@@ -26,9 +26,11 @@ import {
 import { useMemo, useState } from "react";
 import { AgentView } from "@/components/AgentView";
 import { AgentSidebar } from "@/components/AgentSidebar";
+import { EapView } from "@/components/EapView";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
+  { label: "EAP", icon: Layers3 },
   { label: "Cronogramas", icon: CalendarDays },
   { label: "Produção", icon: Gauge },
   { label: "Restrições", icon: AlertTriangle },
@@ -92,16 +94,21 @@ function GanttView({
   search,
   setSearch,
   selectedName,
+  plannedStart,
 }: {
   activities: any[];
   search: string;
   setSearch: (value: string) => void;
   selectedName: string;
+  plannedStart?: string | Date;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<"gantt" | "table" | "lob">("gantt");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyCritical, setOnlyCritical] = useState(false);
+  const projectStart = new Date(
+    plannedStart ?? "2026-10-01T00:00:00Z"
+  ).getTime();
   const filtered = useMemo(
     () =>
       activities.filter(
@@ -136,7 +143,7 @@ function GanttView({
               <span /> AO VIVO
             </span>
           </div>
-          <p>{selectedName} · baseline atualizada hoje</p>
+          <p>{selectedName} · planejamento salvo</p>
         </div>
         <div className="gantt-actions">
           <div className="compact-search">
@@ -279,15 +286,14 @@ function GanttView({
                         <div className="date-cell">
                           {formatDate(
                             new Date(
-                              new Date("2026-10-01T00:00:00Z").getTime() +
-                                activity.startOffset * 86400000
+                              projectStart + activity.startOffset * 86400000
                             )
                           )}
                         </div>
                         <div className="date-cell">
                           {formatDate(
                             new Date(
-                              new Date("2026-10-01T00:00:00Z").getTime() +
+                              projectStart +
                                 (activity.startOffset + activity.durationDays) *
                                   86400000
                             )
@@ -357,16 +363,13 @@ function GanttView({
                   </td>
                   <td>
                     {formatDate(
-                      new Date(
-                        new Date("2026-10-01T00:00:00Z").getTime() +
-                          activity.startOffset * 86400000
-                      )
+                      new Date(projectStart + activity.startOffset * 86400000)
                     )}
                   </td>
                   <td>
                     {formatDate(
                       new Date(
-                        new Date("2026-10-01T00:00:00Z").getTime() +
+                        projectStart +
                           (activity.startOffset + activity.durationDays) *
                             86400000
                       )
@@ -389,51 +392,34 @@ function GanttView({
               espera e sobreposição. Este módulo já está pronto para receber a
               produção real por período.
             </p>
-            <div className="lob-summary">
-              <div>
-                <strong>4</strong>
-                <span>frentes</span>
-              </div>
-              <div>
-                <strong>3 d</strong>
-                <span>espera média</span>
-              </div>
-              <div>
-                <strong>22</strong>
-                <span>pavimentos</span>
-              </div>
+            <div className="module-empty">
+              <span>
+                Sem produção registrada para calcular ritmo, espera ou avanço
+                real.
+              </span>
             </div>
           </div>
           <div className="lob-chart">
-            {["Estrutura", "Vedação", "Instalações", "Acabamentos"].map(
-              (label, index) => (
-                <div className="lob-line" key={label}>
-                  <span>{label}</span>
-                  <div>
-                    <i
-                      style={{
-                        width: `${36 + index * 15}%`,
-                        background:
-                          phaseColors[label] ||
-                          ["#4f7c8f", "#b78b58", "#8e7aa8", "#7aa28a"][index],
-                      }}
-                    />
-                  </div>
-                </div>
-              )
-            )}
+            <div className="module-empty">
+              <span>
+                A Linha de Balanço será calculada após o primeiro lançamento de
+                produção.
+              </span>
+            </div>
           </div>
         </div>
       )}
       <div className="gantt-footer">
         <span>
-          <Users size={14} /> 4 equipes em produção
+          <Users size={14} /> Produção ainda não lançada
         </span>
         <span>
-          <CalendarDays size={14} /> Janela: 220 dias
+          <CalendarDays size={14} /> {activities.length} atividades planejadas
         </span>
         <span className="footer-spacer" />
-        <span className="muted">Último cálculo: hoje, 08:42</span>
+        <span className="muted">
+          CPM e ritmo real aguardam dados operacionais
+        </span>
       </div>
     </section>
   );
@@ -444,13 +430,19 @@ function ModuleView({
   icon: Icon,
   description,
   onBack,
+  projectId,
+  projectName,
 }: {
   name: string;
   icon: typeof Activity;
   description: string;
   onBack: () => void;
+  projectId: number;
+  projectName: string;
 }) {
   if (name === "Agente IA") return <AgentView />;
+  if (name === "EAP")
+    return <EapView projectId={projectId} projectName={projectName} />;
   return (
     <div className="module-page">
       <div className="module-hero">
@@ -688,6 +680,7 @@ export default function Home() {
               }
               description={
                 {
+                  EAP: "Escopo, pacotes de trabalho e estrutura de entregas.",
                   Cronogramas: "Planejamento, baseline e caminho crítico.",
                   Produção: "Ritmos, equipes e avanço físico.",
                   Restrições: "Pendências que podem impactar o prazo.",
@@ -695,6 +688,8 @@ export default function Home() {
                 }[activeNav] || "Gestão integrada de obras."
               }
               onBack={() => setActiveNav("Portfólio")}
+              projectId={selected?.id ?? 1}
+              projectName={selected?.name ?? "Obra selecionada"}
             />
           ) : (
             <>
@@ -837,6 +832,7 @@ export default function Home() {
                 search={search}
                 setSearch={setSearch}
                 selectedName={selected?.name || "Selecione uma obra"}
+                plannedStart={selected?.plannedStart}
               />
             </>
           )}

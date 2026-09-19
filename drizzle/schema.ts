@@ -65,8 +65,45 @@ export const scheduleActivities = mysqlTable("schedule_activities", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const wbsNodes = mysqlTable("wbs_nodes", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
+  parentId: int("parentId"),
+  code: varchar("code", { length: 32 }).notNull(),
+  name: varchar("name", { length: 220 }).notNull(),
+  level: int("level").default(1).notNull(),
+  nodeType: mysqlEnum("nodeType", ["grupo", "pacote", "entrega"])
+    .default("pacote")
+    .notNull(),
+  unit: varchar("unit", { length: 32 }),
+  plannedQuantity: int("plannedQuantity"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const scheduleDependencies = mysqlTable("schedule_dependencies", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
+  predecessorId: int("predecessorId")
+    .notNull()
+    .references(() => scheduleActivities.id),
+  successorId: int("successorId")
+    .notNull()
+    .references(() => scheduleActivities.id),
+  type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull(),
+  lag: int("lag").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
 export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
+export type WbsNode = typeof wbsNodes.$inferSelect;
+export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;

@@ -22,6 +22,13 @@
       "when": 1789854509247,
       "tag": "0002_bitter_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1789861832306,
+      "tag": "0003_striped_sentinel",
+      "breakpoints": true
     }
   ]
 }

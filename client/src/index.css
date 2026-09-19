@@ -1386,6 +1386,49 @@
     border-radius: 11px;
     padding: 19px;
   }
+  .eap-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .eap-heading {
+    border-bottom: 1px solid #edf1f2;
+  }
+  .eap-tree {
+    padding: 8px 0 14px;
+  }
+  .eap-node {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 20px;
+    border-bottom: 1px solid #f1f4f5;
+    color: #536b75;
+  }
+  .eap-node.level-2 {
+    padding-left: 48px;
+    background: #fbfcfc;
+  }
+  .eap-node-code {
+    width: 36px;
+    color: #93a3a9;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .eap-node-chevron {
+    color: #a3b1b6;
+  }
+  .eap-node strong {
+    font-size: 11px;
+    font-weight: 650;
+  }
+  .eap-node-type {
+    margin-left: auto;
+    color: #9aa9ae;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
   .module-card.wide {
     grid-column: 1 / -1;
   }

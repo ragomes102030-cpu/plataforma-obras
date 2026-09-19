@@ -1,6 +1,11 @@
 import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
-import { projects, scheduleActivities } from "../drizzle/schema";
+import {
+  projects,
+  scheduleActivities,
+  scheduleDependencies,
+  wbsNodes,
+} from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -112,6 +117,76 @@ const demoActivities = [
   updatedAt: new Date("2026-09-19T00:00:00Z"),
 }));
 
+const starterWbs = [
+  ["1", "Serviços preliminares", 1, "grupo"],
+  ["1.1", "Canteiro e mobilização", 2, "pacote"],
+  ["2", "Fundação e contenções", 1, "grupo"],
+  ["2.1", "Escavação e contenção", 2, "pacote"],
+  ["3", "Estrutura", 1, "grupo"],
+  ["3.1", "Estrutura dos pavimentos", 2, "pacote"],
+  ["4", "Vedação e instalações", 1, "grupo"],
+  ["4.1", "Alvenaria", 2, "pacote"],
+  ["4.2", "Instalações prediais", 2, "pacote"],
+  ["5", "Acabamentos e entrega", 1, "grupo"],
+  ["5.1", "Acabamentos e áreas comuns", 2, "pacote"],
+  ["5.2", "Comissionamento e entrega", 2, "pacote"],
+] as const;
+
+const starterActivities = [
+  ["1.1", "Mobilização e canteiro", "Preparação", 0, 14],
+  ["2.1", "Fundação e contenções", "Estrutura", 14, 28],
+  ["3.1", "Estrutura dos pavimentos", "Estrutura", 42, 178],
+  ["4.1", "Alvenaria dos pavimentos", "Vedação", 80, 146],
+  ["4.2", "Instalações prediais", "Instalações", 100, 121],
+  ["5.1", "Acabamentos e áreas comuns", "Acabamentos", 150, 82],
+  ["5.2", "Comissionamento e entrega", "Entrega", 232, 12],
+] as const;
+
+async function seedStarterPlan(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+) {
+  await db.insert(wbsNodes).values(
+    starterWbs.map(([code, name, level, nodeType], index) => ({
+      projectId,
+      code,
+      name,
+      level,
+      nodeType,
+      parentId: null,
+      sortOrder: index,
+    }))
+  );
+  const inserted = await db
+    .insert(scheduleActivities)
+    .values(
+      starterActivities.map(
+        ([wbsCode, name, phase, startOffset, durationDays], index) => ({
+          projectId,
+          wbsCode,
+          name,
+          phase,
+          startOffset,
+          durationDays,
+          progress: 0,
+          status: "Não iniciado" as const,
+          critical: 0,
+          sortOrder: index,
+        })
+      )
+    )
+    .$returningId();
+  await db.insert(scheduleDependencies).values(
+    inserted.slice(0, -1).map((activity, index) => ({
+      projectId,
+      predecessorId: activity.id,
+      successorId: inserted[index + 1].id,
+      type: "FS" as const,
+      lag: 0,
+    }))
+  );
+}
+
 const accessibleProjectCondition = (projectId: number, userId: number) =>
   and(
     eq(projects.id, projectId),
@@ -156,6 +231,27 @@ export const appRouter = router({
           .orderBy(scheduleActivities.sortOrder);
         return rows.length ? rows : input.projectId === 1 ? demoActivities : [];
       }),
+    wbs: publicProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        return db
+          .select()
+          .from(wbsNodes)
+          .where(eq(wbsNodes.projectId, input.projectId))
+          .orderBy(wbsNodes.sortOrder);
+      }),
+    dependencies: publicProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        return db
+          .select()
+          .from(scheduleDependencies)
+          .where(eq(scheduleDependencies.projectId, input.projectId));
+      }),
     create: protectedProcedure
       .input(
         z.object({
@@ -189,6 +285,7 @@ export const appRouter = router({
             plannedFinish,
           })
           .$returningId();
+        await seedStarterPlan(db, createdId.id);
         const [created] = await db
           .select()
           .from(projects)
