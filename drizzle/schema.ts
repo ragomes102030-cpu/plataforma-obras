@@ -1,4 +1,11 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -14,10 +21,18 @@ export const users = mysqlTable("users", {
 
 export const projects = mysqlTable("projects", {
   id: int("id").autoincrement().primaryKey(),
+  ownerUserId: int("ownerUserId").references(() => users.id),
   code: varchar("code", { length: 32 }).notNull().unique(),
   name: varchar("name", { length: 180 }).notNull(),
   location: varchar("location", { length: 180 }).notNull(),
-  status: mysqlEnum("status", ["Em execução", "Planejamento", "Concluída", "Em risco"]).default("Planejamento").notNull(),
+  status: mysqlEnum("status", [
+    "Em execução",
+    "Planejamento",
+    "Concluída",
+    "Em risco",
+  ])
+    .default("Planejamento")
+    .notNull(),
   progress: int("progress").default(0).notNull(),
   plannedStart: timestamp("plannedStart").notNull(),
   plannedFinish: timestamp("plannedFinish").notNull(),
@@ -27,14 +42,23 @@ export const projects = mysqlTable("projects", {
 
 export const scheduleActivities = mysqlTable("schedule_activities", {
   id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId").notNull().references(() => projects.id),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
   wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
   name: varchar("name", { length: 220 }).notNull(),
   phase: varchar("phase", { length: 80 }).notNull(),
   startOffset: int("startOffset").notNull(),
   durationDays: int("durationDays").notNull(),
   progress: int("progress").default(0).notNull(),
-  status: mysqlEnum("status", ["Não iniciado", "Em andamento", "Concluído", "Em risco"]).default("Não iniciado").notNull(),
+  status: mysqlEnum("status", [
+    "Não iniciado",
+    "Em andamento",
+    "Concluído",
+    "Em risco",
+  ])
+    .default("Não iniciado")
+    .notNull(),
   critical: int("critical").default(0).notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -44,4 +68,5 @@ export const scheduleActivities = mysqlTable("schedule_activities", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
+export type InsertProject = typeof projects.$inferInsert;
 export type ScheduleActivity = typeof scheduleActivities.$inferSelect;

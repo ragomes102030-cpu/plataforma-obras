@@ -1,0 +1,2 @@
+ALTER TABLE `projects` ADD `ownerUserId` int;--> statement-breakpoint
+ALTER TABLE `projects` ADD CONSTRAINT `projects_ownerUserId_users_id_fk` FOREIGN KEY (`ownerUserId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;

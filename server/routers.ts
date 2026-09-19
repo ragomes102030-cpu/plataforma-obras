@@ -1,15 +1,17 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { projects, scheduleActivities } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
+import { runProjectAgent } from "./agent";
 
 const demoProjects = [
   {
     id: 1,
+    ownerUserId: null,
     code: "ED-22",
     name: "Edifício Residencial 22 Pavimentos",
     location: "São Paulo, SP",
@@ -22,6 +24,7 @@ const demoProjects = [
   },
   {
     id: 2,
+    ownerUserId: null,
     code: "TR-08",
     name: "Torre Residencial Parque Norte",
     location: "Campinas, SP",
@@ -37,11 +40,56 @@ const demoProjects = [
 const demoActivities = [
   ["1.1", "Mobilização e canteiro", "Preparação", 0, 14, 100, "Concluído", 0],
   ["1.2", "Fundação e contenções", "Estrutura", 10, 28, 82, "Em andamento", 1],
-  ["1.3", "Estrutura dos pavimentos 01–22", "Estrutura", 38, 178, 44, "Em andamento", 1],
-  ["1.4", "Alvenaria dos pavimentos 01–22", "Vedação", 70, 146, 29, "Em andamento", 0],
-  ["1.5", "Instalações prediais", "Instalações", 102, 121, 18, "Em andamento", 0],
-  ["1.6", "Acabamentos e áreas comuns", "Acabamentos", 148, 82, 5, "Não iniciado", 0],
-  ["1.7", "Comissionamento e entrega", "Entrega", 208, 12, 0, "Não iniciado", 0],
+  [
+    "1.3",
+    "Estrutura dos pavimentos 01–22",
+    "Estrutura",
+    38,
+    178,
+    44,
+    "Em andamento",
+    1,
+  ],
+  [
+    "1.4",
+    "Alvenaria dos pavimentos 01–22",
+    "Vedação",
+    70,
+    146,
+    29,
+    "Em andamento",
+    0,
+  ],
+  [
+    "1.5",
+    "Instalações prediais",
+    "Instalações",
+    102,
+    121,
+    18,
+    "Em andamento",
+    0,
+  ],
+  [
+    "1.6",
+    "Acabamentos e áreas comuns",
+    "Acabamentos",
+    148,
+    82,
+    5,
+    "Não iniciado",
+    0,
+  ],
+  [
+    "1.7",
+    "Comissionamento e entrega",
+    "Entrega",
+    208,
+    12,
+    0,
+    "Não iniciado",
+    0,
+  ],
 ].map((item, index) => ({
   id: index + 1,
   projectId: 1,
@@ -58,6 +106,12 @@ const demoActivities = [
   updatedAt: new Date("2026-09-19T00:00:00Z"),
 }));
 
+const accessibleProjectCondition = (projectId: number, userId: number) =>
+  and(
+    eq(projects.id, projectId),
+    or(eq(projects.ownerUserId, userId), isNull(projects.ownerUserId))
+  );
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -69,10 +123,19 @@ export const appRouter = router({
     }),
   }),
   projects: router({
-    list: publicProcedure.query(async () => {
+    list: publicProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) return demoProjects;
-      const rows = await db.select().from(projects).orderBy(desc(projects.updatedAt));
+      if (!db || !ctx.user) return demoProjects;
+      const rows = await db
+        .select()
+        .from(projects)
+        .where(
+          or(
+            eq(projects.ownerUserId, ctx.user.id),
+            isNull(projects.ownerUserId)
+          )
+        )
+        .orderBy(desc(projects.updatedAt));
       return rows.length ? rows : demoProjects;
     }),
     activities: publicProcedure
@@ -80,10 +143,94 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) return input.projectId === 1 ? demoActivities : [];
-        const rows = await db.select().from(scheduleActivities)
+        const rows = await db
+          .select()
+          .from(scheduleActivities)
           .where(eq(scheduleActivities.projectId, input.projectId))
           .orderBy(scheduleActivities.sortOrder);
         return rows.length ? rows : input.projectId === 1 ? demoActivities : [];
+      }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().trim().min(2).max(180),
+          location: z.string().trim().min(2).max(180).default("A cadastrar"),
+          plannedStart: z.coerce.date().optional(),
+          plannedFinish: z.coerce.date().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db)
+          throw new Error(
+            "Banco de dados não configurado; a obra não foi persistida."
+          );
+        const plannedStart = input.plannedStart ?? new Date();
+        const plannedFinish =
+          input.plannedFinish ??
+          new Date(plannedStart.getTime() + 180 * 86400000);
+        const code = `OB-${Date.now().toString(36).slice(-6).toUpperCase()}`;
+        const [createdId] = await db
+          .insert(projects)
+          .values({
+            ownerUserId: ctx.user.id,
+            code,
+            name: input.name,
+            location: input.location,
+            status: "Planejamento",
+            progress: 0,
+            plannedStart,
+            plannedFinish,
+          })
+          .$returningId();
+        const [created] = await db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, createdId.id))
+          .limit(1);
+        return created;
+      }),
+  }),
+  agent: router({
+    chat: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          messages: z
+            .array(
+              z.object({
+                role: z.enum(["user", "assistant"]),
+                content: z.string().trim().min(1).max(6000),
+              })
+            )
+            .min(1)
+            .max(20),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        let project;
+        let activities;
+        if (db) {
+          const [row] = await db
+            .select()
+            .from(projects)
+            .where(accessibleProjectCondition(input.projectId, ctx.user.id))
+            .limit(1);
+          if (!row)
+            throw new Error("Obra não encontrada ou sem permissão de acesso.");
+          project = row;
+          activities = await db
+            .select()
+            .from(scheduleActivities)
+            .where(eq(scheduleActivities.projectId, input.projectId))
+            .orderBy(scheduleActivities.sortOrder);
+        } else {
+          project = demoProjects.find(item => item.id === input.projectId);
+          activities = input.projectId === 1 ? demoActivities : [];
+          if (!project) throw new Error("Obra não encontrada.");
+        }
+        return runProjectAgent({ project, activities }, input.messages);
       }),
   }),
 });
