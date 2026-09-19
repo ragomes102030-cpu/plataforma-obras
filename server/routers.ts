@@ -8,6 +8,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { runProjectAgent } from "./agent";
 import { runProjectOrchestrator } from "./orchestrator";
+import { buildAgentProjectContext } from "./agent/context-builder";
 import {
   callReadOnlyMcpTool,
   listConstructionMcpTools,
@@ -242,6 +243,24 @@ export const appRouter = router({
         z.object({
           projectId: z.number().int().positive(),
           mcpProjectId: z.string().trim().min(1).max(120).optional(),
+          context: z
+            .object({
+              activeSection: z.enum([
+                "portfolio",
+                "eap",
+                "cronograma",
+                "producao",
+                "medicao",
+                "gantt",
+                "lob",
+                "restricoes",
+                "relatorios",
+              ]),
+              activeSubtab: z.enum(["gantt", "table", "lob"]).optional(),
+              selectedActivityId: z.number().int().positive().optional(),
+              contextMode: z.enum(["focused", "full"]).default("focused"),
+            })
+            .default({ activeSection: "portfolio", contextMode: "focused" }),
           messages: z
             .array(
               z.object({
@@ -276,9 +295,11 @@ export const appRouter = router({
           activities = input.projectId === 1 ? demoActivities : [];
           if (!project) throw new Error("Obra não encontrada.");
         }
-        return runProjectOrchestrator({ project, activities }, input.messages, {
-          mcpProjectId: input.mcpProjectId,
-        });
+        return runProjectOrchestrator(
+          buildAgentProjectContext(project, activities, input.context),
+          input.messages,
+          { mcpProjectId: input.mcpProjectId }
+        );
       }),
   }),
   integrations: router({

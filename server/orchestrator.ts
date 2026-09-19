@@ -153,6 +153,9 @@ function toOpenAiTools(catalog: Record<string, McpTool[]>): LlmTool[] {
 }
 
 function buildSystem(context: AgentProjectContext, mcpProjectId?: string) {
+  const workspaceContext = context.workspace
+    ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}. Modo: ${context.workspace.contextMode}.`
+    : "Aba ativa não informada. Use o contexto geral da obra.";
   return [
     "Você é o Agent Orchestrator da Plataforma Obras, especialista em planejamento e controle de obras no Brasil.",
     "Responda em português do Brasil, com objetividade e linguagem operacional.",
@@ -164,6 +167,7 @@ function buildSystem(context: AgentProjectContext, mcpProjectId?: string) {
     mcpProjectId
       ? `project_id externo autorizado para consultas: ${mcpProjectId}`
       : "Nenhum project_id externo foi autorizado nesta execução.",
+    workspaceContext,
     "Contexto local da obra:\n" + formatContext(context),
   ].join("\n\n");
 }

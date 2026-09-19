@@ -25,6 +25,12 @@ export type AgentProjectContext = {
     status: string;
     critical: number;
   }>;
+  workspace?: {
+    activeSection: string;
+    activeSubtab?: "gantt" | "table" | "lob";
+    selectedActivityId?: number;
+    contextMode: "focused" | "full";
+  };
 };
 
 const MAX_MESSAGES = 20;

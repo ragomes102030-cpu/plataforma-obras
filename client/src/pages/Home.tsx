@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AgentView } from "@/components/AgentView";
+import { AgentSidebar } from "@/components/AgentSidebar";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -507,6 +508,7 @@ export default function Home() {
   const projects = serverProjects;
   const [selectedId, setSelectedId] = useState(1);
   const [activeNav, setActiveNav] = useState("Portfólio");
+  const [agentOpen, setAgentOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -529,6 +531,16 @@ export default function Home() {
     projectId: selected?.id ?? 1,
   });
   const activities = activitiesQuery.data ?? [];
+  const agentSection =
+    activeNav === "Cronogramas"
+      ? "cronograma"
+      : activeNav === "Produção"
+        ? "producao"
+        : activeNav === "Restrições"
+          ? "restricoes"
+          : activeNav === "Relatórios"
+            ? "relatorios"
+            : "portfolio";
   const visibleProjects = projects.filter(project =>
     `${project.name} ${project.code} ${project.location}`
       .toLowerCase()
@@ -652,6 +664,13 @@ export default function Home() {
             <button className="icon-button notification">
               <Bell size={17} />
               <span />
+            </button>
+            <button
+              className={`agent-open-button ${agentOpen ? "active" : ""}`}
+              onClick={() => setAgentOpen(true)}
+              title="Abrir agente da obra"
+            >
+              <Sparkles size={15} /> <span>Agente</span>
             </button>
             {!user && (
               <button className="login-button" onClick={() => startLogin()}>
@@ -823,6 +842,14 @@ export default function Home() {
           )}
         </div>
       </main>
+      {agentOpen && selected && (
+        <AgentSidebar
+          projectId={selected.id}
+          projectName={selected.name}
+          activeSection={agentSection}
+          onClose={() => setAgentOpen(false)}
+        />
+      )}
       {newProjectOpen && (
         <div
           className="modal-backdrop"
