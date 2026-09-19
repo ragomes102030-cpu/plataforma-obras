@@ -83,3 +83,83 @@ pnpm check && pnpm test --run && pnpm build
 ```
 
 Depois implemente a **Fase 1 — configuração e observabilidade**. Não avance para operações de escrita antes de concluir a Fase 2.
+
+
+## Decisão arquitetural após análise do Hermes
+
+A referência analisada é o **Hermes Agent da Nous Research**. A decisão é adotar os princípios de arquitetura, não copiar o produto inteiro para dentro da Plataforma Obras.
+
+O Hermes separa claramente o loop do agente, montagem de prompt, resolução do provedor, registro de ferramentas, persistência de sessão, memória, plugins e gateway. Seu loop executa: preparar contexto, chamar o modelo, executar ferramentas, anexar resultados, repetir até resposta final, persistir a sessão e aplicar compressão quando necessário. Essa separação é apropriada para a Plataforma Obras.
+
+### Princípios que serão adotados
+
+1. **Agent Orchestrator único no backend.** A interface não chamará LLM ou MCP diretamente. O orquestrador receberá a intenção, montará o contexto da obra, decidirá quais ferramentas são elegíveis, executará o ciclo e devolverá eventos de progresso.
+2. **Gerenciador de provedores.** O sistema usará uma interface OpenAI-compatible para OpenRouter, API própria ou outro provedor, com modelo, timeout, limite de iterações e fallback configuráveis por ambiente.
+3. **Registro de ferramentas com exposição controlada.** Cada MCP/plugin terá catálogo, descrição, esquema, classificação de risco e allowlist por perfil. O LLM nunca poderá inventar o nome de uma ferramenta nem ultrapassar a permissão recebida.
+4. **Aprovação antes de escrita.** O agente poderá preparar uma operação e mostrar uma prévia; criação, alteração de baseline, medição e exclusão somente serão executadas após confirmação compatível com o risco.
+5. **Memória em camadas.** A memória persistente não será um texto livre gigante. Haverá memória de preferências do usuário, memória de projeto, decisões aprovadas, fatos extraídos de documentos e histórico de sessões. Cada item terá origem, data, autor, confiança e possibilidade de correção.
+6. **Contexto sob demanda.** No início, somente ferramentas e dados da obra selecionada serão expostos. Se o catálogo crescer, será adotada descoberta progressiva de ferramentas, equivalente ao Tool Search do Hermes, para não despejar todos os schemas no prompt.
+7. **Sessões e tarefas retomáveis.** Cada execução terá `taskId`, `projectId`, `requestId`, estado, passos, tool calls e resultado. Se a sessão terminar, o próximo ciclo poderá continuar do último passo confirmado, sem repetir escritas idempotentes.
+8. **Cálculo fora do LLM.** CPM, ciclos, datas, baseline, quantitativos e Linha de Balanço permanecem em código/MCP determinístico. O agente coordena e explica, mas não substitui esses cálculos.
+
+### O que não será copiado agora
+
+- Não instalar o Hermes inteiro como dependência do Render.
+- Não permitir autoaperfeiçoamento irrestrito do agente.
+- Não deixar o agente criar plugins ou alterar seus próprios prompts em produção.
+- Não compartilhar um único arquivo de memória entre todas as obras e usuários.
+- Não iniciar multiagentes antes de existir uma tarefa única confiável, auditável e retomável.
+- Não permitir que “memória” substitua o banco, a auditoria ou os documentos originais.
+
+## Roadmap revisado, com os pés no chão
+
+### Marco A — base verificável [EM ANDAMENTO]
+
+Cliente MCP, adaptadores, allowlist, rotas protegidas, URLs de ambiente e plano versionado. Este marco está entregue no commit `c8ea741`.
+
+### Marco B — Agent Orchestrator mínimo [PRÓXIMO]
+
+Criar `server/agent/orchestrator.ts` com um ciclo curto e explícito: receber pedido, carregar uma obra, montar contexto limitado, chamar o provedor, aceitar somente ferramentas allowlisted, registrar cada passo e devolver resposta. Inicialmente terá apenas consultas: EAP, atividades, validação, CPM e curva S.
+
+**Limite:** no máximo uma obra por execução, sem escrita externa e com teto baixo de iterações.
+
+### Marco C — memória e sessões [DEPOIS DO ORCHESTRATOR]
+
+Criar tabelas de sessões, mensagens, fatos de projeto, decisões e memórias. O agente poderá sugerir uma memória, mas fatos importantes terão origem e confirmação. Documentos permanecerão vinculados ao arquivo e à versão de origem.
+
+### Marco D — mapeamento local ↔ MCP [ANTES DE QUALQUER ESCRITA]
+
+Criar vínculos por obra para os `project_id` externos, com tenant/usuário, servidor, data da última sincronização, estado e versão. O valor `default` dos MCPs nunca será usado para uma obra real autenticada.
+
+### Marco E — escrita com prévia e confirmação
+
+Implementar o fluxo de rascunho: o agente gera operações, a interface mostra a diferença, o usuário confirma, o backend executa em ordem idempotente e grava auditoria. Começar por `criar_projeto`, depois EAP, atividades e dependências.
+
+### Marco F — documentos
+
+Adicionar upload, extração, versionamento, classificação e busca por obra. O agente deverá citar documento, página/aba, versão e trecho usado, especialmente em contrato, orçamento e medição.
+
+### Marco G — plugins e descoberta progressiva
+
+Adicionar plugins internos de Excel, PDF, relatórios e notificações. Só quando o número de ferramentas justificar, implementar `tool_search`, `tool_describe` e `tool_call` internos, sempre sobre o catálogo já permitido à sessão.
+
+### Marco H — produção, Linha de Balanço e especialistas
+
+Com a base funcionando, adicionar especialistas internos por domínio: planejamento, produção, custos/documentos e relatórios. Eles não serão agentes independentes no início; serão perfis/prompts e conjuntos de ferramentas do mesmo orquestrador. Multiagentes só entram depois de métricas de qualidade e auditoria.
+
+## Critério de realidade do produto
+
+A Plataforma Obras será considerada pronta para um piloto real quando conseguir executar, com dados de uma obra de teste:
+
+- criar uma obra local e vinculá-la a projetos externos;
+- montar e validar uma EAP;
+- gerar atividades e dependências;
+- calcular CPM e salvar baseline;
+- mostrar curva S e Linha de Balanço;
+- consultar documentos com evidência;
+- recuperar uma tarefa interrompida;
+- impedir escrita sem confirmação;
+- registrar auditoria completa;
+- continuar funcionando quando um MCP ou o provedor de LLM estiver indisponível.
+
+Fontes consultadas: [Arquitetura do Hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture), [Agent Loop](https://hermes-agent.nousresearch.com/docs/developer-guide/agent-loop), [Memória persistente](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory), [MCP e filtros de ferramentas](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp), [Tool Search](https://hermes-agent.nousresearch.com/docs/user-guide/features/tool-search) e [Integração programática](https://hermes-agent.nousresearch.com/docs/developer-guide/programmatic-integration).
