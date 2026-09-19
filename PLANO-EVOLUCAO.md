@@ -117,13 +117,13 @@ O Hermes separa claramente o loop do agente, montagem de prompt, resolução do 
 
 Cliente MCP, adaptadores, allowlist, rotas protegidas, URLs de ambiente e plano versionado. Este marco está entregue no commit `c8ea741`.
 
-### Marco B — Agent Orchestrator mínimo [PRÓXIMO]
+### Marco B — Agent Orchestrator mínimo [CONCLUÍDO]
 
-Criar `server/agent/orchestrator.ts` com um ciclo curto e explícito: receber pedido, carregar uma obra, montar contexto limitado, chamar o provedor, aceitar somente ferramentas allowlisted, registrar cada passo e devolver resposta. Inicialmente terá apenas consultas: EAP, atividades, validação, CPM e curva S.
+Implementado em `server/orchestrator.ts`, exposto por `agent.orchestrate`. O ciclo recebe uma obra, monta contexto limitado, carrega somente ferramentas MCP allowlisted de leitura, chama o provedor, executa até quatro iterações, registra cada tool call e devolve `taskId`, modelo, iterações e auditoria. O endpoint aceita `mcpProjectId` explícito e bloqueia consultas de obra sem esse vínculo para não cair no projeto `default`.
 
-**Limite:** no máximo uma obra por execução, sem escrita externa e com teto baixo de iterações.
+**Limite aplicado:** uma obra por execução, nenhuma escrita externa, máximo de quatro iterações e resultado truncado por ferramenta. Testes cobrem consulta MCP, auditoria, exposição de ferramentas e bloqueio de escrita.
 
-### Marco C — memória e sessões [DEPOIS DO ORCHESTRATOR]
+### Marco C — memória e sessões [PRÓXIMO]
 
 Criar tabelas de sessões, mensagens, fatos de projeto, decisões e memórias. O agente poderá sugerir uma memória, mas fatos importantes terão origem e confirmação. Documentos permanecerão vinculados ao arquivo e à versão de origem.
 

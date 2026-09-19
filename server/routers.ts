@@ -7,6 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { runProjectAgent } from "./agent";
+import { runProjectOrchestrator } from "./orchestrator";
 import {
   callReadOnlyMcpTool,
   listConstructionMcpTools,
@@ -235,6 +236,49 @@ export const appRouter = router({
           if (!project) throw new Error("Obra não encontrada.");
         }
         return runProjectAgent({ project, activities }, input.messages);
+      }),
+    orchestrate: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          mcpProjectId: z.string().trim().min(1).max(120).optional(),
+          messages: z
+            .array(
+              z.object({
+                role: z.enum(["user", "assistant"]),
+                content: z.string().trim().min(1).max(6000),
+              })
+            )
+            .min(1)
+            .max(20),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        let project;
+        let activities;
+        if (db) {
+          const [row] = await db
+            .select()
+            .from(projects)
+            .where(accessibleProjectCondition(input.projectId, ctx.user.id))
+            .limit(1);
+          if (!row)
+            throw new Error("Obra não encontrada ou sem permissão de acesso.");
+          project = row;
+          activities = await db
+            .select()
+            .from(scheduleActivities)
+            .where(eq(scheduleActivities.projectId, input.projectId))
+            .orderBy(scheduleActivities.sortOrder);
+        } else {
+          project = demoProjects.find(item => item.id === input.projectId);
+          activities = input.projectId === 1 ? demoActivities : [];
+          if (!project) throw new Error("Obra não encontrada.");
+        }
+        return runProjectOrchestrator({ project, activities }, input.messages, {
+          mcpProjectId: input.mcpProjectId,
+        });
       }),
   }),
   integrations: router({
