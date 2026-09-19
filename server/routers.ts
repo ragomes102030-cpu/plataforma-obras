@@ -1,28 +1,91 @@
+import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { projects, scheduleActivities } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { getDb } from "./db";
+
+const demoProjects = [
+  {
+    id: 1,
+    code: "ED-22",
+    name: "Edifício Residencial 22 Pavimentos",
+    location: "São Paulo, SP",
+    status: "Em execução" as const,
+    progress: 38,
+    plannedStart: new Date("2026-10-01T00:00:00Z"),
+    plannedFinish: new Date("2027-03-27T00:00:00Z"),
+    createdAt: new Date("2026-09-19T00:00:00Z"),
+    updatedAt: new Date("2026-09-19T00:00:00Z"),
+  },
+  {
+    id: 2,
+    code: "TR-08",
+    name: "Torre Residencial Parque Norte",
+    location: "Campinas, SP",
+    status: "Planejamento" as const,
+    progress: 12,
+    plannedStart: new Date("2027-01-11T00:00:00Z"),
+    plannedFinish: new Date("2027-11-19T00:00:00Z"),
+    createdAt: new Date("2026-09-18T00:00:00Z"),
+    updatedAt: new Date("2026-09-18T00:00:00Z"),
+  },
+];
+
+const demoActivities = [
+  ["1.1", "Mobilização e canteiro", "Preparação", 0, 14, 100, "Concluído", 0],
+  ["1.2", "Fundação e contenções", "Estrutura", 10, 28, 82, "Em andamento", 1],
+  ["1.3", "Estrutura dos pavimentos 01–22", "Estrutura", 38, 178, 44, "Em andamento", 1],
+  ["1.4", "Alvenaria dos pavimentos 01–22", "Vedação", 70, 146, 29, "Em andamento", 0],
+  ["1.5", "Instalações prediais", "Instalações", 102, 121, 18, "Em andamento", 0],
+  ["1.6", "Acabamentos e áreas comuns", "Acabamentos", 148, 82, 5, "Não iniciado", 0],
+  ["1.7", "Comissionamento e entrega", "Entrega", 208, 12, 0, "Não iniciado", 0],
+].map((item, index) => ({
+  id: index + 1,
+  projectId: 1,
+  wbsCode: item[0] as string,
+  name: item[1] as string,
+  phase: item[2] as string,
+  startOffset: item[3] as number,
+  durationDays: item[4] as number,
+  progress: item[5] as number,
+  status: item[6] as string,
+  critical: item[7] as number,
+  sortOrder: index,
+  createdAt: new Date("2026-09-19T00:00:00Z"),
+  updatedAt: new Date("2026-09-19T00:00:00Z"),
+}));
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
-
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  projects: router({
+    list: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return demoProjects;
+      const rows = await db.select().from(projects).orderBy(desc(projects.updatedAt));
+      return rows.length ? rows : demoProjects;
+    }),
+    activities: publicProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return input.projectId === 1 ? demoActivities : [];
+        const rows = await db.select().from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId))
+          .orderBy(scheduleActivities.sortOrder);
+        return rows.length ? rows : input.projectId === 1 ? demoActivities : [];
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

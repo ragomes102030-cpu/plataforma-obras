@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: plataforma-obras-api
+    runtime: node
+    plan: free
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
