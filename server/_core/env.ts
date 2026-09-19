@@ -11,4 +11,11 @@ export const ENV = {
   aiApiKey: process.env.AI_API_KEY ?? "",
   aiModel: process.env.AI_MODEL ?? "",
   publicAppUrl: process.env.PUBLIC_APP_URL ?? "",
+  mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server.onrender.com",
+  mcpCronogramaUrl:
+    process.env.MCP_CRONOGRAMA_URL ??
+    "https://mcp-cronograma-server.onrender.com",
+  mcpGanttLobUrl:
+    process.env.MCP_GANTT_LOB_URL ??
+    "https://mcp-gantt-lob-server.onrender.com",
 };

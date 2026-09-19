@@ -81,3 +81,9 @@ drizzle/      schema e migrações MySQL
 ## Próximas etapas
 
 A próxima evolução deve adicionar dependências persistidas, calendários, baselines versionadas, medições por período, restrições com responsável e prazo, equipes/frentes, custos e auditoria de alterações. Depois que os três MCPs forem identificados, cada integração deve receber um adaptador com permissões explícitas e testes de contrato.
+
+## Integração MCP e continuidade
+
+A camada inicial de integração está em `server/integrations/`, com cliente MCP para sessões Streamable HTTP/SSE, adaptadores dos três servidores e política de ferramentas. O backend expõe `integrations.mcpStatus` e `integrations.mcpReadOnlyCall` como operações protegidas; nenhuma escrita externa é executada automaticamente.
+
+O plano versionado, com fases, checkpoints, regras de segurança e ordem de retomada, está em [PLANO-EVOLUCAO.md](./PLANO-EVOLUCAO.md).

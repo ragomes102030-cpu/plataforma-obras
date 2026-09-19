@@ -7,6 +7,10 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { runProjectAgent } from "./agent";
+import {
+  callReadOnlyMcpTool,
+  listConstructionMcpTools,
+} from "./integrations/construction-mcps";
 
 const demoProjects = [
   {
@@ -232,6 +236,48 @@ export const appRouter = router({
         }
         return runProjectAgent({ project, activities }, input.messages);
       }),
+  }),
+  integrations: router({
+    mcpStatus: protectedProcedure.query(async () => {
+      const startedAt = Date.now();
+      try {
+        const tools = await listConstructionMcpTools();
+        return {
+          status: "online" as const,
+          durationMs: Date.now() - startedAt,
+          servers: Object.fromEntries(
+            Object.entries(tools).map(([name, entries]) => [
+              name,
+              {
+                status: "online" as const,
+                toolCount: entries.length,
+                tools: entries.map(tool => tool.name),
+              },
+            ])
+          ),
+        };
+      } catch (error) {
+        return {
+          status: "degraded" as const,
+          durationMs: Date.now() - startedAt,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Falha desconhecida nos MCPs",
+        };
+      }
+    }),
+    mcpReadOnlyCall: protectedProcedure
+      .input(
+        z.object({
+          domain: z.enum(["eap", "cronograma", "ganttLob"]),
+          toolName: z.string().min(1).max(100),
+          args: z.record(z.string(), z.unknown()).default({}),
+        })
+      )
+      .mutation(({ input }) =>
+        callReadOnlyMcpTool(input.domain, input.toolName, input.args)
+      ),
   }),
 });
 

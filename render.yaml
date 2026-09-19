@@ -30,3 +30,9 @@ services:
         value: gpt-5-mini
       - key: PUBLIC_APP_URL
         sync: false
+      - key: MCP_EAP_URL
+        value: https://mcp-eap-server.onrender.com
+      - key: MCP_CRONOGRAMA_URL
+        value: https://mcp-cronograma-server.onrender.com
+      - key: MCP_GANTT_LOB_URL
+        value: https://mcp-gantt-lob-server.onrender.com
