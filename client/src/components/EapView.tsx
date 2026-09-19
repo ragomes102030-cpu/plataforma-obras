@@ -9,6 +9,9 @@ export function EapView({
   projectName: string;
 }) {
   const wbsQuery = trpc.projects.wbs.useQuery({ projectId });
+  const initializeMutation = trpc.projects.initializePlan.useMutation({
+    onSuccess: () => void wbsQuery.refetch(),
+  });
   const nodes = wbsQuery.data ?? [];
 
   return (
@@ -38,8 +41,17 @@ export function EapView({
         {wbsQuery.isPending ? (
           <div className="module-empty">Carregando a EAP da obra...</div>
         ) : nodes.length === 0 ? (
-          <div className="module-empty">
-            Esta obra ainda não possui uma EAP montada.
+          <div className="module-empty eap-empty-state">
+            <span>Esta obra ainda não possui uma EAP montada.</span>
+            <button
+              className="primary-button"
+              disabled={initializeMutation.isPending}
+              onClick={() => initializeMutation.mutate({ projectId })}
+            >
+              {initializeMutation.isPending
+                ? "Montando..."
+                : "Montar plano inicial"}
+            </button>
           </div>
         ) : (
           <div className="eap-tree">

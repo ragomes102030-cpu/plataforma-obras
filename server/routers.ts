@@ -293,6 +293,27 @@ export const appRouter = router({
           .limit(1);
         return created;
       }),
+    initializePlan: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [project] = await db
+          .select()
+          .from(projects)
+          .where(accessibleProjectCondition(input.projectId, ctx.user.id))
+          .limit(1);
+        if (!project)
+          throw new Error("Obra não encontrada ou sem permissão de acesso.");
+        const existing = await db
+          .select({ id: wbsNodes.id })
+          .from(wbsNodes)
+          .where(eq(wbsNodes.projectId, input.projectId))
+          .limit(1);
+        if (existing.length) return { initialized: false as const };
+        await seedStarterPlan(db, input.projectId);
+        return { initialized: true as const };
+      }),
   }),
   agent: router({
     chat: protectedProcedure

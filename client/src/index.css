@@ -1396,6 +1396,10 @@
   .eap-tree {
     padding: 8px 0 14px;
   }
+  .eap-empty-state {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
   .eap-node {
     display: flex;
     align-items: center;
