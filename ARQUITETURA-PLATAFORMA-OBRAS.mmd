@@ -1,0 +1,58 @@
+flowchart TB
+  U[Usuário de obra] --> UI[Interface simples]
+  UI --> DASH[Painel da obra]
+  UI --> EAP[EAP e pacotes]
+  UI --> SCH[Cronograma e baseline]
+  UI --> PROD[Hoje na obra<br/>Produção]
+  UI --> MED[Medições]
+  UI --> GANTT[Gantt e Linha de Balanço]
+  UI --> CHAT[Barra lateral<br/>Agente da obra]
+
+  PROD --> DB[(Banco local<br/>fonte operacional)]
+  MED --> DB
+  DASH --> DB
+  EAP --> DB
+  SCH --> DB
+  GANTT --> DB
+
+  CHAT --> CTX[Context Builder<br/>obra + aba ativa + contexto focado]
+  CTX --> DB
+  CTX --> MEM[(Memória e sessões<br/>por obra)]
+  CTX --> DOC[(Documentos<br/>versionados)]
+  CTX --> STATUS[Status das fontes]
+
+  CTX --> AGENT[Agent Orchestrator<br/>limite + auditoria + allowlist]
+  AGENT --> LLM[LLM Provider Gateway]
+  LLM --> DS[DeepSeek]
+  LLM --> GEM[Gemini]
+  LLM --> OR[OpenRouter]
+  LLM --> GR[Groq / Cerebras / Zen]
+  LLM --> API[API própria]
+
+  AGENT --> TOOLS[Catálogo de ferramentas<br/>somente leitura inicialmente]
+  TOOLS --> MEAP[MCP EAP]
+  TOOLS --> MCRON[MCP Cronograma]
+  TOOLS --> MLOB[MCP Gantt / LOB]
+
+  AGENT --> AUD[(Auditoria)]
+  AGENT --> RESP[Resposta + fontes<br/>+ ferramentas usadas]
+  RESP --> CHAT
+
+  DB --> SYNC[Sincronização explícita<br/>com MCPs]
+  SYNC --> MEAP
+  SYNC --> MCRON
+  SYNC --> MLOB
+
+  classDef primary fill:#315a6d,color:#fff,stroke:#244757,stroke-width:2px;
+  classDef operational fill:#e8f0f4,color:#20343d,stroke:#7e9bb4;
+  classDef data fill:#f5eee2,color:#4f3f28,stroke:#b78b58;
+  classDef ai fill:#e8e1f1,color:#392d4b,stroke:#8e7aa8;
+  classDef mcp fill:#e5f0e8,color:#2f5038,stroke:#7aa28a;
+  classDef audit fill:#f3e6e6,color:#5e3439,stroke:#a56b75;
+
+  class UI,CHAT,AGENT primary;
+  class DASH,EAP,SCH,PROD,MED,GANTT operational;
+  class DB,MEM,DOC,STATUS data;
+  class CTX,LLM,DS,GEM,OR,GR,API,TOOLS ai;
+  class MEAP,MCRON,MLOB,SYNC mcp;
+  class AUD,RESP audit;

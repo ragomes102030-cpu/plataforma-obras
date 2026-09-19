@@ -124,6 +124,8 @@ Implementado em `server/orchestrator.ts`, exposto por `agent.orchestrate`. O cic
 
 ### Marco C — memória e sessões [PRÓXIMO]
 
+Criar tabelas de sessões, mensagens, fatos de projeto, decisões e memórias. O agente poderá sugerir uma memória, mas fatos importantes terão origem e confirmação. Documentos permanecerão vinculados ao arquivo e à versão de origem.
+
 ### Marco LLM-1 — gateway multi-provedor [CONCLUÍDO]
 
 Implementado em `server/llm-provider-gateway.ts`. O orquestrador deixou de chamar um único endpoint e passou a usar uma camada OpenAI-compatible com provedor primário, dois fallbacks opcionais, compatibilidade com OpenRouter/Gemini/Groq/Cerebras/OpenCode Zen quando configurados, timeout, tratamento de `401`/`402`/`403`/`429`/`5xx` e normalização de resposta. Nenhuma chave é armazenada no código.
@@ -132,7 +134,9 @@ Variáveis disponíveis no Render: `LLM_PRIMARY_*`, `LLM_FALLBACK_*`, `LLM_SECON
 
 **Importante:** o gateway não assume que um modelo gratuito suporta tool calling só porque a API é OpenAI-compatible. Antes de ativar um provedor, executar teste de compatibilidade com chamada de ferramenta e validar os argumentos.
 
-Criar tabelas de sessões, mensagens, fatos de projeto, decisões e memórias. O agente poderá sugerir uma memória, mas fatos importantes terão origem e confirmação. Documentos permanecerão vinculados ao arquivo e à versão de origem.
+## Plano mestre de produto
+
+O plano detalhado de produto, arquitetura e prioridade de produção/medição está em [`PLANO-MESTRE-PRODUCAO-MEDICAO.md`](./PLANO-MESTRE-PRODUCAO-MEDICAO.md), com o diagrama em [`ARQUITETURA-PLATAFORMA-OBRAS.png`](./ARQUITETURA-PLATAFORMA-OBRAS.png).
 
 ### Marco D — mapeamento local ↔ MCP [ANTES DE QUALQUER ESCRITA]
 
