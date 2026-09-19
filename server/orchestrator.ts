@@ -6,12 +6,17 @@ import {
   listConstructionMcpTools,
 } from "./integrations/construction-mcps";
 import type { McpCallResult, McpTool } from "./integrations/mcp-client";
+import {
+  invokeLlmGateway,
+  type LlmMessage,
+  type LlmResponse,
+  type LlmTool,
+} from "./llm-provider-gateway";
 
 const MAX_ITERATIONS = 4;
 const MAX_TOOL_RESULT_CHARS = 12_000;
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 6_000;
-const REQUEST_TIMEOUT_MS = 45_000;
 
 const TOOL_DOMAINS = {
   get_eap_tree: "eap",
@@ -55,37 +60,6 @@ type ToolDomain = keyof ReturnType<
   typeof import("./integrations/construction-mcps").createConstructionMcpClients
 >;
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
-  }>;
-};
-
-type OpenAITool = {
-  type: "function";
-  function: {
-    name: string;
-    description?: string;
-    parameters: Record<string, unknown>;
-  };
-};
-
-type LlmResponse = {
-  model?: string;
-  choices?: Array<{
-    message?: {
-      role?: "assistant";
-      content?: string | null;
-      tool_calls?: ChatMessage["tool_calls"];
-    };
-  }>;
-};
-
 type AuditEvent = {
   taskId: string;
   iteration: number;
@@ -114,22 +88,13 @@ type OrchestratorDeps = {
     args: Record<string, unknown>
   ) => Promise<McpCallResult>;
   callLlm?: (params: {
-    messages: ChatMessage[];
-    tools: OpenAITool[];
+    messages: LlmMessage[];
+    tools: LlmTool[];
   }) => Promise<LlmResponse>;
 };
 
 function createTaskId() {
   return `obra-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function endpoint() {
-  const base = (ENV.aiApiUrl || ENV.forgeApiUrl).replace(/\/$/, "");
-  if (!base) return null;
-  if (base.endsWith("/chat/completions")) return base;
-  return base.endsWith("/v1")
-    ? `${base}/chat/completions`
-    : `${base}/v1/chat/completions`;
 }
 
 function parseContent(response: LlmResponse) {
@@ -167,8 +132,8 @@ function formatContext(context: AgentProjectContext) {
   ].join("\n");
 }
 
-function toOpenAiTools(catalog: Record<string, McpTool[]>): OpenAITool[] {
-  const tools: OpenAITool[] = [];
+function toOpenAiTools(catalog: Record<string, McpTool[]>): LlmTool[] {
+  const tools: LlmTool[] = [];
   for (const entries of Object.values(catalog)) {
     for (const tool of entries) {
       if (!MCP_TOOL_POLICY.readOnly.has(tool.name)) continue;
@@ -203,52 +168,6 @@ function buildSystem(context: AgentProjectContext, mcpProjectId?: string) {
   ].join("\n\n");
 }
 
-async function defaultCallLlm({
-  messages,
-  tools,
-}: {
-  messages: ChatMessage[];
-  tools: OpenAITool[];
-}): Promise<LlmResponse> {
-  const url = endpoint();
-  const apiKey = ENV.aiApiKey || ENV.forgeApiKey;
-  if (!url || !apiKey) {
-    throw new Error(
-      "Agente não configurado. Defina AI_API_BASE_URL/AI_API_KEY ou BUILT_IN_FORGE_API_URL/BUILT_IN_FORGE_API_KEY."
-    );
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: ENV.aiModel || "gpt-5-mini",
-        temperature: 0.2,
-        messages,
-        tools,
-        tool_choice: "auto",
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok)
-      throw new Error(
-        `LLM respondeu ${response.status}: ${(await response.text()).slice(0, 500)}`
-      );
-    return (await response.json()) as LlmResponse;
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError")
-      throw new Error("LLM excedeu o timeout do orquestrador.");
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function validateMessages(messages: AgentMessage[]) {
   if (messages.length < 1 || messages.length > MAX_MESSAGES)
     throw new Error(`A conversa deve ter entre 1 e ${MAX_MESSAGES} mensagens.`);
@@ -280,7 +199,7 @@ export async function runProjectOrchestrator(
   const catalog = await (deps.listTools ?? listConstructionMcpTools)();
   const tools = toOpenAiTools(catalog);
   const audit: AuditEvent[] = [];
-  const conversation: ChatMessage[] = [
+  const conversation: LlmMessage[] = [
     { role: "system", content: buildSystem(context, options.mcpProjectId) },
     ...messages.map(message => ({
       role: message.role,
@@ -289,7 +208,7 @@ export async function runProjectOrchestrator(
   ];
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-    const response = await (deps.callLlm ?? defaultCallLlm)({
+    const response = await (deps.callLlm ?? invokeLlmGateway)({
       messages: conversation,
       tools,
     });

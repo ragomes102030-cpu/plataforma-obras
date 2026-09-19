@@ -28,6 +28,34 @@ services:
         sync: false
       - key: AI_MODEL
         value: gpt-5-mini
+      - key: LLM_PRIMARY_PROVIDER
+        sync: false
+      - key: LLM_PRIMARY_BASE_URL
+        sync: false
+      - key: LLM_PRIMARY_API_KEY
+        sync: false
+      - key: LLM_PRIMARY_MODEL
+        sync: false
+      - key: LLM_FALLBACK_PROVIDER
+        sync: false
+      - key: LLM_FALLBACK_BASE_URL
+        sync: false
+      - key: LLM_FALLBACK_API_KEY
+        sync: false
+      - key: LLM_FALLBACK_MODEL
+        sync: false
+      - key: LLM_SECONDARY_PROVIDER
+        sync: false
+      - key: LLM_SECONDARY_BASE_URL
+        sync: false
+      - key: LLM_SECONDARY_API_KEY
+        sync: false
+      - key: LLM_SECONDARY_MODEL
+        sync: false
+      - key: LLM_MAX_ATTEMPTS
+        value: "3"
+      - key: LLM_REQUEST_TIMEOUT_MS
+        value: "45000"
       - key: PUBLIC_APP_URL
         sync: false
       - key: MCP_EAP_URL
