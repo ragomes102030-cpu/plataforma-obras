@@ -25,6 +25,13 @@ export type ConstructionMcpStatus = {
   servers: Record<ConstructionMcpDomain, ConstructionMcpServerStatus>;
 };
 
+export type ConstructionMcpToolCatalog = Record<
+  ConstructionMcpDomain,
+  McpTool[]
+> & {
+  errors?: Partial<Record<ConstructionMcpDomain, string>>;
+};
+
 export type ConstructionMcpHomologationResult = {
   requestId: string;
   externalProjectIds: Record<ConstructionMcpDomain, string>;
@@ -140,16 +147,25 @@ type ConstructionMcpReadClients = Record<
 
 const IS_TEST_RUNTIME = process.env.NODE_ENV === "test";
 const READ_RETRY_LIMIT = IS_TEST_RUNTIME ? 1 : 2;
-const READ_RETRY_DELAYS_MS = IS_TEST_RUNTIME ? ([1_000] as const) : ([2_000, 5_000] as const);
+const READ_RETRY_DELAYS_MS = IS_TEST_RUNTIME
+  ? ([1_000] as const)
+  : ([2_000, 5_000] as const);
 const CIRCUIT_FAILURE_THRESHOLD = 3;
 const CIRCUIT_COOLDOWN_MS = 30_000;
 const circuitBreakers = new Map<
   ConstructionMcpDomain,
   { consecutiveFailures: number; openedAt: number | null }
 >();
+let toolCatalogCache: {
+  expiresAt: number;
+  value: ConstructionMcpToolCatalog;
+} | null = null;
+let toolCatalogInFlight: Promise<ConstructionMcpToolCatalog> | null = null;
 
 export function resetMcpResilienceState() {
   circuitBreakers.clear();
+  toolCatalogCache = null;
+  toolCatalogInFlight = null;
 }
 
 function circuitState(domain: ConstructionMcpDomain) {
@@ -208,7 +224,8 @@ async function runReadOnlyWithResilience<T>(
     } catch (error) {
       lastError = error;
       if (!isTransientMcpFailure(error) || attempt > READ_RETRY_LIMIT) break;
-      const delayMs = READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1)!;
+      const delayMs =
+        READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1)!;
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
@@ -216,7 +233,10 @@ async function runReadOnlyWithResilience<T>(
   if (state.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
     state.openedAt = Date.now();
   }
-  throw new ReadOnlyResilienceError(errorMessage(lastError), READ_RETRY_LIMIT + 1);
+  throw new ReadOnlyResilienceError(
+    errorMessage(lastError),
+    READ_RETRY_LIMIT + 1
+  );
 }
 
 function errorMessage(error: unknown) {
@@ -290,13 +310,17 @@ export async function runConstructionMcpHomologation(
               attempts,
               toolCount: tools.length,
               durationMs: Date.now() - serverStartedAt,
-              detail: "Nenhuma consulta de homologação compatível foi publicada.",
+              detail:
+                "Nenhuma consulta de homologação compatível foi publicada.",
               error: null,
             },
           ] as const;
         }
         const callResult = await runReadOnlyWithResilience(domain, () =>
-          client.callTool(toolName, probeArguments(toolName, externalProjectIds[domain]))
+          client.callTool(
+            toolName,
+            probeArguments(toolName, externalProjectIds[domain])
+          )
         );
         attempts += callResult.attempts;
         const result = callResult.value;
@@ -345,14 +369,16 @@ export async function runConstructionMcpHomologation(
     startedAt: startedAt.toISOString(),
     durationMs: Date.now() - startedAt.getTime(),
     readOnly: true,
-    servers: Object.fromEntries(entries) as ConstructionMcpHomologationResult["servers"],
+    servers: Object.fromEntries(
+      entries
+    ) as ConstructionMcpHomologationResult["servers"],
   };
 }
 
 export async function getConstructionMcpStatus(
   requestId: string,
   clients: ConstructionMcpReadClients = createConstructionMcpClients()
-  ): Promise<ConstructionMcpStatus> {
+): Promise<ConstructionMcpStatus> {
   const startedAt = Date.now();
   const entries = await Promise.all(
     (
@@ -424,32 +450,60 @@ export async function getConstructionMcpStatus(
   };
 }
 
-export async function listConstructionMcpTools() {
-  const clients = createConstructionMcpClients();
-  const entries = await Promise.all(
-    Object.entries(clients).map(async ([key, client]) => {
-      try {
-        return [
-          key,
-          (
-            await runReadOnlyWithResilience(key as ConstructionMcpDomain, () =>
-              client.listTools()
-            )
-          ).value,
-        ] as const;
-      } catch (error) {
-        console.error(
-          JSON.stringify({
-            evento: "mcp_catalog_error",
-            servidor: key,
-            erro: errorMessage(error),
-          })
-        );
-        return [key, []] as const;
-      }
-    })
-  );
-  return Object.fromEntries(entries) as Record<string, McpTool[]>;
+export async function listConstructionMcpTools(): Promise<ConstructionMcpToolCatalog> {
+  if (toolCatalogCache && toolCatalogCache.expiresAt > Date.now()) {
+    return toolCatalogCache.value;
+  }
+  if (toolCatalogInFlight) return toolCatalogInFlight;
+  const promise = (async () => {
+    const clients = createConstructionMcpClients();
+    const entries = await Promise.all(
+      Object.entries(clients).map(async ([key, client]) => {
+        try {
+          return [
+            key,
+            (
+              await runReadOnlyWithResilience(
+                key as ConstructionMcpDomain,
+                () => client.listTools()
+              )
+            ).value,
+            null,
+          ] as const;
+        } catch (error) {
+          const message = errorMessage(error);
+          console.error(
+            JSON.stringify({
+              evento: "mcp_catalog_error",
+              servidor: key,
+              erro: message,
+            })
+          );
+          return [key, [] as McpTool[], message] as const;
+        }
+      })
+    );
+    const catalog = {
+      eap: entries.find(([key]) => key === "eap")?.[1] ?? [],
+      cronograma: entries.find(([key]) => key === "cronograma")?.[1] ?? [],
+      ganttLob: entries.find(([key]) => key === "ganttLob")?.[1] ?? [],
+      errors: Object.fromEntries(
+        entries.filter(entry => entry[2]).map(entry => [entry[0], entry[2]])
+      ) as Partial<Record<ConstructionMcpDomain, string>>,
+    } satisfies ConstructionMcpToolCatalog;
+    const ttlMs =
+      Number.isFinite(ENV.mcpCatalogTtlMs) && ENV.mcpCatalogTtlMs > 0
+        ? ENV.mcpCatalogTtlMs
+        : 300_000;
+    toolCatalogCache = { value: catalog, expiresAt: Date.now() + ttlMs };
+    return catalog;
+  })();
+  toolCatalogInFlight = promise;
+  try {
+    return await promise;
+  } finally {
+    toolCatalogInFlight = null;
+  }
 }
 
 export async function callReadOnlyMcpTool(

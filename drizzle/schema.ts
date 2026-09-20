@@ -50,7 +50,11 @@ export const projectMcpIntegrations = mysqlTable(
     projectId: int("projectId")
       .notNull()
       .references(() => projects.id),
-    provider: mysqlEnum("provider", ["eap", "cronograma", "ganttLob"]).notNull(),
+    provider: mysqlEnum("provider", [
+      "eap",
+      "cronograma",
+      "ganttLob",
+    ]).notNull(),
     externalProjectId: varchar("externalProjectId", { length: 180 }),
     endpointUrl: varchar("endpointUrl", { length: 500 }).notNull(),
     syncState: mysqlEnum("syncState", [
@@ -85,7 +89,11 @@ export const mcpMutationOperations = mysqlTable(
     userId: int("userId")
       .notNull()
       .references(() => users.id),
-    provider: mysqlEnum("provider", ["eap", "cronograma", "ganttLob"]).notNull(),
+    provider: mysqlEnum("provider", [
+      "eap",
+      "cronograma",
+      "ganttLob",
+    ]).notNull(),
     toolName: varchar("toolName", { length: 100 }).notNull(),
     externalProjectId: varchar("externalProjectId", { length: 180 }).notNull(),
     idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
@@ -153,87 +161,99 @@ export const mcpHomologationRuns = mysqlTable(
   ]
 );
 
-export const scheduleActivities = mysqlTable("schedule_activities", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  externalId: varchar("externalId", { length: 180 }),
-  eapRef: varchar("eapRef", { length: 180 }),
-  wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
-  name: varchar("name", { length: 220 }).notNull(),
-  phase: varchar("phase", { length: 80 }).notNull(),
-  startOffset: int("startOffset").notNull(),
-  durationDays: int("durationDays").notNull(),
-  progress: int("progress").default(0).notNull(),
-  status: mysqlEnum("status", [
-    "Não iniciado",
-    "Em andamento",
-    "Concluído",
-    "Em risco",
-  ])
-    .default("Não iniciado")
-    .notNull(),
-  critical: int("critical").default(0).notNull(),
-  sortOrder: int("sortOrder").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => [
-  uniqueIndex("schedule_activities_project_external_idx").on(
-    table.projectId,
-    table.externalId
-  ),
-  index("schedule_activities_project_idx").on(table.projectId),
-]);
+export const scheduleActivities = mysqlTable(
+  "schedule_activities",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    externalId: varchar("externalId", { length: 180 }),
+    eapRef: varchar("eapRef", { length: 180 }),
+    wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
+    name: varchar("name", { length: 220 }).notNull(),
+    phase: varchar("phase", { length: 80 }).notNull(),
+    startOffset: int("startOffset").notNull(),
+    durationDays: int("durationDays").notNull(),
+    progress: int("progress").default(0).notNull(),
+    status: mysqlEnum("status", [
+      "Não iniciado",
+      "Em andamento",
+      "Concluído",
+      "Em risco",
+    ])
+      .default("Não iniciado")
+      .notNull(),
+    critical: int("critical").default(0).notNull(),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("schedule_activities_project_external_idx").on(
+      table.projectId,
+      table.externalId
+    ),
+    index("schedule_activities_project_idx").on(table.projectId),
+  ]
+);
 
-export const wbsNodes = mysqlTable("wbs_nodes", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  externalId: varchar("externalId", { length: 180 }),
-  externalUid: varchar("externalUid", { length: 180 }),
-  parentId: int("parentId"),
-  code: varchar("code", { length: 32 }).notNull(),
-  name: varchar("name", { length: 220 }).notNull(),
-  level: int("level").default(1).notNull(),
-  nodeType: mysqlEnum("nodeType", ["grupo", "pacote", "entrega"])
-    .default("pacote")
-    .notNull(),
-  unit: varchar("unit", { length: 32 }),
-  plannedQuantity: int("plannedQuantity"),
-  sortOrder: int("sortOrder").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => [
-  uniqueIndex("wbs_nodes_project_external_idx").on(
-    table.projectId,
-    table.externalId
-  ),
-  index("wbs_nodes_project_idx").on(table.projectId),
-]);
+export const wbsNodes = mysqlTable(
+  "wbs_nodes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    externalId: varchar("externalId", { length: 180 }),
+    externalUid: varchar("externalUid", { length: 180 }),
+    parentId: int("parentId"),
+    code: varchar("code", { length: 32 }).notNull(),
+    name: varchar("name", { length: 220 }).notNull(),
+    level: int("level").default(1).notNull(),
+    nodeType: mysqlEnum("nodeType", ["grupo", "pacote", "entrega"])
+      .default("pacote")
+      .notNull(),
+    unit: varchar("unit", { length: 32 }),
+    plannedQuantity: int("plannedQuantity"),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("wbs_nodes_project_external_idx").on(
+      table.projectId,
+      table.externalId
+    ),
+    index("wbs_nodes_project_idx").on(table.projectId),
+  ]
+);
 
-export const scheduleDependencies = mysqlTable("schedule_dependencies", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  externalId: varchar("externalId", { length: 180 }),
-  predecessorId: int("predecessorId")
-    .notNull()
-    .references(() => scheduleActivities.id),
-  successorId: int("successorId")
-    .notNull()
-    .references(() => scheduleActivities.id),
-  type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull(),
-  lag: int("lag").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, table => [
-  uniqueIndex("schedule_dependencies_project_external_idx").on(
-    table.projectId,
-    table.externalId
-  ),
-]);
+export const scheduleDependencies = mysqlTable(
+  "schedule_dependencies",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    externalId: varchar("externalId", { length: 180 }),
+    predecessorId: int("predecessorId")
+      .notNull()
+      .references(() => scheduleActivities.id),
+    successorId: int("successorId")
+      .notNull()
+      .references(() => scheduleActivities.id),
+    type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull(),
+    lag: int("lag").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("schedule_dependencies_project_external_idx").on(
+      table.projectId,
+      table.externalId
+    ),
+  ]
+);
 
 export const productionFronts = mysqlTable("production_fronts", {
   id: int("id").autoincrement().primaryKey(),
@@ -373,10 +393,7 @@ export const agentDecisions = mysqlTable(
   },
   table => [
     index("agent_decisions_project_idx").on(table.projectId),
-    index("agent_decisions_project_stage_idx").on(
-      table.projectId,
-      table.stage
-    ),
+    index("agent_decisions_project_stage_idx").on(table.projectId, table.stage),
   ]
 );
 
@@ -441,7 +458,12 @@ export const agentMemories = mysqlTable(
     confidence: mysqlEnum("confidence", ["high", "medium", "low"])
       .default("medium")
       .notNull(),
-    status: mysqlEnum("status", ["proposed", "approved", "rejected", "obsolete"])
+    status: mysqlEnum("status", [
+      "proposed",
+      "approved",
+      "rejected",
+      "obsolete",
+    ])
       .default("proposed")
       .notNull(),
     approvedBy: int("approvedBy").references(() => users.id),
@@ -453,6 +475,69 @@ export const agentMemories = mysqlTable(
     index("agent_memories_project_idx").on(table.projectId),
     index("agent_memories_owner_scope_idx").on(table.ownerUserId, table.scope),
     index("agent_memories_status_idx").on(table.status),
+  ]
+);
+
+export const agentRuns = mysqlTable(
+  "agent_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    requestId: varchar("requestId", { length: 128 }).notNull().unique(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    status: mysqlEnum("status", [
+      "executando",
+      "respondido",
+      "falhou",
+      "timeout",
+      "aguardando_confirmacao",
+      "dados_incompletos",
+    ])
+      .default("executando")
+      .notNull(),
+    currentStep: varchar("currentStep", { length: 120 }),
+    provider: varchar("provider", { length: 80 }),
+    model: varchar("model", { length: 160 }),
+    contextJson: text("contextJson").notNull(),
+    resultJson: text("resultJson"),
+    errorCode: varchar("errorCode", { length: 100 }),
+    errorMessage: text("errorMessage"),
+    iterations: int("iterations").default(0).notNull(),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    finishedAt: timestamp("finishedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("agent_runs_project_idx").on(table.projectId),
+    index("agent_runs_user_idx").on(table.userId),
+    index("agent_runs_status_idx").on(table.status),
+  ]
+);
+
+export const agentRunEvents = mysqlTable(
+  "agent_run_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    requestId: varchar("requestId", { length: 128 }).notNull(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    eventJson: text("eventJson").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("agent_run_events_request_idx").on(table.requestId),
+    index("agent_run_events_project_idx").on(table.projectId),
+    index("agent_run_events_user_idx").on(table.userId),
   ]
 );
 
@@ -484,3 +569,7 @@ export type AgentFinding = typeof agentFindings.$inferSelect;
 export type InsertAgentFinding = typeof agentFindings.$inferInsert;
 export type AgentMemory = typeof agentMemories.$inferSelect;
 export type InsertAgentMemory = typeof agentMemories.$inferInsert;
+export type AgentRun = typeof agentRuns.$inferSelect;
+export type InsertAgentRun = typeof agentRuns.$inferInsert;
+export type AgentRunEvent = typeof agentRunEvents.$inferSelect;
+export type InsertAgentRunEvent = typeof agentRunEvents.$inferInsert;

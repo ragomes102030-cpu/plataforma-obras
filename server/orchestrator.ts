@@ -4,6 +4,7 @@ import {
   MCP_TOOL_POLICY,
   callReadOnlyMcpTool,
   listConstructionMcpTools,
+  type ConstructionMcpToolCatalog,
 } from "./integrations/construction-mcps";
 import type { McpCallResult, McpTool } from "./integrations/mcp-client";
 import {
@@ -56,9 +57,48 @@ const PROJECT_SCOPED_TOOLS = new Set([
   "calcular_linha_balanco",
 ]);
 
-type ToolDomain = keyof ReturnType<
+export type ToolDomain = keyof ReturnType<
   typeof import("./integrations/construction-mcps").createConstructionMcpClients
 >;
+
+export type OrchestratorEvent =
+  | { type: "catalog_started" }
+  | {
+      type: "catalog_loaded";
+      toolCount: number;
+      errors?: Record<string, string>;
+    }
+  | { type: "llm_started"; iteration: number }
+  | {
+      type: "llm_response";
+      iteration: number;
+      toolCallCount: number;
+      provider?: string;
+    }
+  | {
+      type: "tool_started";
+      iteration: number;
+      domain: ToolDomain;
+      toolName: string;
+    }
+  | {
+      type: "tool_finished";
+      iteration: number;
+      domain: ToolDomain;
+      toolName: string;
+      status: "success" | "error";
+    }
+  | {
+      type: "execution_failed";
+      status:
+        | "falhou"
+        | "timeout"
+        | "aguardando_confirmacao"
+        | "dados_incompletos";
+      errorCode: string;
+      message: string;
+    }
+  | { type: "response_parsed" };
 
 type AuditEvent = {
   taskId: string;
@@ -75,13 +115,15 @@ export type OrchestratorResult = {
   taskId: string;
   content: string;
   model: string;
+  provider?: string;
   iterations: number;
   audit: AuditEvent[];
   readOnly: true;
+  status: "respondido";
 };
 
-type OrchestratorDeps = {
-  listTools?: () => Promise<Record<string, McpTool[]>>;
+export type OrchestratorDeps = {
+  listTools?: () => Promise<ConstructionMcpToolCatalog>;
   callTool?: (
     domain: ToolDomain,
     toolName: string,
@@ -93,15 +135,33 @@ type OrchestratorDeps = {
   }) => Promise<LlmResponse>;
 };
 
+export type OrchestratorOptions = {
+  mcpProjectId?: string;
+  mcpProjectIds?: Partial<Record<ToolDomain, string>>;
+  taskId?: string;
+  maxIterations?: number;
+  deps?: OrchestratorDeps;
+  onEvent?: (event: OrchestratorEvent) => void | Promise<void>;
+};
+
 function createTaskId() {
   return `obra-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function parseContent(response: LlmResponse) {
   const content = response.choices?.[0]?.message?.content;
-  return typeof content === "string" && content.trim()
-    ? content
-    : "O agente concluiu sem produzir uma resposta textual.";
+  if (typeof content === "string" && content.trim()) return content;
+  if (Array.isArray(content)) {
+    const text = content
+      .filter(part => part?.type === "text" && typeof part.text === "string")
+      .map(part => part.text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  throw new Error(
+    "O provider não retornou conteúdo final textual; a resposta ficou vazia, somente com reasoning ou somente com tool call."
+  );
 }
 
 function formatContext(context: AgentProjectContext) {
@@ -130,8 +190,9 @@ function formatContext(context: AgentProjectContext) {
         coordinator.approvedDecisions.length
           ? coordinator.approvedDecisions
               .slice(0, 20)
-              .map(decision =>
-                `${decision.stage} | ${decision.decision} | ${JSON.stringify(decision.scope)} | ${decision.reason || "sem justificativa"}`
+              .map(
+                decision =>
+                  `${decision.stage} | ${decision.decision} | ${JSON.stringify(decision.scope)} | ${decision.reason || "sem justificativa"}`
               )
               .join("\n")
           : "Nenhuma decisão aprovada registrada.",
@@ -139,8 +200,9 @@ function formatContext(context: AgentProjectContext) {
         coordinator.openFindings.length
           ? coordinator.openFindings
               .slice(0, 30)
-              .map(finding =>
-                `${finding.classification} | ${finding.entityType}:${finding.entityRef || "sem referência"} | ${finding.description} | impacto=${finding.impact || "não informado"} | confiança=${finding.confidence}`
+              .map(
+                finding =>
+                  `${finding.classification} | ${finding.entityType}:${finding.entityRef || "sem referência"} | ${finding.description} | impacto=${finding.impact || "não informado"} | confiança=${finding.confidence}`
               )
               .join("\n")
           : "Nenhum achado aberto registrado.",
@@ -148,8 +210,9 @@ function formatContext(context: AgentProjectContext) {
         coordinator.approvedMemories.length
           ? coordinator.approvedMemories
               .slice(0, 30)
-              .map(memory =>
-                `${memory.category}.${memory.key}=${JSON.stringify(memory.value)} | fonte=${memory.sourceType}:${memory.sourceRef || "sem referência"} | confiança=${memory.confidence}`
+              .map(
+                memory =>
+                  `${memory.category}.${memory.key}=${JSON.stringify(memory.value)} | fonte=${memory.sourceType}:${memory.sourceRef || "sem referência"} | confiança=${memory.confidence}`
               )
               .join("\n")
           : "Nenhuma memória aprovada registrada.",
@@ -169,9 +232,10 @@ function formatContext(context: AgentProjectContext) {
   ].join("\n");
 }
 
-function toOpenAiTools(catalog: Record<string, McpTool[]>): LlmTool[] {
+function toOpenAiTools(catalog: ConstructionMcpToolCatalog): LlmTool[] {
   const tools: LlmTool[] = [];
-  for (const entries of Object.values(catalog)) {
+  for (const entries of [catalog.eap, catalog.cronograma, catalog.ganttLob]) {
+    if (!Array.isArray(entries)) continue;
     for (const tool of entries) {
       if (!MCP_TOOL_POLICY.readOnly.has(tool.name)) continue;
       const domain = TOOL_DOMAINS[tool.name as keyof typeof TOOL_DOMAINS];
@@ -220,9 +284,11 @@ function buildSystem(
     "Aprovação deve ser explícita e limitada ao marco apresentado. 'Pode continuar' só vale se o marco e o escopo estiverem claros; silêncio, resposta ambígua ou aprovação de uma parte não aprova os demais nós. Se o cliente pedir revisão, preserve o que foi aprovado e reabra apenas os nós/atividades afetados, informando impactos no cronograma e CPM.",
     "Como as ferramentas de escrita estão bloqueadas nesta fase, nunca diga que uma EAP foi criada ou alterada. Diga 'proposta pronta para aprovação' e, após aprovação, 'pronta para execução controlada'; a gravação exigirá confirmação transacional em fase posterior.",
     "Use primeiro os dados locais da obra. Consulte MCPs somente quando isso acrescentar evidência. Se faltar project_id externo para o domínio necessário, informe que o vínculo daquele domínio ainda não foi configurado.",
-    `project_id externo por domínio: ${Object.entries(mcpProjectIds)
-      .map(([domain, id]) => `${domain}=${id}`)
-      .join(", ") || "nenhum"}`,
+    `project_id externo por domínio: ${
+      Object.entries(mcpProjectIds)
+        .map(([domain, id]) => `${domain}=${id}`)
+        .join(", ") || "nenhum"
+    }`,
     workspaceContext,
     "Contexto local da obra:\n" + formatContext(context),
   ].join("\n\n");
@@ -247,12 +313,7 @@ function validateMessages(messages: AgentMessage[]) {
 export async function runProjectOrchestrator(
   context: AgentProjectContext,
   messages: AgentMessage[],
-  options: {
-    mcpProjectId?: string;
-    mcpProjectIds?: Partial<Record<ToolDomain, string>>;
-    taskId?: string;
-    deps?: OrchestratorDeps;
-  } = {}
+  options: OrchestratorOptions = {}
 ): Promise<OrchestratorResult> {
   validateMessages(messages);
   const taskId = options.taskId ?? createTaskId();
@@ -267,9 +328,30 @@ export async function runProjectOrchestrator(
       : {}),
     ...(options.mcpProjectIds ?? {}),
   };
+  const emit = async (event: OrchestratorEvent) => {
+    try {
+      await options.onEvent?.(event);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          evento: "orchestrator_event_error",
+          taskId,
+          tipo: event.type,
+          erro: error instanceof Error ? error.message : String(error),
+        })
+      );
+    }
+  };
+  await emit({ type: "catalog_started" });
   const catalog = await (deps.listTools ?? listConstructionMcpTools)();
   const tools = toOpenAiTools(catalog);
+  await emit({
+    type: "catalog_loaded",
+    toolCount: tools.length,
+    errors: catalog.errors,
+  });
   const audit: AuditEvent[] = [];
+  const catalogErrorDomains = Object.keys(catalog.errors ?? {});
   const conversation: LlmMessage[] = [
     { role: "system", content: buildSystem(context, mcpProjectIds) },
     ...messages.map(message => ({
@@ -278,21 +360,51 @@ export async function runProjectOrchestrator(
     })),
   ];
 
-  for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+  const maxIterations =
+    Number.isFinite(options.maxIterations) && options.maxIterations! > 0
+      ? Math.min(Math.floor(options.maxIterations!), MAX_ITERATIONS)
+      : MAX_ITERATIONS;
+  for (let iteration = 1; iteration <= maxIterations; iteration++) {
+    await emit({ type: "llm_started", iteration });
     const response = await (deps.callLlm ?? invokeLlmGateway)({
       messages: conversation,
       tools,
     });
     const assistant = response.choices?.[0]?.message;
     if (!assistant) throw new Error("LLM não retornou uma mensagem válida.");
+    await emit({
+      type: "llm_response",
+      iteration,
+      toolCallCount: assistant.tool_calls?.length ?? 0,
+      provider: response.provider,
+    });
     if (!assistant.tool_calls?.length) {
+      const content = parseContent(response);
+      await emit({ type: "response_parsed" });
+      const successfulDomains = Array.from(
+        new Set(
+          audit
+            .filter(event => event.status === "success")
+            .map(event => event.domain)
+        )
+      );
+      const failedDomains = Array.from(
+        new Set(
+          audit
+            .filter(event => event.status === "error")
+            .map(event => event.domain)
+            .concat(catalogErrorDomains as ToolDomain[])
+        )
+      );
       return {
         taskId,
-        content: `${parseContent(response)}\n\nFontes: dados locais da obra${audit.some(event => event.status === "success") ? `; MCPs consultados (${Array.from(new Set(audit.filter(event => event.status === "success").map(event => event.domain))).join(", ")})` : "; nenhum MCP consultado nesta resposta"}.`,
+        content: `${content}\n\nFontes: dados locais da obra${successfulDomains.length ? `; MCPs consultados (${successfulDomains.join(", ")})` : "; nenhum MCP consultado nesta resposta"}${failedDomains.length ? `. MCPs com falha controlada: ${failedDomains.join(", ")}; valide os dados antes de decidir.` : "."}`,
         model: response.model || ENV.aiModel || "gpt-5-mini",
+        provider: response.provider,
         iterations: iteration,
         audit,
         readOnly: true,
+        status: "respondido",
       };
     }
 
@@ -308,6 +420,7 @@ export async function runProjectOrchestrator(
       if (!domain || !MCP_TOOL_POLICY.readOnly.has(toolName)) {
         throw new Error(`Ferramenta não permitida no Marco 2: ${toolName}`);
       }
+      await emit({ type: "tool_started", iteration, domain, toolName });
       const mcpProjectId = mcpProjectIds[domain];
       if (PROJECT_SCOPED_TOOLS.has(toolName) && !mcpProjectId) {
         const message =
@@ -326,6 +439,13 @@ export async function runProjectOrchestrator(
           status: "error",
           durationMs: Date.now() - startedAt,
           error: message,
+        });
+        await emit({
+          type: "tool_finished",
+          iteration,
+          domain,
+          toolName,
+          status: "error",
         });
         continue;
       }
@@ -360,6 +480,13 @@ export async function runProjectOrchestrator(
           status: "success",
           durationMs: Date.now() - startedAt,
         });
+        await emit({
+          type: "tool_finished",
+          iteration,
+          domain,
+          toolName,
+          status: "success",
+        });
       } catch (error) {
         const message =
           error instanceof Error
@@ -380,12 +507,19 @@ export async function runProjectOrchestrator(
           durationMs: Date.now() - startedAt,
           error: message,
         });
+        await emit({
+          type: "tool_finished",
+          iteration,
+          domain,
+          toolName,
+          status: "error",
+        });
       }
     }
   }
 
   throw new Error(
-    `O orquestrador atingiu o limite seguro de ${MAX_ITERATIONS} iterações.`
+    `O orquestrador atingiu o limite seguro de ${maxIterations} iterações.`
   );
 }
 

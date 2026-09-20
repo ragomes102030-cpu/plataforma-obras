@@ -36,6 +36,7 @@ const catalog = {
 describe("runProjectOrchestrator", () => {
   it("executa uma consulta MCP, registra auditoria e retorna resposta final", async () => {
     const llmCalls: Array<{ tools: number; messages: number }> = [];
+    const events: string[] = [];
     const result = await runProjectOrchestrator(
       context,
       [{ role: "user", content: "Qual é a estrutura da EAP?" }],
@@ -81,12 +82,18 @@ describe("runProjectOrchestrator", () => {
             };
           },
         },
+        onEvent: event => {
+          events.push(event.type);
+        },
       }
     );
 
     expect(result.readOnly).toBe(true);
+    expect(result.status).toBe("respondido");
     expect(result.content).toContain("A EAP está vazia.");
-    expect(result.content).toContain("Fontes: dados locais da obra; MCPs consultados (eap).");
+    expect(result.content).toContain(
+      "Fontes: dados locais da obra; MCPs consultados (eap)."
+    );
     expect(result.iterations).toBe(2);
     expect(result.audit[0]).toMatchObject({
       status: "success",
@@ -97,6 +104,43 @@ describe("runProjectOrchestrator", () => {
       { messages: 2, tools: 2 },
       { messages: 4, tools: 2 },
     ]);
+    expect(events).toEqual([
+      "catalog_started",
+      "catalog_loaded",
+      "llm_started",
+      "llm_response",
+      "tool_started",
+      "tool_finished",
+      "llm_started",
+      "llm_response",
+      "response_parsed",
+    ]);
+  });
+
+  it("recusa uma resposta final sem conteúdo textual", async () => {
+    await expect(
+      runProjectOrchestrator(
+        context,
+        [{ role: "user", content: "Resuma a situação." }],
+        {
+          deps: {
+            listTools: async () => catalog,
+            callLlm: async () => ({
+              choices: [
+                {
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    reasoning:
+                      "Analisei os dados, mas não gerei uma conclusão.",
+                  },
+                },
+              ],
+            }),
+          },
+        }
+      )
+    ).rejects.toThrow("não retornou conteúdo final textual");
   });
 
   it("não expõe ferramentas de escrita ao modelo", () => {

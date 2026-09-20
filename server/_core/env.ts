@@ -24,8 +24,11 @@ export const ENV = {
   llmSecondFallbackApiKey: process.env.LLM_SECONDARY_API_KEY ?? "",
   llmSecondFallbackModel: process.env.LLM_SECONDARY_MODEL ?? "",
   llmMaxAttempts: Number(process.env.LLM_MAX_ATTEMPTS ?? "3"),
-  llmTimeoutMs: Number(process.env.LLM_REQUEST_TIMEOUT_MS ?? "45000"),
-  mcpTimeoutMs: Number(process.env.MCP_REQUEST_TIMEOUT_MS ?? "60000"),
+  llmTimeoutMs: Number(process.env.LLM_REQUEST_TIMEOUT_MS ?? "60000"),
+  mcpTimeoutMs: Number(process.env.MCP_REQUEST_TIMEOUT_MS ?? "25000"),
+  agentTotalTimeoutMs: Number(process.env.AGENT_TOTAL_TIMEOUT_MS ?? "120000"),
+  agentMaxIterations: Number(process.env.AGENT_MAX_ITERATIONS ?? "4"),
+  mcpCatalogTtlMs: Number(process.env.MCP_CATALOG_TTL_MS ?? "300000"),
   publicAppUrl: process.env.PUBLIC_APP_URL ?? "",
   mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server.onrender.com",
   mcpCronogramaUrl:

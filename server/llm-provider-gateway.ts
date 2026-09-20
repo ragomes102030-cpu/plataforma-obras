@@ -3,7 +3,10 @@ import { getStoredLlmProvider } from "./llm-settings";
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content:
+    | string
+    | null
+    | Array<{ type?: string; text?: string; [key: string]: unknown }>;
   tool_call_id?: string;
   tool_calls?: Array<{
     id: string;
@@ -23,10 +26,12 @@ export type LlmTool = {
 
 export type LlmResponse = {
   model?: string;
+  provider?: string;
   choices?: Array<{
     message?: {
       role?: "assistant";
-      content?: string | null;
+      content?: LlmMessage["content"];
+      reasoning?: string;
       tool_calls?: LlmMessage["tool_calls"];
     };
   }>;
@@ -112,7 +117,9 @@ export function getConfiguredProviders(): LlmProviderConfig[] {
   return Array.from(unique.values());
 }
 
-export async function getConfiguredProvidersAsync(): Promise<LlmProviderConfig[]> {
+export async function getConfiguredProvidersAsync(): Promise<
+  LlmProviderConfig[]
+> {
   const providers = getConfiguredProviders();
   try {
     const stored = await getStoredLlmProvider();
@@ -206,7 +213,8 @@ export async function invokeLlmGateway(
   request: GatewayRequest,
   providers?: LlmProviderConfig[]
 ): Promise<GatewayResult> {
-  const configuredProviders = providers ?? (await getConfiguredProvidersAsync());
+  const configuredProviders =
+    providers ?? (await getConfiguredProvidersAsync());
   if (configuredProviders.length === 0) {
     throw new Error(
       "Nenhum provedor LLM configurado. Defina um provedor OpenAI-compatible no Render."

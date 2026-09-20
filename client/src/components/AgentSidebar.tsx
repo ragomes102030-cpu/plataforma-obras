@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type AgentSection =
   | "portfolio"
@@ -53,6 +53,31 @@ const mcpLabels = {
   ganttLob: "Gantt / LOB",
 } as const;
 
+const terminalStatuses = new Set([
+  "respondido",
+  "falhou",
+  "timeout",
+  "aguardando_confirmacao",
+  "dados_incompletos",
+]);
+
+function terminalMessage(run: {
+  requestId: string;
+  status: string;
+  errorMessage?: string | null;
+  result?: { content?: string } | null;
+}) {
+  if (run.status === "respondido" && run.result?.content)
+    return run.result.content;
+  const labels: Record<string, string> = {
+    falhou: "falhou",
+    timeout: "atingiu o tempo limite",
+    aguardando_confirmacao: "aguarda confirmação",
+    dados_incompletos: "terminou com dados incompletos",
+  };
+  return `A execução ${labels[run.status] ?? "terminou"}. ${run.errorMessage ?? "Revise o request_id e tente novamente."}\n\nRequest ID: ${run.requestId}`;
+}
+
 export function AgentSidebar({
   projectId,
   projectName,
@@ -67,6 +92,8 @@ export function AgentSidebar({
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const handledRequestRef = useRef<string | null>(null);
   const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
     enabled: false,
     staleTime: 30_000,
@@ -82,7 +109,9 @@ export function AgentSidebar({
     { projectId },
     { staleTime: 10_000, refetchOnWindowFocus: true }
   );
-  const mcpProjectIds: Partial<Record<"eap" | "cronograma" | "ganttLob", string>> = {};
+  const mcpProjectIds: Partial<
+    Record<"eap" | "cronograma" | "ganttLob", string>
+  > = {};
   for (const mapping of mappingsQuery.data ?? []) {
     const value = mapping.externalProjectId?.trim();
     if (value && value.toLowerCase() !== "default") {
@@ -91,15 +120,11 @@ export function AgentSidebar({
   }
   const agentMutation = trpc.agent.orchestrate.useMutation({
     onSuccess: response => {
-      setMessages(previous => [
-        ...previous,
-        {
-          role: "assistant",
-          content: response.content,
-        },
-      ]);
+      handledRequestRef.current = null;
+      setActiveRequestId(response.requestId);
     },
     onError: error => {
+      setActiveRequestId(null);
       setMessages(previous => [
         ...previous,
         {
@@ -109,6 +134,46 @@ export function AgentSidebar({
       ]);
     },
   });
+  const executionQuery = trpc.agent.status.useQuery(
+    { requestId: activeRequestId ?? "aguardando" },
+    {
+      enabled: Boolean(activeRequestId),
+      refetchInterval: activeRequestId ? 1000 : false,
+      retry: 1,
+      refetchOnWindowFocus: true,
+    }
+  );
+
+  useEffect(() => {
+    const run = executionQuery.data;
+    if (!activeRequestId || !run || run.requestId !== activeRequestId) return;
+    if (!terminalStatuses.has(run.status)) return;
+    if (handledRequestRef.current === run.requestId) return;
+    handledRequestRef.current = run.requestId;
+    setActiveRequestId(null);
+    setMessages(previous => [
+      ...previous,
+      { role: "assistant", content: terminalMessage(run) },
+    ]);
+  }, [activeRequestId, executionQuery.data]);
+
+  useEffect(() => {
+    if (!activeRequestId) return;
+    const timeout = window.setTimeout(() => {
+      setActiveRequestId(current => {
+        if (current !== activeRequestId) return current;
+        setMessages(previous => [
+          ...previous,
+          {
+            role: "assistant",
+            content: `Não foi possível obter o estado final do agente no navegador. Consulte o request_id ${activeRequestId}.`,
+          },
+        ]);
+        return null;
+      });
+    }, 130_000);
+    return () => window.clearTimeout(timeout);
+  }, [activeRequestId]);
 
   const handleSend = (content: string) => {
     const nextMessages: Message[] = [...messages, { role: "user", content }];
@@ -136,6 +201,7 @@ export function AgentSidebar({
   const mcpOnline = statusQuery.data?.status === "online";
   const mcpDomains = ["eap", "cronograma", "ganttLob"] as const;
   const coordinator = coordinatorQuery.data;
+  const isLoading = agentMutation.isPending || Boolean(activeRequestId);
 
   return (
     <>
@@ -188,7 +254,7 @@ export function AgentSidebar({
               <span>Marco do coordenador</span>
               <strong>
                 {coordinator
-                  ? stageLabels[coordinator.stage] ?? coordinator.stage
+                  ? (stageLabels[coordinator.stage] ?? coordinator.stage)
                   : "Carregando estado..."}
                 {coordinator && coordinator.blockerCount > 0
                   ? ` · ${coordinator.blockerCount} bloqueador(es)`
@@ -228,7 +294,11 @@ export function AgentSidebar({
                   title={server?.lastError ?? undefined}
                 >
                   <span className="agent-mcp-name">
-                    {online ? <CircleCheck size={11} /> : <CircleAlert size={11} />}
+                    {online ? (
+                      <CircleCheck size={11} />
+                    ) : (
+                      <CircleAlert size={11} />
+                    )}
                     {mcpLabels[domain]}
                   </span>
                   <span className="agent-mcp-meta">
@@ -263,7 +333,11 @@ export function AgentSidebar({
           className="agent-sidebar-chat"
           messages={messages}
           onSendMessage={handleSend}
-          isLoading={agentMutation.isPending}
+          isLoading={isLoading}
+          loadingMessage={
+            executionQuery.data?.currentStep ??
+            "Iniciando execução rastreável..."
+          }
           height="100%"
           placeholder="Pergunte sobre produção, medição ou prazo..."
           emptyStateMessage="Pergunte sobre a obra. O agente priorizará a área que está aberta."

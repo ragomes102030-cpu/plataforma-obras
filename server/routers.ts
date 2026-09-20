@@ -29,12 +29,12 @@ import {
 } from "./_core/trpc";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
-import { runProjectOrchestrator } from "./orchestrator";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
-  getPublicLlmSettings,
-  saveStoredLlmProvider,
-} from "./llm-settings";
+  getAgentExecutionStatus,
+  startAgentExecution,
+} from "./agent-execution";
+import { getPublicLlmSettings, saveStoredLlmProvider } from "./llm-settings";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -346,14 +346,18 @@ async function loadAgentCoordinatorSnapshot(
       .where(eq(agentProjectStates.projectId, projectId))
       .limit(1);
   }
-  if (!state) throw new Error("Não foi possível inicializar o estado do coordenador.");
+  if (!state)
+    throw new Error("Não foi possível inicializar o estado do coordenador.");
 
   const [decisions, findings, memories] = await Promise.all([
     db
       .select()
       .from(agentDecisions)
       .where(
-        and(eq(agentDecisions.projectId, projectId), eq(agentDecisions.userId, userId))
+        and(
+          eq(agentDecisions.projectId, projectId),
+          eq(agentDecisions.userId, userId)
+        )
       )
       .orderBy(desc(agentDecisions.createdAt))
       .limit(20),
@@ -361,7 +365,10 @@ async function loadAgentCoordinatorSnapshot(
       .select()
       .from(agentFindings)
       .where(
-        and(eq(agentFindings.projectId, projectId), eq(agentFindings.status, "open"))
+        and(
+          eq(agentFindings.projectId, projectId),
+          eq(agentFindings.status, "open")
+        )
       )
       .orderBy(desc(agentFindings.createdAt))
       .limit(30),
@@ -373,7 +380,10 @@ async function loadAgentCoordinatorSnapshot(
           eq(agentMemories.status, "approved"),
           or(
             eq(agentMemories.projectId, projectId),
-            and(isNull(agentMemories.projectId), eq(agentMemories.ownerUserId, userId))
+            and(
+              isNull(agentMemories.projectId),
+              eq(agentMemories.ownerUserId, userId)
+            )
           )
         )
       )
@@ -419,9 +429,13 @@ async function buildPhase7PlanForProject(
     .from(projectMcpIntegrations)
     .where(eq(projectMcpIntegrations.projectId, projectId));
   const externalProjectId = (provider: McpProvider) => {
-    const value = mappings.find(item => item.provider === provider)?.externalProjectId;
+    const value = mappings.find(
+      item => item.provider === provider
+    )?.externalProjectId;
     if (!value || value.toLowerCase() === "default") {
-      throw new Error(`Cadastre um project_id de homologação válido para o MCP ${provider}.`);
+      throw new Error(
+        `Cadastre um project_id de homologação válido para o MCP ${provider}.`
+      );
     }
     return value;
   };
@@ -437,9 +451,13 @@ async function buildPhase7PlanForProject(
       project_id: cronogramaProjectId,
     }),
   ]);
-  const cpmResult = await callReadOnlyMcpTool("cronograma", "calcular_caminho_critico", {
-    project_id: cronogramaProjectId,
-  });
+  const cpmResult = await callReadOnlyMcpTool(
+    "cronograma",
+    "calcular_caminho_critico",
+    {
+      project_id: cronogramaProjectId,
+    }
+  );
   return buildPhase7ImportPlan(
     cronogramaProjectId,
     eapResult,
@@ -464,7 +482,7 @@ async function persistPhase7Plan(
     const localWbsByExternalId = new Map<string, number>();
     for (const node of plan.wbsNodes) {
       const parentId = node.parentExternalId
-        ? localWbsByExternalId.get(node.parentExternalId) ?? null
+        ? (localWbsByExternalId.get(node.parentExternalId) ?? null)
         : null;
       const existing = await tx
         .select({ id: wbsNodes.id })
@@ -536,18 +554,20 @@ async function persistPhase7Plan(
           ? Math.max(
               0,
               Math.round(
-                (Date.parse(activity.startDate) - project.plannedStart.getTime()) /
+                (Date.parse(activity.startDate) -
+                  project.plannedStart.getTime()) /
                   86400000
               )
             )
           : 0,
         durationDays: activity.durationDays,
         progress: activity.progress,
-        status: activity.progress >= 100
-          ? ("Concluído" as const)
-          : activity.progress > 0
-            ? ("Em andamento" as const)
-            : ("Não iniciado" as const),
+        status:
+          activity.progress >= 100
+            ? ("Concluído" as const)
+            : activity.progress > 0
+              ? ("Em andamento" as const)
+              : ("Não iniciado" as const),
         critical: activity.critical,
         sortOrder: activity.sortOrder,
       };
@@ -567,9 +587,14 @@ async function persistPhase7Plan(
     }
 
     for (const dependency of plan.dependencies) {
-      const predecessorId = localActivitiesByExternalId.get(dependency.predecessorExternalId);
-      const successorId = localActivitiesByExternalId.get(dependency.successorExternalId);
-      if (!predecessorId || !successorId) throw new Error("Dependência sem atividades locais correspondentes.");
+      const predecessorId = localActivitiesByExternalId.get(
+        dependency.predecessorExternalId
+      );
+      const successorId = localActivitiesByExternalId.get(
+        dependency.successorExternalId
+      );
+      if (!predecessorId || !successorId)
+        throw new Error("Dependência sem atividades locais correspondentes.");
       const existing = await tx
         .select({ id: scheduleDependencies.id })
         .from(scheduleDependencies)
@@ -659,7 +684,10 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return ENV.allowDemoData && input.projectId === 1 ? demoActivities : [];
+        if (!db)
+          return ENV.allowDemoData && input.projectId === 1
+            ? demoActivities
+            : [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const rows = await db
           .select()
@@ -1049,7 +1077,12 @@ export const appRouter = router({
         z.object({
           projectId: z.number().int().positive(),
           stage: z.enum(coordinatorStages),
-          decision: z.enum(["approved", "partially_approved", "rejected", "reopen"]),
+          decision: z.enum([
+            "approved",
+            "partially_approved",
+            "rejected",
+            "reopen",
+          ]),
           scope: z.record(z.string(), z.unknown()).default({}),
           reason: z.string().trim().max(2000).optional(),
           impact: z.record(z.string(), z.unknown()).optional(),
@@ -1143,7 +1176,11 @@ export const appRouter = router({
         if (state) {
           await db
             .update(agentProjectStates)
-            .set({ blockerCount: state.blockerCount + (input.classification === "blocker" ? 1 : 0) })
+            .set({
+              blockerCount:
+                state.blockerCount +
+                (input.classification === "blocker" ? 1 : 0),
+            })
             .where(eq(agentProjectStates.projectId, input.projectId));
         }
         return { id: created.id };
@@ -1165,7 +1202,8 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         if (input.scope === "project") {
-          if (!input.projectId) throw new Error("Memória de obra exige projectId.");
+          if (!input.projectId)
+            throw new Error("Memória de obra exige projectId.");
           await assertAccessibleProject(db, input.projectId, ctx.user.id);
         }
         const [created] = await db
@@ -1199,8 +1237,10 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!memory) throw new Error("Memória não encontrada ou sem permissão.");
-        if (memory.projectId) await assertAccessibleProject(db, memory.projectId, ctx.user.id);
+        if (!memory)
+          throw new Error("Memória não encontrada ou sem permissão.");
+        if (memory.projectId)
+          await assertAccessibleProject(db, memory.projectId, ctx.user.id);
         await db
           .update(agentMemories)
           .set({
@@ -1245,19 +1285,28 @@ export const appRouter = router({
             .where(eq(scheduleActivities.projectId, input.projectId))
             .orderBy(scheduleActivities.sortOrder);
         } else {
-          if (!ENV.allowDemoData) throw new Error("Banco de dados não configurado.");
+          if (!ENV.allowDemoData)
+            throw new Error("Banco de dados não configurado.");
           project = demoProjects.find(item => item.id === input.projectId);
           activities = input.projectId === 1 ? demoActivities : [];
           if (!project) throw new Error("Obra não encontrada.");
         }
-        const mcpProjectIds: Partial<Record<"eap" | "cronograma" | "ganttLob", string>> = {};
+        const mcpProjectIds: Partial<
+          Record<"eap" | "cronograma" | "ganttLob", string>
+        > = {};
         if (db) {
           const mappings = await db
-            .select({ provider: projectMcpIntegrations.provider, externalProjectId: projectMcpIntegrations.externalProjectId })
+            .select({
+              provider: projectMcpIntegrations.provider,
+              externalProjectId: projectMcpIntegrations.externalProjectId,
+            })
             .from(projectMcpIntegrations)
             .where(eq(projectMcpIntegrations.projectId, input.projectId));
           for (const mapping of mappings) {
-            if (mapping.externalProjectId && mapping.externalProjectId.toLowerCase() !== "default") {
+            if (
+              mapping.externalProjectId &&
+              mapping.externalProjectId.toLowerCase() !== "default"
+            ) {
               mcpProjectIds[mapping.provider] = mapping.externalProjectId;
             }
           }
@@ -1271,16 +1320,31 @@ export const appRouter = router({
             .set({ activeSection: "portfolio", activeSubtab: null })
             .where(eq(agentProjectStates.projectId, input.projectId));
         }
-        return runProjectOrchestrator(
-          buildAgentProjectContext(
+        return startAgentExecution({
+          db,
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          context: buildAgentProjectContext(
             project,
             activities,
             { activeSection: "portfolio", contextMode: "focused" },
             coordinator
           ),
-          input.messages,
-          { mcpProjectIds }
+          messages: input.messages,
+          mcpProjectIds,
+          requestId: requestIdFrom(ctx),
+        });
+      }),
+    status: protectedProcedure
+      .input(z.object({ requestId: z.string().trim().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const status = await getAgentExecutionStatus(
+          await getDb(),
+          input.requestId,
+          ctx.user.id
         );
+        if (!status) throw new Error("Execução do agente não encontrada.");
+        return status;
       }),
     orchestrate: protectedProcedure
       .input(
@@ -1343,7 +1407,8 @@ export const appRouter = router({
             .where(eq(scheduleActivities.projectId, input.projectId))
             .orderBy(scheduleActivities.sortOrder);
         } else {
-          if (!ENV.allowDemoData) throw new Error("Banco de dados não configurado.");
+          if (!ENV.allowDemoData)
+            throw new Error("Banco de dados não configurado.");
           project = demoProjects.find(item => item.id === input.projectId);
           activities = input.projectId === 1 ? demoActivities : [];
           if (!project) throw new Error("Obra não encontrada.");
@@ -1360,11 +1425,29 @@ export const appRouter = router({
             })
             .where(eq(agentProjectStates.projectId, input.projectId));
         }
-        return runProjectOrchestrator(
-          buildAgentProjectContext(project, activities, input.context, coordinator),
-          input.messages,
-          { mcpProjectId: input.mcpProjectId, mcpProjectIds: input.mcpProjectIds }
-        );
+        return startAgentExecution({
+          db,
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          context: buildAgentProjectContext(
+            project,
+            activities,
+            input.context,
+            coordinator
+          ),
+          messages: input.messages,
+          mcpProjectIds: {
+            ...(input.mcpProjectId
+              ? {
+                  eap: input.mcpProjectId,
+                  cronograma: input.mcpProjectId,
+                  ganttLob: input.mcpProjectId,
+                }
+              : {}),
+            ...(input.mcpProjectIds ?? {}),
+          },
+          requestId: requestIdFrom(ctx),
+        });
       }),
   }),
   integrations: router({
@@ -1372,14 +1455,15 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return mcpProviders.map(provider => ({
-          provider,
-          externalProjectId: null,
-          endpointUrl: mcpEndpoint(provider),
-          syncState: "unconfigured" as const,
-          lastSyncedAt: null,
-          lastError: null,
-        }));
+        if (!db)
+          return mcpProviders.map(provider => ({
+            provider,
+            externalProjectId: null,
+            endpointUrl: mcpEndpoint(provider),
+            syncState: "unconfigured" as const,
+            lastSyncedAt: null,
+            lastError: null,
+          }));
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const rows = await db
           .select()
@@ -1390,12 +1474,12 @@ export const appRouter = router({
           return row
             ? { ...row, endpointUrl: mcpEndpoint(provider) }
             : {
-            provider,
-            externalProjectId: null,
-            endpointUrl: mcpEndpoint(provider),
-            syncState: "unconfigured" as const,
-            lastSyncedAt: null,
-            lastError: null,
+                provider,
+                externalProjectId: null,
+                endpointUrl: mcpEndpoint(provider),
+                syncState: "unconfigured" as const,
+                lastSyncedAt: null,
+                lastError: null,
               };
         });
       }),
@@ -1454,8 +1538,9 @@ export const appRouter = router({
           .where(eq(projectMcpIntegrations.projectId, input.projectId));
         const externalProjectIds = Object.fromEntries(
           mcpProviders.map(provider => {
-            const value = mappings.find(item => item.provider === provider)
-              ?.externalProjectId;
+            const value = mappings.find(
+              item => item.provider === provider
+            )?.externalProjectId;
             if (!value || value.toLowerCase() === "default") {
               throw new Error(
                 `Cadastre o project_id externo do MCP ${provider} antes da homologação.`
@@ -1550,7 +1635,9 @@ export const appRouter = router({
         }
         const argsJson = JSON.stringify(input.args);
         if (argsJson.length > 16_000) {
-          throw new Error("Os argumentos da mutação excedem o limite permitido.");
+          throw new Error(
+            "Os argumentos da mutação excedem o limite permitido."
+          );
         }
         const mapping = await db
           .select()
@@ -1563,8 +1650,13 @@ export const appRouter = router({
           )
           .limit(1);
         const externalProjectId = mapping[0]?.externalProjectId;
-        if (!externalProjectId || externalProjectId.toLowerCase() === "default") {
-          throw new Error("Cadastre um project_id externo válido antes da prévia.");
+        if (
+          !externalProjectId ||
+          externalProjectId.toLowerCase() === "default"
+        ) {
+          throw new Error(
+            "Cadastre um project_id externo válido antes da prévia."
+          );
         }
         const idempotencyKey = input.idempotencyKey ?? randomUUID();
         const existing = await db
@@ -1574,7 +1666,9 @@ export const appRouter = router({
           .limit(1);
         if (existing[0]) {
           if (existing[0].userId !== ctx.user.id) {
-            throw new Error("A chave de idempotência já pertence a outro usuário.");
+            throw new Error(
+              "A chave de idempotência já pertence a outro usuário."
+            );
           }
           return existing[0];
         }
@@ -1595,7 +1689,8 @@ export const appRouter = router({
           .from(mcpMutationOperations)
           .where(eq(mcpMutationOperations.idempotencyKey, idempotencyKey))
           .limit(1);
-        if (!created[0]) throw new Error("Não foi possível registrar a prévia.");
+        if (!created[0])
+          throw new Error("Não foi possível registrar a prévia.");
         return created[0];
       }),
     confirmMutation: protectedProcedure
@@ -1626,7 +1721,9 @@ export const appRouter = router({
           return {
             operation,
             replayed: true as const,
-            result: operation.resultJson ? JSON.parse(operation.resultJson) : null,
+            result: operation.resultJson
+              ? JSON.parse(operation.resultJson)
+              : null,
           };
         }
         if (
@@ -1663,9 +1760,14 @@ export const appRouter = router({
               error: null,
             })
             .where(eq(mcpMutationOperations.id, operation.id));
-          return { operationId: operation.id, replayed: false as const, result };
+          return {
+            operationId: operation.id,
+            replayed: false as const,
+            result,
+          };
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Falha na mutação MCP.";
+          const message =
+            error instanceof Error ? error.message : "Falha na mutação MCP.";
           await db
             .update(mcpMutationOperations)
             .set({ status: "failed", error: message, executedAt: new Date() })
@@ -1701,7 +1803,8 @@ export const appRouter = router({
               )
             )
             .limit(1);
-          if (!operation[0]) throw new Error("Mutação de evidência não encontrada.");
+          if (!operation[0])
+            throw new Error("Mutação de evidência não encontrada.");
           if (operation[0].status !== "succeeded") {
             throw new Error("A mutação de evidência precisa estar concluída.");
           }
@@ -1717,8 +1820,9 @@ export const appRouter = router({
           .where(eq(projectMcpIntegrations.projectId, input.projectId));
         const externalProjectIds = Object.fromEntries(
           mcpProviders.map(provider => {
-            const value = mappings.find(item => item.provider === provider)
-              ?.externalProjectId;
+            const value = mappings.find(
+              item => item.provider === provider
+            )?.externalProjectId;
             if (!value || value.toLowerCase() === "default") {
               throw new Error(
                 `Cadastre o project_id externo do MCP ${provider} antes do E2E.`
@@ -1734,16 +1838,14 @@ export const appRouter = router({
           reconciliation: true,
           externalProjectIds,
         };
-        await db
-          .insert(mcpHomologationRuns)
-          .values({
-            projectId: input.projectId,
-            userId: ctx.user.id,
-            requestId,
-            status: "read_only_running",
-            planJson: JSON.stringify(plan),
-            startedAt: new Date(),
-          });
+        await db.insert(mcpHomologationRuns).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          requestId,
+          status: "read_only_running",
+          planJson: JSON.stringify(plan),
+          startedAt: new Date(),
+        });
         const result = await runConstructionMcpHomologation(
           externalProjectIds,
           requestId
@@ -1808,7 +1910,9 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [mapping] = await db
-          .select({ externalProjectId: projectMcpIntegrations.externalProjectId })
+          .select({
+            externalProjectId: projectMcpIntegrations.externalProjectId,
+          })
           .from(projectMcpIntegrations)
           .where(
             and(
@@ -1822,7 +1926,9 @@ export const appRouter = router({
           PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName) &&
           (!externalProjectId || externalProjectId.toLowerCase() === "default")
         ) {
-          throw new Error(`Nenhum project_id autorizado para o MCP ${input.domain}.`);
+          throw new Error(
+            `Nenhum project_id autorizado para o MCP ${input.domain}.`
+          );
         }
         const args = { ...input.args };
         if (PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName)) {
