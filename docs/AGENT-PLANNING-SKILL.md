@@ -15,6 +15,7 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 5. **Revisão localizada.** Uma divergência em um nó não deve apagar silenciosamente o que já foi aprovado.
 6. **Separação de domínios.** EAP, cronograma e Gantt/LOB possuem bancos e responsabilidades diferentes; a coordenação ocorre por `project_id` e referências.
 7. **Escrita controlada.** Toda mutação deve ser apresentada como intenção, com idempotência e confirmação transacional; na fase somente leitura, nenhuma escrita é alegada.
+8. **Auditoria ativa.** O agente deve procurar erros e contradições mesmo quando o cliente não perguntar, antes que o dado avance para a próxima etapa.
 
 ## Estados e gates
 
@@ -30,6 +31,36 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 | `CONTROLE` | Baseline e produção disponíveis | `comparar_baseline`, `curva_s`, LOB e dados realizados | Desvios, riscos, causas e ações | Decidir replanejamento |
 
 O agente pode retornar a um estado anterior quando uma revisão alterar uma premissa. Deve declarar a regressão: por exemplo, “a alteração do nó EAP 2.3 invalida as atividades A-14 e A-15 e exige recalcular o CPM”.
+
+## Auditoria ativa de dados
+
+O agente não deve assumir que o dado informado pelo cliente está correto. Em cada marco, deve confrontar as fontes disponíveis e procurar:
+
+| Classe | Exemplos de verificação |
+|---|---|
+| Estrutural | órfão, duplicidade, raiz indevida, folha sem quantidade/N/A |
+| Semântica | tipo de frente incompatível, pacote com unidade indevida, escopo incompleto |
+| Quantitativa | quantidade da EAP incompatível com atividade, unidade ou soma de folhas |
+| Referência | atividade com `eap_ref` inexistente, nó movido ou projeto externo incorreto |
+| Temporal | duração incompatível com datas, término anterior ao início, prazo impossível |
+| Dependência | ciclo, precedência contra a lógica construtiva, lag sem justificativa |
+| CPM | atividade sem duração, caminho crítico inconsistente, folga negativa não explicada |
+| Baseline | realizado comparado à base errada, baseline alterada silenciosamente |
+| Produção | progresso maior que 100%, ritmo incompatível com unidades ou equipes |
+| LOB | atividade não repetitiva modelada como LOB, sucessora mais rápida e interferência |
+| Domínio | divergência entre EAP, cronograma, Gantt, produção e Linha de Balanço |
+
+Cada achado deve informar:
+
+1. **Classificação:** erro bloqueador, alerta ou recomendação;
+2. **Evidência:** valor encontrado, fonte e identificador (`EAP_ID`, `uid`, atividade, dependência, baseline ou unidade);
+3. **Divergência:** o que não fecha e qual valor ou premissa está em conflito;
+4. **Impacto:** quais etapas, atividades ou decisões ficam comprometidas;
+5. **Confiança:** alta, média ou baixa, conforme a qualidade das evidências;
+6. **Correção proposta:** nunca executada silenciosamente;
+7. **Decisão solicitada:** pergunta objetiva ao cliente.
+
+Quando houver duas interpretações plausíveis, o agente deve apresentar ambas. O valor original deve permanecer preservado como evidência até que o cliente confirme a correção. Erro detectado em um marco bloqueia o marco afetado e impede a propagação para atividades, CPM, baseline, Gantt ou produção.
 
 ## Procedimento por estado
 
