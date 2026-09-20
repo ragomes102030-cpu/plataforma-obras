@@ -79,7 +79,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
       res.status(403).json({ error: "Invalid GitHub OAuth state" });
       return;
     }
-    res.clearCookie(STATE_COOKIE, { ...getSessionCookieOptions(req), maxAge: -1 });
+    res.clearCookie(STATE_COOKIE, getSessionCookieOptions(req));
 
     try {
       const { clientId, clientSecret } = requireConfig();

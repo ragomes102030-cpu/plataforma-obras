@@ -5,11 +5,22 @@ import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+/** Normalize CLI-style MySQL URL options before handing them to mysql2. */
+export function normalizeDatabaseConnection(databaseUrl: string) {
+  const url = new URL(databaseUrl);
+  const sslMode = url.searchParams.get("ssl-mode")?.toLowerCase();
+  url.searchParams.delete("ssl-mode");
+  return {
+    uri: url.toString(),
+    ...(sslMode && sslMode !== "disabled" ? { ssl: {} } : {}),
+  };
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle({ connection: normalizeDatabaseConnection(process.env.DATABASE_URL) });
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
