@@ -9,7 +9,7 @@ describe("normalizeDatabaseConnection", () => {
 
     expect(connection.uri).not.toContain("ssl-mode");
     expect(connection.uri).toContain("charset=utf8mb4");
-    expect(connection.ssl).toEqual({});
+    expect(connection.ssl).toEqual({ rejectUnauthorized: false });
   });
 
   it("does not enable TLS when ssl-mode is disabled", () => {

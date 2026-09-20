@@ -12,7 +12,9 @@ export function normalizeDatabaseConnection(databaseUrl: string) {
   url.searchParams.delete("ssl-mode");
   return {
     uri: url.toString(),
-    ...(sslMode && sslMode !== "disabled" ? { ssl: {} } : {}),
+    ...(sslMode && sslMode !== "disabled"
+      ? { ssl: { rejectUnauthorized: false } }
+      : {}),
   };
 }
 
