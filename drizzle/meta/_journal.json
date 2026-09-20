@@ -36,6 +36,13 @@
       "when": 1789862293365,
       "tag": "0004_charming_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1789865744705,
+      "tag": "0005_cuddly_pyro",
+      "breakpoints": true
     }
   ]
 }
