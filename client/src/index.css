@@ -1775,6 +1775,126 @@
     background: #edf6f0;
     font-size: 9px;
   }
+  .mcp-e2e-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .mcp-e2e-icon {
+    color: #6f909b;
+    margin: 3px 2px 0 16px;
+  }
+  .mcp-e2e-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 0 18px 14px;
+    padding: 9px;
+    border-radius: 7px;
+    color: #527267;
+    background: #edf6f0;
+    font-size: 9px;
+    line-height: 1.45;
+  }
+  .mcp-e2e-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 0 18px 15px;
+  }
+  .mcp-e2e-controls label {
+    color: #71858d;
+    font-size: 9px;
+  }
+  .mcp-e2e-control-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mcp-e2e-control-row input {
+    width: 180px;
+    padding: 8px 9px;
+    border: 1px solid #dce7e9;
+    border-radius: 7px;
+    outline: 0;
+    color: #526873;
+    background: #fbfcfc;
+    font-size: 10px;
+  }
+  .mcp-e2e-control-row button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .mcp-e2e-controls > span {
+    color: #8e9ca2;
+    font-size: 9px;
+  }
+  .mcp-e2e-error {
+    margin: 0 18px 14px;
+    color: #9a5e5d;
+    font-size: 9px;
+  }
+  .mcp-e2e-result {
+    padding: 14px 18px 16px;
+    border-top: 1px solid #edf1f2;
+    background: #fbfcfc;
+  }
+  .mcp-e2e-result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .mcp-e2e-result-head strong {
+    margin: 0;
+    color: #526973;
+    font-size: 11px;
+  }
+  .mcp-e2e-result-head span {
+    color: #8e9ca2;
+    font-size: 8px;
+  }
+  .mcp-e2e-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .mcp-e2e-server {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid #dfeaea;
+    border-radius: 7px;
+    color: #55716e;
+    background: white;
+  }
+  .mcp-e2e-server.failed,
+  .mcp-e2e-server.skipped {
+    border-color: #f0d9d5;
+    color: #946e68;
+    background: #fff9f8;
+  }
+  .mcp-e2e-server > span,
+  .mcp-e2e-server > small {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mcp-e2e-server > span {
+    font-size: 9px;
+  }
+  .mcp-e2e-server strong {
+    margin: 0;
+    font-size: 11px;
+  }
+  .mcp-e2e-server small {
+    overflow: hidden;
+    color: #8e9ca2;
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .eap-heading {
     border-bottom: 1px solid #edf1f2;
   }
@@ -2127,6 +2247,17 @@
     .mcp-mutation-confirm-row {
       align-items: stretch;
       flex-direction: column;
+    }
+    .mcp-e2e-control-row,
+    .mcp-e2e-result-head {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .mcp-e2e-control-row input {
+      width: auto;
+    }
+    .mcp-e2e-grid {
+      grid-template-columns: 1fr;
     }
   }
 }

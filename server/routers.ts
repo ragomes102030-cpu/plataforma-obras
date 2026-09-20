@@ -8,6 +8,7 @@ import {
   productionTeams,
   productionUnits,
   mcpMutationOperations,
+  mcpHomologationRuns,
   projectMcpIntegrations,
   scheduleActivities,
   scheduleDependencies,
@@ -1045,6 +1046,124 @@ export const appRouter = router({
             .where(eq(mcpMutationOperations.id, operation.id));
           throw new Error(message);
         }
+      }),
+    runIntegratedHomologation: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          mutationOperationId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        let mutationEvidence: {
+          operationId: number | null;
+          status: string;
+          toolName: string | null;
+        } = { operationId: null, status: "não informado", toolName: null };
+        if (input.mutationOperationId) {
+          const operation = await db
+            .select()
+            .from(mcpMutationOperations)
+            .where(
+              and(
+                eq(mcpMutationOperations.id, input.mutationOperationId),
+                eq(mcpMutationOperations.projectId, input.projectId),
+                eq(mcpMutationOperations.userId, ctx.user.id)
+              )
+            )
+            .limit(1);
+          if (!operation[0]) throw new Error("Mutação de evidência não encontrada.");
+          if (operation[0].status !== "succeeded") {
+            throw new Error("A mutação de evidência precisa estar concluída.");
+          }
+          mutationEvidence = {
+            operationId: operation[0].id,
+            status: operation[0].status,
+            toolName: operation[0].toolName,
+          };
+        }
+        const mappings = await db
+          .select()
+          .from(projectMcpIntegrations)
+          .where(eq(projectMcpIntegrations.projectId, input.projectId));
+        const externalProjectIds = Object.fromEntries(
+          mcpProviders.map(provider => {
+            const value = mappings.find(item => item.provider === provider)
+              ?.externalProjectId;
+            if (!value || value.toLowerCase() === "default") {
+              throw new Error(
+                `Cadastre o project_id externo do MCP ${provider} antes do E2E.`
+              );
+            }
+            return [provider, value] as const;
+          })
+        ) as Record<McpProvider, string>;
+        const requestId = requestIdFrom(ctx);
+        const plan = {
+          readOnlyProbe: true,
+          mutationEvidence: mutationEvidence.operationId,
+          reconciliation: true,
+          externalProjectIds,
+        };
+        await db
+          .insert(mcpHomologationRuns)
+          .values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            requestId,
+            status: "read_only_running",
+            planJson: JSON.stringify(plan),
+            startedAt: new Date(),
+          });
+        const result = await runConstructionMcpHomologation(
+          externalProjectIds,
+          requestId
+        );
+        const allPassed = Object.values(result.servers).every(
+          server => server.status === "passed"
+        );
+        const finalStatus = mutationEvidence.operationId
+          ? allPassed
+            ? "reconciled"
+            : "read_only_degraded"
+          : allPassed
+            ? "read_only_passed"
+            : "read_only_degraded";
+        const reconciliation = {
+          projectId: input.projectId,
+          mutation: mutationEvidence,
+          checks: [
+            "vínculos externos presentes",
+            "probes somente leitura executados",
+            "mutação de evidência concluída antes da reconciliação",
+          ],
+        };
+        const runRows = await db
+          .select({ id: mcpHomologationRuns.id })
+          .from(mcpHomologationRuns)
+          .where(eq(mcpHomologationRuns.requestId, requestId))
+          .limit(1);
+        if (!runRows[0]) throw new Error("Execução E2E não foi registrada.");
+        await db
+          .update(mcpHomologationRuns)
+          .set({
+            status: finalStatus,
+            readOnlyResultJson: JSON.stringify(result),
+            reconciliationJson: JSON.stringify(reconciliation),
+            finishedAt: new Date(),
+          })
+          .where(eq(mcpHomologationRuns.id, runRows[0].id));
+        return {
+          runId: runRows[0].id,
+          status: finalStatus,
+          requestId,
+          mutationEvidence,
+          result,
+          reconciliation,
+        };
       }),
     mcpStatus: protectedProcedure.query(({ ctx }) => {
       return getConstructionMcpStatus(requestIdFrom(ctx));

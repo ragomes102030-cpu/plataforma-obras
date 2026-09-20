@@ -50,6 +50,13 @@
       "when": 1789866951390,
       "tag": "0006_panoramic_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1789867441315,
+      "tag": "0007_nostalgic_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

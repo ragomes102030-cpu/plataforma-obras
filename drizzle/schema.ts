@@ -117,6 +117,42 @@ export const mcpMutationOperations = mysqlTable(
   ]
 );
 
+export const mcpHomologationRuns = mysqlTable(
+  "mcp_homologation_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    requestId: varchar("requestId", { length: 128 }).notNull(),
+    status: mysqlEnum("status", [
+      "planned",
+      "read_only_running",
+      "read_only_passed",
+      "read_only_degraded",
+      "reconciled",
+      "failed",
+    ])
+      .default("planned")
+      .notNull(),
+    planJson: text("planJson").notNull(),
+    readOnlyResultJson: text("readOnlyResultJson"),
+    reconciliationJson: text("reconciliationJson"),
+    error: text("error"),
+    startedAt: timestamp("startedAt"),
+    finishedAt: timestamp("finishedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("mcp_homologation_runs_project_idx").on(table.projectId),
+    index("mcp_homologation_runs_user_idx").on(table.userId),
+  ]
+);
+
 export const scheduleActivities = mysqlTable("schedule_activities", {
   id: int("id").autoincrement().primaryKey(),
   projectId: int("projectId")
@@ -256,6 +292,8 @@ export type InsertProjectMcpIntegration =
 export type McpMutationOperation = typeof mcpMutationOperations.$inferSelect;
 export type InsertMcpMutationOperation =
   typeof mcpMutationOperations.$inferInsert;
+export type McpHomologationRun = typeof mcpHomologationRuns.$inferSelect;
+export type InsertMcpHomologationRun = typeof mcpHomologationRuns.$inferInsert;
 export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
 export type WbsNode = typeof wbsNodes.$inferSelect;
 export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;
