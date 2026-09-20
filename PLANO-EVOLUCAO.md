@@ -22,6 +22,8 @@ Já confirmado:
 - `render.yaml` e `server/_core/env.ts`: URLs configuráveis por ambiente.
 - `integrations.mcpStatus`: sondagem independente dos três MCPs, com `requestId`, latência, ferramentas e último erro por servidor.
 - Barra do agente: status individual de EAP, Cronograma e Gantt/LOB, preservando modo local quando uma fonte estiver indisponível.
+- `project_mcp_integrations`: vínculo local persistido por obra e domínio, com `externalProjectId`, endpoint, estado de sincronização, último erro e data da última sincronização.
+- Tela EAP: editor dos três `project_id` externos; salvar o vínculo não executa nenhuma operação no MCP.
 
 ## Fases seguintes
 
@@ -31,11 +33,11 @@ As URLs `MCP_EAP_URL`, `MCP_CRONOGRAMA_URL` e `MCP_GANTT_LOB_URL` estão declara
 
 **Pronto quando:** a interface mostra os três MCPs como online/offline e o backend registra falhas com `requestId`.
 
-### Fase 2 — identidade e mapeamento de projetos [PENDENTE]
+### Fase 2 — identidade e mapeamento de projetos [CONCLUÍDA]
 
-Criar uma tabela local de integrações de obra, relacionando `localProjectId`, `provider`, `externalProjectId`, URL e estado de sincronização. Nunca usar o projeto `default` para dados reais sem vínculo explícito.
+Criada a tabela local `project_mcp_integrations`, relacionando `projectId`, `provider`, `externalProjectId`, URL e estado de sincronização. A API expõe leitura dos três vínculos e gravação protegida por obra, rejeitando `project_id=default`. O salvamento é exclusivamente local e não chama ferramentas externas.
 
-**Pronto quando:** uma obra local puder apontar para um `project_id` externo distinto em cada MCP.
+**Pronto quando:** uma obra local pode apontar para um `project_id` externo distinto em cada MCP.
 
 ### Fase 3 — criação assistida de obra [PENDENTE]
 

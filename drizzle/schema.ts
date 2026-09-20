@@ -3,8 +3,10 @@ import {
   mysqlEnum,
   mysqlTable,
   decimal,
+  index,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
 
@@ -40,6 +42,38 @@ export const projects = mysqlTable("projects", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+export const projectMcpIntegrations = mysqlTable(
+  "project_mcp_integrations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    provider: mysqlEnum("provider", ["eap", "cronograma", "ganttLob"]).notNull(),
+    externalProjectId: varchar("externalProjectId", { length: 180 }),
+    endpointUrl: varchar("endpointUrl", { length: 500 }).notNull(),
+    syncState: mysqlEnum("syncState", [
+      "unconfigured",
+      "ready",
+      "pending",
+      "error",
+    ])
+      .default("unconfigured")
+      .notNull(),
+    lastSyncedAt: timestamp("lastSyncedAt"),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("project_mcp_integrations_project_provider_idx").on(
+      table.projectId,
+      table.provider
+    ),
+    index("project_mcp_integrations_project_idx").on(table.projectId),
+  ]
+);
 
 export const scheduleActivities = mysqlTable("schedule_activities", {
   id: int("id").autoincrement().primaryKey(),
@@ -174,6 +208,9 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = typeof projects.$inferInsert;
+export type ProjectMcpIntegration = typeof projectMcpIntegrations.$inferSelect;
+export type InsertProjectMcpIntegration =
+  typeof projectMcpIntegrations.$inferInsert;
 export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
 export type WbsNode = typeof wbsNodes.$inferSelect;
 export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;

@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { ChevronRight, Layers3 } from "lucide-react";
+import { McpProjectMapping } from "./McpProjectMapping";
 
 export function EapView({
   projectId,
@@ -66,6 +67,7 @@ export function EapView({
           </div>
         )}
       </div>
+      <McpProjectMapping projectId={projectId} />
     </div>
   );
 }

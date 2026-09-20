@@ -7,6 +7,7 @@ import {
   productionFronts,
   productionTeams,
   productionUnits,
+  projectMcpIntegrations,
   scheduleActivities,
   scheduleDependencies,
   wbsNodes,
@@ -16,6 +17,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
+import { ENV } from "./_core/env";
 import { runProjectAgent } from "./agent";
 import { runProjectOrchestrator } from "./orchestrator";
 import { buildAgentProjectContext } from "./agent/context-builder";
@@ -244,6 +246,18 @@ const accessibleProjectCondition = (projectId: number, userId: number) =>
     eq(projects.id, projectId),
     or(eq(projects.ownerUserId, userId), isNull(projects.ownerUserId))
   );
+
+const mcpProviderSchema = z.enum(["eap", "cronograma", "ganttLob"]);
+const mcpProviders = ["eap", "cronograma", "ganttLob"] as const;
+type McpProvider = (typeof mcpProviders)[number];
+
+function mcpEndpoint(provider: McpProvider) {
+  return {
+    eap: ENV.mcpEapUrl,
+    cronograma: ENV.mcpCronogramaUrl,
+    ganttLob: ENV.mcpGanttLobUrl,
+  }[provider];
+}
 
 async function assertAccessibleProject(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -754,6 +768,78 @@ export const appRouter = router({
       }),
   }),
   integrations: router({
+    projectMappings: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return mcpProviders.map(provider => ({
+          provider,
+          externalProjectId: null,
+          endpointUrl: mcpEndpoint(provider),
+          syncState: "unconfigured" as const,
+          lastSyncedAt: null,
+          lastError: null,
+        }));
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const rows = await db
+          .select()
+          .from(projectMcpIntegrations)
+          .where(eq(projectMcpIntegrations.projectId, input.projectId));
+        return mcpProviders.map(provider => {
+          const row = rows.find(item => item.provider === provider);
+          return row ?? {
+            provider,
+            externalProjectId: null,
+            endpointUrl: mcpEndpoint(provider),
+            syncState: "unconfigured" as const,
+            lastSyncedAt: null,
+            lastError: null,
+          };
+        });
+      }),
+    saveProjectMapping: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          provider: mcpProviderSchema,
+          externalProjectId: z
+            .string()
+            .trim()
+            .min(1)
+            .max(180)
+            .refine(value => value.toLowerCase() !== "default", {
+              message: "O project_id default não pode ser usado em obra real.",
+            }),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        await db
+          .insert(projectMcpIntegrations)
+          .values({
+            projectId: input.projectId,
+            provider: input.provider,
+            externalProjectId: input.externalProjectId,
+            endpointUrl: mcpEndpoint(input.provider),
+            syncState: "ready",
+            lastError: null,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              externalProjectId: input.externalProjectId,
+              endpointUrl: mcpEndpoint(input.provider),
+              syncState: "ready",
+              lastError: null,
+            },
+          });
+        return {
+          saved: true as const,
+          provider: input.provider,
+          externalProjectId: input.externalProjectId,
+        };
+      }),
     mcpStatus: protectedProcedure.query(({ ctx }) => {
       const header = ctx.req.headers["x-request-id"];
       const requestId = Array.isArray(header)
