@@ -30,6 +30,7 @@ import { AgentSidebar } from "@/components/AgentSidebar";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
 import { EapView } from "@/components/EapView";
 import { ProductionView } from "@/components/ProductionView";
+import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -635,9 +636,14 @@ function ModuleView({
     return <EapView projectId={projectId} projectName={projectName} />;
   if (name === "Produção")
     return <ProductionView projectId={projectId} projectName={projectName} />;
+  if (name === "Restrições")
+    return <RestrictionsView projectId={projectId} projectName={projectName} />;
+  if (name === "Relatórios")
+    return <ReportsView projectId={projectId} projectName={projectName} activities={activities} />;
   if (name === "Cronogramas")
     return (
       <GanttView
+        key="cronograma"
         projectId={projectId}
         activities={activities}
         search={search}
@@ -649,6 +655,7 @@ function ModuleView({
   if (name === "Linha de Balanço")
     return (
       <GanttView
+        key="linha-de-balanco"
         projectId={projectId}
         activities={activities}
         search={search}
@@ -823,8 +830,8 @@ export default function Home() {
             >
               <item.icon size={17} />
               <span>{item.label}</span>
-              {item.label === "Restrições" && (
-                <span className="nav-count">7</span>
+              {item.label === "Restrições" && riskActivities.length > 0 && (
+                <span className="nav-count">{riskActivities.length}</span>
               )}
             </button>
           ))}
