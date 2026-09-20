@@ -158,6 +158,8 @@ export const scheduleActivities = mysqlTable("schedule_activities", {
   projectId: int("projectId")
     .notNull()
     .references(() => projects.id),
+  externalId: varchar("externalId", { length: 180 }),
+  eapRef: varchar("eapRef", { length: 180 }),
   wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
   name: varchar("name", { length: 220 }).notNull(),
   phase: varchar("phase", { length: 80 }).notNull(),
@@ -176,13 +178,21 @@ export const scheduleActivities = mysqlTable("schedule_activities", {
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, table => [
+  uniqueIndex("schedule_activities_project_external_idx").on(
+    table.projectId,
+    table.externalId
+  ),
+  index("schedule_activities_project_idx").on(table.projectId),
+]);
 
 export const wbsNodes = mysqlTable("wbs_nodes", {
   id: int("id").autoincrement().primaryKey(),
   projectId: int("projectId")
     .notNull()
     .references(() => projects.id),
+  externalId: varchar("externalId", { length: 180 }),
+  externalUid: varchar("externalUid", { length: 180 }),
   parentId: int("parentId"),
   code: varchar("code", { length: 32 }).notNull(),
   name: varchar("name", { length: 220 }).notNull(),
@@ -195,13 +205,20 @@ export const wbsNodes = mysqlTable("wbs_nodes", {
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, table => [
+  uniqueIndex("wbs_nodes_project_external_idx").on(
+    table.projectId,
+    table.externalId
+  ),
+  index("wbs_nodes_project_idx").on(table.projectId),
+]);
 
 export const scheduleDependencies = mysqlTable("schedule_dependencies", {
   id: int("id").autoincrement().primaryKey(),
   projectId: int("projectId")
     .notNull()
     .references(() => projects.id),
+  externalId: varchar("externalId", { length: 180 }),
   predecessorId: int("predecessorId")
     .notNull()
     .references(() => scheduleActivities.id),
@@ -211,7 +228,12 @@ export const scheduleDependencies = mysqlTable("schedule_dependencies", {
   type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull(),
   lag: int("lag").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, table => [
+  uniqueIndex("schedule_dependencies_project_external_idx").on(
+    table.projectId,
+    table.externalId
+  ),
+]);
 
 export const productionFronts = mysqlTable("production_fronts", {
   id: int("id").autoincrement().primaryKey(),

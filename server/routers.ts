@@ -30,6 +30,10 @@ import {
   getConstructionMcpStatus,
   runConstructionMcpHomologation,
 } from "./integrations/construction-mcps";
+import {
+  buildPhase7ImportPlan,
+  type Phase7ImportPlan,
+} from "./integrations/phase7-import";
 
 const demoProjects = [
   {
@@ -287,6 +291,203 @@ async function assertAccessibleProject(
     .limit(1);
   if (!project)
     throw new Error("Obra não encontrada ou sem permissão de acesso.");
+}
+
+async function buildPhase7PlanForProject(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+): Promise<Phase7ImportPlan> {
+  const mappings = await db
+    .select()
+    .from(projectMcpIntegrations)
+    .where(eq(projectMcpIntegrations.projectId, projectId));
+  const externalProjectId = (provider: McpProvider) => {
+    const value = mappings.find(item => item.provider === provider)?.externalProjectId;
+    if (!value || value.toLowerCase() === "default") {
+      throw new Error(`Cadastre um project_id de homologação válido para o MCP ${provider}.`);
+    }
+    return value;
+  };
+  const eapProjectId = externalProjectId("eap");
+  const cronogramaProjectId = externalProjectId("cronograma");
+  const [eapResult, activityResult, dependencyResult] = await Promise.all([
+    callReadOnlyMcpTool("eap", "get_eap_tree", { project_id: eapProjectId }),
+    callReadOnlyMcpTool("cronograma", "listar_atividades", {
+      project_id: cronogramaProjectId,
+      limit: 500,
+    }),
+    callReadOnlyMcpTool("cronograma", "listar_dependencias", {
+      project_id: cronogramaProjectId,
+    }),
+  ]);
+  const cpmResult = await callReadOnlyMcpTool("cronograma", "calcular_caminho_critico", {
+    project_id: cronogramaProjectId,
+  });
+  return buildPhase7ImportPlan(
+    cronogramaProjectId,
+    eapResult,
+    activityResult,
+    dependencyResult,
+    cpmResult
+  );
+}
+
+async function persistPhase7Plan(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  plan: Phase7ImportPlan
+) {
+  const [project] = await db
+    .select({ plannedStart: projects.plannedStart })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  if (!project) throw new Error("Obra não encontrada para importar o plano.");
+  return db.transaction(async tx => {
+    const localWbsByExternalId = new Map<string, number>();
+    for (const node of plan.wbsNodes) {
+      const parentId = node.parentExternalId
+        ? localWbsByExternalId.get(node.parentExternalId) ?? null
+        : null;
+      const existing = await tx
+        .select({ id: wbsNodes.id })
+        .from(wbsNodes)
+        .where(
+          and(
+            eq(wbsNodes.projectId, projectId),
+            eq(wbsNodes.externalId, node.externalId)
+          )
+        )
+        .limit(1);
+      if (existing[0]) {
+        await tx
+          .update(wbsNodes)
+          .set({
+            externalUid: node.externalUid,
+            parentId,
+            code: node.code,
+            name: node.name,
+            level: node.level,
+            nodeType: node.nodeType,
+            unit: node.unit,
+            plannedQuantity: node.plannedQuantity,
+            sortOrder: node.sortOrder,
+          })
+          .where(eq(wbsNodes.id, existing[0].id));
+        localWbsByExternalId.set(node.externalId, existing[0].id);
+      } else {
+        const [created] = await tx
+          .insert(wbsNodes)
+          .values({
+            projectId,
+            externalId: node.externalId,
+            externalUid: node.externalUid,
+            parentId,
+            code: node.code,
+            name: node.name,
+            level: node.level,
+            nodeType: node.nodeType,
+            unit: node.unit,
+            plannedQuantity: node.plannedQuantity,
+            sortOrder: node.sortOrder,
+          })
+          .$returningId();
+        localWbsByExternalId.set(node.externalId, created.id);
+      }
+    }
+
+    const localActivitiesByExternalId = new Map<string, number>();
+    for (const activity of plan.activities) {
+      const existing = await tx
+        .select({ id: scheduleActivities.id })
+        .from(scheduleActivities)
+        .where(
+          and(
+            eq(scheduleActivities.projectId, projectId),
+            eq(scheduleActivities.externalId, activity.externalId)
+          )
+        )
+        .limit(1);
+      const values = {
+        projectId,
+        externalId: activity.externalId,
+        eapRef: activity.eapRef,
+        wbsCode: activity.eapRef,
+        name: activity.name,
+        phase: activity.phase,
+        startOffset: activity.startDate
+          ? Math.max(
+              0,
+              Math.round(
+                (Date.parse(activity.startDate) - project.plannedStart.getTime()) /
+                  86400000
+              )
+            )
+          : 0,
+        durationDays: activity.durationDays,
+        progress: activity.progress,
+        status: activity.progress >= 100
+          ? ("Concluído" as const)
+          : activity.progress > 0
+            ? ("Em andamento" as const)
+            : ("Não iniciado" as const),
+        critical: activity.critical,
+        sortOrder: activity.sortOrder,
+      };
+      if (existing[0]) {
+        await tx
+          .update(scheduleActivities)
+          .set(values)
+          .where(eq(scheduleActivities.id, existing[0].id));
+        localActivitiesByExternalId.set(activity.externalId, existing[0].id);
+      } else {
+        const [created] = await tx
+          .insert(scheduleActivities)
+          .values(values)
+          .$returningId();
+        localActivitiesByExternalId.set(activity.externalId, created.id);
+      }
+    }
+
+    for (const dependency of plan.dependencies) {
+      const predecessorId = localActivitiesByExternalId.get(dependency.predecessorExternalId);
+      const successorId = localActivitiesByExternalId.get(dependency.successorExternalId);
+      if (!predecessorId || !successorId) throw new Error("Dependência sem atividades locais correspondentes.");
+      const existing = await tx
+        .select({ id: scheduleDependencies.id })
+        .from(scheduleDependencies)
+        .where(
+          and(
+            eq(scheduleDependencies.projectId, projectId),
+            eq(scheduleDependencies.externalId, dependency.externalId)
+          )
+        )
+        .limit(1);
+      const values = {
+        projectId,
+        externalId: dependency.externalId,
+        predecessorId,
+        successorId,
+        type: dependency.type,
+        lag: Math.round(dependency.lag),
+      };
+      if (existing[0]) {
+        await tx
+          .update(scheduleDependencies)
+          .set(values)
+          .where(eq(scheduleDependencies.id, existing[0].id));
+      } else {
+        await tx.insert(scheduleDependencies).values(values);
+      }
+    }
+    return {
+      wbsNodes: localWbsByExternalId.size,
+      activities: localActivitiesByExternalId.size,
+      dependencies: plan.dependencies.length,
+      criticalPath: plan.criticalPath,
+      totalDurationDays: plan.totalDurationDays,
+    };
+  });
 }
 
 export const appRouter = router({
@@ -902,6 +1103,46 @@ export const appRouter = router({
           })
         );
         return result;
+      }),
+    phase7PreviewImport: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const plan = await buildPhase7PlanForProject(db, input.projectId);
+        return {
+          projectId: input.projectId,
+          projectExternalId: plan.projectExternalId,
+          counts: {
+            wbsNodes: plan.wbsNodes.length,
+            activities: plan.activities.length,
+            dependencies: plan.dependencies.length,
+          },
+          criticalPath: plan.criticalPath,
+          totalDurationDays: plan.totalDurationDays,
+          plan,
+        };
+      }),
+    phase7ImportLocal: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          confirmationPhrase: z.literal("CONFIRMAR"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const plan = await buildPhase7PlanForProject(db, input.projectId);
+        const imported = await persistPhase7Plan(db, input.projectId, plan);
+        return {
+          imported: true as const,
+          projectId: input.projectId,
+          projectExternalId: plan.projectExternalId,
+          ...imported,
+        };
       }),
     mutationPreview: protectedProcedure
       .input(

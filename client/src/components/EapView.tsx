@@ -3,6 +3,7 @@ import { ChevronRight, Layers3 } from "lucide-react";
 import { McpE2EWorkbench } from "./McpE2EWorkbench";
 import { McpMutationWorkbench } from "./McpMutationWorkbench";
 import { McpProjectMapping } from "./McpProjectMapping";
+import { Phase7ImportWorkbench } from "./Phase7ImportWorkbench";
 
 export function EapView({
   projectId,
@@ -70,6 +71,7 @@ export function EapView({
         )}
       </div>
       <McpProjectMapping projectId={projectId} />
+      <Phase7ImportWorkbench projectId={projectId} />
       <McpMutationWorkbench projectId={projectId} />
       <McpE2EWorkbench projectId={projectId} />
     </div>

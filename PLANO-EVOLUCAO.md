@@ -68,11 +68,11 @@ Leituras MCP repetem uma falha transitória no máximo uma vez, abrem circuito a
 
 **Pronto quando:** um MCP indisponível resultar em painel degradado, os demais continuarem operacionais e nenhuma escrita for repetida automaticamente.
 
-### Fase 7 — importação EAP e cronograma [PENDENTE]
+### Fase 7 — importação EAP e cronograma [EM IMPLEMENTAÇÃO]
 
-Importar templates ou nós da EAP, validar estrutura, criar atividades vinculadas por `eap_ref`, criar dependências idempotentes e chamar `calcular_caminho_critico`.
+Implementada a primeira entrega segura: preview autenticado, validação de raiz única e referências `eap_ref`, leitura de atividades/dependências/CPM, persistência local idempotente com IDs externos e confirmação explícita `CONFIRMAR`. A escrita externa continua bloqueada; a próxima etapa é aplicar a migração no ambiente e executar o importador na obra fictícia `obra-validacao-14-andares-limpa-20260919`.
 
-**Pronto quando:** o Gantt local e o banco exibirem os mesmos nós, IDs externos e datas calculadas.
+**Pronto quando:** o Gantt local e o banco exibirem os mesmos nós, IDs externos e datas calculadas, com reconciliação dos sete registros de atividade e seis dependências.
 
 ### Fase 8 — baseline, produção e Linha de Balanço [PENDENTE]
 
