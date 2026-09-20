@@ -152,7 +152,10 @@ function toOpenAiTools(catalog: Record<string, McpTool[]>): LlmTool[] {
   return tools;
 }
 
-function buildSystem(context: AgentProjectContext, mcpProjectId?: string) {
+function buildSystem(
+  context: AgentProjectContext,
+  mcpProjectIds: Partial<Record<ToolDomain, string>>
+) {
   const workspaceContext = context.workspace
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}. Modo: ${context.workspace.contextMode}.`
     : "Aba ativa não informada. Use o contexto geral da obra.";
@@ -163,10 +166,10 @@ function buildSystem(context: AgentProjectContext, mcpProjectId?: string) {
     "Você pode consultar MCPs, mas nesta versão todas as ferramentas são SOMENTE LEITURA.",
     "Nunca crie, atualize, exclua, salve baseline ou registre medição. Se o usuário pedir escrita, explique que será habilitada em fase posterior.",
     "Não invente datas, custos, medições ou restrições. Diferencie dado local, dado MCP e inferência.",
-    "Use uma ferramenta somente quando ela ajudar a responder. Se faltar project_id externo, informe que o vínculo da obra ainda não foi configurado.",
-    mcpProjectId
-      ? `project_id externo autorizado para consultas: ${mcpProjectId}`
-      : "Nenhum project_id externo foi autorizado nesta execução.",
+    "Use primeiro os dados locais da obra. Consulte MCPs somente quando isso acrescentar evidência. Se faltar project_id externo para o domínio necessário, informe que o vínculo daquele domínio ainda não foi configurado.",
+    `project_id externo por domínio: ${Object.entries(mcpProjectIds)
+      .map(([domain, id]) => `${domain}=${id}`)
+      .join(", ") || "nenhum"}`,
     workspaceContext,
     "Contexto local da obra:\n" + formatContext(context),
   ].join("\n\n");
@@ -193,6 +196,7 @@ export async function runProjectOrchestrator(
   messages: AgentMessage[],
   options: {
     mcpProjectId?: string;
+    mcpProjectIds?: Partial<Record<ToolDomain, string>>;
     taskId?: string;
     deps?: OrchestratorDeps;
   } = {}
@@ -200,11 +204,21 @@ export async function runProjectOrchestrator(
   validateMessages(messages);
   const taskId = options.taskId ?? createTaskId();
   const deps = options.deps ?? {};
+  const mcpProjectIds: Partial<Record<ToolDomain, string>> = {
+    ...(options.mcpProjectId
+      ? {
+          eap: options.mcpProjectId,
+          cronograma: options.mcpProjectId,
+          ganttLob: options.mcpProjectId,
+        }
+      : {}),
+    ...(options.mcpProjectIds ?? {}),
+  };
   const catalog = await (deps.listTools ?? listConstructionMcpTools)();
   const tools = toOpenAiTools(catalog);
   const audit: AuditEvent[] = [];
   const conversation: LlmMessage[] = [
-    { role: "system", content: buildSystem(context, options.mcpProjectId) },
+    { role: "system", content: buildSystem(context, mcpProjectIds) },
     ...messages.map(message => ({
       role: message.role,
       content: message.content,
@@ -221,7 +235,7 @@ export async function runProjectOrchestrator(
     if (!assistant.tool_calls?.length) {
       return {
         taskId,
-        content: parseContent(response),
+        content: `${parseContent(response)}\n\nFontes: dados locais da obra${audit.some(event => event.status === "success") ? `; MCPs consultados (${Array.from(new Set(audit.filter(event => event.status === "success").map(event => event.domain))).join(", ")})` : "; nenhum MCP consultado nesta resposta"}.`,
         model: response.model || ENV.aiModel || "gpt-5-mini",
         iterations: iteration,
         audit,
@@ -241,7 +255,8 @@ export async function runProjectOrchestrator(
       if (!domain || !MCP_TOOL_POLICY.readOnly.has(toolName)) {
         throw new Error(`Ferramenta não permitida no Marco 2: ${toolName}`);
       }
-      if (PROJECT_SCOPED_TOOLS.has(toolName) && !options.mcpProjectId) {
+      const mcpProjectId = mcpProjectIds[domain];
+      if (PROJECT_SCOPED_TOOLS.has(toolName) && !mcpProjectId) {
         const message =
           "A obra ainda não possui project_id externo autorizado para consulta MCP.";
         conversation.push({
@@ -267,7 +282,7 @@ export async function runProjectOrchestrator(
       } catch {
         throw new Error(`Argumentos inválidos para a ferramenta ${toolName}.`);
       }
-      if (options.mcpProjectId) args.project_id = options.mcpProjectId;
+      if (mcpProjectId) args.project_id = mcpProjectId;
       try {
         const result = await (deps.callTool ?? callReadOnlyMcpTool)(
           domain,

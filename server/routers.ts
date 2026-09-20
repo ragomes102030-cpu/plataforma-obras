@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -25,7 +25,6 @@ import {
 } from "./_core/trpc";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
-import { runProjectAgent } from "./agent";
 import { runProjectOrchestrator } from "./orchestrator";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
@@ -37,6 +36,7 @@ import {
   callReadOnlyMcpTool,
   CONTROLLED_MUTATION_POLICY,
   getConstructionMcpStatus,
+  PROJECT_SCOPED_READ_ONLY_TOOLS,
   runConstructionMcpHomologation,
 } from "./integrations/construction-mcps";
 import {
@@ -260,10 +260,7 @@ async function seedProductionCatalog(
 }
 
 const accessibleProjectCondition = (projectId: number, userId: number) =>
-  and(
-    eq(projects.id, projectId),
-    or(eq(projects.ownerUserId, userId), isNull(projects.ownerUserId))
-  );
+  and(eq(projects.id, projectId), eq(projects.ownerUserId, userId));
 
 const mcpProviderSchema = z.enum(["eap", "cronograma", "ganttLob"]);
 const mcpProviders = ["eap", "cronograma", "ganttLob"] as const;
@@ -539,35 +536,28 @@ export const appRouter = router({
     }),
   }),
   projects: router({
-    list: publicProcedure.query(async ({ ctx }) => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
-      if (!db || !ctx.user) return demoProjects;
+      if (!db) return ENV.allowDemoData ? demoProjects : [];
       const rows = await db
         .select()
         .from(projects)
-        .where(
-          or(
-            eq(projects.ownerUserId, ctx.user.id),
-            isNull(projects.ownerUserId)
-          )
-        )
+        .where(eq(projects.ownerUserId, ctx.user.id))
         .orderBy(desc(projects.updatedAt));
-      return rows.length ? rows : demoProjects;
+      return rows;
     }),
-    activities: publicProcedure
+    activities: protectedProcedure
       .input(z.object({ projectId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return input.projectId === 1 ? demoActivities : [];
-        if (ctx.user) {
-          await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        }
+        if (!db) return ENV.allowDemoData && input.projectId === 1 ? demoActivities : [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const rows = await db
           .select()
           .from(scheduleActivities)
           .where(eq(scheduleActivities.projectId, input.projectId))
           .orderBy(scheduleActivities.sortOrder);
-        return rows.length ? rows : input.projectId === 1 ? demoActivities : [];
+        return rows;
       }),
     updateActivity: protectedProcedure
       .input(
@@ -615,28 +605,24 @@ export const appRouter = router({
           .where(eq(scheduleActivities.id, input.activityId));
         return { updated: true as const };
       }),
-    wbs: publicProcedure
+    wbs: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) return [];
-        if (ctx.user) {
-          await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        }
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
         return db
           .select()
           .from(wbsNodes)
           .where(eq(wbsNodes.projectId, input.projectId))
           .orderBy(wbsNodes.sortOrder);
       }),
-    dependencies: publicProcedure
+    dependencies: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) return [];
-        if (ctx.user) {
-          await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        }
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
         return db
           .select()
           .from(scheduleDependencies)
@@ -662,25 +648,31 @@ export const appRouter = router({
           input.plannedFinish ??
           new Date(plannedStart.getTime() + 180 * 86400000);
         const code = `OB-${Date.now().toString(36).slice(-6).toUpperCase()}`;
-        const [createdId] = await db
-          .insert(projects)
-          .values({
-            ownerUserId: ctx.user.id,
-            code,
-            name: input.name,
-            location: input.location,
-            status: "Planejamento",
-            progress: 0,
-            plannedStart,
-            plannedFinish,
-          })
-          .$returningId();
-        const [created] = await db
-          .select()
-          .from(projects)
-          .where(eq(projects.id, createdId.id))
-          .limit(1);
-        return created;
+        return db.transaction(async tx => {
+          const [createdId] = await tx
+            .insert(projects)
+            .values({
+              ownerUserId: ctx.user.id,
+              code,
+              name: input.name,
+              location: input.location,
+              status: "Planejamento",
+              progress: 0,
+              plannedStart,
+              plannedFinish,
+            })
+            .$returningId();
+          await seedStarterPlan(
+            tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>,
+            createdId.id
+          );
+          const [created] = await tx
+            .select()
+            .from(projects)
+            .where(eq(projects.id, createdId.id))
+            .limit(1);
+          return created;
+        });
       }),
     initializePlan: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -961,17 +953,42 @@ export const appRouter = router({
             .where(eq(scheduleActivities.projectId, input.projectId))
             .orderBy(scheduleActivities.sortOrder);
         } else {
+          if (!ENV.allowDemoData) throw new Error("Banco de dados não configurado.");
           project = demoProjects.find(item => item.id === input.projectId);
           activities = input.projectId === 1 ? demoActivities : [];
           if (!project) throw new Error("Obra não encontrada.");
         }
-        return runProjectAgent({ project, activities }, input.messages);
+        const mcpProjectIds: Partial<Record<"eap" | "cronograma" | "ganttLob", string>> = {};
+        if (db) {
+          const mappings = await db
+            .select({ provider: projectMcpIntegrations.provider, externalProjectId: projectMcpIntegrations.externalProjectId })
+            .from(projectMcpIntegrations)
+            .where(eq(projectMcpIntegrations.projectId, input.projectId));
+          for (const mapping of mappings) {
+            if (mapping.externalProjectId && mapping.externalProjectId.toLowerCase() !== "default") {
+              mcpProjectIds[mapping.provider] = mapping.externalProjectId;
+            }
+          }
+        }
+        return runProjectOrchestrator(
+          buildAgentProjectContext(project, activities, { activeSection: "portfolio", contextMode: "focused" }),
+          input.messages,
+          { mcpProjectIds }
+        );
       }),
     orchestrate: protectedProcedure
       .input(
         z.object({
           projectId: z.number().int().positive(),
           mcpProjectId: z.string().trim().min(1).max(120).optional(),
+          mcpProjectIds: z
+            .object({
+              eap: z.string().trim().min(1).max(120).optional(),
+              cronograma: z.string().trim().min(1).max(120).optional(),
+              ganttLob: z.string().trim().min(1).max(120).optional(),
+            })
+            .partial()
+            .optional(),
           context: z
             .object({
               activeSection: z.enum([
@@ -1020,6 +1037,7 @@ export const appRouter = router({
             .where(eq(scheduleActivities.projectId, input.projectId))
             .orderBy(scheduleActivities.sortOrder);
         } else {
+          if (!ENV.allowDemoData) throw new Error("Banco de dados não configurado.");
           project = demoProjects.find(item => item.id === input.projectId);
           activities = input.projectId === 1 ? demoActivities : [];
           if (!project) throw new Error("Obra não encontrada.");
@@ -1027,7 +1045,7 @@ export const appRouter = router({
         return runProjectOrchestrator(
           buildAgentProjectContext(project, activities, input.context),
           input.messages,
-          { mcpProjectId: input.mcpProjectId }
+          { mcpProjectId: input.mcpProjectId, mcpProjectIds: input.mcpProjectIds }
         );
       }),
   }),
@@ -1461,14 +1479,39 @@ export const appRouter = router({
     mcpReadOnlyCall: protectedProcedure
       .input(
         z.object({
+          projectId: z.number().int().positive(),
           domain: z.enum(["eap", "cronograma", "ganttLob"]),
           toolName: z.string().min(1).max(100),
           args: z.record(z.string(), z.unknown()).default({}),
         })
       )
-      .mutation(({ input }) =>
-        callReadOnlyMcpTool(input.domain, input.toolName, input.args)
-      ),
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [mapping] = await db
+          .select({ externalProjectId: projectMcpIntegrations.externalProjectId })
+          .from(projectMcpIntegrations)
+          .where(
+            and(
+              eq(projectMcpIntegrations.projectId, input.projectId),
+              eq(projectMcpIntegrations.provider, input.domain)
+            )
+          )
+          .limit(1);
+        const externalProjectId = mapping?.externalProjectId;
+        if (
+          PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName) &&
+          (!externalProjectId || externalProjectId.toLowerCase() === "default")
+        ) {
+          throw new Error(`Nenhum project_id autorizado para o MCP ${input.domain}.`);
+        }
+        const args = { ...input.args };
+        if (PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName)) {
+          args.project_id = externalProjectId;
+        }
+        return callReadOnlyMcpTool(input.domain, input.toolName, args);
+      }),
   }),
 });
 

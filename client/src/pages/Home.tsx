@@ -730,21 +730,14 @@ export default function Home() {
   const [newProjectName, setNewProjectName] = useState("");
   const [createError, setCreateError] = useState("");
   const utils = trpc.useUtils();
-  const initializePlanMutation = trpc.projects.initializePlan.useMutation({
-    onSuccess: async () => {
-      await Promise.all([
-        utils.projects.list.invalidate(),
-        utils.projects.activities.invalidate(),
-        utils.projects.wbs.invalidate(),
-      ]);
-    },
-    onError: error => setCreateError(`Obra criada, mas o plano inicial falhou: ${error.message}`),
-  });
   const createProjectMutation = trpc.projects.create.useMutation({
     onSuccess: project => {
-      void projectsQuery.refetch();
+      void Promise.all([
+        projectsQuery.refetch(),
+        utils.projects.activities.invalidate({ projectId: project.id }),
+        utils.projects.wbs.invalidate({ projectId: project.id }),
+      ]);
       setSelectedId(project.id);
-      initializePlanMutation.mutate({ projectId: project.id });
       setNewProjectName("");
       setCreateError("");
       setNewProjectOpen(false);
@@ -798,8 +791,7 @@ export default function Home() {
       location: "A cadastrar",
     });
   };
-  const createPending =
-    createProjectMutation.isPending || initializePlanMutation.isPending;
+  const createPending = createProjectMutation.isPending;
   return (
     <div className="app-frame">
       <aside className="app-sidebar">
@@ -1165,11 +1157,7 @@ export default function Home() {
                 onClick={createProject}
                 disabled={createPending}
               >
-                {createProjectMutation.isPending
-                  ? "Salvando obra…"
-                  : initializePlanMutation.isPending
-                    ? "Montando plano…"
-                    : "Criar obra"}
+                {createProjectMutation.isPending ? "Salvando obra e plano…" : "Criar obra"}
               </button>
             </div>
           </div>

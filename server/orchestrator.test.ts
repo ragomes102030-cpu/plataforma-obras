@@ -85,7 +85,8 @@ describe("runProjectOrchestrator", () => {
     );
 
     expect(result.readOnly).toBe(true);
-    expect(result.content).toBe("A EAP está vazia.");
+    expect(result.content).toContain("A EAP está vazia.");
+    expect(result.content).toContain("Fontes: dados locais da obra; MCPs consultados (eap).");
     expect(result.iterations).toBe(2);
     expect(result.audit[0]).toMatchObject({
       status: "success",

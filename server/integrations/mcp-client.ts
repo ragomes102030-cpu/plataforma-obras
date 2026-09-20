@@ -81,7 +81,10 @@ export class McpClient {
       }
       const sessionId = response.headers.get("mcp-session-id");
       if (sessionId) this.sessionId = sessionId;
-      if (!body.trim()) return { jsonrpc: "2.0" } as JsonRpcResponse;
+      if (!body.trim()) {
+        if (payload.id === undefined) return { jsonrpc: "2.0" } as JsonRpcResponse;
+        throw new Error("MCP respondeu sem payload JSON para uma requisição.");
+      }
       return parseSseOrJson(body);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {

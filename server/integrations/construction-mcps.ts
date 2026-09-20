@@ -95,6 +95,22 @@ export const CONTROLLED_MUTATION_POLICY: Record<
   ganttLob: new Set(),
 };
 
+export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
+  "get_eap_tree",
+  "get_eap_node",
+  "listar_por_tipo_frente",
+  "buscar_eap_node",
+  "pacotes_sem_dono",
+  "resumo_quantitativos",
+  "listar_atividades",
+  "listar_dependencias",
+  "validar_dependencias",
+  "calcular_caminho_critico",
+  "comparar_baseline",
+  "curva_s",
+  "calcular_linha_balanco",
+]);
+
 export function createConstructionMcpClients() {
   return {
     eap: new McpClient(ENV.mcpEapUrl, {
@@ -122,8 +138,9 @@ type ConstructionMcpReadClients = Record<
   Pick<McpClient, "listTools">
 >;
 
-const READ_RETRY_LIMIT = 1;
-const READ_RETRY_DELAY_MS = 1_000;
+const IS_TEST_RUNTIME = process.env.NODE_ENV === "test";
+const READ_RETRY_LIMIT = IS_TEST_RUNTIME ? 1 : 2;
+const READ_RETRY_DELAYS_MS = IS_TEST_RUNTIME ? ([1_000] as const) : ([2_000, 5_000] as const);
 const CIRCUIT_FAILURE_THRESHOLD = 3;
 const CIRCUIT_COOLDOWN_MS = 30_000;
 const circuitBreakers = new Map<
@@ -191,7 +208,8 @@ async function runReadOnlyWithResilience<T>(
     } catch (error) {
       lastError = error;
       if (!isTransientMcpFailure(error) || attempt > READ_RETRY_LIMIT) break;
-      await new Promise(resolve => setTimeout(resolve, READ_RETRY_DELAY_MS));
+      const delayMs = READ_RETRY_DELAYS_MS[attempt - 1] ?? READ_RETRY_DELAYS_MS.at(-1)!;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
   state.consecutiveFailures += 1;

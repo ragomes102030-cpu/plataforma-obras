@@ -65,20 +65,13 @@ export function AgentSidebar({
     { projectId },
     { staleTime: 60_000 }
   );
-  const mappedProjectIds = (mappingsQuery.data ?? [])
-    .map(mapping => mapping.externalProjectId?.trim())
-    .filter(
-      (value): value is string =>
-        typeof value === "string" &&
-        value.length > 0 &&
-        value.toLowerCase() !== "default"
-    );
-  const mcpProjectId =
-    mappingsQuery.data?.length === 3 &&
-    mappedProjectIds.length === 3 &&
-    new Set(mappedProjectIds).size === 1
-      ? mappedProjectIds[0]
-      : undefined;
+  const mcpProjectIds: Partial<Record<"eap" | "cronograma" | "ganttLob", string>> = {};
+  for (const mapping of mappingsQuery.data ?? []) {
+    const value = mapping.externalProjectId?.trim();
+    if (value && value.toLowerCase() !== "default") {
+      mcpProjectIds[mapping.provider] = value;
+    }
+  }
   const agentMutation = trpc.agent.orchestrate.useMutation({
     onSuccess: response => {
       setMessages(previous => [
@@ -105,7 +98,7 @@ export function AgentSidebar({
     setMessages(nextMessages);
     agentMutation.mutate({
       projectId,
-      mcpProjectId,
+      mcpProjectIds,
       messages: nextMessages
         .filter(
           (message): message is Message & { role: "user" | "assistant" } =>
