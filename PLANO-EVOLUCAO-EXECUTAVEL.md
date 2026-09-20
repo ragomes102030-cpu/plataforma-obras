@@ -81,3 +81,14 @@ O banco é a fonte de verdade da aplicação local. Os MCPs continuam separados 
 ## Definição de “sistema funcionando”
 
 O sistema estará pronto para iniciar operação quando houver login funcional, banco persistente compatível, criação e leitura de obras, isolamento por usuário, CI verde, quatro serviços live, healthchecks HTTP 200, contratos MCP homologados e importação idempotente de uma obra de teste. Até esse ponto, novos recursos visuais devem ficar subordinados à correção da base.
+
+
+## Marco concluído — fluxo operacional e interface viva (8c06c51)
+
+A interface principal deixou de depender de métricas e alertas fixos: avanço consolidado, atividades críticas, próximo marco, foco semanal, usuário, workspace e sincronização agora são derivados do banco e da obra selecionada. O módulo **Cronogramas** passou a abrir o Gantt real, com filtragem, edição e persistência das atividades; os módulos de Restrições e Relatórios passaram a refletir as atividades carregadas em vez de exibir cartões genéricos.
+
+Uma nova obra criada pela interface agora recebe automaticamente o plano inicial e o catálogo operacional, deixando EAP, cronograma e produção prontos para uso. No painel de integrações, cada MCP mostra endpoint, vínculo externo, estado pendente/homologado, teste de conexão, latência e quantidade de ferramentas. Salvar um `project_id` não marca mais o servidor como pronto antes da homologação; a homologação somente leitura continua sendo a confirmação operacional.
+
+O commit foi publicado em `main`, o CI passou com typecheck, testes e build, e os quatro endpoints públicos retornaram HTTP 200: serviço principal, MCP EAP, MCP Cronograma e MCP Gantt/LOB.
+
+**Próximo marco:** autenticar uma sessão de cliente, criar uma obra real, vincular os `project_id` externos e executar a homologação somente leitura seguida do preview de importação. A execução deve usar um projeto externo separado da obra de teste até que a reconciliação seja aprovada.
