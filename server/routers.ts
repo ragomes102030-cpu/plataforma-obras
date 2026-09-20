@@ -1049,14 +1049,14 @@ export const appRouter = router({
             provider: input.provider,
             externalProjectId: input.externalProjectId,
             endpointUrl: mcpEndpoint(input.provider),
-            syncState: "ready",
+            syncState: "pending",
             lastError: null,
           })
           .onDuplicateKeyUpdate({
             set: {
               externalProjectId: input.externalProjectId,
               endpointUrl: mcpEndpoint(input.provider),
-              syncState: "ready",
+              syncState: "pending",
               lastError: null,
             },
           });

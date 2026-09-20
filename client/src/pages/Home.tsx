@@ -564,6 +564,10 @@ function ModuleView({
   onBack,
   projectId,
   projectName,
+  activities,
+  search,
+  setSearch,
+  plannedStart,
 }: {
   name: string;
   icon: typeof Activity;
@@ -571,12 +575,29 @@ function ModuleView({
   onBack: () => void;
   projectId: number;
   projectName: string;
+  activities: any[];
+  search: string;
+  setSearch: (value: string) => void;
+  plannedStart?: string | Date;
 }) {
+  const riskActivities = activities.filter(activity => activity.status === "Em risco");
+  const completedActivities = activities.filter(activity => activity.progress >= 100);
   if (name === "Agente IA") return <AgentView />;
   if (name === "EAP")
     return <EapView projectId={projectId} projectName={projectName} />;
   if (name === "Produção")
     return <ProductionView projectId={projectId} projectName={projectName} />;
+  if (name === "Cronogramas")
+    return (
+      <GanttView
+        projectId={projectId}
+        activities={activities}
+        search={search}
+        setSearch={setSearch}
+        selectedName={projectName}
+        plannedStart={plannedStart}
+      />
+    );
   return (
     <div className="module-page">
       <div className="module-hero">
@@ -595,27 +616,34 @@ function ModuleView({
       <div className="module-grid">
         <div className="module-card">
           <span className="eyebrow">STATUS</span>
-          <strong>Dados prontos para operação</strong>
+          <strong>{activities.length} atividades carregadas</strong>
           <p>
-            Esta área agora responde à navegação e está preparada para receber
-            os registros reais do projeto.
+            {riskActivities.length
+              ? `${riskActivities.length} atividade(s) em risco exigem acompanhamento.`
+              : "Nenhuma atividade em risco foi registrada nesta obra."}
           </p>
         </div>
         <div className="module-card">
           <span className="eyebrow">PRÓXIMA AÇÃO</span>
-          <strong>Conectar dados oficiais</strong>
+          <strong>{name === "Relatórios" ? "Resumo operacional" : "Revisar pendências"}</strong>
           <p>
-            Importe a EAP, dependências e medições para substituir os dados
-            demonstrativos.
+            {name === "Relatórios"
+              ? `${completedActivities.length} atividades concluídas de ${activities.length}.`
+              : "Use o cronograma e a produção para registrar o próximo avanço da obra."}
           </p>
         </div>
         <div className="module-card wide">
           <span className="eyebrow">VISÃO DO MÓDULO</span>
           <div className="module-empty">
-            <CircleCheck size={20} />
+            {riskActivities.length ? <AlertTriangle size={20} /> : <CircleCheck size={20} />}
             <span>
-              Interface funcional criada. O próximo passo é persistir as
-              operações no banco.
+              {name === "Relatórios"
+                ? "Os indicadores acima são calculados a partir das atividades persistidas."
+                : name === "Restrições"
+                  ? riskActivities.length
+                    ? "As atividades em risco aparecem aqui assim que forem registradas no cronograma."
+                    : "A obra não possui restrições registradas no momento."
+                  : "Este módulo está conectado ao banco e pronto para receber dados operacionais."}
             </span>
           </div>
         </div>
@@ -641,10 +669,22 @@ export default function Home() {
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [createError, setCreateError] = useState("");
+  const utils = trpc.useUtils();
+  const initializePlanMutation = trpc.projects.initializePlan.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.projects.list.invalidate(),
+        utils.projects.activities.invalidate(),
+        utils.projects.wbs.invalidate(),
+      ]);
+    },
+    onError: error => setCreateError(`Obra criada, mas o plano inicial falhou: ${error.message}`),
+  });
   const createProjectMutation = trpc.projects.create.useMutation({
     onSuccess: project => {
       void projectsQuery.refetch();
       setSelectedId(project.id);
+      initializePlanMutation.mutate({ projectId: project.id });
       setNewProjectName("");
       setCreateError("");
       setNewProjectOpen(false);
@@ -657,6 +697,17 @@ export default function Home() {
     projectId: selected?.id ?? 1,
   });
   const activities = activitiesQuery.data ?? [];
+  const portfolioProgress = projects.length
+    ? Math.round(
+        projects.reduce((total, project) => total + project.progress, 0) /
+          projects.length
+      )
+    : 0;
+  const criticalActivities = activities.filter(activity => activity.critical === 1);
+  const riskActivities = activities.filter(activity => activity.status === "Em risco");
+  const nextMilestone = activities
+    .filter(activity => activity.progress < 100)
+    .sort((a, b) => a.startOffset - b.startOffset)[0];
   const agentSection =
     activeNav === "Cronogramas"
       ? "cronograma"
@@ -683,6 +734,8 @@ export default function Home() {
       location: "A cadastrar",
     });
   };
+  const createPending =
+    createProjectMutation.isPending || initializePlanMutation.isPending;
   return (
     <div className="app-frame">
       <aside className="app-sidebar">
@@ -700,7 +753,7 @@ export default function Home() {
         <div className="workspace-select">
           <div>
             <span className="eyebrow">ESPAÇO DE TRABALHO</span>
-            <strong>Construtora Horizonte</strong>
+            <strong>{user?.name ? `${user.name} · workspace` : "Área pública"}</strong>
           </div>
           <ChevronDown size={15} />
         </div>
@@ -748,8 +801,13 @@ export default function Home() {
         </div>
         <div className="sidebar-bottom">
           <div className="sync-status">
-            <span className="sync-dot" /> Dados sincronizados{" "}
-            <span className="ml-auto">agora</span>
+            <span className={`sync-dot ${projectsQuery.isError ? "error" : ""}`} />
+            {projectsQuery.isPending
+              ? "Carregando dados"
+              : projectsQuery.isError
+                ? "Falha ao carregar"
+                : "Banco sincronizado"}
+            <span className="ml-auto">{projectsQuery.isFetching ? "atualizando" : "agora"}</span>
           </div>
           <div className="user-card">
             <div className="avatar">
@@ -824,6 +882,10 @@ export default function Home() {
               onBack={() => setActiveNav("Portfólio")}
               projectId={selected?.id ?? 1}
               projectName={selected?.name ?? "Obra selecionada"}
+              activities={activities}
+              search={search}
+              setSearch={setSearch}
+              plannedStart={selected?.plannedStart}
             />
           ) : (
             <>
@@ -831,7 +893,7 @@ export default function Home() {
                 <div>
                   <p className="eyebrow accent">PAINEL DE CONTROLE</p>
                   <h2>
-                    Bom dia, Rafael <span className="wave">—</span>
+                    Olá, {user?.name?.split(" ")[0] || "gestor"} <span className="wave">—</span>
                   </h2>
                   <p className="intro-copy">
                     Acompanhe o ritmo das suas obras e antecipe os próximos
@@ -848,28 +910,28 @@ export default function Home() {
               <section className="metrics-grid">
                 <MetricCard
                   label="Obras ativas"
-                  value={String(projects.length || 2).padStart(2, "0")}
-                  detail="1 em planejamento"
+                  value={String(projects.length).padStart(2, "0")}
+                  detail={`${projects.filter(project => project.status === "Planejamento").length} em planejamento`}
                   icon={FolderKanban}
                 />
                 <MetricCard
                   label="Avanço consolidado"
-                  value="31,4%"
-                  detail="+4,2% esta semana"
+                  value={`${portfolioProgress}%`}
+                  detail={selected ? `${selected.name} selecionada` : "Sem obra selecionada"}
                   icon={Activity}
                   tone="green"
                 />
                 <MetricCard
                   label="Atividades críticas"
-                  value="07"
-                  detail="3 com desvio"
+                  value={String(criticalActivities.length).padStart(2, "0")}
+                  detail={`${riskActivities.length} com risco nesta obra`}
                   icon={AlertTriangle}
                   tone="rose"
                 />
                 <MetricCard
                   label="Próximo marco"
-                  value="27 mar"
-                  detail="Edifício Residencial"
+                  value={nextMilestone ? formatDate(new Date(Date.parse(selected?.plannedStart?.toString() ?? new Date().toISOString()) + nextMilestone.startOffset * 86400000)) : "—"}
+                  detail={nextMilestone?.name ?? "Nenhuma atividade pendente"}
                   icon={Clock3}
                   tone="amber"
                 />
@@ -928,36 +990,42 @@ export default function Home() {
                     <Sparkles size={18} className="sparkle" />
                   </div>
                   <div className="focus-list">
-                    <div className="focus-item">
-                      <div className="focus-icon rose">
-                        <AlertTriangle size={16} />
+                    {riskActivities.slice(0, 3).map(activity => (
+                      <div className="focus-item" key={`risk-${activity.id}`}>
+                        <div className="focus-icon rose">
+                          <AlertTriangle size={16} />
+                        </div>
+                        <div>
+                          <strong>{activity.name}</strong>
+                          <span>{activity.phase} · atividade em risco</span>
+                        </div>
+                        <span className="focus-tag rose">Atenção</span>
                       </div>
-                      <div>
-                        <strong>Alvenaria — Pavimento 04</strong>
-                        <span>Ritmo abaixo da meta em 2 dias</span>
+                    ))}
+                    {!riskActivities.length && nextMilestone && (
+                      <div className="focus-item">
+                        <div className="focus-icon amber">
+                          <Clock3 size={16} />
+                        </div>
+                        <div>
+                          <strong>{nextMilestone.name}</strong>
+                          <span>{nextMilestone.phase} · próximo marco planejado</span>
+                        </div>
+                        <span className="focus-tag amber">Prazo</span>
                       </div>
-                      <span className="focus-tag rose">Atenção</span>
-                    </div>
-                    <div className="focus-item">
-                      <div className="focus-icon amber">
-                        <Clock3 size={16} />
+                    )}
+                    {!riskActivities.length && !nextMilestone && (
+                      <div className="focus-item">
+                        <div className="focus-icon green">
+                          <CircleCheck size={16} />
+                        </div>
+                        <div>
+                          <strong>Nenhum alerta aberto</strong>
+                          <span>As atividades desta obra estão sem pendências registradas.</span>
+                        </div>
+                        <span className="focus-tag green">Estável</span>
                       </div>
-                      <div>
-                        <strong>Liberação de projeto</strong>
-                        <span>Instalações · vence amanhã</span>
-                      </div>
-                      <span className="focus-tag amber">Prazo</span>
-                    </div>
-                    <div className="focus-item">
-                      <div className="focus-icon green">
-                        <CircleCheck size={16} />
-                      </div>
-                      <div>
-                        <strong>Estrutura — Pavimento 03</strong>
-                        <span>Concluído antes da baseline</span>
-                      </div>
-                      <span className="focus-tag green">Feito</span>
-                    </div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -1029,9 +1097,13 @@ export default function Home() {
               <button
                 className="primary-button"
                 onClick={createProject}
-                disabled={createProjectMutation.isPending}
+                disabled={createPending}
               >
-                {createProjectMutation.isPending ? "Salvando…" : "Criar obra"}
+                {createProjectMutation.isPending
+                  ? "Salvando obra…"
+                  : initializePlanMutation.isPending
+                    ? "Montando plano…"
+                    : "Criar obra"}
               </button>
             </div>
           </div>

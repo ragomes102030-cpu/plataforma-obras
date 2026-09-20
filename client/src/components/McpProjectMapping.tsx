@@ -5,6 +5,7 @@ import {
   Clock3,
   Link2,
   Play,
+  RefreshCw,
   Save,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -22,6 +23,9 @@ const providers: Provider[] = ["eap", "cronograma", "ganttLob"];
 export function McpProjectMapping({ projectId }: { projectId: number }) {
   const mappingsQuery = trpc.integrations.projectMappings.useQuery({
     projectId,
+  });
+  const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
+    enabled: false,
   });
   const saveMutation = trpc.integrations.saveProjectMapping.useMutation({
     onSuccess: () => void mappingsQuery.refetch(),
@@ -58,22 +62,38 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
       <div className="panel-heading">
         <div>
           <div className="title-with-badge">
-            <h3>Identidade dos MCPs</h3>
+            <h3>Conexões dos MCPs</h3>
             <span className="live-badge">
-              <span /> VÍNCULO LOCAL
+              <span /> STATUS REAL
             </span>
           </div>
           <p>
-            Aponte esta obra para um projeto externo distinto em cada domínio.
+            Aponte esta obra para um projeto externo e teste a conexão antes de
+            importar dados.
           </p>
         </div>
         <Link2 size={18} className="mcp-mapping-icon" />
       </div>
+      <div className="mcp-homologation-action">
+        <button
+          className="outline-button"
+          disabled={statusQuery.isFetching}
+          onClick={() => void statusQuery.refetch()}
+        >
+          <RefreshCw size={13} />
+          {statusQuery.isFetching ? "Testando conexões..." : "Testar conexões MCP"}
+        </button>
+        <span>
+          {statusQuery.data
+            ? `Status geral: ${statusQuery.data.status} · ${statusQuery.data.durationMs} ms`
+            : "Executa initialize e tools/list sem alterar nenhum MCP."}
+        </span>
+      </div>
       <div className="mcp-mapping-notice">
         <CircleAlert size={14} />
         <span>
-          Salvar apenas registra o vínculo local. Nenhum MCP é alterado nesta
-          etapa.
+          Salvar registra apenas o vínculo local. O status só vira homologado
+          depois de uma consulta bem-sucedida.
         </span>
       </div>
       <div className="mcp-homologation-action">
@@ -99,6 +119,7 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
           );
           const saved =
             mapping?.syncState === "ready" && !!mapping.externalProjectId;
+          const serverStatus = statusQuery.data?.servers[provider];
           return (
             <div className="mcp-mapping-row" key={provider}>
               <div className="mcp-mapping-label">
@@ -140,8 +161,18 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
                 className={`mcp-mapping-state ${saved ? "ready" : "pending"}`}
               >
                 {saved ? <CircleCheck size={13} /> : <CircleAlert size={13} />}
-                {saved ? "Vinculado" : "Pendente"}
+                {saved
+                  ? "Homologado"
+                  : mapping?.externalProjectId
+                    ? "Aguardando teste"
+                    : "Pendente"}
               </span>
+              {serverStatus && (
+                <small className="mcp-mapping-status">
+                  {serverStatus.status === "online" ? "Online" : "Offline"}
+                  {` · ${serverStatus.latencyMs} ms · ${serverStatus.toolCount} ferramentas`}
+                </small>
+              )}
             </div>
           );
         })}
@@ -149,6 +180,11 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
       {saveMutation.error && (
         <p className="mcp-mapping-error" role="alert">
           {saveMutation.error.message}
+        </p>
+      )}
+      {statusQuery.error && (
+        <p className="mcp-mapping-error" role="alert">
+          Não foi possível testar os MCPs: {statusQuery.error.message}
         </p>
       )}
       {homologationMutation.error && (
