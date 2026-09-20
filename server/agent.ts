@@ -69,13 +69,16 @@ function extractContent(payload: any) {
   const content = payload?.choices?.[0]?.message?.content;
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content
+    const text = content
       .filter(
         (part: any) => part?.type === "text" && typeof part.text === "string"
       )
       .map((part: any) => part.text)
       .join("\n");
+    if (text.trim()) return text;
   }
+  const reasoning = payload?.choices?.[0]?.message?.reasoning;
+  if (typeof reasoning === "string" && reasoning.trim()) return reasoning;
   return "Não consegui obter uma resposta textual do provedor de IA.";
 }
 
