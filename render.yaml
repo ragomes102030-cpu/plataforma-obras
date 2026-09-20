@@ -62,3 +62,5 @@ services:
         sync: false
       - key: MCP_GANTT_LOB_URL
         sync: false
+      - key: MCP_REQUEST_TIMEOUT_MS
+        value: "60000"

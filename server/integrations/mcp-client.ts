@@ -24,6 +24,8 @@ type McpClientOptions = {
   fetchImpl?: typeof fetch;
 };
 
+export const DEFAULT_MCP_TIMEOUT_MS = 60_000;
+
 const PROTOCOL_VERSION = "2025-03-26";
 
 function parseSseOrJson(body: string): JsonRpcResponse {
@@ -52,7 +54,7 @@ export class McpClient {
   ) {
     if (!baseUrl) throw new Error("URL do MCP não configurada");
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.timeoutMs = options.timeoutMs ?? 15_000;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
     this.clientInfo = {
       name: options.name ?? "plataforma-obras",
       version: options.version ?? "1.0.0",

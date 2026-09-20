@@ -24,6 +24,7 @@ export const ENV = {
   llmSecondFallbackModel: process.env.LLM_SECONDARY_MODEL ?? "",
   llmMaxAttempts: Number(process.env.LLM_MAX_ATTEMPTS ?? "3"),
   llmTimeoutMs: Number(process.env.LLM_REQUEST_TIMEOUT_MS ?? "45000"),
+  mcpTimeoutMs: Number(process.env.MCP_REQUEST_TIMEOUT_MS ?? "60000"),
   publicAppUrl: process.env.PUBLIC_APP_URL ?? "",
   mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server.onrender.com",
   mcpCronogramaUrl:

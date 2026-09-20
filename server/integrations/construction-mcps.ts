@@ -97,12 +97,17 @@ export const CONTROLLED_MUTATION_POLICY: Record<
 
 export function createConstructionMcpClients() {
   return {
-    eap: new McpClient(ENV.mcpEapUrl, { name: "plataforma-obras-eap" }),
+    eap: new McpClient(ENV.mcpEapUrl, {
+      name: "plataforma-obras-eap",
+      timeoutMs: ENV.mcpTimeoutMs,
+    }),
     cronograma: new McpClient(ENV.mcpCronogramaUrl, {
       name: "plataforma-obras-cronograma",
+      timeoutMs: ENV.mcpTimeoutMs,
     }),
     ganttLob: new McpClient(ENV.mcpGanttLobUrl, {
       name: "plataforma-obras-gantt-lob",
+      timeoutMs: ENV.mcpTimeoutMs,
     }),
   };
 }
@@ -118,7 +123,7 @@ type ConstructionMcpReadClients = Record<
 >;
 
 const READ_RETRY_LIMIT = 1;
-const READ_RETRY_DELAY_MS = 120;
+const READ_RETRY_DELAY_MS = 1_000;
 const CIRCUIT_FAILURE_THRESHOLD = 3;
 const CIRCUIT_COOLDOWN_MS = 30_000;
 const circuitBreakers = new Map<
@@ -404,16 +409,27 @@ export async function getConstructionMcpStatus(
 export async function listConstructionMcpTools() {
   const clients = createConstructionMcpClients();
   const entries = await Promise.all(
-    Object.entries(clients).map(
-      async ([key, client]) => [
-        key,
-        (
-          await runReadOnlyWithResilience(key as ConstructionMcpDomain, () =>
-            client.listTools()
-          )
-        ).value,
-      ] as const
-    )
+    Object.entries(clients).map(async ([key, client]) => {
+      try {
+        return [
+          key,
+          (
+            await runReadOnlyWithResilience(key as ConstructionMcpDomain, () =>
+              client.listTools()
+            )
+          ).value,
+        ] as const;
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            evento: "mcp_catalog_error",
+            servidor: key,
+            erro: errorMessage(error),
+          })
+        );
+        return [key, []] as const;
+      }
+    })
   );
   return Object.fromEntries(entries) as Record<string, McpTool[]>;
 }
