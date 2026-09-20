@@ -1642,6 +1642,139 @@
     margin: 10px 18px 16px !important;
     color: #9a5e5d !important;
   }
+  .mcp-mutation-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .warning-badge {
+    color: #987956;
+    background: #faf1df;
+  }
+  .mcp-mutation-icon {
+    color: #b17e55;
+    margin: 3px 2px 0 16px;
+  }
+  .mcp-mutation-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 0 18px 14px;
+    padding: 9px;
+    border-radius: 7px;
+    color: #8d694a;
+    background: #fff7e9;
+    font-size: 9px;
+    line-height: 1.45;
+  }
+  .mcp-mutation-form {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 0 18px 15px;
+  }
+  .mcp-mutation-form label,
+  .mcp-mutation-confirmation label {
+    color: #71858d;
+    font-size: 9px;
+  }
+  .mcp-mutation-form textarea {
+    min-height: 130px;
+    resize: vertical;
+    padding: 9px;
+    border: 1px solid #dce7e9;
+    border-radius: 7px;
+    outline: 0;
+    color: #526873;
+    background: #fbfcfc;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .mcp-mutation-form textarea:focus,
+  .mcp-mutation-confirm-row input:focus {
+    border-color: #b99a7b;
+    box-shadow: 0 0 0 2px #f8ead8;
+  }
+  .mcp-mutation-actions,
+  .mcp-mutation-confirm-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .mcp-mutation-actions > span {
+    color: #8e9ca2;
+    font-size: 9px;
+  }
+  .mcp-mutation-confirmation {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 14px 18px 16px;
+    border-top: 1px solid #f0e5d7;
+    background: #fffaf2;
+  }
+  .mcp-mutation-preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .mcp-mutation-preview-head strong {
+    margin: 0;
+    color: #765b43;
+    font-size: 11px;
+  }
+  .mcp-mutation-preview-head span {
+    color: #a48b76;
+    font-size: 8px;
+  }
+  .mcp-mutation-confirmation pre {
+    max-height: 180px;
+    overflow: auto;
+    margin: 0;
+    padding: 9px;
+    border: 1px solid #eadfce;
+    border-radius: 7px;
+    color: #6d5c4c;
+    background: #fffdf9;
+    font-size: 9px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .mcp-mutation-confirm-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 9px;
+    border: 1px solid #dfd2c2;
+    border-radius: 7px;
+    outline: 0;
+    color: #6d5c4c;
+    background: white;
+    font-size: 10px;
+  }
+  .danger-button {
+    background: #9a665d;
+  }
+  .mcp-mutation-confirm-row .danger-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .mcp-mutation-error {
+    margin: 0 18px 14px;
+    color: #9a5e5d;
+    font-size: 9px;
+  }
+  .mcp-mutation-success {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 18px 15px;
+    padding: 9px;
+    border-radius: 7px;
+    color: #527267;
+    background: #edf6f0;
+    font-size: 9px;
+  }
   .eap-heading {
     border-bottom: 1px solid #edf1f2;
   }
@@ -1989,6 +2122,11 @@
     }
     .mcp-homologation-grid {
       grid-template-columns: 1fr;
+    }
+    .mcp-mutation-actions,
+    .mcp-mutation-confirm-row {
+      align-items: stretch;
+      flex-direction: column;
     }
   }
 }

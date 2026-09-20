@@ -7,6 +7,7 @@ import {
   productionFronts,
   productionTeams,
   productionUnits,
+  mcpMutationOperations,
   projectMcpIntegrations,
   scheduleActivities,
   scheduleDependencies,
@@ -22,7 +23,9 @@ import { runProjectAgent } from "./agent";
 import { runProjectOrchestrator } from "./orchestrator";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
+  callControlledMcpTool,
   callReadOnlyMcpTool,
+  CONTROLLED_MUTATION_POLICY,
   getConstructionMcpStatus,
   runConstructionMcpHomologation,
 } from "./integrations/construction-mcps";
@@ -898,6 +901,150 @@ export const appRouter = router({
           })
         );
         return result;
+      }),
+    mutationPreview: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          provider: mcpProviderSchema,
+          toolName: z.string().min(1).max(100),
+          args: z.record(z.string(), z.unknown()).default({}),
+          idempotencyKey: z.string().trim().min(8).max(128).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        if (!CONTROLLED_MUTATION_POLICY[input.provider].has(input.toolName)) {
+          throw new Error(
+            `A ferramenta ${input.toolName} ainda não está liberada para mutação controlada.`
+          );
+        }
+        const argsJson = JSON.stringify(input.args);
+        if (argsJson.length > 16_000) {
+          throw new Error("Os argumentos da mutação excedem o limite permitido.");
+        }
+        const mapping = await db
+          .select()
+          .from(projectMcpIntegrations)
+          .where(
+            and(
+              eq(projectMcpIntegrations.projectId, input.projectId),
+              eq(projectMcpIntegrations.provider, input.provider)
+            )
+          )
+          .limit(1);
+        const externalProjectId = mapping[0]?.externalProjectId;
+        if (!externalProjectId || externalProjectId.toLowerCase() === "default") {
+          throw new Error("Cadastre um project_id externo válido antes da prévia.");
+        }
+        const idempotencyKey = input.idempotencyKey ?? randomUUID();
+        const existing = await db
+          .select()
+          .from(mcpMutationOperations)
+          .where(eq(mcpMutationOperations.idempotencyKey, idempotencyKey))
+          .limit(1);
+        if (existing[0]) {
+          if (existing[0].userId !== ctx.user.id) {
+            throw new Error("A chave de idempotência já pertence a outro usuário.");
+          }
+          return existing[0];
+        }
+        const confirmationToken = randomUUID();
+        await db.insert(mcpMutationOperations).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          provider: input.provider,
+          toolName: input.toolName,
+          externalProjectId,
+          idempotencyKey,
+          confirmationToken,
+          argsJson,
+          status: "preview",
+        });
+        const created = await db
+          .select()
+          .from(mcpMutationOperations)
+          .where(eq(mcpMutationOperations.idempotencyKey, idempotencyKey))
+          .limit(1);
+        if (!created[0]) throw new Error("Não foi possível registrar a prévia.");
+        return created[0];
+      }),
+    confirmMutation: protectedProcedure
+      .input(
+        z.object({
+          operationId: z.number().int().positive(),
+          confirmationToken: z.string().min(20).max(64),
+          confirmationPhrase: z.literal("CONFIRMAR"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const operations = await db
+          .select()
+          .from(mcpMutationOperations)
+          .where(
+            and(
+              eq(mcpMutationOperations.id, input.operationId),
+              eq(mcpMutationOperations.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        const operation = operations[0];
+        if (!operation) throw new Error("Prévia não encontrada.");
+        await assertAccessibleProject(db, operation.projectId, ctx.user.id);
+        if (operation.status === "succeeded") {
+          return {
+            operation,
+            replayed: true as const,
+            result: operation.resultJson ? JSON.parse(operation.resultJson) : null,
+          };
+        }
+        if (
+          operation.status !== "preview" ||
+          operation.confirmationToken !== input.confirmationToken
+        ) {
+          throw new Error("A prévia não está aguardando confirmação válida.");
+        }
+        const claimed = await db
+          .update(mcpMutationOperations)
+          .set({ status: "executing", confirmedAt: new Date() })
+          .where(
+            and(
+              eq(mcpMutationOperations.id, operation.id),
+              eq(mcpMutationOperations.status, "preview")
+            )
+          );
+        if (!("affectedRows" in claimed) || claimed.affectedRows !== 1) {
+          throw new Error("A operação já foi confirmada ou está em execução.");
+        }
+        try {
+          const result = await callControlledMcpTool(
+            operation.provider,
+            operation.toolName,
+            JSON.parse(operation.argsJson)
+          );
+          const resultJson = JSON.stringify(result);
+          await db
+            .update(mcpMutationOperations)
+            .set({
+              status: "succeeded",
+              resultJson,
+              executedAt: new Date(),
+              error: null,
+            })
+            .where(eq(mcpMutationOperations.id, operation.id));
+          return { operationId: operation.id, replayed: false as const, result };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Falha na mutação MCP.";
+          await db
+            .update(mcpMutationOperations)
+            .set({ status: "failed", error: message, executedAt: new Date() })
+            .where(eq(mcpMutationOperations.id, operation.id));
+          throw new Error(message);
+        }
       }),
     mcpStatus: protectedProcedure.query(({ ctx }) => {
       return getConstructionMcpStatus(requestIdFrom(ctx));

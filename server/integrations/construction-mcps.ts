@@ -84,6 +84,15 @@ export const MCP_TOOL_POLICY = {
   ]),
 } as const;
 
+export const CONTROLLED_MUTATION_POLICY: Record<
+  ConstructionMcpDomain,
+  Set<string>
+> = {
+  eap: new Set(["criar_eap_node"]),
+  cronograma: new Set(),
+  ganttLob: new Set(),
+};
+
 export function createConstructionMcpClients() {
   return {
     eap: new McpClient(ENV.mcpEapUrl, { name: "plataforma-obras-eap" }),
@@ -312,6 +321,23 @@ export async function callReadOnlyMcpTool(
     throw new Error(
       `Ferramenta MCP não permitida em modo somente leitura: ${toolName}`
     );
+  }
+  const clients = createConstructionMcpClients();
+  return clients[domain].callTool(toolName, args);
+}
+
+export async function callControlledMcpTool(
+  domain: ConstructionMcpDomain,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<McpCallResult> {
+  if (!CONTROLLED_MUTATION_POLICY[domain].has(toolName)) {
+    throw new Error(
+      `Mutação não liberada para teste controlado: ${domain}.${toolName}`
+    );
+  }
+  if (JSON.stringify(args).toLowerCase().includes('"project_id":"default"')) {
+    throw new Error("O project_id default é bloqueado para mutações reais.");
   }
   const clients = createConstructionMcpClients();
   return clients[domain].callTool(toolName, args);

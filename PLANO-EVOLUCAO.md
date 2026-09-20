@@ -24,6 +24,8 @@ Já confirmado:
 - Barra do agente: status individual de EAP, Cronograma e Gantt/LOB, preservando modo local quando uma fonte estiver indisponível.
 - `project_mcp_integrations`: vínculo local persistido por obra e domínio, com `externalProjectId`, endpoint, estado de sincronização, último erro e data da última sincronização.
 - Tela EAP: editor dos três `project_id` externos; salvar o vínculo não executa nenhuma operação no MCP.
+- `mcp_mutation_operations`: prévia local, confirmação explícita, chave de idempotência, auditoria e resultado da primeira mutação controlada.
+- Bancada da EAP: teste de `criar_eap_node` no MCP EAP com JSON visível e confirmação digitada `CONFIRMAR`.
 
 ## Fases seguintes
 
@@ -45,11 +47,11 @@ A API expõe `integrations.homologateProject`, que exige os três vínculos exte
 
 **Pronto quando:** a obra possuir os três identificadores externos e o usuário puder executar uma homologação segura, com resultado individual por MCP.
 
-### Fase 4 — criação assistida de obra [PENDENTE]
+### Fase 4 — mutação controlada [EM HOMOLOGAÇÃO]
 
-Implementar um fluxo em três passos: rascunho local, prévia das operações MCP e confirmação do usuário. A confirmação deve criar o projeto no MCP de EAP, salvar o vínculo local e só depois montar a EAP.
+Implementado o fluxo de três passos para a primeira operação segura: prévia local, confirmação explícita e execução idempotente de `criar_eap_node` no MCP EAP. Exclusões e demais mutações permanecem bloqueadas. A criação assistida completa de obra, incluindo `criar_projeto`, permanece pendente até a homologação real em uma obra de teste.
 
-**Pronto quando:** o usuário visualizar um resumo antes de qualquer escrita e puder cancelar sem alteração externa.
+**Pronto quando:** uma obra de homologação executar uma mutação aprovada, com auditoria local, sem duplicidade e sem permitir exclusão.
 
 ### Fase 5 — importação EAP e cronograma [PENDENTE]
 

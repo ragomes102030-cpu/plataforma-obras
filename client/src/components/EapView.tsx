@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { ChevronRight, Layers3 } from "lucide-react";
+import { McpMutationWorkbench } from "./McpMutationWorkbench";
 import { McpProjectMapping } from "./McpProjectMapping";
 
 export function EapView({
@@ -68,6 +69,7 @@ export function EapView({
         )}
       </div>
       <McpProjectMapping projectId={projectId} />
+      <McpMutationWorkbench projectId={projectId} />
     </div>
   );
 }

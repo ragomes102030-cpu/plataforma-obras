@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { McpClient, extractMcpText } from "./mcp-client";
 import {
+  callControlledMcpTool,
   getConstructionMcpStatus,
   MCP_TOOL_POLICY,
   runConstructionMcpHomologation,
@@ -68,6 +69,15 @@ describe("MCP_TOOL_POLICY", () => {
       true
     );
     expect(MCP_TOOL_POLICY.destructive.has("deletar_projeto")).toBe(true);
+  });
+
+  it("não libera exclusões nem domínios ainda não habilitados", async () => {
+    await expect(
+      callControlledMcpTool("eap", "deletar_projeto", {})
+    ).rejects.toThrow("Mutação não liberada");
+    await expect(
+      callControlledMcpTool("cronograma", "criar_atividade", {})
+    ).rejects.toThrow("Mutação não liberada");
   });
 });
 

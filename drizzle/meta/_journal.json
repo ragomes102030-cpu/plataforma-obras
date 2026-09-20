@@ -43,6 +43,13 @@
       "when": 1789865744705,
       "tag": "0005_cuddly_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1789866951390,
+      "tag": "0006_panoramic_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

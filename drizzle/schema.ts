@@ -75,6 +75,48 @@ export const projectMcpIntegrations = mysqlTable(
   ]
 );
 
+export const mcpMutationOperations = mysqlTable(
+  "mcp_mutation_operations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    provider: mysqlEnum("provider", ["eap", "cronograma", "ganttLob"]).notNull(),
+    toolName: varchar("toolName", { length: 100 }).notNull(),
+    externalProjectId: varchar("externalProjectId", { length: 180 }).notNull(),
+    idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
+    confirmationToken: varchar("confirmationToken", { length: 64 }).notNull(),
+    argsJson: text("argsJson").notNull(),
+    resultJson: text("resultJson"),
+    error: text("error"),
+    status: mysqlEnum("status", [
+      "preview",
+      "confirmed",
+      "executing",
+      "succeeded",
+      "failed",
+      "cancelled",
+    ])
+      .default("preview")
+      .notNull(),
+    confirmedAt: timestamp("confirmedAt"),
+    executedAt: timestamp("executedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("mcp_mutation_operations_idempotency_idx").on(
+      table.idempotencyKey
+    ),
+    index("mcp_mutation_operations_project_idx").on(table.projectId),
+    index("mcp_mutation_operations_user_idx").on(table.userId),
+  ]
+);
+
 export const scheduleActivities = mysqlTable("schedule_activities", {
   id: int("id").autoincrement().primaryKey(),
   projectId: int("projectId")
@@ -211,6 +253,9 @@ export type InsertProject = typeof projects.$inferInsert;
 export type ProjectMcpIntegration = typeof projectMcpIntegrations.$inferSelect;
 export type InsertProjectMcpIntegration =
   typeof projectMcpIntegrations.$inferInsert;
+export type McpMutationOperation = typeof mcpMutationOperations.$inferSelect;
+export type InsertMcpMutationOperation =
+  typeof mcpMutationOperations.$inferInsert;
 export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
 export type WbsNode = typeof wbsNodes.$inferSelect;
 export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;
