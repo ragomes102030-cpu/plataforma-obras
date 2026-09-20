@@ -91,12 +91,14 @@ function MetricCard({
 }
 
 function GanttView({
+  projectId,
   activities,
   search,
   setSearch,
   selectedName,
   plannedStart,
 }: {
+  projectId: number;
   activities: any[];
   search: string;
   setSearch: (value: string) => void;
@@ -107,6 +109,14 @@ function GanttView({
   const [tab, setTab] = useState<"gantt" | "table" | "lob">("gantt");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyCritical, setOnlyCritical] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [drafts, setDrafts] = useState<Record<number, any>>({});
+  const utils = trpc.useUtils();
+  const updateActivity = trpc.projects.updateActivity.useMutation({
+    onSuccess: async () => {
+      await utils.projects.activities.invalidate({ projectId });
+    },
+  });
   const projectStart = new Date(
     plannedStart ?? "2026-10-01T00:00:00Z"
   ).getTime();
@@ -160,6 +170,12 @@ function GanttView({
             onClick={() => setFiltersOpen(!filtersOpen)}
           >
             <SlidersHorizontal size={15} /> Filtros
+          </button>
+          <button
+            className={`outline-button ${editMode ? "selected-control" : ""}`}
+            onClick={() => setEditMode(value => !value)}
+          >
+            {editMode ? "Concluir edição" : "Editar Gantt"}
           </button>
           <button
             className="icon-button"
@@ -259,7 +275,7 @@ function GanttView({
                     className="phase-mark"
                     style={{ background: phaseColors[phase] || "#6b8292" }}
                   />
-                  <strong>{phase}</strong>
+                  <strong>Serviço · {phase}</strong>
                   <span className="group-count">
                     {phaseActivities.length} atividades
                   </span>
@@ -268,35 +284,142 @@ function GanttView({
                   phaseActivities.map(activity => {
                     const left = (activity.startOffset / maxDays) * 100;
                     const width = (activity.durationDays / maxDays) * 100;
+                    const draft = drafts[activity.id] ?? activity;
+                    const save = () =>
+                      updateActivity.mutate({
+                        projectId,
+                        activityId: activity.id,
+                        name: draft.name,
+                        phase: draft.phase,
+                        startOffset: Number(draft.startOffset),
+                        durationDays: Number(draft.durationDays),
+                        progress: Number(draft.progress),
+                        status: draft.status,
+                      });
                     return (
                       <div className="gantt-row" key={activity.id}>
                         <div className="activity-cell">
                           <span className="wbs-code">{activity.wbsCode}</span>
-                          <span className="activity-name">{activity.name}</span>
+                          {editMode ? (
+                            <input
+                              className="gantt-edit-input activity-name"
+                              value={draft.name}
+                              onChange={event =>
+                                setDrafts(prev => ({
+                                  ...prev,
+                                  [activity.id]: {
+                                    ...draft,
+                                    name: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          ) : (
+                            <span className="activity-name">
+                              {activity.name}
+                            </span>
+                          )}
                           {activity.critical === 1 && (
                             <span className="critical-chip">C</span>
                           )}
                         </div>
                         <div>
-                          <span
-                            className={`status-chip ${statusTone[activity.status] || statusTone["Não iniciado"]}`}
-                          >
-                            {activity.status}
-                          </span>
+                          {editMode ? (
+                            <div className="gantt-status-editor">
+                              <select
+                                className="gantt-edit-select"
+                                value={draft.status}
+                                onChange={event =>
+                                  setDrafts(prev => ({
+                                    ...prev,
+                                    [activity.id]: {
+                                      ...draft,
+                                      status: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option>Não iniciado</option>
+                                <option>Em andamento</option>
+                                <option>Concluído</option>
+                                <option>Em risco</option>
+                              </select>
+                              <input
+                                className="gantt-edit-progress"
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={draft.progress}
+                                onChange={event =>
+                                  setDrafts(prev => ({
+                                    ...prev,
+                                    [activity.id]: {
+                                      ...draft,
+                                      progress: Number(event.target.value),
+                                    },
+                                  }))
+                                }
+                                aria-label="Avanço percentual"
+                              />
+                            </div>
+                          ) : (
+                            <span
+                              className={`status-chip ${statusTone[activity.status] || statusTone["Não iniciado"]}`}
+                            >
+                              {activity.status}
+                            </span>
+                          )}
                         </div>
                         <div className="date-cell">
-                          {formatDate(
-                            new Date(
-                              projectStart + activity.startOffset * 86400000
+                          {editMode ? (
+                            <input
+                              className="gantt-edit-number"
+                              type="number"
+                              min="0"
+                              value={draft.startOffset}
+                              onChange={event =>
+                                setDrafts(prev => ({
+                                  ...prev,
+                                  [activity.id]: {
+                                    ...draft,
+                                    startOffset: Number(event.target.value),
+                                  },
+                                }))
+                              }
+                            />
+                          ) : (
+                            formatDate(
+                              new Date(
+                                projectStart + activity.startOffset * 86400000
+                              )
                             )
                           )}
                         </div>
                         <div className="date-cell">
-                          {formatDate(
-                            new Date(
-                              projectStart +
-                                (activity.startOffset + activity.durationDays) *
-                                  86400000
+                          {editMode ? (
+                            <input
+                              className="gantt-edit-number"
+                              type="number"
+                              min="1"
+                              value={draft.durationDays}
+                              onChange={event =>
+                                setDrafts(prev => ({
+                                  ...prev,
+                                  [activity.id]: {
+                                    ...draft,
+                                    durationDays: Number(event.target.value),
+                                  },
+                                }))
+                              }
+                            />
+                          ) : (
+                            formatDate(
+                              new Date(
+                                projectStart +
+                                  (activity.startOffset +
+                                    activity.durationDays) *
+                                    86400000
+                              )
                             )
                           )}
                         </div>
@@ -321,6 +444,14 @@ function GanttView({
                             />
                             <span>{activity.progress}%</span>
                           </div>
+                          {editMode && (
+                            <button
+                              className="gantt-save-button"
+                              onClick={save}
+                            >
+                              Salvar
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -831,6 +962,7 @@ export default function Home() {
                 </div>
               </section>
               <GanttView
+                projectId={selected?.id ?? 1}
                 activities={activities}
                 search={search}
                 setSearch={setSearch}

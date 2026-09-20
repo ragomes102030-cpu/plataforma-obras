@@ -296,6 +296,52 @@ export const appRouter = router({
           .orderBy(scheduleActivities.sortOrder);
         return rows.length ? rows : input.projectId === 1 ? demoActivities : [];
       }),
+    updateActivity: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          activityId: z.number().int().positive(),
+          name: z.string().trim().min(2).max(220),
+          phase: z.string().trim().min(2).max(80),
+          startOffset: z.number().int().min(0),
+          durationDays: z.number().int().positive(),
+          progress: z.number().int().min(0).max(100),
+          status: z.enum([
+            "Não iniciado",
+            "Em andamento",
+            "Concluído",
+            "Em risco",
+          ]),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [activity] = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.id, input.activityId),
+              eq(scheduleActivities.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!activity) throw new Error("Atividade não encontrada nesta obra.");
+        await db
+          .update(scheduleActivities)
+          .set({
+            name: input.name,
+            phase: input.phase,
+            startOffset: input.startOffset,
+            durationDays: input.durationDays,
+            progress: input.progress,
+            status: input.status,
+          })
+          .where(eq(scheduleActivities.id, input.activityId));
+        return { updated: true as const };
+      }),
     wbs: publicProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ input }) => {

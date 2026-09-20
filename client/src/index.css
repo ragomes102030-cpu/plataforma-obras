@@ -1064,6 +1064,53 @@
     white-space: nowrap;
     text-overflow: ellipsis;
   }
+  .gantt-edit-input,
+  .gantt-edit-select,
+  .gantt-edit-number,
+  .gantt-edit-progress {
+    border: 1px solid #cbd9dc;
+    border-radius: 4px;
+    background: #fbfdfd;
+    color: #405963;
+    font: inherit;
+    font-size: 9px;
+    min-width: 0;
+    padding: 4px 5px;
+  }
+  .gantt-edit-input {
+    flex: 1;
+    width: 100%;
+  }
+  .gantt-edit-select {
+    max-width: 82px;
+  }
+  .gantt-edit-number {
+    width: 60px;
+  }
+  .gantt-status-editor {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .gantt-edit-progress {
+    width: 38px;
+  }
+  .gantt-save-button {
+    position: absolute;
+    right: 7px;
+    top: 7px;
+    z-index: 2;
+    border: 1px solid #7c9e9d;
+    border-radius: 4px;
+    background: #eef7f4;
+    color: #356b65;
+    cursor: pointer;
+    font-size: 8px;
+    padding: 4px 6px;
+  }
+  .gantt-save-button:hover {
+    background: #dcefe9;
+  }
   .critical-chip {
     display: grid;
     place-items: center;
