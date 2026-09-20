@@ -2,6 +2,7 @@ import {
   int,
   mysqlEnum,
   mysqlTable,
+  decimal,
   text,
   timestamp,
   varchar,
@@ -100,6 +101,75 @@ export const scheduleDependencies = mysqlTable("schedule_dependencies", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const productionFronts = mysqlTable("production_fronts", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
+  code: varchar("code", { length: 32 }).notNull(),
+  name: varchar("name", { length: 180 }).notNull(),
+  location: varchar("location", { length: 180 }),
+  status: mysqlEnum("status", ["ativa", "pausada", "concluida"])
+    .default("ativa")
+    .notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const productionTeams = mysqlTable("production_teams", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
+  name: varchar("name", { length: 180 }).notNull(),
+  trade: varchar("trade", { length: 120 }).notNull(),
+  memberCount: int("memberCount").default(0).notNull(),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const productionUnits = mysqlTable("production_units", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
+  code: varchar("code", { length: 32 }).notNull(),
+  name: varchar("name", { length: 180 }).notNull(),
+  unitType: varchar("unitType", { length: 80 }).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const productionEntries = mysqlTable("production_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId")
+    .notNull()
+    .references(() => projects.id),
+  frontId: int("frontId")
+    .notNull()
+    .references(() => productionFronts.id),
+  teamId: int("teamId")
+    .notNull()
+    .references(() => productionTeams.id),
+  unitId: int("unitId")
+    .notNull()
+    .references(() => productionUnits.id),
+  activityId: int("activityId")
+    .notNull()
+    .references(() => scheduleActivities.id),
+  productionDate: timestamp("productionDate").notNull(),
+  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
+  measurementUnit: varchar("measurementUnit", { length: 32 }).notNull(),
+  notes: text("notes"),
+  status: mysqlEnum("status", ["rascunho", "confirmada"])
+    .default("rascunho")
+    .notNull(),
+  createdBy: int("createdBy").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
@@ -107,3 +177,7 @@ export type InsertProject = typeof projects.$inferInsert;
 export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
 export type WbsNode = typeof wbsNodes.$inferSelect;
 export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;
+export type ProductionFront = typeof productionFronts.$inferSelect;
+export type ProductionTeam = typeof productionTeams.$inferSelect;
+export type ProductionUnit = typeof productionUnits.$inferSelect;
+export type ProductionEntry = typeof productionEntries.$inferSelect;

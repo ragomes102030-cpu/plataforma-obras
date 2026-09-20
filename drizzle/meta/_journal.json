@@ -29,6 +29,13 @@
       "when": 1789861832306,
       "tag": "0003_striped_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1789862293365,
+      "tag": "0004_charming_junta",
+      "breakpoints": true
     }
   ]
 }

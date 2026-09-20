@@ -27,6 +27,7 @@ import { useMemo, useState } from "react";
 import { AgentView } from "@/components/AgentView";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { EapView } from "@/components/EapView";
+import { ProductionView } from "@/components/ProductionView";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -443,6 +444,8 @@ function ModuleView({
   if (name === "Agente IA") return <AgentView />;
   if (name === "EAP")
     return <EapView projectId={projectId} projectName={projectName} />;
+  if (name === "Produção")
+    return <ProductionView projectId={projectId} projectName={projectName} />;
   return (
     <div className="module-page">
       <div className="module-hero">

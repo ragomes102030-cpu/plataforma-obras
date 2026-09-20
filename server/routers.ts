@@ -2,6 +2,10 @@ import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   projects,
+  productionEntries,
+  productionFronts,
+  productionTeams,
+  productionUnits,
   scheduleActivities,
   scheduleDependencies,
   wbsNodes,
@@ -142,6 +146,25 @@ const starterActivities = [
   ["5.2", "Comissionamento e entrega", "Entrega", 232, 12],
 ] as const;
 
+const starterFronts = [
+  ["F-01", "Estrutura", "Pavimentos 01–22"],
+  ["F-02", "Vedação", "Pavimentos 01–22"],
+  ["F-03", "Instalações", "Pavimentos 01–22"],
+] as const;
+
+const starterTeams = [
+  ["Equipe estrutura", "Estrutura", 8],
+  ["Equipe alvenaria", "Vedação", 6],
+  ["Equipe instalações", "Instalações", 5],
+] as const;
+
+const starterUnits = Array.from({ length: 5 }, (_, index) => ({
+  code: `P${String(index + 1).padStart(2, "0")}`,
+  name: `Pavimento ${String(index + 1).padStart(2, "0")}`,
+  unitType: "pavimento",
+  sortOrder: index,
+}));
+
 async function seedStarterPlan(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
@@ -185,6 +208,34 @@ async function seedStarterPlan(
       lag: 0,
     }))
   );
+  await seedProductionCatalog(db, projectId);
+}
+
+async function seedProductionCatalog(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+) {
+  await db.insert(productionFronts).values(
+    starterFronts.map(([code, name, location]) => ({
+      projectId,
+      code,
+      name,
+      location,
+      status: "ativa" as const,
+    }))
+  );
+  await db.insert(productionTeams).values(
+    starterTeams.map(([name, trade, memberCount]) => ({
+      projectId,
+      name,
+      trade,
+      memberCount,
+      active: 1,
+    }))
+  );
+  await db
+    .insert(productionUnits)
+    .values(starterUnits.map(unit => ({ projectId, ...unit })));
 }
 
 const accessibleProjectCondition = (projectId: number, userId: number) =>
@@ -192,6 +243,20 @@ const accessibleProjectCondition = (projectId: number, userId: number) =>
     eq(projects.id, projectId),
     or(eq(projects.ownerUserId, userId), isNull(projects.ownerUserId))
   );
+
+async function assertAccessibleProject(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  userId: number
+) {
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(accessibleProjectCondition(projectId, userId))
+    .limit(1);
+  if (!project)
+    throw new Error("Obra não encontrada ou sem permissão de acesso.");
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -310,9 +375,160 @@ export const appRouter = router({
           .from(wbsNodes)
           .where(eq(wbsNodes.projectId, input.projectId))
           .limit(1);
-        if (existing.length) return { initialized: false as const };
+        if (existing.length) {
+          const fronts = await db
+            .select({ id: productionFronts.id })
+            .from(productionFronts)
+            .where(eq(productionFronts.projectId, input.projectId))
+            .limit(1);
+          if (!fronts.length) await seedProductionCatalog(db, input.projectId);
+          return { initialized: false as const };
+        }
         await seedStarterPlan(db, input.projectId);
         return { initialized: true as const };
+      }),
+  }),
+  production: router({
+    fronts: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db
+          .select()
+          .from(productionFronts)
+          .where(eq(productionFronts.projectId, input.projectId))
+          .orderBy(productionFronts.name);
+      }),
+    teams: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db
+          .select()
+          .from(productionTeams)
+          .where(eq(productionTeams.projectId, input.projectId))
+          .orderBy(productionTeams.name);
+      }),
+    units: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db
+          .select()
+          .from(productionUnits)
+          .where(eq(productionUnits.projectId, input.projectId))
+          .orderBy(productionUnits.sortOrder);
+      }),
+    entries: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db
+          .select()
+          .from(productionEntries)
+          .where(eq(productionEntries.projectId, input.projectId))
+          .orderBy(
+            desc(productionEntries.productionDate),
+            desc(productionEntries.id)
+          );
+      }),
+    createEntry: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          frontId: z.number().int().positive(),
+          teamId: z.number().int().positive(),
+          unitId: z.number().int().positive(),
+          activityId: z.number().int().positive(),
+          productionDate: z.coerce.date(),
+          quantity: z.number().positive().max(999999),
+          measurementUnit: z.string().trim().min(1).max(32),
+          notes: z.string().trim().max(2000).optional(),
+          status: z.enum(["rascunho", "confirmada"]).default("rascunho"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [project] = await db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(accessibleProjectCondition(input.projectId, ctx.user.id))
+          .limit(1);
+        if (!project)
+          throw new Error("Obra não encontrada ou sem permissão de acesso.");
+        const [front, team, unit, activity] = await Promise.all([
+          db
+            .select({ id: productionFronts.id })
+            .from(productionFronts)
+            .where(
+              and(
+                eq(productionFronts.id, input.frontId),
+                eq(productionFronts.projectId, input.projectId)
+              )
+            )
+            .limit(1),
+          db
+            .select({ id: productionTeams.id })
+            .from(productionTeams)
+            .where(
+              and(
+                eq(productionTeams.id, input.teamId),
+                eq(productionTeams.projectId, input.projectId)
+              )
+            )
+            .limit(1),
+          db
+            .select({ id: productionUnits.id })
+            .from(productionUnits)
+            .where(
+              and(
+                eq(productionUnits.id, input.unitId),
+                eq(productionUnits.projectId, input.projectId)
+              )
+            )
+            .limit(1),
+          db
+            .select({ id: scheduleActivities.id })
+            .from(scheduleActivities)
+            .where(
+              and(
+                eq(scheduleActivities.id, input.activityId),
+                eq(scheduleActivities.projectId, input.projectId)
+              )
+            )
+            .limit(1),
+        ]);
+        if (!front.length || !team.length || !unit.length || !activity.length) {
+          throw new Error(
+            "Frente, equipe, unidade e atividade devem pertencer à mesma obra."
+          );
+        }
+        const [createdId] = await db
+          .insert(productionEntries)
+          .values({
+            projectId: input.projectId,
+            frontId: input.frontId,
+            teamId: input.teamId,
+            unitId: input.unitId,
+            activityId: input.activityId,
+            productionDate: input.productionDate,
+            quantity: input.quantity.toFixed(3),
+            measurementUnit: input.measurementUnit,
+            notes: input.notes || null,
+            status: input.status,
+            createdBy: ctx.user.id,
+          })
+          .$returningId();
+        return { id: createdId.id };
       }),
   }),
   agent: router({
