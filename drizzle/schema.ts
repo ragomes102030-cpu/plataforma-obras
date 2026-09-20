@@ -304,6 +304,14 @@ export const productionEntries = mysqlTable("production_entries", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const llmProviderSettings = mysqlTable("llm_provider_settings", {
+  id: int("id").primaryKey(),
+  encryptedConfig: text("encryptedConfig").notNull(),
+  updatedBy: int("updatedBy").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
@@ -323,3 +331,4 @@ export type ProductionFront = typeof productionFronts.$inferSelect;
 export type ProductionTeam = typeof productionTeams.$inferSelect;
 export type ProductionUnit = typeof productionUnits.$inferSelect;
 export type ProductionEntry = typeof productionEntries.$inferSelect;
+export type LlmProviderSettings = typeof llmProviderSettings.$inferSelect;

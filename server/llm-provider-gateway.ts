@@ -1,4 +1,5 @@
 import { ENV } from "./_core/env";
+import { getStoredLlmProvider } from "./llm-settings";
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -111,6 +112,31 @@ export function getConfiguredProviders(): LlmProviderConfig[] {
   return Array.from(unique.values());
 }
 
+export async function getConfiguredProvidersAsync(): Promise<LlmProviderConfig[]> {
+  const providers = getConfiguredProviders();
+  try {
+    const stored = await getStoredLlmProvider();
+    if (stored) {
+      const configured = configuredProvider(
+        stored.provider,
+        stored.baseUrl,
+        stored.apiKey,
+        stored.model
+      );
+      if (configured) {
+        const unique = new Map<string, LlmProviderConfig>();
+        for (const provider of [configured, ...providers]) {
+          unique.set(`${provider.baseUrl}|${provider.model}`, provider);
+        }
+        return Array.from(unique.values());
+      }
+    }
+  } catch (error) {
+    console.warn("[LLM] Falha ao carregar configuração persistida:", error);
+  }
+  return providers;
+}
+
 function shouldRetry(status: number) {
   return RETRYABLE_STATUS.has(status) || status >= 500;
 }
@@ -174,9 +200,10 @@ async function callProvider(
 
 export async function invokeLlmGateway(
   request: GatewayRequest,
-  providers = getConfiguredProviders()
+  providers?: LlmProviderConfig[]
 ): Promise<GatewayResult> {
-  if (providers.length === 0) {
+  const configuredProviders = providers ?? (await getConfiguredProvidersAsync());
+  if (configuredProviders.length === 0) {
     throw new Error(
       "Nenhum provedor LLM configurado. Defina um provedor OpenAI-compatible no Render."
     );
@@ -185,11 +212,11 @@ export async function invokeLlmGateway(
   const errors: string[] = [];
   const maxAttempts =
     Number.isFinite(ENV.llmMaxAttempts) && ENV.llmMaxAttempts > 0
-      ? Math.min(Math.floor(ENV.llmMaxAttempts), providers.length)
-      : providers.length;
+      ? Math.min(Math.floor(ENV.llmMaxAttempts), configuredProviders.length)
+      : configuredProviders.length;
 
   for (let index = 0; index < maxAttempts; index++) {
-    const provider = providers[index];
+    const provider = configuredProviders[index];
     try {
       const response = await callProvider(provider, request);
       return {

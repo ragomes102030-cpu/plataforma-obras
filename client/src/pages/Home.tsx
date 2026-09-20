@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Settings,
   SlidersHorizontal,
   Sparkles,
   Users,
@@ -26,6 +27,7 @@ import {
 import { useMemo, useState } from "react";
 import { AgentView } from "@/components/AgentView";
 import { AgentSidebar } from "@/components/AgentSidebar";
+import { AdminLlmSettings } from "@/components/AdminLlmSettings";
 import { EapView } from "@/components/EapView";
 import { ProductionView } from "@/components/ProductionView";
 
@@ -37,6 +39,7 @@ const nav = [
   { label: "Restrições", icon: AlertTriangle },
   { label: "Relatórios", icon: BarChart3 },
   { label: "Agente IA", icon: Sparkles },
+  { label: "Configurações", icon: Settings, adminOnly: true },
 ];
 const phaseColors: Record<string, string> = {
   Preparação: "#7e9bb4",
@@ -759,7 +762,7 @@ export default function Home() {
         </div>
         <nav className="main-nav">
           <span className="nav-caption">GESTÃO</span>
-          {nav.map(item => (
+          {nav.filter(item => !item.adminOnly || user?.role === "admin").map(item => (
             <button
               key={item.label}
               className={`nav-item ${activeNav === item.label ? "active" : ""}`}
@@ -864,7 +867,9 @@ export default function Home() {
           </div>
         </header>
         <div className="content-wrap">
-          {activeNav !== "Portfólio" ? (
+          {activeNav === "Configurações" ? (
+            <AdminLlmSettings />
+          ) : activeNav !== "Portfólio" ? (
             <ModuleView
               name={activeNav}
               icon={

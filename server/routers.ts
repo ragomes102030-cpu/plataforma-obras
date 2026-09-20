@@ -17,12 +17,21 @@ import {
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import {
+  adminProcedure,
+  protectedProcedure,
+  publicProcedure,
+  router,
+} from "./_core/trpc";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { runProjectAgent } from "./agent";
 import { runProjectOrchestrator } from "./orchestrator";
 import { buildAgentProjectContext } from "./agent/context-builder";
+import {
+  getPublicLlmSettings,
+  saveStoredLlmProvider,
+} from "./llm-settings";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -498,6 +507,33 @@ export const appRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, cookieOptions);
       return { success: true } as const;
+    }),
+  }),
+  admin: router({
+    llmSettings: router({
+      get: adminProcedure.query(() => getPublicLlmSettings()),
+      save: adminProcedure
+        .input(
+          z.object({
+            provider: z.string().trim().min(2).max(80),
+            baseUrl: z
+              .string()
+              .trim()
+              .url()
+              .refine(value => value.startsWith("https://"), {
+                message: "A URL do provedor deve usar HTTPS.",
+              }),
+            apiKey: z.string().trim().min(10).max(500),
+            model: z.string().trim().min(2).max(160),
+          })
+        )
+        .mutation(async ({ ctx, input }) => {
+          await saveStoredLlmProvider(input, ctx.user.id);
+          return {
+            saved: true as const,
+            settings: await getPublicLlmSettings(),
+          };
+        }),
     }),
   }),
   projects: router({
