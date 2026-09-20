@@ -154,8 +154,9 @@ async function callProvider(
         model: provider.model,
         temperature: 0.2,
         messages: request.messages,
-        tools: request.tools,
-        tool_choice: "auto",
+        ...(request.tools.length
+          ? { tools: request.tools, tool_choice: "auto" }
+          : {}),
       }),
       signal: controller.signal,
     });

@@ -1,4 +1,4 @@
-import { ENV } from "./_core/env";
+import { invokeLlmGateway, type LlmMessage } from "./llm-provider-gateway";
 
 export type AgentMessage = {
   role: "user" | "assistant";
@@ -35,24 +35,6 @@ export type AgentProjectContext = {
 
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 6_000;
-const REQUEST_TIMEOUT_MS = 45_000;
-
-function resolveEndpoint() {
-  const base = ENV.aiApiUrl || ENV.forgeApiUrl;
-  if (!base) return null;
-  const normalized = base.replace(/\/$/, "");
-  return normalized.endsWith("/chat/completions")
-    ? normalized
-    : `${normalized}/chat/completions`;
-}
-
-function resolveApiKey() {
-  return ENV.aiApiKey || ENV.forgeApiKey;
-}
-
-function resolveModel() {
-  return ENV.aiModel || "gpt-5-mini";
-}
 
 function formatContext(context: AgentProjectContext) {
   const { project, activities } = context;
@@ -116,14 +98,6 @@ export async function runProjectAgent(
     );
   }
 
-  const endpoint = resolveEndpoint();
-  const apiKey = resolveApiKey();
-  if (!endpoint || !apiKey) {
-    throw new Error(
-      "Agente de IA não configurado. Defina AI_API_BASE_URL e AI_API_KEY no Render."
-    );
-  }
-
   const system = [
     "Você é o Agente de Planejamento da Plataforma Obras.",
     "Responda em português do Brasil, de forma objetiva e operacional.",
@@ -134,45 +108,19 @@ export async function runProjectAgent(
     "Contexto atual da obra:\n" + formatContext(context),
   ].join("\n\n");
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-        ...(ENV.publicAppUrl ? { "HTTP-Referer": ENV.publicAppUrl } : {}),
-        "X-Title": "Plataforma Obras — Agente de Planejamento",
-      },
-      body: JSON.stringify({
-        model: resolveModel(),
-        temperature: 0.2,
-        messages: [{ role: "system", content: system }, ...messages],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Provedor de IA respondeu ${response.status}: ${errorText.slice(0, 500)}`
-      );
-    }
-
-    const payload = await response.json();
-    return {
-      content: extractContent(payload),
-      model: payload?.model || resolveModel(),
-    };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(
-        "O provedor de IA excedeu o tempo limite de 45 segundos."
-      );
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const llmMessages: LlmMessage[] = [
+    { role: "system", content: system },
+    ...messages.map(message => ({
+      role: message.role,
+      content: message.content,
+    })),
+  ];
+  const response = await invokeLlmGateway({
+    messages: llmMessages,
+    tools: [],
+  });
+  return {
+    content: extractContent(response),
+    model: response.model || "gpt-5-mini",
+  };
 }

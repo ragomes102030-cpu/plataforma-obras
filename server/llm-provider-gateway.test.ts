@@ -88,6 +88,25 @@ describe("llm-provider-gateway", () => {
     expect(result.model).toBe("fallback-model");
   });
 
+  it("não envia tool calling quando a requisição não possui ferramentas", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    await invokeLlmGateway(
+      { messages: [{ role: "user", content: "teste" }], tools: [] },
+      providers
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1];
+    const body = JSON.parse(String(request?.body));
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+  });
+
   it("falha claramente quando não há provedor configurado", async () => {
     await expect(
       invokeLlmGateway({ messages: [], tools: [] }, [])

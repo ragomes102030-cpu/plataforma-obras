@@ -56,6 +56,22 @@ export function AgentSidebar({
   const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
     staleTime: 60_000,
   });
+  const mappingsQuery = trpc.integrations.projectMappings.useQuery(
+    { projectId },
+    { staleTime: 60_000 }
+  );
+  const mappedProjectIds = (mappingsQuery.data ?? [])
+    .map(mapping => mapping.externalProjectId?.trim())
+    .filter(
+      (value): value is string =>
+        Boolean(value) && value.toLowerCase() !== "default"
+    );
+  const mcpProjectId =
+    mappingsQuery.data?.length === 3 &&
+    mappedProjectIds.length === 3 &&
+    new Set(mappedProjectIds).size === 1
+      ? mappedProjectIds[0]
+      : undefined;
   const agentMutation = trpc.agent.orchestrate.useMutation({
     onSuccess: response => {
       setMessages(previous => [
@@ -82,6 +98,7 @@ export function AgentSidebar({
     setMessages(nextMessages);
     agentMutation.mutate({
       projectId,
+      mcpProjectId,
       messages: nextMessages
         .filter(
           (message): message is Message & { role: "user" | "assistant" } =>
