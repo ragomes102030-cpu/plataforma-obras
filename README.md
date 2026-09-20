@@ -50,7 +50,9 @@ A migration `drizzle/0002_bitter_paladin.sql` adiciona `ownerUserId` em `project
 DATABASE_URL="mysql://..." pnpm db:push
 ```
 
-O Render precisa ter `DATABASE_URL` apontando para um MySQL compatível. Sem banco, o sistema continua em modo demonstrativo e não persiste novas obras.
+O Render precisa ter `DATABASE_URL` apontando para um MySQL compatível. O schema atual usa `drizzle-orm/mysql-core` e o acesso usa `mysql2`; portanto, o PostgreSQL provisionado no Render não pode ser ligado diretamente sem uma migração planejada de schema e driver. Sem um MySQL compatível configurado, o sistema continua em modo demonstrativo e não persiste novas obras.
+
+As consultas de atividades, EAP e dependências preservam o fallback demonstrativo para visitantes, mas validam a permissão da obra quando existe sessão autenticada e banco conectado. O CI usa uma única versão explícita do pnpm (`10.4.1`) para evitar divergência entre o workflow e o `packageManager`.
 
 ## Executar localmente
 

@@ -518,9 +518,12 @@ export const appRouter = router({
     }),
     activities: publicProcedure
       .input(z.object({ projectId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) return input.projectId === 1 ? demoActivities : [];
+        if (ctx.user) {
+          await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        }
         const rows = await db
           .select()
           .from(scheduleActivities)
@@ -576,9 +579,12 @@ export const appRouter = router({
       }),
     wbs: publicProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) return [];
+        if (ctx.user) {
+          await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        }
         return db
           .select()
           .from(wbsNodes)
@@ -587,9 +593,12 @@ export const appRouter = router({
       }),
     dependencies: publicProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) return [];
+        if (ctx.user) {
+          await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        }
         return db
           .select()
           .from(scheduleDependencies)
