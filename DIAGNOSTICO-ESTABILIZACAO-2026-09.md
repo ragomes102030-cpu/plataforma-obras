@@ -36,6 +36,12 @@ A listagem de obras, atividades, EAP e dependências passou a exigir autenticaç
 
 A procedure de chamada MCP manual também passou a exigir `projectId`, verificar o proprietário e buscar o vínculo externo do domínio no banco. Para ferramentas com escopo de obra, o `project_id` informado pelo cliente é substituído pelo vínculo autorizado.
 
+### Ordem metodológica da obra
+
+Os MCPs da Plataforma Obras foram construídos seguindo a filosofia de **Aldo Dórea Mattos**. O agente agora recebe essa ordem como regra operacional: partir do descritivo para estruturar a EAP; derivar as atividades; validar a sequência e as precedências; montar a rede PERT/CPM; calcular caminho crítico e folgas; consolidar cronograma, Gantt e linha de base; alocar recursos; e usar produção, curva S e Linha de Balanço para análise e controle.
+
+Essa ordem não trata Gantt, Linha de Balanço e produção como módulos independentes. A EAP é a estrutura-mãe. O Gantt representa o cronograma. A Linha de Balanço é aplicada quando há repetição espacial ou produtiva. A produção devolve o realizado para o controle do plano. Quando uma etapa anterior não estiver disponível, o agente deve declarar a lacuna em vez de inventar dados.
+
 ### Identificação das fontes
 
 As respostas do orquestrador agora terminam com uma indicação das fontes: dados locais da obra e, quando aplicável, os domínios MCP efetivamente consultados. Isso evita apresentar inferência ou dado local como se viesse de uma fonte externa.
@@ -61,3 +67,5 @@ O próximo incremento deve ser a criação controlada de uma obra iniciada por l
 [1]: https://github.com/ragomes102030-cpu/plataforma-obras "Repositório da Plataforma Obras"
 [2]: https://api.deepseek.com "API OpenAI-compatible da DeepSeek"
 [3]: https://render.com/docs "Documentação do Render"
+[4]: https://www.ofitexto.com.br/planejamento-e-controle-de-obras-2ed/p "Planejamento e controle de obras — Aldo Dórea Mattos, Oficina de Texto"
+[5]: http://hdl.handle.net/11624/3815 "Pesquisa e aplicação da metodologia desenvolvida por Aldo Dórea Mattos sobre planejamento em obras da construção civil"
