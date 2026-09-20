@@ -350,7 +350,6 @@ export const appRouter = router({
             plannedFinish,
           })
           .$returningId();
-        await seedStarterPlan(db, createdId.id);
         const [created] = await db
           .select()
           .from(projects)
@@ -570,6 +569,14 @@ export const appRouter = router({
             )
             .limit(1),
         ]);
+        const planningNodes = await db
+          .select({ id: wbsNodes.id })
+          .from(wbsNodes)
+          .where(eq(wbsNodes.projectId, input.projectId))
+          .limit(1);
+        if (!planningNodes.length) {
+          throw new Error("Monte e valide a EAP antes de lançar produção.");
+        }
         if (!front.length || !team.length || !unit.length || !activity.length) {
           throw new Error(
             "Frente, equipe, unidade e atividade devem pertencer à mesma obra."

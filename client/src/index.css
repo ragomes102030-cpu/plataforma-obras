@@ -1552,6 +1552,20 @@
     gap: 12px;
     color: #527267;
   }
+  .production-blocked-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    color: #8a625c;
+    background: #fbefed;
+    border-color: #edd9d5;
+  }
+  .production-blocked-card strong {
+    display: block;
+    margin: 0 0 5px;
+    color: #7c5652;
+    font-size: 13px;
+  }
   .production-empty-card strong {
     margin: 0 0 4px;
   }
