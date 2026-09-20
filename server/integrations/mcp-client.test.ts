@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { McpClient, extractMcpText } from "./mcp-client";
-import { MCP_TOOL_POLICY } from "./construction-mcps";
+import {
+  getConstructionMcpStatus,
+  MCP_TOOL_POLICY,
+} from "./construction-mcps";
 
 function response(
   body: string,
@@ -19,7 +22,7 @@ describe("McpClient", () => {
         calls.push({ method: payload.method, headers: init?.headers ?? {} });
         if (payload.method === "initialize") {
           return response(
-            `event: message
+          `event: message
 data: {"jsonrpc":"2.0","id":1,"result":{}}`,
             { "mcp-session-id": "session-1" }
           );
@@ -64,5 +67,32 @@ describe("MCP_TOOL_POLICY", () => {
       true
     );
     expect(MCP_TOOL_POLICY.destructive.has("deletar_projeto")).toBe(true);
+  });
+});
+
+describe("getConstructionMcpStatus", () => {
+  it("mantém os servidores independentes e correlaciona a falha", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const status = await getConstructionMcpStatus("req-status-1", {
+      eap: { listTools: async () => [{ name: "get_eap_tree" }] },
+      cronograma: {
+        listTools: async () => {
+          throw new Error("MCP 503: indisponível");
+        },
+      },
+      ganttLob: { listTools: async () => [] },
+    });
+
+    expect(status.status).toBe("degraded");
+    expect(status.requestId).toBe("req-status-1");
+    expect(status.servers.eap.status).toBe("online");
+    expect(status.servers.eap.toolCount).toBe(1);
+    expect(status.servers.cronograma.status).toBe("offline");
+    expect(status.servers.cronograma.lastError).toContain("503");
+    expect(status.servers.ganttLob.status).toBe("online");
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"requestId":"req-status-1"')
+    );
+    errorSpy.mockRestore();
   });
 });

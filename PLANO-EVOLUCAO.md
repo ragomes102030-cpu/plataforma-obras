@@ -2,9 +2,9 @@
 
 Este documento é o checkpoint operacional da evolução. Se a sessão ou os créditos terminarem, retome pelo primeiro item marcado como **PENDENTE** sem refazer os itens concluídos.
 
-## Marco atual — checkpoint 2026-09-19
+## Marco atual — checkpoint 2026-09-20
 
-**Status:** estrutura de integração criada e validada localmente; nenhum MCP recebeu operação de escrita.
+**Status:** Fase 1 de configuração e observabilidade concluída localmente; nenhum MCP recebeu operação de escrita.
 
 Já confirmado:
 
@@ -20,14 +20,16 @@ Já confirmado:
 - `server/integrations/construction-mcps.ts`: adaptadores dos três domínios e allowlist de ferramentas.
 - `server/integrations/mcp-client.test.ts`: testes sem rede.
 - `render.yaml` e `server/_core/env.ts`: URLs configuráveis por ambiente.
+- `integrations.mcpStatus`: sondagem independente dos três MCPs, com `requestId`, latência, ferramentas e último erro por servidor.
+- Barra do agente: status individual de EAP, Cronograma e Gantt/LOB, preservando modo local quando uma fonte estiver indisponível.
 
 ## Fases seguintes
 
-### Fase 1 — configuração e observabilidade [PENDENTE]
+### Fase 1 — configuração e observabilidade [CONCLUÍDA]
 
-Adicionar no Render as URLs `MCP_EAP_URL`, `MCP_CRONOGRAMA_URL` e `MCP_GANTT_LOB_URL`. Criar uma rota protegida `integrations.status` que liste ferramentas e mostre latência/último erro sem vazar credenciais.
+As URLs `MCP_EAP_URL`, `MCP_CRONOGRAMA_URL` e `MCP_GANTT_LOB_URL` estão declaradas no blueprint do Render e possuem fallback público controlado no backend. A rota protegida `integrations.mcpStatus` lista as ferramentas de cada servidor em sondagens independentes, mostra latência e último erro sem vazar credenciais e registra falhas estruturadas com `requestId`.
 
-**Pronto quando:** a interface mostrar os três MCPs como online/offline e o backend registrar falhas com `requestId`.
+**Pronto quando:** a interface mostra os três MCPs como online/offline e o backend registra falhas com `requestId`.
 
 ### Fase 2 — identidade e mapeamento de projetos [PENDENTE]
 
@@ -82,7 +84,7 @@ Ao retomar, execute:
 pnpm check && pnpm test --run && pnpm build
 ```
 
-Depois implemente a **Fase 1 — configuração e observabilidade**. Não avance para operações de escrita antes de concluir a Fase 2.
+Depois implemente a **Fase 2 — identidade e mapeamento de projetos**. Não avance para operações de escrita antes de concluir o vínculo local ↔ MCP e seus testes de contrato.
 
 ## Decisão arquitetural após análise do Hermes
 

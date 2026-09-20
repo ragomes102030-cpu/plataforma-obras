@@ -1,6 +1,13 @@
 import { trpc } from "@/lib/trpc";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
-import { Bot, CircleAlert, Database, ShieldCheck, X } from "lucide-react";
+import {
+  Bot,
+  CircleAlert,
+  CircleCheck,
+  Database,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 type AgentSection =
@@ -25,6 +32,12 @@ const sectionLabels: Record<AgentSection, string> = {
   restricoes: "Restrições",
   relatorios: "Relatórios",
 };
+
+const mcpLabels = {
+  eap: "EAP",
+  cronograma: "Cronograma",
+  ganttLob: "Gantt / LOB",
+} as const;
 
 export function AgentSidebar({
   projectId,
@@ -87,6 +100,7 @@ export function AgentSidebar({
   };
 
   const mcpOnline = statusQuery.data?.status === "online";
+  const mcpDomains = ["eap", "cronograma", "ganttLob"] as const;
 
   return (
     <>
@@ -142,6 +156,27 @@ export function AgentSidebar({
               : mcpOnline
                 ? "MCPs disponíveis para consulta"
                 : "Modo local: MCPs indisponíveis"}
+          </div>
+          <div className="agent-mcp-grid" aria-label="Status dos MCPs">
+            {mcpDomains.map(domain => {
+              const server = statusQuery.data?.servers?.[domain];
+              const online = server?.status === "online";
+              return (
+                <div
+                  className={`agent-mcp-row ${online ? "online" : "offline"}`}
+                  key={domain}
+                  title={server?.lastError ?? undefined}
+                >
+                  <span className="agent-mcp-name">
+                    {online ? <CircleCheck size={11} /> : <CircleAlert size={11} />}
+                    {mcpLabels[domain]}
+                  </span>
+                  <span className="agent-mcp-meta">
+                    {server ? `${server.latencyMs} ms` : "aguardando"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 

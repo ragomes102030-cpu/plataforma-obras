@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   projects,
@@ -20,7 +21,7 @@ import { runProjectOrchestrator } from "./orchestrator";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
   callReadOnlyMcpTool,
-  listConstructionMcpTools,
+  getConstructionMcpStatus,
 } from "./integrations/construction-mcps";
 
 const demoProjects = [
@@ -753,34 +754,14 @@ export const appRouter = router({
       }),
   }),
   integrations: router({
-    mcpStatus: protectedProcedure.query(async () => {
-      const startedAt = Date.now();
-      try {
-        const tools = await listConstructionMcpTools();
-        return {
-          status: "online" as const,
-          durationMs: Date.now() - startedAt,
-          servers: Object.fromEntries(
-            Object.entries(tools).map(([name, entries]) => [
-              name,
-              {
-                status: "online" as const,
-                toolCount: entries.length,
-                tools: entries.map(tool => tool.name),
-              },
-            ])
-          ),
-        };
-      } catch (error) {
-        return {
-          status: "degraded" as const,
-          durationMs: Date.now() - startedAt,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Falha desconhecida nos MCPs",
-        };
-      }
+    mcpStatus: protectedProcedure.query(({ ctx }) => {
+      const header = ctx.req.headers["x-request-id"];
+      const requestId = Array.isArray(header)
+        ? header[0] || randomUUID()
+        : typeof header === "string" && header.trim()
+          ? header.trim()
+          : randomUUID();
+      return getConstructionMcpStatus(requestId);
     }),
     mcpReadOnlyCall: protectedProcedure
       .input(

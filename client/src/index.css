@@ -561,6 +561,38 @@
   .agent-source-status.degraded {
     color: #946e68;
   }
+  .agent-mcp-grid {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .agent-mcp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    border: 1px solid #e1eaec;
+    border-radius: 5px;
+    color: #55716e;
+    background: #f7fbf8;
+    font-size: 9px;
+  }
+  .agent-mcp-row.offline {
+    border-color: #f0d9d5;
+    color: #946e68;
+    background: #fff9f8;
+  }
+  .agent-mcp-name,
+  .agent-mcp-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .agent-mcp-meta {
+    color: #80918e;
+    font-variant-numeric: tabular-nums;
+  }
   .agent-status-dot {
     width: 6px;
     height: 6px;

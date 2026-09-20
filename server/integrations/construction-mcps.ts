@@ -1,6 +1,24 @@
 import { ENV } from "../_core/env";
 import { McpClient, type McpCallResult, type McpTool } from "./mcp-client";
 
+export type ConstructionMcpDomain = "eap" | "cronograma" | "ganttLob";
+
+export type ConstructionMcpServerStatus = {
+  status: "online" | "offline";
+  latencyMs: number;
+  toolCount: number;
+  tools: string[];
+  lastError: string | null;
+};
+
+export type ConstructionMcpStatus = {
+  status: "online" | "degraded" | "offline";
+  requestId: string;
+  checkedAt: string;
+  durationMs: number;
+  servers: Record<ConstructionMcpDomain, ConstructionMcpServerStatus>;
+};
+
 export const MCP_TOOL_POLICY = {
   readOnly: new Set([
     "get_eap_tree",
@@ -51,6 +69,86 @@ export function createConstructionMcpClients() {
     ganttLob: new McpClient(ENV.mcpGanttLobUrl, {
       name: "plataforma-obras-gantt-lob",
     }),
+  };
+}
+
+type ConstructionMcpClients = Record<
+  ConstructionMcpDomain,
+  Pick<McpClient, "listTools">
+>;
+
+function errorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "Falha desconhecida";
+  return message.replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+export async function getConstructionMcpStatus(
+  requestId: string,
+  clients: ConstructionMcpClients = createConstructionMcpClients()
+): Promise<ConstructionMcpStatus> {
+  const startedAt = Date.now();
+  const entries = await Promise.all(
+    (
+      Object.entries(clients) as Array<
+        [ConstructionMcpDomain, ConstructionMcpClients[ConstructionMcpDomain]]
+      >
+    ).map(async ([domain, client]) => {
+      const serverStartedAt = Date.now();
+      try {
+        const tools = await client.listTools();
+        return [
+          domain,
+          {
+            status: "online" as const,
+            latencyMs: Date.now() - serverStartedAt,
+            toolCount: tools.length,
+            tools: tools.map(tool => tool.name),
+            lastError: null,
+          },
+        ] as const;
+      } catch (error) {
+        const message = errorMessage(error);
+        const latencyMs = Date.now() - serverStartedAt;
+        console.error(
+          JSON.stringify({
+            evento: "mcp_status_error",
+            requestId,
+            servidor: domain,
+            latencia_ms: latencyMs,
+            erro: message,
+          })
+        );
+        return [
+          domain,
+          {
+            status: "offline" as const,
+            latencyMs,
+            toolCount: 0,
+            tools: [],
+            lastError: message,
+          },
+        ] as const;
+      }
+    })
+  );
+
+  const servers = Object.fromEntries(entries) as Record<
+    ConstructionMcpDomain,
+    ConstructionMcpServerStatus
+  >;
+  const serverStatuses = Object.values(servers).map(server => server.status);
+  const status = serverStatuses.every(value => value === "online")
+    ? "online"
+    : serverStatuses.some(value => value === "online")
+      ? "degraded"
+      : "offline";
+
+  return {
+    status,
+    requestId,
+    checkedAt: new Date().toISOString(),
+    durationMs: Date.now() - startedAt,
+    servers,
   };
 }
 
