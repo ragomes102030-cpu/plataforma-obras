@@ -152,7 +152,10 @@ function shouldTryFallback(status: number | undefined) {
 }
 
 function safeError(status: number, body: string) {
-  const compact = body.replace(/\s+/g, " ").slice(0, 500);
+  const compact = body
+    .replace(/https?:\/\/\S+/gi, "[link do provedor omitido]")
+    .replace(/\s+/g, " ")
+    .slice(0, 500);
   return new Error(`Provedor LLM respondeu ${status}: ${compact}`);
 }
 
@@ -179,6 +182,7 @@ async function callProvider(
       body: JSON.stringify({
         model: provider.model,
         temperature: 0.2,
+        max_tokens: Number(process.env.LLM_MAX_TOKENS ?? "1024"),
         messages: request.messages,
         ...(request.tools.length
           ? { tools: request.tools, tool_choice: "auto" }

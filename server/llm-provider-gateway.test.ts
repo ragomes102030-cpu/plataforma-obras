@@ -105,6 +105,7 @@ describe("llm-provider-gateway", () => {
     const body = JSON.parse(String(request?.body));
     expect(body.tools).toBeUndefined();
     expect(body.tool_choice).toBeUndefined();
+    expect(body.max_tokens).toBe(1024);
   });
 
   it("envia somente headers ASCII ao provedor", async () => {
@@ -124,6 +125,26 @@ describe("llm-provider-gateway", () => {
     const headers = request?.headers as Record<string, string>;
     expect(headers["X-Title"]).toBe("Plataforma Obras - Agent Orchestrator");
     expect([...headers["X-Title"]].every(character => character.charCodeAt(0) < 256)).toBe(true);
+  });
+
+  it("não expõe links internos quando o provedor rejeita a chamada", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "insufficient credits; visit https://openrouter.ai/settings/credits",
+          },
+        }),
+        { status: 402 }
+      )
+    );
+
+    await expect(
+      invokeLlmGateway(
+        { messages: [{ role: "user", content: "teste" }], tools: [] },
+        [providers[0]]
+      )
+    ).rejects.toThrow("[link do provedor omitido]");
   });
 
   it("falha claramente quando não há provedor configurado", async () => {
