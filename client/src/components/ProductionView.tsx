@@ -28,6 +28,30 @@ export function ProductionView({
       ]);
     },
   });
+  const createFrontMutation = trpc.production.createFront.useMutation({
+    onSuccess: async () => {
+      setFrontCode("");
+      setFrontName("");
+      setFrontLocation("");
+      await utils.production.fronts.invalidate({ projectId });
+    },
+  });
+  const createTeamMutation = trpc.production.createTeam.useMutation({
+    onSuccess: async () => {
+      setTeamName("");
+      setTeamTrade("");
+      setTeamMembers("");
+      await utils.production.teams.invalidate({ projectId });
+    },
+  });
+  const createUnitMutation = trpc.production.createUnit.useMutation({
+    onSuccess: async () => {
+      setUnitCode("");
+      setUnitName("");
+      setUnitType("");
+      await utils.production.units.invalidate({ projectId });
+    },
+  });
   const createMutation = trpc.production.createEntry.useMutation({
     onSuccess: async () => {
       setQuantity("");
@@ -48,6 +72,15 @@ export function ProductionView({
   const [quantity, setQuantity] = useState("");
   const [measurementUnit, setMeasurementUnit] = useState("m²");
   const [notes, setNotes] = useState("");
+  const [frontCode, setFrontCode] = useState("");
+  const [frontName, setFrontName] = useState("");
+  const [frontLocation, setFrontLocation] = useState("");
+  const [teamName, setTeamName] = useState("");
+  const [teamTrade, setTeamTrade] = useState("");
+  const [teamMembers, setTeamMembers] = useState("");
+  const [unitCode, setUnitCode] = useState("");
+  const [unitName, setUnitName] = useState("");
+  const [unitType, setUnitType] = useState("");
   const canSubmit = Boolean(
     frontId && teamId && unitId && activityId && quantity
   );
@@ -95,6 +128,124 @@ export function ProductionView({
         </div>
         <div className="module-card production-readonly-note">
           <ClipboardCheck size={15} /> Lançamentos começam como rascunho
+        </div>
+      </div>
+
+      <div className="module-card production-catalog-card">
+        <div className="panel-heading production-heading">
+          <div>
+            <h3>Cadastros operacionais</h3>
+            <p>Organize onde, quem e em qual unidade a produção acontece.</p>
+          </div>
+        </div>
+        <div className="production-catalog-grid">
+          <form
+            onSubmit={event => {
+              event.preventDefault();
+              if (frontCode && frontName)
+                createFrontMutation.mutate({
+                  projectId,
+                  code: frontCode,
+                  name: frontName,
+                  location: frontLocation || undefined,
+                });
+            }}
+          >
+            <strong>Nova frente</strong>
+            <input
+              value={frontCode}
+              onChange={event => setFrontCode(event.target.value)}
+              placeholder="Código"
+            />
+            <input
+              value={frontName}
+              onChange={event => setFrontName(event.target.value)}
+              placeholder="Nome da frente"
+            />
+            <input
+              value={frontLocation}
+              onChange={event => setFrontLocation(event.target.value)}
+              placeholder="Local / trecho"
+            />
+            <button
+              className="outline-button"
+              disabled={createFrontMutation.isPending}
+            >
+              <Plus size={13} /> Adicionar frente
+            </button>
+          </form>
+          <form
+            onSubmit={event => {
+              event.preventDefault();
+              if (teamName && teamTrade)
+                createTeamMutation.mutate({
+                  projectId,
+                  name: teamName,
+                  trade: teamTrade,
+                  memberCount: Number(teamMembers || 0),
+                });
+            }}
+          >
+            <strong>Nova equipe</strong>
+            <input
+              value={teamName}
+              onChange={event => setTeamName(event.target.value)}
+              placeholder="Nome da equipe"
+            />
+            <input
+              value={teamTrade}
+              onChange={event => setTeamTrade(event.target.value)}
+              placeholder="Especialidade"
+            />
+            <input
+              type="number"
+              min="0"
+              value={teamMembers}
+              onChange={event => setTeamMembers(event.target.value)}
+              placeholder="Nº de integrantes"
+            />
+            <button
+              className="outline-button"
+              disabled={createTeamMutation.isPending}
+            >
+              <Plus size={13} /> Adicionar equipe
+            </button>
+          </form>
+          <form
+            onSubmit={event => {
+              event.preventDefault();
+              if (unitCode && unitName && unitType)
+                createUnitMutation.mutate({
+                  projectId,
+                  code: unitCode,
+                  name: unitName,
+                  unitType,
+                });
+            }}
+          >
+            <strong>Nova unidade</strong>
+            <input
+              value={unitCode}
+              onChange={event => setUnitCode(event.target.value)}
+              placeholder="Código"
+            />
+            <input
+              value={unitName}
+              onChange={event => setUnitName(event.target.value)}
+              placeholder="Nome da unidade"
+            />
+            <input
+              value={unitType}
+              onChange={event => setUnitType(event.target.value)}
+              placeholder="Tipo: pavimento, trecho..."
+            />
+            <button
+              className="outline-button"
+              disabled={createUnitMutation.isPending}
+            >
+              <Plus size={13} /> Adicionar unidade
+            </button>
+          </form>
         </div>
       </div>
 

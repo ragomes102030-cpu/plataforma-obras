@@ -389,6 +389,69 @@ export const appRouter = router({
       }),
   }),
   production: router({
+    createFront: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          code: z.string().trim().min(1).max(32),
+          name: z.string().trim().min(2).max(180),
+          location: z.string().trim().max(180).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [created] = await db
+          .insert(productionFronts)
+          .values({
+            projectId: input.projectId,
+            code: input.code,
+            name: input.name,
+            location: input.location || null,
+            status: "ativa",
+          })
+          .$returningId();
+        return created;
+      }),
+    createTeam: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          name: z.string().trim().min(2).max(180),
+          trade: z.string().trim().min(2).max(120),
+          memberCount: z.number().int().min(0).max(999).default(0),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [created] = await db
+          .insert(productionTeams)
+          .values({ ...input, active: 1 })
+          .$returningId();
+        return created;
+      }),
+    createUnit: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          code: z.string().trim().min(1).max(32),
+          name: z.string().trim().min(2).max(180),
+          unitType: z.string().trim().min(2).max(80),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [created] = await db
+          .insert(productionUnits)
+          .values({ ...input, sortOrder: 0 })
+          .$returningId();
+        return created;
+      }),
     fronts: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
