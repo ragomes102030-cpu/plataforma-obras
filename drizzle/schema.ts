@@ -312,6 +312,150 @@ export const llmProviderSettings = mysqlTable("llm_provider_settings", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const agentProjectStates = mysqlTable(
+  "agent_project_states",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    stage: mysqlEnum("stage", [
+      "DESCRITIVO",
+      "EAP_PROPOSTA",
+      "EAP_REVISAO",
+      "ATIVIDADES_PROPOSTA",
+      "DEPENDENCIAS_PROPOSTA",
+      "CPM_VALIDADO",
+      "CRONOGRAMA_PROPOSTO",
+      "BASELINE_PROPOSTA",
+      "GANTT_LOB_PROPOSTO",
+      "CONTROLE",
+    ])
+      .default("DESCRITIVO")
+      .notNull(),
+    activeSection: varchar("activeSection", { length: 40 })
+      .default("portfolio")
+      .notNull(),
+    activeSubtab: varchar("activeSubtab", { length: 40 }),
+    blockerCount: int("blockerCount").default(0).notNull(),
+    lastSummary: text("lastSummary"),
+    version: int("version").default(1).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("agent_project_states_project_idx").on(table.projectId),
+    index("agent_project_states_stage_idx").on(table.stage),
+  ]
+);
+
+export const agentDecisions = mysqlTable(
+  "agent_decisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    stage: varchar("stage", { length: 50 }).notNull(),
+    decision: mysqlEnum("decision", [
+      "approved",
+      "partially_approved",
+      "rejected",
+      "reopen",
+    ]).notNull(),
+    scopeJson: text("scopeJson").notNull(),
+    reason: text("reason"),
+    impactJson: text("impactJson"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("agent_decisions_project_idx").on(table.projectId),
+    index("agent_decisions_project_stage_idx").on(
+      table.projectId,
+      table.stage
+    ),
+  ]
+);
+
+export const agentFindings = mysqlTable(
+  "agent_findings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    stage: varchar("stage", { length: 50 }).notNull(),
+    classification: mysqlEnum("classification", [
+      "blocker",
+      "alert",
+      "recommendation",
+    ]).notNull(),
+    entityType: varchar("entityType", { length: 50 }).notNull(),
+    entityRef: varchar("entityRef", { length: 180 }),
+    sourceJson: text("sourceJson").notNull(),
+    originalValueJson: text("originalValueJson"),
+    proposedValueJson: text("proposedValueJson"),
+    description: text("description").notNull(),
+    impact: text("impact"),
+    confidence: mysqlEnum("confidence", ["high", "medium", "low"])
+      .default("medium")
+      .notNull(),
+    status: mysqlEnum("status", [
+      "open",
+      "confirmed",
+      "rejected",
+      "resolved",
+      "obsolete",
+    ])
+      .default("open")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("agent_findings_project_idx").on(table.projectId),
+    index("agent_findings_project_status_idx").on(
+      table.projectId,
+      table.status
+    ),
+  ]
+);
+
+export const agentMemories = mysqlTable(
+  "agent_memories",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId").references(() => projects.id),
+    ownerUserId: int("ownerUserId")
+      .notNull()
+      .references(() => users.id),
+    scope: mysqlEnum("scope", ["project", "client", "library"]).notNull(),
+    category: varchar("category", { length: 80 }).notNull(),
+    memoryKey: varchar("memoryKey", { length: 180 }).notNull(),
+    valueJson: text("valueJson").notNull(),
+    sourceType: varchar("sourceType", { length: 80 }).notNull(),
+    sourceRef: varchar("sourceRef", { length: 180 }),
+    confidence: mysqlEnum("confidence", ["high", "medium", "low"])
+      .default("medium")
+      .notNull(),
+    status: mysqlEnum("status", ["proposed", "approved", "rejected", "obsolete"])
+      .default("proposed")
+      .notNull(),
+    approvedBy: int("approvedBy").references(() => users.id),
+    approvedAt: timestamp("approvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("agent_memories_project_idx").on(table.projectId),
+    index("agent_memories_owner_scope_idx").on(table.ownerUserId, table.scope),
+    index("agent_memories_status_idx").on(table.status),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
@@ -332,3 +476,11 @@ export type ProductionTeam = typeof productionTeams.$inferSelect;
 export type ProductionUnit = typeof productionUnits.$inferSelect;
 export type ProductionEntry = typeof productionEntries.$inferSelect;
 export type LlmProviderSettings = typeof llmProviderSettings.$inferSelect;
+export type AgentProjectState = typeof agentProjectStates.$inferSelect;
+export type InsertAgentProjectState = typeof agentProjectStates.$inferInsert;
+export type AgentDecision = typeof agentDecisions.$inferSelect;
+export type InsertAgentDecision = typeof agentDecisions.$inferInsert;
+export type AgentFinding = typeof agentFindings.$inferSelect;
+export type InsertAgentFinding = typeof agentFindings.$inferInsert;
+export type AgentMemory = typeof agentMemories.$inferSelect;
+export type InsertAgentMemory = typeof agentMemories.$inferInsert;

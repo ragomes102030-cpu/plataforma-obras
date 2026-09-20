@@ -120,6 +120,42 @@ function formatContext(context: AgentProjectContext) {
     )
     .join("\n");
 
+  const coordinator = context.coordinator;
+  const coordinatorLines = coordinator
+    ? [
+        `Marco persistido: ${coordinator.stage}`,
+        `Bloqueadores abertos: ${coordinator.blockerCount}`,
+        `Resumo do coordenador: ${coordinator.lastSummary || "nenhum"}`,
+        "Decisões aprovadas:",
+        coordinator.approvedDecisions.length
+          ? coordinator.approvedDecisions
+              .slice(0, 20)
+              .map(decision =>
+                `${decision.stage} | ${decision.decision} | ${JSON.stringify(decision.scope)} | ${decision.reason || "sem justificativa"}`
+              )
+              .join("\n")
+          : "Nenhuma decisão aprovada registrada.",
+        "Achados abertos:",
+        coordinator.openFindings.length
+          ? coordinator.openFindings
+              .slice(0, 30)
+              .map(finding =>
+                `${finding.classification} | ${finding.entityType}:${finding.entityRef || "sem referência"} | ${finding.description} | impacto=${finding.impact || "não informado"} | confiança=${finding.confidence}`
+              )
+              .join("\n")
+          : "Nenhum achado aberto registrado.",
+        "Memórias aprovadas relevantes:",
+        coordinator.approvedMemories.length
+          ? coordinator.approvedMemories
+              .slice(0, 30)
+              .map(memory =>
+                `${memory.category}.${memory.key}=${JSON.stringify(memory.value)} | fonte=${memory.sourceType}:${memory.sourceRef || "sem referência"} | confiança=${memory.confidence}`
+              )
+              .join("\n")
+          : "Nenhuma memória aprovada registrada.",
+      ].join("\n")
+    : "Estado persistido do coordenador ainda não carregado.";
+
   return [
     `Obra: ${context.project.code} — ${context.project.name}`,
     `Local: ${context.project.location}`,
@@ -129,6 +165,7 @@ function formatContext(context: AgentProjectContext) {
     `Término planejado: ${new Date(context.project.plannedFinish).toISOString().slice(0, 10)}`,
     "Atividades locais (WBS | nome | fase | status | avanço | duração | criticidade):",
     activityLines || "Nenhuma atividade local cadastrada.",
+    "Estado e memória do coordenador:\n" + coordinatorLines,
   ].join("\n");
 }
 

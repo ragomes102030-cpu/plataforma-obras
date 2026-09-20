@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -10,6 +10,10 @@ import {
   mcpMutationOperations,
   mcpHomologationRuns,
   projectMcpIntegrations,
+  agentProjectStates,
+  agentDecisions,
+  agentFindings,
+  agentMemories,
   scheduleActivities,
   scheduleDependencies,
   wbsNodes,
@@ -266,6 +270,19 @@ const mcpProviderSchema = z.enum(["eap", "cronograma", "ganttLob"]);
 const mcpProviders = ["eap", "cronograma", "ganttLob"] as const;
 type McpProvider = (typeof mcpProviders)[number];
 
+const coordinatorStages = [
+  "DESCRITIVO",
+  "EAP_PROPOSTA",
+  "EAP_REVISAO",
+  "ATIVIDADES_PROPOSTA",
+  "DEPENDENCIAS_PROPOSTA",
+  "CPM_VALIDADO",
+  "CRONOGRAMA_PROPOSTO",
+  "BASELINE_PROPOSTA",
+  "GANTT_LOB_PROPOSTO",
+  "CONTROLE",
+] as const;
+
 function mcpEndpoint(provider: McpProvider) {
   const baseUrl = {
     eap: ENV.mcpEapUrl,
@@ -299,6 +316,98 @@ async function assertAccessibleProject(
     .limit(1);
   if (!project)
     throw new Error("Obra não encontrada ou sem permissão de acesso.");
+}
+
+function parseJsonValue(value: string | null | undefined): unknown {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+async function loadAgentCoordinatorSnapshot(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  userId: number
+) {
+  await assertAccessibleProject(db, projectId, userId);
+  let [state] = await db
+    .select()
+    .from(agentProjectStates)
+    .where(eq(agentProjectStates.projectId, projectId))
+    .limit(1);
+  if (!state) {
+    await db.insert(agentProjectStates).values({ projectId });
+    [state] = await db
+      .select()
+      .from(agentProjectStates)
+      .where(eq(agentProjectStates.projectId, projectId))
+      .limit(1);
+  }
+  if (!state) throw new Error("Não foi possível inicializar o estado do coordenador.");
+
+  const [decisions, findings, memories] = await Promise.all([
+    db
+      .select()
+      .from(agentDecisions)
+      .where(
+        and(eq(agentDecisions.projectId, projectId), eq(agentDecisions.userId, userId))
+      )
+      .orderBy(desc(agentDecisions.createdAt))
+      .limit(20),
+    db
+      .select()
+      .from(agentFindings)
+      .where(
+        and(eq(agentFindings.projectId, projectId), eq(agentFindings.status, "open"))
+      )
+      .orderBy(desc(agentFindings.createdAt))
+      .limit(30),
+    db
+      .select()
+      .from(agentMemories)
+      .where(
+        and(
+          eq(agentMemories.status, "approved"),
+          or(
+            eq(agentMemories.projectId, projectId),
+            and(isNull(agentMemories.projectId), eq(agentMemories.ownerUserId, userId))
+          )
+        )
+      )
+      .orderBy(desc(agentMemories.updatedAt))
+      .limit(30),
+  ]);
+
+  return {
+    stage: state.stage,
+    blockerCount: state.blockerCount,
+    lastSummary: state.lastSummary,
+    approvedDecisions: decisions.map(decision => ({
+      stage: decision.stage,
+      decision: decision.decision,
+      scope: parseJsonValue(decision.scopeJson),
+      reason: decision.reason,
+    })),
+    openFindings: findings.map(finding => ({
+      classification: finding.classification,
+      entityType: finding.entityType,
+      entityRef: finding.entityRef,
+      description: finding.description,
+      impact: finding.impact,
+      confidence: finding.confidence,
+    })),
+    approvedMemories: memories.map(memory => ({
+      category: memory.category,
+      key: memory.memoryKey,
+      value: parseJsonValue(memory.valueJson),
+      sourceType: memory.sourceType,
+      sourceRef: memory.sourceRef,
+      confidence: memory.confidence,
+    })),
+  };
 }
 
 async function buildPhase7PlanForProject(
@@ -919,6 +1028,189 @@ export const appRouter = router({
       }),
   }),
   agent: router({
+    snapshot: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          return {
+            stage: "DESCRITIVO" as const,
+            blockerCount: 0,
+            lastSummary: null,
+            approvedDecisions: [],
+            openFindings: [],
+            approvedMemories: [],
+          };
+        }
+        return loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id);
+      }),
+    recordDecision: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          stage: z.enum(coordinatorStages),
+          decision: z.enum(["approved", "partially_approved", "rejected", "reopen"]),
+          scope: z.record(z.string(), z.unknown()).default({}),
+          reason: z.string().trim().max(2000).optional(),
+          impact: z.record(z.string(), z.unknown()).optional(),
+          nextStage: z.enum(coordinatorStages).optional(),
+          summary: z.string().trim().max(3000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        await db.insert(agentDecisions).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          stage: input.stage,
+          decision: input.decision,
+          scopeJson: JSON.stringify(input.scope),
+          reason: input.reason ?? null,
+          impactJson: input.impact ? JSON.stringify(input.impact) : null,
+        });
+        const [state] = await db
+          .select()
+          .from(agentProjectStates)
+          .where(eq(agentProjectStates.projectId, input.projectId))
+          .limit(1);
+        if (!state) {
+          await db.insert(agentProjectStates).values({
+            projectId: input.projectId,
+            stage: input.nextStage ?? input.stage,
+            lastSummary: input.summary ?? null,
+          });
+        } else {
+          await db
+            .update(agentProjectStates)
+            .set({
+              stage: input.nextStage ?? state.stage,
+              lastSummary: input.summary ?? state.lastSummary,
+              version: state.version + 1,
+            })
+            .where(eq(agentProjectStates.projectId, input.projectId));
+        }
+        return loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id);
+      }),
+    recordFinding: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          stage: z.enum(coordinatorStages),
+          classification: z.enum(["blocker", "alert", "recommendation"]),
+          entityType: z.string().trim().min(1).max(50),
+          entityRef: z.string().trim().max(180).optional(),
+          source: z.record(z.string(), z.unknown()).default({}),
+          originalValue: z.unknown().optional(),
+          proposedValue: z.unknown().optional(),
+          description: z.string().trim().min(5).max(3000),
+          impact: z.string().trim().max(2000).optional(),
+          confidence: z.enum(["high", "medium", "low"]).default("medium"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [created] = await db
+          .insert(agentFindings)
+          .values({
+            projectId: input.projectId,
+            stage: input.stage,
+            classification: input.classification,
+            entityType: input.entityType,
+            entityRef: input.entityRef ?? null,
+            sourceJson: JSON.stringify(input.source),
+            originalValueJson:
+              input.originalValue === undefined
+                ? null
+                : JSON.stringify(input.originalValue),
+            proposedValueJson:
+              input.proposedValue === undefined
+                ? null
+                : JSON.stringify(input.proposedValue),
+            description: input.description,
+            impact: input.impact ?? null,
+            confidence: input.confidence,
+          })
+          .$returningId();
+        const [state] = await db
+          .select()
+          .from(agentProjectStates)
+          .where(eq(agentProjectStates.projectId, input.projectId))
+          .limit(1);
+        if (state) {
+          await db
+            .update(agentProjectStates)
+            .set({ blockerCount: state.blockerCount + (input.classification === "blocker" ? 1 : 0) })
+            .where(eq(agentProjectStates.projectId, input.projectId));
+        }
+        return { id: created.id };
+      }),
+    proposeMemory: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive().optional(),
+          scope: z.enum(["project", "client", "library"]),
+          category: z.string().trim().min(1).max(80),
+          key: z.string().trim().min(1).max(180),
+          value: z.unknown(),
+          sourceType: z.string().trim().min(1).max(80),
+          sourceRef: z.string().trim().max(180).optional(),
+          confidence: z.enum(["high", "medium", "low"]).default("medium"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        if (input.scope === "project") {
+          if (!input.projectId) throw new Error("Memória de obra exige projectId.");
+          await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        }
+        const [created] = await db
+          .insert(agentMemories)
+          .values({
+            projectId: input.scope === "project" ? input.projectId : null,
+            ownerUserId: ctx.user.id,
+            scope: input.scope,
+            category: input.category,
+            memoryKey: input.key,
+            valueJson: JSON.stringify(input.value),
+            sourceType: input.sourceType,
+            sourceRef: input.sourceRef ?? null,
+            confidence: input.confidence,
+          })
+          .$returningId();
+        return { id: created.id, status: "proposed" as const };
+      }),
+    approveMemory: protectedProcedure
+      .input(z.object({ memoryId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [memory] = await db
+          .select()
+          .from(agentMemories)
+          .where(
+            and(
+              eq(agentMemories.id, input.memoryId),
+              eq(agentMemories.ownerUserId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        if (!memory) throw new Error("Memória não encontrada ou sem permissão.");
+        if (memory.projectId) await assertAccessibleProject(db, memory.projectId, ctx.user.id);
+        await db
+          .update(agentMemories)
+          .set({
+            status: "approved",
+            approvedBy: ctx.user.id,
+            approvedAt: new Date(),
+          })
+          .where(eq(agentMemories.id, input.memoryId));
+        return { approved: true as const };
+      }),
     chat: protectedProcedure
       .input(
         z.object({
@@ -970,8 +1262,22 @@ export const appRouter = router({
             }
           }
         }
+        const coordinator = db
+          ? await loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id)
+          : undefined;
+        if (db) {
+          await db
+            .update(agentProjectStates)
+            .set({ activeSection: "portfolio", activeSubtab: null })
+            .where(eq(agentProjectStates.projectId, input.projectId));
+        }
         return runProjectOrchestrator(
-          buildAgentProjectContext(project, activities, { activeSection: "portfolio", contextMode: "focused" }),
+          buildAgentProjectContext(
+            project,
+            activities,
+            { activeSection: "portfolio", contextMode: "focused" },
+            coordinator
+          ),
           input.messages,
           { mcpProjectIds }
         );
@@ -1042,8 +1348,20 @@ export const appRouter = router({
           activities = input.projectId === 1 ? demoActivities : [];
           if (!project) throw new Error("Obra não encontrada.");
         }
+        const coordinator = db
+          ? await loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id)
+          : undefined;
+        if (db) {
+          await db
+            .update(agentProjectStates)
+            .set({
+              activeSection: input.context.activeSection,
+              activeSubtab: input.context.activeSubtab ?? null,
+            })
+            .where(eq(agentProjectStates.projectId, input.projectId));
+        }
         return runProjectOrchestrator(
-          buildAgentProjectContext(project, activities, input.context),
+          buildAgentProjectContext(project, activities, input.context, coordinator),
           input.messages,
           { mcpProjectId: input.mcpProjectId, mcpProjectIds: input.mcpProjectIds }
         );

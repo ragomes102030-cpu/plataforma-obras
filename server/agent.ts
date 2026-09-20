@@ -31,6 +31,33 @@ export type AgentProjectContext = {
     selectedActivityId?: number;
     contextMode: "focused" | "full";
   };
+  coordinator?: {
+    stage: string;
+    blockerCount: number;
+    lastSummary?: string | null;
+    approvedDecisions: Array<{
+      stage: string;
+      decision: string;
+      scope: unknown;
+      reason?: string | null;
+    }>;
+    openFindings: Array<{
+      classification: string;
+      entityType: string;
+      entityRef?: string | null;
+      description: string;
+      impact?: string | null;
+      confidence: string;
+    }>;
+    approvedMemories: Array<{
+      category: string;
+      key: string;
+      value: unknown;
+      sourceType: string;
+      sourceRef?: string | null;
+      confidence: string;
+    }>;
+  };
 };
 
 const MAX_MESSAGES = 20;

@@ -21,10 +21,13 @@ export type AgentWorkspaceView = {
   contextMode?: "focused" | "full";
 };
 
+export type AgentCoordinatorSnapshot = NonNullable<AgentProjectContext["coordinator"]>;
+
 export function buildAgentProjectContext(
   project: AgentProjectContext["project"],
   activities: AgentProjectContext["activities"],
-  view: AgentWorkspaceView
+  view: AgentWorkspaceView,
+  coordinator?: AgentCoordinatorSnapshot
 ): AgentProjectContext {
   return {
     project,
@@ -35,6 +38,7 @@ export function buildAgentProjectContext(
       selectedActivityId: view.selectedActivityId,
       contextMode: view.contextMode ?? "focused",
     },
+    coordinator,
   };
 }
 

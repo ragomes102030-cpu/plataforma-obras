@@ -34,6 +34,19 @@ const sectionLabels: Record<AgentSection, string> = {
   relatorios: "Relatórios",
 };
 
+const stageLabels: Record<string, string> = {
+  DESCRITIVO: "Descritivo",
+  EAP_PROPOSTA: "EAP em proposta",
+  EAP_REVISAO: "EAP em revisão",
+  ATIVIDADES_PROPOSTA: "Atividades em proposta",
+  DEPENDENCIAS_PROPOSTA: "Dependências em proposta",
+  CPM_VALIDADO: "CPM validado",
+  CRONOGRAMA_PROPOSTO: "Cronograma em proposta",
+  BASELINE_PROPOSTA: "Baseline em proposta",
+  GANTT_LOB_PROPOSTO: "Gantt / LOB em proposta",
+  CONTROLE: "Controle",
+};
+
 const mcpLabels = {
   eap: "EAP",
   cronograma: "Cronograma",
@@ -64,6 +77,10 @@ export function AgentSidebar({
   const mappingsQuery = trpc.integrations.projectMappings.useQuery(
     { projectId },
     { staleTime: 60_000 }
+  );
+  const coordinatorQuery = trpc.agent.snapshot.useQuery(
+    { projectId },
+    { staleTime: 10_000, refetchOnWindowFocus: true }
   );
   const mcpProjectIds: Partial<Record<"eap" | "cronograma" | "ganttLob", string>> = {};
   for (const mapping of mappingsQuery.data ?? []) {
@@ -118,6 +135,7 @@ export function AgentSidebar({
 
   const mcpOnline = statusQuery.data?.status === "online";
   const mcpDomains = ["eap", "cronograma", "ganttLob"] as const;
+  const coordinator = coordinatorQuery.data;
 
   return (
     <>
@@ -161,6 +179,20 @@ export function AgentSidebar({
               <strong>
                 {sectionLabels[activeSection]}
                 {activeSubtab ? ` · ${activeSubtab}` : ""}
+              </strong>
+            </div>
+          </div>
+          <div className="agent-context-row">
+            <ShieldCheck size={14} />
+            <div>
+              <span>Marco do coordenador</span>
+              <strong>
+                {coordinator
+                  ? stageLabels[coordinator.stage] ?? coordinator.stage
+                  : "Carregando estado..."}
+                {coordinator && coordinator.blockerCount > 0
+                  ? ` · ${coordinator.blockerCount} bloqueador(es)`
+                  : ""}
               </strong>
             </div>
           </div>
@@ -212,7 +244,10 @@ export function AgentSidebar({
 
         <div className="agent-sidebar-safety">
           <ShieldCheck size={14} />
-          <span>Somente leitura neste marco. O agente não altera a obra.</span>
+          <span>
+            Coordenador único por obra. Leitura e auditoria ativas; alterações
+            só após aprovação.
+          </span>
         </div>
         {statusQuery.error && (
           <div className="agent-sidebar-warning">
