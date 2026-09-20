@@ -5,6 +5,7 @@ import {
   CircleAlert,
   CircleCheck,
   Database,
+  RefreshCw,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -54,6 +55,7 @@ export function AgentSidebar({
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
+    enabled: false,
     staleTime: 30_000,
     retry: 1,
     refetchOnWindowFocus: true,
@@ -173,13 +175,22 @@ export function AgentSidebar({
             className={`agent-source-status ${mcpOnline ? "online" : "degraded"}`}
           >
             <span className="agent-status-dot" />
-            {statusQuery.isPending
+            {statusQuery.isFetching
               ? "Verificando fontes..."
               : mcpOnline
                 ? "MCPs disponíveis para consulta"
                 : statusQuery.data?.status === "degraded"
                   ? "MCPs parcialmente disponíveis"
-                  : "Modo local: MCPs indisponíveis"}
+                  : "MCPs ainda não testados"}
+            <button
+              className="icon-button"
+              title="Testar conexões MCP"
+              aria-label="Testar conexões MCP"
+              disabled={statusQuery.isFetching}
+              onClick={() => void statusQuery.refetch()}
+            >
+              <RefreshCw size={13} />
+            </button>
           </div>
           <div className="agent-mcp-grid" aria-label="Status dos MCPs">
             {mcpDomains.map(domain => {
