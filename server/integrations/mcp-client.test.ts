@@ -3,6 +3,7 @@ import { McpClient, extractMcpText } from "./mcp-client";
 import {
   getConstructionMcpStatus,
   MCP_TOOL_POLICY,
+  runConstructionMcpHomologation,
 } from "./construction-mcps";
 
 function response(
@@ -94,5 +95,56 @@ describe("getConstructionMcpStatus", () => {
       expect.stringContaining('"requestId":"req-status-1"')
     );
     errorSpy.mockRestore();
+  });
+});
+
+describe("runConstructionMcpHomologation", () => {
+  it("executa uma consulta permitida por domínio com o ID correto", async () => {
+    const calls: Array<{ domain: string; name: string; args: unknown }> = [];
+    const result = await runConstructionMcpHomologation(
+      {
+        eap: "eap-123",
+        cronograma: "cronograma-456",
+        ganttLob: "lob-789",
+      },
+      "req-homologation-1",
+      {
+        eap: {
+          listTools: async () => [{ name: "get_eap_tree" }],
+          callTool: async (name, args) => {
+            calls.push({ domain: "eap", name, args });
+            return { content: [{ type: "text", text: "EAP OK" }] };
+          },
+        },
+        cronograma: {
+          listTools: async () => [{ name: "listar_atividades" }],
+          callTool: async (name, args) => {
+            calls.push({ domain: "cronograma", name, args });
+            return { structuredContent: { activities: 3 } };
+          },
+        },
+        ganttLob: {
+          listTools: async () => [{ name: "listar_temas" }],
+          callTool: async (name, args) => {
+            calls.push({ domain: "ganttLob", name, args });
+            return { content: [{ type: "text", text: "LOB OK" }] };
+          },
+        },
+      }
+    );
+
+    expect(result.readOnly).toBe(true);
+    expect(Object.values(result.servers).every(item => item.status === "passed")).toBe(
+      true
+    );
+    expect(calls).toEqual([
+      { domain: "eap", name: "get_eap_tree", args: { project_id: "eap-123" } },
+      {
+        domain: "cronograma",
+        name: "listar_atividades",
+        args: { project_id: "cronograma-456" },
+      },
+      { domain: "ganttLob", name: "listar_temas", args: {} },
+    ]);
   });
 });

@@ -1,5 +1,12 @@
 import { trpc } from "@/lib/trpc";
-import { CircleAlert, CircleCheck, Link2, Save } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  Clock3,
+  Link2,
+  Play,
+  Save,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Provider = "eap" | "cronograma" | "ganttLob";
@@ -19,6 +26,9 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
   const saveMutation = trpc.integrations.saveProjectMapping.useMutation({
     onSuccess: () => void mappingsQuery.refetch(),
   });
+  const homologationMutation = trpc.integrations.homologateProject.useMutation({
+    onSuccess: () => void mappingsQuery.refetch(),
+  });
   const [drafts, setDrafts] = useState<Record<Provider, string>>({
     eap: "",
     cronograma: "",
@@ -35,6 +45,13 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
       return next;
     });
   }, [mappingsQuery.data]);
+
+  const allMapped = providers.every(provider =>
+    Boolean(
+      mappingsQuery.data?.find(item => item.provider === provider)
+        ?.externalProjectId
+    )
+  );
 
   return (
     <section className="module-card mcp-mapping-card">
@@ -59,12 +76,29 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
           etapa.
         </span>
       </div>
+      <div className="mcp-homologation-action">
+        <button
+          className="primary-button"
+          disabled={homologationMutation.isPending || !allMapped}
+          onClick={() => homologationMutation.mutate({ projectId })}
+        >
+          <Play size={13} />
+          {homologationMutation.isPending
+            ? "Executando consultas..."
+            : "Executar homologação somente leitura"}
+        </button>
+        <span>
+          Consulta uma ferramenta permitida por MCP e não executa operações de
+          escrita.
+        </span>
+      </div>
       <div className="mcp-mapping-list">
         {providers.map(provider => {
           const mapping = mappingsQuery.data?.find(
             item => item.provider === provider
           );
-          const saved = mapping?.syncState === "ready" && !!mapping.externalProjectId;
+          const saved =
+            mapping?.syncState === "ready" && !!mapping.externalProjectId;
           return (
             <div className="mcp-mapping-row" key={provider}>
               <div className="mcp-mapping-label">
@@ -87,7 +121,9 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
                 <button
                   className="outline-button mcp-mapping-save"
                   disabled={
-                    saveMutation.isPending || !drafts[provider].trim() || saved && drafts[provider] === mapping?.externalProjectId
+                    saveMutation.isPending ||
+                    !drafts[provider].trim() ||
+                    (saved && drafts[provider] === mapping?.externalProjectId)
                   }
                   onClick={() =>
                     saveMutation.mutate({
@@ -100,7 +136,9 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
                   <Save size={13} /> Salvar
                 </button>
               </div>
-              <span className={`mcp-mapping-state ${saved ? "ready" : "pending"}`}>
+              <span
+                className={`mcp-mapping-state ${saved ? "ready" : "pending"}`}
+              >
                 {saved ? <CircleCheck size={13} /> : <CircleAlert size={13} />}
                 {saved ? "Vinculado" : "Pendente"}
               </span>
@@ -112,6 +150,50 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
         <p className="mcp-mapping-error" role="alert">
           {saveMutation.error.message}
         </p>
+      )}
+      {homologationMutation.error && (
+        <p className="mcp-mapping-error" role="alert">
+          {homologationMutation.error.message}
+        </p>
+      )}
+      {homologationMutation.data && (
+        <div className="mcp-homologation-result">
+          <div className="mcp-homologation-result-heading">
+            <strong>Resultado da homologação</strong>
+            <span>
+              <Clock3 size={12} /> {homologationMutation.data.durationMs} ms ·
+              requestId {homologationMutation.data.requestId}
+            </span>
+          </div>
+          <div className="mcp-homologation-grid">
+            {providers.map(provider => {
+              const result = homologationMutation.data.servers[provider];
+              const passed = result.status === "passed";
+              return (
+                <div
+                  className={`mcp-homologation-server ${result.status}`}
+                  key={provider}
+                >
+                  <span>
+                    {passed ? <CircleCheck size={12} /> : <CircleAlert size={12} />}
+                    {providerLabels[provider]}
+                  </span>
+                  <strong>
+                    {result.status === "passed"
+                      ? "Aprovado"
+                      : result.status === "skipped"
+                        ? "Não executado"
+                        : "Falhou"}
+                  </strong>
+                  <small>
+                    {result.toolName ?? "sem ferramenta"} · {result.durationMs} ms
+                  </small>
+                  <small>{result.error ?? result.detail}</small>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </section>
   );

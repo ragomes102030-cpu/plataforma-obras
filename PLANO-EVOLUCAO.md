@@ -4,7 +4,7 @@ Este documento é o checkpoint operacional da evolução. Se a sessão ou os cr�
 
 ## Marco atual — checkpoint 2026-09-20
 
-**Status:** Fase 1 de configuração e observabilidade concluída localmente; nenhum MCP recebeu operação de escrita.
+**Status:** Fases 1 e 2 concluídas; homologação somente leitura implementada para iniciar a validação dos vínculos externos. Nenhum MCP recebeu operação de escrita.
 
 Já confirmado:
 
@@ -39,31 +39,37 @@ Criada a tabela local `project_mcp_integrations`, relacionando `projectId`, `pro
 
 **Pronto quando:** uma obra local pode apontar para um `project_id` externo distinto em cada MCP.
 
-### Fase 3 — criação assistida de obra [PENDENTE]
+### Fase 3 — homologação somente leitura [CONCLUÍDA]
+
+A API expõe `integrations.homologateProject`, que exige os três vínculos externos, executa uma consulta permitida por domínio, registra `requestId`, ferramenta, latência e erro, atualiza o estado local de sincronização e retorna o resultado à tela da EAP. A rotina não inclui ferramentas de criação, alteração, baseline, medição ou exclusão.
+
+**Pronto quando:** a obra possuir os três identificadores externos e o usuário puder executar uma homologação segura, com resultado individual por MCP.
+
+### Fase 4 — criação assistida de obra [PENDENTE]
 
 Implementar um fluxo em três passos: rascunho local, prévia das operações MCP e confirmação do usuário. A confirmação deve criar o projeto no MCP de EAP, salvar o vínculo local e só depois montar a EAP.
 
 **Pronto quando:** o usuário visualizar um resumo antes de qualquer escrita e puder cancelar sem alteração externa.
 
-### Fase 4 — importação EAP e cronograma [PENDENTE]
+### Fase 5 — importação EAP e cronograma [PENDENTE]
 
 Importar templates ou nós da EAP, validar estrutura, criar atividades vinculadas por `eap_ref`, criar dependências idempotentes e chamar `calcular_caminho_critico`.
 
 **Pronto quando:** o Gantt local e o banco exibirem os mesmos nós, IDs externos e datas calculadas.
 
-### Fase 5 — baseline, produção e Linha de Balanço [PENDENTE]
+### Fase 6 — baseline, produção e Linha de Balanço [PENDENTE]
 
 Salvar baseline, comparar desvios, importar progresso, calcular curva S e usar `calcular_linha_balanco`. Para risco de interferência, chamar `balancear_ritmos_lob` e apresentar alternativas de equipes.
 
 **Pronto quando:** uma obra repetitiva mostrar ritmo por unidade, espera e risco de interferência.
 
-### Fase 6 — agente LLM com ferramentas controladas [PENDENTE]
+### Fase 7 — agente LLM com ferramentas controladas [PENDENTE]
 
 Conectar o agente a funções internas do backend, não diretamente às URLs. Consultas poderão ser automáticas; criações e alterações exigirão confirmação; exclusões serão bloqueadas por padrão. Registrar prompt, ferramenta, argumentos sanitizados, usuário, resultado e timestamp.
 
 **Pronto quando:** o agente responder perguntas com dados reais e nunca executar uma ferramenta fora da allowlist.
 
-### Fase 7 — auditoria, testes e operação [PENDENTE]
+### Fase 8 — auditoria, testes e operação [PENDENTE]
 
 Adicionar testes de contrato com mocks HTTP, idempotência, retry limitado, correlação de `requestId`, reconciliação local/MCP e política de recuperação quando um MCP estiver offline.
 
@@ -86,7 +92,7 @@ Ao retomar, execute:
 pnpm check && pnpm test --run && pnpm build
 ```
 
-Depois implemente a **Fase 2 — identidade e mapeamento de projetos**. Não avance para operações de escrita antes de concluir o vínculo local ↔ MCP e seus testes de contrato.
+Depois execute a homologação somente leitura da **Fase 3** em uma obra de teste. Não avance para operações de escrita antes de confirmar os três resultados como aprovados.
 
 ## Decisão arquitetural após análise do Hermes
 

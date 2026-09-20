@@ -1489,6 +1489,89 @@
     font-size: 9px;
     line-height: 1.45;
   }
+  .mcp-homologation-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px 13px;
+  }
+  .mcp-homologation-action > span {
+    color: #8e9ca2;
+    font-size: 9px;
+  }
+  .mcp-homologation-action .primary-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .mcp-homologation-result {
+    padding: 13px 18px 16px;
+    border-top: 1px solid #edf1f2;
+    background: #fbfcfc;
+  }
+  .mcp-homologation-result-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .mcp-homologation-result-heading strong {
+    margin: 0;
+    font-size: 11px;
+  }
+  .mcp-homologation-result-heading span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #8e9ca2;
+    font-size: 9px;
+  }
+  .mcp-homologation-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .mcp-homologation-server {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid #e0eaed;
+    border-radius: 7px;
+    color: #55716e;
+    background: white;
+  }
+  .mcp-homologation-server.failed {
+    border-color: #f0d9d5;
+    color: #946e68;
+    background: #fff9f8;
+  }
+  .mcp-homologation-server.skipped {
+    border-color: #eadfca;
+    color: #987956;
+    background: #fffaf1;
+  }
+  .mcp-homologation-server > span,
+  .mcp-homologation-server > small {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mcp-homologation-server > span {
+    font-size: 9px;
+  }
+  .mcp-homologation-server strong {
+    margin: 0;
+    font-size: 11px;
+  }
+  .mcp-homologation-server small {
+    overflow: hidden;
+    color: #8e9ca2;
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .mcp-mapping-list {
     border-top: 1px solid #edf1f2;
   }
@@ -1898,6 +1981,14 @@
     }
     .mcp-mapping-state {
       justify-self: start;
+    }
+    .mcp-homologation-action,
+    .mcp-homologation-result-heading {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .mcp-homologation-grid {
+      grid-template-columns: 1fr;
     }
   }
 }

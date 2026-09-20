@@ -24,6 +24,7 @@ import { buildAgentProjectContext } from "./agent/context-builder";
 import {
   callReadOnlyMcpTool,
   getConstructionMcpStatus,
+  runConstructionMcpHomologation,
 } from "./integrations/construction-mcps";
 
 const demoProjects = [
@@ -257,6 +258,17 @@ function mcpEndpoint(provider: McpProvider) {
     cronograma: ENV.mcpCronogramaUrl,
     ganttLob: ENV.mcpGanttLobUrl,
   }[provider];
+}
+
+function requestIdFrom(ctx: {
+  req: { headers: Record<string, string | string[] | undefined> };
+}) {
+  const header = ctx.req.headers["x-request-id"];
+  return Array.isArray(header)
+    ? header[0] || randomUUID()
+    : typeof header === "string" && header.trim()
+      ? header.trim()
+      : randomUUID();
 }
 
 async function assertAccessibleProject(
@@ -840,14 +852,55 @@ export const appRouter = router({
           externalProjectId: input.externalProjectId,
         };
       }),
+    homologateProject: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const mappings = await db
+          .select()
+          .from(projectMcpIntegrations)
+          .where(eq(projectMcpIntegrations.projectId, input.projectId));
+        const externalProjectIds = Object.fromEntries(
+          mcpProviders.map(provider => {
+            const value = mappings.find(item => item.provider === provider)
+              ?.externalProjectId;
+            if (!value || value.toLowerCase() === "default") {
+              throw new Error(
+                `Cadastre o project_id externo do MCP ${provider} antes da homologação.`
+              );
+            }
+            return [provider, value] as const;
+          })
+        ) as Record<McpProvider, string>;
+        const result = await runConstructionMcpHomologation(
+          externalProjectIds,
+          requestIdFrom(ctx)
+        );
+        await Promise.all(
+          mcpProviders.map(provider => {
+            const server = result.servers[provider];
+            return db
+              .update(projectMcpIntegrations)
+              .set({
+                syncState: server.status === "passed" ? "ready" : "error",
+                lastError: server.error,
+                lastSyncedAt:
+                  server.status === "passed" ? new Date() : undefined,
+              })
+              .where(
+                and(
+                  eq(projectMcpIntegrations.projectId, input.projectId),
+                  eq(projectMcpIntegrations.provider, provider)
+                )
+              );
+          })
+        );
+        return result;
+      }),
     mcpStatus: protectedProcedure.query(({ ctx }) => {
-      const header = ctx.req.headers["x-request-id"];
-      const requestId = Array.isArray(header)
-        ? header[0] || randomUUID()
-        : typeof header === "string" && header.trim()
-          ? header.trim()
-          : randomUUID();
-      return getConstructionMcpStatus(requestId);
+      return getConstructionMcpStatus(requestIdFrom(ctx));
     }),
     mcpReadOnlyCall: protectedProcedure
       .input(
