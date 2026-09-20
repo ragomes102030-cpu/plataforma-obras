@@ -54,7 +54,10 @@ export function AgentSidebar({
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
-    staleTime: 60_000,
+    staleTime: 30_000,
+    retry: 1,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   });
   const mappingsQuery = trpc.integrations.projectMappings.useQuery(
     { projectId },
@@ -64,7 +67,9 @@ export function AgentSidebar({
     .map(mapping => mapping.externalProjectId?.trim())
     .filter(
       (value): value is string =>
-        Boolean(value) && value.toLowerCase() !== "default"
+        typeof value === "string" &&
+        value.length > 0 &&
+        value.toLowerCase() !== "default"
     );
   const mcpProjectId =
     mappingsQuery.data?.length === 3 &&
@@ -172,7 +177,9 @@ export function AgentSidebar({
               ? "Verificando fontes..."
               : mcpOnline
                 ? "MCPs disponíveis para consulta"
-                : "Modo local: MCPs indisponíveis"}
+                : statusQuery.data?.status === "degraded"
+                  ? "MCPs parcialmente disponíveis"
+                  : "Modo local: MCPs indisponíveis"}
           </div>
           <div className="agent-mcp-grid" aria-label="Status dos MCPs">
             {mcpDomains.map(domain => {

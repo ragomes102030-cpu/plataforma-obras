@@ -35,6 +35,7 @@ const nav = [
   { label: "Portfólio", icon: FolderKanban },
   { label: "EAP", icon: Layers3 },
   { label: "Cronogramas", icon: CalendarDays },
+  { label: "Linha de Balanço", icon: Activity },
   { label: "Produção", icon: Gauge },
   { label: "Restrições", icon: AlertTriangle },
   { label: "Relatórios", icon: BarChart3 },
@@ -100,6 +101,7 @@ function GanttView({
   setSearch,
   selectedName,
   plannedStart,
+  initialTab = "gantt",
 }: {
   projectId: number;
   activities: any[];
@@ -107,9 +109,10 @@ function GanttView({
   setSearch: (value: string) => void;
   selectedName: string;
   plannedStart?: string | Date;
+  initialTab?: "gantt" | "table" | "lob";
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [tab, setTab] = useState<"gantt" | "table" | "lob">("gantt");
+  const [tab, setTab] = useState<"gantt" | "table" | "lob">(initialTab);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -143,7 +146,25 @@ function GanttView({
         (acc[item.phase] ||= []).push(item);
         return acc;
       }, {}),
-    [filtered]
+    [filtered],
+  );
+  const lobSeries = useMemo(
+    () =>
+      activities.slice(0, 10).map(activity => ({
+        activity,
+        points: Array.from({ length: weekCount + 1 }, (_, week) => {
+          const day = week * 7;
+          const elapsed = day - activity.startOffset;
+          const plannedProgress =
+            elapsed <= 0
+              ? 0
+              : Math.min(100, (elapsed / Math.max(1, activity.durationDays)) * 100);
+          const x = 42 + (week / Math.max(1, weekCount)) * 640;
+          const y = 228 - (plannedProgress / 100) * 190;
+          return `${x},${y}`;
+        }).join(" "),
+      })),
+    [activities, weekCount]
   );
   const toggle = (phase: string) =>
     setCollapsed(prev => ({ ...prev, [phase]: !prev[phase] }));
@@ -523,24 +544,48 @@ function GanttView({
             <p className="eyebrow accent">RITMO POR FRENTE</p>
             <h4>Linha de Balanço</h4>
             <p>
-              As frentes estão ordenadas por pavimento para comparar ritmo,
-              espera e sobreposição. Este módulo já está pronto para receber a
-              produção real por período.
+              Curvas planejadas por atividade para comparar início, duração e
+              sobreposição. Quando houver produção real, a mesma área receberá
+              o realizado e os desvios por frente.
             </p>
-            <div className="module-empty">
-              <span>
-                Sem produção registrada para calcular ritmo, espera ou avanço
-                real.
-              </span>
+            <div className="lob-legend">
+              {lobSeries.slice(0, 5).map(({ activity }) => (
+                <span key={activity.id}>
+                  <i style={{ background: phaseColors[activity.phase] || "#6b8292" }} />
+                  {activity.name}
+                </span>
+              ))}
             </div>
           </div>
           <div className="lob-chart">
-            <div className="module-empty">
-              <span>
-                A Linha de Balanço será calculada após o primeiro lançamento de
-                produção.
-              </span>
-            </div>
+            {lobSeries.length ? (
+              <svg viewBox="0 0 720 260" role="img" aria-label="Linha de Balanço planejada">
+                {[0, 25, 50, 75, 100].map(value => {
+                  const y = 228 - (value / 100) * 190;
+                  return (
+                    <g key={value}>
+                      <line x1="42" x2="680" y1={y} y2={y} className="lob-grid-line" />
+                      <text x="8" y={y + 4} className="lob-axis-label">{value}%</text>
+                    </g>
+                  );
+                })}
+                <line x1="42" x2="42" y1="38" y2="228" className="lob-axis-line" />
+                <line x1="42" x2="680" y1="228" y2="228" className="lob-axis-line" />
+                {lobSeries.map(({ activity, points }) => (
+                  <polyline
+                    key={activity.id}
+                    points={points}
+                    fill="none"
+                    stroke={phaseColors[activity.phase] || "#6b8292"}
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ))}
+              </svg>
+            ) : (
+              <div className="module-empty"><span>Inclua atividades no cronograma para calcular o ritmo planejado.</span></div>
+            )}
           </div>
         </div>
       )}
@@ -599,6 +644,18 @@ function ModuleView({
         setSearch={setSearch}
         selectedName={projectName}
         plannedStart={plannedStart}
+      />
+    );
+  if (name === "Linha de Balanço")
+    return (
+      <GanttView
+        projectId={projectId}
+        activities={activities}
+        search={search}
+        setSearch={setSearch}
+        selectedName={projectName}
+        plannedStart={plannedStart}
+        initialTab="lob"
       />
     );
   return (
@@ -712,15 +769,19 @@ export default function Home() {
     .filter(activity => activity.progress < 100)
     .sort((a, b) => a.startOffset - b.startOffset)[0];
   const agentSection =
-    activeNav === "Cronogramas"
-      ? "cronograma"
-      : activeNav === "Produção"
-        ? "producao"
-        : activeNav === "Restrições"
-          ? "restricoes"
-          : activeNav === "Relatórios"
-            ? "relatorios"
-            : "portfolio";
+    activeNav === "EAP"
+      ? "eap"
+      : activeNav === "Cronogramas"
+        ? "cronograma"
+        : activeNav === "Linha de Balanço"
+          ? "lob"
+          : activeNav === "Produção"
+            ? "producao"
+            : activeNav === "Restrições"
+              ? "restricoes"
+              : activeNav === "Relatórios"
+                ? "relatorios"
+                : "portfolio";
   const visibleProjects = projects.filter(project =>
     `${project.name} ${project.code} ${project.location}`
       .toLowerCase()

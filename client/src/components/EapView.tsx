@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { ChevronRight, Layers3 } from "lucide-react";
+import { useState } from "react";
 import { McpE2EWorkbench } from "./McpE2EWorkbench";
 import { McpMutationWorkbench } from "./McpMutationWorkbench";
 import { McpProjectMapping } from "./McpProjectMapping";
@@ -17,6 +18,8 @@ export function EapView({
     onSuccess: () => void wbsQuery.refetch(),
   });
   const nodes = wbsQuery.data ?? [];
+  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+  const selectedNode = nodes.find(node => node.id === selectedNodeId);
 
   return (
     <div className="module-page">
@@ -44,6 +47,13 @@ export function EapView({
         </div>
         {wbsQuery.isPending ? (
           <div className="module-empty">Carregando a EAP da obra...</div>
+        ) : wbsQuery.isError ? (
+          <div className="module-empty eap-empty-state">
+            <span>Não foi possível carregar a EAP: {wbsQuery.error.message}</span>
+            <button className="outline-button" onClick={() => void wbsQuery.refetch()}>
+              Tentar novamente
+            </button>
+          </div>
         ) : nodes.length === 0 ? (
           <div className="module-empty eap-empty-state">
             <span>Esta obra ainda não possui uma EAP montada.</span>
@@ -60,16 +70,27 @@ export function EapView({
         ) : (
           <div className="eap-tree">
             {nodes.map(node => (
-              <div className={`eap-node level-${node.level}`} key={node.id}>
+              <button
+                className={`eap-node level-${node.level} ${selectedNodeId === node.id ? "selected" : ""}`}
+                key={node.id}
+                onClick={() => setSelectedNodeId(node.id)}
+              >
                 <span className="eap-node-code">{node.code}</span>
                 <ChevronRight size={14} className="eap-node-chevron" />
                 <strong>{node.name}</strong>
                 <span className="eap-node-type">{node.nodeType}</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
+      {selectedNode && (
+        <div className="module-card eap-node-detail">
+          <span className="eyebrow">ITEM SELECIONADO</span>
+          <strong>{selectedNode.code} · {selectedNode.name}</strong>
+          <p>{selectedNode.nodeType} · nível {selectedNode.level}{selectedNode.unit ? ` · unidade ${selectedNode.unit}` : ""}</p>
+        </div>
+      )}
       <McpProjectMapping projectId={projectId} />
       <Phase7ImportWorkbench projectId={projectId} />
       <McpMutationWorkbench projectId={projectId} />

@@ -25,7 +25,9 @@ export function McpProjectMapping({ projectId }: { projectId: number }) {
     projectId,
   });
   const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
-    enabled: false,
+    staleTime: 30_000,
+    retry: 1,
+    refetchOnMount: true,
   });
   const saveMutation = trpc.integrations.saveProjectMapping.useMutation({
     onSuccess: () => void mappingsQuery.refetch(),

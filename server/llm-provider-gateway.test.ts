@@ -107,6 +107,25 @@ describe("llm-provider-gateway", () => {
     expect(body.tool_choice).toBeUndefined();
   });
 
+  it("envia somente headers ASCII ao provedor", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    await invokeLlmGateway(
+      { messages: [{ role: "user", content: "teste" }], tools: [] },
+      providers
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1];
+    const headers = request?.headers as Record<string, string>;
+    expect(headers["X-Title"]).toBe("Plataforma Obras - Agent Orchestrator");
+    expect([...headers["X-Title"]].every(character => character.charCodeAt(0) < 256)).toBe(true);
+  });
+
   it("falha claramente quando não há provedor configurado", async () => {
     await expect(
       invokeLlmGateway({ messages: [], tools: [] }, [])

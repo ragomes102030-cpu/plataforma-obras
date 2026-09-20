@@ -270,11 +270,13 @@ const mcpProviders = ["eap", "cronograma", "ganttLob"] as const;
 type McpProvider = (typeof mcpProviders)[number];
 
 function mcpEndpoint(provider: McpProvider) {
-  return {
+  const baseUrl = {
     eap: ENV.mcpEapUrl,
     cronograma: ENV.mcpCronogramaUrl,
     ganttLob: ENV.mcpGanttLobUrl,
   }[provider];
+  const normalized = baseUrl.replace(/\/$/, "");
+  return normalized.endsWith("/mcp") ? normalized : `${normalized}/mcp`;
 }
 
 function requestIdFrom(ctx: {
@@ -1049,14 +1051,16 @@ export const appRouter = router({
           .where(eq(projectMcpIntegrations.projectId, input.projectId));
         return mcpProviders.map(provider => {
           const row = rows.find(item => item.provider === provider);
-          return row ?? {
+          return row
+            ? { ...row, endpointUrl: mcpEndpoint(provider) }
+            : {
             provider,
             externalProjectId: null,
             endpointUrl: mcpEndpoint(provider),
             syncState: "unconfigured" as const,
             lastSyncedAt: null,
             lastError: null,
-          };
+              };
         });
       }),
     saveProjectMapping: protectedProcedure

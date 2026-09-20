@@ -174,7 +174,7 @@ async function callProvider(
         "content-type": "application/json",
         authorization: `Bearer ${provider.apiKey}`,
         ...(ENV.publicAppUrl ? { "HTTP-Referer": ENV.publicAppUrl } : {}),
-        "X-Title": "Plataforma Obras — Agent Orchestrator",
+        "X-Title": "Plataforma Obras - Agent Orchestrator",
       },
       body: JSON.stringify({
         model: provider.model,
