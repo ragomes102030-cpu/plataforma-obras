@@ -11,6 +11,7 @@ export type ConstructionMcpDomain = "eap" | "cronograma" | "ganttLob";
 export type ConstructionMcpServerStatus = {
   status: "online" | "offline";
   latencyMs: number;
+  attempts: number;
   toolCount: number;
   tools: string[];
   lastError: string | null;
@@ -35,6 +36,7 @@ export type ConstructionMcpHomologationResult = {
     {
       status: "passed" | "failed" | "skipped";
       toolName: string | null;
+      attempts: number;
       toolCount: number;
       durationMs: number;
       detail: string;
@@ -110,6 +112,90 @@ type ConstructionMcpClients = Record<
   Pick<McpClient, "listTools" | "callTool">
 >;
 
+type ConstructionMcpReadClients = Record<
+  ConstructionMcpDomain,
+  Pick<McpClient, "listTools">
+>;
+
+const READ_RETRY_LIMIT = 1;
+const READ_RETRY_DELAY_MS = 120;
+const CIRCUIT_FAILURE_THRESHOLD = 3;
+const CIRCUIT_COOLDOWN_MS = 30_000;
+const circuitBreakers = new Map<
+  ConstructionMcpDomain,
+  { consecutiveFailures: number; openedAt: number | null }
+>();
+
+export function resetMcpResilienceState() {
+  circuitBreakers.clear();
+}
+
+function circuitState(domain: ConstructionMcpDomain) {
+  const current = circuitBreakers.get(domain);
+  if (current) return current;
+  const created = { consecutiveFailures: 0, openedAt: null };
+  circuitBreakers.set(domain, created);
+  return created;
+}
+
+function isTransientMcpFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|fetch failed|network|econnreset|MCP (408|425|429|5\d\d)/i.test(
+    message
+  );
+}
+
+class ReadOnlyResilienceError extends Error {
+  constructor(
+    message: string,
+    readonly attempts: number,
+    readonly circuitOpen = false
+  ) {
+    super(message);
+    this.name = "ReadOnlyResilienceError";
+  }
+}
+
+function attemptCount(error: unknown) {
+  return error instanceof ReadOnlyResilienceError ? error.attempts : 1;
+}
+
+async function runReadOnlyWithResilience<T>(
+  domain: ConstructionMcpDomain,
+  operation: () => Promise<T>
+): Promise<{ value: T; attempts: number }> {
+  const state = circuitState(domain);
+  if (
+    state.openedAt !== null &&
+    Date.now() - state.openedAt < CIRCUIT_COOLDOWN_MS
+  ) {
+    throw new ReadOnlyResilienceError(
+      `Circuit breaker aberto para o MCP ${domain}; nova tentativa após o cooldown.`,
+      0,
+      true
+    );
+  }
+  if (state.openedAt !== null) state.openedAt = null;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= READ_RETRY_LIMIT + 1; attempt++) {
+    try {
+      const value = await operation();
+      state.consecutiveFailures = 0;
+      state.openedAt = null;
+      return { value, attempts: attempt };
+    } catch (error) {
+      lastError = error;
+      if (!isTransientMcpFailure(error) || attempt > READ_RETRY_LIMIT) break;
+      await new Promise(resolve => setTimeout(resolve, READ_RETRY_DELAY_MS));
+    }
+  }
+  state.consecutiveFailures += 1;
+  if (state.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+    state.openedAt = Date.now();
+  }
+  throw new ReadOnlyResilienceError(errorMessage(lastError), READ_RETRY_LIMIT + 1);
+}
+
 function errorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Falha desconhecida";
   return message.replace(/\s+/g, " ").trim().slice(0, 240);
@@ -159,7 +245,11 @@ export async function runConstructionMcpHomologation(
     ).map(async ([domain, client]) => {
       const serverStartedAt = Date.now();
       try {
-        const tools = await client.listTools();
+        const toolsResult = await runReadOnlyWithResilience(domain, () =>
+          client.listTools()
+        );
+        const tools = toolsResult.value;
+        let attempts = toolsResult.attempts;
         const allowedNames = new Set(
           tools
             .filter(tool => MCP_TOOL_POLICY.readOnly.has(tool.name as never))
@@ -174,6 +264,7 @@ export async function runConstructionMcpHomologation(
             {
               status: "skipped" as const,
               toolName: null,
+              attempts,
               toolCount: tools.length,
               durationMs: Date.now() - serverStartedAt,
               detail: "Nenhuma consulta de homologação compatível foi publicada.",
@@ -181,15 +272,17 @@ export async function runConstructionMcpHomologation(
             },
           ] as const;
         }
-        const result = await client.callTool(
-          toolName,
-          probeArguments(toolName, externalProjectIds[domain])
+        const callResult = await runReadOnlyWithResilience(domain, () =>
+          client.callTool(toolName, probeArguments(toolName, externalProjectIds[domain]))
         );
+        attempts += callResult.attempts;
+        const result = callResult.value;
         return [
           domain,
           {
             status: "passed" as const,
             toolName,
+            attempts,
             toolCount: tools.length,
             durationMs: Date.now() - serverStartedAt,
             detail: resultDetail(result),
@@ -212,6 +305,7 @@ export async function runConstructionMcpHomologation(
           {
             status: "failed" as const,
             toolName: null,
+            attempts: attemptCount(error),
             toolCount: 0,
             durationMs: Date.now() - serverStartedAt,
             detail: "A consulta somente leitura falhou.",
@@ -234,8 +328,8 @@ export async function runConstructionMcpHomologation(
 
 export async function getConstructionMcpStatus(
   requestId: string,
-  clients: ConstructionMcpClients = createConstructionMcpClients()
-): Promise<ConstructionMcpStatus> {
+  clients: ConstructionMcpReadClients = createConstructionMcpClients()
+  ): Promise<ConstructionMcpStatus> {
   const startedAt = Date.now();
   const entries = await Promise.all(
     (
@@ -245,12 +339,16 @@ export async function getConstructionMcpStatus(
     ).map(async ([domain, client]) => {
       const serverStartedAt = Date.now();
       try {
-        const tools = await client.listTools();
+        const toolsResult = await runReadOnlyWithResilience(domain, () =>
+          client.listTools()
+        );
+        const tools = toolsResult.value;
         return [
           domain,
           {
             status: "online" as const,
             latencyMs: Date.now() - serverStartedAt,
+            attempts: toolsResult.attempts,
             toolCount: tools.length,
             tools: tools.map(tool => tool.name),
             lastError: null,
@@ -273,6 +371,7 @@ export async function getConstructionMcpStatus(
           {
             status: "offline" as const,
             latencyMs,
+            attempts: attemptCount(error),
             toolCount: 0,
             tools: [],
             lastError: message,
@@ -306,7 +405,14 @@ export async function listConstructionMcpTools() {
   const clients = createConstructionMcpClients();
   const entries = await Promise.all(
     Object.entries(clients).map(
-      async ([key, client]) => [key, await client.listTools()] as const
+      async ([key, client]) => [
+        key,
+        (
+          await runReadOnlyWithResilience(key as ConstructionMcpDomain, () =>
+            client.listTools()
+          )
+        ).value,
+      ] as const
     )
   );
   return Object.fromEntries(entries) as Record<string, McpTool[]>;
@@ -323,7 +429,11 @@ export async function callReadOnlyMcpTool(
     );
   }
   const clients = createConstructionMcpClients();
-  return clients[domain].callTool(toolName, args);
+  return (
+    await runReadOnlyWithResilience(domain, () =>
+      clients[domain].callTool(toolName, args)
+    )
+  ).value;
 }
 
 export async function callControlledMcpTool(

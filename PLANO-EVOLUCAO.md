@@ -28,6 +28,7 @@ Já confirmado:
 - Bancada da EAP: teste de `criar_eap_node` no MCP EAP com JSON visível e confirmação digitada `CONFIRMAR`.
 - `mcp_homologation_runs`: registro de cada corredor E2E, com plano, probes somente leitura, reconciliação e estado final.
 - Corredor E2E da EAP: executa leitura dos três MCPs e pode reconciliar uma operação de mutação já concluída, sem criar uma nova mutação.
+- Resiliência MCP: retry limitado apenas para leituras, circuit breaker por domínio, isolamento de falhas e telemetria de tentativas.
 
 ## Fases seguintes
 
@@ -61,25 +62,31 @@ Implementado o corredor de ponta a ponta da bancada: valida os três vínculos, 
 
 **Pronto quando:** uma execução E2E aprovada registrar os três MCPs como aprovados e reconciliar a operação controlada com a obra local.
 
-### Fase 6 — importação EAP e cronograma [PENDENTE]
+### Fase 6 — resiliência e tratamento de falhas [EM HOMOLOGAÇÃO]
+
+Leituras MCP repetem uma falha transitória no máximo uma vez, abrem circuito após falhas consecutivas e continuam isoladas por domínio. Mutação não recebe retry automático. O status e o corredor E2E exibem tentativas, latência e erro; os testes usam clientes simulados e não dependem dos serviços públicos.
+
+**Pronto quando:** um MCP indisponível resultar em painel degradado, os demais continuarem operacionais e nenhuma escrita for repetida automaticamente.
+
+### Fase 7 — importação EAP e cronograma [PENDENTE]
 
 Importar templates ou nós da EAP, validar estrutura, criar atividades vinculadas por `eap_ref`, criar dependências idempotentes e chamar `calcular_caminho_critico`.
 
 **Pronto quando:** o Gantt local e o banco exibirem os mesmos nós, IDs externos e datas calculadas.
 
-### Fase 7 — baseline, produção e Linha de Balanço [PENDENTE]
+### Fase 8 — baseline, produção e Linha de Balanço [PENDENTE]
 
 Salvar baseline, comparar desvios, importar progresso, calcular curva S e usar `calcular_linha_balanco`. Para risco de interferência, chamar `balancear_ritmos_lob` e apresentar alternativas de equipes.
 
 **Pronto quando:** uma obra repetitiva mostrar ritmo por unidade, espera e risco de interferência.
 
-### Fase 8 — agente LLM com ferramentas controladas [PENDENTE]
+### Fase 9 — agente LLM com ferramentas controladas [PENDENTE]
 
 Conectar o agente a funções internas do backend, não diretamente às URLs. Consultas poderão ser automáticas; criações e alterações exigirão confirmação; exclusões serão bloqueadas por padrão. Registrar prompt, ferramenta, argumentos sanitizados, usuário, resultado e timestamp.
 
 **Pronto quando:** o agente responder perguntas com dados reais e nunca executar uma ferramenta fora da allowlist.
 
-### Fase 9 — auditoria, testes e operação [PENDENTE]
+### Fase 10 — auditoria, testes e operação [PENDENTE]
 
 Adicionar testes de contrato com mocks HTTP, idempotência, retry limitado, correlação de `requestId`, reconciliação local/MCP e política de recuperação quando um MCP estiver offline.
 

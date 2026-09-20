@@ -172,7 +172,9 @@ export function AgentSidebar({
                     {mcpLabels[domain]}
                   </span>
                   <span className="agent-mcp-meta">
-                    {server ? `${server.latencyMs} ms` : "aguardando"}
+                    {server
+                      ? `${server.latencyMs} ms · ${server.attempts} tentativa${server.attempts === 1 ? "" : "s"}`
+                      : "aguardando"}
                   </span>
                 </div>
               );

@@ -4,6 +4,7 @@ import {
   callControlledMcpTool,
   getConstructionMcpStatus,
   MCP_TOOL_POLICY,
+  resetMcpResilienceState,
   runConstructionMcpHomologation,
 } from "./construction-mcps";
 
@@ -105,6 +106,40 @@ describe("getConstructionMcpStatus", () => {
       expect.stringContaining('"requestId":"req-status-1"')
     );
     errorSpy.mockRestore();
+  });
+
+  it("repete uma falha transitória somente leitura e informa as tentativas", async () => {
+    resetMcpResilienceState();
+    let calls = 0;
+    const status = await getConstructionMcpStatus("req-retry-1", {
+      eap: {
+        listTools: async () => {
+          calls += 1;
+          if (calls === 1) throw new Error("MCP 503: temporário");
+          return [{ name: "get_eap_tree" }];
+        },
+      },
+      cronograma: { listTools: async () => [] },
+      ganttLob: { listTools: async () => [] },
+    });
+    expect(status.servers.eap.status).toBe("online");
+    expect(status.servers.eap.attempts).toBe(2);
+  });
+
+  it("abre o circuito depois de falhas consecutivas no mesmo MCP", async () => {
+    resetMcpResilienceState();
+    const clients = {
+      eap: { listTools: async () => { throw new Error("MCP 503: indisponível"); } },
+      cronograma: { listTools: async () => [] },
+      ganttLob: { listTools: async () => [] },
+    };
+    await getConstructionMcpStatus("req-circuit-1", clients);
+    await getConstructionMcpStatus("req-circuit-2", clients);
+    await getConstructionMcpStatus("req-circuit-3", clients);
+    const fourth = await getConstructionMcpStatus("req-circuit-4", clients);
+    expect(fourth.servers.eap.attempts).toBe(0);
+    expect(fourth.servers.eap.lastError).toContain("Circuit breaker aberto");
+    resetMcpResilienceState();
   });
 });
 

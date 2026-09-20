@@ -100,7 +100,7 @@ export function McpE2EWorkbench({ projectId }: { projectId: number }) {
                   </span>
                   <strong>{passed ? "OK" : server.status}</strong>
                   <small>
-                    {server.toolName ?? "sem probe"} · {server.durationMs} ms
+                    {server.toolName ?? "sem probe"} · {server.durationMs} ms · {server.attempts} tentativa{server.attempts === 1 ? "" : "s"}
                   </small>
                   <small>{server.error ?? server.detail}</small>
                 </div>
