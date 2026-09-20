@@ -16,12 +16,12 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: OAUTH_SERVER_URL
+      - key: GITHUB_CLIENT_ID
         sync: false
-      - key: VITE_OAUTH_PORTAL_URL
+      - key: GITHUB_CLIENT_SECRET
         sync: false
-      - key: VITE_APP_ID
-        sync: false
+      - key: PUBLIC_APP_URL
+        value: https://plataforma-obras-api.onrender.com
       - key: AI_API_BASE_URL
         sync: false
       - key: AI_API_KEY
