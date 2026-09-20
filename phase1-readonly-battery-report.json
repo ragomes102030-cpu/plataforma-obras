@@ -1,0 +1,221 @@
+{
+  "startedAt": "2026-09-20T23:17:01.520Z",
+  "finishedAt": "2026-09-20T23:17:01.525Z",
+  "mode": "simulated-provider-and-mcp",
+  "readOnly": true,
+  "caseCount": 6,
+  "cases": [
+    {
+      "id": "p1-eap-estrutura",
+      "status": "respondido",
+      "model": "phase1-deterministic-agent",
+      "provider": "simulated-provider",
+      "iterations": 3,
+      "tools": [
+        "eap.get_eap_tree",
+        "eap.validar_estrutura"
+      ],
+      "audit": [
+        {
+          "taskId": "p1-eap-estrutura",
+          "iteration": 1,
+          "event": "tool_call",
+          "domain": "eap",
+          "toolName": "get_eap_tree",
+          "status": "success",
+          "durationMs": 0
+        },
+        {
+          "taskId": "p1-eap-estrutura",
+          "iteration": 2,
+          "event": "tool_call",
+          "domain": "eap",
+          "toolName": "validar_estrutura",
+          "status": "success",
+          "durationMs": 0
+        }
+      ],
+      "hasSources": true,
+      "hasGaps": true,
+      "readOnly": true,
+      "content": "MARCO ATUAL\nMARCO 2 — EAP em revisão.\n\nEVIDÊNCIAS CONSULTADAS\nEAP_ID=1 com folhas 1.1 Fundação, 1.2 Estrutura e 1.3 Alvenaria; validação estrutural sem problemas.\n\nPROPOSTA\nManter a decomposição e revisar unidades/quantidades antes da aprovação.\n\nEXEMPLOS/REFERÊNCIAS\nEAP_ID/UID dos nós consultados no MCP EAP.\n\nDIVERGÊNCIAS E LACUNAS\nNenhum problema estrutural bloqueador; quantidades ainda precisam de confirmação.\n\nIMPACTO DE APROVAR\nAprovar permite derivar atividades, mas não executa nenhuma gravação.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê aprova esta leitura da EAP ou indica EAP_IDs para revisão?\n\nFontes: dados locais da obra; MCPs consultados (eap)."
+    },
+    {
+      "id": "p1-atividades-dependencias",
+      "status": "respondido",
+      "model": "phase1-deterministic-agent",
+      "provider": "simulated-provider",
+      "iterations": 4,
+      "tools": [
+        "cronograma.listar_atividades",
+        "cronograma.listar_dependencias",
+        "cronograma.validar_dependencias"
+      ],
+      "audit": [
+        {
+          "taskId": "p1-atividades-dependencias",
+          "iteration": 1,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "listar_atividades",
+          "status": "success",
+          "durationMs": 0
+        },
+        {
+          "taskId": "p1-atividades-dependencias",
+          "iteration": 2,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "listar_dependencias",
+          "status": "success",
+          "durationMs": 0
+        },
+        {
+          "taskId": "p1-atividades-dependencias",
+          "iteration": 3,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "validar_dependencias",
+          "status": "success",
+          "durationMs": 0
+        }
+      ],
+      "hasSources": true,
+      "hasGaps": true,
+      "readOnly": true,
+      "content": "MARCO ATUAL\nMARCO 3 — atividades e sequência.\n\nEVIDÊNCIAS CONSULTADAS\nAtividades eap_ref=1.1, 1.2 e 1.3; dependências TI entre fundação, estrutura e alvenaria.\n\nPROPOSTA\nConferir as três referências EAP e validar a sequência construtiva antes de discutir datas.\n\nEXEMPLOS/REFERÊNCIAS\nAtividade e dependência identificadas por ID no cronograma.\n\nDIVERGÊNCIAS E LACUNAS\nNão há ciclo na fixture; recursos e produtividade não estão informados.\n\nIMPACTO DE APROVAR\nAprovar a sequência permite calcular CPM, sem criar ou alterar atividades.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê aprova esta sequência para calcular o caminho crítico?\n\nFontes: dados locais da obra; MCPs consultados (cronograma)."
+    },
+    {
+      "id": "p1-cpm",
+      "status": "respondido",
+      "model": "phase1-deterministic-agent",
+      "provider": "simulated-provider",
+      "iterations": 3,
+      "tools": [
+        "cronograma.calcular_caminho_critico",
+        "cronograma.listar_dependencias"
+      ],
+      "audit": [
+        {
+          "taskId": "p1-cpm",
+          "iteration": 1,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "calcular_caminho_critico",
+          "status": "success",
+          "durationMs": 0
+        },
+        {
+          "taskId": "p1-cpm",
+          "iteration": 2,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "listar_dependencias",
+          "status": "success",
+          "durationMs": 0
+        }
+      ],
+      "hasSources": true,
+      "hasGaps": true,
+      "readOnly": true,
+      "content": "MARCO ATUAL\nMARCO 4 — rede CPM.\n\nEVIDÊNCIAS CONSULTADAS\nCaminho crítico indicado por e2e-atv-1 e e2e-atv-2; duração acumulada de 65 dias na fixture.\n\nPROPOSTA\nTratar fundações e estrutura como sequência crítica até confirmação de folgas.\n\nEXEMPLOS/REFERÊNCIAS\nCPM do cronograma e dependências TI consultadas.\n\nDIVERGÊNCIAS E LACUNAS\nFolgas detalhadas e calendários de trabalho não estão disponíveis nesta fixture.\n\nIMPACTO DE APROVAR\nAprovar orienta prioridade de controle, mas não altera a rede.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê aprova esta leitura do caminho crítico ou informa outro calendário?\n\nFontes: dados locais da obra; MCPs consultados (cronograma)."
+    },
+    {
+      "id": "p1-baseline",
+      "status": "respondido",
+      "model": "phase1-deterministic-agent",
+      "provider": "simulated-provider",
+      "iterations": 3,
+      "tools": [
+        "cronograma.listar_baselines",
+        "cronograma.comparar_baseline"
+      ],
+      "audit": [
+        {
+          "taskId": "p1-baseline",
+          "iteration": 1,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "listar_baselines",
+          "status": "success",
+          "durationMs": 0
+        },
+        {
+          "taskId": "p1-baseline",
+          "iteration": 2,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "comparar_baseline",
+          "status": "success",
+          "durationMs": 0
+        }
+      ],
+      "hasSources": true,
+      "hasGaps": true,
+      "readOnly": true,
+      "content": "MARCO ATUAL\nMARCO 5 — baseline e cronograma.\n\nEVIDÊNCIAS CONSULTADAS\nConsulta de baselines e comparação retornam ausência de baseline aprovada na fixture.\n\nPROPOSTA\nNão declarar desvio como fato; preparar uma proposta de baseline somente após aprovação explícita.\n\nEXEMPLOS/REFERÊNCIAS\nBaseline e cronograma do domínio cronograma.\n\nDIVERGÊNCIAS E LACUNAS\nNão há baseline aprovada nem medição real para comparação.\n\nIMPACTO DE APROVAR\nAprovar apenas a leitura mantém a baseline inexistente e não salva nada.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê confirma que não há baseline aprovada ou deseja revisar o escopo?\n\nFontes: dados locais da obra; MCPs consultados (cronograma)."
+    },
+    {
+      "id": "p1-lob",
+      "status": "respondido",
+      "model": "phase1-deterministic-agent",
+      "provider": "simulated-provider",
+      "iterations": 3,
+      "tools": [
+        "ganttLob.calcular_linha_balanco",
+        "ganttLob.listar_temas"
+      ],
+      "audit": [
+        {
+          "taskId": "p1-lob",
+          "iteration": 1,
+          "event": "tool_call",
+          "domain": "ganttLob",
+          "toolName": "calcular_linha_balanco",
+          "status": "success",
+          "durationMs": 0
+        },
+        {
+          "taskId": "p1-lob",
+          "iteration": 2,
+          "event": "tool_call",
+          "domain": "ganttLob",
+          "toolName": "listar_temas",
+          "status": "success",
+          "durationMs": 0
+        }
+      ],
+      "hasSources": true,
+      "hasGaps": true,
+      "readOnly": true,
+      "content": "MARCO ATUAL\nMARCO 6 — Gantt/LOB e produção.\n\nEVIDÊNCIAS CONSULTADAS\nFixture informa pavimento como unidade repetitiva, mas não informa ritmo observado, equipes ou produtividade real.\n\nPROPOSTA\nUsar LOB apenas como recomendação preliminar, condicionada a ritmo e equipes confirmados.\n\nEXEMPLOS/REFERÊNCIAS\nLinha de Balanço e Gantt do domínio ganttLob.\n\nDIVERGÊNCIAS E LACUNAS\nProdutividade, disponibilidade de equipes e interferências reais são lacunas.\n\nIMPACTO DE APROVAR\nAprovar permite revisar a hipótese, não dimensiona equipes nem grava produção.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê deseja confirmar a unidade repetitiva ou fornecer ritmo e equipes para nova leitura?\n\nFontes: dados locais da obra; MCPs consultados (ganttLob)."
+    },
+    {
+      "id": "p1-dados-incompletos",
+      "status": "respondido",
+      "model": "phase1-deterministic-agent",
+      "provider": "simulated-provider",
+      "iterations": 2,
+      "tools": [
+        "cronograma.listar_atividades"
+      ],
+      "audit": [
+        {
+          "taskId": "p1-dados-incompletos",
+          "iteration": 1,
+          "event": "tool_call",
+          "domain": "cronograma",
+          "toolName": "listar_atividades",
+          "status": "success",
+          "durationMs": 0
+        }
+      ],
+      "hasSources": true,
+      "hasGaps": true,
+      "readOnly": true,
+      "content": "MARCO ATUAL\nMARCO 3 — auditoria de dados.\n\nEVIDÊNCIAS CONSULTADAS\nAtividades locais sem progresso real, recursos, calendário e medição de produção confirmados.\n\nPROPOSTA\nRegistrar as lacunas como pendências de confirmação, sem preencher valores por inferência.\n\nEXEMPLOS/REFERÊNCIAS\nAtividades locais e memória aprovada da obra.\n\nDIVERGÊNCIAS E LACUNAS\nDuração real, produtividade, custo, equipes e baseline aprovada estão ausentes.\n\nIMPACTO DE APROVAR\nAprovar apenas o diagnóstico não libera CPM, baseline ou produção.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê confirma estas lacunas ou indica qual fonte deve ser consultada primeiro?\n\nFontes: dados locais da obra; MCPs consultados (cronograma)."
+    }
+  ],
+  "allPassed": true,
+  "note": "Nenhuma chamada externa foi realizada; este relatório prova o contrato e o loop de leitura determinístico."
+}

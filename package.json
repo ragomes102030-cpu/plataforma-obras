@@ -10,6 +10,8 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "phase1:battery": "tsx scripts/phase1-readonly-battery.ts",
+    "e2e:fictitious": "tsx scripts/e2e-fictitious.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
@@ -103,5 +105,5 @@
     "vite-plugin-manus-runtime": "0.0.59",
     "vitest": "^2.1.4"
   },
-    "packageManager": "pnpm@10.4.1"
+  "packageManager": "pnpm@10.4.1"
 }

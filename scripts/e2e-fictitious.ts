@@ -92,8 +92,20 @@ const activities = {
 
 const dependencies = {
   dependencias: [
-    { id: "e2e-dep-1", predecessora_id: "e2e-atv-1", sucessora_id: "e2e-atv-2", tipo: "TI", lag_dias: 0 },
-    { id: "e2e-dep-2", predecessora_id: "e2e-atv-2", sucessora_id: "e2e-atv-3", tipo: "TI", lag_dias: 0 },
+    {
+      id: "e2e-dep-1",
+      predecessora_id: "e2e-atv-1",
+      sucessora_id: "e2e-atv-2",
+      tipo: "TI",
+      lag_dias: 0,
+    },
+    {
+      id: "e2e-dep-2",
+      predecessora_id: "e2e-atv-2",
+      sucessora_id: "e2e-atv-3",
+      tipo: "TI",
+      lag_dias: 0,
+    },
   ],
 };
 
@@ -124,7 +136,9 @@ async function main() {
     agentFlow: null,
   };
 
-  const liveStatus = await getConstructionMcpStatus(`e2e-status-${randomUUID()}`);
+  const liveStatus = await getConstructionMcpStatus(
+    `e2e-status-${randomUUID()}`
+  );
   const liveHomologation = await runConstructionMcpHomologation(
     externalProjectIds,
     `e2e-homologation-${randomUUID()}`
@@ -149,10 +163,14 @@ async function main() {
       result(cpm)
     );
   } catch (error) {
-    invalidReferenceRejected = String(error).includes("referencia EAP inexistente");
+    invalidReferenceRejected = String(error).includes(
+      "referencia EAP inexistente"
+    );
   }
   if (!invalidReferenceRejected) {
-    throw new Error("A auditoria não rejeitou atividade com referência EAP inexistente.");
+    throw new Error(
+      "A auditoria não rejeitou atividade com referência EAP inexistente."
+    );
   }
 
   const context: AgentProjectContext = {
@@ -197,23 +215,53 @@ async function main() {
 
   const catalog = {
     eap: [
-      { name: "get_eap_tree", description: "Consulta EAP", inputSchema: { type: "object", properties: {} } },
-      { name: "validar_estrutura", description: "Valida EAP", inputSchema: { type: "object", properties: {} } },
+      {
+        name: "get_eap_tree",
+        description: "Consulta EAP",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "validar_estrutura",
+        description: "Valida EAP",
+        inputSchema: { type: "object", properties: {} },
+      },
     ],
     cronograma: [
-      { name: "listar_atividades", description: "Lista atividades", inputSchema: { type: "object", properties: {} } },
-      { name: "listar_dependencias", description: "Lista dependências", inputSchema: { type: "object", properties: {} } },
-      { name: "calcular_caminho_critico", description: "Calcula CPM", inputSchema: { type: "object", properties: {} } },
+      {
+        name: "listar_atividades",
+        description: "Lista atividades",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "listar_dependencias",
+        description: "Lista dependências",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "calcular_caminho_critico",
+        description: "Calcula CPM",
+        inputSchema: { type: "object", properties: {} },
+      },
     ],
     ganttLob: [
-      { name: "calcular_linha_balanco", description: "Calcula LOB", inputSchema: { type: "object", properties: {} } },
+      {
+        name: "calcular_linha_balanco",
+        description: "Calcula LOB",
+        inputSchema: { type: "object", properties: {} },
+      },
     ],
   };
   const requestedTools: string[] = [];
   const llmCalls: number[] = [];
   const agentResult = await runProjectOrchestrator(
     context,
-    [{ role: "user", content: "Revise a EAP da obra fictícia e procure inconsistências antes de liberar atividades." }],
+    [
+      {
+        role: "user",
+        content:
+          "Revise a EAP da obra fictícia e procure inconsistências antes de liberar atividades.",
+      },
+    ],
     {
       mcpProjectIds: externalProjectIds,
       deps: {
@@ -239,12 +287,34 @@ async function main() {
           if (llmCalls.length === 1) {
             return {
               model: "e2e-deterministic-agent",
-              choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "e2e-call-1", type: "function", function: { name: "get_eap_tree", arguments: "{}" } }] } }],
+              choices: [
+                {
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [
+                      {
+                        id: "e2e-call-1",
+                        type: "function",
+                        function: { name: "get_eap_tree", arguments: "{}" },
+                      },
+                    ],
+                  },
+                },
+              ],
             };
           }
           return {
             model: "e2e-deterministic-agent",
-            choices: [{ message: { role: "assistant", content: "MARCO ATUAL: EAP em revisão. EVIDÊNCIAS CONSULTADAS: EAP, validação estrutural e memória da obra. PROPOSTA: manter a decomposição por fundação, estrutura e alvenaria por pavimento. DIVERGÊNCIAS E LACUNAS: nenhuma bloqueadora encontrada. PRÓXIMA DECISÃO DO CLIENTE: aprovar a EAP ou indicar nós para revisão." } }],
+            choices: [
+              {
+                message: {
+                  role: "assistant",
+                  content:
+                    "MARCO ATUAL\nEAP em revisão.\n\nEVIDÊNCIAS CONSULTADAS\nEAP, validação estrutural e memória da obra.\n\nPROPOSTA\nManter a decomposição por fundação, estrutura e alvenaria por pavimento.\n\nEXEMPLOS/REFERÊNCIAS\nNós da EAP e unidade repetitiva registrada.\n\nDIVERGÊNCIAS E LACUNAS\nNenhuma bloqueadora encontrada.\n\nIMPACTO DE APROVAR\nA próxima etapa poderá derivar atividades sem executar gravações.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê deseja aprovar a EAP ou indicar nós para revisão?",
+                },
+              },
+            ],
           };
         },
       },

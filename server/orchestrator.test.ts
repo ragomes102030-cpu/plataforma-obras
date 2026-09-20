@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { runProjectOrchestrator, toOpenAiTools } from "./orchestrator";
+import {
+  runProjectOrchestrator,
+  toOpenAiTools,
+  validateReadonlyResponse,
+} from "./orchestrator";
 import type { AgentProjectContext } from "./agent";
 
 const context: AgentProjectContext = {
@@ -76,7 +80,11 @@ describe("runProjectOrchestrator", () => {
               model: "test-model",
               choices: [
                 {
-                  message: { role: "assistant", content: "A EAP está vazia." },
+                  message: {
+                    role: "assistant",
+                    content:
+                      "MARCO ATUAL\nMARCO 2 — EAP em revisão.\n\nEVIDÊNCIAS CONSULTADAS\nMCP EAP: EAP_ID=1.\n\nPROPOSTA\nManter a estrutura consultada.\n\nEXEMPLOS/REFERÊNCIAS\nDados do MCP EAP.\n\nDIVERGÊNCIAS E LACUNAS\nA EAP está vazia.\n\nIMPACTO DE APROVAR\nNenhuma atividade será criada nesta fase.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê deseja revisar ou aprovar esta leitura?",
+                  },
                 },
               ],
             };
@@ -141,6 +149,12 @@ describe("runProjectOrchestrator", () => {
         }
       )
     ).rejects.toThrow("não retornou conteúdo final textual");
+  });
+
+  it("recusa uma resposta que não separa evidências, lacunas e decisão", () => {
+    expect(() =>
+      validateReadonlyResponse("MARCO ATUAL\nResposta curta.")
+    ).toThrow("faltam seções");
   });
 
   it("não expõe ferramentas de escrita ao modelo", () => {

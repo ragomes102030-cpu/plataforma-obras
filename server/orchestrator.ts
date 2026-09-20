@@ -24,6 +24,7 @@ const TOOL_DOMAINS = {
   get_eap_node: "eap",
   listar_por_tipo_frente: "eap",
   buscar_eap_node: "eap",
+  validar_estrutura: "eap",
   pacotes_sem_dono: "eap",
   resumo_quantitativos: "eap",
   listar_templates: "eap",
@@ -45,6 +46,7 @@ const PROJECT_SCOPED_TOOLS = new Set([
   "get_eap_node",
   "listar_por_tipo_frente",
   "buscar_eap_node",
+  "validar_estrutura",
   "pacotes_sem_dono",
   "resumo_quantitativos",
   "listar_atividades",
@@ -162,6 +164,37 @@ function parseContent(response: LlmResponse) {
   throw new Error(
     "O provider não retornou conteúdo final textual; a resposta ficou vazia, somente com reasoning ou somente com tool call."
   );
+}
+
+export const READONLY_RESPONSE_SECTIONS = [
+  "MARCO ATUAL",
+  "EVIDÊNCIAS CONSULTADAS",
+  "PROPOSTA",
+  "EXEMPLOS/REFERÊNCIAS",
+  "DIVERGÊNCIAS E LACUNAS",
+  "IMPACTO DE APROVAR",
+  "PRÓXIMA DECISÃO DO CLIENTE",
+] as const;
+
+export function validateReadonlyResponse(content: string) {
+  const normalized = content.toLocaleUpperCase("pt-BR");
+  const missingSections = READONLY_RESPONSE_SECTIONS.filter(
+    section => !normalized.includes(section)
+  );
+  if (missingSections.length) {
+    throw new Error(
+      `Resposta final fora do contrato de leitura; faltam seções: ${missingSections.join(", ")}.`
+    );
+  }
+  const decisionSection = content.slice(
+    normalized.lastIndexOf("PRÓXIMA DECISÃO DO CLIENTE")
+  );
+  if (!decisionSection.includes("?")) {
+    throw new Error(
+      "Resposta final fora do contrato de leitura; a próxima decisão do cliente deve terminar com uma pergunta inequívoca."
+    );
+  }
+  return content;
 }
 
 function formatContext(context: AgentProjectContext) {
@@ -380,6 +413,7 @@ export async function runProjectOrchestrator(
     });
     if (!assistant.tool_calls?.length) {
       const content = parseContent(response);
+      validateReadonlyResponse(content);
       await emit({ type: "response_parsed" });
       const successfulDomains = Array.from(
         new Set(

@@ -63,7 +63,8 @@ describe("agent-execution", () => {
             {
               message: {
                 role: "assistant",
-                content: "Marco atual: descritivo.",
+                content:
+                  "MARCO ATUAL\nLeitura inicial.\n\nEVIDÊNCIAS CONSULTADAS\nDados locais.\n\nPROPOSTA\nManter a leitura.\n\nEXEMPLOS/REFERÊNCIAS\nContexto da obra.\n\nDIVERGÊNCIAS E LACUNAS\nNenhuma bloqueadora.\n\nIMPACTO DE APROVAR\nNenhuma gravação será realizada.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê aprova esta leitura?",
               },
             },
           ],
@@ -83,7 +84,7 @@ describe("agent-execution", () => {
       provider: "fake",
       model: "fake-model",
     });
-    expect(finished.result?.content).toContain("Marco atual");
+    expect(finished.result?.content).toContain("MARCO ATUAL");
   });
 
   it("classifica provider sem conteúdo final como dados incompletos", async () => {

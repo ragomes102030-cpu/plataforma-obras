@@ -184,6 +184,13 @@ function classifyError(error: unknown) {
       message,
     };
   }
+  if (/contrato de leitura|faltam seções|pergunta inequívoca/i.test(message)) {
+    return {
+      status: "dados_incompletos" as const,
+      errorCode: "readonly_response_contract",
+      message,
+    };
+  }
   if (/confirmação|confirmacao/i.test(message)) {
     return {
       status: "aguardando_confirmacao" as const,

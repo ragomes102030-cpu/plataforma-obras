@@ -1,0 +1,164 @@
+{
+  "startedAt": "2026-09-20T23:13:59.390Z",
+  "readOnly": true,
+  "externalProjectIds": {
+    "eap": "e2e-ficticia-1789946039389-eap",
+    "cronograma": "e2e-ficticia-1789946039389-cronograma",
+    "ganttLob": "e2e-ficticia-1789946039389-gantt-lob"
+  },
+  "liveMcp": {
+    "status": {
+      "status": "online",
+      "requestId": "e2e-status-e5a2de7d-b553-4352-b48c-0594f4f7a5ee",
+      "checkedAt": "2026-09-20T23:14:47.131Z",
+      "durationMs": 47740,
+      "servers": {
+        "eap": {
+          "status": "online",
+          "latencyMs": 35304,
+          "attempts": 2,
+          "toolCount": 18,
+          "tools": [
+            "criar_eap_node",
+            "get_eap_node",
+            "get_eap_tree",
+            "validar_estrutura",
+            "listar_por_tipo_frente",
+            "buscar_eap_node",
+            "atualizar_eap_node",
+            "deletar_eap_node",
+            "move_eap_node",
+            "listar_projetos",
+            "deletar_projeto",
+            "criar_projeto",
+            "atualizar_projeto",
+            "definir_criterio",
+            "pacotes_sem_dono",
+            "resumo_quantitativos",
+            "registrar_retrabalho",
+            "listar_templates"
+          ],
+          "lastError": null
+        },
+        "cronograma": {
+          "status": "online",
+          "latencyMs": 35394,
+          "attempts": 2,
+          "toolCount": 13,
+          "tools": [
+            "criar_atividade",
+            "atualizar_atividade",
+            "listar_atividades",
+            "deletar_atividade",
+            "criar_dependencia",
+            "listar_dependencias",
+            "deletar_dependencia",
+            "validar_dependencias",
+            "calcular_caminho_critico",
+            "salvar_baseline",
+            "listar_baselines",
+            "comparar_baseline",
+            "curva_s"
+          ],
+          "lastError": null
+        },
+        "ganttLob": {
+          "status": "online",
+          "latencyMs": 47681,
+          "attempts": 2,
+          "toolCount": 6,
+          "tools": [
+            "gerar_gantt",
+            "listar_exports",
+            "listar_temas",
+            "calcular_linha_balanco",
+            "balancear_ritmos_lob",
+            "dimensionar_equipes_lob"
+          ],
+          "lastError": null
+        }
+      }
+    },
+    "homologation": {
+      "requestId": "e2e-homologation-840db23e-ff9e-4cd7-8dc8-4e60b633fedc",
+      "externalProjectIds": {
+        "eap": "e2e-ficticia-1789946039389-eap",
+        "cronograma": "e2e-ficticia-1789946039389-cronograma",
+        "ganttLob": "e2e-ficticia-1789946039389-gantt-lob"
+      },
+      "startedAt": "2026-09-20T23:14:47.132Z",
+      "durationMs": 5726,
+      "readOnly": true,
+      "servers": {
+        "eap": {
+          "status": "passed",
+          "toolName": "get_eap_tree",
+          "attempts": 2,
+          "toolCount": 18,
+          "durationMs": 5726,
+          "detail": "{ \"erro\": \"A EAP está vazia — nenhum nó para exibir.\", \"isError\": true }",
+          "error": null
+        },
+        "cronograma": {
+          "status": "passed",
+          "toolName": "listar_atividades",
+          "attempts": 2,
+          "toolCount": 13,
+          "durationMs": 3636,
+          "detail": "{ \"atividades\": [], \"total\": 0, \"retornados\": 0, \"offset\": 0 }",
+          "error": null
+        },
+        "ganttLob": {
+          "status": "passed",
+          "toolName": "listar_temas",
+          "attempts": 2,
+          "toolCount": 6,
+          "durationMs": 2209,
+          "detail": "[\"ocean\",\"slate\",\"forest\",\"amber\",\"crimson\",\"midnight\",\"royal_purple\",\"teal\"]",
+          "error": null
+        }
+      }
+    }
+  },
+  "localFlow": {
+    "eapNodes": 4,
+    "activities": 3,
+    "dependencies": 2,
+    "criticalPath": [
+      "e2e-atv-1",
+      "e2e-atv-2"
+    ],
+    "totalDurationDays": 65,
+    "lob": {
+      "aplicavel": true,
+      "unidade_repetitiva": "pavimento",
+      "ritmo_dias_por_unidade": 2,
+      "interferencias": []
+    },
+    "invalidReferenceRejected": true
+  },
+  "agentFlow": {
+    "model": "e2e-deterministic-agent",
+    "iterations": 2,
+    "requestedTools": [
+      "get_eap_tree:{\"project_id\":\"e2e-ficticia-1789946039389-eap\"}"
+    ],
+    "llmCalls": [
+      2,
+      4
+    ],
+    "readOnly": true,
+    "audit": [
+      {
+        "taskId": "obra-1789946092860-k8dklf",
+        "iteration": 1,
+        "event": "tool_call",
+        "domain": "eap",
+        "toolName": "get_eap_tree",
+        "status": "success",
+        "durationMs": 0
+      }
+    ],
+    "content": "MARCO ATUAL\nEAP em revisão.\n\nEVIDÊNCIAS CONSULTADAS\nEAP, validação estrutural e memória da obra.\n\nPROPOSTA\nManter a decomposição por fundação, estrutura e alvenaria por pavimento.\n\nEXEMPLOS/REFERÊNCIAS\nNós da EAP e unidade repetitiva registrada.\n\nDIVERGÊNCIAS E LACUNAS\nNenhuma bloqueadora encontrada.\n\nIMPACTO DE APROVAR\nA próxima etapa poderá derivar atividades sem executar gravações.\n\nPRÓXIMA DECISÃO DO CLIENTE\nVocê deseja aprovar a EAP ou indicar nós para revisão?\n\nFontes: dados locais da obra; MCPs consultados (eap)."
+  }
+}
