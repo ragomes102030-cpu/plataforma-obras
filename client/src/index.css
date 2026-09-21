@@ -593,6 +593,65 @@
     color: #80918e;
     font-variant-numeric: tabular-nums;
   }
+  .agent-governance-card {
+    display: grid;
+    gap: 7px;
+    padding: 10px;
+    margin-top: 8px;
+    border: 1px solid #d9e6e6;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+  .agent-governance-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    color: #426f7d;
+  }
+  .agent-governance-heading span,
+  .agent-governance-heading strong {
+    display: block;
+  }
+  .agent-governance-heading span {
+    color: #91a1a8;
+    font-size: 9px;
+  }
+  .agent-governance-heading strong {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+  .agent-governance-card > p {
+    margin: 0;
+    color: #617b83;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  .agent-gate-checks {
+    display: grid;
+    gap: 4px;
+  }
+  .agent-gate-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    color: #6b8086;
+    font-size: 9px;
+    line-height: 1.35;
+  }
+  .agent-gate-check svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .agent-gate-check svg:first-child {
+    color: #6c9b7d;
+  }
+  .agent-gate-button {
+    width: 100%;
+    min-height: 30px;
+    justify-content: center;
+    font-size: 10px;
+  }
   .agent-status-dot {
     width: 6px;
     height: 6px;

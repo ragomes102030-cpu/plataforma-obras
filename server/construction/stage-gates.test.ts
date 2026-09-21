@@ -1,0 +1,81 @@
+import { describe, expect, it } from "vitest";
+import { evaluateStageTransition, type StageGateEvidence } from "./stage-gates";
+
+const validEvidence: StageGateEvidence = {
+  hasDescription: true,
+  eapNodeCount: 4,
+  eapValid: true,
+  activityCount: 6,
+  dependenciesValid: true,
+  cpmValid: true,
+  blockerCount: 0,
+};
+
+describe("stage gates", () => {
+  it("avança somente para a próxima etapa quando todos os gates passam", () => {
+    const result = evaluateStageTransition({
+      currentStage: "EAP_PROPOSTA",
+      targetStage: "EAP_REVISAO",
+      decision: "approved",
+      evidence: validEvidence,
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.nextStage).toBe("EAP_REVISAO");
+    expect(result.checks.every(check => check.valid)).toBe(true);
+  });
+
+  it("impede saltar diretamente para uma etapa posterior", () => {
+    const result = evaluateStageTransition({
+      currentStage: "DESCRITIVO",
+      targetStage: "CRONOGRAMA_PROPOSTO",
+      decision: "approved",
+      evidence: validEvidence,
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.errors.join(" ")).toContain("sequencial");
+  });
+
+  it("bloqueia aprovação quando a EAP ainda não existe", () => {
+    const result = evaluateStageTransition({
+      currentStage: "EAP_PROPOSTA",
+      targetStage: "EAP_REVISAO",
+      decision: "approved",
+      evidence: { ...validEvidence, eapNodeCount: 0, eapValid: false },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.checks.some(check => check.code === "eap_exists" && !check.valid)).toBe(true);
+  });
+
+  it("permite reabrir somente a etapa imediatamente anterior", () => {
+    const allowed = evaluateStageTransition({
+      currentStage: "CPM_VALIDADO",
+      targetStage: "DEPENDENCIAS_PROPOSTA",
+      decision: "reopen",
+      evidence: validEvidence,
+    });
+    const denied = evaluateStageTransition({
+      currentStage: "CPM_VALIDADO",
+      targetStage: "EAP_PROPOSTA",
+      decision: "reopen",
+      evidence: validEvidence,
+    });
+
+    expect(allowed.allowed).toBe(true);
+    expect(denied.allowed).toBe(false);
+  });
+
+  it("não permite aprovação com bloqueador aberto", () => {
+    const result = evaluateStageTransition({
+      currentStage: "DESCRITIVO",
+      targetStage: "EAP_PROPOSTA",
+      decision: "approved",
+      evidence: { ...validEvidence, blockerCount: 1 },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.checks.find(check => check.code === "no_open_blockers")?.valid).toBe(false);
+  });
+});

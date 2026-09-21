@@ -52,6 +52,14 @@ import {
   buildPhase7ImportPlan,
   type Phase7ImportPlan,
 } from "./integrations/phase7-import";
+import {
+  COORDINATOR_STAGES,
+  nextCoordinatorStage,
+} from "../shared/construction-stages";
+import {
+  describeStageGate,
+  evaluateStageTransition,
+} from "./construction/stage-gates";
 
 const demoProjects = [
   {
@@ -275,18 +283,7 @@ const mcpProviderSchema = z.enum(["eap", "cronograma", "ganttLob"]);
 const mcpProviders = ["eap", "cronograma", "ganttLob"] as const;
 type McpProvider = (typeof mcpProviders)[number];
 
-const coordinatorStages = [
-  "DESCRITIVO",
-  "EAP_PROPOSTA",
-  "EAP_REVISAO",
-  "ATIVIDADES_PROPOSTA",
-  "DEPENDENCIAS_PROPOSTA",
-  "CPM_VALIDADO",
-  "CRONOGRAMA_PROPOSTO",
-  "BASELINE_PROPOSTA",
-  "GANTT_LOB_PROPOSTO",
-  "CONTROLE",
-] as const;
+const coordinatorStages = COORDINATOR_STAGES;
 
 function mcpEndpoint(provider: McpProvider) {
   const baseUrl = {
@@ -354,6 +351,9 @@ async function loadAgentCoordinatorSnapshot(
   if (!state)
     throw new Error("Não foi possível inicializar o estado do coordenador.");
 
+  const gateEvidence = await loadStageGateEvidence(db, projectId, userId, state.blockerCount);
+  const gate = describeStageGate(state.stage, gateEvidence);
+
   const [decisions, findings, memories] = await Promise.all([
     db
       .select()
@@ -400,6 +400,10 @@ async function loadAgentCoordinatorSnapshot(
     stage: state.stage,
     blockerCount: state.blockerCount,
     lastSummary: state.lastSummary,
+    nextStage: gate.nextStage,
+    canAdvance: gate.canAdvance,
+    gateMessage: gate.message,
+    gateChecks: gate.checks,
     approvedDecisions: decisions.map(decision => ({
       stage: decision.stage,
       decision: decision.decision,
@@ -422,6 +426,42 @@ async function loadAgentCoordinatorSnapshot(
       sourceRef: memory.sourceRef,
       confidence: memory.confidence,
     })),
+  };
+}
+
+async function loadStageGateEvidence(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  userId: number,
+  blockerCount: number
+) {
+  await assertAccessibleProject(db, projectId, userId);
+  const [project, eapNodes, activities, dependencies] = await Promise.all([
+    db
+      .select({ name: projects.name, location: projects.location })
+      .from(projects)
+      .where(accessibleProjectCondition(projectId, userId))
+      .limit(1),
+    db.select().from(wbsNodes).where(eq(wbsNodes.projectId, projectId)),
+    db
+      .select()
+      .from(scheduleActivities)
+      .where(eq(scheduleActivities.projectId, projectId)),
+    db
+      .select()
+      .from(scheduleDependencies)
+      .where(eq(scheduleDependencies.projectId, projectId)),
+  ]);
+  const eapValidation = validateEap(eapNodes);
+  const cpm = calculateDeterministicCpm(activities, dependencies);
+  return {
+    hasDescription: Boolean(project[0]?.name?.trim() && project[0]?.location?.trim()),
+    eapNodeCount: eapNodes.length,
+    eapValid: eapValidation.valid,
+    activityCount: activities.length,
+    dependenciesValid: cpm.issues.every(issue => issue.code !== "invalid_dependency"),
+    cpmValid: cpm.valid,
+    blockerCount,
   };
 }
 
@@ -1070,6 +1110,16 @@ export const appRouter = router({
             stage: "DESCRITIVO" as const,
             blockerCount: 0,
             lastSummary: null,
+            nextStage: "EAP_PROPOSTA" as const,
+            canAdvance: false,
+            gateMessage: "Banco local indisponível; a aprovação está bloqueada.",
+            gateChecks: [
+              {
+                code: "database_available",
+                label: "Banco de dados disponível para persistir a decisão",
+                valid: false,
+              },
+            ],
             approvedDecisions: [],
             openFindings: [],
             approvedMemories: [],
@@ -1099,6 +1149,48 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        let [state] = await db
+          .select()
+          .from(agentProjectStates)
+          .where(eq(agentProjectStates.projectId, input.projectId))
+          .limit(1);
+        if (!state) {
+          await db.insert(agentProjectStates).values({ projectId: input.projectId });
+          [state] = await db
+            .select()
+            .from(agentProjectStates)
+            .where(eq(agentProjectStates.projectId, input.projectId))
+            .limit(1);
+        }
+        if (!state) throw new Error("Não foi possível inicializar o estado do coordenador.");
+        if (input.stage !== state.stage) {
+          throw new Error(
+            `Estado desatualizado: a obra está em ${state.stage}, mas a decisão foi enviada para ${input.stage}. Atualize o painel e tente novamente.`
+          );
+        }
+
+        const targetStage =
+          input.nextStage ??
+          (input.decision === "approved"
+            ? nextCoordinatorStage(state.stage)
+            : state.stage) ??
+          state.stage;
+        const transition = evaluateStageTransition({
+          currentStage: state.stage,
+          targetStage,
+          decision: input.decision,
+          evidence: await loadStageGateEvidence(
+            db,
+            input.projectId,
+            ctx.user.id,
+            state.blockerCount
+          ),
+        });
+        if (!transition.allowed) {
+          throw new Error(
+            `Transição bloqueada: ${transition.errors.join(" ")}`
+          );
+        }
         await db.insert(agentDecisions).values({
           projectId: input.projectId,
           userId: ctx.user.id,
@@ -1108,27 +1200,14 @@ export const appRouter = router({
           reason: input.reason ?? null,
           impactJson: input.impact ? JSON.stringify(input.impact) : null,
         });
-        const [state] = await db
-          .select()
-          .from(agentProjectStates)
-          .where(eq(agentProjectStates.projectId, input.projectId))
-          .limit(1);
-        if (!state) {
-          await db.insert(agentProjectStates).values({
-            projectId: input.projectId,
-            stage: input.nextStage ?? input.stage,
-            lastSummary: input.summary ?? null,
-          });
-        } else {
-          await db
-            .update(agentProjectStates)
-            .set({
-              stage: input.nextStage ?? state.stage,
-              lastSummary: input.summary ?? state.lastSummary,
-              version: state.version + 1,
-            })
-            .where(eq(agentProjectStates.projectId, input.projectId));
-        }
+        await db
+          .update(agentProjectStates)
+          .set({
+            stage: transition.nextStage ?? state.stage,
+            lastSummary: input.summary ?? state.lastSummary,
+            version: state.version + 1,
+          })
+          .where(eq(agentProjectStates.projectId, input.projectId));
         return loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id);
       }),
     recordFinding: protectedProcedure

@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { COORDINATOR_STAGE_LABELS } from "@shared/construction-stages";
 
 type AgentSection =
   | "portfolio"
@@ -32,19 +33,6 @@ const sectionLabels: Record<AgentSection, string> = {
   lob: "Linha de Balanço",
   restricoes: "Restrições",
   relatorios: "Relatórios",
-};
-
-const stageLabels: Record<string, string> = {
-  DESCRITIVO: "Descritivo",
-  EAP_PROPOSTA: "EAP em proposta",
-  EAP_REVISAO: "EAP em revisão",
-  ATIVIDADES_PROPOSTA: "Atividades em proposta",
-  DEPENDENCIAS_PROPOSTA: "Dependências em proposta",
-  CPM_VALIDADO: "CPM validado",
-  CRONOGRAMA_PROPOSTO: "Cronograma em proposta",
-  BASELINE_PROPOSTA: "Baseline em proposta",
-  GANTT_LOB_PROPOSTO: "Gantt / LOB em proposta",
-  CONTROLE: "Controle",
 };
 
 const mcpLabels = {
@@ -109,6 +97,12 @@ export function AgentSidebar({
     { projectId },
     { staleTime: 10_000, refetchOnWindowFocus: true }
   );
+  const utils = trpc.useUtils();
+  const decisionMutation = trpc.agent.recordDecision.useMutation({
+    onSuccess: async () => {
+      await utils.agent.snapshot.invalidate({ projectId });
+    },
+  });
   const mcpProjectIds: Partial<
     Record<"eap" | "cronograma" | "ganttLob", string>
   > = {};
@@ -202,6 +196,24 @@ export function AgentSidebar({
   const mcpDomains = ["eap", "cronograma", "ganttLob"] as const;
   const coordinator = coordinatorQuery.data;
   const isLoading = agentMutation.isPending || Boolean(activeRequestId);
+  const currentStageLabel = coordinator
+    ? COORDINATOR_STAGE_LABELS[coordinator.stage]
+    : "Carregando estado...";
+  const nextStageLabel = coordinator?.nextStage
+    ? COORDINATOR_STAGE_LABELS[coordinator.nextStage]
+    : "Fluxo concluído";
+
+  const approveCurrentGate = () => {
+    if (!coordinator?.nextStage) return;
+    decisionMutation.mutate({
+      projectId,
+      stage: coordinator.stage,
+      decision: "approved",
+      nextStage: coordinator.nextStage,
+      scope: { gate: coordinator.stage },
+      summary: `Gate ${currentStageLabel} aprovado pelo coordenador.`,
+    });
+  };
 
   return (
     <>
@@ -253,9 +265,7 @@ export function AgentSidebar({
             <div>
               <span>Marco do coordenador</span>
               <strong>
-                {coordinator
-                  ? (stageLabels[coordinator.stage] ?? coordinator.stage)
-                  : "Carregando estado..."}
+                {currentStageLabel}
                 {coordinator && coordinator.blockerCount > 0
                   ? ` · ${coordinator.blockerCount} bloqueador(es)`
                   : ""}
@@ -309,6 +319,40 @@ export function AgentSidebar({
                 </div>
               );
             })}
+          </div>
+          <div className="agent-governance-card">
+            <div className="agent-governance-heading">
+              <div>
+                <span>Próximo gate</span>
+                <strong>{nextStageLabel}</strong>
+              </div>
+              <ShieldCheck size={15} />
+            </div>
+            <p>{coordinator?.gateMessage ?? "Carregando critérios..."}</p>
+            {coordinator?.gateChecks?.length ? (
+              <div className="agent-gate-checks">
+                {coordinator.gateChecks.map(check => (
+                  <div className="agent-gate-check" key={check.code}>
+                    {check.valid ? <CircleCheck size={12} /> : <CircleAlert size={12} />}
+                    <span>{check.label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {coordinator?.nextStage && (
+              <button
+                className="primary-button agent-gate-button"
+                disabled={!coordinator.canAdvance || decisionMutation.isPending}
+                onClick={approveCurrentGate}
+              >
+                {decisionMutation.isPending
+                  ? "Validando gate..."
+                  : `Aprovar ${currentStageLabel}`}
+              </button>
+            )}
+            {decisionMutation.error && (
+              <span className="form-error">{decisionMutation.error.message}</span>
+            )}
           </div>
         </div>
 
