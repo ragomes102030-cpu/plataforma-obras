@@ -26,7 +26,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type PointerEvent } from "react";
 import { AgentView } from "@/components/AgentView";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
@@ -125,6 +125,8 @@ function GanttView({
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, any>>({});
+  const [draggingBar, setDraggingBar] = useState<{ id: number; startX: number; startOffset: number; durationDays: number } | null>(null);
+  const [lobProductivityDrafts, setLobProductivityDrafts] = useState<Record<number, string>>({});
   const utils = trpc.useUtils();
   const updateActivity = trpc.projects.updateActivity.useMutation({
     onSuccess: async () => {
@@ -186,6 +188,34 @@ function GanttView({
   );
   const toggle = (phase: string) =>
     setCollapsed(prev => ({ ...prev, [phase]: !prev[phase] }));
+  const beginBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDraggingBar({ id: activity.id, startX: event.clientX, startOffset: activity.startOffset, durationDays: activity.durationDays });
+  };
+  const updateBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
+    if (!draggingBar || draggingBar.id !== activity.id) return;
+    const cell = event.currentTarget.parentElement;
+    if (!cell) return;
+    const deltaDays = Math.round(((event.clientX - draggingBar.startX) / cell.getBoundingClientRect().width) * maxDays);
+    const nextStart = Math.max(0, draggingBar.startOffset + deltaDays);
+    setDrafts(prev => ({ ...prev, [activity.id]: { ...(prev[activity.id] ?? activity), startOffset: nextStart } }));
+  };
+  const finishBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
+    if (!draggingBar || draggingBar.id !== activity.id) return;
+    const draft = drafts[activity.id] ?? activity;
+    updateActivity.mutate({ projectId, activityId: activity.id, name: draft.name, phase: draft.phase, startOffset: Number(draft.startOffset), durationDays: Number(draft.durationDays), plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined, productivity: draft.productivity ? Number(draft.productivity) : undefined, progress: Number(draft.progress), status: draft.status });
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setDraggingBar(null);
+  };
+  const saveLobProductivity = (activity: any) => {
+    const value = Number(lobProductivityDrafts[activity.id]);
+    if (!Number.isFinite(value) || value <= 0) return;
+    const plannedQuantity = activity.plannedQuantity ? Number(activity.plannedQuantity) : undefined;
+    const durationDays = plannedQuantity ? Math.max(1, Math.ceil(plannedQuantity / value)) : activity.durationDays;
+    updateActivity.mutate({ projectId, activityId: activity.id, name: activity.name, phase: activity.phase, startOffset: activity.startOffset, durationDays, plannedQuantity, productivity: value, progress: activity.progress, status: activity.status });
+  };
   return (
     <section className="panel gantt-panel">
       <div className="panel-heading gantt-heading">
@@ -327,9 +357,9 @@ function GanttView({
                 </button>
                 {!collapsed[phase] &&
                   phaseActivities.map(activity => {
-                    const left = (activity.startOffset / maxDays) * 100;
-                    const width = (activity.durationDays / maxDays) * 100;
                     const draft = drafts[activity.id] ?? activity;
+                    const left = (Number(draft.startOffset) / maxDays) * 100;
+                    const width = (Number(draft.durationDays) / maxDays) * 100;
                     const save = () =>
                       updateActivity.mutate({
                         projectId,
@@ -338,6 +368,8 @@ function GanttView({
                         phase: draft.phase,
                         startOffset: Number(draft.startOffset),
                         durationDays: Number(draft.durationDays),
+                        plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined,
+                        productivity: draft.productivity ? Number(draft.productivity) : undefined,
                         progress: Number(draft.progress),
                         status: draft.status,
                       });
@@ -476,6 +508,10 @@ function GanttView({
                         >
                           <div
                             className={`gantt-bar ${activity.critical === 1 ? "critical" : ""}`}
+                            onPointerDown={event => beginBarDrag(event, activity)}
+                            onPointerMove={event => updateBarDrag(event, activity)}
+                            onPointerUp={event => finishBarDrag(event, activity)}
+                            title="Arraste para ajustar a data de início"
                             style={{
                               left: `${left}%`,
                               width: `${Math.max(width, 2)}%`,
@@ -611,6 +647,10 @@ function GanttView({
                           <span>{activity.phase}</span><b>{activity.progress}%</b>
                         </div>
                           <em style={{ left: `${Math.min((end / maxDays) * 100 + 1, 94)}%` }}>{formatDate(new Date(projectStart + end * 86400000))}</em>
+                          <label className="lob-productivity" title="Produtividade planejada por dia" onPointerDown={event => event.stopPropagation()}>
+                            <span>ritmo</span>
+                            <input type="number" min="0.1" step="0.1" value={lobProductivityDrafts[activity.id] ?? activity.productivity ?? ""} placeholder="—" onChange={event => setLobProductivityDrafts(prev => ({ ...prev, [activity.id]: event.target.value }))} onBlur={() => saveLobProductivity(activity)} onKeyDown={event => { if (event.key === "Enter") saveLobProductivity(activity); }} />
+                          </label>
                       </div>
                     ))}
                   </div>

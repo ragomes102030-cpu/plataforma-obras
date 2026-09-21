@@ -760,6 +760,8 @@ export const appRouter = router({
           phase: z.string().trim().min(2).max(80),
           startOffset: z.number().int().min(0),
           durationDays: z.number().int().positive(),
+          plannedQuantity: z.number().positive().optional(),
+          productivity: z.number().positive().optional(),
           progress: z.number().int().min(0).max(100),
           status: z.enum([
             "Não iniciado",
@@ -791,6 +793,8 @@ export const appRouter = router({
             phase: input.phase,
             startOffset: input.startOffset,
             durationDays: input.durationDays,
+            plannedQuantity: input.plannedQuantity === undefined ? null : String(input.plannedQuantity),
+            productivity: input.productivity === undefined ? null : String(input.productivity),
             progress: input.progress,
             status: input.status,
           })
@@ -847,6 +851,87 @@ export const appRouter = router({
           })
           .where(eq(wbsNodes.id, input.nodeId));
         return { updated: true as const };
+      }),
+    createWbsNode: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        parentId: z.number().int().positive().optional(),
+        name: z.string().trim().min(2).max(220),
+        nodeType: z.enum(["grupo", "pacote", "entrega"]),
+        unit: z.string().trim().max(32).optional(),
+        plannedQuantity: z.number().int().min(0).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const parent = input.parentId
+          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId))).limit(1))[0]
+          : undefined;
+        if (input.parentId && !parent) throw new Error("O pai selecionado não pertence a esta obra.");
+        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
+        const code = parent ? `${parent.code}.${siblings.length + 1}` : `${siblings.length + 1}`;
+        const [created] = await db.insert(wbsNodes).values({
+          projectId: input.projectId,
+          parentId: parent?.id ?? null,
+          code,
+          name: input.name,
+          level: (parent?.level ?? 0) + 1,
+          nodeType: input.nodeType,
+          unit: input.unit || null,
+          plannedQuantity: input.plannedQuantity ?? null,
+          sortOrder: siblings.length,
+        }).$returningId();
+        return created;
+      }),
+    moveWbsNode: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), nodeId: z.number().int().positive(), targetParentId: z.number().int().positive().nullable(), targetIndex: z.number().int().min(0).default(0) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const all = await db.select().from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
+        const node = all.find(item => item.id === input.nodeId);
+        const parent = input.targetParentId === null ? undefined : all.find(item => item.id === input.targetParentId);
+        if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+        if (input.targetParentId !== null && !parent) throw new Error("Destino inválido.");
+        if (parent && (parent.id === node.id || parent.code === node.code || parent.code.startsWith(`${node.code}.`))) throw new Error("Não é possível mover um item para dentro de si mesmo.");
+        const siblings = all.filter(item => (parent ? item.parentId === parent.id : item.parentId === null) && item.id !== node.id).sort((a, b) => a.sortOrder - b.sortOrder);
+        const index = Math.min(input.targetIndex, siblings.length);
+        const newCode = parent ? `${parent.code}.${index + 1}` : `${index + 1}`;
+        const levelDelta = (parent?.level ?? 0) + 1 - node.level;
+        const descendants = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`));
+        for (const item of descendants) {
+          const suffix = item.code === node.code ? "" : item.code.slice(node.code.length);
+          await db.update(wbsNodes).set({ parentId: item.id === node.id ? (parent?.id ?? null) : item.parentId, code: `${newCode}${suffix}`, level: item.level + levelDelta, sortOrder: item.id === node.id ? index : item.sortOrder }).where(eq(wbsNodes.id, item.id));
+        }
+        return { moved: true as const };
+      }),
+    duplicateWbsNode: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), nodeId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        if (!source) throw new Error("Item da EAP não encontrado nesta obra.");
+        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code: source.parentId ? `${source.code.split(".").slice(0, -1).join(".")}.${siblings.length + 1}` : `${siblings.length + 1}`, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).$returningId();
+        return created;
+      }),
+    deleteWbsNode: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), nodeId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+        const descendants = await db.select({ id: wbsNodes.id }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), or(eq(wbsNodes.id, node.id), eq(wbsNodes.parentId, node.id))));
+        const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
+        const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
+        if (ids.length) await db.delete(wbsNodes).where(inArray(wbsNodes.id, ids));
+        return { deleted: true as const, count: Math.max(descendants.length, ids.length) };
       }),
     dependencies: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))

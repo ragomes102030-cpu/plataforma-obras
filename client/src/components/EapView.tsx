@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { Check, ChevronRight, Edit3, Layers3, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronRight, Copy, Edit3, Layers3, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { McpE2EWorkbench } from "./McpE2EWorkbench";
 import { McpMutationWorkbench } from "./McpMutationWorkbench";
@@ -24,6 +24,10 @@ export function EapView({
       setEditingNodeId(null);
     },
   });
+  const createNode = trpc.projects.createWbsNode.useMutation({ onSuccess: () => void utils.projects.wbs.invalidate({ projectId }) });
+  const moveNode = trpc.projects.moveWbsNode.useMutation({ onSuccess: () => void utils.projects.wbs.invalidate({ projectId }) });
+  const duplicateNode = trpc.projects.duplicateWbsNode.useMutation({ onSuccess: () => void utils.projects.wbs.invalidate({ projectId }) });
+  const deleteNode = trpc.projects.deleteWbsNode.useMutation({ onSuccess: () => { setSelectedNodeId(null); void utils.projects.wbs.invalidate({ projectId }); } });
   const nodes = wbsQuery.data ?? [];
   const displayNodes = useMemo(
     () =>
@@ -41,6 +45,8 @@ export function EapView({
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  const [creatingChild, setCreatingChild] = useState(false);
+  const [newChildName, setNewChildName] = useState("");
   const [draft, setDraft] = useState({
     code: "",
     name: "",
@@ -89,6 +95,31 @@ export function EapView({
         ? Number(draft.plannedQuantity)
         : undefined,
     });
+  };
+  const createChild = () => {
+    if (!selectedNode || !newChildName.trim()) return;
+    createNode.mutate({
+      projectId,
+      parentId: selectedNode.id,
+      name: newChildName.trim(),
+      nodeType: selectedNode.nodeType === "grupo" ? "pacote" : "entrega",
+    });
+    setNewChildName("");
+    setCreatingChild(false);
+  };
+  const moveSelected = (direction: -1 | 1) => {
+    if (!selectedNode) return;
+    const siblings = displayNodes.filter(node => node.parentId === selectedNode.parentId);
+    const currentIndex = siblings.findIndex(node => node.id === selectedNode.id);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
+    moveNode.mutate({ projectId, nodeId: selectedNode.id, targetParentId: selectedNode.parentId ?? null, targetIndex });
+  };
+  const removeSelected = () => {
+    if (!selectedNode) return;
+    if (window.confirm(`Excluir ${selectedNode.code} · ${selectedNode.name} e seus descendentes?`)) {
+      deleteNode.mutate({ projectId, nodeId: selectedNode.id });
+    }
   };
 
   return (
@@ -170,11 +201,22 @@ export function EapView({
               <p>{selectedNode.nodeType} · nível {selectedNode.level}{selectedNode.unit ? ` · unidade ${selectedNode.unit}` : ""}</p>
             </div>
             {editingNodeId !== selectedNode.id && (
-              <button className="primary-button" onClick={() => startEditing(selectedNode)}>
-                <Edit3 size={14} /> Editar item
-              </button>
+              <div className="eap-detail-actions">
+                <button className="outline-button" onClick={() => setCreatingChild(value => !value)}><Plus size={14} /> Adicionar filho</button>
+                <button className="outline-button" onClick={() => duplicateNode.mutate({ projectId, nodeId: selectedNode.id })}><Copy size={14} /> Duplicar</button>
+                <button className="icon-button" title="Mover para cima" onClick={() => moveSelected(-1)}><ArrowUp size={14} /></button>
+                <button className="icon-button" title="Mover para baixo" onClick={() => moveSelected(1)}><ArrowDown size={14} /></button>
+                <button className="outline-button danger-button" onClick={removeSelected}><Trash2 size={14} /> Excluir</button>
+                <button className="primary-button" onClick={() => startEditing(selectedNode)}><Edit3 size={14} /> Editar item</button>
+              </div>
             )}
           </div>
+          {creatingChild && editingNodeId !== selectedNode.id && (
+            <div className="eap-quick-create">
+              <label>Nome do novo {selectedNode.nodeType === "grupo" ? "pacote" : "entrega"}<input autoFocus value={newChildName} onChange={event => setNewChildName(event.target.value)} placeholder="Ex.: Alvenaria do pavimento" /></label>
+              <button className="primary-button" disabled={createNode.isPending || !newChildName.trim()} onClick={createChild}><Plus size={14} /> {createNode.isPending ? "Criando..." : "Criar item"}</button>
+            </div>
+          )}
           {editingNodeId === selectedNode.id && (
             <div className="eap-edit-panel">
               <div className="eap-edit-grid">
