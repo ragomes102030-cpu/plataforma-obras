@@ -1901,6 +1901,45 @@
     color: #91a4aa;
     font-size: 16px;
   }
+  .cpm-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-top: 4px;
+  }
+  .cpm-actions > span {
+    color: #93a2a8;
+    font-size: 9px;
+  }
+  .cpm-result {
+    display: grid;
+    grid-template-columns: 0.8fr 0.8fr 2fr;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 15px;
+    border-top: 1px solid #edf1f2;
+  }
+  .cpm-result > div {
+    padding: 11px;
+    border: 1px solid #e7eeee;
+    border-radius: 7px;
+    background: #f8fbfb;
+  }
+  .cpm-result strong {
+    display: block;
+    margin-top: 7px;
+    color: #4e7965;
+    font-size: 16px;
+  }
+  .cpm-path p {
+    margin: 7px 0 0;
+    color: #5c737c;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .critical-mark {
+    color: #b36d62 !important;
+  }
   @media (max-width: 900px) {
     .planning-grid {
       grid-template-columns: 1fr;
@@ -1916,6 +1955,12 @@
     }
     .dependency-form > span {
       display: none;
+    }
+    .cpm-actions,
+    .cpm-result {
+      align-items: stretch;
+      flex-direction: column;
+      grid-template-columns: 1fr;
     }
   }
   @media (max-width: 900px) {

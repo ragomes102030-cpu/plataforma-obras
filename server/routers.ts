@@ -1388,6 +1388,22 @@ export const appRouter = router({
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         return { activities, dependencies, resources };
       }),
+    calculateCpm: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const result = calculateDeterministicCpm(activities, dependencies);
+        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
+        const calculatedAt = new Date();
+        for (const item of result.schedule.activities) {
+          await db.update(scheduleActivities).set({ startOffset: item.earlyStart, critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
+        }
+        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
+      }),
     createResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(180), resourceType: z.enum(["mao_de_obra", "equipamento", "material"]), unit: z.string().trim().min(1).max(32), capacityPerDay: z.number().positive().optional(), costPerDay: z.number().nonnegative().optional() }))
       .mutation(async ({ ctx, input }) => {

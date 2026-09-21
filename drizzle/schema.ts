@@ -188,6 +188,12 @@ export const scheduleActivities = mysqlTable(
       .default("Não iniciado")
       .notNull(),
     critical: int("critical").default(0).notNull(),
+    earlyStart: int("earlyStart"),
+    earlyFinish: int("earlyFinish"),
+    lateStart: int("lateStart"),
+    lateFinish: int("lateFinish"),
+    totalFloat: int("totalFloat"),
+    cpmCalculatedAt: timestamp("cpmCalculatedAt"),
     sortOrder: int("sortOrder").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
