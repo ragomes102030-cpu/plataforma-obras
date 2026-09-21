@@ -125,6 +125,18 @@ Uma obra nova deverá conseguir passar pelo seguinte fluxo sem planilhas externa
 
 O sistema atual ainda não atende esse critério. A fundação técnica permite chegar lá, mas será necessário ampliar o modelo de dados e construir os fluxos de forma vertical, começando pelo orçamento e pelos serviços.
 
+## Integração futura com SINAPI, SEINFRA e outras fontes de preços
+
+O módulo de orçamento deverá aceitar catálogos externos de custos. SINAPI, tabelas SEINFRA estaduais, composições próprias da empresa e bases de fornecedores serão tratadas como fontes diferentes, cada uma com código, descrição, unidade, composição, localidade, referência temporal e regras de atualização.
+
+A primeira versão não deve depender de uma API externa. O caminho mais seguro é permitir a importação de arquivos oficiais em CSV ou XLSX, mantendo a fonte, o mês de referência, o estado, a data de importação e o usuário responsável. Posteriormente, cada fonte poderá receber um adaptador por API ou por rotina de atualização quando houver acesso oficial e estável.
+
+Uma composição importada não deverá alterar automaticamente um orçamento aprovado. O sistema deverá criar uma nova versão de preços e mostrar as diferenças de custo antes da aplicação. O usuário poderá aceitar o preço de referência, manter um preço negociado ou usar uma composição própria, sempre com justificativa e histórico.
+
+O desenho previsto para esse recurso inclui um catálogo de fontes, itens de custo, composições, versões de referência, regras de regionalização e tabelas de equivalência. A equivalência será necessária porque o mesmo serviço pode possuir códigos ou descrições diferentes entre SINAPI, SEINFRA e a base interna da empresa.
+
+Essa integração permitirá consultas como: qual é o preço de referência vigente para este serviço na UF da obra, qual composição formou o custo, quanto o orçamento próprio diverge da referência e qual impacto uma atualização de preços terá no orçamento aprovado. A plataforma deverá respeitar as condições de uso e redistribuição de cada fonte e não deverá copiar dados externos sem verificar a licença aplicável.
+
 ## Decisão técnica
 
 Não recomendo migrar para desktop neste momento. O domínio pode ser construído online com o plano gratuito durante o desenvolvimento. A prioridade é criar o núcleo funcional e reduzir a dependência de telas demonstrativas. A arquitetura desktop ou offline poderá ser avaliada depois que o fluxo de orçamento, planejamento, produção e controle estiver estável.
