@@ -132,6 +132,25 @@ try {
     );
   }
 
+  const [uniqueIndexRows] = await connection.query<{ indexName: string }[]>(
+    `
+      SELECT DISTINCT index_name AS indexName
+      FROM information_schema.statistics
+      WHERE table_schema = DATABASE()
+        AND table_name = 'wbs_nodes'
+        AND index_name = 'wbs_nodes_project_code_unique_idx'
+    `
+  );
+  if (!uniqueIndexRows.length) {
+    await connection.query(
+      `
+        ALTER TABLE wbs_nodes
+        ADD UNIQUE INDEX wbs_nodes_project_code_unique_idx (projectId, code)
+      `
+    );
+    console.log("[WBS] Constraint única projectId+code criada.");
+  }
+
   await connection.commit();
   console.log("[WBS] Saneamento concluído; db:push poderá criar a constraint única.");
 } catch (error) {
