@@ -870,7 +870,8 @@ export const appRouter = router({
           : undefined;
         if (input.parentId && !parent) throw new Error("O pai selecionado não pertence a esta obra.");
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
-        const code = parent ? `${parent.code}.${siblings.length + 1}` : `${siblings.length + 1}`;
+        const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
+        const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
         const [created] = await db.insert(wbsNodes).values({
           projectId: input.projectId,
           parentId: parent?.id ?? null,
@@ -898,12 +899,19 @@ export const appRouter = router({
         if (parent && (parent.id === node.id || parent.code === node.code || parent.code.startsWith(`${node.code}.`))) throw new Error("Não é possível mover um item para dentro de si mesmo.");
         const siblings = all.filter(item => (parent ? item.parentId === parent.id : item.parentId === null) && item.id !== node.id).sort((a, b) => a.sortOrder - b.sortOrder);
         const index = Math.min(input.targetIndex, siblings.length);
-        const newCode = parent ? `${parent.code}.${index + 1}` : `${index + 1}`;
-        const levelDelta = (parent?.level ?? 0) + 1 - node.level;
-        const descendants = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`));
-        for (const item of descendants) {
-          const suffix = item.code === node.code ? "" : item.code.slice(node.code.length);
-          await db.update(wbsNodes).set({ parentId: item.id === node.id ? (parent?.id ?? null) : item.parentId, code: `${newCode}${suffix}`, level: item.level + levelDelta, sortOrder: item.id === node.id ? index : item.sortOrder }).where(eq(wbsNodes.id, item.id));
+        const ordered = [...siblings];
+        ordered.splice(index, 0, node);
+        const rootLevel = (parent?.level ?? 0) + 1;
+        for (let position = 0; position < ordered.length; position += 1) {
+          const root = ordered[position];
+          const oldCode = root.code;
+          const nextCode = parent ? `${parent.code}.${position + 1}` : `${position + 1}`;
+          const levelDelta = root.id === node.id ? rootLevel - root.level : 0;
+          const branch = all.filter(item => item.id === root.id || item.code.startsWith(`${oldCode}.`));
+          for (const item of branch) {
+            const suffix = item.code === oldCode ? "" : item.code.slice(oldCode.length);
+            await db.update(wbsNodes).set({ parentId: item.id === root.id ? (root.id === node.id ? (parent?.id ?? null) : root.parentId) : item.parentId, code: `${nextCode}${suffix}`, level: item.level + (root.id === node.id ? levelDelta : 0), sortOrder: item.id === root.id ? position : item.sortOrder }).where(eq(wbsNodes.id, item.id));
+          }
         }
         return { moved: true as const };
       }),
@@ -916,7 +924,8 @@ export const appRouter = router({
         const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
         if (!source) throw new Error("Item da EAP não encontrado nesta obra.");
         const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
-        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code: source.parentId ? `${source.code.split(".").slice(0, -1).join(".")}.${siblings.length + 1}` : `${siblings.length + 1}`, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).$returningId();
+        const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code: source.parentId ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}` : `${nextNumber}`, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).$returningId();
         return created;
       }),
     deleteWbsNode: protectedProcedure
