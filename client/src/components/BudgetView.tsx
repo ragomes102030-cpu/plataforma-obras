@@ -19,6 +19,7 @@ export function BudgetView({
   const utils = trpc.useUtils();
   const budgetQuery = trpc.budgets.list.useQuery({ projectId });
   const wbsQuery = trpc.projects.wbs.useQuery({ projectId });
+  const catalogQuery = trpc.catalog.list.useQuery({});
   const createVersionMutation = trpc.budgets.createVersion.useMutation({
     onSuccess: async () => {
       setVersionName("");
@@ -32,6 +33,9 @@ export function BudgetView({
       setUnit("");
       setQuantity("");
       setUnitPrice("");
+      setCompositionId("");
+      setProductivity("");
+      setPlannedDuration("");
       setSource("");
       setReferencePeriod("");
       await utils.budgets.list.invalidate({ projectId });
@@ -43,14 +47,21 @@ export function BudgetView({
   const [unit, setUnit] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
+  const [compositionId, setCompositionId] = useState("");
+  const [productivity, setProductivity] = useState("");
+  const [plannedDuration, setPlannedDuration] = useState("");
   const [source, setSource] = useState("");
   const [referencePeriod, setReferencePeriod] = useState("");
   const [wbsNodeId, setWbsNodeId] = useState("");
+  const selectedComposition = catalogQuery.data?.compositions.find(
+    item => item.id === Number(compositionId)
+  );
   const activeVersion = budgetQuery.data?.versions.find(
     item => item.id === budgetQuery.data.activeVersionId
   );
   const canCreateItem = Boolean(
-    activeVersion && code && description && unit && Number(quantity) > 0 && Number(unitPrice) >= 0
+    activeVersion && code && description && unit && Number(quantity) > 0 &&
+    (compositionId ? true : Number(unitPrice) >= 0)
   );
 
   const submitVersion = (event: React.FormEvent) => {
@@ -68,7 +79,10 @@ export function BudgetView({
       description: description.trim(),
       unit: unit.trim(),
       quantity: Number(quantity),
-      unitPrice: Number(unitPrice),
+      unitPrice: Number(unitPrice || 0),
+      compositionId: compositionId ? Number(compositionId) : undefined,
+      productivity: productivity ? Number(productivity) : undefined,
+      plannedDurationDays: plannedDuration ? Number(plannedDuration) : undefined,
       source: source.trim() || undefined,
       referencePeriod: referencePeriod.trim() || undefined,
       wbsNodeId: wbsNodeId ? Number(wbsNodeId) : undefined,
@@ -130,18 +144,21 @@ export function BudgetView({
               <label className="budget-field-wide">Descrição<input value={description} onChange={event => setDescription(event.target.value)} placeholder="Ex.: Concreto estrutural" required /></label>
               <label>Unidade<input value={unit} onChange={event => setUnit(event.target.value)} placeholder="m³" required /></label>
               <label>Quantidade<input type="number" min="0.001" step="0.001" value={quantity} onChange={event => setQuantity(event.target.value)} placeholder="0,000" required /></label>
-              <label>Preço unitário<input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder="0,00" required /></label>
+              <label>Preço unitário<input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder={compositionId ? "Calculado pela composição" : "0,00"} required={!compositionId} /></label>
+              <label className="budget-field-wide">Aplicar composição<select value={compositionId} onChange={event => setCompositionId(event.target.value)}><option value="">Preço digitado manualmente</option>{(catalogQuery.data?.compositions ?? []).map(item => <option key={item.id} value={item.id}>{item.code} · {item.description}</option>)}</select></label>
+              <label>Produtividade<input type="number" min="0.001" step="0.001" value={productivity} onChange={event => setProductivity(event.target.value)} placeholder="Qtd/dia" /></label>
+              <label>Duração planejada<input type="number" min="1" step="1" value={plannedDuration} onChange={event => setPlannedDuration(event.target.value)} placeholder={productivity ? "Calculada" : "Dias"} /></label>
               <label>Vínculo EAP<select value={wbsNodeId} onChange={event => setWbsNodeId(event.target.value)}><option value="">Sem vínculo por enquanto</option>{(wbsQuery.data ?? []).map(node => <option key={node.id} value={node.id}>{node.code} · {node.name}</option>)}</select></label>
               <label>Fonte<input value={source} onChange={event => setSource(event.target.value)} placeholder="Própria, SINAPI..." /></label>
               <label>Referência<input value={referencePeriod} onChange={event => setReferencePeriod(event.target.value)} placeholder="09/2026" /></label>
-              <div className="budget-form-footer"><span>O total será calculado e persistido a partir do item.</span><button className="primary-button" disabled={!canCreateItem || createItemMutation.isPending}><Plus size={14} /> {createItemMutation.isPending ? "Salvando..." : "Adicionar serviço"}</button></div>
+              <div className="budget-form-footer"><span>{selectedComposition ? `Composição selecionada: ${selectedComposition.code}. O custo será calculado pela memória de componentes.` : "O total será calculado e persistido a partir do item."}</span><button className="primary-button" disabled={!canCreateItem || createItemMutation.isPending}><Plus size={14} /> {createItemMutation.isPending ? "Salvando..." : "Adicionar serviço"}</button></div>
             </form>
             {createItemMutation.error && <p className="form-error">{createItemMutation.error.message}</p>}
           </section>
 
           <section className="module-card budget-table-card">
             <div className="panel-heading"><div><h3>Composição do orçamento</h3><p>Versão {activeVersion.versionNumber} · {activeVersion.name}</p></div><button className="outline-button" onClick={() => void budgetQuery.refetch()}><RefreshCw size={13} /> Atualizar</button></div>
-            {budgetQuery.isPending ? <div className="module-empty">Carregando orçamento...</div> : budgetQuery.data?.items.length ? <div className="budget-table-wrap"><table className="budget-table"><thead><tr><th>Código</th><th>Serviço</th><th>Un.</th><th>Quantidade</th><th>Preço unit.</th><th>Total</th><th>Fonte</th></tr></thead><tbody>{budgetQuery.data.items.map(item => <tr key={item.id}><td>{item.code}</td><td><strong>{item.description}</strong>{item.referencePeriod && <small>Referência {item.referencePeriod}</small>}</td><td>{item.unit}</td><td>{Number(item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 3 })}</td><td>{money(Number(item.unitPrice))}</td><td><strong>{money(Number(item.quantity) * Number(item.unitPrice))}</strong></td><td>{item.source || "Própria"}</td></tr>)}</tbody></table></div> : <div className="module-empty"><Calculator size={20} /><span>Nenhum serviço cadastrado. Use o formulário acima para iniciar o orçamento.</span></div>}
+            {budgetQuery.isPending ? <div className="module-empty">Carregando orçamento...</div> : budgetQuery.data?.items.length ? <div className="budget-table-wrap"><table className="budget-table"><thead><tr><th>Código</th><th>Serviço</th><th>Un.</th><th>Quantidade</th><th>Preço unit.</th><th>Total</th><th>Planejamento</th><th>Fonte</th></tr></thead><tbody>{budgetQuery.data.items.map(item => <tr key={item.id}><td>{item.code}</td><td><strong>{item.description}</strong>{item.compositionNote && <small>Composição: {item.compositionNote}</small>}{item.referencePeriod && <small>Referência {item.referencePeriod}</small>}</td><td>{item.unit}</td><td>{Number(item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 3 })}</td><td>{money(Number(item.unitPrice))}</td><td><strong>{money(Number(item.quantity) * Number(item.unitPrice))}</strong></td><td>{item.plannedDurationDays ? `${item.plannedDurationDays} dias` : "—"}</td><td>{item.source || (item.compositionId ? "Composição" : "Própria")}</td></tr>)}</tbody></table></div> : <div className="module-empty"><Calculator size={20} /><span>Nenhum serviço cadastrado. Use o formulário acima para iniciar o orçamento.</span></div>}
           </section>
         </>
       )}

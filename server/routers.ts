@@ -1173,6 +1173,9 @@ export const appRouter = router({
           unit: z.string().trim().min(1).max(32),
           quantity: z.number().positive(),
           unitPrice: z.number().nonnegative(),
+          compositionId: z.number().int().positive().optional(),
+          productivity: z.number().positive().optional(),
+          plannedDurationDays: z.number().int().positive().optional(),
           source: z.string().trim().max(80).optional(),
           referencePeriod: z.string().trim().max(20).optional(),
           wbsNodeId: z.number().int().positive().optional(),
@@ -1195,6 +1198,30 @@ export const appRouter = router({
         if (!version) throw new Error("Versão de orçamento não encontrada.");
         if (version.status === "aprovado" || version.status === "arquivado")
           throw new Error("Esta versão não aceita novos itens.");
+        let effectiveUnitPrice = input.unitPrice;
+        let compositionNote: string | null = null;
+        if (input.compositionId) {
+          const [composition] = await db
+            .select()
+            .from(serviceCompositions)
+            .where(eq(serviceCompositions.id, input.compositionId))
+            .limit(1);
+          if (!composition) throw new Error("Composição não encontrada.");
+          const components = await db
+            .select()
+            .from(compositionComponents)
+            .where(eq(compositionComponents.compositionId, input.compositionId));
+          if (!components.length) throw new Error("A composição não possui componentes.");
+          effectiveUnitPrice = components.reduce(
+            (sum, component) =>
+              sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
+            0
+          );
+          compositionNote = `${composition.code} · ${composition.description}`;
+        }
+        const calculatedDuration = input.productivity
+          ? Math.max(1, Math.ceil(input.quantity / input.productivity))
+          : input.plannedDurationDays;
         const [createdId] = await db
           .insert(budgetItems)
           .values({
@@ -1204,9 +1231,16 @@ export const appRouter = router({
             description: input.description,
             unit: input.unit,
             quantity: input.quantity.toFixed(3),
-            unitPrice: input.unitPrice.toFixed(2),
+            unitPrice: effectiveUnitPrice.toFixed(2),
+            compositionId: input.compositionId,
+            compositionUnitCost: input.compositionId
+              ? effectiveUnitPrice.toFixed(2)
+              : null,
+            productivity: input.productivity?.toFixed(3),
+            plannedDurationDays: calculatedDuration,
             source: input.source || null,
             referencePeriod: input.referencePeriod || null,
+            compositionNote,
           })
           .$returningId();
         return { id: createdId.id };
