@@ -650,7 +650,21 @@ function ModuleView({
     return <RestrictionsView projectId={projectId} projectName={projectName} />;
   if (name === "Relatórios")
     return <ReportsView projectId={projectId} projectName={projectName} activities={activities} />;
-  if (name === "Cronogramas") return <PlanningView projectId={projectId} projectName={projectName} />;
+  if (name === "Cronogramas")
+    return (
+      <>
+        <PlanningView projectId={projectId} projectName={projectName} />
+        <GanttView
+          key="cronograma-calculado"
+          projectId={projectId}
+          activities={activities}
+          search={search}
+          setSearch={setSearch}
+          selectedName={projectName}
+          plannedStart={plannedStart}
+        />
+      </>
+    );
   if (name === "Linha de Balanço")
     return (
       <GanttView

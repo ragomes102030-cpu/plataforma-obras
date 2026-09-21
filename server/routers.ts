@@ -25,6 +25,8 @@ import {
   compositionComponents,
   planningResources,
   activityResourceAllocations,
+  scheduleBaselines,
+  scheduleBaselineItems,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -1381,12 +1383,25 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { activities: [], dependencies: [], resources: [] };
+        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [] };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
-        return { activities, dependencies, resources };
+        const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
+        return { activities, dependencies, resources, baselines };
+      }),
+    captureBaseline: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(160) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        if (!activities.length) throw new Error("Não há atividades para congelar como baseline.");
+        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).$returningId();
+        await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
+        return { id: created.id, activityCount: activities.length };
       }),
     calculateCpm: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))

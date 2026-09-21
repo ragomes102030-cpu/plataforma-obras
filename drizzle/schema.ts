@@ -293,6 +293,32 @@ export const activityResourceAllocations = mysqlTable(
   ]
 );
 
+export const scheduleBaselines = mysqlTable("schedule_baselines", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull().references(() => projects.id),
+  name: varchar("name", { length: 160 }).notNull(),
+  status: mysqlEnum("status", ["rascunho", "ativa", "arquivada"]).default("ativa").notNull(),
+  createdBy: int("createdBy").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const scheduleBaselineItems = mysqlTable(
+  "schedule_baseline_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    baselineId: int("baselineId").notNull().references(() => scheduleBaselines.id),
+    activityId: int("activityId").notNull().references(() => scheduleActivities.id),
+    startOffset: int("startOffset").notNull(),
+    durationDays: int("durationDays").notNull(),
+    earlyStart: int("earlyStart"),
+    earlyFinish: int("earlyFinish"),
+  },
+  table => [
+    uniqueIndex("schedule_baseline_activity_idx").on(table.baselineId, table.activityId),
+    index("schedule_baseline_items_baseline_idx").on(table.baselineId),
+  ]
+);
+
 export const productionFronts = mysqlTable("production_fronts", {
   id: int("id").autoincrement().primaryKey(),
   projectId: int("projectId")
