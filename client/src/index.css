@@ -3900,3 +3900,51 @@ html, body, #root { background: #080a0c !important; color: #edf3f5 !important; }
 .agent-sidebar-safety, .agent-sidebar-warning { background: #0e1518 !important; color: #dce8eb !important; border-color: #293940 !important; }
 .ai-chat-box, .ai-chat-box > *, [class*="bg-card"], [class*="bg-background"], [class*="bg-secondary"], [class*="bg-muted"] { color: #e6f0f2; }
 .status-chip, .focus-tag, .critical-chip, .live-badge { filter: brightness(.82) saturate(.8); }
+
+
+/* Cobertura específica dos quatro módulos operacionais. */
+.gantt-panel, .gantt-panel *, .gantt-heading, .gantt-toolbar, .gantt-table, .gantt-table-header,
+.gantt-group, .gantt-row, .timeline-cell, .timeline-header, .gantt-footer { border-color: #293940 !important; }
+.gantt-panel, .gantt-table, .gantt-table-header, .gantt-group, .gantt-row, .timeline-cell,
+.timeline-header { background: #101619 !important; color: #dce8eb !important; }
+.gantt-row:nth-child(even), .gantt-group:nth-child(even) { background: #111a1e !important; }
+.gantt-row:hover, .gantt-row.is-expanded, .gantt-group:hover { background: #1a2d34 !important; }
+.gantt-row .activity-cell, .gantt-row .date-cell, .gantt-row .timeline-cell, .gantt-row > div { color: #dce8eb !important; }
+.gantt-row .activity-name, .gantt-row .wbs-code { color: #f1f7f8 !important; }
+.gantt-row .status-chip { background: #1d2d33 !important; color: #cfe1e5 !important; border-color: #38525b !important; }
+.gantt-row .critical-chip { background: #59383a !important; color: #ffd8d4 !important; }
+.gantt-table-header, .timeline-header { background: #0b1215 !important; color: #a9bcc3 !important; }
+
+.eap-card, .eap-node-detail, .eap-advanced-tools, .eap-tree, .eap-tree-actions,
+.eap-structure-legend, .eap-edit-panel, .eap-quick-create, .eap-advanced-tools-body { background: #11171a !important; color: #edf3f5 !important; border-color: #2a3a41 !important; }
+.eap-node-row { background: #101619 !important; color: #dce8eb !important; border-color: #293940 !important; }
+.eap-node-row:hover, .eap-node-row:focus-visible, .eap-node-row.selected { background: #1a2d34 !important; color: #f3fafb !important; }
+.eap-node-row strong, .eap-node-row .eap-node-code { color: #f1f7f8 !important; }
+.eap-node-row .eap-node-type, .eap-node-edit-hint, .eap-structure-legend, .eap-detail-heading p { color: #9eafb6 !important; }
+.eap-branch-toggle, .eap-branch-spacer { background: #18282e !important; color: #c8e4e9 !important; border-color: #3a5660 !important; }
+.eap-edit-panel label, .eap-quick-create label, .eap-detail-actions { color: #b4c5ca !important; }
+
+.production-readonly-note, .production-blocked-card, .production-catalog-card, .production-empty-card,
+.production-form, .production-history, .production-entry-list, .production-entry, .production-catalog-grid,
+.production-catalog-grid form, .production-form-grid, .production-form-footer { background: #11171a !important; color: #edf3f5 !important; border-color: #2a3a41 !important; }
+.production-catalog-grid form, .production-entry { background: #0f171a !important; }
+.production-catalog-grid form strong, .production-entry strong, .production-heading h3 { color: #f1f7f8 !important; }
+.production-catalog-grid form span, .production-entry span, .production-heading p, .production-readonly-note,
+.production-blocked-card p, .production-empty-card p { color: #9eafb6 !important; }
+.production-form-grid label, .production-field-wide { color: #b9c9ce !important; }
+.production-form input, .production-form select, .production-form textarea,
+.production-catalog-grid input { background: #0b1012 !important; color: #edf3f5 !important; border-color: #304149 !important; }
+
+.portfolio-panel, .portfolio-list, .portfolio-row, .portfolio-status, .portfolio-main,
+.portfolio-progress, .focus-panel, .focus-list, .focus-item { background: #11171a !important; color: #edf3f5 !important; border-color: #2a3a41 !important; }
+.portfolio-row { background: #101619 !important; }
+.portfolio-row:hover, .portfolio-row.active { background: #1a2d34 !important; }
+.portfolio-main strong, .portfolio-progress, .portfolio-status, .portfolio-main span, .progress-label { color: #dce8eb !important; }
+.portfolio-main strong { color: #f1f7f8 !important; }
+.progress-track { background: #293940 !important; }
+.focus-item { background: #10191d !important; }
+.focus-item strong { color: #f1f7f8 !important; }
+.focus-item span { color: #9eafb6 !important; }
+.focus-icon { background: #1d3037 !important; color: #cfe8ed !important; }
+.focus-tag { background: #27383d !important; color: #d2e5e8 !important; }
+.portfolio-context-note { color: #9eafb6 !important; }
