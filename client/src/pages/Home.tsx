@@ -168,7 +168,7 @@ function GanttView({
               ? 0
               : Math.min(100, (elapsed / Math.max(1, activity.durationDays)) * 100);
           const x = 42 + (week / Math.max(1, weekCount)) * 640;
-          const y = 228 - (plannedProgress / 100) * 190;
+          const y = 244 - (plannedProgress / 100) * 190;
           return `${x},${y}`;
         }).join(" "),
       })),
@@ -552,24 +552,31 @@ function GanttView({
             <p className="eyebrow accent">RITMO POR FRENTE</p>
             <h4>Linha de Balanço</h4>
             <p>
-              Curvas planejadas por atividade para comparar início, duração e
-              sobreposição. Quando houver produção real, a mesma área receberá
-              o realizado e os desvios por frente.
+              Acompanhe o avanço acumulado de cada frente ao longo do tempo.
+              Linhas mais paralelas indicam um ritmo mais estável e ajudam a
+              identificar conflitos entre equipes.
             </p>
+            <div className="lob-kpis">
+              <div><strong>{lobSeries.length}</strong><span>frentes exibidas</span></div>
+              <div><strong>{weekCount}</strong><span>semanas planejadas</span></div>
+              <div><strong>{activities.filter(activity => activity.critical === 1).length}</strong><span>atividades críticas</span></div>
+            </div>
             <div className="lob-legend">
-              {lobSeries.slice(0, 5).map(({ activity }) => (
-                <span key={activity.id}>
-                  <i style={{ background: phaseColors[activity.phase] || "#6b8292" }} />
-                  {activity.name}
-                </span>
-              ))}
+              <span><i className="planned-line" /> Planejado</span>
+              <span><i className="actual-line" /> Realizado</span>
+              <span><i className="critical-line" /> Crítico</span>
             </div>
           </div>
           <div className="lob-chart">
             {lobSeries.length ? (
-              <svg viewBox="0 0 720 260" role="img" aria-label="Linha de Balanço planejada">
+              <div className="lob-chart-frame">
+                <div className="lob-chart-title">
+                  <div><strong>Avanço acumulado</strong><span>Planejado · escala semanal</span></div>
+                  <span className="lob-status"><span /> Sem realizado lançado</span>
+                </div>
+                <svg viewBox="0 0 720 290" role="img" aria-label="Linha de Balanço planejada">
                 {[0, 25, 50, 75, 100].map(value => {
-                  const y = 228 - (value / 100) * 190;
+                  const y = 244 - (value / 100) * 190;
                   return (
                     <g key={value}>
                       <line x1="42" x2="680" y1={y} y2={y} className="lob-grid-line" />
@@ -577,20 +584,23 @@ function GanttView({
                     </g>
                   );
                 })}
-                <line x1="42" x2="42" y1="38" y2="228" className="lob-axis-line" />
-                <line x1="42" x2="680" y1="228" y2="228" className="lob-axis-line" />
+                <line x1="42" x2="42" y1="54" y2="244" className="lob-axis-line" />
+                <line x1="42" x2="680" y1="244" y2="244" className="lob-axis-line" />
                 {lobSeries.map(({ activity, points }) => (
-                  <polyline
-                    key={activity.id}
-                    points={points}
-                    fill="none"
-                    stroke={phaseColors[activity.phase] || "#6b8292"}
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <g key={activity.id}>
+                    <polyline points={points} fill="none" stroke={phaseColors[activity.phase] || "#6b8292"} strokeWidth={activity.critical === 1 ? "3.2" : "2.4"} strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx={points.split(" ").at(-1)?.split(",")[0]} cy={points.split(" ").at(-1)?.split(",")[1]} r={activity.critical === 1 ? "4" : "3"} fill={phaseColors[activity.phase] || "#6b8292"} />
+                  </g>
                 ))}
-              </svg>
+                <text x="42" y="270" className="lob-axis-label">Início</text>
+                <text x="680" y="270" textAnchor="end" className="lob-axis-label">Semana {weekCount}</text>
+                </svg>
+                <div className="lob-series-list">
+                  {lobSeries.slice(0, 6).map(({ activity }) => (
+                    <span key={activity.id} title={`${activity.wbsCode} · ${activity.name}`}><i style={{ background: phaseColors[activity.phase] || "#6b8292" }} />{activity.wbsCode} · {activity.name}</span>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="module-empty"><span>Inclua atividades no cronograma para calcular o ritmo planejado.</span></div>
             )}

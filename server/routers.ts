@@ -809,6 +809,45 @@ export const appRouter = router({
           .where(eq(wbsNodes.projectId, input.projectId))
           .orderBy(wbsNodes.sortOrder);
       }),
+    updateWbsNode: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          nodeId: z.number().int().positive(),
+          code: z.string().trim().min(1).max(32),
+          name: z.string().trim().min(2).max(220),
+          nodeType: z.enum(["grupo", "pacote", "entrega"]),
+          unit: z.string().trim().max(32).optional(),
+          plannedQuantity: z.number().int().min(0).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [node] = await db
+          .select({ id: wbsNodes.id })
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.id, input.nodeId),
+              eq(wbsNodes.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+        await db
+          .update(wbsNodes)
+          .set({
+            code: input.code,
+            name: input.name,
+            nodeType: input.nodeType,
+            unit: input.unit || null,
+            plannedQuantity: input.plannedQuantity ?? null,
+          })
+          .where(eq(wbsNodes.id, input.nodeId));
+        return { updated: true as const };
+      }),
     dependencies: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
