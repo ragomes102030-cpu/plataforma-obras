@@ -60,6 +60,15 @@ export function ProductionView({
       await utils.production.entries.invalidate({ projectId });
     },
   });
+  const confirmMutation = trpc.production.confirmEntry.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.production.entries.invalidate({ projectId }),
+        utils.projects.activities.invalidate({ projectId }),
+        utils.planning.control.invalidate({ projectId }),
+      ]);
+    },
+  });
   const fronts = frontsQuery.data ?? [];
   const teams = teamsQuery.data ?? [];
   const units = unitsQuery.data ?? [];
@@ -448,6 +457,17 @@ export function ProductionView({
                       <span>
                         {entry.measurementUnit} · {entry.status}
                       </span>
+                      {entry.status === "rascunho" ? (
+                        <button
+                          className="outline-button production-confirm-button"
+                          disabled={confirmMutation.isPending}
+                          onClick={() =>
+                            confirmMutation.mutate({ projectId, entryId: entry.id })
+                          }
+                        >
+                          <ClipboardCheck size={12} /> Confirmar
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}

@@ -1960,6 +1960,73 @@
     margin-top: 16px;
     border-top: 1px solid #edf1f2;
   }
+  .control-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .control-summary > div {
+    padding: 11px;
+    border: 1px solid #e7eeee;
+    border-radius: 7px;
+    background: #f8fbfb;
+  }
+  .control-summary strong {
+    display: block;
+    margin-top: 6px;
+    color: #4e7965;
+    font-size: 17px;
+  }
+  .control-list {
+    margin-top: 16px;
+    border-top: 1px solid #edf1f2;
+  }
+  .control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.8fr);
+    align-items: center;
+    gap: 18px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f3f4;
+  }
+  .control-row strong {
+    display: block;
+    color: #526973;
+    font-size: 10px;
+  }
+  .control-row span {
+    display: block;
+    margin-top: 4px;
+    color: #9aa8ae;
+    font-size: 9px;
+  }
+  .control-bars {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .control-bars > div {
+    position: relative;
+    height: 9px;
+    flex: 1;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #e7edef;
+  }
+  .control-bars i,
+  .control-bars em {
+    position: absolute;
+    left: 0;
+    display: block;
+    height: 4px;
+    border-radius: 8px;
+  }
+  .control-bars i { top: 0; background: #b7c8cd; }
+  .control-bars em { bottom: 0; background: #6b9d7d; }
+  .control-bars b { min-width: 42px; color: #4e7965; font-size: 9px; text-align: right; }
+  .negative-variance { color: #b36d62 !important; }
+  .positive-variance { color: #4e7965 !important; }
+  .production-confirm-button { margin-top: 7px; padding: 5px 8px; font-size: 9px; }
   @media (max-width: 900px) {
     .planning-grid {
       grid-template-columns: 1fr;
@@ -1984,6 +2051,10 @@
     }
     .baseline-form {
       flex-direction: column;
+    }
+    .control-summary,
+    .control-row {
+      grid-template-columns: 1fr;
     }
   }
   @media (max-width: 900px) {

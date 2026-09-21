@@ -1109,6 +1109,24 @@ export const appRouter = router({
           .$returningId();
         return { id: createdId.id };
       }),
+    confirmEntry: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), entryId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
+        if (!entry) throw new Error("Medição não encontrada nesta obra.");
+        await db.update(productionEntries).set({ status: "confirmada" }).where(eq(productionEntries.id, input.entryId));
+        const [activity] = await db.select({ id: scheduleActivities.id, plannedQuantity: scheduleActivities.plannedQuantity }).from(scheduleActivities).where(eq(scheduleActivities.id, entry.activityId)).limit(1);
+        if (activity) {
+          const confirmed = await db.select({ quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.activityId, entry.activityId), eq(productionEntries.status, "confirmada")));
+          const plannedQuantity = Number(activity.plannedQuantity ?? 0);
+          const progress = plannedQuantity ? Math.min(100, Math.round((confirmed.reduce((sum, item) => sum + Number(item.quantity), 0) / plannedQuantity) * 100)) : 0;
+          await db.update(scheduleActivities).set({ progress, status: progress >= 100 ? "Concluído" : progress > 0 ? "Em andamento" : "Não iniciado" }).where(eq(scheduleActivities.id, entry.activityId));
+        }
+        return { confirmed: true as const };
+      }),
   }),
   budgets: router({
     list: protectedProcedure
@@ -1390,6 +1408,34 @@ export const appRouter = router({
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
         return { activities, dependencies, resources, baselines };
+      }),
+    control: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { asOf: new Date(), activities: [], totals: { plannedQuantity: 0, actualQuantity: 0, plannedProgress: 0, actualProgress: 0, variance: 0 } };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
+        const actualByActivity = new Map<number, number>();
+        for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
+        const asOf = input.asOf ?? new Date();
+        const start = project?.plannedStart?.getTime() ?? asOf.getTime();
+        const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
+        const rows = activities.map(activity => {
+          const plannedQuantity = Number(activity.plannedQuantity ?? 0);
+          const actualQuantity = actualByActivity.get(activity.id) ?? 0;
+          const plannedStart = activity.earlyStart ?? activity.startOffset;
+          const plannedProgress = plannedQuantity > 0 ? Math.max(0, Math.min(100, ((elapsedDays - plannedStart) / Math.max(1, activity.durationDays)) * 100)) : 0;
+          const actualProgress = plannedQuantity > 0 ? Math.max(0, Math.min(100, (actualQuantity / plannedQuantity) * 100)) : 0;
+          return { id: activity.id, wbsCode: activity.wbsCode, name: activity.name, phase: activity.phase, plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10, critical: activity.critical === 1, status: activity.status };
+        });
+        const plannedQuantity = rows.reduce((sum, row) => sum + row.plannedQuantity, 0);
+        const actualQuantity = rows.reduce((sum, row) => sum + row.actualQuantity, 0);
+        const plannedProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.plannedProgress, 0) / plannedQuantity : 0;
+        const actualProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.actualProgress, 0) / plannedQuantity : 0;
+        return { asOf, activities: rows, totals: { plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10 } };
       }),
     captureBaseline: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(160) }))
