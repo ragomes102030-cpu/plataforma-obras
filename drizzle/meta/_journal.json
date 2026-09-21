@@ -127,6 +127,13 @@
       "when": 1790002298831,
       "tag": "0017_light_war_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1790014108278,
+      "tag": "0018_quick_zaran",
+      "breakpoints": true
     }
   ]
 }

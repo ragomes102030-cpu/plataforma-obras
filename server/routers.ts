@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -217,7 +217,7 @@ async function seedStarterPlan(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
 ) {
-  await db.insert(wbsNodes).values(
+  const insertedWbs = await db.insert(wbsNodes).values(
     starterWbs.map(([code, name, level, nodeType], index) => ({
       projectId,
       code,
@@ -227,13 +227,15 @@ async function seedStarterPlan(
       parentId: null,
       sortOrder: index,
     }))
-  );
+  ).$returningId();
+  const wbsIdsByCode = new Map(starterWbs.map(([code], index) => [code, insertedWbs[index]?.id]));
   const inserted = await db
     .insert(scheduleActivities)
     .values(
       starterActivities.map(
         ([wbsCode, name, phase, startOffset, durationDays], index) => ({
           projectId,
+          wbsNodeId: wbsIdsByCode.get(wbsCode) ?? null,
           wbsCode,
           name,
           phase,
@@ -265,8 +267,10 @@ async function seedSolarAcaciasPlan(
 ) {
   type NodeType = "grupo" | "pacote" | "entrega";
   let order = 0;
+  const nodeIdsByCode = new Map<string, number>();
   const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
     const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).$returningId();
+    nodeIdsByCode.set(code, created.id);
     return created.id;
   };
   const rootId = await addNode(null, "1", "Edifício Residencial Solar das Acácias", 1, "grupo");
@@ -299,8 +303,8 @@ async function seedSolarAcaciasPlan(
   const delivery = await addPhase("1.7", "Comissionamento e entrega");
   await addLocationPackages(delivery, "1.7.1", "Áreas comuns e cobertura", [["1", "Impermeabilização da cobertura", "m²", 720], ["2", "Barrilete e reservatório superior", "un", 1], ["3", "Casa de máquinas e elevadores", "un", 2], ["4", "Comissionamento dos sistemas", "mês", 2]]);
   await addLocationPackages(delivery, "1.7.2", "Unidades e documentação", [["1", "Louças e metais", "un", 64], ["2", "Testes e entrega das unidades", "un", 32], ["3", "As built, manual e habite-se", "un", 1]]);
-  const activityRows = structuralLocations.map((location, index) => ({ projectId, externalId: `SOL-EST-${index + 1}`, eapRef: `1.3.${index + 1}.4`, wbsCode: `1.3.${index + 1}.4`, name: `Ciclo estrutural — ${location}`, phase: "Estrutura", startOffset: 120 + index * 14, durationDays: 14, plannedQuantity: "1", productivity: "0.071", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: index }));
-  activityRows.push({ projectId, externalId: "SOL-FUND-01", eapRef: "1.2.1.1", wbsCode: "1.2.1.1", name: "Escavação e contenção do subsolo", phase: "Fundação", startOffset: 20, durationDays: 60, plannedQuantity: "2400", productivity: "40", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: activityRows.length });
+  const activityRows = structuralLocations.map((location, index) => ({ projectId, wbsNodeId: nodeIdsByCode.get(`1.3.${index + 1}.4`) ?? null, externalId: `SOL-EST-${index + 1}`, eapRef: `1.3.${index + 1}.4`, wbsCode: `1.3.${index + 1}.4`, name: `Ciclo estrutural — ${location}`, phase: "Estrutura", startOffset: 120 + index * 14, durationDays: 14, plannedQuantity: "1", productivity: "0.071", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: index }));
+  activityRows.push({ projectId, wbsNodeId: nodeIdsByCode.get("1.2.1.1") ?? null, externalId: "SOL-FUND-01", eapRef: "1.2.1.1", wbsCode: "1.2.1.1", name: "Escavação e contenção do subsolo", phase: "Fundação", startOffset: 20, durationDays: 60, plannedQuantity: "2400", productivity: "40", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: activityRows.length });
   const inserted = await db.insert(scheduleActivities).values(activityRows).$returningId();
   await db.insert(scheduleDependencies).values(inserted.slice(0, -1).map((item, index) => ({ projectId, predecessorId: item.id, successorId: inserted[index + 1].id, type: "FS" as const, lag: 0 })));
   await seedProductionCatalog(db, projectId);
@@ -645,8 +649,19 @@ async function persistPhase7Plan(
           )
         )
         .limit(1);
+      const [wbsNode] = await tx
+        .select({ id: wbsNodes.id })
+        .from(wbsNodes)
+        .where(
+          and(
+            eq(wbsNodes.projectId, projectId),
+            eq(wbsNodes.code, activity.eapRef)
+          )
+        )
+        .limit(1);
       const values = {
         projectId,
+        wbsNodeId: wbsNode?.id ?? null,
         externalId: activity.externalId,
         eapRef: activity.eapRef,
         wbsCode: activity.eapRef,
@@ -858,7 +873,7 @@ export const appRouter = router({
           .select()
           .from(wbsNodes)
           .where(eq(wbsNodes.projectId, input.projectId))
-          .orderBy(wbsNodes.sortOrder);
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
     updateWbsNode: protectedProcedure
       .input(
@@ -938,29 +953,88 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const all = await db.select().from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
-        const node = all.find(item => item.id === input.nodeId);
-        const parent = input.targetParentId === null ? undefined : all.find(item => item.id === input.targetParentId);
-        if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
-        if (input.targetParentId !== null && !parent) throw new Error("Destino inválido.");
-        if (parent && (parent.id === node.id || parent.code === node.code || parent.code.startsWith(`${node.code}.`))) throw new Error("Não é possível mover um item para dentro de si mesmo.");
-        const siblings = all.filter(item => (parent ? item.parentId === parent.id : item.parentId === null) && item.id !== node.id).sort((a, b) => a.sortOrder - b.sortOrder);
-        const index = Math.min(input.targetIndex, siblings.length);
-        const ordered = [...siblings];
-        ordered.splice(index, 0, node);
-        const rootLevel = (parent?.level ?? 0) + 1;
-        for (let position = 0; position < ordered.length; position += 1) {
-          const root = ordered[position];
-          const oldCode = root.code;
-          const nextCode = parent ? `${parent.code}.${position + 1}` : `${position + 1}`;
-          const levelDelta = root.id === node.id ? rootLevel - root.level : 0;
-          const branch = all.filter(item => item.id === root.id || item.code.startsWith(`${oldCode}.`));
-          for (const item of branch) {
-            const suffix = item.code === oldCode ? "" : item.code.slice(oldCode.length);
-            await db.update(wbsNodes).set({ parentId: item.id === root.id ? (root.id === node.id ? (parent?.id ?? null) : root.parentId) : item.parentId, code: `${nextCode}${suffix}`, level: item.level + (root.id === node.id ? levelDelta : 0), sortOrder: item.id === root.id ? position : item.sortOrder }).where(eq(wbsNodes.id, item.id));
+        return db.transaction(async tx => {
+          const all = await tx
+            .select()
+            .from(wbsNodes)
+            .where(eq(wbsNodes.projectId, input.projectId));
+          const node = all.find(item => item.id === input.nodeId);
+          const parent = input.targetParentId === null
+            ? null
+            : all.find(item => item.id === input.targetParentId) ?? null;
+          if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+          if (input.targetParentId !== null && !parent) throw new Error("Destino inválido.");
+
+          const byId = new Map(all.map(item => [item.id, item]));
+          let ancestor = parent;
+          while (ancestor) {
+            if (ancestor.id === node.id) {
+              throw new Error("Não é possível mover um item para dentro de sua própria descendência.");
+            }
+            ancestor = ancestor.parentId === null ? null : byId.get(ancestor.parentId) ?? null;
           }
-        }
-        return { moved: true as const };
+
+          const compareOrder = (left: typeof all[number], right: typeof all[number]) =>
+            left.sortOrder - right.sortOrder || left.id - right.id;
+          const children = new Map<number | null, typeof all>();
+          for (const item of all) {
+            const current = children.get(item.parentId) ?? [];
+            current.push(item);
+            children.set(item.parentId, current);
+          }
+          for (const siblings of Array.from(children.values())) siblings.sort(compareOrder);
+
+          const oldSiblings = (children.get(node.parentId) ?? []).filter(item => item.id !== node.id);
+          const targetSiblings = (children.get(parent?.id ?? null) ?? []).filter(item => item.id !== node.id);
+          const targetIndex = Math.min(input.targetIndex, targetSiblings.length);
+          const nextTargetSiblings = [...targetSiblings];
+          nextTargetSiblings.splice(targetIndex, 0, node);
+          children.set(node.parentId, oldSiblings);
+          children.set(parent?.id ?? null, nextTargetSiblings);
+
+          const desired = new Map<number, { parentId: number | null; code: string; level: number; sortOrder: number }>();
+          const visit = (parentId: number | null, prefix: string, level: number) => {
+            const siblings = children.get(parentId) ?? [];
+            siblings.forEach((item, index) => {
+              const code = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
+              desired.set(item.id, { parentId, code, level, sortOrder: index });
+              visit(item.id, code, level + 1);
+            });
+          };
+          visit(null, "", 1);
+
+          const updates = Array.from(desired.entries());
+          if (updates.length) {
+            const ids = updates.map(([id]) => id);
+            const parentCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.parentId}`), sql` `);
+            const codeCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.code}`), sql` `);
+            const levelCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.level}`), sql` `);
+            const orderCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.sortOrder}`), sql` `);
+            await tx.execute(sql`
+              UPDATE wbs_nodes
+              SET parentId = CASE id ${parentCase} ELSE parentId END,
+                  code = CASE id ${codeCase} ELSE code END,
+                  level = CASE id ${levelCase} ELSE level END,
+                  sortOrder = CASE id ${orderCase} ELSE sortOrder END
+              WHERE projectId = ${input.projectId}
+                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            `);
+            await tx.execute(sql`
+              UPDATE schedule_activities AS activity
+              INNER JOIN wbs_nodes AS node ON node.id = activity.wbsNodeId
+              SET activity.wbsCode = node.code, activity.eapRef = node.code
+              WHERE activity.projectId = ${input.projectId}
+                AND activity.wbsNodeId IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            `);
+          }
+          const moved = desired.get(node.id);
+          return {
+            moved: true as const,
+            nodeId: node.id,
+            code: moved?.code ?? node.code,
+            affectedNodeIds: updates.map(([id]) => id),
+          };
+        });
       }),
     duplicateWbsNode: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), nodeId: z.number().int().positive() }))
@@ -1662,8 +1736,19 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [wbsNode] = await db
+          .select({ id: wbsNodes.id })
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.code, input.wbsCode)
+            )
+          )
+          .limit(1);
+        if (!wbsNode) throw new Error("O código informado não corresponde a um item da EAP desta obra.");
         const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsCode: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now() }).$returningId();
+        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now() }).$returningId();
         return { id: createdId.id };
       }),
     createDependency: protectedProcedure

@@ -168,6 +168,7 @@ export const scheduleActivities = mysqlTable(
     projectId: int("projectId")
       .notNull()
       .references(() => projects.id),
+    wbsNodeId: int("wbsNodeId"),
     externalId: varchar("externalId", { length: 180 }),
     eapRef: varchar("eapRef", { length: 180 }),
     wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
@@ -204,6 +205,7 @@ export const scheduleActivities = mysqlTable(
       table.externalId
     ),
     index("schedule_activities_project_idx").on(table.projectId),
+    index("schedule_activities_wbs_node_idx").on(table.wbsNodeId),
   ]
 );
 
