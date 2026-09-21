@@ -228,14 +228,31 @@ async function seedStarterPlan(
       sortOrder: index,
     }))
   ).$returningId();
-  const wbsIdsByCode = new Map(starterWbs.map(([code], index) => [code, insertedWbs[index]?.id]));
+  const wbsIdsByCode = new Map<string, number>();
+  starterWbs.forEach(([code], index) => {
+    const id = insertedWbs[index]?.id;
+    if (!id) throw new Error(`EAP inicial inválida: ID ausente para ${code}.`);
+    wbsIdsByCode.set(code, id);
+  });
+  for (const [code] of starterWbs) {
+    const parentCode = code.includes(".") ? code.split(".").slice(0, -1).join(".") : null;
+    if (!parentCode) continue;
+    const nodeId = wbsIdsByCode.get(code);
+    const parentId = wbsIdsByCode.get(parentCode);
+    if (!nodeId || !parentId) throw new Error(`EAP inicial inválida: pai ausente para ${code}.`);
+    await db.update(wbsNodes).set({ parentId }).where(and(eq(wbsNodes.id, nodeId), eq(wbsNodes.projectId, projectId)));
+  }
   const inserted = await db
     .insert(scheduleActivities)
     .values(
       starterActivities.map(
         ([wbsCode, name, phase, startOffset, durationDays], index) => ({
           projectId,
-          wbsNodeId: wbsIdsByCode.get(wbsCode) ?? null,
+          wbsNodeId: (() => {
+            const nodeId = wbsIdsByCode.get(wbsCode);
+            if (!nodeId) throw new Error(`Atividade inicial sem nó EAP para ${wbsCode}.`);
+            return nodeId;
+          })(),
           wbsCode,
           name,
           phase,
@@ -269,6 +286,11 @@ async function seedSolarAcaciasPlan(
   type NodeType = "grupo" | "pacote" | "entrega";
   let order = 0;
   const nodeIdsByCode = new Map<string, number>();
+  const requireNodeId = (code: string) => {
+    const id = nodeIdsByCode.get(code);
+    if (!id) throw new Error(`EAP Solar inválida: nó ausente para ${code}.`);
+    return id;
+  };
   const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
     const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).$returningId();
     nodeIdsByCode.set(code, created.id);
@@ -304,8 +326,8 @@ async function seedSolarAcaciasPlan(
   const delivery = await addPhase("1.7", "Comissionamento e entrega");
   await addLocationPackages(delivery, "1.7.1", "Áreas comuns e cobertura", [["1", "Impermeabilização da cobertura", "m²", 720], ["2", "Barrilete e reservatório superior", "un", 1], ["3", "Casa de máquinas e elevadores", "un", 2], ["4", "Comissionamento dos sistemas", "mês", 2]]);
   await addLocationPackages(delivery, "1.7.2", "Unidades e documentação", [["1", "Louças e metais", "un", 64], ["2", "Testes e entrega das unidades", "un", 32], ["3", "As built, manual e habite-se", "un", 1]]);
-  const activityRows = structuralLocations.map((location, index) => ({ projectId, wbsNodeId: nodeIdsByCode.get(`1.3.${index + 1}.4`) ?? null, externalId: `SOL-EST-${index + 1}`, eapRef: `1.3.${index + 1}.4`, wbsCode: `1.3.${index + 1}.4`, name: `Ciclo estrutural — ${location}`, phase: "Estrutura", startOffset: 120 + index * 14, durationDays: 14, plannedQuantity: "1", productivity: "0.071", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: index }));
-  activityRows.push({ projectId, wbsNodeId: nodeIdsByCode.get("1.2.1.1") ?? null, externalId: "SOL-FUND-01", eapRef: "1.2.1.1", wbsCode: "1.2.1.1", name: "Escavação e contenção do subsolo", phase: "Fundação", startOffset: 20, durationDays: 60, plannedQuantity: "2400", productivity: "40", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: activityRows.length });
+  const activityRows = structuralLocations.map((location, index) => ({ projectId, wbsNodeId: requireNodeId(`1.3.${index + 1}.4`), externalId: `SOL-EST-${index + 1}`, eapRef: `1.3.${index + 1}.4`, wbsCode: `1.3.${index + 1}.4`, name: `Ciclo estrutural — ${location}`, phase: "Estrutura", startOffset: 120 + index * 14, durationDays: 14, plannedQuantity: "1", productivity: "0.071", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: index }));
+  activityRows.push({ projectId, wbsNodeId: requireNodeId("1.2.1.1"), externalId: "SOL-FUND-01", eapRef: "1.2.1.1", wbsCode: "1.2.1.1", name: "Escavação e contenção do subsolo", phase: "Fundação", startOffset: 20, durationDays: 60, plannedQuantity: "2400", productivity: "40", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: activityRows.length });
   const inserted = await db.insert(scheduleActivities).values(activityRows).$returningId();
   await db.insert(scheduleDependencies).values(inserted.slice(0, -1).map((item, index) => ({ projectId, predecessorId: item.id, successorId: inserted[index + 1].id, type: "FS" as const, lag: 0 })));
   await seedProductionCatalog(db, projectId);
@@ -703,7 +725,10 @@ async function persistPhase7Plan(
           )
         )
         .limit(1);
-      const wbsNodeId = localWbsByExternalId.get(activity.eapRef) ?? null;
+      const wbsNodeId = localWbsByExternalId.get(activity.eapRef);
+      if (!wbsNodeId) {
+        throw new Error(`Atividade ${activity.externalId} referencia EAP inexistente: ${activity.eapRef}.`);
+      }
       const values = {
         projectId,
         wbsNodeId,
@@ -953,17 +978,28 @@ export const appRouter = router({
           input.code,
           input.nodeId
         );
-        await db
-          .update(wbsNodes)
-          .set({
-            code: input.code,
-            name: input.name,
-            nodeType: input.nodeType,
-            unit: input.unit || null,
-            plannedQuantity: input.plannedQuantity ?? null,
-          })
-          .where(eq(wbsNodes.id, input.nodeId));
-        return { updated: true as const };
+        return db.transaction(async tx => {
+          await tx
+            .update(wbsNodes)
+            .set({
+              code: input.code,
+              name: input.name,
+              nodeType: input.nodeType,
+              unit: input.unit || null,
+              plannedQuantity: input.plannedQuantity ?? null,
+            })
+            .where(eq(wbsNodes.id, input.nodeId));
+          await tx
+            .update(scheduleActivities)
+            .set({ wbsCode: input.code, eapRef: input.code })
+            .where(
+              and(
+                eq(scheduleActivities.projectId, input.projectId),
+                eq(scheduleActivities.wbsNodeId, input.nodeId)
+              )
+            );
+          return { updated: true as const };
+        });
       }),
     createWbsNode: protectedProcedure
       .input(z.object({
@@ -1119,11 +1155,18 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
         if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
-        const descendants = await db.select({ id: wbsNodes.id }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), or(eq(wbsNodes.id, node.id), eq(wbsNodes.parentId, node.id))));
         const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
+        const linkedActivities = ids.length
+          ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.wbsNodeId, ids)))
+          : [];
+        if (linkedActivities.length) throw new Error("Não é possível excluir uma EAP vinculada a atividades. Realoque ou remova as atividades primeiro.");
+        const linkedBudgetItems = ids.length
+          ? await db.select({ id: budgetItems.id }).from(budgetItems).where(inArray(budgetItems.wbsNodeId, ids))
+          : [];
+        if (linkedBudgetItems.length) throw new Error("Não é possível excluir uma EAP vinculada ao orçamento. Realoque ou remova os itens primeiro.");
         if (ids.length) await db.delete(wbsNodes).where(inArray(wbsNodes.id, ids));
-        return { deleted: true as const, count: Math.max(descendants.length, ids.length) };
+        return { deleted: true as const, count: ids.length };
       }),
     dependencies: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))

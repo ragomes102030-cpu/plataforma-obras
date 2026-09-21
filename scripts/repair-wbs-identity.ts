@@ -33,6 +33,8 @@ type Candidate = {
   budgetRefs: number;
 };
 
+type CountRow = { count: number };
+
 const connection = await mysql.createConnection(connectionOptions(databaseUrl));
 
 try {
@@ -150,6 +152,36 @@ try {
     );
     console.log("[WBS] Constraint única projectId+code criada.");
   }
+
+  await connection.query(`
+    UPDATE wbs_nodes child
+    INNER JOIN wbs_nodes parent
+      ON parent.projectId = child.projectId
+     AND parent.code = SUBSTRING_INDEX(child.code, '.', LENGTH(child.code) - LENGTH(REPLACE(child.code, '.', '')))
+    SET child.parentId = parent.id
+    WHERE child.parentId IS NULL
+      AND child.code LIKE '%.%'
+  `);
+  console.log("[WBS] Pais ausentes reconstruídos a partir do código hierárquico.");
+
+  await connection.query(`
+    UPDATE schedule_activities activity
+    INNER JOIN wbs_nodes node
+      ON node.projectId = activity.projectId
+     AND node.code = activity.wbsCode
+    SET activity.wbsNodeId = node.id,
+        activity.eapRef = node.code
+    WHERE activity.wbsNodeId IS NULL
+  `);
+  const [unlinkedActivities] = await connection.query<CountRow[]>(`
+    SELECT COUNT(*) AS count
+    FROM schedule_activities
+    WHERE wbsNodeId IS NULL
+  `);
+  if (Number(unlinkedActivities[0]?.count ?? 0) > 0) {
+    throw new Error(`[WBS] Existem ${unlinkedActivities[0]?.count} atividades sem correspondência única na EAP.`);
+  }
+  console.log("[WBS] Vínculos atividade → EAP preenchidos e validados.");
 
   await connection.commit();
   console.log("[WBS] Saneamento concluído; db:push poderá criar a constraint única.");

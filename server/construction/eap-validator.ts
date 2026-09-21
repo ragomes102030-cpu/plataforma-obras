@@ -62,6 +62,24 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
     }
   }
 
+  for (const node of nodes) {
+    const code = node.code.trim();
+    const expectedParentCode = code.includes(".")
+      ? code.slice(0, code.lastIndexOf("."))
+      : null;
+    if (!expectedParentCode) continue;
+    const parent =
+      node.parentId === null ? undefined : byId.get(String(node.parentId));
+    if (parent?.code.trim() !== expectedParentCode) {
+      issues.push({
+        code: "eap_parent_code_mismatch",
+        severity: "error",
+        message: `Nó EAP ${code} deveria ter como pai ${expectedParentCode}.`,
+        entityRef: String(node.id),
+      });
+    }
+  }
+
   const state = new Map<string, "visiting" | "visited">();
   const visit = (node: EapEvidenceNode) => {
     const id = String(node.id);

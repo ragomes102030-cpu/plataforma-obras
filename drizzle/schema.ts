@@ -2,6 +2,7 @@ import {
   int,
   mysqlEnum,
   mysqlTable,
+  AnyMySqlColumn,
   decimal,
   index,
   text,
@@ -168,7 +169,9 @@ export const scheduleActivities = mysqlTable(
     projectId: int("projectId")
       .notNull()
       .references(() => projects.id),
-    wbsNodeId: int("wbsNodeId"),
+    wbsNodeId: int("wbsNodeId")
+      .notNull()
+      .references(() => wbsNodes.id, { onDelete: "restrict" }),
     externalId: varchar("externalId", { length: 180 }),
     eapRef: varchar("eapRef", { length: 180 }),
     wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
@@ -218,7 +221,9 @@ export const wbsNodes = mysqlTable(
       .references(() => projects.id),
     externalId: varchar("externalId", { length: 180 }),
     externalUid: varchar("externalUid", { length: 180 }),
-    parentId: int("parentId"),
+    parentId: int("parentId").references((): AnyMySqlColumn => wbsNodes.id, {
+      onDelete: "restrict",
+    }),
     code: varchar("code", { length: 32 }).notNull(),
     name: varchar("name", { length: 220 }).notNull(),
     level: int("level").default(1).notNull(),

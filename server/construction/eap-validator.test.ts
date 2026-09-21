@@ -59,4 +59,16 @@ describe("validateEap", () => {
     expect(result.valid).toBe(false);
     expect(result.issues.some(issue => issue.code === "eap_cycle")).toBe(true);
   });
+
+  it("rejeita nó filho sem o pai indicado pelo código WBS", () => {
+    const result = validateEap([
+      node(),
+      node({ id: 2, parentId: null, code: "1.1", name: "Canteiro" }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain(
+      "eap_parent_code_mismatch"
+    );
+  });
 });
