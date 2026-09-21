@@ -120,7 +120,7 @@ A Fase 1 comprovou a leitura simulada em seis cenários, homologou os três MCPs
 
 ### Fase 3 — Validações determinísticas e CPM
 
-**Estado:** em andamento; entrega 3A concluída no checkpoint `9c86105`.
+**Estado:** concluída no checkpoint `e54d10f`.
 
 **Objetivo:** retirar da LLM os cálculos de consistência, dependências e caminho crítico.
 
@@ -142,7 +142,11 @@ A Fase 1 comprovou a leitura simulada em seis cenários, homologou os três MCPs
 
 **Resultado 3A:** 61 testes verdes, validadores de EAP/dependências, CPM encapsulado e correção da relação SF no calculador compartilhado.
 
-**Retomada:** criar `ConstructionValidationSnapshot`, executar os validadores sobre evidências normalizadas e só então conectar o resumo ao orquestrador. Não liberar escrita, baseline ou outbox.
+**Checkpoint final:** `e54d10f` — `feat: integrar snapshot deterministico ao agente`.
+
+**Resultado final:** o `agent.chat` executa EAP, dependências e CPM no backend e informa `valid`, `blocked` ou `insufficient` ao agente. A LLM permanece explicadora e não pode aprovar uma rede bloqueada.
+
+**Próxima fase:** Fase 4 — governança, versões e gates da obra. Não liberar escrita, baseline ou outbox antes dos gates persistentes.
 
 ---
 
