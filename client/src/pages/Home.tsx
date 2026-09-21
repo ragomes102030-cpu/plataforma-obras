@@ -729,6 +729,7 @@ export default function Home() {
   const projects = serverProjects;
   const [selectedId, setSelectedId] = useState(1);
   const [activeNav, setActiveNav] = useState("Portfólio");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
@@ -801,7 +802,14 @@ export default function Home() {
   const createPending = createProjectMutation.isPending;
   return (
     <div className="app-frame">
-      <aside className="app-sidebar">
+      {mobileNavOpen && (
+        <button
+          className="mobile-nav-backdrop"
+          aria-label="Fechar menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+      <aside className={`app-sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark">
             <Layers3 size={18} />
@@ -826,7 +834,10 @@ export default function Home() {
             <button
               key={item.label}
               className={`nav-item ${activeNav === item.label ? "active" : ""}`}
-              onClick={() => setActiveNav(item.label)}
+              onClick={() => {
+                setActiveNav(item.label);
+                setMobileNavOpen(false);
+              }}
             >
               <item.icon size={17} />
               <span>{item.label}</span>
@@ -853,6 +864,7 @@ export default function Home() {
               onClick={() => {
                 setSelectedId(project.id);
                 setActiveNav("Portfólio");
+                setMobileNavOpen(false);
               }}
               className={`project-mini ${selected?.id === project.id ? "selected" : ""}`}
             >
@@ -889,7 +901,12 @@ export default function Home() {
       <main className="main-canvas">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="mobile-menu">
+            <button
+              className="mobile-menu"
+              aria-label="Abrir menu de navegação"
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen(true)}
+            >
               <Menu size={18} />
             </button>
             <div>
