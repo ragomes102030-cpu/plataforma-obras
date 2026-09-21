@@ -927,6 +927,7 @@ export default function Home() {
           </div>
         </header>
         <div className="content-wrap">
+          <div key={activeNav} className="tab-content-root">
           {activeNav === "Configurações" ? (
             <AdminLlmSettings />
           ) : activeNav !== "Portfólio" ? (
@@ -1104,6 +1105,7 @@ export default function Home() {
               />
             </>
           )}
+          </div>
         </div>
       </main>
       {agentOpen && selected && (
