@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
+  BookOpen,
   CalendarDays,
   ChevronDown,
   ChevronRight,
@@ -32,11 +33,13 @@ import { AdminLlmSettings } from "@/components/AdminLlmSettings";
 import { EapView } from "@/components/EapView";
 import { ProductionView } from "@/components/ProductionView";
 import { BudgetView } from "@/components/BudgetView";
+import { CatalogView } from "@/components/CatalogView";
 import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
   { label: "Orçamento", icon: WalletCards },
+  { label: "Catálogo", icon: BookOpen },
   { label: "EAP", icon: Layers3 },
   { label: "Cronogramas", icon: CalendarDays },
   { label: "Linha de Balanço", icon: Activity },
@@ -637,6 +640,7 @@ function ModuleView({
   if (name === "Agente IA") return <AgentView />;
   if (name === "Orçamento")
     return <BudgetView projectId={projectId} projectName={projectName} />;
+  if (name === "Catálogo") return <CatalogView />;
   if (name === "EAP")
     return <EapView projectId={projectId} projectName={projectName} />;
   if (name === "Produção")
@@ -961,6 +965,7 @@ export default function Home() {
               description={
                 {
                   Orçamento: "Serviços, quantitativos, preços e versões do orçamento.",
+                  Catálogo: "Fontes de preços, insumos e composições de serviço.",
                   EAP: "Escopo, pacotes de trabalho e estrutura de entregas.",
                   Cronogramas: "Planejamento, baseline e caminho crítico.",
                   Produção: "Ritmos, equipes e avanço físico.",

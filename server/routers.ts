@@ -19,6 +19,10 @@ import {
   wbsNodes,
   budgetVersions,
   budgetItems,
+  priceCatalogs,
+  priceItems,
+  serviceCompositions,
+  compositionComponents,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -1205,6 +1209,134 @@ export const appRouter = router({
             referencePeriod: input.referencePeriod || null,
           })
           .$returningId();
+        return { id: createdId.id };
+      }),
+  }),
+  catalog: router({
+    list: protectedProcedure
+      .input(
+        z.object({
+          catalogId: z.number().int().positive().optional(),
+          compositionId: z.number().int().positive().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { catalogs: [], priceItems: [], compositions: [], components: [], total: 0 };
+        const catalogs = await db.select().from(priceCatalogs).orderBy(desc(priceCatalogs.createdAt));
+        const selectedCatalogId = input.catalogId ?? catalogs[0]?.id;
+        const items = selectedCatalogId
+          ? await db.select().from(priceItems).where(eq(priceItems.catalogId, selectedCatalogId)).orderBy(priceItems.code)
+          : [];
+        const compositions = await db.select().from(serviceCompositions).orderBy(desc(serviceCompositions.updatedAt));
+        const selectedCompositionId = input.compositionId ?? compositions[0]?.id;
+        const components = selectedCompositionId
+          ? await db.select().from(compositionComponents).where(eq(compositionComponents.compositionId, selectedCompositionId))
+          : [];
+        const total = components.reduce(
+          (sum, component) => sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
+          0
+        );
+        return { catalogs, priceItems: items, compositions, components, total };
+      }),
+    createCatalog: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().trim().min(2).max(160),
+          sourceType: z.enum(["propria", "SINAPI", "SEINFRA", "fornecedor"]),
+          state: z.string().trim().length(2).optional(),
+          referencePeriod: z.string().trim().min(2).max(20),
+          notes: z.string().trim().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [createdId] = await db.insert(priceCatalogs).values({
+          name: input.name,
+          sourceType: input.sourceType,
+          state: input.state?.toUpperCase() || null,
+          referencePeriod: input.referencePeriod,
+          notes: input.notes || null,
+          createdBy: ctx.user.id,
+        }).$returningId();
+        return { id: createdId.id };
+      }),
+    createPriceItem: protectedProcedure
+      .input(
+        z.object({
+          catalogId: z.number().int().positive(),
+          code: z.string().trim().min(1).max(64),
+          description: z.string().trim().min(2).max(240),
+          unit: z.string().trim().min(1).max(32),
+          itemType: z.enum(["material", "mao_de_obra", "equipamento", "servico"]),
+          unitPrice: z.number().nonnegative(),
+          notes: z.string().trim().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [catalog] = await db.select({ id: priceCatalogs.id }).from(priceCatalogs).where(eq(priceCatalogs.id, input.catalogId)).limit(1);
+        if (!catalog) throw new Error("Catálogo não encontrado.");
+        const [createdId] = await db.insert(priceItems).values({
+          catalogId: input.catalogId,
+          code: input.code,
+          description: input.description,
+          unit: input.unit,
+          itemType: input.itemType,
+          unitPrice: input.unitPrice.toFixed(2),
+          notes: input.notes || null,
+        }).$returningId();
+        void ctx.user.id;
+        return { id: createdId.id };
+      }),
+    createComposition: protectedProcedure
+      .input(
+        z.object({
+          code: z.string().trim().min(1).max(64),
+          description: z.string().trim().min(2).max(240),
+          unit: z.string().trim().min(1).max(32),
+          sourceCatalogId: z.number().int().positive().optional(),
+          referencePeriod: z.string().trim().max(20).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [createdId] = await db.insert(serviceCompositions).values({
+          code: input.code,
+          description: input.description,
+          unit: input.unit,
+          sourceCatalogId: input.sourceCatalogId,
+          referencePeriod: input.referencePeriod || null,
+          createdBy: ctx.user.id,
+        }).$returningId();
+        return { id: createdId.id };
+      }),
+    addComponent: protectedProcedure
+      .input(
+        z.object({
+          compositionId: z.number().int().positive(),
+          priceItemId: z.number().int().positive(),
+          componentType: z.enum(["material", "mao_de_obra", "equipamento"]),
+          coefficient: z.number().positive(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [item] = await db.select({ unitPrice: priceItems.unitPrice }).from(priceItems).where(eq(priceItems.id, input.priceItemId)).limit(1);
+        if (!item) throw new Error("Insumo não encontrado.");
+        const [composition] = await db.select({ id: serviceCompositions.id }).from(serviceCompositions).where(eq(serviceCompositions.id, input.compositionId)).limit(1);
+        if (!composition) throw new Error("Composição não encontrada.");
+        const [createdId] = await db.insert(compositionComponents).values({
+          compositionId: input.compositionId,
+          priceItemId: input.priceItemId,
+          componentType: input.componentType,
+          coefficient: input.coefficient.toFixed(6),
+          unitPriceSnapshot: Number(item.unitPrice).toFixed(2),
+        }).$returningId();
         return { id: createdId.id };
       }),
   }),

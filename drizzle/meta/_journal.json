@@ -92,6 +92,13 @@
       "when": 1790000091560,
       "tag": "0012_clear_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1790000465686,
+      "tag": "0013_parched_owl",
+      "breakpoints": true
     }
   ]
 }

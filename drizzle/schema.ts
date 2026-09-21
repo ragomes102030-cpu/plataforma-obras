@@ -380,6 +380,94 @@ export const budgetItems = mysqlTable(
   ]
 );
 
+export const priceCatalogs = mysqlTable(
+  "price_catalogs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    sourceType: mysqlEnum("sourceType", ["propria", "SINAPI", "SEINFRA", "fornecedor"])
+      .notNull(),
+    state: varchar("state", { length: 2 }),
+    referencePeriod: varchar("referencePeriod", { length: 20 }).notNull(),
+    status: mysqlEnum("status", ["ativo", "arquivado"]).default("ativo").notNull(),
+    notes: text("notes"),
+    createdBy: int("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [index("price_catalogs_reference_idx").on(table.referencePeriod)]
+);
+
+export const priceItems = mysqlTable(
+  "price_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    catalogId: int("catalogId")
+      .notNull()
+      .references(() => priceCatalogs.id),
+    code: varchar("code", { length: 64 }).notNull(),
+    description: varchar("description", { length: 240 }).notNull(),
+    unit: varchar("unit", { length: 32 }).notNull(),
+    itemType: mysqlEnum("itemType", ["material", "mao_de_obra", "equipamento", "servico"])
+      .notNull(),
+    unitPrice: decimal("unitPrice", { precision: 14, scale: 2 }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("price_items_catalog_code_idx").on(table.catalogId, table.code),
+    index("price_items_catalog_idx").on(table.catalogId),
+  ]
+);
+
+export const serviceCompositions = mysqlTable(
+  "service_compositions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    code: varchar("code", { length: 64 }).notNull(),
+    description: varchar("description", { length: 240 }).notNull(),
+    unit: varchar("unit", { length: 32 }).notNull(),
+    sourceCatalogId: int("sourceCatalogId").references(() => priceCatalogs.id),
+    referencePeriod: varchar("referencePeriod", { length: 20 }),
+    status: mysqlEnum("status", ["rascunho", "validada", "arquivada"])
+      .default("rascunho")
+      .notNull(),
+    createdBy: int("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("service_compositions_code_idx").on(table.code),
+    index("service_compositions_source_idx").on(table.sourceCatalogId),
+  ]
+);
+
+export const compositionComponents = mysqlTable(
+  "composition_components",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    compositionId: int("compositionId")
+      .notNull()
+      .references(() => serviceCompositions.id),
+    priceItemId: int("priceItemId")
+      .notNull()
+      .references(() => priceItems.id),
+    componentType: mysqlEnum("componentType", ["material", "mao_de_obra", "equipamento"])
+      .notNull(),
+    coefficient: decimal("coefficient", { precision: 14, scale: 6 }).notNull(),
+    unitPriceSnapshot: decimal("unitPriceSnapshot", { precision: 14, scale: 2 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("composition_components_unique_idx").on(
+      table.compositionId,
+      table.priceItemId
+    ),
+    index("composition_components_composition_idx").on(table.compositionId),
+  ]
+);
+
 export const llmProviderSettings = mysqlTable("llm_provider_settings", {
   id: int("id").primaryKey(),
   encryptedConfig: text("encryptedConfig").notNull(),
