@@ -236,6 +236,10 @@ export const wbsNodes = mysqlTable(
       table.projectId,
       table.externalId
     ),
+    uniqueIndex("wbs_nodes_project_code_unique_idx").on(
+      table.projectId,
+      table.code
+    ),
     index("wbs_nodes_project_idx").on(table.projectId),
   ]
 );

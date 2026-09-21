@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -405,6 +405,24 @@ async function assertAccessibleProject(
     throw new Error("Obra não encontrada ou sem permissão de acesso.");
 }
 
+async function assertAvailableWbsCode(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  code: string,
+  exceptNodeId?: number
+) {
+  const conditions = [eq(wbsNodes.projectId, projectId), eq(wbsNodes.code, code)];
+  if (exceptNodeId) conditions.push(ne(wbsNodes.id, exceptNodeId));
+  const [conflict] = await db
+    .select({ id: wbsNodes.id })
+    .from(wbsNodes)
+    .where(and(...conditions))
+    .limit(1);
+  if (conflict) {
+    throw new Error(`O código WBS ${code} já está em uso nesta obra.`);
+  }
+}
+
 function parseJsonValue(value: string | null | undefined): unknown {
   if (!value) return null;
   try {
@@ -624,7 +642,19 @@ async function persistPhase7Plan(
           )
         )
         .limit(1);
-      if (existing[0]) {
+      const existingByCode = existing[0]
+        ? existing
+        : await tx
+            .select({ id: wbsNodes.id })
+            .from(wbsNodes)
+            .where(
+              and(
+                eq(wbsNodes.projectId, projectId),
+                eq(wbsNodes.code, node.code)
+              )
+            )
+            .limit(1);
+      if (existingByCode[0]) {
         await tx
           .update(wbsNodes)
           .set({
@@ -638,8 +668,8 @@ async function persistPhase7Plan(
             plannedQuantity: node.plannedQuantity,
             sortOrder: node.sortOrder,
           })
-          .where(eq(wbsNodes.id, existing[0].id));
-        localWbsByExternalId.set(node.externalId, existing[0].id);
+          .where(eq(wbsNodes.id, existingByCode[0].id));
+        localWbsByExternalId.set(node.externalId, existingByCode[0].id);
       } else {
         const [created] = await tx
           .insert(wbsNodes)
@@ -673,19 +703,10 @@ async function persistPhase7Plan(
           )
         )
         .limit(1);
-      const [wbsNode] = await tx
-        .select({ id: wbsNodes.id })
-        .from(wbsNodes)
-        .where(
-          and(
-            eq(wbsNodes.projectId, projectId),
-            eq(wbsNodes.code, activity.eapRef)
-          )
-        )
-        .limit(1);
+      const wbsNodeId = localWbsByExternalId.get(activity.eapRef) ?? null;
       const values = {
         projectId,
-        wbsNodeId: wbsNode?.id ?? null,
+        wbsNodeId,
         externalId: activity.externalId,
         eapRef: activity.eapRef,
         wbsCode: activity.eapRef,
@@ -926,6 +947,12 @@ export const appRouter = router({
           )
           .limit(1);
         if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+        await assertAvailableWbsCode(
+          db,
+          input.projectId,
+          input.code,
+          input.nodeId
+        );
         await db
           .update(wbsNodes)
           .set({
@@ -958,6 +985,7 @@ export const appRouter = router({
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
+        await assertAvailableWbsCode(db, input.projectId, code);
         const [created] = await db.insert(wbsNodes).values({
           projectId: input.projectId,
           parentId: parent?.id ?? null,
@@ -1030,6 +1058,12 @@ export const appRouter = router({
           const updates = Array.from(desired.entries());
           if (updates.length) {
             const ids = updates.map(([id]) => id);
+            await tx.execute(sql`
+              UPDATE wbs_nodes
+              SET code = CONCAT('__wbs_tmp__', id)
+              WHERE projectId = ${input.projectId}
+                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            `);
             const parentCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.parentId}`), sql` `);
             const codeCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.code}`), sql` `);
             const levelCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.level}`), sql` `);
@@ -1070,7 +1104,11 @@ export const appRouter = router({
         if (!source) throw new Error("Item da EAP não encontrado nesta obra.");
         const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
-        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code: source.parentId ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}` : `${nextNumber}`, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).$returningId();
+        const code = source.parentId
+          ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
+          : `${nextNumber}`;
+        await assertAvailableWbsCode(db, input.projectId, code);
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).$returningId();
         return created;
       }),
     deleteWbsNode: protectedProcedure

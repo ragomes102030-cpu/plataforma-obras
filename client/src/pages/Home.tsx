@@ -1219,14 +1219,23 @@ export default function Home() {
                   </div>
                 </div>
               </section>
-              <GanttView
-                projectId={selected?.id ?? 1}
-                activities={activities}
-                search={search}
-                setSearch={setSearch}
-                selectedName={selected?.name || "Selecione uma obra"}
-                plannedStart={selected?.plannedStart}
-              />
+              <section className="panel portfolio-next-step">
+                <div>
+                  <p className="eyebrow accent">PRÓXIMO PASSO OPERACIONAL</p>
+                  <h3>Planeje a obra ativa em Cronogramas</h3>
+                  <p>
+                    O Portfólio mostra o resumo consolidado. Use Cronogramas
+                    para editar atividades, calcular CPM, controlar baseline e
+                    acompanhar o realizado.
+                  </p>
+                </div>
+                <button
+                  className="outline-button"
+                  onClick={() => setActiveNav("Cronogramas")}
+                >
+                  Abrir Cronogramas <ChevronRight size={15} />
+                </button>
+              </section>
             </>
           )}
           </div>
