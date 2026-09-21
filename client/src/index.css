@@ -3343,3 +3343,225 @@
     max-width: none;
   }
 }
+
+
+/* Segunda rodada: leitura de planejamento inspirada em Project/Primavera */
+.gantt-table-header > span:first-child {
+  letter-spacing: .08em;
+}
+.timeline-header > span {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.timeline-header > span b {
+  color: #607983;
+  font-size: 9px;
+}
+.timeline-header > span small {
+  color: #a0adb2;
+  font-size: 8px;
+  font-weight: 500;
+}
+.group-label {
+  min-height: 32px;
+}
+.group-label strong {
+  color: #506b76;
+  letter-spacing: .01em;
+}
+.group-count {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.gantt-bar {
+  box-shadow: 0 2px 5px #3f63730f;
+}
+.gantt-bar:hover {
+  filter: saturate(1.12) brightness(.98);
+  box-shadow: 0 3px 9px #3f63732b;
+}
+.lob-flow-frame {
+  overflow: hidden;
+}
+.lob-flow-head {
+  display: grid;
+  grid-template-columns: 170px minmax(500px, 1fr);
+  gap: 12px;
+  align-items: end;
+  padding: 14px 0 8px;
+  border-bottom: 1px solid #e7eff0;
+}
+.lob-flow-head > span {
+  color: #8b9ba1;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: .09em;
+}
+.lob-date-axis {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(42px, 1fr));
+  min-width: 560px;
+}
+.lob-date-axis span {
+  color: #87999f;
+  font-size: 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.lob-flow-body {
+  display: grid;
+  grid-template-columns: 170px minmax(500px, 1fr);
+  gap: 12px;
+  min-height: 300px;
+}
+.lob-flow-labels,
+.lob-flow-grid {
+  display: grid;
+  grid-template-rows: repeat(12, minmax(25px, 1fr));
+}
+.lob-flow-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 8px;
+  border-bottom: 1px solid #f0f3f4;
+}
+.lob-flow-label b {
+  flex: 0 0 auto;
+  color: #789099;
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.lob-flow-label span {
+  overflow: hidden;
+  color: #5b727c;
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lob-flow-grid {
+  position: relative;
+  min-width: 560px;
+  background: repeating-linear-gradient(to right, transparent 0 calc(100% / 13 - 1px), #e9eff0 calc(100% / 13 - 1px) calc(100% / 13));
+}
+.lob-flow-grid > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #dce7e9;
+  opacity: .85;
+}
+.lob-flow-row {
+  position: relative;
+  border-bottom: 1px solid #f0f3f4;
+}
+.lob-flow-bar {
+  position: absolute;
+  top: 6px;
+  height: 14px;
+  min-width: 20px;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px #3f637326;
+  transition: filter .15s ease, transform .15s ease;
+}
+.lob-flow-bar:hover {
+  z-index: 2;
+  filter: saturate(1.15) brightness(.97);
+  transform: translateY(-1px);
+}
+.lob-flow-bar.critical {
+  height: 16px;
+  top: 5px;
+  box-shadow: 0 0 0 2px #b78b584d, 0 2px 6px #3f637326;
+}
+.lob-flow-bar span {
+  position: absolute;
+  left: 7px;
+  top: 2px;
+  overflow: hidden;
+  max-width: calc(100% - 35px);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lob-flow-bar b {
+  position: absolute;
+  right: 5px;
+  top: 2px;
+  color: #fff;
+  font-size: 8px;
+}
+.lob-flow-row em {
+  position: absolute;
+  left: calc(var(--end, 100%) + 5px);
+  top: 8px;
+  color: #8ea0a6;
+  font-size: 8px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.lob-flow-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #e9eff0;
+}
+.lob-flow-footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #73878e;
+  font-size: 8px;
+}
+.lob-flow-footer i {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+}
+.lob-flow-footer .planned-line { background: #547b8b; }
+.lob-flow-footer .critical-line { height: 4px; background: #b78b58; }
+.lob-flow-note {
+  margin-left: auto;
+  color: #9aa8ad !important;
+}
+@media (max-width: 900px) {
+  .lob-flow-head,
+  .lob-flow-body {
+    grid-template-columns: 130px minmax(500px, 1fr);
+  }
+}
+
+.eap-structure-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 9px 20px;
+  border-bottom: 1px solid #edf1f2;
+  background: #fbfdfd;
+}
+.eap-structure-legend span {
+  color: #82949b;
+  font-size: 8px;
+}
+.eap-structure-legend b {
+  margin-right: 4px;
+  color: #58727d;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.eap-node.level-3 {
+  padding-left: 76px;
+}

@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Check, ChevronRight, Edit3, Layers3, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { McpE2EWorkbench } from "./McpE2EWorkbench";
 import { McpMutationWorkbench } from "./McpMutationWorkbench";
 import { McpProjectMapping } from "./McpProjectMapping";
@@ -25,6 +25,19 @@ export function EapView({
     },
   });
   const nodes = wbsQuery.data ?? [];
+  const displayNodes = useMemo(
+    () =>
+      [...nodes].sort((a, b) => {
+        const left = a.code.split(".").map(Number);
+        const right = b.code.split(".").map(Number);
+        for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+          const difference = (left[index] ?? -1) - (right[index] ?? -1);
+          if (difference !== 0) return difference;
+        }
+        return a.name.localeCompare(b.name, "pt-BR");
+      }),
+    [nodes]
+  );
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
@@ -96,11 +109,16 @@ export function EapView({
         <div className="panel-heading eap-heading">
           <div>
             <h3>Estrutura de entregas</h3>
-            <p>{nodes.length} itens persistidos no banco · clique em um item para editar</p>
+            <p>{nodes.length} itens persistidos · grupos organizam, pacotes delimitam o escopo e entregas viram medição</p>
           </div>
           <span className="live-badge">
             <span /> DADOS REAIS
           </span>
+        </div>
+        <div className="eap-structure-legend">
+          <span><b>Grupo</b> macroentrega</span>
+          <span><b>Pacote</b> unidade de controle</span>
+          <span><b>Entrega</b> item mensurável</span>
         </div>
         {wbsQuery.isPending ? (
           <div className="module-empty">Carregando a EAP da obra...</div>
@@ -124,7 +142,7 @@ export function EapView({
           </div>
         ) : (
           <div className="eap-tree">
-            {nodes.map(node => (
+            {displayNodes.map(node => (
               <button
                 className={`eap-node level-${node.level} ${selectedNodeId === node.id ? "selected" : ""}`}
                 key={node.id}

@@ -39,9 +39,9 @@ import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
+  { label: "EAP", icon: Layers3 },
   { label: "Orçamento", icon: WalletCards },
   { label: "Catálogo", icon: BookOpen },
-  { label: "EAP", icon: Layers3 },
   { label: "Cronogramas", icon: CalendarDays },
   { label: "Linha de Balanço", icon: Activity },
   { label: "Produção", icon: Gauge },
@@ -174,6 +174,16 @@ function GanttView({
       })),
     [activities, weekCount]
   );
+  const lobRows = useMemo(
+    () =>
+      activities.slice(0, 12).map(activity => ({
+        activity,
+        left: (activity.startOffset / maxDays) * 100,
+        width: Math.max((activity.durationDays / maxDays) * 100, 1.4),
+        end: activity.startOffset + activity.durationDays,
+      })),
+    [activities, maxDays]
+  );
   const toggle = (phase: string) =>
     setCollapsed(prev => ({ ...prev, [phase]: !prev[phase] }));
   return (
@@ -278,7 +288,7 @@ function GanttView({
         <div className="gantt-scroller">
           <div className="gantt-grid">
             <div className="gantt-table-header">
-              <span>WBS / ATIVIDADE</span>
+              <span>SERVIÇO / ATIVIDADE</span>
               <span>STATUS</span>
               <span>INÍCIO</span>
               <span>FIM</span>
@@ -290,7 +300,10 @@ function GanttView({
               }}
             >
               {Array.from({ length: weekCount }, (_, index) => (
-                <span key={index}>S{String(index + 1).padStart(2, "0")}</span>
+                <span key={index}>
+                  <b>S{String(index + 1).padStart(2, "0")}</b>
+                  <small>{formatDate(new Date(projectStart + index * 7 * 86400000))}</small>
+                </span>
               ))}
             </div>
             {Object.entries(grouped).map(([phase, phaseActivities]) => (
@@ -307,9 +320,9 @@ function GanttView({
                     className="phase-mark"
                     style={{ background: phaseColors[phase] || "#6b8292" }}
                   />
-                  <strong>Serviço · {phase}</strong>
+                  <strong>{phase}</strong>
                   <span className="group-count">
-                    {phaseActivities.length} atividades
+                    frente · {phaseActivities.length} {phaseActivities.length === 1 ? "atividade" : "atividades"}
                   </span>
                 </button>
                 {!collapsed[phase] &&
@@ -568,38 +581,41 @@ function GanttView({
             </div>
           </div>
           <div className="lob-chart">
-            {lobSeries.length ? (
-              <div className="lob-chart-frame">
+            {lobRows.length ? (
+              <div className="lob-chart-frame lob-flow-frame">
                 <div className="lob-chart-title">
-                  <div><strong>Avanço acumulado</strong><span>Planejado · escala semanal</span></div>
-                  <span className="lob-status"><span /> Sem realizado lançado</span>
+                  <div><strong>Planejamento por serviço e unidade</strong><span>Arraste visualmente a leitura do início ao fim de cada frente</span></div>
+                  <span className="lob-status"><span /> Planejado</span>
                 </div>
-                <svg viewBox="0 0 720 290" role="img" aria-label="Linha de Balanço planejada">
-                {[0, 25, 50, 75, 100].map(value => {
-                  const y = 244 - (value / 100) * 190;
-                  return (
-                    <g key={value}>
-                      <line x1="42" x2="680" y1={y} y2={y} className="lob-grid-line" />
-                      <text x="8" y={y + 4} className="lob-axis-label">{value}%</text>
-                    </g>
-                  );
-                })}
-                <line x1="42" x2="42" y1="54" y2="244" className="lob-axis-line" />
-                <line x1="42" x2="680" y1="244" y2="244" className="lob-axis-line" />
-                {lobSeries.map(({ activity, points }) => (
-                  <g key={activity.id}>
-                    <polyline points={points} fill="none" stroke={phaseColors[activity.phase] || "#6b8292"} strokeWidth={activity.critical === 1 ? "3.2" : "2.4"} strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx={points.split(" ").at(-1)?.split(",")[0]} cy={points.split(" ").at(-1)?.split(",")[1]} r={activity.critical === 1 ? "4" : "3"} fill={phaseColors[activity.phase] || "#6b8292"} />
-                  </g>
-                ))}
-                <text x="42" y="270" className="lob-axis-label">Início</text>
-                <text x="680" y="270" textAnchor="end" className="lob-axis-label">Semana {weekCount}</text>
-                </svg>
-                <div className="lob-series-list">
-                  {lobSeries.slice(0, 6).map(({ activity }) => (
-                    <span key={activity.id} title={`${activity.wbsCode} · ${activity.name}`}><i style={{ background: phaseColors[activity.phase] || "#6b8292" }} />{activity.wbsCode} · {activity.name}</span>
-                  ))}
+                <div className="lob-flow-head">
+                  <span>FRENTE / ATIVIDADE</span>
+                  <div className="lob-date-axis">
+                    {Array.from({ length: Math.min(weekCount + 1, 13) }, (_, index) => (
+                      <span key={index}>{formatDate(new Date(projectStart + Math.round((index / 12) * weekCount) * 7 * 86400000))}</span>
+                    ))}
+                  </div>
                 </div>
+                <div className="lob-flow-body">
+                  <div className="lob-flow-labels">
+                    {lobRows.map(({ activity }) => (
+                      <div key={activity.id} className="lob-flow-label" title={activity.name}>
+                        <b>{activity.wbsCode}</b><span>{activity.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="lob-flow-grid">
+                    {Array.from({ length: Math.min(weekCount + 1, 13) }, (_, index) => <i key={index} style={{ left: `${(index / Math.max(1, Math.min(weekCount, 12))) * 100}%` }} />)}
+                    {lobRows.map(({ activity, left, width, end }) => (
+                      <div key={activity.id} className="lob-flow-row">
+                        <div className={`lob-flow-bar ${activity.critical === 1 ? "critical" : ""}`} style={{ left: `${left}%`, width: `${width}%`, background: phaseColors[activity.phase] || "#6b8292" }} title={`${activity.wbsCode} · ${activity.name} · ${activity.durationDays} dias`}>
+                          <span>{activity.phase}</span><b>{activity.progress}%</b>
+                        </div>
+                          <em style={{ left: `${Math.min((end / maxDays) * 100 + 1, 94)}%` }}>{formatDate(new Date(projectStart + end * 86400000))}</em>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="lob-flow-footer"><span><i className="planned-line" /> Planejado</span><span><i className="critical-line" /> Atividade crítica</span><span className="lob-flow-note">Use o Gantt para editar datas, duração e avanço</span></div>
               </div>
             ) : (
               <div className="module-empty"><span>Inclua atividades no cronograma para calcular o ritmo planejado.</span></div>
