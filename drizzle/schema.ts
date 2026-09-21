@@ -175,6 +175,9 @@ export const scheduleActivities = mysqlTable(
     phase: varchar("phase", { length: 80 }).notNull(),
     startOffset: int("startOffset").notNull(),
     durationDays: int("durationDays").notNull(),
+    plannedQuantity: decimal("plannedQuantity", { precision: 14, scale: 3 }),
+    productivity: decimal("productivity", { precision: 14, scale: 3 }),
+    budgetItemId: int("budgetItemId"),
     progress: int("progress").default(0).notNull(),
     status: mysqlEnum("status", [
       "Não iniciado",
@@ -252,6 +255,35 @@ export const scheduleDependencies = mysqlTable(
       table.projectId,
       table.externalId
     ),
+  ]
+);
+
+export const planningResources = mysqlTable("planning_resources", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull().references(() => projects.id),
+  name: varchar("name", { length: 180 }).notNull(),
+  resourceType: mysqlEnum("resourceType", ["mao_de_obra", "equipamento", "material"]).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  capacityPerDay: decimal("capacityPerDay", { precision: 14, scale: 3 }),
+  costPerDay: decimal("costPerDay", { precision: 14, scale: 2 }),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const activityResourceAllocations = mysqlTable(
+  "activity_resource_allocations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    activityId: int("activityId").notNull().references(() => scheduleActivities.id),
+    resourceId: int("resourceId").notNull().references(() => planningResources.id),
+    quantity: decimal("quantity", { precision: 14, scale: 3 }).default("1").notNull(),
+    productivity: decimal("productivity", { precision: 14, scale: 3 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("activity_resource_unique_idx").on(table.activityId, table.resourceId),
+    index("activity_resource_activity_idx").on(table.activityId),
   ]
 );
 

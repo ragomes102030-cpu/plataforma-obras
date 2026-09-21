@@ -34,6 +34,7 @@ import { EapView } from "@/components/EapView";
 import { ProductionView } from "@/components/ProductionView";
 import { BudgetView } from "@/components/BudgetView";
 import { CatalogView } from "@/components/CatalogView";
+import { PlanningView } from "@/components/PlanningView";
 import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
 
 const nav = [
@@ -649,18 +650,7 @@ function ModuleView({
     return <RestrictionsView projectId={projectId} projectName={projectName} />;
   if (name === "Relatórios")
     return <ReportsView projectId={projectId} projectName={projectName} activities={activities} />;
-  if (name === "Cronogramas")
-    return (
-      <GanttView
-        key="cronograma"
-        projectId={projectId}
-        activities={activities}
-        search={search}
-        setSearch={setSearch}
-        selectedName={projectName}
-        plannedStart={plannedStart}
-      />
-    );
+  if (name === "Cronogramas") return <PlanningView projectId={projectId} projectName={projectName} />;
   if (name === "Linha de Balanço")
     return (
       <GanttView
