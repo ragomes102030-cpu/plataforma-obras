@@ -169,6 +169,13 @@ describe("runProjectOrchestrator", () => {
           dependencyCount: null,
           warnings: ["Nenhuma dependência cadastrada para a obra."],
           errors: ["MCP Cronograma indisponível; fallback local utilizado."],
+          validation: {
+            status: "blocked",
+            blockerCount: 1,
+            issues: ["A rede possui ciclo."],
+            projectDuration: null,
+            criticalPath: [],
+          },
         },
       },
       [{ role: "user", content: "Qual é a situação local?" }],
@@ -197,6 +204,8 @@ describe("runProjectOrchestrator", () => {
     expect(systemMessage).toContain("Fonte de evidências: local_db");
     expect(systemMessage).toContain("Nós EAP locais: 4");
     expect(systemMessage).toContain("MCP Cronograma indisponível");
+    expect(systemMessage).toContain("Validação determinística: blocked");
+    expect(systemMessage).toContain("A rede possui ciclo.");
   });
 
   it("não expõe ferramentas de escrita ao modelo", () => {

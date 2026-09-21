@@ -33,6 +33,8 @@ import { buildAgentProjectContext } from "./agent/context-builder";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
+import { validateEap } from "./construction/eap-validator";
+import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import {
   getAgentExecutionStatus,
   startAgentExecution,
@@ -1336,6 +1338,33 @@ export const appRouter = router({
                   evidenceSource.listDependencies(input.projectId),
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
+              const eapValidation = validateEap(eapResult.data ?? []);
+              const cpmResult = calculateDeterministicCpm(
+                activityResult.data ?? [],
+                dependencyResult.data ?? []
+              );
+              const evidenceErrors = results.flatMap(result =>
+                result.errors.map(error => error.message)
+              );
+              const validationIssues = [
+                ...eapValidation.issues.map(issue => issue.message),
+                ...cpmResult.issues.map(issue => issue.message),
+              ];
+              const blockerCount =
+                evidenceErrors.length +
+                eapValidation.issues.filter(issue => issue.severity === "error")
+                  .length +
+                cpmResult.issues.filter(issue => issue.severity === "error")
+                  .length;
+              const hasEnoughData =
+                Boolean(eapResult.data?.length) &&
+                Boolean(activityResult.data?.length);
+              const validationStatus: "valid" | "blocked" | "insufficient" =
+                blockerCount
+                  ? "blocked"
+                  : hasEnoughData
+                    ? "valid"
+                    : "insufficient";
               return {
                 source: Array.from(
                   new Set(results.map(result => result.source))
@@ -1346,9 +1375,14 @@ export const appRouter = router({
                 warnings: results.flatMap(result =>
                   result.warnings.map(warning => warning.message)
                 ),
-                errors: results.flatMap(result =>
-                  result.errors.map(error => error.message)
-                ),
+                errors: evidenceErrors,
+                validation: {
+                  status: validationStatus,
+                  blockerCount,
+                  issues: validationIssues,
+                  projectDuration: cpmResult.schedule?.projectDuration ?? null,
+                  criticalPath: cpmResult.schedule?.criticalPath ?? [],
+                },
               };
             })()
           : undefined;

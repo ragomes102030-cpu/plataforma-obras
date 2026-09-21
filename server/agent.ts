@@ -32,6 +32,13 @@ export type AgentProjectContext = {
     dependencyCount: number | null;
     warnings: string[];
     errors: string[];
+    validation?: {
+      status: "valid" | "blocked" | "insufficient";
+      blockerCount: number;
+      issues: string[];
+      projectDuration: number | null;
+      criticalPath: string[];
+    };
   };
   workspace?: {
     activeSection: string;

@@ -222,6 +222,12 @@ function formatContext(context: AgentProjectContext) {
         `Dependências locais consultadas: ${context.evidence.dependencyCount ?? "indisponível"}`,
         `Avisos de evidência: ${context.evidence.warnings.join(" | ") || "nenhum"}`,
         `Erros de evidência: ${context.evidence.errors.join(" | ") || "nenhum"}`,
+        context.evidence.validation
+          ? `Validação determinística: ${context.evidence.validation.status} | bloqueadores=${context.evidence.validation.blockerCount} | duração=${context.evidence.validation.projectDuration ?? "indisponível"} | caminho crítico=${context.evidence.validation.criticalPath.join(" → ") || "indisponível"}`
+          : "Validação determinística ainda não executada.",
+        context.evidence.validation?.issues.length
+          ? `Problemas determinísticos: ${context.evidence.validation.issues.join(" | ")}`
+          : "Problemas determinísticos: nenhum.",
       ].join("\n")
     : "Resumo de evidências locais ainda não carregado.";
   const coordinatorLines = coordinator
@@ -311,6 +317,7 @@ function buildSystem(
     "Você pode consultar MCPs, mas nesta versão todas as ferramentas são SOMENTE LEITURA.",
     "Nunca crie, atualize, exclua, salve baseline ou registre medição. Se o usuário pedir escrita, explique que será habilitada em fase posterior.",
     "Não invente datas, custos, medições ou restrições. Diferencie dado local, dado MCP e inferência.",
+    "Resultados de EAP, dependências e CPM calculados pelo backend são determinísticos. Se a validação estiver bloqueada ou insuficiente, não apresente cronograma, caminho crítico ou aprovação como válidos; explique o bloqueio e peça os dados faltantes.",
     "Siga esta ordem metodológica: (1) leia o descritivo e estruture a EAP; (2) derive as atividades necessárias; (3) valide a sequência construtiva e as precedências; (4) consulte durações e monte a rede PERT/CPM; (5) identifique caminho crítico e folgas; (6) consolide o cronograma/Gantt e a linha de base; (7) aloque recursos e interprete a produção; (8) use curva S e Linha de Balanço para análise e controle.",
     "A EAP é a estrutura-mãe: cronograma, Gantt, recursos, produção, curva S e Linha de Balanço devem ser rastreáveis a nós ou pacotes da EAP. Gantt é uma representação do cronograma, não uma fonte paralela. Linha de Balanço é prioritária para frentes repetitivas e não deve ser imposta a uma obra sem repetição.",
     "Ao analisar uma obra, priorize consultas na ordem EAP, cronograma/CPM, recursos/produção e então Gantt/LOB. Se uma conclusão depender de uma etapa anterior ausente, declare a lacuna em vez de preencher por inferência.",
