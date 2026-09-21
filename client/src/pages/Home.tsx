@@ -124,6 +124,7 @@ function GanttView({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
   const [drafts, setDrafts] = useState<Record<number, any>>({});
   const [draggingBar, setDraggingBar] = useState<{ id: number; startX: number; startOffset: number; durationDays: number } | null>(null);
   const [lobProductivityDrafts, setLobProductivityDrafts] = useState<Record<number, string>>({});
@@ -227,6 +228,7 @@ function GanttView({
             </span>
           </div>
           <p>{selectedName} · planejamento salvo</p>
+          <p className="gantt-help">Clique em uma frente para expandir detalhes. Ative “Editar Gantt” para alterar status, avanço, início, duração ou arrastar a barra.</p>
         </div>
         <div className="gantt-actions">
           <div className="compact-search">
@@ -374,7 +376,15 @@ function GanttView({
                         status: draft.status,
                       });
                     return (
-                      <div className="gantt-row" key={activity.id}>
+                      <div
+                        className={`gantt-row ${expandedActivityId === activity.id ? "is-expanded" : ""}`}
+                        key={activity.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={expandedActivityId === activity.id}
+                        onClick={() => setExpandedActivityId(current => current === activity.id ? null : activity.id)}
+                        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setExpandedActivityId(current => current === activity.id ? null : activity.id); } }}
+                      >
                         <div className="activity-cell">
                           <span className="wbs-code">{activity.wbsCode}</span>
                           {editMode ? (
@@ -528,12 +538,20 @@ function GanttView({
                           {editMode && (
                             <button
                               className="gantt-save-button"
-                              onClick={save}
+                              onClick={event => { event.stopPropagation(); save(); }}
                             >
                               Salvar
                             </button>
                           )}
                         </div>
+                      {expandedActivityId === activity.id && (
+                        <div className="gantt-detail-row">
+                          <strong>{activity.wbsCode} · {activity.name}</strong>
+                          <span>{activity.plannedQuantity ? `Quantidade planejada: ${activity.plannedQuantity}` : "Quantidade planejada não informada"}</span>
+                          <span>{activity.productivity ? `Produtividade: ${activity.productivity}/dia` : "Produtividade não informada"}</span>
+                          <span>{activity.critical === 1 ? "Caminho crítico" : "Folga não calculada nesta tela"}</span>
+                        </div>
+                      )}
                       </div>
                     );
                   })}
@@ -618,6 +636,7 @@ function GanttView({
           </div>
           <div className="lob-chart">
             {lobRows.length ? (
+              <div className="lob-chart-scroll">
               <div className="lob-chart-frame lob-flow-frame">
                 <div className="lob-chart-title">
                   <div><strong>Planejamento por serviço e unidade</strong><span>Leia o início, a duração e o fim de cada frente ao longo do calendário</span></div>
@@ -656,6 +675,7 @@ function GanttView({
                   </div>
                 </div>
                 <div className="lob-flow-footer"><span><i className="planned-line" /> Planejado</span><span><i className="critical-line" /> Atividade crítica</span><span className="lob-flow-note">Use o Gantt para editar datas, duração e avanço</span></div>
+              </div>
               </div>
             ) : (
               <div className="module-empty"><span>Inclua atividades no cronograma para calcular o ritmo planejado.</span></div>
@@ -1068,6 +1088,7 @@ export default function Home() {
                     Acompanhe o ritmo das suas obras e antecipe os próximos
                     movimentos.
                   </p>
+                  <p className="portfolio-context-note">Portfólio consolidado: os indicadores abaixo resumem todas as obras. Os alertas, atividades, EAP, orçamento e cronograma detalhados pertencem somente à obra ativa: <strong>{selected?.name || "nenhuma selecionada"}</strong>.</p>
                 </div>
                 <button
                   className="primary-button"

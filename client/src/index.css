@@ -3798,3 +3798,40 @@
     flex-wrap: wrap;
   }
 }
+
+
+/* Tema preto manus e controles de planejamento */
+:root { --background: #080a0c; --foreground: #eef2f4; --card: #111518; --card-foreground: #eef2f4; --muted: #151b1f; --muted-foreground: #a7b3ba; --border: #2a343a; --sidebar: #0c1012; }
+.app-frame { background: #080a0c; color: #eef2f4; }
+.app-sidebar { background: #0b0f11; border-color: #202a2f; }
+.main-content, .content-wrap { background: #080a0c; }
+.module-page, .panel, .module-card, .gantt-panel, .budget-table-card, .budget-item-card, .catalog-page .module-card, .planning-page .module-card, .agent-governance-card { background: #111518; border-color: #2a343a; color: #eef2f4; }
+.module-card p, .panel p, .module-hero p, .muted, .metric-detail, .planning-row span, .gantt-help, .lob-copy p:not(.eyebrow), .lob-chart-title span { color: #a7b3ba; }
+.module-hero h2, .panel-heading h3, .module-card h3, .lob-copy h4, .portfolio-main strong, .activity-name, .table-name, .planning-row strong { color: #f5f7f8; }
+input, select, textarea, .gantt-edit-input, .gantt-edit-select, .gantt-edit-number { background: #0b0f11; color: #eef2f4; border-color: #344149; }
+input::placeholder, textarea::placeholder { color: #77858d; }
+.outline-button, .icon-button, .toolbar-tab { color: #d6e0e4; border-color: #344149; background: #12191d; }
+.outline-button:hover, .toolbar-tab:hover, .toolbar-tab.active { background: #1b2b31; border-color: #50727d; color: #fff; }
+.primary-button { background: #8bc3d1; color: #071014; }
+.primary-button:hover { background: #b3e0e8; }
+.metric-card, .budget-summary-card, .lob-kpis div, .lob-chart-frame, .schedule-table-wrap, .budget-table-wrap, .catalog-list-row, .planning-row { background: #151c20; border-color: #2a343a; color: #eef2f4; }
+.budget-table th, .schedule-table th { background: #0b1012; color: #b9c8ce; border-color: #2a343a; }
+.budget-table td, .schedule-table td { border-color: #253138; color: #dce5e8; }
+.portfolio-row { background: #101619; border-color: #2a343a; color: #eef2f4; }
+.portfolio-row:hover, .portfolio-row.active { background: #18262b; border-color: #51737e; }
+.gantt-heading { border-bottom-color: #2a343a; }
+.gantt-help { font-size: .75rem; margin-top: .35rem; max-width: 62rem; }
+.gantt-row { cursor: pointer; }
+.gantt-row:hover, .gantt-row.is-expanded { background: rgba(96, 157, 171, .12); }
+.gantt-row:focus-visible { outline: 2px solid #8bc3d1; outline-offset: -2px; }
+.gantt-detail-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .55rem 1rem; align-items: center; padding: .55rem .8rem .7rem 1rem; background: #0c1215; border-top: 1px solid #25343a; color: #b6c7cc; font-size: .75rem; }
+.gantt-detail-row strong { color: #e9f2f4; }
+.lob-chart-scroll { overflow-x: auto; overflow-y: hidden; width: 100%; padding-bottom: .55rem; scrollbar-color: #557783 #0b1012; }
+.lob-chart-scroll .lob-flow-frame { min-width: 980px; }
+.lob-flow-grid { min-width: 860px; }
+.lob-chart-scroll::-webkit-scrollbar { height: 10px; }
+.lob-chart-scroll::-webkit-scrollbar-track { background: #0b1012; }
+.lob-chart-scroll::-webkit-scrollbar-thumb { background: #557783; border-radius: 999px; }
+.module-empty { background: #0d1316; border-color: #2a343a; color: #aebdc2; }
+.status-chip, .critical-chip, .focus-tag { filter: saturate(.85) brightness(.9); }
+@media (max-width: 900px) { .lob-chart-scroll .lob-flow-frame { min-width: 860px; } }

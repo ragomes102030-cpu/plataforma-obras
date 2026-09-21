@@ -115,7 +115,7 @@ export function BudgetView({
         <div className="module-card budget-summary-card budget-total-card">
           <span className="eyebrow">TOTAL DIRETO</span>
           <strong>{money(budgetQuery.data?.total ?? 0)}</strong>
-          <p>Quantidade × preço unitário. BDI entra em etapa posterior.</p>
+          <p>{budgetQuery.data?.items.length && (budgetQuery.data?.total ?? 0) === 0 ? "Itens iniciais sem preços: preencha ou vincule uma composição." : "Quantidade × preço unitário. BDI entra em etapa posterior."}</p>
         </div>
       </div>
 

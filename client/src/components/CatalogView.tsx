@@ -90,6 +90,13 @@ export function CatalogView() {
         <div className="module-card budget-summary-card budget-total-card"><span className="eyebrow">CUSTO UNITÁRIO</span><strong>{money(catalogQuery.data?.total ?? 0)}</strong><p>Coeficiente × preço congelado na composição.</p></div>
       </div>
 
+      {!(catalogQuery.data?.catalogs.length) && (
+        <section className="module-card catalog-onboarding-card">
+          <div className="panel-heading"><div><h3>Como começar o catálogo</h3><p>O catálogo é uma biblioteca de preços reutilizável; ele não é criado automaticamente com cada obra.</p></div><BookOpen size={18} className="sparkle" /></div>
+          <div className="focus-list"><div className="focus-item"><div className="focus-icon blue"><span>1</span></div><div><strong>Crie uma fonte de preços</strong><span>Informe nome, origem e período de referência.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>2</span></div><div><strong>Cadastre itens ou importe uma base</strong><span>Materiais, mão de obra, equipamentos e serviços.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>3</span></div><div><strong>Monte composições</strong><span>Use coeficientes para formar o custo unitário do serviço.</span></div></div></div>
+        </section>
+      )}
+
       <section className="module-card">
         <div className="panel-heading"><div><h3>Nova fonte de preços</h3><p>A fonte e o período acompanham cada referência importada ou cadastrada.</p></div><Plus size={18} className="sparkle" /></div>
         <form className="catalog-form-grid" onSubmit={event => { event.preventDefault(); if (catalogName && catalogPeriod) createCatalog.mutate({ name: catalogName, sourceType, state: catalogState || undefined, referencePeriod: catalogPeriod }); }}>

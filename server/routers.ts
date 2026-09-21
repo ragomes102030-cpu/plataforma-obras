@@ -259,6 +259,7 @@ async function seedStarterPlan(
     }))
   );
   await seedProductionCatalog(db, projectId);
+  await seedInitialBudget(db, projectId, wbsIdsByCode);
 }
 
 async function seedSolarAcaciasPlan(
@@ -308,6 +309,7 @@ async function seedSolarAcaciasPlan(
   const inserted = await db.insert(scheduleActivities).values(activityRows).$returningId();
   await db.insert(scheduleDependencies).values(inserted.slice(0, -1).map((item, index) => ({ projectId, predecessorId: item.id, successorId: inserted[index + 1].id, type: "FS" as const, lag: 0 })));
   await seedProductionCatalog(db, projectId);
+  await seedInitialBudget(db, projectId, nodeIdsByCode);
 }
 
 async function seedProductionCatalog(
@@ -335,6 +337,28 @@ async function seedProductionCatalog(
   await db
     .insert(productionUnits)
     .values(starterUnits.map(unit => ({ projectId, ...unit })));
+}
+
+async function seedInitialBudget(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  wbsIdsByCode: Map<string, number | undefined>
+) {
+  const existing = await db.select({ id: budgetVersions.id }).from(budgetVersions).where(eq(budgetVersions.projectId, projectId)).limit(1);
+  if (existing.length) return;
+  const [version] = await db.insert(budgetVersions).values({
+    projectId,
+    name: 'Orçamento inicial — preencher preços',
+    versionNumber: 1,
+    status: 'rascunho',
+    currency: 'BRL',
+    notes: 'Versão inicial criada para orientar o cadastro; preços ainda precisam ser confirmados.',
+  }).$returningId();
+  await db.insert(budgetItems).values([
+    { budgetVersionId: version.id, wbsNodeId: wbsIdsByCode.get('1.1') ?? wbsIdsByCode.get('1'), code: '01.001', description: 'Mobilização e canteiro', unit: 'vb', quantity: '1.000', unitPrice: '0.00', plannedDurationDays: 14, source: 'A preencher', sortOrder: 0 },
+    { budgetVersionId: version.id, wbsNodeId: wbsIdsByCode.get('2.1') ?? wbsIdsByCode.get('1.2'), code: '02.001', description: 'Fundação e contenções', unit: 'vb', quantity: '1.000', unitPrice: '0.00', plannedDurationDays: 28, source: 'A preencher', sortOrder: 1 },
+    { budgetVersionId: version.id, wbsNodeId: wbsIdsByCode.get('3.1') ?? wbsIdsByCode.get('1.3'), code: '03.001', description: 'Estrutura dos pavimentos', unit: 'vb', quantity: '1.000', unitPrice: '0.00', plannedDurationDays: 178, source: 'A preencher', sortOrder: 2 },
+  ]);
 }
 
 const accessibleProjectCondition = (projectId: number, userId: number) =>

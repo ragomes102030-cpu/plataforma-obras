@@ -197,6 +197,41 @@ export function validateReadonlyResponse(content: string) {
   return content;
 }
 
+function normalizeReadonlyResponse(content: string, context: AgentProjectContext) {
+  try {
+    return validateReadonlyResponse(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Resposta fora do contrato.";
+    const attention = context.activities
+      .filter(activity => activity.status === "Em risco" || activity.critical)
+      .slice(0, 5)
+      .map(activity => `${activity.wbsCode} · ${activity.name}`)
+      .join("; ") || "Nenhuma atividade crítica ou em risco foi identificada nos dados locais.";
+    return [
+      "MARCO ATUAL",
+      "Leitura operacional da obra com dados locais disponíveis.",
+      "",
+      "EVIDÊNCIAS CONSULTADAS",
+      `Obra ${context.project.code} · ${context.project.name}; ${context.activities.length} atividade(s) local(is).`,
+      "",
+      "PROPOSTA",
+      content.trim() || "Reexecutar a análise com o contexto da obra e a pergunta atual.",
+      "",
+      "EXEMPLOS/REFERÊNCIAS",
+      `Atividades que merecem atenção inicial: ${attention}`,
+      "",
+      "DIVERGÊNCIAS E LACUNAS",
+      `${message} Os dados locais foram preservados; MCPs e campos ausentes não foram inventados.`,
+      "",
+      "IMPACTO DE APROVAR",
+      "Nenhuma alteração será gravada. A aprovação apenas confirma a leitura deste marco.",
+      "",
+      "PRÓXIMA DECISÃO DO CLIENTE",
+      "Você deseja revisar esta leitura com foco nas atividades listadas antes de avançar?",
+    ].join("\n");
+  }
+}
+
 function formatContext(context: AgentProjectContext) {
   const activityLines = context.activities
     .slice(0, 80)
@@ -328,6 +363,7 @@ function buildSystem(
     "No MARCO 3, derive cada atividade de um pacote/nó da EAP e mostre eap_ref, nome, duração ou dados PERT, unidade de produção e premissas. Confirme o quadro de sequenciação antes de discutir datas. No MARCO 4, use dependências válidas, rejeite ciclos, calcule CPM e explique caminho crítico e folgas.",
     "No MARCO 5, trate o Gantt como representação do cronograma aprovado. A baseline só pode ser proposta depois da aprovação do cliente e nunca deve ser tratada como aprovada por inferência. No MARCO 6, use Linha de Balanço apenas se houver unidades repetitivas; mostre ritmo, interferências e alternativas de equipes como recomendações, não como fato executado.",
     "Toda resposta em marco deve usar este formato: MARCO ATUAL; EVIDÊNCIAS CONSULTADAS; PROPOSTA; EXEMPLOS/REFERÊNCIAS; DIVERGÊNCIAS E LACUNAS; IMPACTO DE APROVAR; PRÓXIMA DECISÃO DO CLIENTE. Termine com uma pergunta inequívoca de aprovação ou revisão.",
+    "Responda diretamente à mensagem mais recente do cliente. Não repita uma resposta anterior por padrão: compare a pergunta atual com o histórico, destaque o que mudou e use os dados atuais da obra. Se o cliente perguntar quais atividades merecem atenção, devolva uma lista priorizada com WBS, motivo e próximo passo.",
     "Atue também como auditor técnico: procure ativamente contradições entre o descritivo do cliente, a EAP, as atividades, as precedências, o CPM, a baseline, o Gantt, a produção e a Linha de Balanço. Não espere o cliente perguntar. Classifique cada achado como estrutural, semântico, quantitativo, unidade, escopo, temporal, dependência/ciclo, referência EAP quebrada, progresso impossível, duplicidade ou incompatibilidade entre domínios.",
     "Para cada erro ou suspeita, mostre evidência concreta, fonte e identificador (EAP_ID/uid, atividade, dependência, baseline ou unidade), explique o impacto, informe o grau de confiança e proponha a correção sem executá-la. Nunca corrija silenciosamente dado informado pelo cliente. Se houver duas interpretações plausíveis, apresente ambas e peça decisão.",
     "Faça verificações cruzadas sempre que houver dados suficientes: quantidade e unidade da EAP versus atividade; eap_ref versus nós existentes; duração versus datas; precedências versus sequência construtiva; caminho crítico versus datas do cronograma; progresso versus baseline; ritmo da LOB versus produtividade e número de equipes; unidades repetitivas versus aplicabilidade da LOB. Um resultado tecnicamente válido pode ainda conter um aviso semântico: diferencie erro bloqueador, alerta e recomendação.",
@@ -430,8 +466,7 @@ export async function runProjectOrchestrator(
       provider: response.provider,
     });
     if (!assistant.tool_calls?.length) {
-      const content = parseContent(response);
-      validateReadonlyResponse(content);
+      const content = normalizeReadonlyResponse(parseContent(response), context);
       await emit({ type: "response_parsed" });
       const successfulDomains = Array.from(
         new Set(
