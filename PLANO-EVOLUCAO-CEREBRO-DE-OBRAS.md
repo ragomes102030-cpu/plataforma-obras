@@ -120,6 +120,8 @@ A Fase 1 comprovou a leitura simulada em seis cenários, homologou os três MCPs
 
 ### Fase 3 — Validações determinísticas e CPM
 
+**Estado:** em andamento; entrega 3A concluída no checkpoint `9c86105`.
+
 **Objetivo:** retirar da LLM os cálculos de consistência, dependências e caminho crítico.
 
 **Escopo:**
@@ -136,9 +138,11 @@ A Fase 1 comprovou a leitura simulada em seis cenários, homologou os três MCPs
 
 **Testes obrigatórios:** grafo linear, grafo paralelo, ciclo, atividade sem duração, dependência FS/SS/FF/SF, `lag`, atividade sem EAP e cronograma vazio.
 
-**Checkpoint:** `feat: adicionar validadores e calculo cpm`.
+**Checkpoint 3A:** `9c86105` — `feat: adicionar validadores determinísticos e CPM`.
 
-**Retomada:** começar pelos testes unitários dos calculadores. Não conectar o resultado à LLM antes de os testes de grafo passarem.
+**Resultado 3A:** 61 testes verdes, validadores de EAP/dependências, CPM encapsulado e correção da relação SF no calculador compartilhado.
+
+**Retomada:** criar `ConstructionValidationSnapshot`, executar os validadores sobre evidências normalizadas e só então conectar o resumo ao orquestrador. Não liberar escrita, baseline ou outbox.
 
 ---
 

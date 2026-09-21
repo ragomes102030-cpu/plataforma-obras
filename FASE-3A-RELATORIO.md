@@ -38,17 +38,17 @@ Durante a auditoria foi encontrado e corrigido um erro existente na relação **
 
 ## Auditoria
 
-| Verificação | Resultado |
-|---|---|
-| `pnpm check` | Passou |
-| `pnpm test` | **61 testes passaram em 15 arquivos** |
-| `pnpm build` | Passou |
-| Prettier | Passou após correção final |
-| `git diff --check` | Passou |
-| Banco | Não alterado |
-| LLM/orquestrador | Não conectado nesta etapa |
-| Mutação | Nenhuma |
-| Deploy | Não executado |
+| Verificação        | Resultado                             |
+| ------------------ | ------------------------------------- |
+| `pnpm check`       | Passou                                |
+| `pnpm test`        | **61 testes passaram em 15 arquivos** |
+| `pnpm build`       | Passou                                |
+| Prettier           | Passou após correção final            |
+| `git diff --check` | Passou                                |
+| Banco              | Não alterado                          |
+| LLM/orquestrador   | Não conectado nesta etapa             |
+| Mutação            | Nenhuma                               |
+| Deploy             | Não executado                         |
 
 O build continua exibindo somente o aviso preexistente de chunks frontend acima de 500 kB.
 
