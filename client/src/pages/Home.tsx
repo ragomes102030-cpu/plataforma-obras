@@ -815,6 +815,9 @@ export default function Home() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectLocation, setNewProjectLocation] = useState("");
+  const [newProjectStart, setNewProjectStart] = useState("");
+  const [newProjectFinish, setNewProjectFinish] = useState("");
   const [createError, setCreateError] = useState("");
   const utils = trpc.useUtils();
   const createProjectMutation = trpc.projects.create.useMutation({
@@ -875,7 +878,9 @@ export default function Home() {
     if (!newProjectName.trim()) return;
     createProjectMutation.mutate({
       name: newProjectName.trim(),
-      location: "A cadastrar",
+      location: newProjectLocation.trim() || "A cadastrar",
+      plannedStart: newProjectStart ? new Date(`${newProjectStart}T00:00:00`) : undefined,
+      plannedFinish: newProjectFinish ? new Date(`${newProjectFinish}T00:00:00`) : undefined,
     });
   };
   const createPending = createProjectMutation.isPending;
@@ -1245,6 +1250,11 @@ export default function Home() {
                 placeholder="Ex.: Edifício Aurora"
               />
             </label>
+            <div className="modal-form-grid">
+              <label>Local<input value={newProjectLocation} onChange={event => setNewProjectLocation(event.target.value)} placeholder="Ex.: Juazeiro do Norte - CE" /></label>
+              <label>Início previsto<input type="date" value={newProjectStart} onChange={event => setNewProjectStart(event.target.value)} /></label>
+              <label>Fim previsto<input type="date" value={newProjectFinish} onChange={event => setNewProjectFinish(event.target.value)} /></label>
+            </div>
             <p className="modal-note">
               A obra será persistida no banco como planejamento inicial e ficará
               vinculada à sua conta.

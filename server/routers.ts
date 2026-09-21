@@ -259,6 +259,53 @@ async function seedStarterPlan(
   await seedProductionCatalog(db, projectId);
 }
 
+async function seedSolarAcaciasPlan(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+) {
+  type NodeType = "grupo" | "pacote" | "entrega";
+  let order = 0;
+  const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
+    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).$returningId();
+    return created.id;
+  };
+  const rootId = await addNode(null, "1", "Edifício Residencial Solar das Acácias", 1, "grupo");
+  const addPhase = async (code: string, name: string) => addNode(rootId, code, name, 2, "pacote");
+  const addLocationPackages = async (parentId: number, code: string, location: string, packages: Array<[string, string, string?, number?]>) => {
+    const locationId = await addNode(parentId, code, location, 3, "pacote");
+    for (const [suffix, name, unit, quantity] of packages) await addNode(locationId, `${code}.${suffix}`, name, 4, "entrega", unit, quantity);
+  };
+  const preliminary = await addPhase("1.1", "Serviços preliminares e implantação");
+  await addLocationPackages(preliminary, "1.1.1", "Canteiro e mobilização", [["1", "Instalação do canteiro", "mês", 1], ["2", "Locação e gabarito", "m²", 6800], ["3", "Ligações provisórias", "un", 1]]);
+  await addLocationPackages(preliminary, "1.1.2", "Administração direta", [["1", "Planejamento executivo e compatibilização", "mês", 24], ["2", "Segurança, qualidade e meio ambiente", "mês", 24]]);
+  const foundation = await addPhase("1.2", "Fundação e contenções");
+  await addLocationPackages(foundation, "1.2.1", "Subsolo e escavação", [["1", "Escavação do subsolo", "m³", 2400], ["2", "Cortina de contenção em concreto", "m²", 850], ["3", "Impermeabilização de contenção", "m²", 850]]);
+  await addLocationPackages(foundation, "1.2.2", "Fundação profunda", [["1", "Estacas hélice contínua Ø40 cm", "m", 768], ["2", "Blocos de coroamento", "un", 48], ["3", "Vigas baldrame e arranques", "m", 220]]);
+  const structure = await addPhase("1.3", "Estrutura de concreto armado");
+  const structuralLocations = ["Laje do subsolo", "Laje do térreo", ...Array.from({ length: 8 }, (_, index) => `Laje do pavimento-tipo ${index + 2}`), "Laje de cobertura"];
+  for (let index = 0; index < structuralLocations.length; index += 1) {
+    const location = structuralLocations[index];
+    await addLocationPackages(structure, `1.3.${index + 1}`, location, [["1", "Formas de compensado plastificado", "m²", index > 1 && index < 10 ? 1100 : 1000], ["2", "Armação de aço", "kg", index > 1 && index < 10 ? 12500 : 10500], ["3", "Pilares, vigas e escoramento", "m³", index > 1 && index < 10 ? 145 : 130], ["4", "Concretagem da laje", "m³", index > 1 && index < 10 ? 145 : 130], ["5", "Cura, desforma e reescoramento", "dia", 7]]);
+  }
+  const masonry = await addPhase("1.4", "Vedação e fachadas");
+  const masonryLocations = ["Subsolo", "Térreo", ...Array.from({ length: 8 }, (_, index) => `Pavimento-tipo ${index + 2}`), "Cobertura"];
+  for (let index = 0; index < masonryLocations.length; index += 1) await addLocationPackages(masonry, `1.4.${index + 1}`, masonryLocations[index], [["1", "Alvenaria de blocos cerâmicos", "m²", index > 1 && index < 10 ? 780 : 520], ["2", "Vergas, contravergas e encunhamento", "m", 260], ["3", "Revestimento externo base", "m²", 300]]);
+  const installations = await addPhase("1.5", "Instalações prediais");
+  await addLocationPackages(installations, "1.5.1", "Prumadas e áreas comuns", [["1", "Instalações hidrossanitárias", "m", 1800], ["2", "Instalações elétricas e SPDA", "m", 4200], ["3", "Gás e combate a incêndio", "m", 1200], ["4", "Infraestrutura dos elevadores", "un", 2]]);
+  await addLocationPackages(installations, "1.5.2", "Unidades privativas", [["1", "Pontos hidrossanitários", "un", 256], ["2", "Pontos elétricos", "un", 980], ["3", "Sistemas de medição", "un", 64]]);
+  const finishes = await addPhase("1.6", "Revestimentos e acabamentos");
+  await addLocationPackages(finishes, "1.6.1", "Áreas internas", [["1", "Emboço e reboco interno", "m²", 15800], ["2", "Contrapiso", "m²", 5600], ["3", "Piso cerâmico", "m²", 4900], ["4", "Pintura interna", "m²", 16200]]);
+  await addLocationPackages(finishes, "1.6.2", "Fachadas e áreas externas", [["1", "Reboco externo", "m²", 3600], ["2", "Textura e pintura externa", "m²", 3600], ["3", "Esquadrias de alumínio", "un", 320], ["4", "Guarda-corpos de vidro", "m", 680]]);
+  const delivery = await addPhase("1.7", "Comissionamento e entrega");
+  await addLocationPackages(delivery, "1.7.1", "Áreas comuns e cobertura", [["1", "Impermeabilização da cobertura", "m²", 720], ["2", "Barrilete e reservatório superior", "un", 1], ["3", "Casa de máquinas e elevadores", "un", 2], ["4", "Comissionamento dos sistemas", "mês", 2]]);
+  await addLocationPackages(delivery, "1.7.2", "Unidades e documentação", [["1", "Louças e metais", "un", 64], ["2", "Testes e entrega das unidades", "un", 32], ["3", "As built, manual e habite-se", "un", 1]]);
+  const activityRows = structuralLocations.map((location, index) => ({ projectId, externalId: `SOL-EST-${index + 1}`, eapRef: `1.3.${index + 1}.4`, wbsCode: `1.3.${index + 1}.4`, name: `Ciclo estrutural — ${location}`, phase: "Estrutura", startOffset: 120 + index * 14, durationDays: 14, plannedQuantity: "1", productivity: "0.071", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: index }));
+  activityRows.push({ projectId, externalId: "SOL-FUND-01", eapRef: "1.2.1.1", wbsCode: "1.2.1.1", name: "Escavação e contenção do subsolo", phase: "Fundação", startOffset: 20, durationDays: 60, plannedQuantity: "2400", productivity: "40", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: activityRows.length });
+  const inserted = await db.insert(scheduleActivities).values(activityRows).$returningId();
+  await db.insert(scheduleDependencies).values(inserted.slice(0, -1).map((item, index) => ({ projectId, predecessorId: item.id, successorId: inserted[index + 1].id, type: "FS" as const, lag: 0 })));
+  await seedProductionCatalog(db, projectId);
+}
+
 async function seedProductionCatalog(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
@@ -987,10 +1034,12 @@ export const appRouter = router({
               plannedFinish,
             })
             .$returningId();
-          await seedStarterPlan(
-            tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>,
-            createdId.id
-          );
+          const seedDb = tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>;
+          if (input.name.toLowerCase().includes("solar das acácias")) {
+            await seedSolarAcaciasPlan(seedDb, createdId.id);
+          } else {
+            await seedStarterPlan(seedDb, createdId.id);
+          }
           const [created] = await tx
             .select()
             .from(projects)
