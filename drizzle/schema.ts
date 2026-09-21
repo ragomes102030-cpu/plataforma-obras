@@ -324,6 +324,62 @@ export const productionEntries = mysqlTable("production_entries", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const budgetVersions = mysqlTable(
+  "budget_versions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    versionNumber: int("versionNumber").notNull(),
+    status: mysqlEnum("status", ["rascunho", "em_revisao", "aprovado", "arquivado"])
+      .default("rascunho")
+      .notNull(),
+    currency: varchar("currency", { length: 3 }).default("BRL").notNull(),
+    notes: text("notes"),
+    createdBy: int("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("budget_versions_project_version_idx").on(
+      table.projectId,
+      table.versionNumber
+    ),
+    index("budget_versions_project_idx").on(table.projectId),
+  ]
+);
+
+export const budgetItems = mysqlTable(
+  "budget_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    budgetVersionId: int("budgetVersionId")
+      .notNull()
+      .references(() => budgetVersions.id),
+    wbsNodeId: int("wbsNodeId").references(() => wbsNodes.id),
+    code: varchar("code", { length: 48 }).notNull(),
+    description: varchar("description", { length: 240 }).notNull(),
+    unit: varchar("unit", { length: 32 }).notNull(),
+    quantity: decimal("quantity", { precision: 14, scale: 3 }).notNull(),
+    unitPrice: decimal("unitPrice", { precision: 14, scale: 2 }).notNull(),
+    source: varchar("source", { length: 80 }),
+    referencePeriod: varchar("referencePeriod", { length: 20 }),
+    compositionNote: text("compositionNote"),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("budget_items_version_code_idx").on(
+      table.budgetVersionId,
+      table.code
+    ),
+    index("budget_items_version_idx").on(table.budgetVersionId),
+  ]
+);
+
 export const llmProviderSettings = mysqlTable("llm_provider_settings", {
   id: int("id").primaryKey(),
   encryptedConfig: text("encryptedConfig").notNull(),

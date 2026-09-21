@@ -22,6 +22,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Users,
+  WalletCards,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -30,10 +31,12 @@ import { AgentSidebar } from "@/components/AgentSidebar";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
 import { EapView } from "@/components/EapView";
 import { ProductionView } from "@/components/ProductionView";
+import { BudgetView } from "@/components/BudgetView";
 import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
+  { label: "Orçamento", icon: WalletCards },
   { label: "EAP", icon: Layers3 },
   { label: "Cronogramas", icon: CalendarDays },
   { label: "Linha de Balanço", icon: Activity },
@@ -632,6 +635,8 @@ function ModuleView({
   const riskActivities = activities.filter(activity => activity.status === "Em risco");
   const completedActivities = activities.filter(activity => activity.progress >= 100);
   if (name === "Agente IA") return <AgentView />;
+  if (name === "Orçamento")
+    return <BudgetView projectId={projectId} projectName={projectName} />;
   if (name === "EAP")
     return <EapView projectId={projectId} projectName={projectName} />;
   if (name === "Produção")
@@ -955,6 +960,7 @@ export default function Home() {
               }
               description={
                 {
+                  Orçamento: "Serviços, quantitativos, preços e versões do orçamento.",
                   EAP: "Escopo, pacotes de trabalho e estrutura de entregas.",
                   Cronogramas: "Planejamento, baseline e caminho crítico.",
                   Produção: "Ritmos, equipes e avanço físico.",

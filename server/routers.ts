@@ -17,6 +17,8 @@ import {
   scheduleActivities,
   scheduleDependencies,
   wbsNodes,
+  budgetVersions,
+  budgetItems,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -1095,6 +1097,112 @@ export const appRouter = router({
             notes: input.notes || null,
             status: input.status,
             createdBy: ctx.user.id,
+          })
+          .$returningId();
+        return { id: createdId.id };
+      }),
+  }),
+  budgets: router({
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { versions: [], activeVersionId: null, items: [], total: 0 };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versions = await db
+          .select()
+          .from(budgetVersions)
+          .where(eq(budgetVersions.projectId, input.projectId))
+          .orderBy(desc(budgetVersions.versionNumber));
+        const active = versions[0];
+        const items = active
+          ? await db
+              .select()
+              .from(budgetItems)
+              .where(eq(budgetItems.budgetVersionId, active.id))
+              .orderBy(budgetItems.sortOrder)
+          : [];
+        const total = items.reduce(
+          (sum, item) => sum + Number(item.quantity) * Number(item.unitPrice),
+          0
+        );
+        return { versions, activeVersionId: active?.id ?? null, items, total };
+      }),
+    createVersion: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          name: z.string().trim().min(2).max(160),
+          notes: z.string().trim().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const existing = await db
+          .select({ versionNumber: budgetVersions.versionNumber })
+          .from(budgetVersions)
+          .where(eq(budgetVersions.projectId, input.projectId))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        const [createdId] = await db
+          .insert(budgetVersions)
+          .values({
+            projectId: input.projectId,
+            name: input.name,
+            versionNumber: (existing[0]?.versionNumber ?? 0) + 1,
+            status: "rascunho",
+            notes: input.notes || null,
+            createdBy: ctx.user.id,
+          })
+          .$returningId();
+        return { id: createdId.id };
+      }),
+    createItem: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          budgetVersionId: z.number().int().positive(),
+          code: z.string().trim().min(1).max(48),
+          description: z.string().trim().min(2).max(240),
+          unit: z.string().trim().min(1).max(32),
+          quantity: z.number().positive(),
+          unitPrice: z.number().nonnegative(),
+          source: z.string().trim().max(80).optional(),
+          referencePeriod: z.string().trim().max(20).optional(),
+          wbsNodeId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [version] = await db
+          .select({ id: budgetVersions.id, status: budgetVersions.status })
+          .from(budgetVersions)
+          .where(
+            and(
+              eq(budgetVersions.id, input.budgetVersionId),
+              eq(budgetVersions.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!version) throw new Error("Versão de orçamento não encontrada.");
+        if (version.status === "aprovado" || version.status === "arquivado")
+          throw new Error("Esta versão não aceita novos itens.");
+        const [createdId] = await db
+          .insert(budgetItems)
+          .values({
+            budgetVersionId: input.budgetVersionId,
+            wbsNodeId: input.wbsNodeId,
+            code: input.code,
+            description: input.description,
+            unit: input.unit,
+            quantity: input.quantity.toFixed(3),
+            unitPrice: input.unitPrice.toFixed(2),
+            source: input.source || null,
+            referencePeriod: input.referencePeriod || null,
           })
           .$returningId();
         return { id: createdId.id };
