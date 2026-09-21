@@ -12,7 +12,8 @@
     "test": "vitest run",
     "phase1:battery": "tsx scripts/phase1-readonly-battery.ts",
     "e2e:fictitious": "tsx scripts/e2e-fictitious.ts",
-    "db:push": "tsx scripts/repair-wbs-identity.ts && drizzle-kit push"
+    "db:push": "tsx scripts/repair-wbs-identity.ts && drizzle-kit push",
+    "db:migrate:integrity": "tsx scripts/repair-wbs-identity.ts && tsx scripts/migrate-wbs-integrity.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

@@ -3,7 +3,7 @@ services:
     name: plataforma-obras-api
     runtime: node
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm db:push && pnpm build
+    buildCommand: pnpm install --frozen-lockfile && pnpm db:migrate:integrity && pnpm build
     startCommand: pnpm start
     autoDeploy: true
     healthCheckPath: /healthz
