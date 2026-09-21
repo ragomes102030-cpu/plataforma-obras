@@ -2,7 +2,7 @@
 
 **Data:** 20 de setembro de 2026  
 **Base:** `9c86105` — validadores determinísticos  
-**Estado:** concluída antes do deploy.
+**Estado:** concluída e publicada.
 
 ## Resultado
 
@@ -34,22 +34,28 @@ Quando o estado é `blocked` ou `insufficient`, o prompt instrui o agente a apre
 
 ## Auditoria
 
-| Verificação        | Resultado                         |
-| ------------------ | --------------------------------- |
-| `pnpm check`       | Passou                            |
-| `pnpm test`        | 61 testes passaram em 15 arquivos |
-| `pnpm build`       | Passou                            |
-| Prettier           | Passou                            |
-| `git diff --check` | Passou antes do commit            |
-| Banco              | Nenhuma migração ou mutação       |
-| MCP                | Somente leitura                   |
-| Deploy             | Executado após este checkpoint    |
+| Verificação        | Resultado                             |
+| ------------------ | ------------------------------------- |
+| `pnpm check`       | Passou                                |
+| `pnpm test`        | 61 testes passaram em 15 arquivos     |
+| `pnpm build`       | Passou                                |
+| Prettier           | Passou                                |
+| `git diff --check` | Passou antes do commit                |
+| Banco              | Nenhuma migração ou mutação           |
+| MCP                | Somente leitura                       |
+| Deploy             | Render `live`; HTTP 200 em `/healthz` |
 
 O build exibe apenas o aviso conhecido de chunks frontend acima de 500 kB.
 
-## Checkpoint de código
+## Checkpoints de código e publicação
 
-O fechamento da Fase 3 será versionado em commit separado desta documentação. O hash final deve ser registrado no plano mestre após o commit.
+| Commit    | Resultado                                            |
+| --------- | ---------------------------------------------------- |
+| `9c86105` | Validadores determinísticos e CPM                    |
+| `e54d10f` | Snapshot determinístico conectado ao agente          |
+| `6fd7863` | Plano mestre atualizado e deploy automático iniciado |
+
+O commit `6fd7863` foi detectado pelo serviço Render `plataforma-obras-api` como deploy `dep-dao82368bjmc73b4u1tg`, com status final `live` e término às `2026-09-21T00:59:33Z`.
 
 ## Limitações preservadas
 
