@@ -51,11 +51,11 @@ Não misturar duas fases no mesmo commit quando a segunda ainda não foi validad
 
 A base aprovada possui execução assíncrona, `request_id`, polling, eventos, estados terminais, contrato de resposta somente leitura, bateria simulada e E2E de MCPs. Os pontos de retorno principais são:
 
-| Checkpoint | Conteúdo |
-|---|---|
-| `b595566` | Execução observável e confiável do agente. |
-| `6e40c0e` | Prova em leitura, contrato textual, bateria determinística e relatórios. |
-| `TESTE-REAL-2026-09-20.md` | Teste autenticado real; EAP e Cronograma MCP retornaram HTTP 502. |
+| Checkpoint                 | Conteúdo                                                                 |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `b595566`                  | Execução observável e confiável do agente.                               |
+| `6e40c0e`                  | Prova em leitura, contrato textual, bateria determinística e relatórios. |
+| `TESTE-REAL-2026-09-20.md` | Teste autenticado real; EAP e Cronograma MCP retornaram HTTP 502.        |
 
 Nenhuma fase posterior deve remover os MCPs. O objetivo é fazer o banco local funcionar como fonte primária e deixar os MCPs como fallback, auditoria e sincronização.
 
@@ -85,6 +85,8 @@ A Fase 1 comprovou a leitura simulada em seis cenários, homologou os três MCPs
 
 ### Fase 2 — Leitura local de EAP e Cronograma
 
+**Estado:** concluída no checkpoint `a65c3df`.
+
 **Objetivo:** permitir que o agente responda usando o banco local mesmo quando os MCPs estiverem indisponíveis.
 
 **Escopo:**
@@ -106,9 +108,13 @@ A Fase 1 comprovou a leitura simulada em seis cenários, homologou os três MCPs
 
 **Testes obrigatórios:** obra vazia, obra com EAP, obra com atividades, dependência entre projetos diferentes, MCP indisponível e fallback local.
 
-**Checkpoint:** `feat: adicionar fonte local de evidencias`.
+**Checkpoint:** `a65c3df` — `feat: integrar fallback de evidencias MCP`.
 
-**Retomada:** continuar no diretório `server/construction/`, revisar primeiro os tipos existentes em `drizzle/schema.ts` e só depois conectar o roteador ao orquestrador.
+**Resultado:** fonte local, roteador `local-first`, adaptador MCP comum, preservação de erros HTTP 502 e integração do resumo de evidências no `agent.chat`. Foram validados 50 testes em 12 arquivos e build de produção.
+
+**Limitação:** o contexto inclui contagens, fonte, avisos e erros; detalhes completos continuam sob consulta de ferramenta para evitar inflar o prompt. Gantt/LOB estruturado permanece para etapa posterior.
+
+**Próxima fase:** Fase 3 — validações determinísticas e CPM.
 
 ---
 
@@ -298,26 +304,27 @@ Nenhuma fase pode ser considerada concluída se:
 
 ## 7. Próximo ponto de continuação
 
-A próxima execução deve começar na **Fase 2 — Leitura local de EAP e Cronograma**.
+A próxima execução deve começar na **Fase 3 — Validações determinísticas e CPM**.
 
 Primeiro passo:
 
 ```text
-Criar os tipos de evidência e uma implementação somente leitura de
-LocalDatabaseEvidenceSource para wbs_nodes, schedule_activities e
-schedule_dependencies, sem alterar ainda o fluxo principal do agente.
+Criar primeiro os testes de grafo para validação de dependências e CPM,
+sem conectar cálculos à LLM até que os cenários lineares, paralelos e cíclicos
+estejam aprovados.
 ```
 
 Primeiros arquivos previstos:
 
 ```text
-server/construction/domain-types.ts
-server/construction/local-database-source.ts
-server/construction/evidence-source.ts
-server/construction/local-database-source.test.ts
+server/construction/eap-validator.ts
+server/construction/dependency-validator.ts
+server/construction/cpm-calculator.ts
+server/construction/dependency-validator.test.ts
+server/construction/cpm-calculator.test.ts
 ```
 
-A implementação deve terminar com testes locais e um commit isolado. Depois disso, atualizar esta seção com:
+A implementação deve terminar com testes determinísticos e um commit isolado. Depois disso, atualizar esta seção com:
 
 - hash do commit;
 - testes executados;
@@ -327,11 +334,12 @@ A implementação deve terminar com testes locais e um commit isolado. Depois di
 
 ## 8. Registro de retomadas
 
-| Data | Fase | Commit | Resultado | Próximo passo |
-|---|---|---|---|---|
-| 20/09/2026 | Fase 0 | `b595566` | Observabilidade e estados terminais | Prova em leitura |
-| 20/09/2026 | Fase 1 | `6e40c0e` | Bateria e contrato de leitura | Fonte local |
-| 20/09/2026 | Teste real | — | MCP EAP/Cronograma retornaram 502; estado seguro `dados_incompletos` | Implementar Fase 2 |
+| Data       | Fase       | Commit    | Resultado                                                            | Próximo passo              |
+| ---------- | ---------- | --------- | -------------------------------------------------------------------- | -------------------------- |
+| 20/09/2026 | Fase 0     | `b595566` | Observabilidade e estados terminais                                  | Prova em leitura           |
+| 20/09/2026 | Fase 1     | `6e40c0e` | Bateria e contrato de leitura                                        | Fonte local                |
+| 20/09/2026 | Teste real | —         | MCP EAP/Cronograma retornaram 502; estado seguro `dados_incompletos` | Implementar Fase 2         |
+| 20/09/2026 | Fase 2     | `a65c3df` | Fonte local, fallback MCP e erros preservados; 50 testes verdes      | Fase 3 — validadores e CPM |
 
 ## Referências
 
