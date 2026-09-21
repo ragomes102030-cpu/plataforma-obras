@@ -19,6 +19,7 @@ export function EapView({
   });
   const nodes = wbsQuery.data ?? [];
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const selectedNode = nodes.find(node => node.id === selectedNodeId);
 
   return (
@@ -91,10 +92,33 @@ export function EapView({
           <p>{selectedNode.nodeType} · nível {selectedNode.level}{selectedNode.unit ? ` · unidade ${selectedNode.unit}` : ""}</p>
         </div>
       )}
-      <McpProjectMapping projectId={projectId} />
-      <Phase7ImportWorkbench projectId={projectId} />
-      <McpMutationWorkbench projectId={projectId} />
-      <McpE2EWorkbench projectId={projectId} />
+      <section className="module-card eap-advanced-tools">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">INTEGRAÇÕES AVANÇADAS</span>
+            <h3>Homologação e integração MCP</h3>
+            <p>
+              Ferramentas de diagnóstico e importação são carregadas somente
+              quando necessárias.
+            </p>
+          </div>
+          <button
+            className="outline-button"
+            onClick={() => setShowAdvancedTools(current => !current)}
+            aria-expanded={showAdvancedTools}
+          >
+            {showAdvancedTools ? "Ocultar ferramentas" : "Abrir ferramentas"}
+          </button>
+        </div>
+        {showAdvancedTools && (
+          <div className="eap-advanced-tools-body">
+            <McpProjectMapping projectId={projectId} />
+            <Phase7ImportWorkbench projectId={projectId} />
+            <McpMutationWorkbench projectId={projectId} />
+            <McpE2EWorkbench projectId={projectId} />
+          </div>
+        )}
+      </section>
     </div>
   );
 }
