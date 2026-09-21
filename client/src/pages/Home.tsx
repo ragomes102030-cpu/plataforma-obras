@@ -584,7 +584,7 @@ function GanttView({
             {lobRows.length ? (
               <div className="lob-chart-frame lob-flow-frame">
                 <div className="lob-chart-title">
-                  <div><strong>Planejamento por serviço e unidade</strong><span>Arraste visualmente a leitura do início ao fim de cada frente</span></div>
+                  <div><strong>Planejamento por serviço e unidade</strong><span>Leia o início, a duração e o fim de cada frente ao longo do calendário</span></div>
                   <span className="lob-status"><span /> Planejado</span>
                 </div>
                 <div className="lob-flow-head">
