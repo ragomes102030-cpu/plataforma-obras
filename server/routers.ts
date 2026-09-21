@@ -31,6 +31,8 @@ import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
+import { EvidenceSourceRouter } from "./construction/evidence-router";
+import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import {
   getAgentExecutionStatus,
   startAgentExecution,
@@ -1323,11 +1325,15 @@ export const appRouter = router({
         }
         const evidence = db
           ? await (async () => {
+              const evidenceSource = new EvidenceSourceRouter(
+                localDatabaseEvidenceSource,
+                new ConstructionMcpEvidenceSource(mcpProjectIds)
+              );
               const [eapResult, activityResult, dependencyResult] =
                 await Promise.all([
-                  localDatabaseEvidenceSource.getEapTree(input.projectId),
-                  localDatabaseEvidenceSource.listActivities(input.projectId),
-                  localDatabaseEvidenceSource.listDependencies(input.projectId),
+                  evidenceSource.getEapTree(input.projectId),
+                  evidenceSource.listActivities(input.projectId),
+                  evidenceSource.listDependencies(input.projectId),
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
               return {

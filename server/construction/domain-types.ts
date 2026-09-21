@@ -13,11 +13,11 @@ export type EvidenceError = {
 };
 
 export type EapEvidenceNode = {
-  id: number;
+  id: number | string;
   projectId: number;
   externalId: string | null;
   externalUid: string | null;
-  parentId: number | null;
+  parentId: number | string | null;
   code: string;
   name: string;
   level: number;
@@ -28,7 +28,7 @@ export type EapEvidenceNode = {
 };
 
 export type ScheduleEvidenceActivity = {
-  id: number;
+  id: number | string;
   projectId: number;
   externalId: string | null;
   eapRef: string | null;
@@ -44,11 +44,11 @@ export type ScheduleEvidenceActivity = {
 };
 
 export type ScheduleEvidenceDependency = {
-  id: number;
+  id: number | string;
   projectId: number;
   externalId: string | null;
-  predecessorId: number;
-  successorId: number;
+  predecessorId: number | string;
+  successorId: number | string;
   type: "FS" | "SS" | "FF" | "SF";
   lag: number;
 };
@@ -94,5 +94,22 @@ export function unavailableEvidence<T>(
     data: null,
     warnings: [],
     errors: [{ code: "local_database_unavailable", message, retryable: true }],
+  };
+}
+
+export function failedEvidence<T>(
+  source: EvidenceSourceKind,
+  projectId: number,
+  code: string,
+  error: unknown,
+  retryable = true
+): EvidenceResult<T> {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    source,
+    projectId,
+    data: null,
+    warnings: [],
+    errors: [{ code, message, retryable }],
   };
 }

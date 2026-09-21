@@ -40,7 +40,14 @@ export class EvidenceSourceRouter implements EvidenceSource {
     if (!this.fallback) return local;
 
     const fallback = await fallbackResult();
-    if (!hasData(fallback)) return local;
+    if (!hasData(fallback)) {
+      return {
+        ...local,
+        source: "local_db+mcp",
+        warnings: [...local.warnings, ...fallback.warnings],
+        errors: [...local.errors, ...fallback.errors],
+      };
+    }
 
     return withFallbackWarning(fallback, {
       code: fallbackCode,

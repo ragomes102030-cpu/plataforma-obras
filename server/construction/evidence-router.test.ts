@@ -143,4 +143,33 @@ describe("EvidenceSourceRouter", () => {
     expect(result.data).toBeNull();
     expect(result.errors[0]?.code).toBe("local_database_unavailable");
   });
+
+  it("preserva o erro do MCP quando o local está vazio e o fallback falha", async () => {
+    const router = new EvidenceSourceRouter(
+      source(),
+      source({
+        getEapTree: async () => ({
+          source: "mcp",
+          projectId: 1,
+          data: null,
+          warnings: [],
+          errors: [
+            {
+              code: "mcp_eap_unavailable",
+              message: "MCP 502: Bad Gateway",
+              retryable: true,
+            },
+          ],
+        }),
+      })
+    );
+
+    const result = await router.getEapTree(1);
+
+    expect(result.source).toBe("local_db+mcp");
+    expect(result.data).toEqual([]);
+    expect(result.errors).toMatchObject([
+      { code: "mcp_eap_unavailable", message: "MCP 502: Bad Gateway" },
+    ]);
+  });
 });
