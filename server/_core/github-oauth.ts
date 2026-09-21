@@ -15,7 +15,10 @@ function getBaseUrl(req: Request): string {
   if (configured) return configured;
 
   const forwardedProto = req.headers["x-forwarded-proto"];
-  const protocol = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(",")[0]?.trim() || req.protocol;
+  const protocol =
+    (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)
+      ?.split(",")[0]
+      ?.trim() || req.protocol;
   return `${protocol}://${req.get("host")}`;
 }
 
@@ -27,16 +30,24 @@ function requireConfig(): { clientId: string; clientSecret: string } {
   const clientId = process.env.GITHUB_CLIENT_ID?.trim();
   const clientSecret = process.env.GITHUB_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) {
-    throw new Error("GitHub OAuth is not configured: set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET");
+    throw new Error(
+      "GitHub OAuth is not configured: set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET"
+    );
   }
   return { clientId, clientSecret };
 }
 
-async function githubJson<T>(url: string, init: RequestInit, label: string): Promise<T> {
+async function githubJson<T>(
+  url: string,
+  init: RequestInit,
+  label: string
+): Promise<T> {
   const response = await fetch(url, init);
   const body = await response.text();
   if (!response.ok) {
-    throw new Error(`GitHub ${label} failed (${response.status}): ${body.slice(0, 300)}`);
+    throw new Error(
+      `GitHub ${label} failed (${response.status}): ${body.slice(0, 300)}`
+    );
   }
   return JSON.parse(body) as T;
 }
@@ -65,9 +76,13 @@ export function registerGitHubOAuthRoutes(app: Express) {
   });
 
   app.get("/api/auth/github/callback", async (req: Request, res: Response) => {
-    const code = typeof req.query.code === "string" ? req.query.code : undefined;
-    const state = typeof req.query.state === "string" ? req.query.state : undefined;
-    const expectedState = parseCookieHeader(req.headers.cookie ?? "")[STATE_COOKIE];
+    const code =
+      typeof req.query.code === "string" ? req.query.code : undefined;
+    const state =
+      typeof req.query.state === "string" ? req.query.state : undefined;
+    const expectedState = parseCookieHeader(req.headers.cookie ?? "")[
+      STATE_COOKIE
+    ];
 
     const statesMatch = Boolean(
       state &&
@@ -88,12 +103,21 @@ export function registerGitHubOAuthRoutes(app: Express) {
         GITHUB_TOKEN_URL,
         {
           method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/json" },
-          body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }),
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code,
+            redirect_uri: redirectUri,
+          }),
         },
         "token exchange"
       );
-      if (!token.access_token) throw new Error("GitHub token exchange returned no access token");
+      if (!token.access_token)
+        throw new Error("GitHub token exchange returned no access token");
 
       const headers = {
         Accept: "application/vnd.github+json",
@@ -101,19 +125,21 @@ export function registerGitHubOAuthRoutes(app: Express) {
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "plataforma-obras-api",
       };
-      const profile = await githubJson<{ id: number; login: string; name?: string | null; email?: string | null }>(
-        `${GITHUB_API_URL}/user`,
-        { headers },
-        "user lookup"
-      );
+      const profile = await githubJson<{
+        id: number;
+        login: string;
+        name?: string | null;
+        email?: string | null;
+      }>(`${GITHUB_API_URL}/user`, { headers }, "user lookup");
       let email = profile.email ?? null;
       if (!email) {
-        const emails = await githubJson<Array<{ email: string; primary: boolean; verified: boolean }>>(
-          `${GITHUB_API_URL}/user/emails`,
-          { headers },
-          "email lookup"
-        );
-        email = emails.find(item => item.primary && item.verified)?.email ?? emails.find(item => item.verified)?.email ?? null;
+        const emails = await githubJson<
+          Array<{ email: string; primary: boolean; verified: boolean }>
+        >(`${GITHUB_API_URL}/user/emails`, { headers }, "email lookup");
+        email =
+          emails.find(item => item.primary && item.verified)?.email ??
+          emails.find(item => item.verified)?.email ??
+          null;
       }
 
       const openId = `github:${profile.id}`;

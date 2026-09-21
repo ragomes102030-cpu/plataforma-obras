@@ -13,12 +13,15 @@ async function startTestServer() {
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Test server did not start");
+  if (!address || typeof address === "string")
+    throw new Error("Test server did not start");
   return { server, baseUrl: `http://127.0.0.1:${address.port}` };
 }
 
 async function stopTestServer(server: Server) {
-  await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
+  await new Promise<void>((resolve, reject) =>
+    server.close(error => (error ? reject(error) : resolve()))
+  );
 }
 
 describe("GitHub OAuth", () => {
@@ -37,7 +40,9 @@ describe("GitHub OAuth", () => {
     const { server, baseUrl } = await startTestServer();
 
     try {
-      const response = await realFetch(`${baseUrl}/api/auth/github`, { redirect: "manual" });
+      const response = await realFetch(`${baseUrl}/api/auth/github`, {
+        redirect: "manual",
+      });
       expect(response.status).toBe(302);
       const location = new URL(response.headers.get("location") ?? "");
       expect(location.origin).toBe("https://github.com");
@@ -48,8 +53,12 @@ describe("GitHub OAuth", () => {
       );
       expect(location.searchParams.get("scope")).toBe("read:user user:email");
       expect(location.searchParams.get("state")).toMatch(/^[a-f0-9]{64}$/);
-      const cookies = (response.headers as Headers & { getSetCookie(): string[] }).getSetCookie();
-      expect(cookies.some(cookie => cookie.startsWith("__Host-github_oauth_state="))).toBe(true);
+      const cookies = (
+        response.headers as Headers & { getSetCookie(): string[] }
+      ).getSetCookie();
+      expect(
+        cookies.some(cookie => cookie.startsWith("__Host-github_oauth_state="))
+      ).toBe(true);
     } finally {
       await stopTestServer(server);
     }
@@ -63,11 +72,16 @@ describe("GitHub OAuth", () => {
     const { server, baseUrl } = await startTestServer();
 
     try {
-      const response = await realFetch(`${baseUrl}/api/auth/github/callback?code=code&state=wrong`, {
-        redirect: "manual",
-      });
+      const response = await realFetch(
+        `${baseUrl}/api/auth/github/callback?code=code&state=wrong`,
+        {
+          redirect: "manual",
+        }
+      );
       expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: "Invalid GitHub OAuth state" });
+      expect(await response.json()).toEqual({
+        error: "Invalid GitHub OAuth state",
+      });
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       await stopTestServer(server);
@@ -78,12 +92,25 @@ describe("GitHub OAuth", () => {
     process.env.GITHUB_CLIENT_ID = "github-client-test";
     process.env.GITHUB_CLIENT_SECRET = "github-secret-test";
     process.env.PUBLIC_APP_URL = "https://plataforma-obras-api.onrender.com";
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "token-test" }), { status: 200 }))
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 12345, login: "obra-user", name: "Obra User", email: "obra@example.com" }), {
+        new Response(JSON.stringify({ access_token: "token-test" }), {
           status: 200,
         })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 12345,
+            login: "obra-user",
+            name: "Obra User",
+            email: "obra@example.com",
+          }),
+          {
+            status: 200,
+          }
+        )
       );
     vi.stubGlobal("fetch", fetchMock);
     const upsertUser = vi.spyOn(db, "upsertUser").mockResolvedValue(undefined);
@@ -91,11 +118,17 @@ describe("GitHub OAuth", () => {
     const { server, baseUrl } = await startTestServer();
 
     try {
-      const startResponse = await realFetch(`${baseUrl}/api/auth/github`, { redirect: "manual" });
+      const startResponse = await realFetch(`${baseUrl}/api/auth/github`, {
+        redirect: "manual",
+      });
       const location = new URL(startResponse.headers.get("location") ?? "");
       const state = location.searchParams.get("state");
-      const cookies = (startResponse.headers as Headers & { getSetCookie(): string[] }).getSetCookie();
-      const stateCookie = cookies.find(cookie => cookie.startsWith("__Host-github_oauth_state="))?.split(";", 1)[0];
+      const cookies = (
+        startResponse.headers as Headers & { getSetCookie(): string[] }
+      ).getSetCookie();
+      const stateCookie = cookies
+        .find(cookie => cookie.startsWith("__Host-github_oauth_state="))
+        ?.split(";", 1)[0];
       expect(state).toBeTruthy();
       expect(stateCookie).toBeTruthy();
 
@@ -105,7 +138,9 @@ describe("GitHub OAuth", () => {
       );
       expect(callbackResponse.status).toBe(302);
       expect(callbackResponse.headers.get("location")).toBe("/");
-      expect(callbackResponse.headers.get("set-cookie")).toContain("app_session_id=session-token-test");
+      expect(callbackResponse.headers.get("set-cookie")).toContain(
+        "app_session_id=session-token-test"
+      );
       expect(upsertUser).toHaveBeenCalledWith(
         expect.objectContaining({
           openId: "github:12345",
