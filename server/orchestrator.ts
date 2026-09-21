@@ -214,6 +214,16 @@ function formatContext(context: AgentProjectContext) {
     .join("\n");
 
   const coordinator = context.coordinator;
+  const evidence = context.evidence
+    ? [
+        `Fonte de evidências: ${context.evidence.source}`,
+        `Nós EAP locais: ${context.evidence.eapNodeCount ?? "indisponível"}`,
+        `Atividades locais consultadas: ${context.evidence.activityCount ?? "indisponível"}`,
+        `Dependências locais consultadas: ${context.evidence.dependencyCount ?? "indisponível"}`,
+        `Avisos de evidência: ${context.evidence.warnings.join(" | ") || "nenhum"}`,
+        `Erros de evidência: ${context.evidence.errors.join(" | ") || "nenhum"}`,
+      ].join("\n")
+    : "Resumo de evidências locais ainda não carregado.";
   const coordinatorLines = coordinator
     ? [
         `Marco persistido: ${coordinator.stage}`,
@@ -261,6 +271,7 @@ function formatContext(context: AgentProjectContext) {
     `Término planejado: ${new Date(context.project.plannedFinish).toISOString().slice(0, 10)}`,
     "Atividades locais (WBS | nome | fase | status | avanço | duração | criticidade):",
     activityLines || "Nenhuma atividade local cadastrada.",
+    "Evidências estruturadas:\n" + evidence,
     "Estado e memória do coordenador:\n" + coordinatorLines,
   ].join("\n");
 }

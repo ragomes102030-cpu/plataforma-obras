@@ -30,6 +30,7 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
+import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import {
   getAgentExecutionStatus,
   startAgentExecution,
@@ -1320,6 +1321,31 @@ export const appRouter = router({
             .set({ activeSection: "portfolio", activeSubtab: null })
             .where(eq(agentProjectStates.projectId, input.projectId));
         }
+        const evidence = db
+          ? await (async () => {
+              const [eapResult, activityResult, dependencyResult] =
+                await Promise.all([
+                  localDatabaseEvidenceSource.getEapTree(input.projectId),
+                  localDatabaseEvidenceSource.listActivities(input.projectId),
+                  localDatabaseEvidenceSource.listDependencies(input.projectId),
+                ]);
+              const results = [eapResult, activityResult, dependencyResult];
+              return {
+                source: Array.from(
+                  new Set(results.map(result => result.source))
+                ).join("+"),
+                eapNodeCount: eapResult.data?.length ?? null,
+                activityCount: activityResult.data?.length ?? null,
+                dependencyCount: dependencyResult.data?.length ?? null,
+                warnings: results.flatMap(result =>
+                  result.warnings.map(warning => warning.message)
+                ),
+                errors: results.flatMap(result =>
+                  result.errors.map(error => error.message)
+                ),
+              };
+            })()
+          : undefined;
         return startAgentExecution({
           db,
           projectId: input.projectId,
@@ -1328,7 +1354,8 @@ export const appRouter = router({
             project,
             activities,
             { activeSection: "portfolio", contextMode: "focused" },
-            coordinator
+            coordinator,
+            evidence
           ),
           messages: input.messages,
           mcpProjectIds,

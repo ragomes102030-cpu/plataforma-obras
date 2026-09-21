@@ -21,17 +21,21 @@ export type AgentWorkspaceView = {
   contextMode?: "focused" | "full";
 };
 
-export type AgentCoordinatorSnapshot = NonNullable<AgentProjectContext["coordinator"]>;
+export type AgentCoordinatorSnapshot = NonNullable<
+  AgentProjectContext["coordinator"]
+>;
 
 export function buildAgentProjectContext(
   project: AgentProjectContext["project"],
   activities: AgentProjectContext["activities"],
   view: AgentWorkspaceView,
-  coordinator?: AgentCoordinatorSnapshot
+  coordinator?: AgentCoordinatorSnapshot,
+  evidence?: AgentProjectContext["evidence"]
 ): AgentProjectContext {
   return {
     project,
     activities,
+    evidence,
     workspace: {
       activeSection: view.activeSection,
       activeSubtab: view.activeSubtab,

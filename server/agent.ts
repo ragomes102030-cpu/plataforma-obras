@@ -25,6 +25,14 @@ export type AgentProjectContext = {
     status: string;
     critical: number;
   }>;
+  evidence?: {
+    source: string;
+    eapNodeCount: number | null;
+    activityCount: number | null;
+    dependencyCount: number | null;
+    warnings: string[];
+    errors: string[];
+  };
   workspace?: {
     activeSection: string;
     activeSubtab?: "gantt" | "table" | "lob";

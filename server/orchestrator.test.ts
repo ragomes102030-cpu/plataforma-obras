@@ -157,6 +157,48 @@ describe("runProjectOrchestrator", () => {
     ).toThrow("faltam seções");
   });
 
+  it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
+    let systemMessage = "";
+    const result = await runProjectOrchestrator(
+      {
+        ...context,
+        evidence: {
+          source: "local_db",
+          eapNodeCount: 4,
+          activityCount: 3,
+          dependencyCount: null,
+          warnings: ["Nenhuma dependência cadastrada para a obra."],
+          errors: ["MCP Cronograma indisponível; fallback local utilizado."],
+        },
+      },
+      [{ role: "user", content: "Qual é a situação local?" }],
+      {
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          callLlm: async ({ messages }) => {
+            systemMessage = String(messages[0]?.content);
+            return {
+              choices: [
+                {
+                  message: {
+                    role: "assistant",
+                    content:
+                      "MARCO ATUAL\nLeitura local.\n\nEVIDÊNCIAS CONSULTADAS\nBanco local.\n\nPROPOSTA\nManter leitura.\n\nEXEMPLOS/REFERÊNCIAS\nEAP local.\n\nDIVERGÊNCIAS E LACUNAS\nDependências ausentes.\n\nIMPACTO DE APROVAR\nNenhuma mutação.\n\nPRÓXIMA DECISÃO DO CLIENTE\nDeseja revisar?",
+                  },
+                },
+              ],
+            };
+          },
+        },
+      }
+    );
+
+    expect(result.status).toBe("respondido");
+    expect(systemMessage).toContain("Fonte de evidências: local_db");
+    expect(systemMessage).toContain("Nós EAP locais: 4");
+    expect(systemMessage).toContain("MCP Cronograma indisponível");
+  });
+
   it("não expõe ferramentas de escrita ao modelo", () => {
     const tools = toOpenAiTools({
       eap: [{ name: "criar_eap_node" }, { name: "get_eap_tree" }],
