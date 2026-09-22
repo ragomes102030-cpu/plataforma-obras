@@ -136,9 +136,18 @@ function GanttView({
       await utils.projects.activities.invalidate({ projectId });
     },
   });
-  const projectStart = new Date(
-    plannedStart ?? "2026-10-01T00:00:00Z"
-  ).getTime();
+  const projectStart = useMemo(() => {
+    if (plannedStart) {
+      const t = new Date(plannedStart).getTime();
+      if (!Number.isNaN(t)) return t;
+    }
+    const minOffset = activities.length
+      ? Math.min(
+          ...activities.map(a => a.earlyStart ?? a.startOffset ?? 0)
+        )
+      : 0;
+    return Date.now() - minOffset * 86_400_000;
+  }, [plannedStart, activities]);
   const filtered = useMemo(
     () =>
       activities.filter(
@@ -707,6 +716,7 @@ function ModuleView({
   icon: Icon,
   description,
   onBack,
+  onNavigate,
   projectId,
   projectName,
   activities,
@@ -718,6 +728,7 @@ function ModuleView({
   icon: typeof Activity;
   description: string;
   onBack: () => void;
+  onNavigate: (label: string) => void;
   projectId: number;
   projectName: string;
   activities: any[];
@@ -727,6 +738,7 @@ function ModuleView({
 }) {
   const riskActivities = activities.filter(activity => activity.status === "Em risco");
   const completedActivities = activities.filter(activity => activity.progress >= 100);
+  const setActiveNav = onNavigate;
   if (name === "Agente IA") return <AgentView />;
   if (name === "Orçamento")
     return <BudgetView projectId={projectId} projectName={projectName} />;
@@ -756,16 +768,31 @@ function ModuleView({
     );
   if (name === "Linha de Balanço")
     return (
-      <GanttView
-        key="linha-de-balanco"
-        projectId={projectId}
-        activities={activities}
-        search={search}
-        setSearch={setSearch}
-        selectedName={projectName}
-        plannedStart={plannedStart}
-        initialTab="lob"
-      />
+      <div className="module-page">
+        <div className="module-hero">
+          <div className="module-icon"><Activity size={22} /></div>
+          <div>
+            <p className="eyebrow accent">RITMO DE EXECUÇÃO</p>
+            <h2>Linha de Balanço</h2>
+            <p>Visualize o fluxo contínuo das atividades por semana.</p>
+          </div>
+          <div className="module-hero-actions">
+            <button type="button" className="outline-button" onClick={() => onNavigate("Cronogramas")}>Cronograma</button>
+            <button type="button" className="outline-button" onClick={() => onNavigate("Orçamento")}>Orçamento</button>
+            <button type="button" className="outline-button" onClick={onBack}>Voltar</button>
+          </div>
+        </div>
+        <GanttView
+          key="linha-de-balanco"
+          projectId={projectId}
+          activities={activities}
+          search={search}
+          setSearch={setSearch}
+          selectedName={projectName}
+          plannedStart={plannedStart}
+          initialTab="lob"
+        />
+      </div>
     );
   return (
     <div className="module-page">
@@ -1080,6 +1107,7 @@ export default function Home() {
                 }[activeNav] || "Gestão integrada de obras."
               }
               onBack={() => setActiveNav("Portfólio")}
+              onNavigate={setActiveNav}
               projectId={selected?.id ?? 1}
               projectName={selected?.name ?? "Obra selecionada"}
               activities={activities}

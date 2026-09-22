@@ -1,6 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, Calculator, FilePlus2, Plus, RefreshCw, Scale, WalletCards } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { NAV_PATHS } from "@/nav-paths";
 
 function money(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -17,6 +19,7 @@ export function BudgetView({
   projectName: string;
 }) {
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
   const budgetQuery = trpc.budgets.list.useQuery({ projectId });
   const wbsQuery = trpc.projects.wbs.useQuery({ projectId });
   const catalogQuery = trpc.catalog.list.useQuery({});
@@ -113,6 +116,10 @@ export function BudgetView({
           <p>{projectName} · cadastre serviços, quantitativos e preços com rastreabilidade.</p>
         </div>
         <span className="module-hero-status"><span /> Etapa 2 · núcleo inicial</span>
+        <div className="module-hero-actions">
+          <button type="button" className="outline-button" onClick={() => navigate(NAV_PATHS["Cronogramas"])}>Cronograma</button>
+          <button type="button" className="outline-button" onClick={() => navigate(NAV_PATHS["Linha de Balanço"])}>LOB</button>
+        </div>
       </div>
 
       <div className="budget-summary-grid">

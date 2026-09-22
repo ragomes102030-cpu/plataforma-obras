@@ -84,6 +84,30 @@ import {
   evaluateStageTransition,
 } from "./construction/stage-gates";
 
+/** TTL cache para queries pesadas (catálogo SEINFRA ~11k itens, reconcile ~29s). */
+const queryCache = new Map<string, { at: number; value: unknown }>();
+const QUERY_CACHE_TTL_MS = 30_000;
+
+function cacheGet<T>(key: string): T | undefined {
+  const hit = queryCache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > QUERY_CACHE_TTL_MS) {
+    queryCache.delete(key);
+    return undefined;
+  }
+  return hit.value as T;
+}
+
+function cacheSet(key: string, value: unknown): void {
+  queryCache.set(key, { at: Date.now(), value });
+}
+
+function cacheClearPrefix(prefix: string): void {
+  for (const key of queryCache.keys()) {
+    if (key.startsWith(prefix)) queryCache.delete(key);
+  }
+}
+
 const demoProjects = [
   {
     id: 1,
@@ -1769,6 +1793,59 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
+        const thresholdPct =
+          input.thresholdPct ?? ENV.priceVariationThresholdPct;
+        const cacheKey = `reconcilePreview:${input.projectId}:${thresholdPct}:${input.minScore}`;
+        const cached = cacheGet<
+          | {
+              catalog: null;
+              items: [];
+              thresholdPct: number;
+              totalBefore: 0;
+              totalAfter: 0;
+            }
+          | {
+              catalog: {
+                id: number;
+                name: string;
+                referencePeriod: string | null;
+              } | null;
+              items: Array<{
+                budgetItemId: number;
+                code: string;
+                description: string;
+                unit: string;
+                quantity: number;
+                manualPrice: number;
+                isPriceException: boolean;
+                match: {
+                  kind: "priceItem" | "composition";
+                  id: number;
+                  code: string;
+                  description: string;
+                  unit: string;
+                  unitPrice: number;
+                  score: number;
+                } | null;
+                candidates: Array<{
+                  kind: "priceItem" | "composition";
+                  id: number;
+                  code: string;
+                  description: string;
+                  unit: string;
+                  unitPrice: number;
+                  score: number;
+                }>;
+                variation: number | null;
+                alert: boolean;
+                projectedDelta: number;
+              }>;
+              thresholdPct: number;
+              totalBefore: number;
+              totalAfter: number;
+            }
+        >(cacheKey);
+        if (cached) return cached;
         const db = await getDb();
         if (!db)
           return {
@@ -1808,8 +1885,6 @@ export const appRouter = router({
             totalAfter: 0,
           };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const thresholdPct =
-          input.thresholdPct ?? ENV.priceVariationThresholdPct;
         const [project] = await db
           .select()
           .from(projects)
@@ -1985,7 +2060,7 @@ export const appRouter = router({
           const price = row.match ? row.match.unitPrice : row.manualPrice;
           return sum + row.quantity * price;
         }, 0);
-        return {
+        const result = {
           catalog: activeCatalog
             ? {
                 id: activeCatalog.id,
@@ -1998,6 +2073,8 @@ export const appRouter = router({
           totalBefore,
           totalAfter,
         };
+        cacheSet(cacheKey, result);
+        return result;
       }),
     applyReconciliation: protectedProcedure
       .input(
@@ -2032,6 +2109,7 @@ export const appRouter = router({
         if (!activeVersion) throw new Error("Nenhuma versão de orçamento ativa.");
         if (activeVersion.status === "aprovado" || activeVersion.status === "arquivado")
           throw new Error("Versão aprovada/arquivada não aceita reconciliação.");
+        cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
         const itemIds = input.decisions.map(d => d.budgetItemId);
         const existing = await db
           .select()
@@ -2192,6 +2270,15 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
+        const cacheKey = `catalog.list:${input.catalogId ?? "auto"}:${input.compositionId ?? "auto"}`;
+        const cached = cacheGet<{
+          catalogs: typeof priceCatalogs.$inferSelect[];
+          priceItems: typeof priceItems.$inferSelect[];
+          compositions: typeof serviceCompositions.$inferSelect[];
+          components: typeof compositionComponents.$inferSelect[];
+          total: number;
+        }>(cacheKey);
+        if (cached) return cached;
         const db = await getDb();
         if (!db) return { catalogs: [], priceItems: [], compositions: [], components: [], total: 0 };
         const catalogs = await db.select().from(priceCatalogs).orderBy(desc(priceCatalogs.createdAt));
@@ -2208,7 +2295,9 @@ export const appRouter = router({
           (sum, component) => sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
           0
         );
-        return { catalogs, priceItems: items, compositions, components, total };
+        const result = { catalogs, priceItems: items, compositions, components, total };
+        cacheSet(cacheKey, result);
+        return result;
       }),
     createCatalog: protectedProcedure
       .input(
@@ -2259,6 +2348,8 @@ export const appRouter = router({
           unitPrice: input.unitPrice.toFixed(2),
           notes: input.notes || null,
         }).$returningId();
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
         void ctx.user.id;
         return { id: createdId.id };
       }),
@@ -2302,6 +2393,8 @@ export const appRouter = router({
             createdBy: ctx.user.id,
           })
           .$returningId();
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
         const chunkSize = 500;
         for (let i = 0; i < parsed.records.length; i += chunkSize) {
           const chunk = parsed.records.slice(i, i + chunkSize);
@@ -2317,6 +2410,8 @@ export const appRouter = router({
             }))
           );
         }
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
         return {
           catalogId: created.id,
           referencePeriod,
@@ -2402,6 +2497,8 @@ export const appRouter = router({
           referencePeriod: input.referencePeriod || null,
           createdBy: ctx.user.id,
         }).$returningId();
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
         return { id: createdId.id };
       }),
     addComponent: protectedProcedure

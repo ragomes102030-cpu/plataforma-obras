@@ -2133,6 +2133,16 @@
   .module-hero .outline-button {
     margin-left: auto;
   }
+  .module-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+  .module-hero-actions .outline-button {
+    margin-left: 0;
+  }
   .module-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2883,6 +2893,10 @@
     }
     .module-hero .outline-button {
       margin-left: 0;
+    }
+    .module-hero-actions {
+      margin-left: 0;
+      width: 100%;
     }
     .module-grid,
     .lob-view {
@@ -3810,6 +3824,7 @@
 .module-hero h2, .panel-heading h3, .module-card h3, .lob-copy h4, .portfolio-main strong, .activity-name, .table-name, .planning-row strong { color: #f5f7f8; }
 input, select, textarea, .gantt-edit-input, .gantt-edit-select, .gantt-edit-number { background: #0b0f11; color: #eef2f4; border-color: #344149; }
 input::placeholder, textarea::placeholder { color: #77858d; }
+.module-hero-actions .outline-button { margin-left: 0; }
 .outline-button, .icon-button, .toolbar-tab { color: #d6e0e4; border-color: #344149; background: #12191d; }
 .outline-button:hover, .toolbar-tab:hover, .toolbar-tab.active { background: #1b2b31; border-color: #50727d; color: #fff; }
 .primary-button { background: #8bc3d1; color: #071014; }
