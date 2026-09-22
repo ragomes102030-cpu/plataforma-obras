@@ -34,7 +34,7 @@ const query = async <T extends mysql.RowDataPacket[] | mysql.ResultSetHeader[]>(
 };
 
 try {
-  const [nullActivities] = await query<CountRow[]>(
+  const nullActivities = await query<CountRow[]>(
     "SELECT COUNT(*) AS count FROM schedule_activities WHERE wbsNodeId IS NULL"
   );
   if (Number(nullActivities[0]?.count ?? 0) > 0) {
@@ -43,7 +43,7 @@ try {
     );
   }
 
-  const [duplicateCodes] = await query<CountRow[]>(
+  const duplicateCodes = await query<CountRow[]>(
     `SELECT COUNT(*) AS count FROM (
        SELECT projectId, code
        FROM wbs_nodes
@@ -57,7 +57,7 @@ try {
     );
   }
 
-  const [column] = await query<ColumnRow[]>(
+  const column = await query<ColumnRow[]>(
     `SELECT IS_NULLABLE AS isNullable
        FROM information_schema.columns
       WHERE table_schema = DATABASE()
@@ -79,7 +79,7 @@ try {
     console.log("[WBS] wbsNodeId já é NOT NULL.");
   }
 
-  const [activityForeignKey] = await query<CountRow[]>(
+  const activityForeignKey = await query<CountRow[]>(
     `SELECT COUNT(*) AS count
        FROM information_schema.key_column_usage
       WHERE table_schema = DATABASE()
@@ -100,7 +100,7 @@ try {
     console.log("[WBS] Foreign key atividade → EAP já existe.");
   }
 
-  const [parentForeignKey] = await query<CountRow[]>(
+  const parentForeignKey = await query<CountRow[]>(
     `SELECT COUNT(*) AS count
        FROM information_schema.key_column_usage
       WHERE table_schema = DATABASE()
