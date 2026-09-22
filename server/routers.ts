@@ -541,6 +541,7 @@ async function loadAgentCoordinatorSnapshot(
     })),
     openFindings: findings.map(finding => ({
       id: finding.id,
+      status: finding.status,
       classification: finding.classification,
       entityType: finding.entityType,
       entityRef: finding.entityRef,

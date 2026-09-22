@@ -12,6 +12,7 @@ export function RestrictionsView({ projectId, projectName }: { projectId: number
   const [impact, setImpact] = useState("");
   const [stage, setStage] = useState<Stage>("CONTROLE");
   const mutation = trpc.agent.recordFinding.useMutation({ onSuccess: async () => { setDescription(""); setImpact(""); await utils.agent.snapshot.invalidate({ projectId }); } });
+  const transition = trpc.agent.transitionFinding.useMutation({ onSuccess: async () => { await utils.agent.snapshot.invalidate({ projectId }); } });
   const findings = snapshot.data?.openFindings ?? [];
   return (
     <div className="module-page">
@@ -26,7 +27,7 @@ export function RestrictionsView({ projectId, projectName }: { projectId: number
         </form>
       </div>
       <div className="module-card"><div className="panel-heading"><div><h3>Pendências abertas</h3><p>O agente deve observar estes itens nas próximas análises.</p></div><RefreshCw size={16} className="sparkle" /></div>
-        {snapshot.isPending ? <div className="module-empty">Carregando restrições...</div> : findings.length === 0 ? <div className="module-empty"><CheckCircle2 size={20} /> Nenhuma restrição aberta.</div> : <div className="focus-list">{findings.map((finding, index) => <div className="focus-item" key={`${finding.entityType}-${finding.entityRef ?? index}`}><div className="focus-icon rose"><AlertTriangle size={16} /></div><div><strong>{finding.description}</strong><span>{finding.entityType} · {finding.confidence} · {finding.impact || "Impacto não informado"}</span></div><span className="focus-tag rose">Bloqueio</span></div>)}</div>}
+        {snapshot.isPending ? <div className="module-empty">Carregando restrições...</div> : findings.length === 0 ? <div className="module-empty"><CheckCircle2 size={20} /> Nenhuma restrição aberta.</div> : <div className="focus-list">{findings.map((finding, index) => <div className="focus-item" key={`${finding.entityType}-${finding.entityRef ?? index}`}><div className="focus-icon rose"><AlertTriangle size={16} /></div><div><strong>{finding.description}</strong><span>{finding.entityType} · {finding.confidence} · {finding.impact || "Impacto não informado"}</span></div><span className="focus-tag rose">Bloqueio</span><button className="focus-tag" onClick={() => transition.mutate({ projectId, findingId: finding.id, to: finding.status === "open" ? "resolved" : "open" })} disabled={transition.isPending}>{finding.status === "open" ? "Resolver" : "Reabrir"}</button></div>)}</div>}
       </div>
     </div>
   );
