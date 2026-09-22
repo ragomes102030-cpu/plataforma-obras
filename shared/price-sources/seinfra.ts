@@ -84,7 +84,8 @@ export function parsePtBrCurrency(value: unknown): number | null {
 
 function matchHeaderField(header: string, synonyms: readonly string[]): boolean {
   if (!header) return false;
-  return synonyms.some(syn => header === syn || header.includes(syn));
+  // Prefere igualdade exata; includes só para sinônimos compostos ("valor unitario").
+  return synonyms.some(syn => header === syn || (syn.length > 3 && header.includes(syn)));
 }
 
 interface HeaderMap {
@@ -115,8 +116,18 @@ export function findHeaderRow(rows: SheetRow[]): HeaderMap | null {
     }
     const hits = [code, description, unit, price].filter(index => index >= 0)
       .length;
-    // Pelo menos código+descrição+valor (unidade às vezes vem como coluna mista)
-    if (code >= 0 && description >= 0 && price >= 0 && hits >= 3) {
+    // Título de tabela ("Preço de Insumos / Serviços") pode casar vários
+    // sinônimos na MESMA célula — exige colunas distintas para code/desc/price.
+    const distinctCore =
+      code >= 0 &&
+      description >= 0 &&
+      price >= 0 &&
+      code !== description &&
+      code !== price &&
+      description !== price;
+    const unitOk =
+      unit < 0 || (unit !== code && unit !== description && unit !== price);
+    if (distinctCore && unitOk && hits >= 3) {
       return { code, description, unit, price, rowIndex: r };
     }
   }

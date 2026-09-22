@@ -57,6 +57,22 @@ describe("findHeaderRow — tolerância de layout", () => {
   it("retorna null quando não há tabela", () => {
     expect(findHeaderRow([["nota"], ["qualquer coisa"]])).toBeNull();
   });
+
+  it("não confunde título SEINFRA com cabeçalho (mesma célula, vários sinônimos)", () => {
+    const rows: unknown[][] = [
+      [
+        null,
+        "Tabela de Preço de Insumos / Serviços\nTabela 028 - ENC. SOCIAIS 114,15%",
+        null,
+        "Data de Emissão:\n09/10/2023 14:02",
+      ],
+      [null, null, null, "Página: 1"],
+      ["COTAÇÃO / ADMINISTRAÇÃO LOCAL DE OBRA (C/ ENCARGOS)"],
+      ["Insumo", "Descrição", "Unidade", "Valor (R$)"],
+      ["I8600", "ALMOXARIFE", "HxMÊS", 4965.16],
+    ];
+    expect(findHeaderRow(rows)?.rowIndex).toBe(3);
+  });
 });
 
 describe("parseSeinfraRows", () => {
