@@ -1821,9 +1821,12 @@ export const appRouter = router({
         const result = calculateDeterministicCpm(activities, dependencies);
         if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
         const calculatedAt = new Date();
-        for (const item of result.schedule.activities) {
-          await db.update(scheduleActivities).set({ startOffset: item.earlyStart, critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
-        }
+        const schedule = result.schedule;
+        await db.transaction(async tx => {
+          for (const item of schedule.activities) {
+            await tx.update(scheduleActivities).set({ startOffset: item.earlyStart, critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
+          }
+        });
         return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
       }),
     createResource: protectedProcedure
