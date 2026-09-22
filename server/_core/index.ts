@@ -5,7 +5,9 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerGitHubOAuthRoutes } from "./github-oauth";
 import { registerStorageProxy } from "./storageProxy";
+import { sql } from "drizzle-orm";
 import { appRouter } from "../routers";
+import { getDb } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -37,7 +39,28 @@ async function startServer() {
   registerStorageProxy(app);
   registerGitHubOAuthRoutes(app);
   app.get("/healthz", (_req, res) => {
-    res.status(200).json({ ok: true, service: "plataforma-obras-api" });
+    res.status(200).json({
+      ok: true,
+      service: "plataforma-obras-api",
+      commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? "local",
+      branch: process.env.RENDER_GIT_BRANCH ?? null,
+      deployId: process.env.RENDER_DEPLOY_ID ?? null,
+      uptimeSeconds: Math.round(process.uptime()),
+    });
+  });
+  app.get("/readyz", async (_req, res) => {
+    const db = await getDb();
+    if (!db) {
+      res.status(503).json({ ok: false, database: "indisponivel" });
+      return;
+    }
+    try {
+      await db.execute(sql`SELECT 1`);
+      res.status(200).json({ ok: true, database: "ok" });
+    } catch (error) {
+      console.error("[readyz] banco inacessivel:", error);
+      res.status(503).json({ ok: false, database: "erro" });
+    }
   });
   // tRPC API
   app.use(
