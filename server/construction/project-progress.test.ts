@@ -59,4 +59,25 @@ describe("deriveProjectProgress", () => {
       ])
     ).toBe(33);
   });
+
+  it("nao zera progresso quando a media ponderada zera por duracao ou arredondamento", () => {
+    expect(
+      deriveProjectProgress([
+        { progress: 40, durationDays: 1 },
+        { progress: 0, durationDays: 580 },
+      ])
+    ).toBe(1);
+    expect(
+      deriveProjectProgress([
+        { progress: 40, durationDays: 0 },
+        { progress: 0, durationDays: 10 },
+      ])
+    ).toBe(1);
+    expect(
+      deriveProjectProgress([
+        { progress: 1, durationDays: 100 },
+        { progress: 0, durationDays: 100 },
+      ])
+    ).toBe(1);
+  });
 });

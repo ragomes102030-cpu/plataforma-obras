@@ -19,14 +19,18 @@ export function deriveProjectProgress(
   );
   if (totalDuration <= 0) {
     const simple = activities.reduce((sum, activity) => sum + activity.progress, 0);
-    return clampPercent(Math.round(simple / activities.length));
+    const rounded = Math.round(simple / activities.length);
+    if (rounded <= 0 && activities.some((a) => a.progress > 0)) return 1;
+    return clampPercent(rounded);
   }
   const weighted = activities.reduce(
     (sum, activity) =>
       sum + activity.progress * Math.max(0, activity.durationDays),
     0
   );
-  return clampPercent(Math.round(weighted / totalDuration));
+  const rounded = Math.round(weighted / totalDuration);
+  if (rounded <= 0 && activities.some((a) => a.progress > 0)) return 1;
+  return clampPercent(rounded);
 }
 
 function clampPercent(value: number): number {
