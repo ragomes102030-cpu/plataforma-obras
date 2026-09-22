@@ -652,6 +652,9 @@ export const agentFindings = mysqlTable(
     ])
       .default("open")
       .notNull(),
+    resolvedAt: timestamp("resolvedAt"),
+    resolvedBy: int("resolvedBy").references(() => users.id),
+    resolutionNote: text("resolutionNote"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

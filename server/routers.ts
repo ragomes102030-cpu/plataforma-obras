@@ -46,6 +46,10 @@ import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-sourc
 import { validateEap } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import {
+  allowedSourcesFor,
+  canTransitionFinding,
+} from "./construction/finding-lifecycle";
+import {
   getAgentExecutionStatus,
   startAgentExecution,
 } from "./agent-execution";
@@ -476,7 +480,7 @@ async function loadAgentCoordinatorSnapshot(
   if (!state)
     throw new Error("Não foi possível inicializar o estado do coordenador.");
 
-  const gateEvidence = await loadStageGateEvidence(db, projectId, userId, state.blockerCount);
+  const gateEvidence = await loadStageGateEvidence(db, projectId, userId);
   const gate = describeStageGate(state.stage, gateEvidence);
 
   const [decisions, findings, memories] = await Promise.all([
@@ -523,7 +527,7 @@ async function loadAgentCoordinatorSnapshot(
 
   return {
     stage: state.stage,
-    blockerCount: state.blockerCount,
+    blockerCount: gateEvidence.blockerCount,
     lastSummary: state.lastSummary,
     nextStage: gate.nextStage,
     canAdvance: gate.canAdvance,
@@ -536,12 +540,14 @@ async function loadAgentCoordinatorSnapshot(
       reason: decision.reason,
     })),
     openFindings: findings.map(finding => ({
+      id: finding.id,
       classification: finding.classification,
       entityType: finding.entityType,
       entityRef: finding.entityRef,
       description: finding.description,
       impact: finding.impact,
       confidence: finding.confidence,
+      createdAt: finding.createdAt,
     })),
     approvedMemories: memories.map(memory => ({
       category: memory.category,
@@ -554,29 +560,47 @@ async function loadAgentCoordinatorSnapshot(
   };
 }
 
+async function countOpenBlockers(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(agentFindings)
+    .where(
+      and(
+        eq(agentFindings.projectId, projectId),
+        eq(agentFindings.status, "open"),
+        eq(agentFindings.classification, "blocker")
+      )
+    );
+  return Number(row?.total ?? 0);
+}
+
 async function loadStageGateEvidence(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
-  userId: number,
-  blockerCount: number
+  userId: number
 ) {
   await assertAccessibleProject(db, projectId, userId);
-  const [project, eapNodes, activities, dependencies] = await Promise.all([
-    db
-      .select({ name: projects.name, location: projects.location })
-      .from(projects)
-      .where(accessibleProjectCondition(projectId, userId))
-      .limit(1),
-    db.select().from(wbsNodes).where(eq(wbsNodes.projectId, projectId)),
-    db
-      .select()
-      .from(scheduleActivities)
-      .where(eq(scheduleActivities.projectId, projectId)),
-    db
-      .select()
-      .from(scheduleDependencies)
-      .where(eq(scheduleDependencies.projectId, projectId)),
-  ]);
+  const [project, eapNodes, activities, dependencies, blockerCount] =
+    await Promise.all([
+      db
+        .select({ name: projects.name, location: projects.location })
+        .from(projects)
+        .where(accessibleProjectCondition(projectId, userId))
+        .limit(1),
+      db.select().from(wbsNodes).where(eq(wbsNodes.projectId, projectId)),
+      db
+        .select()
+        .from(scheduleActivities)
+        .where(eq(scheduleActivities.projectId, projectId)),
+      db
+        .select()
+        .from(scheduleDependencies)
+        .where(eq(scheduleDependencies.projectId, projectId)),
+      countOpenBlockers(db, projectId),
+    ]);
   const eapValidation = validateEap(eapNodes);
   const cpm = calculateDeterministicCpm(activities, dependencies);
   return {
@@ -1966,8 +1990,7 @@ export const appRouter = router({
           evidence: await loadStageGateEvidence(
             db,
             input.projectId,
-            ctx.user.id,
-            state.blockerCount
+            ctx.user.id
           ),
         });
         if (!transition.allowed) {
@@ -2036,22 +2059,48 @@ export const appRouter = router({
             confidence: input.confidence,
           })
           .$returningId();
-        const [state] = await db
-          .select()
-          .from(agentProjectStates)
-          .where(eq(agentProjectStates.projectId, input.projectId))
-          .limit(1);
-        if (state) {
-          await db
-            .update(agentProjectStates)
-            .set({
-              blockerCount:
-                state.blockerCount +
-                (input.classification === "blocker" ? 1 : 0),
-            })
-            .where(eq(agentProjectStates.projectId, input.projectId));
-        }
         return { id: created.id };
+      }),
+    transitionFinding: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          findingId: z.number().int().positive(),
+          to: z.enum(["resolved", "open", "obsolete"]),
+          note: z.string().trim().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [finding] = await db
+          .select()
+          .from(agentFindings)
+          .where(
+            and(
+              eq(agentFindings.id, input.findingId),
+              eq(agentFindings.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!finding) throw new Error("Achado não encontrado nesta obra.");
+        if (!canTransitionFinding(finding.status, input.to)) {
+          throw new Error(
+            `Transição inválida: ${finding.status} → ${input.to}. Permitido a partir de: ${allowedSourcesFor(input.to).join(", ")}.`
+          );
+        }
+        const reopening = input.to === "open";
+        await db
+          .update(agentFindings)
+          .set({
+            status: input.to,
+            resolvedAt: reopening ? null : new Date(),
+            resolvedBy: reopening ? null : ctx.user.id,
+            resolutionNote: input.note ?? null,
+          })
+          .where(eq(agentFindings.id, input.findingId));
+        return loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id);
       }),
     proposeMemory: protectedProcedure
       .input(
