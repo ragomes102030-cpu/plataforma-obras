@@ -3980,6 +3980,14 @@ html, body, #root { background: #080a0c !important; color: #edf3f5 !important; }
   color: #9eafb6 !important;
 }
 
+.portfolio-quick-actions {
+  border-bottom-color: #293940 !important;
+}
+
+.portfolio-quick-actions .eyebrow {
+  color: #9eafb6 !important;
+}
+
 [class~="bg-white"],
 [class~="bg-slate-50"],
 [class~="bg-slate-100"],
@@ -4017,5 +4025,62 @@ html, body, #root { background: #080a0c !important; color: #edf3f5 !important; }
   .portfolio-next-step {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+.portfolio-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.portfolio-quick-actions .eyebrow {
+  margin: 0;
+  width: 100%;
+}
+
+.portfolio-quick-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.portfolio-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.portfolio-quick-actions .outline-button,
+.portfolio-next-actions .outline-button,
+.portfolio-next-actions .primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .portfolio-quick-actions,
+  .portfolio-next-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portfolio-quick-buttons {
+    flex-direction: column;
+  }
+
+  .portfolio-quick-buttons .outline-button,
+  .portfolio-next-actions .outline-button,
+  .portfolio-next-actions .primary-button {
+    justify-content: center;
+    width: 100%;
   }
 }

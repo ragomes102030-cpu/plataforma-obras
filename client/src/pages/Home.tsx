@@ -26,7 +26,9 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useLocation } from "wouter";
+import { NAV_PATHS, labelFromPath } from "@/nav-paths";
 import { AgentView } from "@/components/AgentView";
 import { AgentSidebar } from "@/components/AgentSidebar";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
@@ -827,8 +829,17 @@ export default function Home() {
   const projectsQuery = trpc.projects.list.useQuery();
   const serverProjects = projectsQuery.data ?? [];
   const projects = serverProjects;
+  const [location, setLocation] = useLocation();
   const [selectedId, setSelectedId] = useState(1);
-  const [activeNav, setActiveNav] = useState("Portfólio");
+  const [activeNav, setActiveNavState] = useState(() => labelFromPath(location));
+  useEffect(() => {
+    setActiveNavState(labelFromPath(location));
+  }, [location]);
+  const setActiveNav = (label: string) => {
+    setActiveNavState(label);
+    const path = NAV_PATHS[label] ?? "/";
+    if (location !== path) setLocation(path);
+  };
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -968,7 +979,6 @@ export default function Home() {
               key={project.id}
               onClick={() => {
                 setSelectedId(project.id);
-                setActiveNav("Portfólio");
                 setMobileNavOpen(false);
               }}
               className={`project-mini ${selected?.id === project.id ? "selected" : ""}`}
@@ -1141,11 +1151,47 @@ export default function Home() {
                       Limpar busca <X size={14} />
                     </button>
                   </div>
+                  {selected && (
+                    <div className="portfolio-quick-actions">
+                      <span className="eyebrow">ABRIR NA OBRA ATIVA · {selected.name}</span>
+                      <div className="portfolio-quick-buttons">
+                        <button
+                          type="button"
+                          className="outline-button"
+                          onClick={() => setActiveNav("Orçamento")}
+                        >
+                          <WalletCards size={14} /> Orçamento
+                        </button>
+                        <button
+                          type="button"
+                          className="outline-button"
+                          onClick={() => setActiveNav("Cronogramas")}
+                        >
+                          <CalendarDays size={14} /> Cronogramas
+                        </button>
+                        <button
+                          type="button"
+                          className="outline-button"
+                          onClick={() => setActiveNav("Linha de Balanço")}
+                        >
+                          <Activity size={14} /> Linha de Balanço
+                        </button>
+                        <button
+                          type="button"
+                          className="outline-button"
+                          onClick={() => setActiveNav("EAP")}
+                        >
+                          <Layers3 size={14} /> EAP
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="portfolio-list">
                     {visibleProjects.map(project => (
                       <button
                         key={project.id}
                         onClick={() => setSelectedId(project.id)}
+                        title="Selecionar obra ativa — use os atalhos acima para abrir Orçamento ou Cronogramas"
                         className={`portfolio-row ${selected?.id === project.id ? "active" : ""}`}
                       >
                         <div className="portfolio-status">
@@ -1230,12 +1276,20 @@ export default function Home() {
                     acompanhar o realizado.
                   </p>
                 </div>
-                <button
-                  className="outline-button"
-                  onClick={() => setActiveNav("Cronogramas")}
-                >
-                  Abrir Cronogramas <ChevronRight size={15} />
-                </button>
+                <div className="portfolio-next-actions">
+                  <button
+                    className="outline-button"
+                    onClick={() => setActiveNav("Cronogramas")}
+                  >
+                    Abrir Cronogramas <ChevronRight size={15} />
+                  </button>
+                  <button
+                    className="primary-button"
+                    onClick={() => setActiveNav("Orçamento")}
+                  >
+                    Abrir Orçamento <WalletCards size={15} />
+                  </button>
+                </div>
               </section>
             </>
           )}
