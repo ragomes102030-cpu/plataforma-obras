@@ -37,6 +37,8 @@ type CountRow = { count: number };
 
 const connection = await mysql.createConnection(connectionOptions(databaseUrl));
 
+let committed = false;
+
 try {
   await connection.beginTransaction();
   const [duplicateRows] = await connection.query<DuplicateGroup[]>(`
@@ -134,25 +136,6 @@ try {
     );
   }
 
-  const [uniqueIndexRows] = await connection.query<{ indexName: string }[]>(
-    `
-      SELECT DISTINCT index_name AS indexName
-      FROM information_schema.statistics
-      WHERE table_schema = DATABASE()
-        AND table_name = 'wbs_nodes'
-        AND index_name = 'wbs_nodes_project_code_unique_idx'
-    `
-  );
-  if (!uniqueIndexRows.length) {
-    await connection.query(
-      `
-        ALTER TABLE wbs_nodes
-        ADD UNIQUE INDEX wbs_nodes_project_code_unique_idx (projectId, code)
-      `
-    );
-    console.log("[WBS] Constraint única projectId+code criada.");
-  }
-
   await connection.query(`
     UPDATE wbs_nodes child
     INNER JOIN wbs_nodes parent
@@ -184,10 +167,41 @@ try {
   console.log("[WBS] Vínculos atividade → EAP preenchidos e validados.");
 
   await connection.commit();
-  console.log("[WBS] Saneamento concluído; db:push poderá criar a constraint única.");
+  committed = true;
+  console.log("[WBS] Saneamento transacional concluído.");
+
+  // MySQL não reverte DDL (commit implícito): por isso o DDL roda só depois do
+  // commit do DML, guardado por information_schema para permanecer idempotente.
+  const [uniqueIndexRows] = await connection.query<{ indexName: string }[]>(
+    `
+      SELECT DISTINCT index_name AS indexName
+      FROM information_schema.statistics
+      WHERE table_schema = DATABASE()
+        AND table_name = 'wbs_nodes'
+        AND index_name = 'wbs_nodes_project_code_unique_idx'
+    `
+  );
+  if (!uniqueIndexRows.length) {
+    await connection.query(
+      `
+        ALTER TABLE wbs_nodes
+        ADD UNIQUE INDEX wbs_nodes_project_code_unique_idx (projectId, code)
+      `
+    );
+    console.log("[WBS] Constraint única projectId+code criada.");
+  } else {
+    console.log("[WBS] Constraint única projectId+code já existe.");
+  }
 } catch (error) {
-  await connection.rollback();
-  console.error("[WBS] Saneamento revertido:", error);
+  if (committed) {
+    console.error(
+      "[WBS] Falha após o commit do saneamento (DDL não é reversível):",
+      error
+    );
+  } else {
+    await connection.rollback();
+    console.error("[WBS] Saneamento revertido:", error);
+  }
   process.exitCode = 1;
 } finally {
   await connection.end();

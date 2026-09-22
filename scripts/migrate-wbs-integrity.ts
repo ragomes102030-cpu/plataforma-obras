@@ -34,8 +34,6 @@ const query = async <T extends mysql.RowDataPacket[] | mysql.ResultSetHeader[]>(
 };
 
 try {
-  await connection.beginTransaction();
-
   const [nullActivities] = await query<CountRow[]>(
     "SELECT COUNT(*) AS count FROM schedule_activities WHERE wbsNodeId IS NULL"
   );
@@ -70,6 +68,8 @@ try {
     throw new Error("[WBS] A coluna schedule_activities.wbsNodeId não existe.");
   }
 
+  // DDL não é transacional em MySQL: cada alteração abaixo é idempotente e
+  // guardada por information_schema, então reexecutar a migração é seguro.
   if (column[0].isNullable === "YES") {
     await connection.query(
       "ALTER TABLE schedule_activities MODIFY COLUMN wbsNodeId int NOT NULL"
@@ -121,13 +121,11 @@ try {
     console.log("[WBS] Foreign key pai → EAP já existe.");
   }
 
-  await connection.commit();
   console.log(
     "[WBS] Migração de integridade concluída sem operação destrutiva."
   );
 } catch (error) {
-  await connection.rollback();
-  console.error("[WBS] Migração revertida:", error);
+  console.error("[WBS] Migração de integridade interrompida:", error);
   process.exitCode = 1;
 } finally {
   await connection.end();
