@@ -49,6 +49,7 @@ import {
   allowedSourcesFor,
   canTransitionFinding,
 } from "./construction/finding-lifecycle";
+import { deriveProjectProgress } from "./construction/project-progress";
 import {
   getAgentExecutionStatus,
   startAgentExecution,
@@ -216,6 +217,30 @@ const starterUnits = Array.from({ length: 5 }, (_, index) => ({
   unitType: "pavimento",
   sortOrder: index,
 }));
+
+async function recomputeProjectProgress(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+): Promise<number> {
+  const rows = await db
+    .select({
+      progress: scheduleActivities.progress,
+      durationDays: scheduleActivities.durationDays,
+    })
+    .from(scheduleActivities)
+    .where(eq(scheduleActivities.projectId, projectId));
+  const progress = deriveProjectProgress(
+    rows.map(row => ({
+      progress: Number(row.progress ?? 0),
+      durationDays: Number(row.durationDays ?? 0),
+    }))
+  );
+  await db
+    .update(projects)
+    .set({ progress })
+    .where(eq(projects.id, projectId));
+  return progress;
+}
 
 async function seedStarterPlan(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -920,6 +945,7 @@ export const appRouter = router({
            durationDays: z.number().int().positive(),
           plannedQuantity: z.number().positive().optional(),
           productivity: z.number().positive().optional(),
+          budgetItemId: z.number().int().positive().nullable().optional(),
           progress: z.number().int().min(0).max(100),
           status: z.enum([
             "Não iniciado",
@@ -954,10 +980,12 @@ export const appRouter = router({
             durationDays: input.durationDays,
             plannedQuantity: input.plannedQuantity === undefined ? null : String(input.plannedQuantity),
             productivity: input.productivity === undefined ? null : String(input.productivity),
+            ...(input.budgetItemId !== undefined && { budgetItemId: input.budgetItemId }),
             progress: input.progress,
             status: input.status,
           })
           .where(eq(scheduleActivities.id, input.activityId));
+        await recomputeProjectProgress(db, input.projectId);
         return { updated: true as const };
       }),
     wbs: protectedProcedure
@@ -1513,6 +1541,7 @@ export const appRouter = router({
           const progress = plannedQuantity ? Math.min(100, Math.round((confirmed.reduce((sum, item) => sum + Number(item.quantity), 0) / plannedQuantity) * 100)) : 0;
           await db.update(scheduleActivities).set({ progress, status: progress >= 100 ? "Concluído" : progress > 0 ? "Em andamento" : "Não iniciado" }).where(eq(scheduleActivities.id, entry.activityId));
         }
+        await recomputeProjectProgress(db, input.projectId);
         return { confirmed: true as const };
       }),
   }),
