@@ -37,4 +37,7 @@ export const ENV = {
   mcpGanttLobUrl:
     process.env.MCP_GANTT_LOB_URL ??
     "https://mcp-gantt-lob-server.onrender.com",
+  priceVariationThresholdPct: Number(
+    process.env.PRICE_VARIATION_THRESHOLD_PCT ?? "30"
+  ),
 };

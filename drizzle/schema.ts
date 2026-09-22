@@ -1,10 +1,12 @@
 import {
+  boolean,
   int,
   mysqlEnum,
   mysqlTable,
   AnyMySqlColumn,
   decimal,
   index,
+  json,
   text,
   timestamp,
   uniqueIndex,
@@ -40,6 +42,8 @@ export const projects = mysqlTable("projects", {
   progress: int("progress").default(0).notNull(),
   plannedStart: timestamp("plannedStart").notNull(),
   plannedFinish: timestamp("plannedFinish").notNull(),
+  baseReferencia: mysqlEnum("baseReferencia", ["SEINFRA", "SINAPI", "PROPRIA"]),
+  baseReferenciaRef: varchar("baseReferenciaRef", { length: 20 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -446,6 +450,7 @@ export const budgetItems = mysqlTable(
     source: varchar("source", { length: 80 }),
     referencePeriod: varchar("referencePeriod", { length: 20 }),
     compositionNote: text("compositionNote"),
+    isPriceException: boolean("isPriceException").default(false).notNull(),
     sortOrder: int("sortOrder").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -764,6 +769,23 @@ export const agentRunEvents = mysqlTable(
     index("agent_run_events_request_idx").on(table.requestId),
     index("agent_run_events_project_idx").on(table.projectId),
     index("agent_run_events_user_idx").on(table.userId),
+  ]
+);
+
+export const projectAuditEvents = mysqlTable(
+  "project_audit_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId").references(() => users.id),
+    action: varchar("action", { length: 64 }).notNull(),
+    payload: json("payload").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("project_audit_events_project_idx").on(table.projectId, table.action),
   ]
 );
 

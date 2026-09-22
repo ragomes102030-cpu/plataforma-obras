@@ -10,6 +10,7 @@ import {
   mcpMutationOperations,
   mcpHomologationRuns,
   projectMcpIntegrations,
+  projectAuditEvents,
   agentProjectStates,
   agentDecisions,
   agentFindings,
@@ -29,6 +30,13 @@ import {
   scheduleBaselineItems,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
+import { seinfraAdapter } from "@shared/price-sources/seinfra";
+import {
+  exceedsPriceThreshold,
+  findCandidates,
+  priceVariation,
+  type ComparableRecord,
+} from "@shared/price-sources/matching";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
@@ -336,7 +344,7 @@ async function seedSolarAcaciasPlan(
   await addLocationPackages(preliminary, "1.1.2", "Administração direta", [["1", "Planejamento executivo e compatibilização", "mês", 24], ["2", "Segurança, qualidade e meio ambiente", "mês", 24]]);
   const foundation = await addPhase("1.2", "Fundação e contenções");
   await addLocationPackages(foundation, "1.2.1", "Subsolo e escavação", [["1", "Escavação do subsolo", "m³", 2400], ["2", "Cortina de contenção em concreto", "m²", 850], ["3", "Impermeabilização de contenção", "m²", 850]]);
-  await addLocationPackages(foundation, "1.2.2", "Fundação profunda", [["1", "Estacas hélice contínua Ø40 cm", "m", 768], ["2", "Blocos de coroamento", "un", 48], ["3", "Vigas baldrame e arranques", "m", 220]]);
+  await addLocationPackages(foundation, "1.2.2", "Fundação profunda", [["1", "Estacas hélice contínua Ã˜40 cm", "m", 768], ["2", "Blocos de coroamento", "un", 48], ["3", "Vigas baldrame e arranques", "m", 220]]);
   const structure = await addPhase("1.3", "Estrutura de concreto armado");
   const structuralLocations = ["Laje do subsolo", "Laje do térreo", ...Array.from({ length: 8 }, (_, index) => `Laje do pavimento-tipo ${index + 2}`), "Laje de cobertura"];
   for (let index = 0; index < structuralLocations.length; index += 1) {
@@ -1311,6 +1319,74 @@ export const appRouter = router({
         await seedStarterPlan(db, input.projectId);
         return { initialized: true as const };
       }),
+    setBaseReferencia: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          baseReferencia: z.enum(["SEINFRA", "SINAPI", "PROPRIA"]),
+          reference: z.string().trim().min(2).max(20),
+          confirm: z.boolean().default(false),
+          catalogId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [project] = await db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        if (!project) throw new Error("Obra não encontrada.");
+        const previousBase = project.baseReferencia;
+        const changing =
+          previousBase !== null &&
+          (previousBase !== input.baseReferencia ||
+            project.baseReferenciaRef !== input.reference);
+        if (changing) {
+          const [approved] = await db
+            .select({ id: budgetVersions.id })
+            .from(budgetVersions)
+            .where(
+              and(
+                eq(budgetVersions.projectId, input.projectId),
+                eq(budgetVersions.status, "aprovado")
+              )
+            )
+            .limit(1);
+          if (approved && !input.confirm) {
+            throw new Error(
+              "Esta obra já tem orçamento aprovado com a base atual. Confirme explicitamente a troca (confirm=true); preços congelados não serão alterados."
+            );
+          }
+        }
+        await db
+          .update(projects)
+          .set({
+            baseReferencia: input.baseReferencia,
+            baseReferenciaRef: input.reference,
+          })
+          .where(eq(projects.id, input.projectId));
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: changing ? "base_changed" : "base_defined",
+          payload: {
+            from: previousBase,
+            fromRef: project.baseReferenciaRef,
+            to: input.baseReferencia,
+            toRef: input.reference,
+            catalogId: input.catalogId ?? null,
+            confirmed: input.confirm,
+            at: new Date().toISOString(),
+          },
+        });
+        return {
+          baseReferencia: input.baseReferencia,
+          baseReferenciaRef: input.reference,
+        };
+      }),
   }),
   production: router({
     createFront: protectedProcedure
@@ -1684,6 +1760,428 @@ export const appRouter = router({
           .$returningId();
         return { id: createdId.id };
       }),
+    reconcilePreview: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          thresholdPct: z.number().min(0).max(500).optional(),
+          minScore: z.number().min(0).max(1).default(0.35),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db)
+          return {
+            catalog: null,
+            items: [] as Array<{
+              budgetItemId: number;
+              code: string;
+              description: string;
+              unit: string;
+              quantity: number;
+              manualPrice: number;
+              isPriceException: boolean;
+              match: {
+                kind: "priceItem" | "composition";
+                id: number;
+                code: string;
+                description: string;
+                unit: string;
+                unitPrice: number;
+                score: number;
+              } | null;
+              candidates: Array<{
+                kind: "priceItem" | "composition";
+                id: number;
+                code: string;
+                description: string;
+                unit: string;
+                unitPrice: number;
+                score: number;
+              }>;
+              variation: number | null;
+              alert: boolean;
+              projectedDelta: number;
+            }>,
+            thresholdPct: ENV.priceVariationThresholdPct,
+            totalBefore: 0,
+            totalAfter: 0,
+          };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const thresholdPct =
+          input.thresholdPct ?? ENV.priceVariationThresholdPct;
+        const [project] = await db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        const activeVersionId = (
+          await db
+            .select()
+            .from(budgetVersions)
+            .where(eq(budgetVersions.projectId, input.projectId))
+            .orderBy(desc(budgetVersions.versionNumber))
+            .limit(1)
+        )[0]?.id;
+        if (!project || !activeVersionId)
+          return {
+            catalog: null,
+            items: [] as Array<{
+              budgetItemId: number;
+              code: string;
+              description: string;
+              unit: string;
+              quantity: number;
+              manualPrice: number;
+              isPriceException: boolean;
+              match: {
+                kind: "priceItem" | "composition";
+                id: number;
+                code: string;
+                description: string;
+                unit: string;
+                unitPrice: number;
+                score: number;
+              } | null;
+              candidates: Array<{
+                kind: "priceItem" | "composition";
+                id: number;
+                code: string;
+                description: string;
+                unit: string;
+                unitPrice: number;
+                score: number;
+              }>;
+              variation: number | null;
+              alert: boolean;
+              projectedDelta: number;
+            }>,
+            thresholdPct,
+            totalBefore: 0,
+            totalAfter: 0,
+          };
+        const items = await db
+          .select()
+          .from(budgetItems)
+          .where(eq(budgetItems.budgetVersionId, activeVersionId))
+          .orderBy(budgetItems.sortOrder);
+        const seinfraCatalogs = await db
+          .select()
+          .from(priceCatalogs)
+          .where(eq(priceCatalogs.sourceType, "SEINFRA"))
+          .orderBy(desc(priceCatalogs.createdAt));
+        const activeCatalog =
+          seinfraCatalogs.find(
+            row =>
+              project.baseReferenciaRef === null ||
+              row.referencePeriod === project.baseReferenciaRef
+          ) ?? seinfraCatalogs[0];
+        const baseItems = activeCatalog
+          ? await db
+              .select()
+              .from(priceItems)
+              .where(eq(priceItems.catalogId, activeCatalog.id))
+          : [];
+        const baseCompositions = await db
+          .select()
+          .from(serviceCompositions)
+          .where(eq(serviceCompositions.sourceCatalogId, activeCatalog?.id ?? -1));
+        const compositionIds = baseCompositions.map(row => row.id);
+        const compositionComponentRows = compositionIds.length
+          ? await db
+              .select()
+              .from(compositionComponents)
+              .where(inArray(compositionComponents.compositionId, compositionIds))
+          : [];
+        const compositionPriceById = new Map<number, number>();
+        for (const component of compositionComponentRows) {
+          const current = compositionPriceById.get(component.compositionId) ?? 0;
+          compositionPriceById.set(
+            component.compositionId,
+            current +
+              Number(component.coefficient) * Number(component.unitPriceSnapshot)
+          );
+        }
+        const records: ComparableRecord[] = [
+          ...baseItems.map(row => ({
+            kind: "priceItem" as const,
+            id: row.id,
+            code: row.code,
+            description: row.description,
+            unit: row.unit,
+            unitPrice: Number(row.unitPrice),
+          })),
+          ...baseCompositions.map(row => ({
+            kind: "composition" as const,
+            id: row.id,
+            code: row.code,
+            description: row.description,
+            unit: row.unit,
+            unitPrice: compositionPriceById.get(row.id) ?? 0,
+          })),
+        ];
+        const preview = items.map(item => {
+          const manualPrice = Number(item.unitPrice);
+          const codeCandidates = records.filter(
+            record => record.code === item.code
+          );
+          const scored = [
+            ...codeCandidates.map(record => ({ ...record, score: 1 })),
+            ...findCandidates(item.description, records, {
+              minScore: input.minScore,
+              limit: 3,
+            }).filter(
+              candidate =>
+                !codeCandidates.some(
+                  existing =>
+                    existing.kind === candidate.kind &&
+                    existing.id === candidate.id
+                )
+            ),
+          ].sort((a, b) => b.score - a.score);
+          const best = scored[0] ?? null;
+          const suggestedPrice = best ? best.unitPrice : null;
+          const variation =
+            suggestedPrice !== null
+              ? priceVariation(manualPrice, suggestedPrice)
+              : null;
+          const alert =
+            suggestedPrice !== null &&
+            exceedsPriceThreshold(manualPrice, suggestedPrice, thresholdPct);
+          const quantity = Number(item.quantity);
+          return {
+            budgetItemId: item.id,
+            code: item.code,
+            description: item.description,
+            unit: item.unit,
+            quantity,
+            manualPrice,
+            isPriceException: item.isPriceException,
+            match: best
+              ? {
+                  kind: best.kind,
+                  id: best.id,
+                  code: best.code,
+                  description: best.description,
+                  unit: best.unit,
+                  unitPrice: best.unitPrice,
+                  score: best.score,
+                }
+              : null,
+            candidates: scored.slice(1, 4),
+            variation,
+            alert,
+            projectedDelta:
+              suggestedPrice !== null
+                ? (suggestedPrice - manualPrice) * quantity
+                : 0,
+          };
+        });
+        const totalBefore = preview.reduce(
+          (sum, row) => sum + row.quantity * row.manualPrice,
+          0
+        );
+        const totalAfter = preview.reduce((sum, row) => {
+          const price = row.match ? row.match.unitPrice : row.manualPrice;
+          return sum + row.quantity * price;
+        }, 0);
+        return {
+          catalog: activeCatalog
+            ? {
+                id: activeCatalog.id,
+                name: activeCatalog.name,
+                referencePeriod: activeCatalog.referencePeriod,
+              }
+            : null,
+          items: preview,
+          thresholdPct,
+          totalBefore,
+          totalAfter,
+        };
+      }),
+    applyReconciliation: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          decisions: z
+            .array(
+              z.object({
+                budgetItemId: z.number().int().positive(),
+                action: z.enum(["apply_match", "keep_manual"]),
+                matchKind: z.enum(["priceItem", "composition"]).optional(),
+                matchId: z.number().int().positive().optional(),
+                score: z.number().min(0).max(1).optional(),
+              })
+            )
+            .min(1)
+            .max(200),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const activeVersion = (
+          await db
+            .select()
+            .from(budgetVersions)
+            .where(eq(budgetVersions.projectId, input.projectId))
+            .orderBy(desc(budgetVersions.versionNumber))
+            .limit(1)
+        )[0];
+        if (!activeVersion) throw new Error("Nenhuma versão de orçamento ativa.");
+        if (activeVersion.status === "aprovado" || activeVersion.status === "arquivado")
+          throw new Error("Versão aprovada/arquivada não aceita reconciliação.");
+        const itemIds = input.decisions.map(d => d.budgetItemId);
+        const existing = await db
+          .select()
+          .from(budgetItems)
+          .where(
+            and(
+              eq(budgetItems.budgetVersionId, activeVersion.id),
+              inArray(budgetItems.id, itemIds)
+            )
+          );
+        const byId = new Map(existing.map(row => [row.id, row]));
+        const thresholdPct = ENV.priceVariationThresholdPct;
+        const [projectRow] = await db
+          .select({
+            baseReferenciaRef: projects.baseReferenciaRef,
+          })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        const projectBaseRef = projectRow?.baseReferenciaRef ?? null;
+        let applied = 0;
+        let kept = 0;
+        let exceptions = 0;
+        for (const decision of input.decisions) {
+          const item = byId.get(decision.budgetItemId);
+          if (!item) throw new Error(`Item ${decision.budgetItemId} não nesta versão.`);
+          const manualPrice = Number(item.unitPrice);
+          if (decision.action === "keep_manual") {
+            await db
+              .update(budgetItems)
+              .set({ isPriceException: true, source: "manual (fora da base padrão)" })
+              .where(eq(budgetItems.id, item.id));
+            await db.insert(projectAuditEvents).values({
+              projectId: input.projectId,
+              userId: ctx.user.id,
+              action: "price_match_rejected",
+              payload: {
+                budgetItemId: item.id,
+                manualDescription: item.description,
+                manualPrice,
+                score: decision.score ?? null,
+                at: new Date().toISOString(),
+              },
+            });
+            kept += 1;
+            exceptions += 1;
+            continue;
+          }
+          if (!decision.matchKind || !decision.matchId)
+            throw new Error("apply_match exige matchKind e matchId.");
+          let suggested: {
+            description: string;
+            unitPrice: number;
+            code: string;
+            unit: string;
+          } | null = null;
+          if (decision.matchKind === "priceItem") {
+            const [row] = await db
+              .select()
+              .from(priceItems)
+              .where(eq(priceItems.id, decision.matchId!))
+              .limit(1);
+            if (row)
+              suggested = {
+                description: row.description,
+                unitPrice: Number(row.unitPrice),
+                code: row.code,
+                unit: row.unit,
+              };
+          } else {
+            const [row] = await db
+              .select()
+              .from(serviceCompositions)
+              .where(eq(serviceCompositions.id, decision.matchId!))
+              .limit(1);
+            if (row) {
+              const components = await db
+                .select()
+                .from(compositionComponents)
+                .where(
+                  eq(compositionComponents.compositionId, row.id)
+                );
+              const computed = components.length
+                ? components.reduce(
+                    (sum, component) =>
+                      sum +
+                      Number(component.coefficient) *
+                        Number(component.unitPriceSnapshot),
+                    0
+                  )
+                : null;
+              suggested = {
+                description: row.description,
+                unitPrice: computed ?? 0,
+                code: row.code,
+                unit: row.unit,
+              };
+            }
+          }
+          if (!suggested || suggested.unitPrice <= 0)
+            throw new Error(
+              `Match ${decision.matchKind}:${decision.matchId} não encontrado ou sem preço.`
+            );
+          const variation = priceVariation(manualPrice, suggested.unitPrice);
+          const alert = exceedsPriceThreshold(
+            manualPrice,
+            suggested.unitPrice,
+            thresholdPct
+          );
+          await db
+            .update(budgetItems)
+            .set({
+              unitPrice: suggested.unitPrice.toFixed(2),
+              source: `SEINFRA ${suggested.code}`,
+              referencePeriod: projectBaseRef,
+              isPriceException: false,
+            })
+            .where(eq(budgetItems.id, item.id));
+          await db.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "price_match_applied",
+            payload: {
+              budgetItemId: item.id,
+              manualDescription: item.description,
+              seinfraDescription: suggested.description,
+              seinfraCode: suggested.code,
+              matchKind: decision.matchKind,
+              matchId: decision.matchId,
+              score: decision.score ?? null,
+              manualPrice,
+              seinfraPrice: suggested.unitPrice,
+              variation,
+              thresholdPct,
+              alert,
+              at: new Date().toISOString(),
+            },
+          });
+          applied += 1;
+        }
+        const items = await db
+          .select()
+          .from(budgetItems)
+          .where(eq(budgetItems.budgetVersionId, activeVersion.id));
+        const total = items.reduce(
+          (sum, item) => sum + Number(item.quantity) * Number(item.unitPrice),
+          0
+        );
+        return { applied, kept, exceptions, total };
+      }),
   }),
   catalog: router({
     list: protectedProcedure
@@ -1763,6 +2261,125 @@ export const appRouter = router({
         }).$returningId();
         void ctx.user.id;
         return { id: createdId.id };
+      }),
+    importPriceSheet: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().trim().min(2).max(160).optional(),
+          sourceType: z.enum(["SEINFRA"]),
+          fileName: z.string().trim().min(1).max(240),
+          fileDataBase64: z.string().min(1).max(40_000_000),
+          referencePeriod: z.string().trim().min(2).max(20),
+          state: z.string().trim().length(2).optional(),
+          notes: z.string().trim().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const bytes = Buffer.from(input.fileDataBase64, "base64");
+        if (!bytes.length) throw new Error("Arquivo vazio ou base64 inválido.");
+        const uint8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        if (!seinfraAdapter.canParse(input.fileName, uint8)) {
+          throw new Error("Formato não suportado. Envie .xls ou .xlsx da SEINFRA (download manual do site).");
+        }
+        const parsed = await seinfraAdapter.parse(input.fileName, uint8);
+        if (!parsed.records.length) {
+          throw new Error("Nenhum preço reconhecido na planilha (cabeçalho não identificado).");
+        }
+        const referencePeriod = input.referencePeriod || parsed.referenceHint || "s/ ref";
+        // Cada import = 1 NOVO priceCatalogs; nunca sobrescreve meses anteriores.
+        const [created] = await db
+          .insert(priceCatalogs)
+          .values({
+            name: input.name ?? `SEINFRA-CE ${referencePeriod}`,
+            sourceType: "SEINFRA",
+            state: (input.state ?? "CE").toUpperCase(),
+            referencePeriod,
+            notes: parsed.referenceHint
+              ? `ref arquivo: ${parsed.referenceHint}; ${parsed.skipped} linha(s) ignoradas`
+              : `${parsed.skipped} linha(s) ignoradas`,
+            createdBy: ctx.user.id,
+          })
+          .$returningId();
+        const chunkSize = 500;
+        for (let i = 0; i < parsed.records.length; i += chunkSize) {
+          const chunk = parsed.records.slice(i, i + chunkSize);
+          await db.insert(priceItems).values(
+            chunk.map(record => ({
+              catalogId: created.id,
+              code: record.code,
+              description: record.description,
+              unit: record.unit,
+              itemType: record.itemType,
+              unitPrice: record.unitPrice.toFixed(2),
+              notes: record.notes ?? null,
+            }))
+          );
+        }
+        return {
+          catalogId: created.id,
+          referencePeriod,
+          imported: parsed.records.length,
+          skipped: parsed.skipped,
+          referenceHint: parsed.referenceHint,
+        };
+      }),
+    searchPrices: protectedProcedure
+      .input(
+        z.object({
+          query: z.string().trim().min(2).max(240),
+          sourceType: z.enum(["propria", "SINAPI", "SEINFRA", "fornecedor"]).optional(),
+          limit: z.number().int().min(1).max(10).default(6),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { candidates: [] };
+        const catalogs = input.sourceType
+          ? await db
+              .select({ id: priceCatalogs.id })
+              .from(priceCatalogs)
+              .where(eq(priceCatalogs.sourceType, input.sourceType))
+          : await db.select({ id: priceCatalogs.id }).from(priceCatalogs);
+        const catalogIds = catalogs.map(row => row.id);
+        const baseItems = catalogIds.length
+          ? await db
+              .select()
+              .from(priceItems)
+              .where(inArray(priceItems.catalogId, catalogIds))
+          : [];
+        const compositions = await db
+          .select({
+            id: serviceCompositions.id,
+            code: serviceCompositions.code,
+            description: serviceCompositions.description,
+            unit: serviceCompositions.unit,
+          })
+          .from(serviceCompositions);
+        const records: ComparableRecord[] = [
+          ...baseItems.map(row => ({
+            kind: "priceItem" as const,
+            id: row.id,
+            code: row.code,
+            description: row.description,
+            unit: row.unit,
+            unitPrice: Number(row.unitPrice),
+          })),
+          ...compositions.map(row => ({
+            kind: "composition" as const,
+            id: row.id,
+            code: row.code,
+            description: row.description,
+            unit: row.unit,
+            unitPrice: 0,
+          })),
+        ];
+        const candidates = findCandidates(input.query, records, {
+          limit: input.limit,
+          minScore: 0.3,
+        });
+        return { candidates };
       }),
     createComposition: protectedProcedure
       .input(

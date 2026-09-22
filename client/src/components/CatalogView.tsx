@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
-import { BookOpen, Calculator, Plus, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { BookOpen, Calculator, Plus, RefreshCw, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const typeLabels = {
   material: "Material",
@@ -37,6 +37,25 @@ export function CatalogView() {
   const [priceItemId, setPriceItemId] = useState("");
   const [componentType, setComponentType] = useState<"material" | "mao_de_obra" | "equipamento">("material");
   const [coefficient, setCoefficient] = useState("");
+  const [seinfraFile, setSeinfraFile] = useState<File | null>(null);
+  const [seinfraPeriod, setSeinfraPeriod] = useState("");
+  const [seinfraUf, setSeinfraUf] = useState("CE");
+  const [seinfraName, setSeinfraName] = useState("");
+  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; skipped: number; referenceHint: string | null } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [acQuery, setAcQuery] = useState("");
+  const [acOpen, setAcOpen] = useState(false);
+
+  useEffect(() => {
+    if (!acQuery.trim() || acQuery.trim().length < 2) { setAcOpen(false); return; }
+    const t = setTimeout(() => setAcOpen(true), 300);
+    return () => clearTimeout(t);
+  }, [acQuery]);
+  const acEnabled = acOpen && acQuery.trim().length >= 2;
+  const acQueryResult = trpc.catalog.searchPrices.useQuery(
+    { query: acQuery.trim(), sourceType: "SEINFRA", limit: 6 },
+    { enabled: acEnabled }
+  );
 
   const selectedCatalog = catalogQuery.data?.catalogs.find(item => item.id === catalogId) ?? catalogQuery.data?.catalogs[0];
   const selectedComposition = catalogQuery.data?.compositions.find(item => item.id === compositionId) ?? catalogQuery.data?.compositions[0];
@@ -71,6 +90,40 @@ export function CatalogView() {
       await utils.catalog.list.invalidate({ catalogId, compositionId });
     },
   });
+  const importSheet = trpc.catalog.importPriceSheet.useMutation({
+    onSuccess: async result => {
+      setImportResult(result);
+      setSeinfraFile(null);
+      setSeinfraPeriod("");
+      setSeinfraName("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await utils.catalog.list.invalidate();
+      setCatalogId(result.catalogId);
+    },
+  });
+  const submitImport = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!seinfraFile || !seinfraPeriod.trim()) return;
+    const buffer = await seinfraFile.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+    importSheet.mutate({
+      sourceType: "SEINFRA",
+      fileName: seinfraFile.name,
+      fileDataBase64: btoa(binary),
+      referencePeriod: seinfraPeriod.trim(),
+      state: seinfraUf.trim().toUpperCase() || undefined,
+      name: seinfraName.trim() || undefined,
+    });
+  };
+  const applyAutocomplete = (candidate: { code: string; description: string; unit: string; unitPrice: number }) => {
+    setItemCode(candidate.code);
+    setItemDescription(candidate.description);
+    setItemUnit(candidate.unit);
+    setItemPrice(String(candidate.unitPrice));
+    setAcOpen(false);
+  };
 
   return (
     <div className="module-page catalog-page">
@@ -109,13 +162,37 @@ export function CatalogView() {
         {createCatalog.error && <p className="form-error">{createCatalog.error.message}</p>}
       </section>
 
+      <section className="module-card">
+        <div className="panel-heading"><div><h3>Importar base SEINFRA-CE</h3><p>Upload manual de .xls/.xlsx oficial — cada importação gera um novo catálogo versionado.</p></div><Upload size={18} className="sparkle" /></div>
+        <form className="catalog-form-grid" onSubmit={submitImport}>
+          <label>Arquivo SEINFRA<input ref={fileInputRef} type="file" accept=".xls,.xlsx" onChange={event => setSeinfraFile(event.target.files?.[0] ?? null)} required /></label>
+          <label>Período de referência<input value={seinfraPeriod} onChange={event => setSeinfraPeriod(event.target.value)} placeholder="09/2026" required /></label>
+          <label>UF<input value={seinfraUf} onChange={event => setSeinfraUf(event.target.value)} placeholder="CE" maxLength={2} /></label>
+          <label>Nome do catálogo<input value={seinfraName} onChange={event => setSeinfraName(event.target.value)} placeholder="SEINFRA-CE 09/2026 (opcional)" /></label>
+          <div className="catalog-form-footer"><span>Arquivos aceitos: Tabela de Insumos (I...) e Planos de Serviços (C...) da SEINFRA.</span><button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || importSheet.isPending}><Upload size={14} /> {importSheet.isPending ? "Importando..." : "Importar planilha"}</button></div>
+        </form>
+        {importSheet.error && <p className="form-error">{importSheet.error.message}</p>}
+        {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span></div></div>}
+      </section>
+
       <div className="catalog-two-column">
         <section className="module-card">
           <div className="panel-heading"><div><h3>Itens de preço</h3><p>Fonte ativa: {selectedCatalog?.name ?? "nenhuma"}</p></div><button className="outline-button" onClick={() => void catalogQuery.refetch()}><RefreshCw size={13} /> Atualizar</button></div>
           <div className="catalog-selector-row"><select value={selectedCatalog?.id ?? ""} onChange={event => setCatalogId(event.target.value ? Number(event.target.value) : undefined)}><option value="">Selecione uma fonte</option>{(catalogQuery.data?.catalogs ?? []).map(item => <option key={item.id} value={item.id}>{item.name} · {item.referencePeriod}</option>)}</select></div>
           <form className="catalog-compact-form" onSubmit={event => { event.preventDefault(); if (selectedCatalog && itemCode && itemDescription && itemUnit && itemPrice) createItem.mutate({ catalogId: selectedCatalog.id, code: itemCode, description: itemDescription, unit: itemUnit, itemType, unitPrice: Number(itemPrice) }); }}>
             <input value={itemCode} onChange={event => setItemCode(event.target.value)} placeholder="Código" required />
-            <input value={itemDescription} onChange={event => setItemDescription(event.target.value)} placeholder="Descrição" required />
+            <div style={{ position: "relative" }}>
+              <input value={itemDescription} onChange={event => { setItemDescription(event.target.value); setAcQuery(event.target.value); }} placeholder="Descrição" required />
+              {acEnabled && (acQueryResult.data?.candidates.length ?? 0) > 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20, background: "var(--surface, #fff)", border: "1px solid var(--border, #ddd)", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,.12)" }}>
+                  {acQueryResult.data?.candidates.map(c => (
+                    <button type="button" key={`${c.kind}-${c.id}`} onClick={() => applyAutocomplete(c)} style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", border: "none", background: "transparent", cursor: "pointer", fontSize: 12 }}>
+                      <strong>{c.code}</strong> · {c.description} · {money(c.unitPrice)} · score {(c.score * 100).toFixed(0)}%
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <input value={itemUnit} onChange={event => setItemUnit(event.target.value)} placeholder="Un." required />
             <select value={itemType} onChange={event => setItemType(event.target.value as typeof itemType)}>{Object.entries(typeLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
             <input type="number" min="0" step="0.01" value={itemPrice} onChange={event => setItemPrice(event.target.value)} placeholder="Preço" required />
