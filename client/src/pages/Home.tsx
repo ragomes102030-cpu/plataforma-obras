@@ -147,7 +147,7 @@ function GanttView({
     [activities, search, onlyCritical]
   );
   const maxDays = Math.max(
-    ...activities.map(item => item.startOffset + item.durationDays),
+    ...activities.map(item => (item.earlyStart ?? item.startOffset) + item.durationDays),
     220
   );
   const weekCount = Math.ceil(maxDays / 7);
@@ -165,7 +165,7 @@ function GanttView({
         activity,
         points: Array.from({ length: weekCount + 1 }, (_, week) => {
           const day = week * 7;
-          const elapsed = day - activity.startOffset;
+          const elapsed = day - (activity.earlyStart ?? activity.startOffset);
           const plannedProgress =
             elapsed <= 0
               ? 0
@@ -181,9 +181,9 @@ function GanttView({
     () =>
       activities.slice(0, 12).map(activity => ({
         activity,
-        left: (activity.startOffset / maxDays) * 100,
+        left: ((activity.earlyStart ?? activity.startOffset) / maxDays) * 100,
         width: Math.max((activity.durationDays / maxDays) * 100, 1.4),
-        end: activity.startOffset + activity.durationDays,
+        end: (activity.earlyStart ?? activity.startOffset) + activity.durationDays,
       })),
     [activities, maxDays]
   );
@@ -193,7 +193,7 @@ function GanttView({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDraggingBar({ id: activity.id, startX: event.clientX, startOffset: activity.startOffset, durationDays: activity.durationDays });
+    setDraggingBar({ id: activity.id, startX: event.clientX, startOffset: (activity.earlyStart ?? activity.startOffset), durationDays: activity.durationDays });
   };
   const updateBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
     if (!draggingBar || draggingBar.id !== activity.id) return;
@@ -201,12 +201,12 @@ function GanttView({
     if (!cell) return;
     const deltaDays = Math.round(((event.clientX - draggingBar.startX) / cell.getBoundingClientRect().width) * maxDays);
     const nextStart = Math.max(0, draggingBar.startOffset + deltaDays);
-    setDrafts(prev => ({ ...prev, [activity.id]: { ...(prev[activity.id] ?? activity), startOffset: nextStart } }));
+    setDrafts(prev => ({ ...prev, [activity.id]: { ...(prev[activity.id] ?? activity), earlyStart: nextStart } }));
   };
   const finishBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
     if (!draggingBar || draggingBar.id !== activity.id) return;
     const draft = drafts[activity.id] ?? activity;
-    updateActivity.mutate({ projectId, activityId: activity.id, name: draft.name, phase: draft.phase, startOffset: Number(draft.startOffset), durationDays: Number(draft.durationDays), plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined, productivity: draft.productivity ? Number(draft.productivity) : undefined, progress: Number(draft.progress), status: draft.status });
+    updateActivity.mutate({ projectId, activityId: activity.id, name: draft.name, phase: draft.phase, startOffset: Number(draft.startOffset), ...(Number(draft.earlyStart) !== Number(activity.earlyStart) && { earlyStart: Number(draft.earlyStart) }), durationDays: Number(draft.durationDays), plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined, productivity: draft.productivity ? Number(draft.productivity) : undefined, progress: Number(draft.progress), status: draft.status });
     event.currentTarget.releasePointerCapture(event.pointerId);
     setDraggingBar(null);
   };
@@ -360,21 +360,22 @@ function GanttView({
                 {!collapsed[phase] &&
                   phaseActivities.map(activity => {
                     const draft = drafts[activity.id] ?? activity;
-                    const left = (Number(draft.startOffset) / maxDays) * 100;
+                    const left = (Number(draft.earlyStart ?? draft.startOffset) / maxDays) * 100;
                     const width = (Number(draft.durationDays) / maxDays) * 100;
                     const save = () =>
-                      updateActivity.mutate({
-                        projectId,
-                        activityId: activity.id,
-                        name: draft.name,
-                        phase: draft.phase,
-                        startOffset: Number(draft.startOffset),
-                        durationDays: Number(draft.durationDays),
-                        plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined,
-                        productivity: draft.productivity ? Number(draft.productivity) : undefined,
-                        progress: Number(draft.progress),
-                        status: draft.status,
-                      });
+                       updateActivity.mutate({
+                         projectId,
+                         activityId: activity.id,
+                         name: draft.name,
+                         phase: draft.phase,
+                         startOffset: Number(draft.startOffset),
+                         ...(Number(draft.earlyStart) !== Number(activity.earlyStart) && { earlyStart: Number(draft.earlyStart) }),
+                         durationDays: Number(draft.durationDays),
+                         plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined,
+                         productivity: draft.productivity ? Number(draft.productivity) : undefined,
+                         progress: Number(draft.progress),
+                         status: draft.status,
+                       });
                     return (
                       <div
                         className={`gantt-row ${expandedActivityId === activity.id ? "is-expanded" : ""}`}
@@ -475,11 +476,11 @@ function GanttView({
                               }
                             />
                           ) : (
-                            formatDate(
-                              new Date(
-                                projectStart + activity.startOffset * 86400000
+formatDate(
+                                new Date(
+                                  projectStart + (activity.earlyStart ?? activity.startOffset) * 86400000
+                                )
                               )
-                            )
                           )}
                         </div>
                         <div className="date-cell">
@@ -500,14 +501,14 @@ function GanttView({
                               }
                             />
                           ) : (
-                            formatDate(
-                              new Date(
-                                projectStart +
-                                  (activity.startOffset +
-                                    activity.durationDays) *
-                                    86400000
-                              )
-                            )
+formatDate(
+                               new Date(
+                                 projectStart +
+                                   ((activity.earlyStart ?? activity.startOffset) +
+                                     activity.durationDays) *
+                                     86400000
+                               )
+                             )
                           )}
                         </div>
                         <div
@@ -593,18 +594,18 @@ function GanttView({
                     </span>
                   </td>
                   <td>
-                    {formatDate(
-                      new Date(projectStart + activity.startOffset * 86400000)
-                    )}
-                  </td>
-                  <td>
-                    {formatDate(
-                      new Date(
-                        projectStart +
-                          (activity.startOffset + activity.durationDays) *
-                            86400000
-                      )
-                    )}
+{formatDate(
+                       new Date(projectStart + (activity.earlyStart ?? activity.startOffset) * 86400000)
+                     )}
+                   </td>
+                   <td>
+                     {formatDate(
+                       new Date(
+                         projectStart +
+                           ((activity.earlyStart ?? activity.startOffset) + activity.durationDays) *
+                             86400000
+                       )
+                     )}
                   </td>
                   <td>{activity.progress}%</td>
                 </tr>

@@ -915,8 +915,9 @@ export const appRouter = router({
           activityId: z.number().int().positive(),
           name: z.string().trim().min(2).max(220),
           phase: z.string().trim().min(2).max(80),
-          startOffset: z.number().int().min(0),
-          durationDays: z.number().int().positive(),
+           startOffset: z.number().int().min(0),
+           earlyStart: z.number().int().min(0).optional(),
+           durationDays: z.number().int().positive(),
           plannedQuantity: z.number().positive().optional(),
           productivity: z.number().positive().optional(),
           progress: z.number().int().min(0).max(100),
@@ -949,6 +950,7 @@ export const appRouter = router({
             name: input.name,
             phase: input.phase,
             startOffset: input.startOffset,
+            ...(input.earlyStart !== undefined && { earlyStart: input.earlyStart }),
             durationDays: input.durationDays,
             plannedQuantity: input.plannedQuantity === undefined ? null : String(input.plannedQuantity),
             productivity: input.productivity === undefined ? null : String(input.productivity),
@@ -1849,7 +1851,7 @@ export const appRouter = router({
         const schedule = result.schedule;
         await db.transaction(async tx => {
           for (const item of schedule.activities) {
-            await tx.update(scheduleActivities).set({ startOffset: item.earlyStart, critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
+            await tx.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
           }
         });
         return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
