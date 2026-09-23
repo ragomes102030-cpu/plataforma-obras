@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, Calculator, FilePlus2, Plus, RefreshCw, Scale, WalletCards } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { NAV_PATHS } from "@/nav-paths";
 
@@ -98,6 +98,42 @@ export function BudgetView({
         : allPricesZero || total === 0
           ? "Sem preços"
           : "Com preços";
+  const analysis = useMemo(() => {
+    if (!items.length || total <= 0) return null;
+    const priced = items
+      .map(item => ({
+        id: item.id,
+        code: item.code,
+        description: item.description,
+        wbsNodeId: item.wbsNodeId ?? null,
+        lineTotal: Number(item.quantity) * Number(item.unitPrice),
+      }))
+      .filter(item => item.lineTotal > 0);
+    if (!priced.length) return null;
+    const top = [...priced]
+      .sort((a, b) => b.lineTotal - a.lineTotal)
+      .slice(0, 10);
+    const maxTop = top[0]?.lineTotal || 1;
+    const wbsById = new Map((wbsQuery.data ?? []).map(node => [node.id, node]));
+    const byBranch = new Map<string, number>();
+    for (const item of priced) {
+      const node = item.wbsNodeId != null ? wbsById.get(item.wbsNodeId) : undefined;
+      const branchCode = (node?.code ?? item.code).split(".").slice(0, 2).join(".");
+      const branchName = node?.name
+        ? `${branchCode} · ${node.name}`
+        : branchCode || "Sem ramo";
+      byBranch.set(branchName, (byBranch.get(branchName) ?? 0) + item.lineTotal);
+    }
+    const branches = [...byBranch.entries()]
+      .map(([name, branchTotal]) => ({
+        name,
+        branchTotal,
+        pct: (branchTotal / total) * 100,
+      }))
+      .sort((a, b) => b.branchTotal - a.branchTotal)
+      .slice(0, 8);
+    return { top, maxTop, branches };
+  }, [items, total, wbsQuery.data]);
 
   const submitVersion = (event: React.FormEvent) => {
     event.preventDefault();
@@ -233,6 +269,56 @@ export function BudgetView({
                 >
                   Abrir Catálogo de composições
                 </button>
+              </div>
+            </section>
+          )}
+          {analysis && (
+            <section className="module-card budget-analysis-card">
+              <div className="panel-heading">
+                <div>
+                  <h3>Análise do orçamento</h3>
+                  <p>Concentração dos maiores serviços e composição por ramo da EAP.</p>
+                </div>
+                <WalletCards size={18} className="sparkle" />
+              </div>
+              <div className="budget-analysis-grid">
+                <div>
+                  <span className="eyebrow">TOP SERVIÇOS POR VALOR</span>
+                  <div className="budget-analysis-bars">
+                    {analysis.top.map(item => (
+                      <div className="budget-analysis-row" key={`top-${item.id}`}>
+                        <span className="budget-analysis-label" title={`${item.code} · ${item.description}`}>
+                          {item.code} · {item.description}
+                        </span>
+                        <div className="budget-analysis-track">
+                          <div
+                            style={{
+                              width: `${Math.max(4, (item.lineTotal / analysis.maxTop) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <strong>{money(item.lineTotal)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="eyebrow">% POR RAMO DA EAP</span>
+                  <div className="budget-analysis-branches">
+                    {analysis.branches.map(branch => (
+                      <div className="budget-analysis-branch" key={`branch-${branch.name}`}>
+                        <div>
+                          <span>{branch.name}</span>
+                          <strong>{branch.pct.toFixed(1)}%</strong>
+                        </div>
+                        <div className="budget-analysis-track">
+                          <div style={{ width: `${Math.max(2, branch.pct)}%` }} />
+                        </div>
+                        <small>{money(branch.branchTotal)}</small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
           )}

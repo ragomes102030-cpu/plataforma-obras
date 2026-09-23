@@ -4075,6 +4075,128 @@ html, body, #root { background: #080a0c !important; color: #edf3f5 !important; }
   color: #475569;
 }
 
+.budget-analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+.budget-analysis-bars,
+.budget-analysis-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
+.budget-analysis-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.budget-analysis-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.55rem;
+}
+
+.budget-analysis-branch > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.budget-analysis-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.budget-analysis-track {
+  height: 8px;
+  background: rgba(122, 162, 138, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.budget-analysis-track > div {
+  height: 100%;
+  background: #4f7c8f;
+  border-radius: 999px;
+}
+
+.budget-analysis-row strong {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.budget-analysis-branch small {
+  opacity: 0.8;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .budget-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.planning-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.planning-checklist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.planning-checklist-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.planning-checklist-row strong {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.planning-checklist-row .ok {
+  color: #2f6b4f;
+}
+
+.planning-checklist-row .pending {
+  color: #9a6b2f;
+}
+
+.planning-checklist-next {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+@media (max-width: 720px) {
+  .budget-analysis-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
 .portfolio-next-step .budget-status-line {
   margin-top: 0.5rem;
   color: #334155;

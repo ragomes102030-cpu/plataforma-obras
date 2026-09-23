@@ -2776,6 +2776,70 @@ export const appRouter = router({
         const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now() }).$returningId();
         return { id: createdId.id };
       }),
+    generateFromEap: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const nodes = await db
+          .select()
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.nodeType, "entrega")
+            )
+          )
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        if (!nodes.length) {
+          return {
+            created: 0,
+            skipped: 0,
+            message: "A EAP desta obra não possui entregas (nós tipo entrega).",
+          };
+        }
+        const existing = await db
+          .select({ wbsCode: scheduleActivities.wbsCode })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId));
+        const existingCodes = new Set(existing.map(row => row.wbsCode));
+        const byId = new Map(nodes.map(node => [node.id, node]));
+        let created = 0;
+        let skipped = 0;
+        for (const node of nodes) {
+          if (existingCodes.has(node.code)) {
+            skipped += 1;
+            continue;
+          }
+          const parent = node.parentId != null ? byId.get(node.parentId) : undefined;
+          const durationDays =
+            node.plannedQuantity && node.plannedQuantity > 0
+              ? Math.max(1, node.plannedQuantity)
+              : 1;
+          await db.insert(scheduleActivities).values({
+            projectId: input.projectId,
+            wbsNodeId: node.id,
+            wbsCode: node.code,
+            eapRef: node.code,
+            name: node.name,
+            phase: parent?.name?.slice(0, 80) || "Execução",
+            startOffset: 0,
+            durationDays,
+            plannedQuantity: node.plannedQuantity
+              ? String(node.plannedQuantity)
+              : null,
+            sortOrder: node.sortOrder * 1000 + node.id,
+          });
+          existingCodes.add(node.code);
+          created += 1;
+        }
+        return {
+          created,
+          skipped,
+          message: `${created} atividade(s) criada(s) a partir da EAP; ${skipped} já existiam.`,
+        };
+      }),
     createDependency: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), predecessorId: z.number().int().positive(), successorId: z.number().int().positive(), type: z.enum(["FS", "SS", "FF", "SF"]).default("FS"), lag: z.number().int().default(0) }))
       .mutation(async ({ ctx, input }) => {

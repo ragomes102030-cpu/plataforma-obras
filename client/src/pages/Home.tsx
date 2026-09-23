@@ -906,11 +906,32 @@ export default function Home() {
   const serverProjects = projectsQuery.data ?? [];
   const projects = serverProjects;
   const [location, setLocation] = useLocation();
-  const [selectedId, setSelectedId] = useState(1);
+  const [selectedId, setSelectedId] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem("activeProjectId");
+      const parsed = raw ? Number(raw) : 1;
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    } catch {
+      return 1;
+    }
+  });
   const [activeNav, setActiveNavState] = useState(() => labelFromPath(location));
   useEffect(() => {
     setActiveNavState(labelFromPath(location));
   }, [location]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("activeProjectId", String(selectedId));
+    } catch {
+      // localStorage indisponível (private mode) — seleção vale só na sessão
+    }
+  }, [selectedId]);
+  useEffect(() => {
+    if (!projects.length) return;
+    if (!projects.some(project => project.id === selectedId)) {
+      setSelectedId(projects[0].id);
+    }
+  }, [projects, selectedId]);
   const setActiveNav = (label: string) => {
     setActiveNavState(label);
     const path = NAV_PATHS[label] ?? "/";
@@ -952,6 +973,14 @@ export default function Home() {
     { projectId: selected?.id ?? 1 },
     { enabled: Boolean(selected) }
   );
+  const wbsQuery = trpc.projects.wbs.useQuery(
+    { projectId: selected?.id ?? 1 },
+    { enabled: Boolean(selected) }
+  );
+  const planningQuery = trpc.planning.list.useQuery(
+    { projectId: selected?.id ?? 1 },
+    { enabled: Boolean(selected) }
+  );
   const budgetStatusLine = (() => {
     if (!budgetQuery.data) return "Orçamento: carregando…";
     if (budgetQuery.data.unavailable) return "Orçamento: indisponível (sem banco)";
@@ -964,6 +993,45 @@ export default function Home() {
     }).format(total);
     return `Orçamento: ${budgetQuery.data.items.length} serviço(s) · ${money}`;
   })();
+  const wbsNodes = wbsQuery.data ?? [];
+  const baselines = planningQuery.data?.baselines ?? [];
+  const planningSteps = [
+    {
+      key: "eap",
+      label: "EAP",
+      done: wbsNodes.length > 0,
+      detail: wbsNodes.length
+        ? `${wbsNodes.length} nós`
+        : "sem estrutura",
+      nav: "EAP" as const,
+    },
+    {
+      key: "orcamento",
+      label: "Orçamento",
+      done: Boolean(budgetQuery.data?.activeVersionId) && (budgetQuery.data?.total ?? 0) > 0,
+      detail: !budgetQuery.data?.activeVersionId
+        ? "sem versão"
+        : (budgetQuery.data?.total ?? 0) > 0
+          ? "com preços"
+          : "sem preços",
+      nav: "Orçamento" as const,
+    },
+    {
+      key: "atividades",
+      label: "Atividades",
+      done: activities.length > 0,
+      detail: activities.length ? `${activities.length} no cronograma` : "nenhuma",
+      nav: "Cronogramas" as const,
+    },
+    {
+      key: "baseline",
+      label: "Baseline",
+      done: baselines.length > 0,
+      detail: baselines.length ? `${baselines.length} capturada(s)` : "não capturada",
+      nav: "Cronogramas" as const,
+    },
+  ];
+  const nextPlanningStep = planningSteps.find(step => !step.done);
   const portfolioProgress = projects.length
     ? Math.round(
         projects.reduce((total, project) => total + project.progress, 0) /
@@ -1254,7 +1322,42 @@ export default function Home() {
                     <div className="portfolio-quick-actions">
                       <span className="eyebrow">ABRIR NA OBRA ATIVA · {selected.name}</span>
                       <p className="budget-status-line">{budgetStatusLine}</p>
+                      <div className="planning-checklist">
+                        {planningSteps.map(step => (
+                          <div className="planning-checklist-row" key={step.key}>
+                            <span>
+                              <CircleCheck
+                                size={14}
+                                className={step.done ? "ok" : "pending"}
+                              />
+                              {step.label}
+                            </span>
+                            <strong className={step.done ? "ok" : "pending"}>
+                              {step.done ? "OK" : "Pendente"} · {step.detail}
+                            </strong>
+                          </div>
+                        ))}
+                        {nextPlanningStep ? (
+                          <p className="planning-checklist-next">
+                            Próximo passo: {nextPlanningStep.label} —{" "}
+                            {nextPlanningStep.detail}
+                          </p>
+                        ) : (
+                          <p className="planning-checklist-next">
+                            Planejamento base completo para esta obra.
+                          </p>
+                        )}
+                      </div>
                       <div className="portfolio-quick-buttons">
+                        {nextPlanningStep && (
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={() => setActiveNav(nextPlanningStep.nav)}
+                          >
+                            Continuar: {nextPlanningStep.label}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="outline-button"
