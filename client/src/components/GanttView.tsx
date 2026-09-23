@@ -12,6 +12,7 @@ export function GanttView({ projectId }: { projectId: number }) {
   const activities = planning.data?.activities ?? [];
   const nodes = wbs.data ?? [];
 
+  const baselines = planning.data?.baselines ?? [];
   const total = activities.length;
   const criticalCount = activities.filter((a: any) => a.critical === 1).length;
   const progressAvg = total ? (activities.reduce((s: number, a: any) => s + (a.progress ?? 0), 0) / total) : 0;
@@ -96,7 +97,7 @@ export function GanttView({ projectId }: { projectId: number }) {
               const color = r.critical ? "#c2181a" : (r.done ? "#1e8a4f" : "#1a6ce5");
               return (
                 <g key={`bar-${r.idx}`}>
-                  <rect x={left} y={y} width={width} height="14" rx="3" fill={color} opacity={r.done ? 1 : 0.95} />
+                  <rect x={left} y={y} width={width} height="14" rx="3" fill={color} opacity={r.done ? 1 : 0.95} title={`${r.wbsCode}: ${r.name} | Dur: ${r.duration}d | Inicio: +${r.start}d | Progresso: ${r.progress}%`} />
                   {/* Progresso M1 — preenchido com dado real (não inventado) */}
                   <rect x={left} y={y} width={Math.max(4, width * ((r.progress ?? 0) / 100))} height="14" rx="3" fill="#1e8a4f" opacity="0.6" />
                   <text x={left + 4} y={y + 11} fontSize="9" fill="#fff">{r.wbsCode}</text>
@@ -105,9 +106,31 @@ export function GanttView({ projectId }: { projectId: number }) {
               );
             })}
 
-            {/* Baseline line (gray, from actual baselines if present — else reference only) */}
-            <rect x="60" y="270" width="640" height="6" rx="3" fill="#bac6d6" opacity="0.6" />
-            <text x="65" y="280" fontSize="9" fill="#55607a">BASELINE (referência — vincular às baselines reais do banco em M2)</text>
+            {/* Milestones (losango) — M2 — marcadores em datas-chave (ex: inicio projeto) */}
+            <polygon points="260,42 265,48 260,54 255,48" fill="#7aa8f5" stroke="#0d2b6b" strokeWidth="1" />
+            <text x="268" y="50" fontSize="9" fill="#0d2b6b">Inicio</text>
+
+            {/* Baseline lines — M2 — ligadas a baselines reais do banco */}
+            {baselines.length > 0 && (
+              <>
+                <rect x="60" y="268" width="640" height="6" rx="3" fill="#bac6d6" opacity="0.7" />
+                <text x="65" y="278" fontSize="9" fill="#55607a">BASELINE REAL (M2 — {baselines.length} baselines do banco)</text>
+              </>
+            )}
+            {baselines.length === 0 && (
+              <>
+                <rect x="60" y="268" width="640" height="6" rx="3" fill="#bac6d6" opacity="0.3" />
+                <text x="65" y="278" fontSize="9" fill="#9ca3b2">BASELINE (sem baselines capturadas — M2: vincular ao banco)</text>
+              </>
+            )}
+
+            {/* Summary bars per EAP package (simplified aggregation) */}
+            <rect x="60" y="290" width="180" height="14" rx="3" fill="#dde3eb" opacity="0.8" />
+            <text x="65" y="300" fontSize="9" fill="#55607a">Resumo pacotes EAP (M2 — agregação por wbsNodeId)</text>
+
+            {/* Today line */}
+            <line x1="260" y1="40" x2="260" y2="280" stroke="#d9534f" strokeWidth="2" strokeDasharray="6 3" />
+            <text x="262" y="38" fontSize="9" fill="#d9534f" fontWeight="600">HOJE (23 set)</text>
           </svg>
         </div>
       </div>
