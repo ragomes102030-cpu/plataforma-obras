@@ -22,6 +22,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
   const [cols, setCols] = useState({ eap: true, nome: true, inicio: true, termino: true, dur: true, pct: true });
   const [colsOpen, setColsOpen] = useState(false);
   const [drag, setDrag] = useState<{ id: number; mode: "move" | "resize"; startX: number; origStart: number; origDur: number } | null>(null);
+  const [linkMode, setLinkMode] = useState(false);
   const [linkFrom, setLinkFrom] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -156,8 +157,8 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
           <input type="checkbox" checked={onlyCritical} onChange={(e) => setOnlyCritical(e.target.checked)} /> Só críticas
         </label>
         <button onClick={() => setColsOpen((v) => !v)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: colsOpen ? "var(--primary)" : "var(--surf)", color: colsOpen ? "#fff" : "var(--text)" }}>Colunas</button>
-        <button onClick={() => setLinkFrom(null)} disabled={linkFrom === null} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: linkFrom === null ? "default" : "pointer", border: "1px solid var(--border)", background: linkFrom !== null ? "var(--warn)" : "var(--surf)", color: "var(--text)" }}>
-          {linkFrom === null ? "Ligar (clique na 1ª barra)" : `Ligando de ${linkFrom}... (clique na 2ª)`}
+        <button onClick={() => { setLinkMode((v) => !v); setLinkFrom(null); }} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: linkMode ? "var(--warn)" : "var(--surf)", color: "var(--text)" }}>
+          {!linkMode ? "Ligar dependência" : linkFrom === null ? "Ligar: clique na 1ª barra" : `Ligar de ${linkFrom}: clique na 2ª`}
         </button>
       </div>
 
@@ -243,17 +244,19 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
                     opacity={0.95}
                     stroke={isLinkSource ? "var(--warn)" : "transparent"}
                     strokeWidth={isLinkSource ? 2 : 0}
-                    style={{ cursor: linkFrom !== null ? "crosshair" : "move" }}
+                    style={{ cursor: linkMode ? "crosshair" : "move" }}
                     onMouseDown={(e) => {
-                      if (linkFrom !== null) return;
+                      if (linkMode) return;
                       e.preventDefault();
                       setDrag({ id: r.id, mode: "move", startX: e.clientX, origStart: r.start, origDur: r.duration });
                     }}
                     onClick={() => {
-                      if (linkFrom === null) return;
+                      if (!linkMode) return;
+                      if (linkFrom === null) { setLinkFrom(r.id); return; }
                       if (linkFrom === r.id) { setLinkFrom(null); return; }
                       createDependency.mutate({ projectId, predecessorId: linkFrom, successorId: r.id, type: "FS", lag: 0 });
                       setLinkFrom(null);
+                      setLinkMode(false);
                     }}
                   >
                     <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | Progresso: ${r.progress}% | arraste p/ mover`}</title>
@@ -267,7 +270,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
                     fill="transparent"
                     style={{ cursor: "ew-resize" }}
                     onMouseDown={(e) => {
-                      if (linkFrom !== null) return;
+                      if (linkMode) return;
                       e.preventDefault();
                       e.stopPropagation();
                       setDrag({ id: r.id, mode: "resize", startX: e.clientX, origStart: r.start, origDur: r.duration });
@@ -279,7 +282,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
               );
             })}
 
-            {linkFrom === null && dependencies.map(arrow)}
+            {dependencies.map(arrow)}
 
             {baselines.length > 0 && <text x={LABEL_W} y={svgH - 16} fontSize={9} fill="#55607a">BASELINE REAL ({baselines.length} baselines do banco)</text>}
           </svg>
