@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 type Dep = { predecessorId: number; successorId: number; type: string; lag?: number };
+type Activity = { id: number; wbsCode?: string; name?: string; durationDays?: number; startOffset?: number; critical?: number; progress?: number; phase?: string; status?: string; earlyStart?: number | null };
 type Zoom = "dia" | "semana" | "mes";
 
 const ROW_H = 26;
@@ -10,8 +11,9 @@ const HEADER_H = 46;
 const ZOOM_FACTOR: Record<Zoom, number> = { mes: 1, semana: 3, dia: 10 };
 
 export function GanttView({ projectId, plannedStart }: { projectId: number; plannedStart?: string | Date }) {
+  const utils = trpc.useUtils();
   const planning = trpc.planning.list.useQuery({ projectId });
-  const activities = planning.data?.activities ?? [];
+  const activities: Activity[] = planning.data?.activities ?? [];
   const dependencies: Dep[] = (planning.data?.dependencies ?? []) as Dep[];
   const baselines = planning.data?.baselines ?? [];
 
@@ -19,6 +21,14 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [cols, setCols] = useState({ eap: true, nome: true, inicio: true, termino: true, dur: true, pct: true });
   const [colsOpen, setColsOpen] = useState(false);
+  const [drag, setDrag] = useState<{ id: number; mode: "move" | "resize"; startX: number; origStart: number; origDur: number } | null>(null);
+  const [linkFrom, setLinkFrom] = useState<number | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const invalidate = () => utils.planning.list.invalidate({ projectId });
+  const updateActivity = trpc.projects.updateActivity.useMutation({ onSuccess: async () => { setMsg("Atividade atualizada. CPM recalculando..."); await invalidate(); } , onError: (e) => setMsg("Erro ao salvar: " + e.message) });
+  const createDependency = trpc.planning.createDependency.useMutation({ onSuccess: async () => { setMsg("Dependência criada."); await invalidate(); }, onError: (e) => setMsg("Erro ao ligar: " + e.message) });
+  const calculateCpm = trpc.planning.calculateCpm.useMutation({ onSuccess: async () => { setMsg("CPM recalculado."); await invalidate(); }, onError: (e) => setMsg("Erro no CPM: " + e.message) });
 
   const projectStart = useMemo(() => {
     if (plannedStart) {
@@ -28,30 +38,20 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
     return null;
   }, [plannedStart]);
 
-  const dateAt = (offsetDays: number) => {
-    if (projectStart === null) return `+${offsetDays}d`;
-    return new Date(projectStart + offsetDays * 86400000).toLocaleDateString("pt-BR");
-  };
+  const dateAt = (o: number) => (projectStart === null ? `+${o}d` : new Date(projectStart + o * 86400000).toLocaleDateString("pt-BR"));
 
-  const visible = useMemo(
-    () => (onlyCritical ? activities.filter((a: any) => a.critical === 1) : activities),
-    [activities, onlyCritical]
-  );
-
+  const visible = useMemo(() => (onlyCritical ? activities.filter((a) => a.critical === 1) : activities), [activities, onlyCritical]);
   const total = activities.length;
-  const criticalCount = activities.filter((a: any) => a.critical === 1).length;
-  const progressAvg = total ? activities.reduce((s: number, a: any) => s + (a.progress ?? 0), 0) / total : 0;
+  const criticalCount = activities.filter((a) => a.critical === 1).length;
+  const progressAvg = total ? activities.reduce((s, a) => s + (a.progress ?? 0), 0) / total : 0;
 
-  const maxDay = useMemo(
-    () => Math.max(1, ...visible.map((a: any) => (a.startOffset ?? 0) + (a.durationDays ?? 1))),
-    [visible]
-  );
+  const maxDay = useMemo(() => Math.max(1, ...visible.map((a) => (a.startOffset ?? 0) + (a.durationDays ?? 1))), [visible]);
   const chartW = 720 * ZOOM_FACTOR[zoom];
   const scale = chartW / maxDay;
 
   const rows = useMemo(
     () =>
-      visible.map((a: any, idx: number) => ({
+      visible.map((a, idx) => ({
         idx,
         id: a.id,
         wbsCode: a.wbsCode ?? "?",
@@ -79,6 +79,43 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
 
   const svgH = HEADER_H + rows.length * ROW_H + 40;
 
+  const commitMove = (id: number, nextStart: number) => {
+    const a = activities.find((x) => x.id === id);
+    if (!a) return;
+    updateActivity.mutate(
+      {
+        projectId,
+        activityId: id,
+        name: a.name ?? "Atividade",
+        phase: a.phase ?? "Execução",
+        startOffset: Math.max(0, Math.round(nextStart)),
+        earlyStart: Math.max(0, Math.round(nextStart)),
+        durationDays: a.durationDays ?? 1,
+        progress: a.progress ?? 0,
+        status: (a.status as any) ?? "Não iniciado",
+      },
+      { onSuccess: () => calculateCpm.mutate({ projectId }) }
+    );
+  };
+
+  const commitResize = (id: number, nextDur: number) => {
+    const a = activities.find((x) => x.id === id);
+    if (!a) return;
+    updateActivity.mutate(
+      {
+        projectId,
+        activityId: id,
+        name: a.name ?? "Atividade",
+        phase: a.phase ?? "Execução",
+        startOffset: a.startOffset ?? 0,
+        durationDays: Math.max(1, Math.round(nextDur)),
+        progress: a.progress ?? 0,
+        status: (a.status as any) ?? "Não iniciado",
+      },
+      { onSuccess: () => calculateCpm.mutate({ projectId }) }
+    );
+  };
+
   const arrow = (dep: Dep) => {
     const p = posById.get(dep.predecessorId);
     const s = posById.get(dep.successorId);
@@ -95,10 +132,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
     return (
       <g key={`${dep.predecessorId}-${dep.successorId}-${t}`}>
         <path d={d} fill="none" stroke="#7a8699" strokeWidth={1} markerEnd="url(#arrowhead)" />
-        <text x={(midX + xEnd) / 2} y={(y0 + y1) / 2 - 2} fontSize={8} fill="#55607a">
-          {t}
-          {lag !== 0 ? (lag > 0 ? `+${lag}` : `${lag}`) : ""}
-        </text>
+        <text x={(midX + xEnd) / 2} y={(y0 + y1) / 2 - 2} fontSize={8} fill="#55607a">{t}{lag !== 0 ? (lag > 0 ? `+${lag}` : `${lag}`) : ""}</text>
       </g>
     );
   };
@@ -114,31 +148,16 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
         <span style={{ fontSize: 11, color: "var(--text2)" }}>Zoom:</span>
         {(["dia", "semana", "mes"] as Zoom[]).map((z) => (
-          <button
-            key={z}
-            onClick={() => setZoom(z)}
-            style={{
-              fontSize: 11,
-              padding: "3px 10px",
-              borderRadius: 6,
-              cursor: "pointer",
-              border: "1px solid var(--border)",
-              background: zoom === z ? "var(--primary)" : "var(--surf)",
-              color: zoom === z ? "#fff" : "var(--text)",
-            }}
-          >
+          <button key={z} onClick={() => setZoom(z)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: zoom === z ? "var(--primary)" : "var(--surf)", color: zoom === z ? "#fff" : "var(--text)" }}>
             {z === "dia" ? "Dia" : z === "semana" ? "Semana" : "Mês"}
           </button>
         ))}
         <label style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4, marginLeft: 8 }}>
-          <input type="checkbox" checked={onlyCritical} onChange={(e) => setOnlyCritical(e.target.checked)} />
-          Só críticas
+          <input type="checkbox" checked={onlyCritical} onChange={(e) => setOnlyCritical(e.target.checked)} /> Só críticas
         </label>
-        <button
-          onClick={() => setColsOpen((v) => !v)}
-          style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: colsOpen ? "var(--primary)" : "var(--surf)", color: colsOpen ? "#fff" : "var(--text)" }}
-        >
-          Colunas
+        <button onClick={() => setColsOpen((v) => !v)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: colsOpen ? "var(--primary)" : "var(--surf)", color: colsOpen ? "#fff" : "var(--text)" }}>Colunas</button>
+        <button onClick={() => setLinkFrom(null)} disabled={linkFrom === null} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: linkFrom === null ? "default" : "pointer", border: "1px solid var(--border)", background: linkFrom !== null ? "var(--warn)" : "var(--surf)", color: "var(--text)" }}>
+          {linkFrom === null ? "Ligar (clique na 1ª barra)" : `Ligando de ${linkFrom}... (clique na 2ª)`}
         </button>
       </div>
 
@@ -153,11 +172,23 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
         </div>
       )}
 
+      {msg && <div style={{ fontSize: 11, color: "var(--ok)", marginBottom: 6 }}>{msg}</div>}
       {planning.isPending && <div style={{ padding: 12, color: "var(--text2)" }}>Carregando atividades...</div>}
       {planning.error && <div style={{ padding: 12, color: "var(--crit)" }}>Erro ao carregar atividades.</div>}
 
       <div style={{ overflow: "auto", maxHeight: 460, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surf)" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", minWidth: 0 }}>
+        <div
+          style={{ display: "flex", alignItems: "flex-start", minWidth: 0 }}
+          onMouseMove={(e) => {
+            if (!drag) return;
+            const deltaDays = (e.clientX - drag.startX) / scale;
+            if (drag.mode === "move") commitMove(drag.id, drag.origStart + deltaDays);
+            else commitResize(drag.id, drag.origDur + deltaDays);
+            setDrag(null);
+          }}
+          onMouseUp={() => setDrag(null)}
+          onMouseLeave={() => setDrag(null)}
+        >
           <table style={{ flex: `0 0 ${LABEL_W}px`, borderCollapse: "collapse", fontSize: 11, position: "sticky", left: 0, background: "var(--surf)", zIndex: 2 }}>
             <thead>
               <tr style={{ background: "var(--primary)", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
@@ -183,7 +214,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
             </tbody>
           </table>
 
-          <svg width={chartW + 20} height={svgH} style={{ flex: "0 0 auto" }} aria-label="Gantt com dependências">
+          <svg width={chartW + 20} height={svgH} style={{ flex: "0 0 auto", cursor: drag ? "grabbing" : "default" }} aria-label="Gantt editável com dependências">
             <defs>
               <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                 <path d="M0,0 L6,3 L0,6 Z" fill="#7a8699" />
@@ -199,28 +230,65 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
               const p = posById.get(r.id)!;
               const w = Math.max(6, r.duration * scale);
               const color = r.critical ? "#c2181a" : "#1a6ce5";
+              const isLinkSource = linkFrom === r.id;
               return (
                 <g key={`bar-${r.id}`}>
-                  <rect x={p.x0} y={p.y + 6} width={w} height={14} rx={3} fill={color} opacity={0.95}>
-                    <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | Progresso: ${r.progress}%`}</title>
+                  <rect
+                    x={p.x0}
+                    y={p.y + 6}
+                    width={w}
+                    height={14}
+                    rx={3}
+                    fill={color}
+                    opacity={0.95}
+                    stroke={isLinkSource ? "var(--warn)" : "transparent"}
+                    strokeWidth={isLinkSource ? 2 : 0}
+                    style={{ cursor: linkFrom !== null ? "crosshair" : "move" }}
+                    onMouseDown={(e) => {
+                      if (linkFrom !== null) return;
+                      e.preventDefault();
+                      setDrag({ id: r.id, mode: "move", startX: e.clientX, origStart: r.start, origDur: r.duration });
+                    }}
+                    onClick={() => {
+                      if (linkFrom === null) return;
+                      if (linkFrom === r.id) { setLinkFrom(null); return; }
+                      createDependency.mutate({ projectId, predecessorId: linkFrom, successorId: r.id, type: "FS", lag: 0 });
+                      setLinkFrom(null);
+                    }}
+                  >
+                    <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | Progresso: ${r.progress}% | arraste p/ mover`}</title>
                   </rect>
-                  <rect x={p.x0} y={p.y + 6} width={Math.max(3, w * (r.progress / 100))} height={14} rx={3} fill="#1e8a4f" opacity={0.6} />
+                  <rect x={p.x0} y={p.y + 6} width={Math.max(3, w * (r.progress / 100))} height={14} rx={3} fill="#1e8a4f" opacity={0.6} style={{ pointerEvents: "none" }} />
+                  <rect
+                    x={p.x1 - 4}
+                    y={p.y + 4}
+                    width={8}
+                    height={18}
+                    fill="transparent"
+                    style={{ cursor: "ew-resize" }}
+                    onMouseDown={(e) => {
+                      if (linkFrom !== null) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDrag({ id: r.id, mode: "resize", startX: e.clientX, origStart: r.start, origDur: r.duration });
+                    }}
+                  >
+                    <title>Arraste para mudar a duração</title>
+                  </rect>
                 </g>
               );
             })}
 
-            {dependencies.map(arrow)}
+            {linkFrom === null && dependencies.map(arrow)}
 
-            {baselines.length > 0 && (
-              <text x={LABEL_W} y={svgH - 16} fontSize={9} fill="#55607a">BASELINE REAL ({baselines.length} baselines do banco)</text>
-            )}
+            {baselines.length > 0 && <text x={LABEL_W} y={svgH - 16} fontSize={9} fill="#55607a">BASELINE REAL ({baselines.length} baselines do banco)</text>}
           </svg>
         </div>
       </div>
 
       <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 10 }}>
-        <b>M4:</b> zoom Dia/Semana/Mês, colunas configuráveis e filtro "só críticas" ativos.
-        <b> Pendência:</b> calendário/dias não úteis — API não fornece campos de feriados/workdays. <b>M5/M6:</b> edição e export não implementados.
+        <b>M5:</b> arraste a barra para mover; arraste a alça direita para mudar a duração; use "Ligar" e clique em 2 barras para criar FS. Cada ação grava via API e recalcula o CPM.
+        <b> M3/M4:</b> setas FS/SS com lag, zoom, colunas, filtro.
       </div>
     </div>
   );
