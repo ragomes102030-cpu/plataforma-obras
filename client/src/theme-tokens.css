@@ -1,0 +1,61 @@
+/* Tokens de design — Fase B parte 1 (tema)
+Referência: paleta-claro.html + paleta-escuro.html (com contraste verificado)
+Uso: substituir cores hardcoded no projeto; respeitar AA ≥ 4.5:1 */
+:root {
+  /* CLARO — padrão (P6/Project) */
+  --bg-claro: #f6f7f9;
+  --surf-claro: #fff;
+  --border-claro: #dde3eb;
+  --text-claro: #0a1628;
+  --text2-claro: #44566a;
+  --primary-claro: #0d2b6b;
+  --accent-claro: #1a5ec8;
+  --ok-claro: #1b7a43;
+  --warn-claro: #c48a00;
+  --crit-claro: #b32220;
+  --base-claro: #bac6d6;
+  --line-claro: #bac6d6;
+
+  /* ESCURO — grafite (não preto puro) */
+  --bg-escuro: #181b21;
+  --surf-escuro: #21242c;
+  --border-escuro: #2d303a;
+  --text-escuro: #e4e6ec;
+  --text2-escuro: #9ca3b2;
+  --primary-escuro: #7aa8f5;
+  --accent-escuro: #51a2f7;
+  --ok-escuro: #5cb78c;
+  --warn-escuro: #dba93e;
+  --crit-escuro: #f07a7a;
+  --base-escuro: #383c4c;
+  --line-escuro: #383c4c;
+
+  /* Ativo (CLARO por padrão) */
+  --bg: var(--bg-claro);
+  --surf: var(--surf-claro);
+  --border: var(--border-claro);
+  --text: var(--text-claro);
+  --text2: var(--text2-claro);
+  --primary: var(--primary-claro);
+  --accent: var(--accent-claro);
+  --ok: var(--ok-claro);
+  --warn: var(--warn-claro);
+  --crit: var(--crit-claro);
+  --base: var(--base-claro);
+  --line: var(--line-claro);
+}
+
+[data-theme="dark"] {
+  --bg: var(--bg-escuro);
+  --surf: var(--surf-escuro);
+  --border: var(--border-escuro);
+  --text: var(--text-escuro);
+  --text2: var(--text2-escuro);
+  --primary: var(--primary-escuro);
+  --accent: var(--accent-escuro);
+  --ok: var(--ok-escuro);
+  --warn: var(--warn-escuro);
+  --crit: var(--crit-escuro);
+  --base: var(--base-escuro);
+  --line: var(--line-escuro);
+}
