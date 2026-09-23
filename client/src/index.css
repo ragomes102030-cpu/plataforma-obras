@@ -903,6 +903,8 @@
   .focus-list {
     border-top: 1px solid #edf1f2;
     padding: 4px 18px;
+    max-height: 400px;
+    overflow-y: auto;
   }
   .focus-item {
     display: flex;
@@ -1781,6 +1783,8 @@
   }
   .catalog-list {
     border-top: 1px solid #edf1f2;
+    max-height: 400px;
+    overflow-y: auto;
   }
   .catalog-list-row {
     display: flex;
@@ -1866,6 +1870,8 @@
   .planning-list {
     margin-top: 16px;
     border-top: 1px solid #edf1f2;
+    max-height: 400px;
+    overflow-y: auto;
   }
   .planning-row {
     display: flex;
@@ -1959,6 +1965,8 @@
   .baseline-list {
     margin-top: 16px;
     border-top: 1px solid #edf1f2;
+    max-height: 400px;
+    overflow-y: auto;
   }
   .control-summary {
     display: grid;
@@ -1980,6 +1988,8 @@
   .control-list {
     margin-top: 16px;
     border-top: 1px solid #edf1f2;
+    max-height: 400px;
+    overflow-y: auto;
   }
   .control-row {
     display: grid;

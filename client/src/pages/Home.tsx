@@ -739,6 +739,7 @@ function ModuleView({
   const riskActivities = activities.filter(activity => activity.status === "Em risco");
   const completedActivities = activities.filter(activity => activity.progress >= 100);
   const setActiveNav = onNavigate;
+  const [cronogramaTab, setCronogramaTab] = useState<"gantt" | "planejamento">("gantt");
   if (name === "Agente IA") return <AgentView />;
   if (name === "Orçamento")
     return <BudgetView projectId={projectId} projectName={projectName} />;
@@ -753,18 +754,46 @@ function ModuleView({
     return <ReportsView projectId={projectId} projectName={projectName} activities={activities} />;
   if (name === "Cronogramas")
     return (
-      <>
-        <PlanningView projectId={projectId} projectName={projectName} />
-        <GanttView
-          key="cronograma-calculado"
-          projectId={projectId}
-          activities={activities}
-          search={search}
-          setSearch={setSearch}
-          selectedName={projectName}
-          plannedStart={plannedStart}
-        />
-      </>
+      <div className="module-page">
+        <div className="module-hero">
+          <div className="module-icon"><CalendarDays size={22} /></div>
+          <div>
+            <p className="eyebrow accent">CRONOGRAMA DA OBRA</p>
+            <h2>Cronogramas</h2>
+            <p>Acompanhe o planejamento e o Gantt calculado do projeto.</p>
+          </div>
+          <div className="module-hero-actions">
+            <button
+              type="button"
+              className={`toolbar-tab ${cronogramaTab === "gantt" ? "active" : ""}`}
+              onClick={() => setCronogramaTab("gantt")}
+            >
+              Gantt
+            </button>
+            <button
+              type="button"
+              className={`toolbar-tab ${cronogramaTab === "planejamento" ? "active" : ""}`}
+              onClick={() => setCronogramaTab("planejamento")}
+            >
+              Planejamento
+            </button>
+            <button type="button" className="outline-button" onClick={onBack}>Voltar</button>
+          </div>
+        </div>
+        {cronogramaTab === "gantt" ? (
+          <GanttView
+            key="cronograma-calculado"
+            projectId={projectId}
+            activities={activities}
+            search={search}
+            setSearch={setSearch}
+            selectedName={projectName}
+            plannedStart={plannedStart}
+          />
+        ) : (
+          <PlanningView projectId={projectId} projectName={projectName} />
+        )}
+      </div>
     );
   if (name === "Linha de Balanço")
     return (

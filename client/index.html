@@ -20,10 +20,23 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+    <!--
+      Analytics loads only when VITE_ANALYTICS_ENDPOINT and VITE_ANALYTICS_WEBSITE_ID
+      are substituted by Vite. If unset, the literals keep a "%" and the IIFE returns.
+    -->
+    <script>
+      (function () {
+        var endpoint = "%VITE_ANALYTICS_ENDPOINT%";
+        var websiteId = "%VITE_ANALYTICS_WEBSITE_ID%";
+        if (endpoint.indexOf("%") !== -1 || websiteId.indexOf("%") !== -1) return;
+        if (!endpoint || !websiteId) return;
+        var s = document.createElement("script");
+        s.defer = true;
+        s.src = endpoint.replace(/\/$/, "") + "/umami";
+        s.setAttribute("data-website-id", websiteId);
+        document.body.appendChild(s);
+      })();
+    </script>
   </body>
 
 </html>
