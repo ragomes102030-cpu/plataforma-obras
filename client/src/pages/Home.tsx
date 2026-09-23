@@ -7,8 +7,12 @@ import {
   BarChart3,
   Bell,
   BookOpen,
+  Calculator,
   CalendarDays,
   ChevronDown,
+  Flag,
+  LineChart,
+  Scale,
   ChevronRight,
   CircleCheck,
   Clock3,
@@ -38,6 +42,10 @@ import { BudgetView } from "@/components/BudgetView";
 import { CatalogView } from "@/components/CatalogView";
 import { PlanningView } from "@/components/PlanningView";
 import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
+import { FrentesView } from "@/components/FrentesView";
+import { MedicaoView } from "@/components/MedicaoView";
+import { GraficosView } from "@/components/GraficosView";
+import { FormulasView } from "@/components/FormulasView";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -46,9 +54,13 @@ const nav = [
   { label: "Catálogo", icon: BookOpen },
   { label: "Cronogramas", icon: CalendarDays },
   { label: "Linha de Balanço", icon: Activity },
+  { label: "Frentes", icon: Flag },
   { label: "Produção", icon: Gauge },
+  { label: "Medição", icon: Scale },
   { label: "Restrições", icon: AlertTriangle },
   { label: "Relatórios", icon: BarChart3 },
+  { label: "Gráficos", icon: LineChart },
+  { label: "Fórmulas", icon: Calculator },
   { label: "Agente IA", icon: Sparkles },
   { label: "Configurações", icon: Settings, adminOnly: true },
 ];
@@ -752,6 +764,14 @@ function ModuleView({
     return <RestrictionsView projectId={projectId} projectName={projectName} />;
   if (name === "Relatórios")
     return <ReportsView projectId={projectId} projectName={projectName} activities={activities} />;
+  if (name === "Frentes")
+    return <FrentesView projectId={projectId} projectName={projectName} />;
+  if (name === "Medição")
+    return <MedicaoView projectId={projectId} projectName={projectName} />;
+  if (name === "Gráficos")
+    return <GraficosView projectId={projectId} projectName={projectName} activities={activities} />;
+  if (name === "Fórmulas")
+    return <FormulasView projectName={projectName} />;
   if (name === "Cronogramas")
     return (
       <div className="module-page">
@@ -928,6 +948,22 @@ export default function Home() {
     projectId: selected?.id ?? 1,
   });
   const activities = activitiesQuery.data ?? [];
+  const budgetQuery = trpc.budgets.list.useQuery(
+    { projectId: selected?.id ?? 1 },
+    { enabled: Boolean(selected) }
+  );
+  const budgetStatusLine = (() => {
+    if (!budgetQuery.data) return "Orçamento: carregando…";
+    if (budgetQuery.data.unavailable) return "Orçamento: indisponível (sem banco)";
+    if (!budgetQuery.data.activeVersionId) return "Orçamento: sem versão";
+    if (!budgetQuery.data.items.length) return "Orçamento: 0 serviços";
+    const total = budgetQuery.data.total;
+    const money = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(total);
+    return `Orçamento: ${budgetQuery.data.items.length} serviço(s) · ${money}`;
+  })();
   const portfolioProgress = projects.length
     ? Math.round(
         projects.reduce((total, project) => total + project.progress, 0) /
@@ -948,11 +984,13 @@ export default function Home() {
           ? "lob"
           : activeNav === "Produção"
             ? "producao"
-            : activeNav === "Restrições"
-              ? "restricoes"
-              : activeNav === "Relatórios"
-                ? "relatorios"
-                : "portfolio";
+            : activeNav === "Medição"
+              ? "medicao"
+              : activeNav === "Restrições"
+                ? "restricoes"
+                : activeNav === "Relatórios"
+                  ? "relatorios"
+                  : "portfolio";
   const visibleProjects = projects.filter(project =>
     `${project.name} ${project.code} ${project.location}`
       .toLowerCase()
@@ -1130,9 +1168,13 @@ export default function Home() {
                   Catálogo: "Fontes de preços, insumos e composições de serviço.",
                   EAP: "Escopo, pacotes de trabalho e estrutura de entregas.",
                   Cronogramas: "Planejamento, baseline e caminho crítico.",
+                  Frentes: "Onde a execução acontece — código, nome e local/trecho.",
                   Produção: "Ritmos, equipes e avanço físico.",
+                  Medição: "Períodos de produção e avanço para acompanhamento da medição.",
                   Restrições: "Pendências que podem impactar o prazo.",
                   Relatórios: "Indicadores e visões executivas.",
+                  Gráficos: "Planejado × realizado, produção e status das atividades.",
+                  Fórmulas: "Catálogo canônico das fórmulas de domínio.",
                 }[activeNav] || "Gestão integrada de obras."
               }
               onBack={() => setActiveNav("Portfólio")}
@@ -1211,6 +1253,7 @@ export default function Home() {
                   {selected && (
                     <div className="portfolio-quick-actions">
                       <span className="eyebrow">ABRIR NA OBRA ATIVA · {selected.name}</span>
+                      <p className="budget-status-line">{budgetStatusLine}</p>
                       <div className="portfolio-quick-buttons">
                         <button
                           type="button"
@@ -1332,6 +1375,7 @@ export default function Home() {
                     para editar atividades, calcular CPM, controlar baseline e
                     acompanhar o realizado.
                   </p>
+                  {selected && <p className="budget-status-line">{budgetStatusLine}</p>}
                 </div>
                 <div className="portfolio-next-actions">
                   <button

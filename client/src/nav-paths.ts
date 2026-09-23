@@ -5,9 +5,13 @@ export const NAV_PATHS: Record<string, string> = {
   Catálogo: "/catalogo",
   Cronogramas: "/cronogramas",
   "Linha de Balanço": "/lob",
+  Frentes: "/frentes",
   Produção: "/producao",
+  Medição: "/medicao",
   Restrições: "/restricoes",
   Relatórios: "/relatorios",
+  Gráficos: "/graficos",
+  Fórmulas: "/formulas",
   "Agente IA": "/agente",
   "Configurações": "/configuracoes",
 };

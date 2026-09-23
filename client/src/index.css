@@ -4068,6 +4068,19 @@ html, body, #root { background: #080a0c !important; color: #edf3f5 !important; }
   width: 100%;
 }
 
+.budget-status-line {
+  margin: 0;
+  width: 100%;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.portfolio-next-step .budget-status-line {
+  margin-top: 0.5rem;
+  color: #334155;
+  font-weight: 500;
+}
+
 .portfolio-quick-buttons {
   display: flex;
   flex-wrap: wrap;

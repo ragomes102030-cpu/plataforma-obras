@@ -1,6 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { Activity, ClipboardCheck, Plus, RefreshCw, Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import { NAV_PATHS } from "@/nav-paths";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -14,6 +16,7 @@ export function ProductionView({
   projectName: string;
 }) {
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
   const activitiesQuery = trpc.projects.activities.useQuery({ projectId });
   const wbsQuery = trpc.projects.wbs.useQuery({ projectId });
   const frontsQuery = trpc.production.fronts.useQuery({ projectId });
@@ -138,6 +141,18 @@ export function ProductionView({
             {projectName} · registre o realizado por frente, equipe e unidade.
           </p>
         </div>
+        <span className="module-hero-status">
+          <span />{" "}
+          {wbsQuery.isPending || activitiesQuery.isPending
+            ? "Carregando"
+            : !planningReady
+              ? "Aguardando planejamento"
+              : catalogEmpty
+                ? "Montar catálogo"
+                : entries.length === 0
+                  ? "Sem lançamentos"
+                  : `${entries.length} lançamento(s)`}
+        </span>
         <div className="module-card production-readonly-note">
           <ClipboardCheck size={15} /> Lançamentos começam como rascunho
         </div>
@@ -154,6 +169,20 @@ export function ProductionView({
               unidades e lançamentos diários.
             </p>
           </div>
+          <button
+            type="button"
+            className="outline-button"
+            onClick={() => navigate(NAV_PATHS["EAP"])}
+          >
+            Abrir EAP
+          </button>
+          <button
+            type="button"
+            className="outline-button"
+            onClick={() => navigate(NAV_PATHS["Cronogramas"])}
+          >
+            Cronogramas
+          </button>
         </div>
       ) : null}
 
@@ -435,7 +464,20 @@ export function ProductionView({
               </div>
             </div>
             {entries.length === 0 ? (
-              <div className="module-empty">Ainda não há produção lançada.</div>
+              <div className="module-empty">
+                <ClipboardCheck size={20} />
+                <span>
+                  <strong>Nenhum lançamento ainda.</strong> Use o formulário ao
+                  lado para registrar a primeira produção do dia.
+                </span>
+                <button
+                  type="button"
+                  className="outline-button"
+                  onClick={() => navigate(NAV_PATHS["Frentes"])}
+                >
+                  Ver frentes
+                </button>
+              </div>
             ) : (
               <div className="production-entry-list">
                 {entries.map(entry => (

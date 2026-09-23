@@ -901,6 +901,10 @@ async function persistPhase7Plan(
   });
 }
 
+function dayKeyAt(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -1650,7 +1654,14 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { versions: [], activeVersionId: null, items: [], total: 0 };
+        if (!db)
+          return {
+            versions: [],
+            activeVersionId: null,
+            items: [],
+            total: 0,
+            unavailable: true,
+          };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const versions = await db
           .select()
@@ -1669,7 +1680,13 @@ export const appRouter = router({
           (sum, item) => sum + Number(item.quantity) * Number(item.unitPrice),
           0
         );
-        return { versions, activeVersionId: active?.id ?? null, items, total };
+        return {
+          versions,
+          activeVersionId: active?.id ?? null,
+          items,
+          total,
+          unavailable: false,
+        };
       }),
     createVersion: protectedProcedure
       .input(
@@ -1701,6 +1718,136 @@ export const appRouter = router({
           })
           .$returningId();
         return { id: createdId.id };
+      }),
+    ensureVersion: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const existing = await db
+          .select({
+            id: budgetVersions.id,
+            versionNumber: budgetVersions.versionNumber,
+          })
+          .from(budgetVersions)
+          .where(eq(budgetVersions.projectId, input.projectId))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (existing[0]) {
+          const items = await db
+            .select({ id: budgetItems.id })
+            .from(budgetItems)
+            .where(eq(budgetItems.budgetVersionId, existing[0].id))
+            .limit(1);
+          if (items.length) return { id: existing[0].id, created: false };
+        }
+        const wbsRows = await db
+          .select({ id: wbsNodes.id, code: wbsNodes.code })
+          .from(wbsNodes)
+          .where(eq(wbsNodes.projectId, input.projectId));
+        const wbsIdByCode = new Map(wbsRows.map(row => [row.code, row.id]));
+        const wbsFor = (...codes: string[]): number | null => {
+          for (const code of codes) {
+            const id = wbsIdByCode.get(code);
+            if (id) return id;
+          }
+          return null;
+        };
+        const versionId = existing[0]?.id;
+        if (versionId) {
+          await db.insert(budgetItems).values([
+            {
+              budgetVersionId: versionId,
+              wbsNodeId: wbsFor("1.1", "1"),
+              code: "01.001",
+              description: "Mobilização e canteiro",
+              unit: "vb",
+              quantity: "1.000",
+              unitPrice: "0.00",
+              plannedDurationDays: 14,
+              source: "A preencher",
+              sortOrder: 0,
+            },
+            {
+              budgetVersionId: versionId,
+              wbsNodeId: wbsFor("2.1", "1.2"),
+              code: "02.001",
+              description: "Fundação e contenções",
+              unit: "vb",
+              quantity: "1.000",
+              unitPrice: "0.00",
+              plannedDurationDays: 28,
+              source: "A preencher",
+              sortOrder: 1,
+            },
+            {
+              budgetVersionId: versionId,
+              wbsNodeId: wbsFor("3.1", "1.3"),
+              code: "03.001",
+              description: "Estrutura dos pavimentos",
+              unit: "vb",
+              quantity: "1.000",
+              unitPrice: "0.00",
+              plannedDurationDays: 178,
+              source: "A preencher",
+              sortOrder: 2,
+            },
+          ]);
+          return { id: versionId, created: true };
+        }
+        const [createdId] = await db
+          .insert(budgetVersions)
+          .values({
+            projectId: input.projectId,
+            name: "Orçamento inicial — preencher preços",
+            versionNumber: 1,
+            status: "rascunho",
+            currency: "BRL",
+            notes:
+              "Versão inicial criada para orientar o cadastro; preços ainda precisam ser confirmados.",
+            createdBy: ctx.user.id,
+          })
+          .$returningId();
+        await db.insert(budgetItems).values([
+          {
+            budgetVersionId: createdId.id,
+            wbsNodeId: wbsFor("1.1", "1"),
+            code: "01.001",
+            description: "Mobilização e canteiro",
+            unit: "vb",
+            quantity: "1.000",
+            unitPrice: "0.00",
+            plannedDurationDays: 14,
+            source: "A preencher",
+            sortOrder: 0,
+          },
+          {
+            budgetVersionId: createdId.id,
+            wbsNodeId: wbsFor("2.1", "1.2"),
+            code: "02.001",
+            description: "Fundação e contenções",
+            unit: "vb",
+            quantity: "1.000",
+            unitPrice: "0.00",
+            plannedDurationDays: 28,
+            source: "A preencher",
+            sortOrder: 1,
+          },
+          {
+            budgetVersionId: createdId.id,
+            wbsNodeId: wbsFor("3.1", "1.3"),
+            code: "03.001",
+            description: "Estrutura dos pavimentos",
+            unit: "vb",
+            quantity: "1.000",
+            unitPrice: "0.00",
+            plannedDurationDays: 178,
+            source: "A preencher",
+            sortOrder: 2,
+          },
+        ]);
+        return { id: createdId.id, created: true };
       }),
     createItem: protectedProcedure
       .input(
@@ -2652,6 +2799,289 @@ export const appRouter = router({
         if (!activity || !resource) throw new Error("Atividade ou recurso não pertence à obra.");
         const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).$returningId();
         return { id: createdId.id };
+      }),
+    evm: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
+      .query(async ({ ctx, input }) => {
+        const empty = {
+          available: false as const,
+          asOf: input.asOf ?? new Date(),
+          bac: 0,
+          pv: 0,
+          ev: 0,
+          ac: null as number | null,
+          spi: null as number | null,
+          cpi: null as number | null,
+          sv: 0,
+          cv: null as number | null,
+          eac: null as number | null,
+          vac: null as number | null,
+          etc: null as number | null,
+          plannedPct: 0,
+          actualPct: 0,
+          acLinked: false,
+          note: "Banco de dados não configurado.",
+        };
+        const db = await getDb();
+        if (!db) return empty;
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versions = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber));
+        const active = versions[0];
+        const items = active
+          ? await db.select().from(budgetItems).where(eq(budgetItems.budgetVersionId, active.id))
+          : [];
+        const bac = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
+        const actualByActivity = new Map<number, number>();
+        for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
+        const asOf = input.asOf ?? new Date();
+        const start = project?.plannedStart?.getTime() ?? asOf.getTime();
+        const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
+        let weightedPlanned = 0;
+        let weightedActual = 0;
+        let totalPlannedQty = 0;
+        let ac = 0;
+        let acLinked = false;
+        const budgetById = new Map(items.map(item => [item.id, item]));
+        for (const activity of activities) {
+          const plannedQuantity = Number(activity.plannedQuantity ?? 0);
+          if (plannedQuantity <= 0) continue;
+          const actualQuantity = actualByActivity.get(activity.id) ?? 0;
+          const plannedStart = activity.earlyStart ?? activity.startOffset;
+          const plannedProgress = Math.max(0, Math.min(100, ((elapsedDays - plannedStart) / Math.max(1, activity.durationDays)) * 100));
+          const actualProgress = Math.max(0, Math.min(100, (actualQuantity / plannedQuantity) * 100));
+          weightedPlanned += plannedQuantity * plannedProgress;
+          weightedActual += plannedQuantity * actualProgress;
+          totalPlannedQty += plannedQuantity;
+          if (activity.budgetItemId) {
+            const item = budgetById.get(activity.budgetItemId);
+            if (item && Number(item.quantity) > 0) {
+              const unitCost = Number(item.unitPrice) / Number(item.quantity);
+              ac += actualQuantity * unitCost;
+              acLinked = true;
+            }
+          }
+        }
+        const plannedPct = totalPlannedQty ? weightedPlanned / totalPlannedQty : 0;
+        const actualPct = totalPlannedQty ? weightedActual / totalPlannedQty : 0;
+        const pv = bac * (plannedPct / 100);
+        const ev = bac * (actualPct / 100);
+        const spi = pv > 0 ? ev / pv : null;
+        const cpi = acLinked && ac > 0 ? ev / ac : null;
+        const sv = ev - pv;
+        const cv = acLinked ? ev - ac : null;
+        const eac = cpi && cpi > 0 ? bac / cpi : bac > 0 ? bac : null;
+        const vac = eac !== null ? bac - eac : null;
+        const etc = eac !== null ? eac - (acLinked ? ac : ev) : null;
+        const note = !bac
+          ? "Orçamento sem valores — EVM físico (SPI) disponível; custos (CPI/EAC) aguardam preços."
+          : !acLinked
+            ? "CPI/EAC estimados sem custos vinculados às atividades."
+            : null;
+        return {
+          available: true as const,
+          asOf,
+          bac,
+          pv,
+          ev,
+          ac: acLinked ? ac : null,
+          spi: spi === null ? null : Math.round(spi * 1000) / 1000,
+          cpi: cpi === null ? null : Math.round(cpi * 1000) / 1000,
+          sv: Math.round(sv * 100) / 100,
+          cv: cv === null ? null : Math.round(cv * 100) / 100,
+          eac: eac === null ? null : Math.round(eac * 100) / 100,
+          vac: vac === null ? null : Math.round(vac * 100) / 100,
+          etc: etc === null ? null : Math.round(etc * 100) / 100,
+          plannedPct: Math.round(plannedPct * 10) / 10,
+          actualPct: Math.round(actualPct * 10) / 10,
+          acLinked,
+          note,
+        };
+      }),
+    scurve: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { available: false as const, points: [] as { date: string; plannedPct: number; actualPct: number }[], note: "Banco de dados não configurado." };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const entries = await db.select({ productionDate: productionEntries.productionDate, quantity: productionEntries.quantity, activityId: productionEntries.activityId }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
+        if (!activities.length) return { available: true as const, points: [] as { date: string; plannedPct: number; actualPct: number }[], note: "Sem atividades no cronograma." };
+        const asOf = input.asOf ?? new Date();
+        const startMs = project?.plannedStart?.getTime() ?? asOf.getTime();
+        const start = new Date(startMs);
+        const endOffset = Math.max(1, ...activities.map(a => (a.earlyStart ?? a.startOffset) + a.durationDays));
+        const end = new Date(startMs + (endOffset - 1) * 86400000);
+        const endMs = Math.max(end.getTime(), asOf.getTime(), ...entries.map(e => new Date(e.productionDate).getTime()));
+        const totalDays = Math.max(1, Math.ceil((endMs - startMs) / 86400000));
+        const step = Math.max(1, Math.ceil(totalDays / 90));
+        const totalPlannedQty = activities.reduce((sum, a) => sum + Number(a.plannedQuantity ?? 0), 0);
+        const actualByDay = new Map<string, number>();
+        for (const entry of entries) {
+          const key = new Date(entry.productionDate).toISOString().slice(0, 10);
+          actualByDay.set(key, (actualByDay.get(key) ?? 0) + Number(entry.quantity));
+        }
+        const sortedActualDays = [...actualByDay.keys()].sort();
+        const points: { date: string; plannedPct: number; actualPct: number }[] = [];
+        let cumActual = 0;
+        let dayIndex = 0;
+        let actualCursor = 0;
+        for (let offset = 0; offset <= totalDays; offset += step) {
+          const dayMs = startMs + offset * 86400000;
+          const dayDate = new Date(dayMs);
+          const dayKey = dayDate.toISOString().slice(0, 10);
+          while (actualCursor < sortedActualDays.length && sortedActualDays[actualCursor]! <= dayKey) {
+            cumActual += actualByDay.get(sortedActualDays[actualCursor]!) ?? 0;
+            actualCursor += 1;
+          }
+          let weightedPlanned = 0;
+          for (const activity of activities) {
+            const plannedQuantity = Number(activity.plannedQuantity ?? 0);
+            if (plannedQuantity <= 0) continue;
+            const plannedStart = activity.earlyStart ?? activity.startOffset;
+            const progress = Math.max(0, Math.min(100, ((offset - plannedStart) / Math.max(1, activity.durationDays)) * 100));
+            weightedPlanned += plannedQuantity * progress;
+          }
+          const plannedPct = totalPlannedQty ? weightedPlanned / totalPlannedQty : 0;
+          const actualPct = totalPlannedQty ? Math.min(100, (cumActual / totalPlannedQty) * 100) : 0;
+          points.push({
+            date: dayKey,
+            plannedPct: Math.round(plannedPct * 10) / 10,
+            actualPct: Math.round(actualPct * 10) / 10,
+          });
+          dayIndex += 1;
+        }
+        if (points.length && points[points.length - 1]!.date < dayKeyAt(endMs)) {
+          const dayKey = dayKeyAt(endMs);
+          while (actualCursor < sortedActualDays.length && sortedActualDays[actualCursor]! <= dayKey) {
+            cumActual += actualByDay.get(sortedActualDays[actualCursor]!) ?? 0;
+            actualCursor += 1;
+          }
+          let weightedPlanned = 0;
+          for (const activity of activities) {
+            const plannedQuantity = Number(activity.plannedQuantity ?? 0);
+            if (plannedQuantity <= 0) continue;
+            const plannedStart = activity.earlyStart ?? activity.startOffset;
+            const progress = Math.max(0, Math.min(100, ((endOffset - plannedStart) / Math.max(1, activity.durationDays)) * 100));
+            weightedPlanned += plannedQuantity * progress;
+          }
+          points.push({
+            date: dayKey,
+            plannedPct: Math.round((totalPlannedQty ? weightedPlanned / totalPlannedQty : 0) * 10) / 10,
+            actualPct: Math.round(Math.min(100, totalPlannedQty ? (cumActual / totalPlannedQty) * 100 : 0) * 10) / 10,
+          });
+        }
+        void dayIndex;
+        return { available: true as const, points, note: null as string | null };
+      }),
+    leveling: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { available: false as const, capacity: 0, histogram: [] as { offset: number; demand: number }[], peaks: [] as { offset: number; demand: number }[], suggestions: [] as { activityId: number; wbsCode: string; name: string; fromOffset: number; toOffset: number; float: number }[], note: "Banco de dados não configurado." };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        const resources = await db.select().from(planningResources).where(and(eq(planningResources.projectId, input.projectId), eq(planningResources.resourceType, "mao_de_obra"), eq(planningResources.active, 1)));
+        if (!activities.length) return { available: true as const, capacity: 0, histogram: [] as { offset: number; demand: number }[], peaks: [] as { offset: number; demand: number }[], suggestions: [] as { activityId: number; wbsCode: string; name: string; fromOffset: number; toOffset: number; float: number }[], note: "Sem atividades no cronograma." };
+        const capacity = resources.reduce((sum, resource) => sum + Number(resource.capacityPerDay ?? 0), 0);
+        const activityIds = activities.map(activity => activity.id);
+        const allocations = activityIds.length
+          ? await db.select().from(activityResourceAllocations).where(inArray(activityResourceAllocations.activityId, activityIds))
+          : [];
+        const allocByActivity = new Map<number, number>();
+        for (const allocation of allocations) {
+          allocByActivity.set(allocation.activityId, (allocByActivity.get(allocation.activityId) ?? 0) + Number(allocation.quantity));
+        }
+        const span = Math.max(1, ...activities.map(a => (a.earlyStart ?? a.startOffset) + a.durationDays));
+        const demandByDay = new Array<number>(span).fill(0);
+        for (const activity of activities) {
+          const start = activity.earlyStart ?? activity.startOffset;
+          const duration = Math.max(1, activity.durationDays);
+          const demand = allocByActivity.get(activity.id) ?? 0;
+          if (demand <= 0) continue;
+          for (let day = start; day < start + duration && day < span; day += 1) {
+            if (day >= 0) demandByDay[day] = (demandByDay[day] ?? 0) + demand;
+          }
+        }
+        const histogram = demandByDay.map((demand, offset) => ({ offset, demand: Math.round(demand * 1000) / 1000 }));
+        const peaks = capacity > 0
+          ? histogram.filter(point => point.demand > capacity)
+          : [];
+        const suggestions: { activityId: number; wbsCode: string; name: string; fromOffset: number; toOffset: number; float: number }[] = [];
+        if (peaks.length && capacity > 0) {
+          const peakSet = new Set(peaks.map(peak => peak.offset));
+          for (const activity of activities) {
+            const float = activity.totalFloat ?? 0;
+            if (float <= 0 || activity.critical === 1) continue;
+            const start = activity.earlyStart ?? activity.startOffset;
+            const duration = Math.max(1, activity.durationDays);
+            let overlaps = false;
+            for (let day = start; day < start + duration; day += 1) {
+              if (peakSet.has(day)) {
+                overlaps = true;
+                break;
+              }
+            }
+            if (!overlaps) continue;
+            const toOffset = Math.min(start + float, span - duration);
+            if (toOffset <= start) continue;
+            suggestions.push({
+              activityId: activity.id,
+              wbsCode: activity.wbsCode,
+              name: activity.name,
+              fromOffset: start,
+              toOffset,
+              float,
+            });
+            if (suggestions.length >= 12) break;
+          }
+        }
+        const note = !capacity
+          ? "Cadastre capacidade/dia nos recursos de mão de obra para detectar picos."
+          : !allocations.length
+            ? "Aloque recursos nas atividades (allocateResource) para montar a demanda diária."
+            : peaks.length
+              ? `${peaks.length} dia(s) acima da capacidade de ${capacity}/dia.`
+              : "Demanda dentro da capacidade nos dias calculados.";
+        return {
+          available: true as const,
+          capacity: Math.round(capacity * 1000) / 1000,
+          histogram,
+          peaks,
+          suggestions,
+          note,
+        };
+      }),
+    applyLevelShift: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), activityId: z.number().int().positive(), newStartOffset: z.number().int().min(0) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
+        if (!activity) throw new Error("Atividade não encontrada.");
+        const float = activity.totalFloat ?? 0;
+        const current = activity.earlyStart ?? activity.startOffset;
+        if (activity.critical === 1 && input.newStartOffset !== current) {
+          throw new Error("Atividade crítica não pode ser deslocada no nivelamento.");
+        }
+        if (input.newStartOffset < current || input.newStartOffset > current + float) {
+          throw new Error(`Deslocamento fora da folga total (${float} dia(s)).`);
+        }
+        await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId)));
+        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const all = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        const result = calculateDeterministicCpm(all, dependencies);
+        if (result.valid && result.schedule) {
+          const calculatedAt = new Date();
+          for (const item of result.schedule.activities) {
+            await db.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
+          }
+        }
+        return { ok: true as const, newStartOffset: input.newStartOffset, cpmValid: result.valid };
       }),
   }),
   agent: router({

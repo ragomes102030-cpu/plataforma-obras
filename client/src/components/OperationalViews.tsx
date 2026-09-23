@@ -1,6 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, BarChart3, CheckCircle2, ClipboardList, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { NAV_PATHS } from "@/nav-paths";
 
 const stages = ["DESCRITIVO", "EAP_PROPOSTA", "EAP_REVISAO", "ATIVIDADES_PROPOSTA", "DEPENDENCIAS_PROPOSTA", "CPM_VALIDADO", "CRONOGRAMA_PROPOSTO", "BASELINE_PROPOSTA", "GANTT_LOB_PROPOSTO", "CONTROLE"] as const;
 type Stage = (typeof stages)[number];
@@ -8,6 +10,7 @@ type Stage = (typeof stages)[number];
 export function RestrictionsView({ projectId, projectName }: { projectId: number; projectName: string }) {
   const snapshot = trpc.agent.snapshot.useQuery({ projectId });
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
   const [description, setDescription] = useState("");
   const [impact, setImpact] = useState("");
   const [stage, setStage] = useState<Stage>("CONTROLE");
@@ -16,7 +19,7 @@ export function RestrictionsView({ projectId, projectName }: { projectId: number
   const findings = snapshot.data?.openFindings ?? [];
   return (
     <div className="module-page">
-      <div className="module-hero"><div className="module-icon"><AlertTriangle size={22} /></div><div><p className="eyebrow accent">CONTROLE OPERACIONAL</p><h2>Restrições</h2><p>{projectName} · registre impedimentos, alertas e recomendações com rastreabilidade.</p></div></div>
+      <div className="module-hero"><div className="module-icon"><AlertTriangle size={22} /></div><div><p className="eyebrow accent">CONTROLE OPERACIONAL</p><h2>Restrições</h2><p>{projectName} · registre impedimentos, alertas e recomendações com rastreabilidade.</p></div><span className="module-hero-status"><span /> {snapshot.isPending ? "Carregando" : findings.length ? `${findings.length} aberta(s)` : "Sem restrições"}</span></div>
       <div className="module-grid"><div className="module-card"><span className="eyebrow">ABERTAS</span><strong>{findings.length} achado(s)</strong><p>Itens que ainda precisam de decisão ou tratamento.</p></div><div className="module-card"><span className="eyebrow">MARCO DO COORDENADOR</span><strong>{snapshot.data?.stage ?? "Carregando..."}</strong><p>{snapshot.data?.blockerCount ?? 0} bloqueador(es) acumulado(s).</p></div></div>
       <div className="module-card"><div className="panel-heading"><div><h3>Registrar restrição</h3><p>O registro fica disponível para o agente coordenador da obra.</p></div><Plus size={17} className="sparkle" /></div>
         <form className="production-form-grid" onSubmit={event => { event.preventDefault(); if (!description.trim()) return; mutation.mutate({ projectId, stage, classification: "blocker", entityType: "restricao_manual", source: { channel: "restricoes", actor: "cliente" }, description: description.trim(), impact: impact.trim() || undefined, confidence: "medium" }); }}>
@@ -35,6 +38,7 @@ export function RestrictionsView({ projectId, projectName }: { projectId: number
 
 export function ReportsView({ projectId, projectName, activities }: { projectId: number; projectName: string; activities: any[] }) {
   const entriesQuery = trpc.production.entries.useQuery({ projectId });
+  const [, navigate] = useLocation();
   const entries = entriesQuery.data ?? [];
   const completed = activities.filter(item => item.progress >= 100).length;
   const atRisk = activities.filter(item => item.status === "Em risco").length;
@@ -45,9 +49,9 @@ export function ReportsView({ projectId, projectName, activities }: { projectId:
     .slice(0, 5);
   return (
     <div className="module-page">
-      <div className="module-hero"><div className="module-icon"><BarChart3 size={22} /></div><div><p className="eyebrow accent">VISÃO EXECUTIVA</p><h2>Relatórios</h2><p>{projectName} · indicadores calculados a partir do planejamento e da produção persistidos.</p></div></div>
+      <div className="module-hero"><div className="module-icon"><BarChart3 size={22} /></div><div><p className="eyebrow accent">VISÃO EXECUTIVA</p><h2>Relatórios</h2><p>{projectName} · indicadores calculados a partir do planejamento e da produção persistidos.</p></div><span className="module-hero-status"><span /> {activities.length === 0 ? "Sem cronograma" : entries.length === 0 ? "Sem produção" : `${entries.length} lançamento(s)`}</span></div>
       <div className="metrics-grid"><div className="metric-card"><div className="metric-icon bg-[#e8f0f4] text-[#426579]"><ClipboardList size={17} /></div><div><p className="metric-label">Atividades</p><p className="metric-value">{completed}/{activities.length}</p><p className="metric-detail">concluídas</p></div></div><div className="metric-card"><div className="metric-icon bg-[#f3e6e6] text-[#8b5b60]"><AlertTriangle size={17} /></div><div><p className="metric-label">Risco</p><p className="metric-value">{atRisk}</p><p className="metric-detail">atividade(s) em risco</p></div></div><div className="metric-card"><div className="metric-icon bg-[#e5f0e8] text-[#427052]"><CheckCircle2 size={17} /></div><div><p className="metric-label">Produção</p><p className="metric-value">{totalQuantity.toFixed(3)}</p><p className="metric-detail">quantidade lançada</p></div></div></div>
-      <div className="module-card"><div className="panel-heading"><div><h3>Leitura do coordenador</h3><p>Este painel resume sinais persistidos e não substitui a validação do cliente.</p></div></div><div className="module-empty"><CheckCircle2 size={20} /> {entries.length ? `${entries.length} lançamento(s) de produção registrados.` : "Ainda não há lançamentos de produção."}</div></div>
+      <div className="module-card"><div className="panel-heading"><div><h3>Leitura do coordenador</h3><p>Este painel resume sinais persistidos e não substitui a validação do cliente.</p></div></div>{entries.length ? <div className="module-empty"><CheckCircle2 size={20} /> {entries.length} lançamento(s) de produção registrados.</div> : <div className="module-empty"><AlertTriangle size={20} /><span><strong>Ainda não há produção.</strong> O relatório executivo se alimenta dos apontamentos diários.</span><button type="button" className="outline-button" onClick={() => navigate(NAV_PATHS["Produção"])}>Ir para Produção</button></div>}</div>
       <div className="module-card"><div className="panel-heading"><div><h3>Atividades que merecem atenção primeiro</h3><p>Prioridade calculada por risco, caminho crítico, avanço e início planejado.</p></div><AlertTriangle size={18} className="sparkle" /></div>{priorityActivities.length ? <div className="focus-list">{priorityActivities.map((activity, index) => <div className="focus-item" key={activity.id}><div className={`focus-icon ${activity.status === "Em risco" ? "rose" : "amber"}`}><span>{index + 1}</span></div><div><strong>{activity.wbsCode} · {activity.name}</strong><span>{activity.status === "Em risco" ? "Em risco" : activity.critical === 1 ? "Caminho crítico" : "Ainda não concluída"} · avanço {activity.progress}%</span></div><span className={`focus-tag ${activity.status === "Em risco" ? "rose" : "amber"}`}>{activity.status === "Em risco" ? "Bloqueio" : "Prioridade"}</span></div>)}</div> : <div className="module-empty"><CheckCircle2 size={20} /> Nenhuma atividade pendente foi encontrada.</div>}</div>
     </div>
   );

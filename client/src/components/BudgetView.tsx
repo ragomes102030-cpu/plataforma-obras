@@ -29,6 +29,11 @@ export function BudgetView({
       await utils.budgets.list.invalidate({ projectId });
     },
   });
+  const ensureVersionMutation = trpc.budgets.ensureVersion.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate({ projectId });
+    },
+  });
   const createItemMutation = trpc.budgets.createItem.useMutation({
     onSuccess: async () => {
       setCode("");
@@ -80,6 +85,19 @@ export function BudgetView({
     activeVersion && code && description && unit && Number(quantity) > 0 &&
     (compositionId ? true : Number(unitPrice) >= 0)
   );
+  const unavailable = budgetQuery.data?.unavailable === true;
+  const items = budgetQuery.data?.items ?? [];
+  const total = budgetQuery.data?.total ?? 0;
+  const allPricesZero = items.length > 0 && items.every(item => Number(item.unitPrice) === 0);
+  const heroStatus = unavailable
+    ? "Sem banco"
+    : budgetQuery.isPending
+      ? "Carregando"
+      : !activeVersion
+        ? "Sem versão"
+        : allPricesZero || total === 0
+          ? "Sem preços"
+          : "Com preços";
 
   const submitVersion = (event: React.FormEvent) => {
     event.preventDefault();
@@ -115,7 +133,7 @@ export function BudgetView({
           <h2>Orçamento da obra</h2>
           <p>{projectName} · cadastre serviços, quantitativos e preços com rastreabilidade.</p>
         </div>
-        <span className="module-hero-status"><span /> Etapa 2 · núcleo inicial</span>
+        <span className="module-hero-status"><span /> {heroStatus}</span>
         <div className="module-hero-actions">
           <button type="button" className="outline-button" onClick={() => navigate(NAV_PATHS["Cronogramas"])}>Cronograma</button>
           <button type="button" className="outline-button" onClick={() => navigate(NAV_PATHS["Linha de Balanço"])}>LOB</button>
@@ -125,8 +143,18 @@ export function BudgetView({
       <div className="budget-summary-grid">
         <div className="module-card budget-summary-card">
           <span className="eyebrow">VERSÃO ATIVA</span>
-          <strong>{activeVersion?.name || "Nenhuma versão criada"}</strong>
-          <p>{activeVersion ? `V${activeVersion.versionNumber} · ${activeVersion.status.replace("_", " ")}` : "Crie uma versão para iniciar o orçamento."}</p>
+          <strong>
+            {unavailable
+              ? "Indisponível"
+              : activeVersion?.name || "Nenhuma versão criada"}
+          </strong>
+          <p>
+            {unavailable
+              ? "Banco de dados não configurado no servidor."
+              : activeVersion
+                ? `V${activeVersion.versionNumber} · ${activeVersion.status.replace("_", " ")}`
+                : "Crie uma versão para iniciar o orçamento."}
+          </p>
         </div>
         <div className="module-card budget-summary-card">
           <span className="eyebrow">ITENS DE SERVIÇO</span>
@@ -135,26 +163,79 @@ export function BudgetView({
         </div>
         <div className="module-card budget-summary-card budget-total-card">
           <span className="eyebrow">TOTAL DIRETO</span>
-          <strong>{money(budgetQuery.data?.total ?? 0)}</strong>
-          <p>{budgetQuery.data?.items.length && (budgetQuery.data?.total ?? 0) === 0 ? "Itens iniciais sem preços: preencha ou vincule uma composição." : "Quantidade × preço unitário. BDI entra em etapa posterior."}</p>
+          <strong>{unavailable ? "—" : money(total)}</strong>
+          <p>
+            {unavailable
+              ? "Configure DATABASE_URL para ver o orçamento."
+              : items.length && total === 0
+                ? "Itens iniciais sem preços: preencha ou vincule uma composição."
+                : "Quantidade × preço unitário. BDI entra em etapa posterior."}
+          </p>
         </div>
       </div>
 
-      {!activeVersion ? (
+      {unavailable ? (
+        <section className="module-card budget-empty-state">
+          <div className="budget-empty-icon"><FilePlus2 size={22} /></div>
+          <div>
+            <h3>Banco de dados não configurado</h3>
+            <p>
+              O orçamento fica indisponível sem <code>DATABASE_URL</code> no
+              servidor. Configure o banco e recarregue a página para cadastrar
+              versões, serviços e preços.
+            </p>
+          </div>
+        </section>
+      ) : !activeVersion ? (
         <section className="module-card budget-empty-state">
           <div className="budget-empty-icon"><FilePlus2 size={22} /></div>
           <div>
             <h3>Comece pela primeira versão do orçamento</h3>
-            <p>Uma versão preserva o histórico e evita alterar silenciosamente um orçamento aprovado.</p>
+            <p>
+              Uma versão preserva o histórico e evita alterar silenciosamente
+              um orçamento aprovado. Gere a estrutura inicial a partir da EAP
+              ou crie uma versão em branco.
+            </p>
             <form className="budget-version-form" onSubmit={submitVersion}>
               <input value={versionName} onChange={event => setVersionName(event.target.value)} placeholder="Ex.: Orçamento preliminar" required />
               <button className="primary-button" disabled={createVersionMutation.isPending}><Plus size={14} /> Criar versão</button>
+              <button
+                type="button"
+                className="outline-button"
+                disabled={ensureVersionMutation.isPending}
+                onClick={() => ensureVersionMutation.mutate({ projectId })}
+              >
+                {ensureVersionMutation.isPending
+                  ? "Gerando..."
+                  : "Gerar versão inicial da obra"}
+              </button>
             </form>
             {createVersionMutation.error && <p className="form-error">{createVersionMutation.error.message}</p>}
+            {ensureVersionMutation.error && <p className="form-error">{ensureVersionMutation.error.message}</p>}
           </div>
         </section>
       ) : (
         <>
+          {allPricesZero && (
+            <section className="module-card budget-empty-state">
+              <div className="budget-empty-icon"><AlertTriangle size={22} /></div>
+              <div>
+                <h3>Itens sem preços</h3>
+                <p>
+                  O total está em R$ 0 porque os serviços ainda não têm preço
+                  unitário. Vincule composições no Catálogo ou digite o preço de
+                  cada item no formulário abaixo.
+                </p>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => navigate(NAV_PATHS["Catálogo"])}
+                >
+                  Abrir Catálogo de composições
+                </button>
+              </div>
+            </section>
+          )}
           <section className="module-card budget-item-card">
             <div className="panel-heading">
               <div><h3>Novo serviço</h3><p>Cadastre o item com quantidade, unidade e preço de referência.</p></div>
