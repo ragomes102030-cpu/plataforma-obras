@@ -341,7 +341,7 @@ function GanttView({
         </div>
       </div>
       {tab === "gantt" && (
-        <GanttM2 projectId={projectId} />
+        <GanttM2 projectId={projectId} plannedStart={plannedStart} />
       )}
       {tab === "table" && (
         <div className="schedule-table-wrap">

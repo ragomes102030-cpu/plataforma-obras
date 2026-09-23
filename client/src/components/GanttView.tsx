@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 Referencia: paleta-claro.html + wireframe-gantt.html
 Restricoes: nenhum dado fixo; predecessoras = PENDENCIA M3; calendario/feriados = PENDENCIA M4
  */
-export function GanttView({ projectId }: { projectId: number }) {
+export function GanttView({ projectId, plannedStart }: { projectId: number; plannedStart?: string | Date }) {
   const planning = trpc.planning.list.useQuery({ projectId });
   const wbs = trpc.projects.wbs.useQuery({ projectId });
 
@@ -17,20 +17,43 @@ export function GanttView({ projectId }: { projectId: number }) {
   const criticalCount = activities.filter((a: any) => a.critical === 1).length;
   const progressAvg = total ? (activities.reduce((s: number, a: any) => s + (a.progress ?? 0), 0) / total) : 0;
 
+  const projectStart = useMemo(() => {
+    if (plannedStart) {
+      const t = new Date(plannedStart).getTime();
+      if (!Number.isNaN(t)) return t;
+    }
+    return null;
+  }, [plannedStart]);
+
+  const fmt = (offsetDays: number) => {
+    if (projectStart === null) return `+${offsetDays}d`;
+    const d = new Date(projectStart + offsetDays * 86400000);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
   // Build simple visual rows from real data (no hardcoded array)
   const rows = useMemo(() => {
-    return activities.map((a: any, idx: number) => ({
-      idx,
-      wbsCode: a.wbsCode ?? "?",
-      name: a.name ?? "—",
-      duration: a.durationDays ?? 1,
-      start: a.startOffset ?? 0,
-      critical: a.critical === 1,
-      phase: a.phase ?? "—",
-      progress: a.progress ?? 0,
-      done: a.actualQuantity != null && a.plannedQuantity != null && a.actualQuantity >= a.plannedQuantity,
-    }));
-  }, [activities]);
+    return activities.map((a: any, idx: number) => {
+      const start = a.startOffset ?? 0;
+      const dur = a.durationDays ?? 1;
+      return {
+        idx,
+        wbsCode: a.wbsCode ?? "?",
+        name: a.name ?? "—",
+        duration: dur,
+        start,
+        inicio: projectStart === null ? `+${start}d` : new Date(projectStart + start * 86400000).toLocaleDateString("pt-BR"),
+        termino: projectStart === null ? `+${start + dur}d` : new Date(projectStart + (start + dur) * 86400000).toLocaleDateString("pt-BR"),
+        critical: a.critical === 1,
+        phase: a.phase ?? "—",
+        progress: a.progress ?? 0,
+        done: a.actualQuantity != null && a.plannedQuantity != null && a.actualQuantity >= a.plannedQuantity,
+      };
+    });
+  }, [activities, projectStart]);
 
   return (
     <div style={{ background: "var(--bg)", color: "var(--text)", padding: 16 }}>
@@ -54,6 +77,7 @@ export function GanttView({ projectId }: { projectId: number }) {
                 <th style={{ textAlign: "left", padding: 5 }}>Nome</th>
                 <th style={{ textAlign: "left", padding: 5 }}>Dur.</th>
                 <th style={{ textAlign: "left", padding: 5 }}>Início</th>
+                <th style={{ textAlign: "left", padding: 5 }}>Término</th>
                 <th style={{ textAlign: "left", padding: 5 }}>Fase</th>
                 <th style={{ textAlign: "left", padding: 5 }}>%</th>
               </tr>
@@ -64,7 +88,8 @@ export function GanttView({ projectId }: { projectId: number }) {
                   <td style={{ padding: 4, fontWeight: r.critical ? 600 : 400, color: r.critical ? "var(--crit)" : "inherit" }}>{r.wbsCode}</td>
                   <td style={{ padding: 4 }}>{r.name}</td>
                   <td style={{ padding: 4 }}>{r.duration}d</td>
-                  <td style={{ padding: 4 }}>{r.start === 0 ? "Projeto" : `+${r.start}d`}</td>
+                  <td style={{ padding: 4 }}>{r.inicio}</td>
+                  <td style={{ padding: 4 }}>{r.termino}</td>
                   <td style={{ padding: 4 }}>{r.phase}</td>
                   <td style={{ padding: 4, fontWeight: 600, color: r.progress > 0 ? "var(--ok)" : "var(--text2)" }}>{r.progress}%</td>
                 </tr>
@@ -73,24 +98,22 @@ export function GanttView({ projectId }: { projectId: number }) {
           </table>
         </div>
 
-        {/* Right timeline — SVG bars based on real data */}
         <div style={{ position: "relative", overflow: "auto", maxHeight: 420, background: "#fafbfc", border: "1px solid var(--line)", borderRadius: 6, padding: 8 }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: "var(--primary)", marginBottom: 6 }}>
-            Barras — 44 atividades · Semana de referência (startOffset 0 = 20 set 2026)
+            Barras — {total} atividades · início da obra {projectStart === null ? "não informado" : new Date(projectStart).toLocaleDateString("pt-BR")} · dias corridos, sem feriados
           </div>
-          <svg viewBox="0 0 720 320" style={{ width: "100%", height: 320 }} aria-label="Gantt M1 — dados reais de planning.list">
-            {/* Header weeks */}
+          <svg viewBox="0 0 720 320" style={{ width: "100%", height: 320 }} aria-label="Gantt — dados reais de planning.list">
             <rect x="60" y="0" width="640" height="24" fill="#0d2b6b" rx="4" />
-            <text x="70" y="16" fill="#fff" fontSize="10" fontWeight="600">Semana 20 set · 27 set · 04 out · 11 out</text>
-            <text x="60" y="36" fontSize="9" fill="#55607a">Hoje (23 set) → linha vertical</text>
+            <text x="70" y="16" fill="#fff" fontSize="10" fontWeight="600">
+              {projectStart === null
+                ? "Escala por offset (sem plannedStart)"
+                : [0, 14, 28, 42].map(o => new Date(projectStart + o * 86400000).toLocaleDateString("pt-BR")).join(" · ")}
+            </text>
 
-            {/* Today line */}
             <line x1="260" y1="40" x2="260" y2="280" stroke="#d9534f" strokeWidth="2" strokeDasharray="6 3" />
             <text x="262" y="38" fontSize="9" fill="#d9534f" fontWeight="600">HOJE</text>
 
-            {/* Rows: show first 8 real activities as bars (no hardcoded codes — derived from rows) */}
             {rows.slice(0, 8).map((r, idx) => {
-              // Scale: startOffset 0→60, duration scaled to ~50px per day (simplified)
               const left = 60 + (r.start * 58);
               const width = Math.max(20, r.duration * 58);
               const y = 55 + idx * 28;
@@ -98,50 +121,41 @@ export function GanttView({ projectId }: { projectId: number }) {
               return (
                 <g key={`bar-${r.idx}`}>
                   <rect x={left} y={y} width={width} height="14" rx="3" fill={color} opacity={r.done ? 1 : 0.95}>
-                    <title>{`${r.wbsCode}: ${r.name} | Dur: ${r.duration}d | Inicio: +${r.start}d | Progresso: ${r.progress}%`}</title>
+                    <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | Progresso: ${r.progress}%`}</title>
                   </rect>
-                  {/* Progresso M1 — preenchido com dado real (não inventado) */}
                   <rect x={left} y={y} width={Math.max(4, width * ((r.progress ?? 0) / 100))} height="14" rx="3" fill="#1e8a4f" opacity="0.6" />
                   <text x={left + 4} y={y + 11} fontSize="9" fill="#fff">{r.wbsCode}</text>
-                  <text x={left} y={y + 26} fontSize="8" fill="#55607a">{r.name.substring(0, 18)}</text>
                 </g>
               );
             })}
 
-            {/* Milestones (losango) — M2 — marcadores em datas-chave (ex: inicio projeto) */}
             <polygon points="260,42 265,48 260,54 255,48" fill="#7aa8f5" stroke="#0d2b6b" strokeWidth="1" />
-            <text x="268" y="50" fontSize="9" fill="#0d2b6b">Inicio</text>
+            <text x="268" y="50" fontSize="9" fill="#0d2b6b">Início</text>
 
-            {/* Baseline lines — M2 — ligadas a baselines reais do banco */}
             {baselines.length > 0 && (
               <>
                 <rect x="60" y="268" width="640" height="6" rx="3" fill="#bac6d6" opacity="0.7" />
-                <text x="65" y="278" fontSize="9" fill="#55607a">BASELINE REAL (M2 — {baselines.length} baselines do banco)</text>
+                <text x="65" y="278" fontSize="9" fill="#55607a">BASELINE REAL ({baselines.length} baselines do banco)</text>
               </>
             )}
             {baselines.length === 0 && (
               <>
                 <rect x="60" y="268" width="640" height="6" rx="3" fill="#bac6d6" opacity="0.3" />
-                <text x="65" y="278" fontSize="9" fill="#9ca3b2">BASELINE (sem baselines capturadas — M2: vincular ao banco)</text>
+                <text x="65" y="278" fontSize="9" fill="#9ca3b2">BASELINE (sem baselines capturadas)</text>
               </>
             )}
 
-            {/* Summary bars per EAP package (simplified aggregation) */}
             <rect x="60" y="290" width="180" height="14" rx="3" fill="#dde3eb" opacity="0.8" />
-            <text x="65" y="300" fontSize="9" fill="#55607a">Resumo pacotes EAP (M2 — agregação por wbsNodeId)</text>
-
-            {/* Today line */}
-            <line x1="260" y1="40" x2="260" y2="280" stroke="#d9534f" strokeWidth="2" strokeDasharray="6 3" />
-            <text x="262" y="38" fontSize="9" fill="#d9534f" fontWeight="600">HOJE (23 set)</text>
+            <text x="65" y="300" fontSize="9" fill="#55607a">Resumo pacotes EAP</text>
           </svg>
         </div>
       </div>
 
       <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 10 }}>
-        <b>Pendências M1:</b> Predecessoras (M3 via planning.dependencies); Zoom/dia/semana (M4); Calendário/feriados (M4 — não existe campo na API); Edição in-line (M5); Export PNG (M6). Nenhum dado fixo: todas as barras derivam de <code>rows</code> (useMemo sobre <code>activities</code> real).
+        <b>Regra de datas:</b> data de início da obra = plannedStart do projeto; início da atividade = plannedStart + startOffset; término = início + durationDays. <b>Dias corridos, sem feriados.</b>
       </div>
       <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 6, paddingTop: 6, borderTop: "1px dashed var(--line)" }}>
-        <b>Regra aplicada:</b> Nenhum campo estático (arrays/constantes de exemplo) neste componente. Dados vindos exclusivamente de <code>trpc.planning.list</code>. Se <code>activities</code> estiver vazio, a tabela mostra vazio (não inventa).
+        <b>Pendências:</b> Predecessoras (M3); Zoom/dia-semana (M4); Calendário/feriados (M4, campo inexistente na API); Edição in-line (M5); Export PNG (M6).
       </div>
     </div>
   );
