@@ -138,7 +138,6 @@ function GanttView({
   const [tab, setTab] = useState<"gantt" | "table" | "lob">(initialTab);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [onlyCritical, setOnlyCritical] = useState(false);
-  const [editMode, setEditMode] = useState(false);
   const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
   const [drafts, setDrafts] = useState<Record<number, any>>({});
   const [draggingBar, setDraggingBar] = useState<{ id: number; startX: number; startOffset: number; durationDays: number } | null>(null);
@@ -246,13 +245,13 @@ function GanttView({
       <div className="panel-heading gantt-heading">
         <div>
           <div className="title-with-badge">
-            <h3>Planejamento integrado</h3>
+            <h3>Gantt da obra</h3>
             <span className="live-badge">
               <span /> AO VIVO
             </span>
           </div>
           <p>{selectedName} · planejamento salvo</p>
-          <p className="gantt-help">Clique em uma frente para expandir detalhes. Ative “Editar Gantt” para alterar status, avanço, início, duração ou arrastar a barra.</p>
+          <p className="gantt-help">Barras por atividade a partir das datas reais do cronograma. Use as abas abaixo para alternar entre Gantt, Tabela e Linha de balanço.</p>
         </div>
         <div className="gantt-actions">
           <div className="compact-search">
@@ -268,12 +267,6 @@ function GanttView({
             onClick={() => setFiltersOpen(!filtersOpen)}
           >
             <SlidersHorizontal size={15} /> Filtros
-          </button>
-          <button
-            className={`outline-button ${editMode ? "selected-control" : ""}`}
-            onClick={() => setEditMode(value => !value)}
-          >
-            {editMode ? "Concluir edição" : "Editar Gantt"}
           </button>
           <button
             className="icon-button"
