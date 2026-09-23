@@ -97,6 +97,8 @@ export function GanttView({ projectId }: { projectId: number }) {
               return (
                 <g key={`bar-${r.idx}`}>
                   <rect x={left} y={y} width={width} height="14" rx="3" fill={color} opacity={r.done ? 1 : 0.95} />
+                  {/* Progresso M1 — preenchido com dado real (não inventado) */}
+                  <rect x={left} y={y} width={Math.max(4, width * ((r.progress ?? 0) / 100))} height="14" rx="3" fill="#1e8a4f" opacity="0.6" />
                   <text x={left + 4} y={y + 11} fontSize="9" fill="#fff">{r.wbsCode}</text>
                   <text x={left} y={y + 26} fontSize="8" fill="#55607a">{r.name.substring(0, 18)}</text>
                 </g>
