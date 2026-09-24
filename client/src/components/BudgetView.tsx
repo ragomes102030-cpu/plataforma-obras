@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, Calculator, FilePlus2, Plus, RefreshCw, Scale, WalletCards } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { NAV_PATHS } from "@/nav-paths";
 
@@ -60,6 +60,7 @@ export function BudgetView({
   const [plannedDuration, setPlannedDuration] = useState("");
   const [source, setSource] = useState("");
   const [referencePeriod, setReferencePeriod] = useState("");
+  const [bdiPct, setBdiPct] = useState("");
   const [wbsNodeId, setWbsNodeId] = useState("");
   const [decisions, setDecisions] = useState<Record<number, "apply_match" | "keep_manual">>({});
   const [appliedSummary, setAppliedSummary] = useState<{ applied: number; kept: number; exceptions: number; total: number } | null>(null);
@@ -88,6 +89,9 @@ export function BudgetView({
   const unavailable = budgetQuery.data?.unavailable === true;
   const items = budgetQuery.data?.items ?? [];
   const total = budgetQuery.data?.total ?? 0;
+  const bdi = Number(bdiPct) || 0;
+  const totalComBdi = total * (1 + bdi / 100);
+  const encargos = totalComBdi - total;
   const allPricesZero = items.length > 0 && items.every(item => Number(item.unitPrice) === 0);
   const heroStatus = unavailable
     ? "Sem banco"
@@ -134,6 +138,23 @@ export function BudgetView({
       .slice(0, 8);
     return { top, maxTop, branches };
   }, [items, total, wbsQuery.data]);
+
+  const branchGroups = useMemo(() => {
+    if (!items.length) return [];
+    const wbsById = new Map((wbsQuery.data ?? []).map(node => [node.id, node]));
+    const groups = new Map<string, { key: string; label: string; items: typeof items; subtotal: number }>();
+    for (const item of items) {
+      const node = item.wbsNodeId != null ? wbsById.get(item.wbsNodeId) : undefined;
+      const key = (node?.code ?? "").split(".").slice(0, 2).join(".");
+      const branchNode = (wbsQuery.data ?? []).find(n => n.code === key);
+      const label = key ? `${key} · ${branchNode?.name ?? key}` : "Sem ramo";
+      const group = groups.get(key) ?? { key, label, items: [], subtotal: 0 };
+      group.items.push(item);
+      group.subtotal += Number(item.quantity) * Number(item.unitPrice);
+      groups.set(key, group);
+    }
+    return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+  }, [items, wbsQuery.data]);
 
   const submitVersion = (event: React.FormEvent) => {
     event.preventDefault();
@@ -205,7 +226,26 @@ export function BudgetView({
               ? "Configure DATABASE_URL para ver o orçamento."
               : items.length && total === 0
                 ? "Itens iniciais sem preços: preencha ou vincule uma composição."
-                : "Quantidade × preço unitário. BDI entra em etapa posterior."}
+                : "Somente custos diretos. Informe o BDI ao lado para o total final."}
+          </p>
+        </div>
+        <div className="module-card budget-summary-card budget-bdi-card">
+          <span className="eyebrow">TOTAL COM BDI</span>
+          <strong>{unavailable ? "—" : money(totalComBdi)}</strong>
+          <p>
+            {unavailable ? "Configure DATABASE_URL para ver o orçamento." : "BDI:"}
+            {!unavailable && (
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={bdiPct}
+                onChange={event => setBdiPct(event.target.value)}
+                placeholder="0,0"
+                className="budget-bdi-input"
+              />
+            )}
+            {!unavailable && bdi > 0 && <span>encargos {money(encargos)}</span>}
           </p>
         </div>
       </div>
@@ -372,7 +412,7 @@ export function BudgetView({
 
           <section className="module-card budget-table-card">
             <div className="panel-heading"><div><h3>Composição do orçamento</h3><p>Versão {activeVersion.versionNumber} · {activeVersion.name}</p></div><button className="outline-button" onClick={() => void budgetQuery.refetch()}><RefreshCw size={13} /> Atualizar</button></div>
-            {budgetQuery.isPending ? <div className="module-empty">Carregando orçamento...</div> : budgetQuery.data?.items.length ? <div className="budget-table-wrap"><table className="budget-table"><thead><tr><th>Código</th><th>Serviço</th><th>Un.</th><th>Quantidade</th><th>Preço unit.</th><th>Total</th><th>Planejamento</th><th>Fonte</th></tr></thead><tbody>{budgetQuery.data.items.map(item => <tr key={item.id}><td>{item.code}</td><td><strong>{item.description}</strong>{item.isPriceException && <small><AlertTriangle size={11} /> fora da base padrão</small>}{item.compositionNote && <small>Composição: {item.compositionNote}</small>}{item.referencePeriod && <small>Referência {item.referencePeriod}</small>}</td><td>{item.unit}</td><td>{Number(item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 3 })}</td><td>{money(Number(item.unitPrice))}</td><td><strong>{money(Number(item.quantity) * Number(item.unitPrice))}</strong></td><td>{item.plannedDurationDays ? `${item.plannedDurationDays} dias` : "—"}</td><td>{item.source || (item.compositionId ? "Composição" : "Própria")}</td></tr>)}</tbody></table></div> : <div className="module-empty"><Calculator size={20} /><span>Nenhum serviço cadastrado. Use o formulário acima para iniciar o orçamento.</span></div>}
+            {budgetQuery.isPending ? <div className="module-empty">Carregando orçamento...</div> : budgetQuery.data?.items.length ? <div className="budget-table-wrap"><table className="budget-table"><thead><tr><th>Código</th><th>Serviço</th><th>Un.</th><th>Quantidade</th><th>Preço unit.</th><th>Total</th><th>Planejamento</th><th>Fonte</th></tr></thead><tbody>{branchGroups.map(group => <Fragment key={group.key}><tr className="budget-branch-row"><td colSpan={8}><strong>{group.label}</strong><small>{group.items.length} item(ns) · subtotal {money(group.subtotal)}</small></td></tr>{group.items.map(item => <tr key={item.id}><td>{item.code}</td><td><strong>{item.description}</strong>{item.isPriceException && <small><AlertTriangle size={11} /> fora da base padrão</small>}{item.compositionNote && <small>Composição: {item.compositionNote}</small>}{item.referencePeriod && <small>Referência {item.referencePeriod}</small>}</td><td>{item.unit}</td><td>{Number(item.quantity).toLocaleString("pt-BR", { minimumFractionDigits: 3 })}</td><td>{money(Number(item.unitPrice))}</td><td><strong>{money(Number(item.quantity) * Number(item.unitPrice))}</strong></td><td>{item.plannedDurationDays ? `${item.plannedDurationDays} dias` : "—"}</td><td>{item.source || (item.compositionId ? "Composição" : "Própria")}</td></tr>)}</Fragment>)}</tbody><tfoot><tr className="budget-total-row"><td colSpan={5}>TOTAL DIRETO</td><td colSpan={3}><strong>{money(total)}</strong></td></tr><tr className="budget-total-row budget-total-bdi"><td colSpan={5}>TOTAL COM BDI{bdi > 0 ? ` (${bdi.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%)` : ""}</td><td colSpan={3}><strong>{money(totalComBdi)}</strong></td></tr></tfoot></table></div> : <div className="module-empty"><Calculator size={20} /><span>Nenhum serviço cadastrado. Use o formulário acima para iniciar o orçamento.</span></div>}
           </section>
         </>
       )}
