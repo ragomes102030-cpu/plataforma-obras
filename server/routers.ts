@@ -83,6 +83,11 @@ import {
   describeStageGate,
   evaluateStageTransition,
 } from "./construction/stage-gates";
+import {
+  approveCurrentPlanVersion,
+  ensureWritablePlanVersion,
+  listPlanVersionDetails,
+} from "./construction/plan-versions";
 
 /** TTL cache para queries pesadas (catálogo SEINFRA ~11k itens, reconcile ~29s). */
 const queryCache = new Map<string, { at: number; value: unknown }>();
@@ -584,6 +589,9 @@ async function loadAgentCoordinatorSnapshot(
       .limit(30),
   ]);
 
+  const planVersions = await listPlanVersionDetails(projectId);
+  const planVersion = planVersions[0] ?? null;
+
   return {
     stage: state.stage,
     blockerCount: gateEvidence.blockerCount,
@@ -592,6 +600,14 @@ async function loadAgentCoordinatorSnapshot(
     canAdvance: gate.canAdvance,
     gateMessage: gate.message,
     gateChecks: gate.checks,
+    planVersion: planVersion
+      ? {
+          id: planVersion.id,
+          versionNumber: planVersion.versionNumber,
+          status: planVersion.status,
+          approvedAt: planVersion.approvedAt,
+        }
+      : null,
     approvedDecisions: decisions.map(decision => ({
       stage: decision.stage,
       decision: decision.decision,
@@ -724,7 +740,8 @@ async function buildPhase7PlanForProject(
 async function persistPhase7Plan(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
-  plan: Phase7ImportPlan
+  plan: Phase7ImportPlan,
+  versionId: number
 ) {
   const [project] = await db
     .select({ plannedStart: projects.plannedStart })
@@ -791,6 +808,7 @@ async function persistPhase7Plan(
             unit: node.unit,
             plannedQuantity: node.plannedQuantity,
             sortOrder: node.sortOrder,
+            versionId,
           })
           .$returningId();
         localWbsByExternalId.set(node.externalId, created.id);
@@ -841,6 +859,7 @@ async function persistPhase7Plan(
               : ("Não iniciado" as const),
         critical: activity.critical,
         sortOrder: activity.sortOrder,
+        versionId,
       };
       if (existing[0]) {
         await tx
@@ -890,7 +909,7 @@ async function persistPhase7Plan(
           .set(values)
           .where(eq(scheduleDependencies.id, existing[0].id));
       } else {
-        await tx.insert(scheduleDependencies).values(values);
+        await tx.insert(scheduleDependencies).values({ projectId, externalId: dependency.externalId, predecessorId, successorId, type: dependency.type, lag: Math.round(dependency.lag), versionId });
       }
     }
     return {
@@ -1115,6 +1134,7 @@ export const appRouter = router({
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
         await assertAvailableWbsCode(db, input.projectId, code);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const [created] = await db.insert(wbsNodes).values({
           projectId: input.projectId,
           parentId: parent?.id ?? null,
@@ -1125,6 +1145,7 @@ export const appRouter = router({
           unit: input.unit || null,
           plannedQuantity: input.plannedQuantity ?? null,
           sortOrder: siblings.length,
+          versionId: writable.id,
         }).$returningId();
         return created;
       }),
@@ -3031,8 +3052,9 @@ export const appRouter = router({
           )
           .limit(1);
         if (!wbsNode) throw new Error("O código informado não corresponde a um item da EAP desta obra.");
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now() }).$returningId();
+        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).$returningId();
         return { id: createdId.id };
       }),
     generateFromEap: protectedProcedure
@@ -3076,6 +3098,7 @@ export const appRouter = router({
             node.plannedQuantity && node.plannedQuantity > 0
               ? Math.max(1, node.plannedQuantity)
               : 1;
+          const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
           await db.insert(scheduleActivities).values({
             projectId: input.projectId,
             wbsNodeId: node.id,
@@ -3089,6 +3112,7 @@ export const appRouter = router({
               ? String(node.plannedQuantity)
               : null,
             sortOrder: node.sortOrder * 1000 + node.id,
+            versionId: writable.id,
           });
           existingCodes.add(node.code);
           created += 1;
@@ -3108,7 +3132,8 @@ export const appRouter = router({
         if (input.predecessorId === input.successorId) throw new Error("Uma atividade não pode depender dela mesma.");
         const rows = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, [input.predecessorId, input.successorId])));
         if (rows.length !== 2) throw new Error("As duas atividades precisam pertencer à obra.");
-        const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag }).$returningId();
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).$returningId();
         return { id: createdId.id };
       }),
     createDependencies: protectedProcedure
@@ -3147,6 +3172,7 @@ export const appRouter = router({
           );
         if (found.length !== ids.length)
           throw new Error("Uma ou mais atividades não pertencem à obra.");
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         await db.insert(scheduleDependencies).values(
           input.dependencies.map(item => ({
             projectId: input.projectId,
@@ -3154,6 +3180,7 @@ export const appRouter = router({
             successorId: item.successorId,
             type: item.type,
             lag: item.lag,
+            versionId: writable.id,
           }))
         );
         return { created: input.dependencies.length };
@@ -3666,15 +3693,38 @@ export const appRouter = router({
             `Transição bloqueada: ${transition.errors.join(" ")}`
           );
         }
-        await db.insert(agentDecisions).values({
-          projectId: input.projectId,
-          userId: ctx.user.id,
-          stage: input.stage,
-          decision: input.decision,
-          scopeJson: JSON.stringify(input.scope),
-          reason: input.reason ?? null,
-          impactJson: input.impact ? JSON.stringify(input.impact) : null,
-        });
+        let planVersion: { id: number; versionNumber: number } | null = null;
+        if (input.decision === "approved") {
+          const [decisionRecord] = await db
+            .insert(agentDecisions)
+            .values({
+              projectId: input.projectId,
+              userId: ctx.user.id,
+              stage: input.stage,
+              decision: input.decision,
+              scopeJson: JSON.stringify(input.scope),
+              reason: input.reason ?? null,
+              impactJson: input.impact ? JSON.stringify(input.impact) : null,
+            })
+            .$returningId();
+          if (decisionRecord) {
+            planVersion = await approveCurrentPlanVersion(
+              input.projectId,
+              decisionRecord.id,
+              ctx.user.id
+            );
+          }
+        } else {
+          await db.insert(agentDecisions).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            stage: input.stage,
+            decision: input.decision,
+            scopeJson: JSON.stringify(input.scope),
+            reason: input.reason ?? null,
+            impactJson: input.impact ? JSON.stringify(input.impact) : null,
+          });
+        }
         await db
           .update(agentProjectStates)
           .set({
@@ -3684,8 +3734,27 @@ export const appRouter = router({
           })
           .where(eq(agentProjectStates.projectId, input.projectId));
         return loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id);
-      }),
-    recordFinding: protectedProcedure
+  }),
+  agentPlanVersions: protectedProcedure
+    .input(z.object({ projectId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados não configurado.");
+      await assertAccessibleProject(db, input.projectId, ctx.user.id);
+      const details = await listPlanVersionDetails(input.projectId);
+      return details.map(version => ({
+        id: version.id,
+        versionNumber: version.versionNumber,
+        status: version.status,
+        baseVersionId: version.baseVersionId,
+        decisionId: version.decisionId,
+        approvedAt: version.approvedAt,
+        eapNodeCount: version.eapNodeCount,
+        activityCount: version.activityCount,
+        dependencyCount: version.dependencyCount,
+      }));
+    }),
+  recordFinding: protectedProcedure
       .input(
         z.object({
           projectId: z.number().int().positive(),
@@ -4253,7 +4322,8 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const plan = await buildPhase7PlanForProject(db, input.projectId);
-        const imported = await persistPhase7Plan(db, input.projectId, plan);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const imported = await persistPhase7Plan(db, input.projectId, plan, writable.id);
         return {
           imported: true as const,
           projectId: input.projectId,

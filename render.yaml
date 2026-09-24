@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm start
+    startCommand: pnpm exec drizzle-kit push && pnpm start
     autoDeploy: true
     healthCheckPath: /healthz
     envVars:

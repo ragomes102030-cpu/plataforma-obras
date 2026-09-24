@@ -194,7 +194,9 @@ export function AgentSidebar({
 
   const mcpOnline = statusQuery.data?.status === "online";
   const mcpDomains = ["eap", "cronograma", "ganttLob"] as const;
-  const coordinator = coordinatorQuery.data;
+  const coordinator = coordinatorQuery.data as
+    | (typeof coordinatorQuery.data & { planVersion?: { versionNumber: number; status: string } })
+    | undefined;
   const isLoading = agentMutation.isPending || Boolean(activeRequestId);
   const currentStageLabel = coordinator
     ? COORDINATOR_STAGE_LABELS[coordinator.stage]
@@ -202,6 +204,13 @@ export function AgentSidebar({
   const nextStageLabel = coordinator?.nextStage
     ? COORDINATOR_STAGE_LABELS[coordinator.nextStage]
     : "Fluxo concluído";
+  const planVersionLabel = coordinator?.planVersion
+    ? `Versão do plano: ${coordinator.planVersion.versionNumber}${
+        coordinator.planVersion.status === "approved"
+          ? " (aprovada)"
+          : ""
+      }`
+    : "Sem versão de plano";
 
   const approveCurrentGate = () => {
     if (!coordinator?.nextStage) return;
@@ -327,6 +336,9 @@ export function AgentSidebar({
                 <strong>{nextStageLabel}</strong>
               </div>
               <ShieldCheck size={15} />
+            </div>
+            <div style={{ fontSize: ".8rem", color: "var(--muted-foreground)", marginBottom: ".25rem" }}>
+              {planVersionLabel}
             </div>
             <p>{coordinator?.gateMessage ?? "Carregando critérios..."}</p>
             {coordinator?.gateChecks?.length ? (

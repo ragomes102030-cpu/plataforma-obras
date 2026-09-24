@@ -84,6 +84,67 @@ export const projectMcpIntegrations = mysqlTable(
   ]
 );
 
+export const agentDecisions = mysqlTable(
+  "agent_decisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id),
+    stage: varchar("stage", { length: 50 }).notNull(),
+    decision: mysqlEnum("decision", [
+      "approved",
+      "partially_approved",
+      "rejected",
+      "reopen",
+    ]).notNull(),
+    scopeJson: text("scopeJson").notNull(),
+    reason: text("reason"),
+    impactJson: text("impactJson"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("agent_decisions_project_idx").on(table.projectId),
+    index("agent_decisions_project_stage_idx").on(
+      table.projectId,
+      table.stage
+    ),
+  ]
+);
+
+export const projectPlanVersions = mysqlTable(
+  "project_plan_versions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    versionNumber: int("versionNumber").notNull(),
+    status: mysqlEnum("status", ["draft", "proposed", "approved", "superseded"])
+      .default("draft")
+      .notNull(),
+    baseVersionId: int("baseVersionId").references(
+      (): AnyMySqlColumn => projectPlanVersions.id
+    ),
+    decisionId: int("decisionId").references(() => agentDecisions.id),
+    approvedAt: timestamp("approvedAt"),
+    notes: text("notes"),
+    createdBy: int("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("project_plan_versions_project_version_idx").on(
+      table.projectId,
+      table.versionNumber
+    ),
+    index("project_plan_versions_project_idx").on(table.projectId),
+  ]
+);
+
 export const mcpMutationOperations = mysqlTable(
   "mcp_mutation_operations",
   {
@@ -202,6 +263,7 @@ export const scheduleActivities = mysqlTable(
     lateFinish: int("lateFinish"),
     totalFloat: int("totalFloat"),
     cpmCalculatedAt: timestamp("cpmCalculatedAt"),
+    versionId: int("versionId").references(() => projectPlanVersions.id),
     sortOrder: int("sortOrder").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -212,6 +274,7 @@ export const scheduleActivities = mysqlTable(
       table.externalId
     ),
     index("schedule_activities_project_idx").on(table.projectId),
+    index("schedule_activities_plan_version_idx").on(table.versionId),
     index("schedule_activities_wbs_node_idx").on(table.wbsNodeId),
   ]
 );
@@ -236,6 +299,7 @@ export const wbsNodes = mysqlTable(
       .notNull(),
     unit: varchar("unit", { length: 32 }),
     plannedQuantity: int("plannedQuantity"),
+    versionId: int("versionId").references(() => projectPlanVersions.id),
     sortOrder: int("sortOrder").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -250,6 +314,7 @@ export const wbsNodes = mysqlTable(
       table.code
     ),
     index("wbs_nodes_project_idx").on(table.projectId),
+    index("wbs_nodes_plan_version_idx").on(table.versionId),
   ]
 );
 
@@ -269,6 +334,7 @@ export const scheduleDependencies = mysqlTable(
       .references(() => scheduleActivities.id),
     type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull(),
     lag: int("lag").default(0).notNull(),
+    versionId: int("versionId").references(() => projectPlanVersions.id),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [
@@ -276,6 +342,7 @@ export const scheduleDependencies = mysqlTable(
       table.projectId,
       table.externalId
     ),
+    index("schedule_dependencies_plan_version_idx").on(table.versionId),
   ]
 );
 
@@ -594,34 +661,6 @@ export const agentProjectStates = mysqlTable(
   table => [
     uniqueIndex("agent_project_states_project_idx").on(table.projectId),
     index("agent_project_states_stage_idx").on(table.stage),
-  ]
-);
-
-export const agentDecisions = mysqlTable(
-  "agent_decisions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id),
-    stage: varchar("stage", { length: 50 }).notNull(),
-    decision: mysqlEnum("decision", [
-      "approved",
-      "partially_approved",
-      "rejected",
-      "reopen",
-    ]).notNull(),
-    scopeJson: text("scopeJson").notNull(),
-    reason: text("reason"),
-    impactJson: text("impactJson"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    index("agent_decisions_project_idx").on(table.projectId),
-    index("agent_decisions_project_stage_idx").on(table.projectId, table.stage),
   ]
 );
 
