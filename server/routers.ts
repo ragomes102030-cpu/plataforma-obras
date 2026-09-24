@@ -1931,6 +1931,102 @@ export const appRouter = router({
           .$returningId();
         return { id: createdId.id };
       }),
+    createItems: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          budgetVersionId: z.number().int().positive(),
+          items: z.array(
+            z.object({
+              code: z.string().trim().min(1).max(48),
+              description: z.string().trim().min(2).max(240),
+              unit: z.string().trim().min(1).max(32),
+              quantity: z.number().positive(),
+              unitPrice: z.number().nonnegative(),
+              compositionId: z.number().int().positive().optional(),
+              productivity: z.number().positive().optional(),
+              plannedDurationDays: z.number().int().positive().optional(),
+              source: z.string().trim().max(80).optional(),
+              referencePeriod: z.string().trim().max(20).optional(),
+              wbsNodeId: z.number().int().positive().optional(),
+            })
+          ).min(1).max(2000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [version] = await db
+          .select({ id: budgetVersions.id, status: budgetVersions.status })
+          .from(budgetVersions)
+          .where(
+            and(
+              eq(budgetVersions.id, input.budgetVersionId),
+              eq(budgetVersions.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!version) throw new Error("Versão de orçamento não encontrada.");
+        if (version.status === "aprovado" || version.status === "arquivado")
+          throw new Error("Esta versão não aceita novos itens.");
+        const compositionIds = Array.from(
+          new Set(
+            input.items
+              .map(item => item.compositionId)
+              .filter((value): value is number => typeof value === "number")
+          )
+        );
+        const compositionMap = new Map<number, { price: number; note: string }>();
+        if (compositionIds.length) {
+          const compositions = await db
+            .select()
+            .from(serviceCompositions)
+            .where(inArray(serviceCompositions.id, compositionIds));
+          const components = await db
+            .select()
+            .from(compositionComponents)
+            .where(inArray(compositionComponents.compositionId, compositionIds));
+          for (const composition of compositions) {
+            const parts = components.filter(item => item.compositionId === composition.id);
+            if (!parts.length) throw new Error(`A composição ${composition.code} não possui componentes.`);
+            const price = parts.reduce(
+              (sum, part) => sum + Number(part.coefficient) * Number(part.unitPriceSnapshot),
+              0
+            );
+            compositionMap.set(composition.id, {
+              price,
+              note: `${composition.code} — ${composition.description}`,
+            });
+          }
+        }
+        const rows = input.items.map(item => {
+          const composition = item.compositionId ? compositionMap.get(item.compositionId) : undefined;
+          if (item.compositionId && !composition) throw new Error("Composição não encontrada.");
+          const effectiveUnitPrice = composition ? composition.price : item.unitPrice;
+          const calculatedDuration = item.productivity
+            ? Math.max(1, Math.ceil(item.quantity / item.productivity))
+            : item.plannedDurationDays;
+          return {
+            budgetVersionId: input.budgetVersionId,
+            wbsNodeId: item.wbsNodeId,
+            code: item.code,
+            description: item.description,
+            unit: item.unit,
+            quantity: item.quantity.toFixed(3),
+            unitPrice: effectiveUnitPrice.toFixed(2),
+            compositionId: item.compositionId,
+            compositionUnitCost: item.compositionId ? effectiveUnitPrice.toFixed(2) : null,
+            productivity: item.productivity?.toFixed(3),
+            plannedDurationDays: calculatedDuration,
+            source: item.source || null,
+            referencePeriod: item.referencePeriod || null,
+            compositionNote: composition?.note ?? null,
+          };
+        });
+        await db.insert(budgetItems).values(rows);
+        return { created: rows.length };
+      }),
     reconcilePreview: protectedProcedure
       .input(
         z.object({
