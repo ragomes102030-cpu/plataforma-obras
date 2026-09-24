@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, PieChart } from "lucide-react";
 import { useMemo } from "react";
-import { Line, LineChart as ReLineChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart as ReBarChart, Cell, Line, LineChart as ReLineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { useLocation } from "wouter";
 import { NAV_PATHS } from "@/nav-paths";
 
@@ -68,6 +68,21 @@ export function GraficosView({
     Object.values(statusCounts).reduce((sum, value) => sum + value, 0)
   );
 
+  const productionByDayChart = useMemo(
+    () => productionByDay.map(([day, qty]) => ({ day: day.slice(5), qty })),
+    [productionByDay]
+  );
+
+  const statusChart = useMemo(
+    () =>
+      Object.entries(statusCounts).map(([status, count]) => ({
+        status,
+        count,
+        pct: (count / statusTotal) * 100,
+      })),
+    [statusCounts, statusTotal]
+  );
+
   const deviations = useMemo(() => {
     const rows = control?.activities ?? [];
     return rows
@@ -78,7 +93,6 @@ export function GraficosView({
 
   const planned = control?.totals.plannedProgress ?? 0;
   const actual = control?.totals.actualProgress ?? 0;
-  const maxDayQty = Math.max(1, ...productionByDay.map(([, qty]) => qty));
 
   return (
     <div className="module-page">
@@ -330,7 +344,7 @@ export function GraficosView({
                 style={{
                   height: 12,
                   borderRadius: 6,
-                  background: "#0d1316",
+                  background: "#e7eded",
                   marginTop: 8,
                   overflow: "hidden",
                 }}
@@ -440,46 +454,26 @@ export function GraficosView({
             </button>
           </div>
         ) : (
-          <div className="lob-chart-frame">
-            <div className="lob-chart-title">
-              <span>Qtd. por dia · {productionByDay.length} dia(s)</span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: 4,
-                height: 160,
-                padding: "8px 0",
-              }}
-            >
-              {productionByDay.map(([day, qty], index) => (
-                <div
-                  key={day}
-                  title={`${day}: ${qty}`}
-                  style={{
-                    flex: 1,
-                    minWidth: 6,
-                    height: `${(qty / maxDayQty) * 100}%`,
-                    background: barColor(index),
-                    borderRadius: "3px 3px 0 0",
-                  }}
-                />
-              ))}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 11,
-                opacity: 0.75,
-                marginTop: 6,
-              }}
-            >
-              <span>{productionByDay[0]?.[0]}</span>
-              <span>{productionByDay[productionByDay.length - 1]?.[0]}</span>
-            </div>
-          </div>
+          <ChartContainer
+            config={{
+              qty: { label: "Quantidade", color: "#4f7c8f" },
+            }}
+            className="h-[220px] w-full aspect-auto"
+          >
+            <ReBarChart data={productionByDayChart} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(122,162,138,0.25)" vertical={false} />
+              <XAxis
+                dataKey="day"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={24}
+              />
+              <YAxis tickLine={false} axisLine={false} width={44} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="qty" fill="var(--color-qty)" radius={[3, 3, 0, 0]} maxBarSize={28} />
+            </ReBarChart>
+          </ChartContainer>
         )}
       </div>
 
@@ -490,55 +484,52 @@ export function GraficosView({
             <p>Distribuição percentual por status (padrão relatório executivo).</p>
           </div>
         </div>
-        <div className="planning-list">
-          {activities.length === 0 ? (
-            <div className="module-empty">
-              <PieChart size={20} />
-              <span>
-                <strong>Sem atividades.</strong> O mapa de status depende do
-                cronograma da obra.
-              </span>
-              <button
-                type="button"
-                className="outline-button"
-                onClick={() => navigate(NAV_PATHS["Cronogramas"])}
-              >
-                Abrir Cronogramas
-              </button>
-            </div>
-          ) : (
-            Object.entries(statusCounts).map(([status, count], index) => (
-              <div className="planning-row" key={status}>
-                <div>
-                  <strong>{status}</strong>
-                  <span>
-                    {((count / statusTotal) * 100).toFixed(1)}% do total ·{" "}
-                    {count} atividade(s)
-                  </span>
-                  <div
-                    style={{
-                      height: 8,
-                      borderRadius: 4,
-                      background: "#0d1316",
-                      marginTop: 6,
-                      overflow: "hidden",
-                      maxWidth: 320,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${(count / statusTotal) * 100}%`,
-                        height: "100%",
-                        background: barColor(index),
-                      }}
-                    />
-                  </div>
-                </div>
-                <b>{count}</b>
-              </div>
-            ))
-          )}
-        </div>
+        {activities.length === 0 ? (
+          <div className="module-empty">
+            <PieChart size={20} />
+            <span>
+              <strong>Sem atividades.</strong> O mapa de status depende do
+              cronograma da obra.
+            </span>
+            <button
+              type="button"
+              className="outline-button"
+              onClick={() => navigate(NAV_PATHS["Cronogramas"])}
+            >
+              Abrir Cronogramas
+            </button>
+          </div>
+        ) : (
+          <ChartContainer
+            config={{
+              pct: { label: "% das atividades" },
+            }}
+            className="h-[220px] w-full aspect-auto"
+          >
+            <ReBarChart data={statusChart} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(122,162,138,0.25)" horizontal={false} />
+              <XAxis type="number" domain={[0, 100]} tickLine={false} axisLine={false} width={44} tickFormatter={(value: number) => `${value}%`} />
+              <YAxis
+                type="category"
+                dataKey="status"
+                tickLine={false}
+                axisLine={false}
+                width={96}
+                tick={{ fontSize: 11 }}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent formatter={(value) => `${Number(value).toFixed(1)}%`} />
+                }
+              />
+              <Bar dataKey="pct" radius={[0, 3, 3, 0]} maxBarSize={16} background={{ fill: "#eef1f2", radius: 3 }}>
+                {statusChart.map((entry, index) => (
+                  <Cell key={entry.status} fill={barColor(index)} />
+                ))}
+              </Bar>
+            </ReBarChart>
+          </ChartContainer>
+        )}
       </div>
     </div>
   );
