@@ -92,6 +92,33 @@ function formatDate(value: string | Date) {
     .format(new Date(value))
     .replace(" de ", " ");
 }
+const SPARK_POINTS = 12;
+function projectSparkline(project: {
+  plannedStart?: string | Date | null;
+  plannedFinish?: string | Date | null;
+  progress: number;
+}): { line: string; dotLeft: number; dotTop: number } | null {
+  const start = project.plannedStart ? new Date(project.plannedStart).getTime() : NaN;
+  const finish = project.plannedFinish ? new Date(project.plannedFinish).getTime() : NaN;
+  if (!Number.isFinite(start) || !Number.isFinite(finish) || finish <= start) return null;
+  const span = Math.max(1, finish - start);
+  const elapsed = Math.min(1, Math.max(0, (Date.now() - start) / span));
+  // Logística 0..1: S-curve clássica de avanço planejado entre início e fim da obra
+  const px = (t: number) => 1 / (1 + Math.exp(-9 * (t - 0.5)));
+  const xFor = (t: number) => t * 100;
+  const yFor = (v: number) => 28 - Math.min(1, Math.max(0, v)) * 26;
+  const points: string[] = [];
+  for (let i = 0; i < SPARK_POINTS; i++) {
+    const t = i / (SPARK_POINTS - 1);
+    points.push(`${xFor(t).toFixed(2)},${yFor(px(t)).toFixed(2)}`);
+  }
+  return {
+    line: points.join(" "),
+    dotLeft: Number(xFor(elapsed).toFixed(2)),
+    dotTop: Number(((yFor(project.progress / 100) / 32) * 100).toFixed(2)),
+  };
+}
+
 function MetricCard({
   label,
   value,
@@ -1320,6 +1347,21 @@ export default function Home() {
                               <div style={{ width: `${project.progress}%` }} />
                             </div>
                           </div>
+                          {(() => {
+                            const spark = projectSparkline(project);
+                            if (!spark) return null;
+                            return (
+                              <div className="portfolio-sparkline" aria-hidden="true">
+                                <svg viewBox="0 0 100 32" preserveAspectRatio="none">
+                                  <polyline className="sparkline-line" points={spark.line} />
+                                </svg>
+                                <span
+                                  className="sparkline-dot"
+                                  style={{ left: `${spark.dotLeft}%`, top: `${spark.dotTop}%` }}
+                                />
+                              </div>
+                            );
+                          })()}
                           <span
                             className={`portfolio-card-cta ${active ? "on" : ""}`}
                           >

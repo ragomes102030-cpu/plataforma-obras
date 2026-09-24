@@ -905,6 +905,35 @@
     background: #7399a5;
     border-radius: 10px;
   }
+  .portfolio-sparkline {
+    position: relative;
+    height: 30px;
+    margin-top: 2px;
+  }
+  .portfolio-sparkline svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .sparkline-line {
+    fill: none;
+    stroke: #7399a5;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .sparkline-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #3b6277;
+    border: 2px solid var(--card);
+    transform: translate(-50%, -50%);
+  }
   .row-chevron {
     color: #b0bcc0;
   }
@@ -4341,6 +4370,8 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .portfolio-card-base { color: var(--muted-foreground); background: var(--accent); }
 .portfolio-card-cta { color: var(--foreground); border-color: var(--border); }
 .portfolio-card-cta.on { border-color: var(--primary); color: var(--primary-foreground); background: var(--primary); }
+.portfolio-sparkline .sparkline-line { stroke: var(--ring); }
+.portfolio-sparkline .sparkline-dot { background: var(--foreground); border-color: var(--card); }
 .gantt-heading { border-bottom-color: var(--border); }
 .gantt-help { font-size: .75rem; margin-top: .35rem; max-width: 62rem; }
 .gantt-row { cursor: pointer; }
