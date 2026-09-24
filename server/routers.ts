@@ -2739,11 +2739,30 @@ export const appRouter = router({
         if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
         const calculatedAt = new Date();
         const schedule = result.schedule;
-        await db.transaction(async tx => {
-          for (const item of schedule.activities) {
-            await tx.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
-          }
-        });
+        const items = schedule.activities;
+        if (items.length) {
+          const ids = items.map(item => Number(item.id));
+          const critCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`), sql` `);
+          const esCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`), sql` `);
+          const efCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`), sql` `);
+          const lsCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`), sql` `);
+          const lfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`), sql` `);
+          const tfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`), sql` `);
+          await db.transaction(async tx => {
+            await tx.execute(sql`
+              UPDATE schedule_activities
+              SET critical = CASE id ${critCase} END,
+                  earlyStart = CASE id ${esCase} END,
+                  earlyFinish = CASE id ${efCase} END,
+                  lateStart = CASE id ${lsCase} END,
+                  lateFinish = CASE id ${lfCase} END,
+                  totalFloat = CASE id ${tfCase} END,
+                  cpmCalculatedAt = ${calculatedAt}
+              WHERE projectId = ${input.projectId}
+                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+            `);
+          });
+        }
         return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
       }),
     createResource: protectedProcedure
