@@ -65,8 +65,21 @@
   --sidebar-accent: #e9eef1;
   --sidebar-accent-foreground: #1c3a44;
   --sidebar-border: #d4dde2;
-  --sidebar-ring: #2f6f7f;
+--sidebar-ring: #2f6f7f;
   --radius: 0.75rem;
+
+  /* Aliases legados usados pelo GanttView (GanttM2) — resolvem no tema atual */
+  --bg: var(--background);
+  --surf: var(--card);
+  --text: var(--foreground);
+  --text2: var(--muted-foreground);
+  --line: var(--border);
+  --thead-bg: var(--primary);
+  --thead-text: var(--primary-foreground);
+  --row-critical-bg: color-mix(in srgb, var(--destructive) 12%, transparent);
+  --crit: var(--destructive);
+  --ok: #2e7d32;
+  --warn: #c48a00;
 }
 
 .dark {

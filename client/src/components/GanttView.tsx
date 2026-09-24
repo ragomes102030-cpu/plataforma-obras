@@ -310,7 +310,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
               </marker>
             </defs>
 
-            <rect x={LABEL_W} y={0} width={chartW} height={HEADER_H - 16} fill="#0d2b6b" rx="4" />
+            <rect x={LABEL_W} y={0} width={chartW} height={HEADER_H - 16} fill="var(--primary)" rx="4" />
             {ticks.map(d => (
               <g key={`tick-${d}`}>
                 <line x1={LABEL_W + d * scale} y1={HEADER_H - 16} x2={LABEL_W + d * scale} y2={svgH - 20} stroke="#8b98a8" strokeWidth={0.5} opacity={0.28} />
