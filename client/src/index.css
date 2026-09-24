@@ -4576,4 +4576,117 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
     justify-content: center;
     width: 100%;
   }
+}
+
+/* Clickability: linhas da tabela do cronograma e barras da LoB clicáveis */
+.schedule-table tbody tr {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.schedule-table tbody tr:hover {
+  background: #f2f7f9;
+}
+.lob-flow-label {
+  cursor: pointer;
+}
+.lob-flow-label:hover b {
+  color: var(--primary);
+}
+.lob-flow-bar {
+  cursor: pointer;
+}
+
+/* Clickability: drawer de edição de atividade do cronograma */
+.activity-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(15, 23, 42, 0.32);
+  display: flex;
+  justify-content: flex-end;
+  animation: drawer-fade 0.15s ease;
+}
+.activity-drawer {
+  width: min(400px, 94vw);
+  height: 100%;
+  background: var(--card);
+  border-left: 1px solid #e4ebed;
+  box-shadow: -12px 0 32px #55717b2e;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  animation: drawer-slide 0.18s ease;
+}
+.activity-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #edf1f2;
+}
+.activity-drawer-head .eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.activity-drawer-head h4 {
+  margin: 3px 0 0;
+  font-size: 14px;
+  color: #415965;
+}
+.activity-drawer-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.activity-drawer-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.activity-drawer-fields label span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #9aa8ae;
+}
+.activity-drawer-fields input,
+.activity-drawer-fields select {
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid #dfe7ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #374a55;
+}
+.activity-drawer-fields input:focus,
+.activity-drawer-fields select:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-color: var(--primary);
+}
+.activity-drawer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f2;
+}
+.activity-drawer-actions .outline-button,
+.activity-drawer-actions .primary-button {
+  flex: 1;
+  justify-content: center;
+}
+@keyframes drawer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drawer-slide {
+  from { transform: translateX(20px); opacity: 0.6; }
+  to { transform: none; opacity: 1; }
 }

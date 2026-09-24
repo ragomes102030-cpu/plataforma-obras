@@ -10,7 +10,7 @@ const LABEL_W = 320;
 const HEADER_H = 46;
 const ZOOM_FACTOR: Record<Zoom, number> = { mes: 1, semana: 3, dia: 10 };
 
-export function GanttView({ projectId, plannedStart }: { projectId: number; plannedStart?: string | Date }) {
+export function GanttView({ projectId, plannedStart, onSelectActivity }: { projectId: number; plannedStart?: string | Date; onSelectActivity?: (id: number) => void }) {
   const utils = trpc.useUtils();
   const planning = trpc.planning.list.useQuery({ projectId });
   const activities: Activity[] = planning.data?.activities ?? [];
@@ -26,6 +26,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
   const [linkFrom, setLinkFrom] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const draggedRef = useRef(false);
 
   const rasterize = async (): Promise<HTMLCanvasElement | null> => {
     const svg = svgRef.current;
@@ -270,6 +271,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
           style={{ display: "flex", alignItems: "flex-start", minWidth: 0 }}
           onMouseMove={(e) => {
             if (!drag) return;
+            draggedRef.current = true;
             const deltaDays = (e.clientX - drag.startX) / scale;
             if (drag.mode === "move") commitMove(drag.id, drag.origStart + deltaDays);
             else commitResize(drag.id, drag.origDur + deltaDays);
@@ -291,7 +293,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} style={{ height: ROW_H, borderBottom: "1px solid var(--line)", background: r.critical ? "var(--row-critical-bg)" : undefined }}>
+                <tr key={r.id} style={{ height: ROW_H, borderBottom: "1px solid var(--line)", background: r.critical ? "var(--row-critical-bg)" : undefined, cursor: linkMode ? "crosshair" : "pointer" }} onClick={() => { if (!linkMode) onSelectActivity?.(r.id); }} title="Clique para editar">
                   {cols.eap && <td style={{ padding: "0 5px", color: r.critical ? "var(--crit)" : "inherit", fontWeight: r.critical ? 600 : 400 }}>{r.wbsCode}</td>}
                   {cols.nome && <td style={{ padding: "0 5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }} title={r.name}>{r.name}</td>}
                   {cols.inicio && <td style={{ padding: "0 5px" }}>{r.inicio}</td>}
@@ -337,19 +339,24 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
                     opacity={0.95}
                     stroke={isLinkSource ? "var(--warn)" : "transparent"}
                     strokeWidth={isLinkSource ? 2 : 0}
-                    style={{ cursor: linkMode ? "crosshair" : "move" }}
+                    style={{ cursor: linkMode ? "crosshair" : drag?.id === r.id ? "grabbing" : "move" }}
                     onMouseDown={(e) => {
                       if (linkMode) return;
                       e.preventDefault();
+                      draggedRef.current = false;
                       setDrag({ id: r.id, mode: "move", startX: e.clientX, origStart: r.start, origDur: r.duration });
                     }}
                     onClick={() => {
-                      if (!linkMode) return;
-                      if (linkFrom === null) { setLinkFrom(r.id); return; }
-                      if (linkFrom === r.id) { setLinkFrom(null); return; }
-                      createDependency.mutate({ projectId, predecessorId: linkFrom, successorId: r.id, type: "FS", lag: 0 });
-                      setLinkFrom(null);
-                      setLinkMode(false);
+                      if (linkMode) {
+                        if (linkFrom === null) { setLinkFrom(r.id); return; }
+                        if (linkFrom === r.id) { setLinkFrom(null); return; }
+                        createDependency.mutate({ projectId, predecessorId: linkFrom, successorId: r.id, type: "FS", lag: 0 });
+                        setLinkFrom(null);
+                        setLinkMode(false);
+                        return;
+                      }
+                      if (draggedRef.current) return;
+                      onSelectActivity?.(r.id);
                     }}
                   >
                     <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | Progresso: ${r.progress}% | arraste p/ mover`}</title>
@@ -366,6 +373,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
                       if (linkMode) return;
                       e.preventDefault();
                       e.stopPropagation();
+                      draggedRef.current = false;
                       setDrag({ id: r.id, mode: "resize", startX: e.clientX, origStart: r.start, origDur: r.duration });
                     }}
                   >

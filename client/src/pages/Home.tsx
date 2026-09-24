@@ -248,6 +248,38 @@ function GanttView({
     const durationDays = plannedQuantity ? Math.max(1, Math.ceil(plannedQuantity / value)) : activity.durationDays;
     updateActivity.mutate({ projectId, activityId: activity.id, name: activity.name, phase: activity.phase, startOffset: activity.startOffset, durationDays, plannedQuantity, productivity: value, progress: activity.progress, status: activity.status });
   };
+  const toLocalDate = (timestamp: number) => {
+    const d = new Date(timestamp);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const setDraftField = (activityId: number, key: string, value: any) => {
+    const activity = activities.find(a => a.id === activityId);
+    if (!activity) return;
+    setDrafts(prev => ({ ...prev, [activityId]: { ...(prev[activityId] ?? activity), [key]: value } }));
+  };
+  const saveDrawerActivity = () => {
+    const id = expandedActivityId;
+    if (id === null) return;
+    const activity = activities.find(a => a.id === id);
+    if (!activity) return;
+    const draft = drafts[id] ?? activity;
+    const startOffset = Number(draft.startOffset ?? activity.startOffset ?? 0);
+    const earlyStart = draft.earlyStart !== undefined ? Number(draft.earlyStart) : undefined;
+    updateActivity.mutate({
+      projectId,
+      activityId: id,
+      name: draft.name ?? activity.name,
+      phase: draft.phase ?? activity.phase,
+      startOffset,
+      ...(earlyStart !== undefined && earlyStart !== startOffset ? { earlyStart } : {}),
+      durationDays: Number(draft.durationDays ?? activity.durationDays ?? 1),
+      plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined,
+      productivity: draft.productivity ? Number(draft.productivity) : undefined,
+      progress: Number(draft.progress ?? activity.progress ?? 0),
+      status: draft.status ?? activity.status ?? "Não iniciado",
+    });
+    setExpandedActivityId(null);
+  };
   return (
     <section className="panel gantt-panel">
       <div className="panel-heading gantt-heading">
@@ -342,7 +374,7 @@ function GanttView({
         </div>
       </div>
       {tab === "gantt" && (
-        <GanttM2 projectId={projectId} plannedStart={plannedStart} />
+        <GanttM2 projectId={projectId} plannedStart={plannedStart} onSelectActivity={id => setExpandedActivityId(id)} />
       )}
       {tab === "table" && (
         <div className="schedule-table-wrap">
@@ -360,7 +392,7 @@ function GanttView({
             </thead>
             <tbody>
               {filtered.map(activity => (
-                <tr key={activity.id}>
+                <tr key={activity.id} onClick={() => setExpandedActivityId(activity.id)} title="Clique para editar">
                   <td>{activity.wbsCode}</td>
                   <td className="table-name">
                     {activity.name}
@@ -437,7 +469,7 @@ function GanttView({
                 <div className="lob-flow-body">
                   <div className="lob-flow-labels">
                     {lobRows.map(({ activity }) => (
-                      <div key={activity.id} className="lob-flow-label" title={activity.name}>
+                      <div key={activity.id} className="lob-flow-label" title={activity.name} onClick={() => setExpandedActivityId(activity.id)}>
                         <b>{activity.wbsCode}</b><span>{activity.name}</span>
                       </div>
                     ))}
@@ -458,7 +490,7 @@ function GanttView({
                       return (
                         <div key={activity.id} className="lob-flow-row">
                           {bufferDays > 0 && <div className="lob-buffer" style={{ left: `${bufferLeft}%`, width: `${bufferWidth}%` }} title={`Pulmão: ${bufferDays} dia(s)`} />}
-                          <div className={`lob-flow-bar ${activity.critical === 1 ? "critical" : ""}`} style={{ left: `${left}%`, width: `${width}%`, background: phaseColors[activity.phase] || "#6b8292" }} title={`${activity.wbsCode} · ${activity.name} · ${activity.durationDays} dias · ${activity.progress}%`}>
+                          <div className={`lob-flow-bar ${activity.critical === 1 ? "critical" : ""}`} style={{ left: `${left}%`, width: `${width}%`, background: phaseColors[activity.phase] || "#6b8292" }} title={`${activity.wbsCode} · ${activity.name} · ${activity.durationDays} dias · ${activity.progress}% · clique para editar`} onClick={() => setExpandedActivityId(activity.id)}>
                             <i className="lob-realized" style={{ width: `${Math.max(0, Math.min(100, activity.progress ?? 0))}%` }} />
                             <span>{activity.name}</span><b>{activity.progress}%</b>
                           </div>
@@ -493,6 +525,67 @@ function GanttView({
           CPM e ritmo real aguardam dados operacionais
         </span>
       </div>
+      {expandedActivityId !== null && (() => {
+        const activity = activities.find(a => a.id === expandedActivityId);
+        if (!activity) return null;
+        const draft = drafts[expandedActivityId] ?? activity;
+        const startDay = Number(draft.earlyStart ?? draft.startOffset ?? 0);
+        return (
+          <div className="activity-drawer-overlay" onClick={() => setExpandedActivityId(null)}>
+            <aside className="activity-drawer" onClick={event => event.stopPropagation()}>
+              <div className="activity-drawer-head">
+                <div>
+                  <p className="eyebrow">EDITAR ATIVIDADE</p>
+                  <h4>{activity.wbsCode} · {activity.name}</h4>
+                </div>
+                <button className="icon-button" title="Fechar" onClick={() => setExpandedActivityId(null)}>
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="activity-drawer-fields">
+                <label>
+                  <span>Nome</span>
+                  <input value={draft.name ?? ""} onChange={event => setDraftField(expandedActivityId, "name", event.target.value)} />
+                </label>
+                <label>
+                  <span>Fase</span>
+                  <input value={draft.phase ?? ""} onChange={event => setDraftField(expandedActivityId, "phase", event.target.value)} />
+                </label>
+                <label>
+                  <span>Início</span>
+                  <input
+                    type="date"
+                    value={toLocalDate(projectStart + startDay * 86400000)}
+                    onChange={event => {
+                      const timestamp = new Date(`${event.target.value}T12:00:00`).getTime();
+                      if (Number.isNaN(timestamp)) return;
+                      setDraftField(expandedActivityId, "earlyStart", Math.max(0, Math.round((timestamp - projectStart) / 86400000)));
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Duração (dias)</span>
+                  <input type="number" min={1} value={draft.durationDays ?? 1} onChange={event => setDraftField(expandedActivityId, "durationDays", Number(event.target.value))} />
+                </label>
+                <label>
+                  <span>Avanço (%)</span>
+                  <input type="number" min={0} max={100} value={draft.progress ?? 0} onChange={event => setDraftField(expandedActivityId, "progress", Number(event.target.value))} />
+                </label>
+                <label>
+                  <span>Status</span>
+                  <select value={draft.status ?? "Não iniciado"} onChange={event => setDraftField(expandedActivityId, "status", event.target.value)}>
+                    {Object.keys(statusTone).map(status => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="activity-drawer-actions">
+                <button className="outline-button" onClick={() => setExpandedActivityId(null)}>Cancelar</button>
+                <button className="primary-button" onClick={saveDrawerActivity}>Salvar alterações</button>
+              </div>
+            </aside>
+          </div>
+        );
+      })()}
     </section>
   );
 }
