@@ -4231,6 +4231,9 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .lob-chart-scroll::-webkit-scrollbar-thumb { background: var(--muted-foreground); border-radius: 999px; }
 .module-empty { background: var(--card); border-color: var(--border); color: var(--muted-foreground); }
 .status-chip, .critical-chip, .focus-tag { filter: saturate(.85) brightness(.9); }
+.focus-icon.rose, .focus-tag.rose { background: #f3e6e6; color: #8b5b60; }
+.focus-icon.amber, .focus-tag.amber { background: #f7efe0; color: #8a6d3b; }
+.focus-icon.green, .focus-tag.green { background: #e5f0e8; color: #427052; }
 @media (max-width: 900px) { .lob-chart-scroll .lob-flow-frame { min-width: 860px; } }
 
 .portfolio-next-step {
