@@ -1787,6 +1787,50 @@
     letter-spacing: 0;
     text-transform: none;
   }
+  .budget-branch-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .budget-branch-toolbar .compact-search {
+    flex: 1;
+    min-width: 220px;
+  }
+  .budget-branch-count {
+    color: var(--muted-foreground);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .budget-branch-toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+  .budget-branch-toggle:hover td {
+    filter: brightness(0.97);
+  }
+  .budget-branch-chevron {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 6px;
+    vertical-align: middle;
+    transition: transform 0.15s ease;
+  }
+  .budget-branch-chevron.open {
+    transform: rotate(90deg);
+  }
+  .budget-branch-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding-top: 12px;
+  }
+  .budget-branch-pagination span {
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
   .budget-total-row td {
     background: #f4f8f9;
     color: #3e5964;
