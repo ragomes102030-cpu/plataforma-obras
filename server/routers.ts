@@ -119,6 +119,8 @@ const demoProjects = [
     progress: 38,
     plannedStart: new Date("2026-10-01T00:00:00Z"),
     plannedFinish: new Date("2027-03-27T00:00:00Z"),
+    baseReferencia: "SEINFRA" as const,
+    baseReferenciaRef: "SEINFRA 09/2026",
     createdAt: new Date("2026-09-19T00:00:00Z"),
     updatedAt: new Date("2026-09-19T00:00:00Z"),
   },

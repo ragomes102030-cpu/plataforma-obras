@@ -873,7 +873,7 @@
     font-size: 9px;
     margin-top: 4px;
   }
-  .progress-label {
+  .portfolio-card-progress .progress-label {
     display: flex;
     justify-content: space-between;
     gap: 5px;
@@ -881,19 +881,165 @@
     font-size: 9px;
     margin-bottom: 6px;
   }
-  .progress-track {
+  .portfolio-card-progress .progress-track {
     height: 4px;
     background: var(--card);
     border-radius: 10px;
     overflow: hidden;
   }
-  .progress-track > div {
+  .portfolio-card-progress .progress-track > div {
     height: 100%;
     background: #7399a5;
     border-radius: 10px;
   }
   .row-chevron {
     color: #b0bcc0;
+  }
+  .portfolio-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 18px 4px;
+  }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid #e4ebed;
+    background: var(--card);
+    color: #6d8a95;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 150ms ease;
+  }
+  .filter-chip:hover {
+    border-color: #b9ccd3;
+    color: #3b6277;
+  }
+  .filter-chip.active {
+    background: #e2edf4;
+    border-color: #9fb9c3;
+    color: #3b6277;
+  }
+  .filter-chip-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: rgba(79, 124, 143, 0.12);
+    color: inherit;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .filter-chip.active .filter-chip-count {
+    background: rgba(63, 98, 119, 0.16);
+  }
+  .portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    padding: 10px 18px 18px;
+  }
+  .portfolio-card {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 14px;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid #e4ebed;
+    border-radius: 11px;
+    cursor: pointer;
+    transition: 160ms ease;
+  }
+  .portfolio-card:hover {
+    border-color: #b9ccd3;
+    box-shadow: 0 6px 18px #55717b10;
+    transform: translateY(-1px);
+  }
+  .portfolio-card.active {
+    border-color: #7399a5;
+    box-shadow: 0 0 0 1px #7399a5 inset;
+  }
+  .portfolio-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .portfolio-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 650;
+  }
+  .portfolio-code {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: #93a1a7;
+  }
+  .portfolio-card-name {
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+  .portfolio-card-location {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #93a1a7;
+    font-size: 10px;
+  }
+  .portfolio-card-base {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #eef3f5;
+    color: #6d8a95;
+    font-size: 9px;
+    font-weight: 600;
+  }
+  .portfolio-card-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 2px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid #dbe6e9;
+    color: #3b6277;
+    font-size: 10px;
+    font-weight: 650;
+    transition: 150ms ease;
+  }
+  .portfolio-card-cta.on {
+    background: #e2edf4;
+    border-color: #9fb9c3;
+    color: #3b6277;
+  }
+  .portfolio-card:hover .portfolio-card-cta {
+    border-color: #b9ccd3;
+  }
+  .portfolio-empty {
+    grid-column: 1 / -1;
+    padding: 22px 12px;
+    text-align: center;
+    color: #99a7ad;
+    font-size: 11px;
   }
   .focus-panel {
     min-height: 100%;
@@ -1313,8 +1459,8 @@
     .topbar {
       padding: 0 22px;
     }
-    .portfolio-row {
-      grid-template-columns: 83px minmax(140px, 1fr) 120px 18px;
+    .portfolio-grid {
+      grid-template-columns: 1fr;
     }
   }
   @media (max-width: 820px) {
@@ -3983,8 +4129,16 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .metric-card, .budget-summary-card, .lob-kpis div, .lob-chart-frame, .schedule-table-wrap, .budget-table-wrap, .catalog-list-row, .planning-row { background: var(--card); border-color: var(--border); color: var(--foreground); }
 .budget-table th, .schedule-table th { background: var(--sidebar); color: var(--muted-foreground); border-color: var(--border); }
 .budget-table td, .schedule-table td { border-color: var(--border); color: var(--foreground); }
-.portfolio-row { background: var(--card); border-color: var(--border); color: var(--foreground); }
-.portfolio-row:hover, .portfolio-row.active { background: var(--border); border-color: var(--ring); }
+.portfolio-card { background: var(--card); border-color: var(--border); color: var(--foreground); }
+.portfolio-card:hover, .portfolio-card.active { border-color: var(--ring); background: var(--accent); }
+.filter-chip { color: var(--muted-foreground); border-color: var(--border); background: var(--card); }
+.filter-chip:hover { color: var(--accent-foreground); border-color: var(--ring); background: var(--accent); }
+.filter-chip.active { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+.portfolio-card-name { color: var(--foreground); }
+.portfolio-code, .portfolio-card-location { color: var(--muted-foreground); }
+.portfolio-card-base { color: var(--muted-foreground); background: var(--accent); }
+.portfolio-card-cta { color: var(--foreground); border-color: var(--border); }
+.portfolio-card-cta.on { border-color: var(--primary); color: var(--primary-foreground); background: var(--primary); }
 .gantt-heading { border-bottom-color: var(--border); }
 .gantt-help { font-size: .75rem; margin-top: .35rem; max-width: 62rem; }
 .gantt-row { cursor: pointer; }

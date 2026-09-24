@@ -19,6 +19,7 @@ import {
   FolderKanban,
   Gauge,
   Layers3,
+  MapPin,
   Menu,
   MoreHorizontal,
   Plus,
@@ -77,6 +78,13 @@ const statusTone: Record<string, string> = {
   Concluído: "bg-[#e3f0e8] text-[#37654b]",
   "Em andamento": "bg-[#e2edf4] text-[#3b6277]",
   "Não iniciado": "bg-[#eef1f3] text-[#64727c]",
+  "Em risco": "bg-[#f6e7e4] text-[#8b514e]",
+};
+const PROJECT_CATEGORIES = ["Todas", "Em execução", "Planejamento", "Concluída", "Em risco"] as const;
+const projectTone: Record<string, string> = {
+  "Em execução": "bg-[#e2edf4] text-[#3b6277]",
+  Planejamento: "bg-[#f5eee2] text-[#8e7049]",
+  Concluída: "bg-[#e3f0e8] text-[#37654b]",
   "Em risco": "bg-[#f6e7e4] text-[#8b514e]",
 };
 function formatDate(value: string | Date) {
@@ -707,6 +715,7 @@ export default function Home() {
   const [agentOpen, setAgentOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
+  const [portfolioFilter, setPortfolioFilter] = useState<string>("Todas");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -825,11 +834,14 @@ export default function Home() {
                 : activeNav === "Relatórios"
                   ? "relatorios"
                   : "portfolio";
-  const visibleProjects = projects.filter(project =>
-    `${project.name} ${project.code} ${project.location}`
+  const visibleProjects = projects.filter(project => {
+    const matchesSearch = `${project.name} ${project.code} ${project.location}`
       .toLowerCase()
-      .includes(globalSearch.toLowerCase())
-  );
+      .includes(globalSearch.toLowerCase());
+    const matchesCategory =
+      portfolioFilter === "Todas" || project.status === portfolioFilter;
+    return matchesSearch && matchesCategory;
+  });
   const createProject = () => {
     if (!user) {
       startLogin();
@@ -1155,36 +1167,80 @@ export default function Home() {
                       </div>
                     </div>
                   )}
-                  <div className="portfolio-list">
-                    {visibleProjects.map(project => (
+                  <div className="portfolio-filters">
+                    {PROJECT_CATEGORIES.map(category => (
                       <button
-                        key={project.id}
-                        onClick={() => setSelectedId(project.id)}
-                        title="Selecionar obra ativa — use os atalhos acima para abrir Orçamento ou Cronogramas"
-                        className={`portfolio-row ${selected?.id === project.id ? "active" : ""}`}
+                        key={category}
+                        type="button"
+                        className={`filter-chip ${
+                          portfolioFilter === category ? "active" : ""
+                        }`}
+                        onClick={() => setPortfolioFilter(category)}
                       >
-                        <div className="portfolio-status">
-                          <span className="status-dot ok" />
-                          <span>{project.status}</span>
-                        </div>
-                        <div className="portfolio-main">
-                          <strong>{project.name}</strong>
-                          <span>
-                            {project.code} · {project.location}
-                          </span>
-                        </div>
-                        <div className="portfolio-progress">
-                          <div className="progress-label">
-                            <span>{project.progress}% executado</span>
-                            <span>{formatDate(project.plannedFinish)}</span>
-                          </div>
-                          <div className="progress-track">
-                            <div style={{ width: `${project.progress}%` }} />
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="row-chevron" />
+                        {category}
+                        <span className="filter-chip-count">
+                          {category === "Todas"
+                            ? projects.length
+                            : projects.filter(p => p.status === category).length}
+                        </span>
                       </button>
                     ))}
+                  </div>
+                  <div className="portfolio-grid">
+                    {visibleProjects.map(project => {
+                      const active = selected?.id === project.id;
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          onClick={() => setSelectedId(project.id)}
+                          title="Selecionar obra ativa — use os atalhos acima para abrir Orçamento ou Cronogramas"
+                          className={`portfolio-card ${active ? "active" : ""}`}
+                        >
+                          <div className="portfolio-card-head">
+                            <span
+                              className={`portfolio-status-pill ${
+                                projectTone[project.status] ?? projectTone["Em execução"]
+                              }`}
+                            >
+                              {project.status}
+                            </span>
+                            <span className="portfolio-code">{project.code}</span>
+                          </div>
+                          <strong className="portfolio-card-name">
+                            {project.name}
+                          </strong>
+                          <span className="portfolio-card-location">
+                            <MapPin size={13} /> {project.location}
+                          </span>
+                          {project.baseReferencia && (
+                            <span className="portfolio-card-base">
+                              Referência: {project.baseReferencia}
+                            </span>
+                          )}
+                          <div className="portfolio-card-progress">
+                            <div className="progress-label">
+                              <span>{project.progress}% executado</span>
+                              <span>{formatDate(project.plannedFinish)}</span>
+                            </div>
+                            <div className="progress-track">
+                              <div style={{ width: `${project.progress}%` }} />
+                            </div>
+                          </div>
+                          <span
+                            className={`portfolio-card-cta ${active ? "on" : ""}`}
+                          >
+                            {active ? "Obra ativa" : "Abrir obra"}
+                            <ChevronRight size={14} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {visibleProjects.length === 0 && (
+                      <div className="portfolio-empty">
+                        Nenhuma obra encontrada para este filtro.
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="panel focus-panel">
