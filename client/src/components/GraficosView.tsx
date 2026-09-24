@@ -68,6 +68,14 @@ export function GraficosView({
     Object.values(statusCounts).reduce((sum, value) => sum + value, 0)
   );
 
+  const deviations = useMemo(() => {
+    const rows = control?.activities ?? [];
+    return rows
+      .filter((row) => Math.abs(row.variance) >= 0.1)
+      .sort((a, b) => a.variance - b.variance)
+      .slice(0, 40);
+  }, [control]);
+
   const planned = control?.totals.plannedProgress ?? 0;
   const actual = control?.totals.actualProgress ?? 0;
   const maxDayQty = Math.max(1, ...productionByDay.map(([, qty]) => qty));
@@ -344,6 +352,68 @@ export function GraficosView({
         {!control && entriesQuery.isPending ? (
           <div className="module-empty">Carregando indicadores...</div>
         ) : null}
+      </div>
+
+      <div className="module-card">
+        <div className="panel-heading">
+          <div>
+            <h3>Desvios por atividade</h3>
+            <p>Maiores desvios entre o avanço planejado e o realizado, por atividade.</p>
+          </div>
+          <PieChart size={17} className="sparkle" />
+        </div>
+        {!control && entriesQuery.isPending ? (
+          <div className="module-empty">Carregando atividades...</div>
+        ) : deviations.length === 0 ? (
+          <div className="module-empty">
+            <PieChart size={20} />
+            <span>
+              <strong>Sem desvios relevantes.</strong>{" "}
+              {activities.length === 0
+                ? "Monte o cronograma para comparar os avanços."
+                : "Planejado e realizado em linha."}
+            </span>
+          </div>
+        ) : (
+          <div className="deviation-list">
+            <div className="deviation-row deviation-row-head">
+              <span>Atividade</span>
+              <span>Planejado</span>
+              <span>Realizado</span>
+              <span>Desvio</span>
+            </div>
+            {deviations.map((row) => (
+              <div className="deviation-row" key={row.id}>
+                <div className="deviation-info">
+                  <strong>{row.name}</strong>
+                  <span>
+                    {row.phase} · {row.wbsCode}
+                  </span>
+                </div>
+                <div className="deviation-cell">
+                  <span>{row.plannedProgress}%</span>
+                  <div className="deviation-bar">
+                    <div style={{ width: `${Math.min(100, Math.max(0, row.plannedProgress))}%` }} />
+                  </div>
+                </div>
+                <div className="deviation-cell">
+                  <span>{row.actualProgress}%</span>
+                  <div className="deviation-bar deviation-bar-actual">
+                    <div style={{ width: `${Math.min(100, Math.max(0, row.actualProgress))}%` }} />
+                  </div>
+                </div>
+                <b
+                  className={`deviation-badge ${
+                    row.variance < 0 ? "negative-variance" : "positive-variance"
+                  }`}
+                >
+                  {row.variance > 0 ? "+" : ""}
+                  {row.variance} pp
+                </b>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="module-card">
