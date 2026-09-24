@@ -240,8 +240,22 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
       )}
 
       {msg && <div style={{ fontSize: 11, color: "var(--ok)", marginBottom: 6 }}>{msg}</div>}
-      {planning.isPending && <div style={{ padding: 12, color: "var(--text2)" }}>Carregando atividades...</div>}
-      {planning.error && <div style={{ padding: 12, color: "var(--crit)" }}>Erro ao carregar atividades.</div>}
+      {planning.isPending && !activities.length && (
+        <div style={{ padding: 12, color: "var(--text2)" }}>Carregando atividades...</div>
+      )}
+      {planning.error && !activities.length && (
+        <div style={{ padding: 12, color: "var(--crit)" }}>
+          Não foi possível carregar as atividades.{" "}
+          <button onClick={() => planning.refetch()} style={{ textDecoration: "underline", cursor: "pointer", background: "none", border: "none", color: "var(--crit)" }}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
+      {planning.error && activities.length > 0 && (
+        <div style={{ padding: 6, fontSize: 11, color: "var(--warn)" }}>
+          Falha ao atualizar; exibindo os últimos dados carregados.
+        </div>
+      )}
 
       <div style={{ overflow: "auto", maxHeight: 460, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surf)" }}>
         <div
