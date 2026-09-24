@@ -31,10 +31,17 @@ class ErrorBoundary extends Component<Props, State> {
               className="text-destructive mb-6 flex-shrink-0"
             />
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+            <h2 className="text-xl mb-2">Ocorreu um erro inesperado</h2>
+
+            <p className="text-sm text-muted-foreground mb-6 text-center max-w-lg">
+              Isso normalmente acontece quando o navegador traduz a página
+              automaticamente. Desative a tradução e recarregue para continuar.
+            </p>
 
             <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
+              <pre className="text-xs text-muted-foreground whitespace-break-spaces">
+                {this.state.error?.message}
+                {"\n\n"}
                 {this.state.error?.stack}
               </pre>
             </div>
