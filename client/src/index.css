@@ -3879,9 +3879,10 @@ input, select, textarea, .gantt-edit-input, .gantt-edit-select, .gantt-edit-numb
 input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .module-hero-actions .outline-button { margin-left: 0; }
 .outline-button, .icon-button, .toolbar-tab { color: var(--foreground); border-color: var(--border); background: var(--card); }
-.outline-button:hover, .toolbar-tab:hover, .toolbar-tab.active { background: var(--border); border-color: var(--ring); color: #fff; }
+.outline-button:hover, .toolbar-tab:hover { background: var(--accent); border-color: var(--ring); color: var(--accent-foreground); }
+.toolbar-tab.active { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
 .primary-button { background: var(--primary); color: var(--primary-foreground); }
-.primary-button:hover { background: #b3e0e8; }
+.primary-button:hover { background: #276070; }
 .metric-card, .budget-summary-card, .lob-kpis div, .lob-chart-frame, .schedule-table-wrap, .budget-table-wrap, .catalog-list-row, .planning-row { background: var(--card); border-color: var(--border); color: var(--foreground); }
 .budget-table th, .schedule-table th { background: var(--sidebar); color: var(--muted-foreground); border-color: var(--border); }
 .budget-table td, .schedule-table td { border-color: var(--border); color: var(--foreground); }
@@ -3903,148 +3904,6 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .module-empty { background: var(--card); border-color: var(--border); color: var(--muted-foreground); }
 .status-chip, .critical-chip, .focus-tag { filter: saturate(.85) brightness(.9); }
 @media (max-width: 900px) { .lob-chart-scroll .lob-flow-frame { min-width: 860px; } }
-
-
-/* Correção definitiva do tema híbrido: todas as superfícies seguem o tema manus escuro. */
-html, body, #root { background: var(--background) !important; color: var(--foreground) !important; }
-.app-frame, .main-canvas, .main-content, .content-wrap, .tab-content-root { background: var(--background) !important; color: var(--foreground) !important; }
-.app-sidebar { background: var(--sidebar) !important; color: #dce8eb !important; border-right-color: #26363d !important; }
-.brand-name, .brand-name span, .brand-subtitle, .workspace-select, .workspace-select strong,
-.nav-caption, .nav-item, .project-mini, .project-progress, .sync-status, .user-card strong, .user-card span { color: #aebec4 !important; }
-.workspace-select, .global-search, .compact-search, .icon-button, .nav-item:hover, .project-mini:hover,
-.project-mini.selected, .nav-item.active { background: var(--card) !important; border-color: #2d4149 !important; color: #e9f5f7 !important; }
-.topbar { background: #0e1518 !important; border-bottom-color: #293a41 !important; }
-.topbar h1, .breadcrumb { color: var(--foreground) !important; }
-.global-search input, .compact-search input, input, select, textarea { background: var(--sidebar) !important; color: var(--foreground) !important; border-color: #304149 !important; }
-.global-search input::placeholder, .compact-search input::placeholder, input::placeholder, textarea::placeholder { color: #7e929a !important; }
-.module-page, .module-page > *, .panel, .module-card, .metric-card, .budget-summary-card, .budget-empty-state,
-.budget-item-card, .budget-table-card, .catalog-page .module-card, .planning-page .module-card,
-.cpm-panel, .baseline-panel, .control-panel, .gantt-panel, .agent-sidebar, .modal-card,
-.eap-edit-panel, .eap-tree, .production-card, .lob-view, .lob-chart-frame, .module-hero,
-.focus-panel, .portfolio-panel, .portfolio-row, .schedule-table-wrap, .budget-table-wrap,
-.catalog-list-row, .planning-row { background: var(--card) !important; color: var(--foreground) !important; border-color: #2a3a41 !important; }
-.module-page p, .module-card p, .panel p, .module-hero p, .metric-detail, .planning-row span,
-.portfolio-row span, .gantt-help, .lob-copy p:not(.eyebrow), .lob-chart-title span, .module-empty span { color: #9eafb6 !important; }
-.module-page h2, .module-page h3, .module-page h4, .panel-heading h3, .module-hero h2,
-.portfolio-row strong, .activity-name, .table-name, .planning-row strong, .lob-copy h4 { color: #f2f8fa !important; }
-.gantt-toolbar, .filter-strip, .gantt-table-header, .timeline-header, .gantt-group,
-.gantt-row, .schedule-table thead, .schedule-table tbody, .schedule-table tr,
-.budget-table thead, .budget-table tbody, .budget-table tr { background: var(--card) !important; color: #dce8eb !important; border-color: #293940 !important; }
-.gantt-row:hover, .gantt-row.is-expanded, .gantt-group:hover, .schedule-table tbody tr:hover,
-.budget-table tbody tr:hover { background: #18282e !important; }
-.gantt-row > div, .schedule-table td, .budget-table td, .schedule-table th, .budget-table th { border-color: #293940 !important; color: #dce8eb !important; }
-.gantt-detail-row, .module-empty { background: #0c1316 !important; color: #aebfc5 !important; border-color: #293940 !important; }
-.timeline-header span, .gantt-table-header, .schedule-table th, .budget-table th { color: #aebfc5 !important; }
-.lob-flow-head, .lob-flow-body, .lob-flow-labels, .lob-flow-grid, .lob-flow-footer,
-.lob-chart-title, .lob-kpis div { background-color: #10191d !important; color: #dce8eb !important; border-color: #293940 !important; }
-.lob-flow-grid { background-image: repeating-linear-gradient(to right, transparent 0 calc(100% / 13 - 1px), #293940 calc(100% / 13 - 1px) calc(100% / 13)) !important; }
-.primary-button { background: #8bc7d4 !important; color: var(--primary-foreground) !important; }
-.outline-button, .toolbar-tab, .icon-button { background: var(--card) !important; color: #dcebef !important; border-color: #38505a !important; }
-.outline-button:hover, .toolbar-tab:hover, .toolbar-tab.active, .icon-button:hover { background: #24404a !important; color: #ffffff !important; }
-.agent-sidebar-backdrop, .modal-backdrop { background: rgba(0, 0, 0, .76) !important; }
-.agent-sidebar-header, .agent-sidebar-context, .agent-sidebar-chat, .agent-governance-card,
-.agent-sidebar-safety, .agent-sidebar-warning { background: #0e1518 !important; color: #dce8eb !important; border-color: #293940 !important; }
-.ai-chat-box, .ai-chat-box > *, [class*="bg-card"], [class*="bg-background"], [class*="bg-secondary"], [class*="bg-muted"] { color: #e6f0f2; }
-.status-chip, .focus-tag, .critical-chip, .live-badge { filter: brightness(.82) saturate(.8); }
-
-
-/* Cobertura específica dos quatro módulos operacionais. */
-.gantt-panel, .gantt-panel *, .gantt-heading, .gantt-toolbar, .gantt-table, .gantt-table-header,
-.gantt-group, .gantt-row, .timeline-cell, .timeline-header, .gantt-footer { border-color: #293940 !important; }
-.gantt-panel, .gantt-table, .gantt-table-header, .gantt-group, .gantt-row, .timeline-cell,
-.timeline-header { background: var(--card) !important; color: #dce8eb !important; }
-.gantt-row:nth-child(even), .gantt-group:nth-child(even) { background: #111a1e !important; }
-.gantt-row:hover, .gantt-row.is-expanded, .gantt-group:hover { background: #1a2d34 !important; }
-.gantt-row .activity-cell, .gantt-row .date-cell, .gantt-row .timeline-cell, .gantt-row > div { color: #dce8eb !important; }
-.gantt-row .activity-name, .gantt-row .wbs-code { color: #f1f7f8 !important; }
-.gantt-row .status-chip { background: #1d2d33 !important; color: #cfe1e5 !important; border-color: #38525b !important; }
-.gantt-row .critical-chip { background: #59383a !important; color: #ffd8d4 !important; }
-.gantt-table-header, .timeline-header { background: #0b1215 !important; color: #a9bcc3 !important; }
-
-.eap-card, .eap-node-detail, .eap-advanced-tools, .eap-tree, .eap-tree-actions,
-.eap-structure-legend, .eap-edit-panel, .eap-quick-create, .eap-advanced-tools-body { background: var(--card) !important; color: var(--foreground) !important; border-color: #2a3a41 !important; }
-.eap-node-row { background: var(--card) !important; color: #dce8eb !important; border-color: #293940 !important; }
-.eap-node-row:hover, .eap-node-row:focus-visible, .eap-node-row.selected { background: #1a2d34 !important; color: #f3fafb !important; }
-.eap-node-row strong, .eap-node-row .eap-node-code { color: #f1f7f8 !important; }
-.eap-node-row .eap-node-type, .eap-node-edit-hint, .eap-structure-legend, .eap-detail-heading p { color: #9eafb6 !important; }
-.eap-branch-toggle, .eap-branch-spacer { background: #18282e !important; color: #c8e4e9 !important; border-color: #3a5660 !important; }
-.eap-edit-panel label, .eap-quick-create label, .eap-detail-actions { color: #b4c5ca !important; }
-
-.production-readonly-note, .production-blocked-card, .production-catalog-card, .production-empty-card,
-.production-form, .production-history, .production-entry-list, .production-entry, .production-catalog-grid,
-.production-catalog-grid form, .production-form-grid, .production-form-footer { background: var(--card) !important; color: var(--foreground) !important; border-color: #2a3a41 !important; }
-.production-catalog-grid form, .production-entry { background: #0f171a !important; }
-.production-catalog-grid form strong, .production-entry strong, .production-heading h3 { color: #f1f7f8 !important; }
-.production-catalog-grid form span, .production-entry span, .production-heading p, .production-readonly-note,
-.production-blocked-card p, .production-empty-card p { color: #9eafb6 !important; }
-.production-form-grid label, .production-field-wide { color: #b9c9ce !important; }
-.production-form input, .production-form select, .production-form textarea,
-.production-catalog-grid input { background: var(--sidebar) !important; color: var(--foreground) !important; border-color: #304149 !important; }
-
-.portfolio-panel, .portfolio-list, .portfolio-row, .portfolio-status, .portfolio-main,
-.portfolio-progress, .focus-panel, .focus-list, .focus-item { background: var(--card) !important; color: var(--foreground) !important; border-color: #2a3a41 !important; }
-.portfolio-row { background: var(--card) !important; }
-.portfolio-row:hover, .portfolio-row.active { background: #1a2d34 !important; }
-.portfolio-main strong, .portfolio-progress, .portfolio-status, .portfolio-main span, .progress-label { color: #dce8eb !important; }
-.portfolio-main strong { color: #f1f7f8 !important; }
-.progress-track { background: #293940 !important; }
-.focus-item { background: #10191d !important; }
-.focus-item strong { color: #f1f7f8 !important; }
-.focus-item span { color: #9eafb6 !important; }
-.focus-icon { background: #1d3037 !important; color: #cfe8ed !important; }
-.focus-tag { background: #27383d !important; color: #d2e5e8 !important; }
-.portfolio-context-note { color: #9eafb6 !important; }
-
-
-/* Fechamento do tema escuro: superfícies internas e componentes compostos. */
-.gantt-row > div,
-.gantt-table-header > span,
-.timeline-header > span,
-.control-summary > div,
-.control-row,
-.control-bars,
-.control-bars > div,
-.schedule-table td,
-.schedule-table th,
-.budget-table td,
-.budget-table th,
-.portfolio-next-step {
-  background: var(--card) !important;
-  color: #dce8eb !important;
-  border-color: #293940 !important;
-}
-
-.control-summary > div strong,
-.control-row strong,
-.portfolio-next-step h3 {
-  color: #f1f7f8 !important;
-}
-
-.control-summary > div span,
-.control-row span,
-.portfolio-next-step p {
-  color: #9eafb6 !important;
-}
-
-.portfolio-quick-actions {
-  border-bottom-color: #293940 !important;
-}
-
-.portfolio-quick-actions .eyebrow {
-  color: #9eafb6 !important;
-}
-
-[class~="bg-white"],
-[class~="bg-slate-50"],
-[class~="bg-slate-100"],
-[class~="bg-gray-50"],
-[class~="bg-gray-100"],
-[class~="bg-zinc-50"],
-[class~="bg-neutral-50"] {
-  background-color: var(--card) !important;
-  color: #dce8eb !important;
-  border-color: #293940 !important;
-}
 
 .portfolio-next-step {
   display: flex;
@@ -4264,7 +4123,4 @@ html, body, #root { background: var(--background) !important; color: var(--foreg
     justify-content: center;
     width: 100%;
   }
-}
-@ i m p o r t   u r l ( " . / t h e m e - t o k e n s . c s s " ) ;  
- b o d y { b a c k g r o u n d : v a r ( - - b g ) ; c o l o r : v a r ( - - t e x t ) } . m o d u l e - p a g e { b a c k g r o u n d : v a r ( - - s u r f ) ; b o r d e r : 1 p x   s o l i d   v a r ( - - b o r d e r ) }  
- 
+}
