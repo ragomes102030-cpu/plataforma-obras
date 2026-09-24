@@ -1629,6 +1629,62 @@ export const appRouter = router({
           .$returningId();
         return { id: createdId.id };
       }),
+    createEntries: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          entries: z.array(
+            z.object({
+              frontId: z.number().int().positive(),
+              teamId: z.number().int().positive(),
+              unitId: z.number().int().positive(),
+              activityId: z.number().int().positive(),
+              productionDate: z.coerce.date(),
+              quantity: z.number().positive().max(999999),
+              measurementUnit: z.string().trim().min(1).max(32),
+              notes: z.string().trim().max(2000).optional(),
+              status: z.enum(["rascunho", "confirmada"]).default("rascunho"),
+            })
+          ).min(1).max(5000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const frontIds = Array.from(new Set(input.entries.map(item => item.frontId)));
+        const teamIds = Array.from(new Set(input.entries.map(item => item.teamId)));
+        const unitIds = Array.from(new Set(input.entries.map(item => item.unitId)));
+        const activityIds = Array.from(new Set(input.entries.map(item => item.activityId)));
+        const [fronts, teams, units, activitiesFound] = await Promise.all([
+          db.select({ id: productionFronts.id }).from(productionFronts).where(and(eq(productionFronts.projectId, input.projectId), inArray(productionFronts.id, frontIds))),
+          db.select({ id: productionTeams.id }).from(productionTeams).where(and(eq(productionTeams.projectId, input.projectId), inArray(productionTeams.id, teamIds))),
+          db.select({ id: productionUnits.id }).from(productionUnits).where(and(eq(productionUnits.projectId, input.projectId), inArray(productionUnits.id, unitIds))),
+          db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, activityIds))),
+        ]);
+        if (
+          fronts.length !== frontIds.length ||
+          teams.length !== teamIds.length ||
+          units.length !== unitIds.length ||
+          activitiesFound.length !== activityIds.length
+        )
+          throw new Error("Uma ou mais referências não pertencem à obra.");
+        await db.insert(productionEntries).values(
+          input.entries.map(item => ({
+            projectId: input.projectId,
+            frontId: item.frontId,
+            teamId: item.teamId,
+            unitId: item.unitId,
+            activityId: item.activityId,
+            productionDate: item.productionDate,
+            quantity: item.quantity.toFixed(3),
+            measurementUnit: item.measurementUnit,
+            notes: item.notes ?? null,
+            status: item.status,
+          }))
+        );
+        return { created: input.entries.length };
+      }),
     confirmEntry: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), entryId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
@@ -2596,6 +2652,44 @@ export const appRouter = router({
         void ctx.user.id;
         return { id: createdId.id };
       }),
+    createPriceItems: protectedProcedure
+      .input(
+        z.object({
+          catalogId: z.number().int().positive(),
+          items: z.array(
+            z.object({
+              code: z.string().trim().min(1).max(64),
+              description: z.string().trim().min(2).max(240),
+              unit: z.string().trim().min(1).max(32),
+              itemType: z.enum(["material", "mao_de_obra", "equipamento", "servico"]),
+              unitPrice: z.number().nonnegative(),
+              notes: z.string().trim().max(2000).optional(),
+            })
+          ).min(1).max(5000),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [catalog] = await db
+          .select({ id: priceCatalogs.id })
+          .from(priceCatalogs)
+          .where(eq(priceCatalogs.id, input.catalogId))
+          .limit(1);
+        if (!catalog) throw new Error("Catálogo não encontrado.");
+        await db.insert(priceItems).values(
+          input.items.map(item => ({
+            catalogId: input.catalogId,
+            code: item.code,
+            description: item.description,
+            unit: item.unit,
+            itemType: item.itemType,
+            unitPrice: item.unitPrice.toFixed(2),
+            notes: item.notes ?? null,
+          }))
+        );
+        return { created: input.items.length };
+      }),
     importPriceSheet: protectedProcedure
       .input(
         z.object({
@@ -2978,6 +3072,65 @@ export const appRouter = router({
         if (!activity || !resource) throw new Error("Atividade ou recurso não pertence à obra.");
         const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).$returningId();
         return { id: createdId.id };
+      }),
+    allocateResources: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          resourceId: z.number().int().positive(),
+          allocations: z.array(
+            z.object({
+              activityId: z.number().int().positive(),
+              quantity: z.number().positive().default(1),
+              productivity: z.number().positive().optional(),
+            })
+          ).min(1).max(5000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [resource] = await db
+          .select({ id: planningResources.id })
+          .from(planningResources)
+          .where(
+            and(
+              eq(planningResources.id, input.resourceId),
+              eq(planningResources.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!resource) throw new Error("Recurso não pertence à obra.");
+        const activityIds = Array.from(new Set(input.allocations.map(item => item.activityId)));
+        const validActivities = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              inArray(scheduleActivities.id, activityIds)
+            )
+          );
+        if (validActivities.length !== activityIds.length)
+          throw new Error("Uma ou mais atividades não pertencem à obra.");
+        await db
+          .insert(activityResourceAllocations)
+          .values(
+            input.allocations.map(item => ({
+              activityId: item.activityId,
+              resourceId: input.resourceId,
+              quantity: item.quantity.toFixed(3),
+              productivity: item.productivity?.toFixed(3) ?? null,
+            }))
+          )
+          .onDuplicateKeyUpdate({
+            set: {
+              quantity: sql`VALUES(quantity)`,
+              productivity: sql`VALUES(productivity)`,
+            },
+          });
+        return { created: input.allocations.length };
       }),
     evm: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
