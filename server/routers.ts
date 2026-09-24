@@ -3061,6 +3061,116 @@ export const appRouter = router({
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag }).$returningId();
         return { id: createdId.id };
       }),
+    createDependencies: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          dependencies: z.array(
+            z.object({
+              predecessorId: z.number().int().positive(),
+              successorId: z.number().int().positive(),
+              type: z.enum(["FS", "SS", "FF", "SF"]).default("FS"),
+              lag: z.number().int().default(0),
+            })
+          ).min(1).max(5000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        for (const dependency of input.dependencies) {
+          if (dependency.predecessorId === dependency.successorId)
+            throw new Error("Uma atividade não pode depender dela mesma.");
+        }
+        const ids = Array.from(
+          new Set(input.dependencies.flatMap(item => [item.predecessorId, item.successorId]))
+        );
+        const found = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              inArray(scheduleActivities.id, ids)
+            )
+          );
+        if (found.length !== ids.length)
+          throw new Error("Uma ou mais atividades não pertencem à obra.");
+        await db.insert(scheduleDependencies).values(
+          input.dependencies.map(item => ({
+            projectId: input.projectId,
+            predecessorId: item.predecessorId,
+            successorId: item.successorId,
+            type: item.type,
+            lag: item.lag,
+          }))
+        );
+        return { created: input.dependencies.length };
+      }),
+    updateActivities: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          updates: z.array(
+            z.object({
+              activityId: z.number().int().positive(),
+              name: z.string().trim().min(2).max(220).optional(),
+              phase: z.string().trim().min(2).max(80).optional(),
+              startOffset: z.number().int().min(0).optional(),
+              durationDays: z.number().int().positive().optional(),
+              plannedQuantity: z.number().positive().optional(),
+              productivity: z.number().positive().optional(),
+              progress: z.number().int().min(0).max(100).optional(),
+              status: z.enum(["Não iniciado", "Em andamento", "Concluído", "Em risco"]).optional(),
+            })
+          ).min(1).max(2000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const activityIds = input.updates.map(item => item.activityId);
+        const found = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              inArray(scheduleActivities.id, activityIds)
+            )
+          );
+        if (found.length !== new Set(activityIds).size)
+          throw new Error("Uma ou mais atividades não pertencem à obra.");
+        const idsSql = sql.join(activityIds.map(id => sql`${id}`), sql`, `);
+        const applyField = async (field: string, values: Array<[number, unknown]>) => {
+          if (!values.length) return;
+          const caseSql = sql.join(values.map(([id, value]) => sql`WHEN ${id} THEN ${value}`), sql` `);
+          await db.execute(sql`
+            UPDATE schedule_activities
+            SET ${sql.raw(field)} = CASE id ${caseSql} END,
+                cpmCalculatedAt = NULL
+            WHERE projectId = ${input.projectId}
+              AND id IN (${idsSql})
+          `);
+        };
+        await db.transaction(async () => {
+          const pick = (key: keyof (typeof input.updates)[number]) =>
+            input.updates
+              .filter(item => item[key] !== undefined)
+              .map(item => [item.activityId, item[key]] as [number, unknown]);
+          await applyField("name", pick("name"));
+          await applyField("phase", pick("phase"));
+          await applyField("startOffset", pick("startOffset"));
+          await applyField("durationDays", pick("durationDays"));
+          await applyField("plannedQuantity", pick("plannedQuantity"));
+          await applyField("productivity", pick("productivity"));
+          await applyField("progress", pick("progress"));
+          await applyField("status", pick("status"));
+        });
+        return { updated: input.updates.length };
+      }),
     allocateResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), activityId: z.number().int().positive(), resourceId: z.number().int().positive(), quantity: z.number().positive().default(1), productivity: z.number().positive().optional() }))
       .mutation(async ({ ctx, input }) => {
