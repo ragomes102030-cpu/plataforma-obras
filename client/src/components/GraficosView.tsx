@@ -127,10 +127,23 @@ export function GraficosView({
       const node = item.wbsNodeId != null ? wbsById.get(item.wbsNodeId) : undefined;
       const code = node?.code ?? item.code ?? "";
       const parts = code.split(".");
-      const branchCode = parts.slice(0, 2).join(".");
+      let branchCode: string;
+      let segmentName: string;
+      if (parts.length >= 3) {
+        // WBS hierárquica: ramo = 2 níveis, segmento = 3 níveis.
+        branchCode = parts.slice(0, 2).join(".");
+        segmentName = parts.slice(0, 3).join(".");
+      } else if (parts.length === 2) {
+        // Código 2 partes (ex.: "01.001"): ramo = capítulo, segmento = código completo.
+        branchCode = parts[0] || code;
+        segmentName = code;
+      } else {
+        // Código plano (ex.: "SEIN-C0106"): ramo = prefixo antes do "-", segmento = código.
+        const dash = code.indexOf("-");
+        branchCode = dash > 0 ? code.slice(0, dash) : code;
+        segmentName = code;
+      }
       const branchName = node?.name ? `${branchCode} – ${node.name}` : branchCode || "Sem ramo";
-      const segmentCode = parts.slice(0, 3).join(".");
-      const segmentName = segmentCode || branchName;
       const entry = byBranch.get(branchName) ?? { base: 0, segments: new Map<string, number>() };
       entry.base += lineTotal;
       entry.segments.set(segmentName, (entry.segments.get(segmentName) ?? 0) + lineTotal);
@@ -139,7 +152,16 @@ export function GraficosView({
     const branches = [...byBranch.entries()]
       .map(([name, data]) => ({ name, ...data, total: data.base }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
+      .slice(0, 8)
+      .map((branch) => {
+        // Limita a legenda: mantém os 6 maiores segmentos e agrega o restante em "Outros".
+        const ranked = [...branch.segments.entries()].sort((a, b) => b[1] - a[1]);
+        const kept = ranked.slice(0, 6);
+        const leftover = ranked.slice(6).reduce((sum, [, value]) => sum + value, 0);
+        const segments = new Map(kept);
+        if (leftover > 0) segments.set("Outros", leftover);
+        return { ...branch, segments };
+      });
     return branches;
   }, [budgetQuery.data, wbsQuery.data]);
 
