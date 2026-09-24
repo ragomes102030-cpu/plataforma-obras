@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { BookOpen, Calculator, Plus, RefreshCw, Upload } from "lucide-react";
+import { BookOpen, Calculator, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const typeLabels = {
@@ -93,6 +93,22 @@ export function CatalogView() {
       await utils.catalog.list.invalidate({ catalogId, compositionId });
     },
   });
+  const updateComponent = trpc.catalog.updateComponent.useMutation({
+    onSuccess: async () => {
+      await utils.catalog.list.invalidate({ catalogId, compositionId });
+    },
+  });
+  const removeComponent = trpc.catalog.removeComponent.useMutation({
+    onSuccess: async () => {
+      await utils.catalog.list.invalidate({ catalogId, compositionId });
+    },
+  });
+  const [componentCoefDrafts, setComponentCoefDrafts] = useState<Record<number, string>>({});
+  const saveComponentCoef = (component: { id: number; coefficient: string }) => {
+    const value = Number(componentCoefDrafts[component.id]);
+    if (!Number.isFinite(value) || value <= 0) return;
+    updateComponent.mutate({ componentId: component.id, coefficient: value });
+  };
   const importSheet = trpc.catalog.importPriceSheet.useMutation({
     onSuccess: async result => {
       setImportResult(result);
@@ -279,8 +295,49 @@ export function CatalogView() {
             </form>
             {addComponent.error && <p className="form-error">{addComponent.error.message}</p>}
             <div className="catalog-list">
-              {catalogQuery.data?.components.map(component => <div className="catalog-list-row" key={component.id}><div><strong>{component.priceItemId} · componente</strong><span>{component.componentType} · coeficiente {component.coefficient}</span></div><b>{money(Number(component.coefficient) * Number(component.unitPriceSnapshot))}</b></div>)}
-              {!catalogQuery.data?.components.length && <div className="module-empty">Adicione componentes para calcular o custo unitário.</div>}
+              {catalogQuery.data?.components.map(component => {
+                const subtotal = Number(component.coefficient) * Number(component.unitPriceSnapshot);
+                return (
+                  <div className="catalog-list-row catalog-component-row" key={component.id}>
+                    <div>
+                      <strong>{component.itemCode} · {component.itemDescription}</strong>
+                      <span>{typeLabels[component.componentType]} · {component.itemUnit}</span>
+                    </div>
+                    <div className="catalog-component-fields">
+                      <label className="catalog-component-coef">
+                        <span>coef.</span>
+                        <input
+                          type="number"
+                          min="0.000001"
+                          step="0.000001"
+                          value={componentCoefDrafts[component.id] ?? component.coefficient}
+                          onChange={event => setComponentCoefDrafts(prev => ({ ...prev, [component.id]: event.target.value }))}
+                          onBlur={() => saveComponentCoef(component)}
+                          onKeyDown={event => { if (event.key === "Enter") saveComponentCoef(component); }}
+                        />
+                      </label>
+                      <span className="catalog-component-unit">{money(Number(component.unitPriceSnapshot))}</span>
+                      <b>{money(subtotal)}</b>
+                      <button
+                        type="button"
+                        className="catalog-component-remove"
+                        title="Remover componente"
+                        onClick={() => removeComponent.mutate({ componentId: component.id })}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {catalogQuery.data?.components.length ? (
+                <div className="catalog-component-total">
+                  <span>TOTAL DA COMPOSIÇÃO</span>
+                  <strong>{money(catalogQuery.data?.total ?? 0)}</strong>
+                </div>
+              ) : (
+                <div className="module-empty">Adicione componentes para calcular o custo unitário.</div>
+              )}
             </div>
           </> : <div className="module-empty"><Calculator size={20} /> Crie ou selecione uma composição.</div>}
         </section>

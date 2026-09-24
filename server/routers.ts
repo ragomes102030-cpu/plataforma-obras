@@ -2576,7 +2576,11 @@ export const appRouter = router({
           catalogs: typeof priceCatalogs.$inferSelect[];
           priceItems: typeof priceItems.$inferSelect[];
           compositions: typeof serviceCompositions.$inferSelect[];
-          components: typeof compositionComponents.$inferSelect[];
+          components: (typeof compositionComponents.$inferSelect & {
+            itemCode: string;
+            itemDescription: string;
+            itemUnit: string;
+          })[];
           total: number;
         }>(cacheKey);
         if (cached) return cached;
@@ -2590,7 +2594,22 @@ export const appRouter = router({
         const compositions = await db.select().from(serviceCompositions).orderBy(desc(serviceCompositions.updatedAt));
         const selectedCompositionId = input.compositionId ?? compositions[0]?.id;
         const components = selectedCompositionId
-          ? await db.select().from(compositionComponents).where(eq(compositionComponents.compositionId, selectedCompositionId))
+          ? await db.select({
+              id: compositionComponents.id,
+              compositionId: compositionComponents.compositionId,
+              priceItemId: compositionComponents.priceItemId,
+              componentType: compositionComponents.componentType,
+              coefficient: compositionComponents.coefficient,
+              unitPriceSnapshot: compositionComponents.unitPriceSnapshot,
+              createdAt: compositionComponents.createdAt,
+              itemCode: priceItems.code,
+              itemDescription: priceItems.description,
+              itemUnit: priceItems.unit,
+            })
+              .from(compositionComponents)
+              .innerJoin(priceItems, eq(compositionComponents.priceItemId, priceItems.id))
+              .where(eq(compositionComponents.compositionId, selectedCompositionId))
+              .orderBy(priceItems.code)
           : [];
         const total = components.reduce(
           (sum, component) => sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
@@ -2863,7 +2882,36 @@ export const appRouter = router({
           coefficient: input.coefficient.toFixed(6),
           unitPriceSnapshot: Number(item.unitPrice).toFixed(2),
         }).$returningId();
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
         return { id: createdId.id };
+      }),
+    updateComponent: protectedProcedure
+      .input(
+        z.object({
+          componentId: z.number().int().positive(),
+          coefficient: z.number().positive(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await db.update(compositionComponents)
+          .set({ coefficient: input.coefficient.toFixed(6) })
+          .where(eq(compositionComponents.id, input.componentId));
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
+        return { ok: true };
+      }),
+    removeComponent: protectedProcedure
+      .input(z.object({ componentId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await db.delete(compositionComponents).where(eq(compositionComponents.id, input.componentId));
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
+        return { ok: true };
       }),
   }),
   planning: router({
