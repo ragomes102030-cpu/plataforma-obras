@@ -145,9 +145,9 @@ export function BudgetView({
     const groups = new Map<string, { key: string; label: string; items: typeof items; subtotal: number }>();
     for (const item of items) {
       const node = item.wbsNodeId != null ? wbsById.get(item.wbsNodeId) : undefined;
-      const key = (node?.code ?? "").split(".").slice(0, 2).join(".");
+      const key = (node?.code ?? item.code ?? "").split(".").slice(0, 2).join(".");
       const branchNode = (wbsQuery.data ?? []).find(n => n.code === key);
-      const label = key ? `${key} · ${branchNode?.name ?? key}` : "Sem ramo";
+      const label = key ? (branchNode?.name ? `${key} · ${branchNode.name}` : key) : "Sem ramo";
       const group = groups.get(key) ?? { key, label, items: [], subtotal: 0 };
       group.items.push(item);
       group.subtotal += Number(item.quantity) * Number(item.unitPrice);
