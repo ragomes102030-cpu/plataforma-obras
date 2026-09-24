@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+﻿import { useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 type Dep = { predecessorId: number; successorId: number; type: string; lag?: number };
@@ -142,6 +142,14 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
     return m;
   }, [rows, scale]);
 
+  const ticks = useMemo(() => {
+    const count = zoom === "dia" ? 10 : zoom === "semana" ? 7 : 6;
+    const step = Math.max(1, Math.round(maxDay / count));
+    const out: number[] = [];
+    for (let d = 0; d <= maxDay + step; d += step) out.push(d);
+    return out;
+  }, [maxDay, zoom]);
+
   const svgH = HEADER_H + rows.length * ROW_H + 40;
 
   const commitMove = (id: number, nextStart: number) => {
@@ -196,8 +204,8 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
     const lag = Number(dep.lag ?? 0);
     return (
       <g key={`${dep.predecessorId}-${dep.successorId}-${t}`}>
-        <path d={d} fill="none" stroke="#7a8699" strokeWidth={1} markerEnd="url(#arrowhead)" />
-        <text x={(midX + xEnd) / 2} y={(y0 + y1) / 2 - 2} fontSize={8} fill="#55607a">{t}{lag !== 0 ? (lag > 0 ? `+${lag}` : `${lag}`) : ""}</text>
+        <path d={d} fill="none" stroke="#8b98a8" strokeWidth={1} markerEnd="url(#arrowhead)" />
+        <text x={(midX + xEnd) / 2} y={(y0 + y1) / 2 - 2} fontSize={8} fill="#8b98a8">{t}{lag !== 0 ? (lag > 0 ? `+${lag}` : `${lag}`) : ""}</text>
       </g>
     );
   };
@@ -272,7 +280,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
         >
           <table style={{ flex: `0 0 ${LABEL_W}px`, borderCollapse: "collapse", fontSize: 11, position: "sticky", left: 0, background: "var(--surf)", zIndex: 2 }}>
             <thead>
-              <tr style={{ background: "var(--primary)", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
+              <tr style={{ background: "var(--thead-bg)", color: "var(--thead-text)", position: "sticky", top: 0, zIndex: 3 }}>
                 {cols.eap && <th style={{ textAlign: "left", padding: 5 }}>EAP</th>}
                 {cols.nome && <th style={{ textAlign: "left", padding: 5 }}>Nome</th>}
                 {cols.inicio && <th style={{ textAlign: "left", padding: 5 }}>Início</th>}
@@ -283,7 +291,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} style={{ height: ROW_H, borderBottom: "1px solid var(--line)", background: r.critical ? "#fff5f5" : undefined }}>
+                <tr key={r.id} style={{ height: ROW_H, borderBottom: "1px solid var(--line)", background: r.critical ? "var(--row-critical-bg)" : undefined }}>
                   {cols.eap && <td style={{ padding: "0 5px", color: r.critical ? "var(--crit)" : "inherit", fontWeight: r.critical ? 600 : 400 }}>{r.wbsCode}</td>}
                   {cols.nome && <td style={{ padding: "0 5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }} title={r.name}>{r.name}</td>}
                   {cols.inicio && <td style={{ padding: "0 5px" }}>{r.inicio}</td>}
@@ -298,14 +306,19 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
           <svg ref={svgRef} width={chartW + 20} height={svgH} style={{ flex: "0 0 auto", cursor: drag ? "grabbing" : "default" }} aria-label="Gantt editável com dependências">
             <defs>
               <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#7a8699" />
+                <path d="M0,0 L6,3 L0,6 Z" fill="#8b98a8" />
               </marker>
             </defs>
 
             <rect x={LABEL_W} y={0} width={chartW} height={HEADER_H - 16} fill="#0d2b6b" rx="4" />
-            <text x={LABEL_W + 8} y={20} fill="#fff" fontSize={10} fontWeight={600}>
-              {[0, Math.round(maxDay / 3), Math.round((2 * maxDay) / 3), maxDay].map((o) => dateAt(o)).join("  ·  ")}
-            </text>
+            {ticks.map(d => (
+              <g key={`tick-${d}`}>
+                <line x1={LABEL_W + d * scale} y1={HEADER_H - 16} x2={LABEL_W + d * scale} y2={svgH - 20} stroke="#8b98a8" strokeWidth={0.5} opacity={0.28} />
+                <text x={LABEL_W + d * scale + 3} y={20} fill="#ffffff" fontSize={9} fontWeight={600}>
+                  {dateAt(d)}
+                </text>
+              </g>
+            ))}
 
             {rows.map((r) => {
               const p = posById.get(r.id)!;
@@ -364,7 +377,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
 
             {dependencies.map(arrow)}
 
-            {baselines.length > 0 && <text x={LABEL_W} y={svgH - 16} fontSize={9} fill="#55607a">BASELINE REAL ({baselines.length} baselines do banco)</text>}
+            {baselines.length > 0 && <text x={LABEL_W} y={svgH - 16} fontSize={9} fill="#8b98a8">BASELINE REAL ({baselines.length} baselines do banco)</text>}
           </svg>
         </div>
       </div>

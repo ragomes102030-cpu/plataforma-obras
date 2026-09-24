@@ -59,3 +59,23 @@ Uso: substituir cores hardcoded no projeto; respeitar AA ≥ 4.5:1 */
   --base: var(--base-escuro);
   --line: var(--line-escuro);
 }
+
+:root {
+  --chart-bg: #fafbfc;
+  --row-critical-bg: #fff5f5;
+  --bar-normal: #1a6ce5;
+  --bar-critical: #c2181a;
+  --bar-done: #1e8a4f;
+  --thead-bg: #0d2b6b;
+  --thead-text: #ffffff;
+}
+
+[data-theme="dark"] {
+  --chart-bg: #1b1e24;
+  --row-critical-bg: rgba(240, 122, 122, 0.12);
+  --bar-normal: #51a2f7;
+  --bar-critical: #f07a7a;
+  --bar-done: #5cb78c;
+  --thead-bg: #16233f;
+  --thead-text: #e4e6ec;
+}
