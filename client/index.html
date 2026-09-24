@@ -9,13 +9,9 @@
     <title>Plataforma Obras - Planejamento integrado</title>
     <script>
       try {
-        var t = localStorage.getItem("theme");
-        if (t) document.documentElement.setAttribute("data-theme", t);
-        else if (
-          window.matchMedia &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches
-        )
-          document.documentElement.setAttribute("data-theme", "dark");
+        localStorage.removeItem("theme");
+        document.documentElement.removeAttribute("data-theme");
+        document.documentElement.classList.remove("dark");
       } catch (e) {}
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
