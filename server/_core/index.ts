@@ -30,9 +30,66 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+async function ensurePlanVersionSchema() {
+  const db = await getDb();
+  if (!db) {
+    console.warn('ensurePlanVersionSchema: database unavailable, skipping');
+    return;
+  }
+  try {
+    const [tables] = await db.execute(sql`
+      SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project_plan_versions'
+    `);
+    if (((tables as any[]).length ?? 0) === 0) {
+      await db.execute(sql`
+        CREATE TABLE project_plan_versions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          projectId INT NOT NULL REFERENCES projects(id),
+          versionNumber INT NOT NULL,
+          status ENUM('draft', 'proposed', 'approved', 'superseded') NOT NULL DEFAULT 'draft',
+          baseVersionId INT REFERENCES project_plan_versions(id),
+          decisionId INT REFERENCES agentDecisions(id),
+          approvedAt TIMESTAMP,
+          notes TEXT,
+          createdBy INT REFERENCES users(id),
+          createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE INDEX project_plan_versions_project_version_idx (projectId, versionNumber),
+          INDEX project_plan_versions_project_idx (projectId)
+      `);
+    }
+    const [colsSA] = await db.execute(sql`
+      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'schedule_activities' AND COLUMN_NAME = 'versionId'
+    `);
+    if (((colsSA as any[]).length ?? 0) === 0) {
+      await db.execute(sql`ALTER TABLE schedule_activities ADD COLUMN versionId INT NULL REFERENCES project_plan_versions(id)`);
+    }
+    const [colsWN] = await db.execute(sql`
+      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wbs_nodes' AND COLUMN_NAME = 'versionId'
+    `);
+    if (((colsWN as any[]).length ?? 0) === 0) {
+      await db.execute(sql`ALTER TABLE wbs_nodes ADD COLUMN versionId INT NULL REFERENCES project_plan_versions(id)`);
+    }
+    const [colsSD] = await db.execute(sql`
+      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'schedule_dependencies' AND COLUMN_NAME = 'versionId'
+    `);
+    if (((colsSD as any[]).length ?? 0) === 0) {
+      await db.execute(sql`ALTER TABLE schedule_dependencies ADD COLUMN versionId INT NULL REFERENCES project_plan_versions(id)`);
+    }
+  } catch (error) {
+    console.warn('ensurePlanVersionSchema error (non-fatal):', error);
+  }
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  await ensurePlanVersionSchema();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
