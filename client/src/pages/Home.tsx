@@ -436,18 +436,32 @@ function GanttView({
                   </div>
                   <div className="lob-flow-grid">
                     {Array.from({ length: Math.min(weekCount + 1, 13) }, (_, index) => <i key={index} style={{ left: `${(index / Math.max(1, Math.min(weekCount, 12))) * 100}%` }} />)}
-                    {lobRows.map(({ activity, left, width, end }) => (
-                      <div key={activity.id} className="lob-flow-row">
-                        <div className={`lob-flow-bar ${activity.critical === 1 ? "critical" : ""}`} style={{ left: `${left}%`, width: `${width}%`, background: phaseColors[activity.phase] || "#6b8292" }} title={`${activity.wbsCode} · ${activity.name} · ${activity.durationDays} dias`}>
-                          <span>{activity.phase}</span><b>{activity.progress}%</b>
-                        </div>
+                    {(() => {
+                      const offset = Math.round((Date.now() - projectStart) / 86400000);
+                      const pct = Math.max(0, Math.min(100, (offset / Math.max(1, maxDays)) * 100));
+                      return <div className="lob-today" style={{ left: `${pct}%` }} title={`Hoje · ${formatDate(new Date())}`}><span>Hoje</span></div>;
+                    })()}
+                    {lobRows.map(({ activity, left, width, end }, index) => {
+                      const prev = index > 0 ? lobRows[index - 1] : null;
+                      const startDays = Number(activity.earlyStart ?? activity.startOffset ?? 0);
+                      const bufferDays = prev ? Math.max(0, startDays - (prev.end ?? 0)) : 0;
+                      const bufferLeft = prev ? Math.min((prev.end / maxDays) * 100, 100) : 0;
+                      const bufferWidth = Math.min((bufferDays / maxDays) * 100, 100 - bufferLeft);
+                      return (
+                        <div key={activity.id} className="lob-flow-row">
+                          {bufferDays > 0 && <div className="lob-buffer" style={{ left: `${bufferLeft}%`, width: `${bufferWidth}%` }} title={`Pulmão: ${bufferDays} dia(s)`} />}
+                          <div className={`lob-flow-bar ${activity.critical === 1 ? "critical" : ""}`} style={{ left: `${left}%`, width: `${width}%`, background: phaseColors[activity.phase] || "#6b8292" }} title={`${activity.wbsCode} · ${activity.name} · ${activity.durationDays} dias · ${activity.progress}%`}>
+                            <i className="lob-realized" style={{ width: `${Math.max(0, Math.min(100, activity.progress ?? 0))}%` }} />
+                            <span>{activity.name}</span><b>{activity.progress}%</b>
+                          </div>
                           <em style={{ left: `${Math.min((end / maxDays) * 100 + 1, 94)}%` }}>{formatDate(new Date(projectStart + end * 86400000))}</em>
                           <label className="lob-productivity" title="Produtividade planejada por dia" onPointerDown={event => event.stopPropagation()}>
                             <span>ritmo</span>
                             <input type="number" min="0.1" step="0.1" value={lobProductivityDrafts[activity.id] ?? activity.productivity ?? ""} placeholder="—" onChange={event => setLobProductivityDrafts(prev => ({ ...prev, [activity.id]: event.target.value }))} onBlur={() => saveLobProductivity(activity)} onKeyDown={event => { if (event.key === "Enter") saveLobProductivity(activity); }} />
                           </label>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="lob-flow-footer"><span><i className="planned-line" /> Planejado</span><span><i className="critical-line" /> Atividade crítica</span><span className="lob-flow-note">Use o Gantt para editar datas, duração e avanço</span></div>

@@ -3429,12 +3429,17 @@
   display: grid;
   grid-template-columns: repeat(13, minmax(42px, 1fr));
   min-width: 560px;
+  height: 46px;
+  align-items: end;
 }
 .lob-date-axis span {
   color: #87999f;
   font-size: 8px;
   text-align: center;
   white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  justify-self: center;
 }
 .lob-flow-body {
   display: grid;
@@ -3481,6 +3486,42 @@
   width: 1px;
   background: #dce7e9;
   opacity: .85;
+}
+.lob-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #c2181a;
+  z-index: 3;
+  pointer-events: none;
+}
+.lob-today span {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  color: #c2181a;
+  font-size: 8px;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+.lob-buffer {
+  position: absolute;
+  top: 13px;
+  height: 0;
+  border-top: 3px dashed #dba93e;
+  z-index: 1;
+  pointer-events: none;
+}
+.lob-realized {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px 0 0 3px;
+  background: rgba(30, 138, 79, .55);
+  pointer-events: none;
 }
 .lob-flow-row {
   position: relative;
