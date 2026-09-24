@@ -20,6 +20,9 @@ export function CatalogView() {
   const utils = trpc.useUtils();
   const [catalogId, setCatalogId] = useState<number | undefined>();
   const [compositionId, setCompositionId] = useState<number | undefined>();
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [groupQuery, setGroupQuery] = useState("");
+  const toggleGroup = (key: string) => setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   const catalogQuery = trpc.catalog.list.useQuery({ catalogId, compositionId });
 
   const [catalogName, setCatalogName] = useState("");
@@ -199,9 +202,60 @@ export function CatalogView() {
             <button className="outline-button" disabled={!selectedCatalog || createItem.isPending}><Plus size={13} /> Adicionar</button>
           </form>
           {createItem.error && <p className="form-error">{createItem.error.message}</p>}
+          <input
+            value={groupQuery}
+            onChange={event => setGroupQuery(event.target.value)}
+            placeholder="Filtrar itens por código ou descrição"
+            style={{ width: "100%", marginBottom: 8 }}
+          />
           <div className="catalog-list">
-            {catalogQuery.data?.priceItems.map(item => <div className="catalog-list-row" key={item.id}><div><strong>{item.code} · {item.description}</strong><span>{typeLabels[item.itemType]} · {item.unit}</span></div><b>{money(Number(item.unitPrice))}</b></div>)}
-            {!catalogQuery.data?.priceItems.length && <div className="module-empty">Nenhum item nesta fonte.</div>}
+            {(() => {
+              const q = groupQuery.trim().toLowerCase();
+              const items = (catalogQuery.data?.priceItems ?? []).filter(
+                item =>
+                  !q ||
+                  item.code.toLowerCase().includes(q) ||
+                  item.description.toLowerCase().includes(q)
+              );
+              if (!items.length) return <div className="module-empty">Nenhum item nesta fonte.</div>;
+              const order = ["material", "mao_de_obra", "equipamento", "servico"] as const;
+              const groups = order
+                .map(key => ({ key, label: typeLabels[key], list: items.filter(item => item.itemType === key) }))
+                .filter(group => group.list.length > 0);
+              return (
+                <>
+                  {groups.map(group => {
+                    const collapsed = collapsedGroups[group.key];
+                    const total = group.list.reduce((sum, item) => sum + Number(item.unitPrice), 0);
+                    return (
+                      <div className="catalog-group" key={group.key}>
+                        <button
+                          type="button"
+                          className="catalog-group-head"
+                          onClick={() => toggleGroup(group.key)}
+                          aria-expanded={!collapsed}
+                        >
+                          <span className="catalog-group-chevron">{collapsed ? "▸" : "▾"}</span>
+                          <strong>{group.label}</strong>
+                          <span className="catalog-group-count">{group.list.length} itens</span>
+                          <b>{money(total)}</b>
+                        </button>
+                        {!collapsed &&
+                          group.list.map(item => (
+                            <div className="catalog-list-row" key={item.id}>
+                              <div>
+                                <strong>{item.code} · {item.description}</strong>
+                                <span>{typeLabels[item.itemType]} · {item.unit}</span>
+                              </div>
+                              <b>{money(Number(item.unitPrice))}</b>
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
           </div>
         </section>
 
