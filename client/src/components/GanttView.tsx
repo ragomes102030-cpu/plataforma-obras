@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 type Dep = { predecessorId: number; successorId: number; type: string; lag?: number };
@@ -25,6 +25,70 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
   const [linkMode, setLinkMode] = useState(false);
   const [linkFrom, setLinkFrom] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const rasterize = async (): Promise<HTMLCanvasElement | null> => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.querySelectorAll("[stroke='var(--warn)']").forEach((n) => n.setAttribute("stroke", "#c48a00"));
+    const w = svg.clientWidth || chartWFallback();
+    const h = svg.clientHeight || 400;
+    const data = new XMLSerializer().serializeToString(clone);
+    const url = URL.createObjectURL(new Blob([data], { type: "image/svg+xml;charset=utf-8" }));
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = url;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = w * 2;
+      canvas.height = h * 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const chartWFallback = () => 720 + 20;
+
+  const exportPng = async () => {
+    try {
+      const canvas = await rasterize();
+      if (!canvas) { setMsg("Falha ao exportar PNG."); return; }
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `gantt-obra-${projectId}.png`;
+      a.click();
+      setMsg("PNG exportado.");
+    } catch {
+      setMsg("Falha ao exportar PNG.");
+    }
+  };
+
+  const exportPdf = async () => {
+    try {
+      const canvas = await rasterize();
+      if (!canvas) { setMsg("Falha ao exportar PDF."); return; }
+      const win = window.open("", "_blank");
+      if (!win) { setMsg("Bloqueador de pop-up impediu o PDF."); return; }
+      const img = canvas.toDataURL("image/png");
+      win.document.write(`<html><head><title>Gantt da obra</title></head><body style="margin:0"><img src="${img}" style="width:100%"/></body></html>`);
+      win.document.close();
+      win.focus();
+      win.print();
+      setMsg("PDF: use a impressão do navegador para salvar.");
+    } catch {
+      setMsg("Falha ao exportar PDF.");
+    }
+  };
 
   const invalidate = () => utils.planning.list.invalidate({ projectId });
   const updateActivity = trpc.projects.updateActivity.useMutation({ onSuccess: async () => { setMsg("Atividade atualizada. CPM recalculando..."); await invalidate(); } , onError: (e) => setMsg("Erro ao salvar: " + e.message) });
@@ -160,6 +224,8 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
         <button onClick={() => { setLinkMode((v) => !v); setLinkFrom(null); }} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: linkMode ? "var(--warn)" : "var(--surf)", color: "var(--text)" }}>
           {!linkMode ? "Ligar dependência" : linkFrom === null ? "Ligar: clique na 1ª barra" : `Ligar de ${linkFrom}: clique na 2ª`}
         </button>
+        <button onClick={exportPng} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: "var(--surf)", color: "var(--text)" }}>Exportar PNG</button>
+        <button onClick={exportPdf} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: "var(--surf)", color: "var(--text)" }}>Exportar PDF</button>
       </div>
 
       {colsOpen && (
@@ -215,7 +281,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
             </tbody>
           </table>
 
-          <svg width={chartW + 20} height={svgH} style={{ flex: "0 0 auto", cursor: drag ? "grabbing" : "default" }} aria-label="Gantt editável com dependências">
+          <svg ref={svgRef} width={chartW + 20} height={svgH} style={{ flex: "0 0 auto", cursor: drag ? "grabbing" : "default" }} aria-label="Gantt editável com dependências">
             <defs>
               <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                 <path d="M0,0 L6,3 L0,6 Z" fill="#7a8699" />
@@ -291,7 +357,7 @@ export function GanttView({ projectId, plannedStart }: { projectId: number; plan
 
       <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 10 }}>
         <b>M5:</b> arraste a barra para mover; arraste a alça direita para mudar a duração; use "Ligar" e clique em 2 barras para criar FS. Cada ação grava via API e recalcula o CPM.
-        <b> M3/M4:</b> setas FS/SS com lag, zoom, colunas, filtro.
+        <b> M6:</b> exporte PNG ou PDF. <b>M3/M4:</b> setas FS/SS com lag, zoom, colunas, filtro.
       </div>
     </div>
   );
