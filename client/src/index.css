@@ -4321,6 +4321,9 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .primary-button { background: var(--primary); color: var(--primary-foreground); }
 .primary-button:hover { background: #276070; }
 .metric-card, .budget-summary-card, .lob-kpis div, .lob-chart-frame, .schedule-table-wrap, .budget-table-wrap, .catalog-list-row, .planning-row { background: var(--card); border-color: var(--border); color: var(--foreground); }
+.clickable-card { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.clickable-card:hover, .clickable-card:focus-visible { border-color: var(--ring); box-shadow: 0 2px 12px rgba(47, 111, 127, .14); }
+.clickable-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .deviation-list, .deviation-row { border-color: var(--border); }
 .deviation-row-head { background: var(--card); color: var(--muted-foreground); }
 .deviation-info strong { color: var(--foreground); }

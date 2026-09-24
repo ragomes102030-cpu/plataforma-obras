@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, PieChart } from "lucide-react";
 import { useMemo } from "react";
-import { Bar, BarChart as ReBarChart, Cell, Line, LineChart as ReLineChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Area, AreaChart as ReAreaChart, Bar, BarChart as ReBarChart, Cell, Line, LineChart as ReLineChart, Pie, PieChart as RePieChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { useLocation } from "wouter";
 import { NAV_PATHS } from "@/nav-paths";
 
@@ -19,6 +19,17 @@ function formatMoney(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
+function compactMoney(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) {
+    return `R$ ${(value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  }
+  if (abs >= 1_000) {
+    return `R$ ${(value / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} mil`;
+  }
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
+
 export function GraficosView({
   projectId,
   projectName,
@@ -32,6 +43,8 @@ export function GraficosView({
   const controlQuery = trpc.planning.control.useQuery({ projectId });
   const evmQuery = trpc.planning.evm.useQuery({ projectId });
   const scurveQuery = trpc.planning.scurve.useQuery({ projectId });
+  const budgetQuery = trpc.budgets.list.useQuery({ projectId });
+  const wbsQuery = trpc.projects.wbs.useQuery({ projectId });
   const [, navigate] = useLocation();
   const entries = entriesQuery.data ?? [];
   const control = controlQuery.data;
@@ -94,6 +107,73 @@ export function GraficosView({
   const planned = control?.totals.plannedProgress ?? 0;
   const actual = control?.totals.actualProgress ?? 0;
 
+  const donutData = useMemo(() => {
+    const realized = Math.min(100, Math.max(0, actual));
+    return [
+      { name: "Realizado", value: realized, fill: "#4f7c8f" },
+      { name: "A realizar", value: Math.max(0, 100 - realized), fill: "#e7eded" },
+    ];
+  }, [actual]);
+
+  const costByBranch = useMemo(() => {
+    const items = budgetQuery.data?.items ?? [];
+    if (!items.length) return [];
+    const nodes = wbsQuery.data ?? [];
+    const wbsById = new Map(nodes.map((node) => [node.id, node]));
+    const byBranch = new Map<string, { base: number; segments: Map<string, number> }>();
+    for (const item of items) {
+      const lineTotal = Number(item.quantity) * Number(item.unitPrice);
+      if (lineTotal <= 0) continue;
+      const node = item.wbsNodeId != null ? wbsById.get(item.wbsNodeId) : undefined;
+      const code = node?.code ?? item.code ?? "";
+      const parts = code.split(".");
+      const branchCode = parts.slice(0, 2).join(".");
+      const branchName = node?.name ? `${branchCode} – ${node.name}` : branchCode || "Sem ramo";
+      const segmentCode = parts.slice(0, 3).join(".");
+      const segmentName = segmentCode || branchName;
+      const entry = byBranch.get(branchName) ?? { base: 0, segments: new Map<string, number>() };
+      entry.base += lineTotal;
+      entry.segments.set(segmentName, (entry.segments.get(segmentName) ?? 0) + lineTotal);
+      byBranch.set(branchName, entry);
+    }
+    const branches = [...byBranch.entries()]
+      .map(([name, data]) => ({ name, ...data, total: data.base }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+    return branches;
+  }, [budgetQuery.data, wbsQuery.data]);
+
+  const costKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const branch of costByBranch) {
+      for (const key of branch.segments.keys()) keys.add(key);
+    }
+    return [...keys];
+  }, [costByBranch]);
+
+  const costChartData = useMemo(
+    () =>
+      costByBranch.map((branch) => {
+        const row: Record<string, number | string> = { branch: branch.name };
+        for (const key of costKeys) row[key] = branch.segments.get(key) ?? 0;
+        return row;
+      }),
+    [costByBranch, costKeys]
+  );
+
+  const cumulativeProduction = useMemo(() => {
+    let acc = 0;
+    return productionByDayChart.map((row) => {
+      acc += row.qty;
+      return { day: row.day, qty: acc };
+    });
+  }, [productionByDayChart]);
+
+  const donutChartConfig = {
+    Realizado: { label: "Realizado", color: "#4f7c8f" },
+    "A realizar": { label: "A realizar", color: "#e7eded" },
+  } as const;
+
   return (
     <div className="module-page">
       <div className="module-hero">
@@ -139,21 +219,67 @@ export function GraficosView({
       </div>
 
       <div className="catalog-summary-grid">
-        <div className="module-card budget-summary-card">
+        <div
+          className="module-card budget-summary-card clickable-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate(NAV_PATHS["Cronogramas"])}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") navigate(NAV_PATHS["Cronogramas"]);
+          }}
+        >
           <span className="eyebrow">PLANEJADO</span>
           <strong>{planned}%</strong>
           <p>Curva física do CPM.</p>
         </div>
-        <div className="module-card budget-summary-card">
+        <div
+          className="module-card budget-summary-card clickable-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate(NAV_PATHS["Produção"])}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") navigate(NAV_PATHS["Produção"]);
+          }}
+        >
           <span className="eyebrow">REALIZADO</span>
           <strong>{actual}%</strong>
           <p>Avanço por medições.</p>
         </div>
-        <div className="module-card budget-summary-card budget-total-card">
+        <div
+          className="module-card budget-summary-card budget-total-card clickable-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate(NAV_PATHS["Cronogramas"])}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") navigate(NAV_PATHS["Cronogramas"]);
+          }}
+        >
           <span className="eyebrow">ATIVIDADES</span>
           <strong>{activities.length}</strong>
           <p>No cronograma ativo.</p>
         </div>
+      </div>
+
+      <div className="module-card">
+        <div className="panel-heading">
+          <div>
+            <h3>Avanço físico (donut)</h3>
+            <p>Percentual realizado sobre a curva física planejada.</p>
+          </div>
+          <PieChart size={17} className="sparkle" />
+        </div>
+        {donutChartConfig == null ? null : (
+          <ChartContainer config={donutChartConfig} className="h-[220px] w-full aspect-auto">
+            <RePieChart>
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={64} outerRadius={92} paddingAngle={3}>
+                {donutData.map((entry) => (
+                  <Cell key={entry.name} fill={entry.fill} />
+                ))}
+              </Pie>
+            </RePieChart>
+          </ChartContainer>
+        )}
       </div>
 
       <div className="module-card">
@@ -371,6 +497,94 @@ export function GraficosView({
       <div className="module-card">
         <div className="panel-heading">
           <div>
+            <h3>Custo por frente (orçamento)</h3>
+            <p>Distribuição do orçamento por ramo da WBS (barras empilhadas).</p>
+          </div>
+          <PieChart size={17} className="sparkle" />
+        </div>
+        {budgetQuery.isPending ? (
+          <div className="module-empty">Carregando orçamento...</div>
+        ) : costChartData.length === 0 ? (
+          <div className="module-empty">
+            <PieChart size={20} />
+            <span>
+              <strong>Sem orçamento.</strong> Lance os itens do orçamento para
+              ver a distribuição de custo por frente.
+            </span>
+            <button
+              type="button"
+              className="outline-button"
+              onClick={() => navigate(NAV_PATHS["Orçamento"])}
+            >
+              Ir para Orçamento
+            </button>
+          </div>
+        ) : (
+          <>
+            <ChartContainer
+              config={Object.fromEntries(
+                costKeys.map((key, index) => [
+                  key,
+                  { label: key, color: barColor(index) },
+                ])
+              )}
+              className="h-[260px] w-full aspect-auto"
+            >
+              <ReBarChart data={costChartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(122,162,138,0.25)" vertical={false} />
+                <XAxis
+                  dataKey="branch"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={16}
+                  interval={0}
+                  angle={-18}
+                  height={52}
+                  tickFormatter={(value: string) =>
+                    value.length > 22 ? `${value.slice(0, 21)}…` : value
+                  }
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={54}
+                  tickFormatter={(value: number) => compactMoney(value)}
+                />
+                <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatMoney(Number(value))} />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                {costKeys.map((key, index) => (
+                  <Bar key={key} dataKey={key} stackId="cost" fill={barColor(index)} maxBarSize={64} />
+                ))}
+              </ReBarChart>
+            </ChartContainer>
+            <div className="control-summary" style={{ marginTop: 12 }}>
+              <div>
+                <span className="eyebrow">FRENTES</span>
+                <strong>{costByBranch.length}</strong>
+              </div>
+              <div>
+                <span className="eyebrow">MAIOR FRENTE</span>
+                <strong style={{ fontSize: 13 }}>
+                  {costByBranch[0]?.name ?? "—"}
+                </strong>
+              </div>
+              <div>
+                <span className="eyebrow">TOTAL</span>
+                <strong>
+                  {formatMoney(
+                    costByBranch.reduce((sum, branch) => sum + branch.total, 0)
+                  )}
+                </strong>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="module-card">
+        <div className="panel-heading">
+          <div>
             <h3>Desvios por atividade</h3>
             <p>Maiores desvios entre o avanço planejado e o realizado, por atividade.</p>
           </div>
@@ -473,6 +687,65 @@ export function GraficosView({
               <ChartTooltip content={<ChartTooltipContent />} />
               <Bar dataKey="qty" fill="var(--color-qty)" radius={[3, 3, 0, 0]} maxBarSize={28} />
             </ReBarChart>
+          </ChartContainer>
+        )}
+      </div>
+
+      <div className="module-card">
+        <div className="panel-heading">
+          <div>
+            <h3>Produção acumulada</h3>
+            <p>Área com a soma diária acumulada dos últimos lançamentos.</p>
+          </div>
+          <LineChart size={16} className="sparkle" />
+        </div>
+        {cumulativeProduction.length === 0 ? (
+          <div className="module-empty">
+            <LineChart size={20} />
+            <span>
+              <strong>Sem lançamentos.</strong> A área acumulada começa com o
+              primeiro apontamento confirmado.
+            </span>
+            <button
+              type="button"
+              className="outline-button"
+              onClick={() => navigate(NAV_PATHS["Produção"])}
+            >
+              Ir para Produção
+            </button>
+          </div>
+        ) : (
+          <ChartContainer
+            config={{
+              qty: { label: "Acumulado", color: "#4f7c8f" },
+            }}
+            className="h-[220px] w-full aspect-auto"
+          >
+            <ReAreaChart data={cumulativeProduction} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="productionAccumulatedFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#4f7c8f" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#4f7c8f" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(122,162,138,0.25)" vertical={false} />
+              <XAxis
+                dataKey="day"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={24}
+              />
+              <YAxis tickLine={false} axisLine={false} width={44} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Area
+                type="monotone"
+                dataKey="qty"
+                stroke="var(--color-qty)"
+                strokeWidth={2}
+                fill="url(#productionAccumulatedFill)"
+              />
+            </ReAreaChart>
           </ChartContainer>
         )}
       </div>
