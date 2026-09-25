@@ -131,6 +131,15 @@ async function startServer() {
   // tRPC API
   app.use(
     "/api/trpc",
+    express.json({ limit: "50mb" }),
+    (req, res, next) => {
+      // @trpc/server v11 adapter extracts path via req.path.slice(req.path.lastIndexOf('/')+1)
+      // req.path is relative to mount point ("/" for /api/trpc) which gives empty string
+      // Override req.path to preserve full path after /api/trpc for nested routers
+      const fullPath = req.originalUrl.replace("/api/trpc", "") || "/";
+      Object.defineProperty(req, "path", { value: fullPath, writable: false, configurable: true });
+      next();
+    },
     createExpressMiddleware({
       router: appRouter,
       createContext,
