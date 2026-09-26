@@ -1,86 +1,134 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
 
-const TRPC_URL = process.env.PLATAFORMA_URL || "https://plataforma-obras-api.onrender.com/api/trpc";
+// Backend MCP servers (SSE protocol)
+const MCP_SERVERS = {
+  eap: { url: "https://mcp-eap-server.onrender.com/mcp", name: "eap-server" },
+  cronograma: { url: "https://mcp-cronograma-server.onrender.com/mcp", name: "cronograma-server" },
+  gantt: { url: "https://mcp-gantt-lob-server.onrender.com/mcp", name: "mcp-gantt-lob-server" },
+};
+
+type ServerKey = keyof typeof MCP_SERVERS;
+
+// Initialize empty session map with all keys
+const sessions: Record<ServerKey, string> = {
+  eap: "",
+  cronograma: "",
+  gantt: "",
+};
+
+async function initializeServer(key: ServerKey): Promise<string> {
+  const srv = MCP_SERVERS[key];
+  const response = await fetch(srv.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "plataforma-obra-mcp", version: "1.0.0" },
+      },
+    }),
+  });
+  const text = await response.text();
+  const sessionMatch = text.match(/mcp-session-id:\s*([a-f0-9]+)/i);
+  if (sessionMatch) {
+    sessions[key] = sessionMatch[1];
+    return sessions[key];
+  }
+  return "";
+}
+
+async function callTool(key: ServerKey, toolName: string, args: Record<string, unknown>): Promise<any> {
+  if (!sessions[key]) await initializeServer(key);
+  const srv = MCP_SERVERS[key];
+  const response = await fetch(srv.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      "mcp-session-id": sessions[key],
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: { name: toolName, arguments: args },
+    }),
+  });
+  const text = await response.text();
+  const dataMatch = text.match(/data:\s*(\{[^}]+\})/s);
+  if (dataMatch) {
+    try {
+      const data = JSON.parse(dataMatch[1]);
+      if (data.error) throw new Error(data.error.message);
+      return data.result;
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("JSON")) {
+        return { content: [{ type: "text", text: text }] };
+      }
+      throw e;
+    }
+  }
+  return { content: [{ type: "text", text: text }] };
+}
+
+async function listTools(key: ServerKey): Promise<any[]> {
+  if (!sessions[key]) await initializeServer(key);
+  const srv = MCP_SERVERS[key];
+  const response = await fetch(srv.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text-event-stream",
+      "mcp-session-id": sessions[key],
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now() + 1,
+      method: "tools/list",
+      params: {},
+    }),
+  });
+  const text = await response.text();
+  const dataMatch = text.match(/data:\s*(\{[^}]+\})/s);
+  if (dataMatch) {
+    try {
+      const data = JSON.parse(dataMatch[1]);
+      return data.result?.tools || [];
+    } catch {}
+  }
+  return [];
+}
 
 const server = new McpServer({
   name: "plataforma-obra",
   version: "1.0.0",
-  description: "MCP para Plataforma Obras tRPC API - planejamento de obras",
 });
 
-async function callTrpc(method: string, params: Record<string, unknown>) {
-  const res = await fetch(TRPC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", method, params, id: Date.now() }),
-  });
-  if (!res.ok) throw new Error(`tRPC ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.json?.message || method);
-  return data.result;
-}
-
-server.tool("projects_list", "Listar projetos", {}, async () => {
-  const r = await callTrpc("projects.list", {});
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("projects_get", "Detalhes de um projeto", { projectId: z.string() }, async ({ projectId }) => {
-  const r = await callTrpc("projects.get", { projectId });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("tasks_list", "Listar tarefas do projeto", { projectId: z.string() }, async ({ projectId }) => {
-  const r = await callTrpc("tasks.list", { projectId });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("gantt_generate", "Gerar cronograma Gantt", { projectId: z.string() }, async ({ projectId }) => {
-  const r = await callTrpc("gantt.generate", { projectId });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("eap_build", "Gerar EAP/WBS", { projectId: z.string() }, async ({ projectId }) => {
-  const r = await callTrpc("eap.build", { projectId });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("costs_search", "Buscar custos", { query: z.string(), projectId: z.string().optional() }, async ({ query, projectId }) => {
-  const r = await callTrpc("costs.search", { query, projectId });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("costs_sync", "Sincronizar custos", { batchSize: z.number().optional().default(100) }, async ({ batchSize }) => {
-  const r = await callTrpc("costs.sync", { batchSize });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("sinapi_search", "Buscar insumo SINAPI", { query: z.string(), uf: z.string().optional().default("CE") }, async ({ query, uf }) => {
-  const r = await callTrpc("sinapi.search", { query, uf });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("seinfra_search", "Buscar insumo SEINFRA", { query: z.string(), uf: z.string().optional().default("CE") }, async ({ query, uf }) => {
-  const r = await callTrpc("seinfra.search", { query, uf });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("schedule_generate", "Gerar schedule", { projectId: z.string() }, async ({ projectId }) => {
-  const r = await callTrpc("schedule.generate", { projectId });
-  return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: false };
-});
-
-server.tool("platform_health", "Verificar saúde da plataforma", {}, async () => {
-  try {
-    const r = await callTrpc("platform.health", {});
-    return { content: [{ type: "text", text: JSON.stringify({ status: "online", ...r }, null, 2) }], isError: false };
-  } catch (e: unknown) {
-    return { content: [{ type: "text", text: JSON.stringify({ status: "offline", error: String(e) }, null, 2) }], isError: true };
+async function registerAllTools() {
+  for (const key of Object.keys(MCP_SERVERS) as ServerKey[]) {
+    const tools = await listTools(key);
+    for (const tool of tools) {
+      const toolName: string = String(tool.name);
+      const description: string = String(tool.description || "");
+      server.tool(toolName, description, async (args: Record<string, unknown>) => {
+        const result = await callTool(key, toolName, args);
+        return result;
+      });
+    }
   }
-});
+}
 
 const transport = new StdioServerTransport();
 server.connect(transport);
-console.error("[plataforma-obra-mcp] ready");
+
+registerAllTools()
+  .then(() => console.error("[plataforma-obra-mcp] Ready"))
+  .catch(e => console.error("[plataforma-obra-mcp] Error:", e));
