@@ -1,11 +1,12 @@
 {
   "buildCommand": "pnpm build",
-  "devCommand": "pnpm dev",
+  "outputDirectory": "dist/public",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "vite",
-  "regions": ["iad1", "sfo1"],
-  "env": {
-    "DATABASE_URL": "@aiven_database_url",
-    "NODE_ENV": "production"
-  }
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://plataforma-obras-api.onrender.com/api/:path*"
+    }
+  ]
 }
