@@ -1295,12 +1295,23 @@ export const appRouter = router({
       }),
     create: protectedProcedure
       .input(
-        z.object({
-          name: z.string().trim().min(2).max(180),
-          location: z.string().trim().min(2).max(180).default("A cadastrar"),
-          plannedStart: z.coerce.date().optional(),
-          plannedFinish: z.coerce.date().optional(),
-        })
+        z
+          .object({
+            name: z.string().trim().min(2).max(180),
+            location: z.string().trim().min(2).max(180).default("A cadastrar"),
+            plannedStart: z.coerce.date().optional(),
+            plannedFinish: z.coerce.date().optional(),
+          })
+          .refine(
+            data =>
+              !data.plannedStart ||
+              !data.plannedFinish ||
+              data.plannedFinish.getTime() > data.plannedStart.getTime(),
+            {
+              message: "A data de término deve ser posterior à data de início.",
+              path: ["plannedFinish"],
+            }
+          )
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -1328,11 +1339,11 @@ export const appRouter = router({
             })
             .$returningId();
           const seedDb = tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>;
-          if (input.name.toLowerCase().includes("solar das acácias")) {
-            await seedSolarAcaciasPlan(seedDb, createdId.id);
-          } else {
-            await seedStarterPlan(seedDb, createdId.id);
-          }
+          // seedSolarAcaciasPlan é um plano de demonstração e não deve ser
+          // acionado por texto no nome da obra digitado por um usuário real.
+          // Uso apenas manual/administrativo (chamar seedSolarAcaciasPlan
+          // diretamente, se necessário) fora deste fluxo de criação.
+          await seedStarterPlan(seedDb, createdId.id);
           const [created] = await tx
             .select()
             .from(projects)

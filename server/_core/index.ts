@@ -210,8 +210,13 @@ async function startServer() {
     (req, res, next) => {
       // @trpc/server v11 adapter extracts path via req.path.slice(req.path.lastIndexOf('/')+1)
       // req.path is relative to mount point ("/" for /api/trpc) which gives empty string
-      // Override req.path to preserve full path after /api/trpc for nested routers
-      const fullPath = req.originalUrl.replace("/api/trpc", "") || "/";
+      // Override req.path to preserve full path after /api/trpc for nested routers.
+      // IMPORTANT: strip the query string first — leaving it in corrupts the
+      // procedure name the adapter extracts (e.g. "planning.list?input=...")
+      // and makes every non-batched call 404, while batched calls happen to
+      // survive because the batch splitter resolves names differently.
+      const rawPath = req.originalUrl.replace("/api/trpc", "") || "/";
+      const fullPath = rawPath.split("?")[0] || "/";
       Object.defineProperty(req, "path", { value: fullPath, writable: false, configurable: true });
       next();
     },
