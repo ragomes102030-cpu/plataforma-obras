@@ -9,6 +9,7 @@ const validEvidence: StageGateEvidence = {
   dependenciesValid: true,
   cpmValid: true,
   blockerCount: 0,
+  costCoverageValid: true,
 };
 
 describe("stage gates", () => {
@@ -65,6 +66,22 @@ describe("stage gates", () => {
 
     expect(allowed.allowed).toBe(true);
     expect(denied.allowed).toBe(false);
+  });
+
+  it("bloqueia baseline quando a cobertura de custo (regra dos 100%) falha", () => {
+    const result = evaluateStageTransition({
+      currentStage: "CRONOGRAMA_PROPOSTO",
+      targetStage: "BASELINE_PROPOSTA",
+      decision: "approved",
+      evidence: { ...validEvidence, costCoverageValid: false },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(
+      result.checks.some(
+        check => check.code === "cost_coverage_valid" && !check.valid
+      )
+    ).toBe(true);
   });
 
   it("não permite aprovação com bloqueador aberto", () => {

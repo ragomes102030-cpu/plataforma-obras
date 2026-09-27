@@ -51,7 +51,7 @@ import { buildAgentProjectContext } from "./agent/context-builder";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap } from "./construction/eap-validator";
+import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import {
   allowedSourcesFor,
@@ -691,7 +691,7 @@ async function loadStageGateEvidence(
   userId: number
 ) {
   await assertAccessibleProject(db, projectId, userId);
-  const [project, eapNodes, activities, dependencies, blockerCount] =
+  const [project, eapNodes, activities, dependencies, blockerCount, activeBudgetVersion] =
     await Promise.all([
       db
         .select({ name: projects.name, location: projects.location })
@@ -708,9 +708,27 @@ async function loadStageGateEvidence(
         .from(scheduleDependencies)
         .where(eq(scheduleDependencies.projectId, projectId)),
       countOpenBlockers(db, projectId),
+      db
+        .select({ id: budgetVersions.id })
+        .from(budgetVersions)
+        .where(eq(budgetVersions.projectId, projectId))
+        .orderBy(desc(budgetVersions.versionNumber))
+        .limit(1),
     ]);
   const eapValidation = validateEap(eapNodes);
   const cpm = calculateDeterministicCpm(activities, dependencies);
+  const budgetItemRefs = activeBudgetVersion[0]
+    ? await db
+        .select({ wbsNodeId: budgetItems.wbsNodeId })
+        .from(budgetItems)
+        .where(eq(budgetItems.budgetVersionId, activeBudgetVersion[0].id))
+    : [];
+  // Regra dos 100% aplicada a custo: só faz sentido avaliar cobertura de
+  // custo quando a EAP em si já é estruturalmente válida (senão a árvore
+  // de pai/filho usada para achar folhas e duplicidade não é confiável).
+  const costCoverage = eapValidation.valid
+    ? validateWbsCostCoverage(eapNodes, budgetItemRefs)
+    : { valid: false, issues: [] };
   return {
     hasDescription: Boolean(project[0]?.name?.trim() && project[0]?.location?.trim()),
     eapNodeCount: eapNodes.length,
@@ -719,6 +737,7 @@ async function loadStageGateEvidence(
     dependenciesValid: cpm.issues.every(issue => issue.code !== "invalid_dependency"),
     cpmValid: cpm.valid,
     blockerCount,
+    costCoverageValid: costCoverage.valid,
   };
 }
 

@@ -13,6 +13,7 @@ export type StageGateEvidence = {
   dependenciesValid: boolean;
   cpmValid: boolean;
   blockerCount: number;
+  costCoverageValid: boolean;
 };
 
 export type StageGateCheck = {
@@ -125,6 +126,12 @@ function checksForTarget(
           label: "O cronograma possui um CPM válido",
           valid: evidence.cpmValid,
         },
+        {
+          code: "cost_coverage_valid",
+          label:
+            "A EAP tem cobertura de custo de 100% (toda entrega tem orçamento, sem dupla contagem)",
+          valid: evidence.costCoverageValid,
+        },
       ];
     case "GANTT_LOB_PROPOSTO":
       return [
@@ -142,6 +149,12 @@ function checksForTarget(
           code: "plan_ready",
           label: "O plano possui atividades e CPM válido",
           valid: evidence.activityCount > 0 && evidence.cpmValid,
+        },
+        {
+          code: "cost_coverage_valid",
+          label:
+            "A EAP tem cobertura de custo de 100% antes de entrar em controle",
+          valid: evidence.costCoverageValid,
         },
       ];
     case "DESCRITIVO":

@@ -104,3 +104,88 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
 
   return { valid: !issues.some(issue => issue.severity === "error"), issues };
 }
+
+/**
+ * Regra dos 100% aplicada a custo.
+ *
+ * A EAP é uma árvore de escopo, não de quantidade: nós irmãos podem ter
+ * unidades diferentes (m², kg, m³, vb), então somar quantidade de filho
+ * contra o pai não é válido de forma geral. O que precisa amarrar em 100%
+ * é o CUSTO: todo pacote-folha de escopo (nó sem filhos) precisa estar
+ * coberto por pelo menos um item de orçamento, e nenhum nó pode ter custo
+ * lançado tanto nele quanto em algum de seus descendentes (dupla contagem
+ * — o que empurraria o total para além de 100% do escopo real).
+ *
+ * Esta função não substitui validateEap: rode as duas. Ela assume que a
+ * árvore já passou por validateEap (não trata ciclo/órfão aqui).
+ */
+export type BudgetItemCostRef = {
+  wbsNodeId: number | string | null;
+};
+
+export function validateWbsCostCoverage(
+  nodes: EapEvidenceNode[],
+  budgetItems: BudgetItemCostRef[]
+): EapValidationResult {
+  const issues: ValidationIssue[] = [];
+  const byId = new Map<string, EapEvidenceNode>();
+  for (const node of nodes) byId.set(String(node.id), node);
+
+  const childrenOf = new Map<string, EapEvidenceNode[]>();
+  for (const node of nodes) {
+    if (node.parentId === null) continue;
+    const parentKey = String(node.parentId);
+    childrenOf.set(parentKey, [...(childrenOf.get(parentKey) ?? []), node]);
+  }
+
+  const nodesWithCost = new Set<string>();
+  for (const item of budgetItems) {
+    if (item.wbsNodeId === null) continue;
+    nodesWithCost.add(String(item.wbsNodeId));
+  }
+
+  const hasCostedDescendant = (nodeId: string): boolean => {
+    for (const child of childrenOf.get(nodeId) ?? []) {
+      const childId = String(child.id);
+      if (nodesWithCost.has(childId) || hasCostedDescendant(childId))
+        return true;
+    }
+    return false;
+  };
+
+  for (const node of nodes) {
+    const id = String(node.id);
+    const children = childrenOf.get(id) ?? [];
+    const isLeaf = children.length === 0;
+
+    if (isLeaf) {
+      if (!nodesWithCost.has(id)) {
+        issues.push({
+          code: "wbs_leaf_without_cost",
+          severity: "error",
+          message: `Entrega ${node.code} (${node.name}) não tem nenhum item de orçamento vinculado — o escopo existe na EAP mas não tem custo, então o orçamento não cobre 100% da obra.`,
+          entityRef: id,
+        });
+      }
+    } else {
+      if (nodesWithCost.has(id) && hasCostedDescendant(id)) {
+        issues.push({
+          code: "wbs_double_counted_cost",
+          severity: "error",
+          message: `O nó ${node.code} (${node.name}) tem custo lançado nele e também em algum de seus descendentes — isso conta o mesmo escopo duas vezes e estoura os 100% do orçamento.`,
+          entityRef: id,
+        });
+      }
+      if (children.every(child => !nodesWithCost.has(String(child.id)) && !hasCostedDescendant(String(child.id))) && !nodesWithCost.has(id)) {
+        issues.push({
+          code: "wbs_group_without_any_cost",
+          severity: "warning",
+          message: `Nenhum descendente de ${node.code} (${node.name}) tem custo lançado ainda.`,
+          entityRef: id,
+        });
+      }
+    }
+  }
+
+  return { valid: !issues.some(issue => issue.severity === "error"), issues };
+}
