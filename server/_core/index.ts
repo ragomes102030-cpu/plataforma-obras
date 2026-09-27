@@ -87,6 +87,16 @@ async function ensurePlanVersionSchema() {
       : [];
   }
 
+  // Diagnostico temporario: expoe NOMES de variaveis, nunca valores. O filtro
+  // tambem serve de controle -- se GITHUB_CLIENT_SECRET e DATABASE_URL aparecerem
+  // aqui, a injecao de env funciona e o defeito e o nome/valor do JWT_SECRET.
+  // Nao acrescentar valores: /readyz e publico.
+  function configVarNames(): string[] {
+    return Object.keys(process.env)
+      .filter(name => /jwt|secret|session/i.test(name))
+      .sort();
+  }
+
   // O healthcheck (/readyz) so executa `SELECT 1`: prova reachability, nao
   // schema. Um MySQL recem-provisionado passa no healthcheck e so quebra no
   // login, porque upsertUser e o primeiro e unico passo do fluxo OAuth que
@@ -131,9 +141,13 @@ async function startServer() {
   const server = createServer(app);
 
   await ensureUsersTable();
+  const configVars = configVarNames();
+  console.log(
+    `[config] variaveis de ambiente casando com jwt/secret/session (nome apenas): ${configVars.join(", ") || "(nenhuma)"}`
+  );
   if (ENV.cookieSecret.length === 0) {
     console.warn(
-      "[startup] JWT_SECRET ausente, vazio ou so espacos: o boot passa mas o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). Defina um valor real na Railway."
+      `[startup] JWT_SECRET ausente, vazio ou so espacos (len=${ENV.cookieSecret.length}). O boot passa e o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). variaveis presentes: ${configVars.join(", ") || "(nenhuma)"}`
     );
   }
   await ensurePlanVersionSchema();
@@ -181,6 +195,7 @@ async function startServer() {
         database: "ok",
         tabelas: names?.length ?? 0,
         jwtSecretConfigurado: ENV.cookieSecret.length > 0,
+        variaveisConfig: configVarNames(),
         warnings,
       });
     } catch (error) {
