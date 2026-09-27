@@ -436,19 +436,51 @@ async function seedInitialBudget(
 ) {
   const existing = await db.select({ id: budgetVersions.id }).from(budgetVersions).where(eq(budgetVersions.projectId, projectId)).limit(1);
   if (existing.length) return;
+  // ATENÇÃO: este orçamento é um ESQUELETO (sem preços, sem quantitativos
+  // reais), criado apenas para dar estrutura inicial à obra recém-cadastrada.
+  // Ele NÃO deve ser tratado como um orçamento válido em nenhuma tela ou
+  // relatório até que cada item tenha preço e quantidade reais confirmados.
+  // As linhas abaixo espelham 1:1 os pacotes de segundo nível da EAP inicial
+  // (starterWbs / seedSolarAcaciasPlan) para não deixar nenhum grupo da EAP
+  // sem cobertura orçamentária — antes desta correção, Vedação/Instalações
+  // e Acabamentos/Entrega ficavam de fora do orçamento inicial.
   const [version] = await db.insert(budgetVersions).values({
     projectId,
-    name: 'Orçamento inicial — preencher preços',
+    name: 'Orçamento inicial (ESQUELETO — sem preços reais, preencher antes de aprovar)',
     versionNumber: 1,
     status: 'rascunho',
     currency: 'BRL',
-    notes: 'Versão inicial criada para orientar o cadastro; preços ainda precisam ser confirmados.',
+    notes: 'Estrutura gerada automaticamente na criação da obra, sem preços nem quantitativos reais. Nenhum valor aqui deve ser usado para decisão de planejamento até ser revisado e preenchido pelo responsável técnico.',
   }).$returningId();
-  await db.insert(budgetItems).values([
-    { budgetVersionId: version.id, wbsNodeId: wbsIdsByCode.get('1.1') ?? wbsIdsByCode.get('1'), code: '01.001', description: 'Mobilização e canteiro', unit: 'vb', quantity: '1.000', unitPrice: '0.00', plannedDurationDays: 14, source: 'A preencher', sortOrder: 0 },
-    { budgetVersionId: version.id, wbsNodeId: wbsIdsByCode.get('2.1') ?? wbsIdsByCode.get('1.2'), code: '02.001', description: 'Fundação e contenções', unit: 'vb', quantity: '1.000', unitPrice: '0.00', plannedDurationDays: 28, source: 'A preencher', sortOrder: 1 },
-    { budgetVersionId: version.id, wbsNodeId: wbsIdsByCode.get('3.1') ?? wbsIdsByCode.get('1.3'), code: '03.001', description: 'Estrutura dos pavimentos', unit: 'vb', quantity: '1.000', unitPrice: '0.00', plannedDurationDays: 178, source: 'A preencher', sortOrder: 2 },
-  ]);
+  const skeletonItems: Array<{
+    starterCode: string;
+    solarCode: string;
+    code: string;
+    description: string;
+    plannedDurationDays: number;
+  }> = [
+    { starterCode: '1.1', solarCode: '1.1', code: '01.001', description: 'Mobilização e canteiro', plannedDurationDays: 14 },
+    { starterCode: '2.1', solarCode: '1.2', code: '02.001', description: 'Fundação e contenções', plannedDurationDays: 28 },
+    { starterCode: '3.1', solarCode: '1.3', code: '03.001', description: 'Estrutura dos pavimentos', plannedDurationDays: 178 },
+    { starterCode: '4.1', solarCode: '1.4', code: '04.001', description: 'Alvenaria e vedação', plannedDurationDays: 146 },
+    { starterCode: '4.2', solarCode: '1.5', code: '04.002', description: 'Instalações prediais', plannedDurationDays: 121 },
+    { starterCode: '5.1', solarCode: '1.6', code: '05.001', description: 'Acabamentos e áreas comuns', plannedDurationDays: 82 },
+    { starterCode: '5.2', solarCode: '1.7', code: '05.002', description: 'Comissionamento e entrega', plannedDurationDays: 12 },
+  ];
+  await db.insert(budgetItems).values(
+    skeletonItems.map((item, index) => ({
+      budgetVersionId: version.id,
+      wbsNodeId: wbsIdsByCode.get(item.starterCode) ?? wbsIdsByCode.get(item.solarCode),
+      code: item.code,
+      description: `${item.description} (ESQUELETO — sem preço real)`,
+      unit: 'vb',
+      quantity: '1.000',
+      unitPrice: '0.00',
+      plannedDurationDays: item.plannedDurationDays,
+      source: 'A preencher — sem base de preço aplicada',
+      sortOrder: index,
+    }))
+  );
 }
 
 const accessibleProjectCondition = (projectId: number, userId: number) =>
