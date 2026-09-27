@@ -893,11 +893,12 @@ export default function Home() {
   const planningSteps = [
     {
       key: "eap",
-      label: "EAP",
+      label: "Estrutura da obra (EAP)",
       done: wbsNodes.length > 0,
       detail: wbsNodes.length
-        ? `${wbsNodes.length} nós`
-        : "sem estrutura",
+        ? `${wbsNodes.length} itens estruturados`
+        : "ainda não criada",
+      next: "Criar a estrutura da obra (EAP)",
       nav: "EAP" as const,
     },
     {
@@ -905,24 +906,27 @@ export default function Home() {
       label: "Orçamento",
       done: Boolean(budgetQuery.data?.activeVersionId) && (budgetQuery.data?.total ?? 0) > 0,
       detail: !budgetQuery.data?.activeVersionId
-        ? "sem versão"
+        ? "nenhuma versão criada"
         : (budgetQuery.data?.total ?? 0) > 0
-          ? "com preços"
-          : "sem preços",
+          ? "com preços lançados"
+          : "criado, mas sem preços lançados",
+      next: !budgetQuery.data?.activeVersionId ? "Criar a primeira versão do orçamento" : "Lançar os preços do orçamento",
       nav: "Orçamento" as const,
     },
     {
       key: "atividades",
-      label: "Atividades",
+      label: "Cronograma",
       done: activities.length > 0,
-      detail: activities.length ? `${activities.length} no cronograma` : "nenhuma",
+      detail: activities.length ? `${activities.length} atividades cadastradas` : "ainda sem atividades",
+      next: "Cadastrar as atividades do cronograma",
       nav: "Cronogramas" as const,
     },
     {
       key: "baseline",
       label: "Baseline",
       done: baselines.length > 0,
-      detail: baselines.length ? `${baselines.length} capturada(s)` : "não capturada",
+      detail: baselines.length ? `${baselines.length} baseline(s) salva(s)` : "ainda não salva",
+      next: "Salvar a baseline do cronograma",
       nav: "Cronogramas" as const,
     },
   ];
@@ -1231,14 +1235,13 @@ export default function Home() {
                               {step.label}
                             </span>
                             <strong className={step.done ? "ok" : "pending"}>
-                              {step.done ? "OK" : "Pendente"} · {step.detail}
+                              {step.done ? "Concluído" : "Pendente"} · {step.detail}
                             </strong>
                           </div>
                         ))}
                         {nextPlanningStep ? (
                           <p className="planning-checklist-next">
-                            Próximo passo: {nextPlanningStep.label} —{" "}
-                            {nextPlanningStep.detail}
+                            Próximo passo: {nextPlanningStep.next}
                           </p>
                         ) : (
                           <p className="planning-checklist-next">
@@ -1502,8 +1505,8 @@ export default function Home() {
               <label>Fim previsto<input type="date" value={newProjectFinish} onChange={event => setNewProjectFinish(event.target.value)} /></label>
             </div>
             <p className="modal-note">
-              A obra será persistida no banco como planejamento inicial e ficará
-              vinculada à sua conta.
+              A obra é salva com um planejamento inicial em branco — você
+              adiciona a estrutura (EAP), o orçamento e o cronograma depois.
             </p>
             {createError && (
               <p className="modal-note text-red-700">{createError}</p>
