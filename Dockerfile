@@ -19,9 +19,19 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # install, senao o pnpm falha ao aplicar o patch.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches/ ./patches/
+
+# vite.config.ts define `root: client/`, `outDir: dist/public` e os aliases
+# @/@shared/@assets. Sem ele o `vite build` assume root=/app, nao acha o
+# index.html (que vive em client/) e aborta. tsconfig.json e o mesmo para os
+# path mappings que o esbuild e o tsc leem.
+COPY vite.config.ts tsconfig.json ./
 COPY client/ ./client/
 COPY server/ ./server/
 COPY shared/ ./shared/
+
+# server/db.ts, routers.ts, agent-execution.ts e llm-settings.ts importam
+# ../drizzle/schema. Sem esse diretorio o esbuild aborta o bundle do servidor.
+COPY drizzle/ ./drizzle/
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN pnpm install --frozen-lockfile
