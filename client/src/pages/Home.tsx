@@ -853,8 +853,12 @@ export default function Home() {
       ]);
       setSelectedId(project.id);
       setNewProjectName("");
+      setNewProjectLocation("");
+      setNewProjectStart("");
+      setNewProjectFinish("");
       setCreateError("");
       setNewProjectOpen(false);
+      setActiveNav("EAP");
     },
     onError: error => setCreateError(error.message),
   });

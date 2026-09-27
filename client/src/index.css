@@ -4511,6 +4511,29 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
   .budget-analysis-grid {
     grid-template-columns: 1fr;
   }
+
+  .budget-analysis-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "label value"
+      "track track";
+    row-gap: 0.3rem;
+  }
+
+  .budget-analysis-row .budget-analysis-label {
+    grid-area: label;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+
+  .budget-analysis-row strong {
+    grid-area: value;
+  }
+
+  .budget-analysis-row .budget-analysis-track {
+    grid-area: track;
+  }
 }
 
 .planning-checklist {
