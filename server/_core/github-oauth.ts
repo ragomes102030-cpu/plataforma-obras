@@ -160,7 +160,14 @@ export function registerGitHubOAuthRoutes(app: Express) {
       res.redirect(302, "/");
     } catch (error) {
       console.error("[GitHub OAuth] Callback failed", error);
-      res.status(502).json({ error: "GitHub login failed" });
+      // Diagnostico: o 502 generico esconde a causa real e Obriga a caçar no
+      // log do Railway. githubJson ja inclui status e corpo na mensagem.
+      // TEMPORARIO: remover assim que o login estiver estavel.
+      const detail =
+        error instanceof Error ? error.message : String(error);
+      res
+        .status(502)
+        .json({ error: "GitHub login failed", detail: detail.slice(0, 300) });
     }
   });
 }

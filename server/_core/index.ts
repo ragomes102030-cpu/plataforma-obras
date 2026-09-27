@@ -69,16 +69,62 @@ async function ensurePlanVersionSchema() {
     if (Array.isArray(colsSD) && colsSD.length === 0) {
       await db.execute(sql`ALTER TABLE schedule_dependencies ADD COLUMN versionId INT NULL`);
     }
-  } catch (error) {
-    console.warn('ensurePlanVersionSchema error (non-fatal):', error);
+    } catch (error) {
+      console.warn('ensurePlanVersionSchema error (non-fatal):', error);
+    }
   }
-}
+
+  // O healthcheck (/readyz) so executa `SELECT 1`: prova reachability, nao
+  // schema. Um MySQL recem-provisionado passa no healthcheck e so quebra no
+  // login, porque upsertUser e o primeiro e unico passo do fluxo OAuth que
+  // toca o banco (github-oauth.ts:146). Inventariamos as tabelas para o log
+  // dizer a verdade, e garantimos a `users`, que e a que o login exige.
+  async function ensureUsersTable() {
+    const db = await getDb();
+    if (!db) {
+      console.warn('ensureUsersTable: database unavailable, skipping');
+      return;
+    }
+    try {
+      const [tables] = await db.execute(sql`
+        SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+      `);
+      const names = Array.isArray(tables)
+        ? tables.map((row: Record<string, unknown>) => String(row.TABLE_NAME))
+        : [];
+      console.log(`[schema] ${names.length} tabela(s) no banco: ${names.join(', ') || '(nenhuma)'}`);
+      if (names.includes('users')) {
+        return;
+      }
+      console.warn('[schema] tabela `users` AUSENTE — criando (o login GitHub dependia dela)');
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS users (
+          id int AUTO_INCREMENT NOT NULL,
+          openId varchar(64) NOT NULL,
+          name text,
+          email varchar(320),
+          loginMethod varchar(64),
+          role enum('user','admin') NOT NULL DEFAULT 'user',
+          createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          lastSignedIn timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY users_openId_unique (openId)
+        )
+      `);
+      console.log('[schema] tabela `users` criada com sucesso');
+    } catch (error) {
+      console.warn('ensureUsersTable error (non-fatal):', error);
+    }
+  }
 
 async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  await ensurePlanVersionSchema();
+    await ensureUsersTable();
+    await ensurePlanVersionSchema();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
