@@ -85,12 +85,20 @@ async function startServer() {
   registerStorageProxy(app);
   registerGitHubOAuthRoutes(app);
   app.get("/healthz", (_req, res) => {
+      // Railway-first, com fallback Vercel para nao regredir durante a transicao.
+      const commitSha =
+        process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA;
+      const branch =
+        process.env.RAILWAY_GIT_COMMIT_BRANCH ?? process.env.VERCEL_GIT_COMMIT_REF;
+      const deployId =
+        process.env.RAILWAY_DEPLOYMENT_ID ?? process.env.VERCEL_DEPLOYMENT_ID;
       res.status(200).json({
         ok: true,
         service: "plataforma-obras-api",
-        commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
-        branch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
-        deployId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
+        commit: commitSha?.slice(0, 7) ?? "local",
+        branch: branch ?? null,
+        deployId: deployId ?? null,
+        environment: process.env.RAILWAY_ENVIRONMENT ?? null,
         uptimeSeconds: Math.round(process.uptime()),
       });
     });

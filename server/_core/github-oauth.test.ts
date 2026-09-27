@@ -7,6 +7,9 @@ import { registerGitHubOAuthRoutes } from "./github-oauth";
 
 const realFetch = globalThis.fetch;
 
+// Nunca fixar um dominio de deploy aqui: quebra o CI a cada troca de plataforma.
+const TEST_PUBLIC_APP_URL = "https://app.exemplo.test";
+
 async function startTestServer() {
   const app = express();
   registerGitHubOAuthRoutes(app);
@@ -36,7 +39,7 @@ describe("GitHub OAuth", () => {
   it("redirects to GitHub with a callback URL and a CSRF state cookie", async () => {
     process.env.GITHUB_CLIENT_ID = "github-client-test";
     process.env.GITHUB_CLIENT_SECRET = "github-secret-test";
-    process.env.PUBLIC_APP_URL = "https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app";
+    process.env.PUBLIC_APP_URL = TEST_PUBLIC_APP_URL;
     const { server, baseUrl } = await startTestServer();
 
     try {
@@ -49,7 +52,7 @@ describe("GitHub OAuth", () => {
       expect(location.pathname).toBe("/login/oauth/authorize");
       expect(location.searchParams.get("client_id")).toBe("github-client-test");
       expect(location.searchParams.get("redirect_uri")).toBe(
-        "https://plataforma-obras-api.onrender.com/api/auth/github/callback"
+        `${TEST_PUBLIC_APP_URL}/api/auth/github/callback`
       );
       expect(location.searchParams.get("scope")).toBe("read:user user:email");
       expect(location.searchParams.get("state")).toMatch(/^[a-f0-9]{64}$/);
@@ -91,7 +94,7 @@ describe("GitHub OAuth", () => {
   it("exchanges the code, upserts the GitHub user, and creates a session", async () => {
     process.env.GITHUB_CLIENT_ID = "github-client-test";
     process.env.GITHUB_CLIENT_SECRET = "github-secret-test";
-    process.env.PUBLIC_APP_URL = "https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app";
+    process.env.PUBLIC_APP_URL = TEST_PUBLIC_APP_URL;
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
