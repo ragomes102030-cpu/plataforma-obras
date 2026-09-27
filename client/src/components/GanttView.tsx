@@ -26,24 +26,37 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
   const [linkFrom, setLinkFrom] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const headerSvgRef = useRef<SVGSVGElement>(null);
   const draggedRef = useRef(false);
 
-  const rasterize = async (): Promise<HTMLCanvasElement | null> => {
-    const svg = svgRef.current;
-    if (!svg) return null;
+  const svgToImage = async (svg: SVGSVGElement): Promise<HTMLImageElement> => {
     const clone = svg.cloneNode(true) as SVGSVGElement;
     clone.querySelectorAll("[stroke='var(--warn)']").forEach((n) => n.setAttribute("stroke", "#c48a00"));
-    const w = svg.clientWidth || chartWFallback();
-    const h = svg.clientHeight || 400;
     const data = new XMLSerializer().serializeToString(clone);
     const url = URL.createObjectURL(new Blob([data], { type: "image/svg+xml;charset=utf-8" }));
     try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      return await new Promise<HTMLImageElement>((resolve, reject) => {
         const i = new Image();
         i.onload = () => resolve(i);
         i.onerror = reject;
         i.src = url;
       });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const rasterize = async (): Promise<HTMLCanvasElement | null> => {
+    const svg = svgRef.current;
+    const headerSvg = headerSvgRef.current;
+    if (!svg) return null;
+    const w = svg.clientWidth || chartWFallback();
+    const headerH = headerSvg?.clientHeight || 0;
+    const bodyH = svg.clientHeight || 400;
+    const h = headerH + bodyH;
+    try {
+      const bodyImg = await svgToImage(svg);
+      const headerImg = headerSvg ? await svgToImage(headerSvg) : null;
       const canvas = document.createElement("canvas");
       canvas.width = w * 2;
       canvas.height = h * 2;
@@ -51,10 +64,11 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
       if (!ctx) return null;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      if (headerImg) ctx.drawImage(headerImg, 0, 0, canvas.width, headerH * 2);
+      ctx.drawImage(bodyImg, 0, headerH * 2, canvas.width, canvas.height - headerH * 2);
       return canvas;
-    } finally {
-      URL.revokeObjectURL(url);
+    } catch {
+      return null;
     }
   };
 
@@ -135,7 +149,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
   const posById = useMemo(() => {
     const m = new Map<number, { y: number; x0: number; x1: number }>();
     rows.forEach((r) => {
-      const y = HEADER_H + r.idx * ROW_H;
+      const y = r.idx * ROW_H;
       const x0 = LABEL_W + r.start * scale;
       const x1 = x0 + Math.max(6, r.duration * scale);
       m.set(r.id, { y, x0, x1 });
@@ -151,7 +165,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
     return out;
   }, [maxDay, zoom]);
 
-  const svgH = HEADER_H + rows.length * ROW_H + 40;
+  const svgH = rows.length * ROW_H + 40;
 
   const commitMove = (id: number, nextStart: number) => {
     const a = activities.find((x) => x.id === id);
@@ -267,6 +281,20 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
       )}
 
       <div style={{ overflow: "auto", maxHeight: 460, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surf)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", minWidth: 0, position: "sticky", top: 0, zIndex: 3 }}>
+          <div style={{ flex: `0 0 ${LABEL_W}px`, height: HEADER_H, background: "var(--thead-bg)" }} />
+          <svg ref={headerSvgRef} width={chartW + 20} height={HEADER_H} style={{ flex: "0 0 auto" }} aria-hidden="true">
+            <rect x={0} y={0} width={chartW} height={HEADER_H - 16} fill="var(--primary)" rx="4" />
+            {ticks.map((d) => (
+              <g key={`htick-${d}`}>
+                <line x1={d * scale} y1={HEADER_H - 16} x2={d * scale} y2={HEADER_H} stroke="#8b98a8" strokeWidth={0.5} opacity={0.28} />
+                <text x={d * scale + 3} y={20} fill="#ffffff" fontSize={9} fontWeight={600}>
+                  {dateAt(d)}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
         <div
           style={{ display: "flex", alignItems: "flex-start", minWidth: 0 }}
           onMouseMove={(e) => {
@@ -282,7 +310,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
         >
           <table style={{ flex: `0 0 ${LABEL_W}px`, borderCollapse: "collapse", fontSize: 11, position: "sticky", left: 0, background: "var(--surf)", zIndex: 2 }}>
             <thead>
-              <tr style={{ background: "var(--thead-bg)", color: "var(--thead-text)", position: "sticky", top: 0, zIndex: 3 }}>
+              <tr style={{ background: "var(--thead-bg)", color: "var(--thead-text)", position: "sticky", top: HEADER_H, zIndex: 3 }}>
                 {cols.eap && <th style={{ textAlign: "left", padding: 5 }}>EAP</th>}
                 {cols.nome && <th style={{ textAlign: "left", padding: 5 }}>Nome</th>}
                 {cols.inicio && <th style={{ textAlign: "left", padding: 5 }}>Início</th>}
@@ -312,14 +340,8 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
               </marker>
             </defs>
 
-            <rect x={LABEL_W} y={0} width={chartW} height={HEADER_H - 16} fill="var(--primary)" rx="4" />
             {ticks.map(d => (
-              <g key={`tick-${d}`}>
-                <line x1={LABEL_W + d * scale} y1={HEADER_H - 16} x2={LABEL_W + d * scale} y2={svgH - 20} stroke="#8b98a8" strokeWidth={0.5} opacity={0.28} />
-                <text x={LABEL_W + d * scale + 3} y={20} fill="#ffffff" fontSize={9} fontWeight={600}>
-                  {dateAt(d)}
-                </text>
-              </g>
+              <line key={`tick-${d}`} x1={LABEL_W + d * scale} y1={0} x2={LABEL_W + d * scale} y2={svgH - 20} stroke="#8b98a8" strokeWidth={0.5} opacity={0.28} />
             ))}
 
             {rows.map((r) => {
