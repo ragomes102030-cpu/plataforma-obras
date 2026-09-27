@@ -130,13 +130,13 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
-    await ensureUsersTable();
-    if (ENV.cookieSecret.length === 0) {
-      console.warn(
-        '[startup] JWT_SECRET ausente, vazio ou so espacos: o boot passa mas o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). Defina um valor real na Railway.'
-      );
-    }
-    await ensurePlanVersionSchema();
+  await ensureUsersTable();
+  if (ENV.cookieSecret.length === 0) {
+    console.warn(
+      "[startup] JWT_SECRET ausente, vazio ou so espacos: o boot passa mas o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). Defina um valor real na Railway."
+    );
+  }
+  await ensurePlanVersionSchema();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -166,24 +166,24 @@ async function startServer() {
       res.status(503).json({ ok: false, database: "indisponivel" });
       return;
     }
-      try {
-        await db.execute(sql`SELECT 1`);
-        const names = await listTableNames();
-        const warnings: string[] = [];
-        if (names && !names.includes('users')) {
-          warnings.push('tabela `users` ausente: o login GitHub falha em upsertUser');
-        }
-        if (ENV.cookieSecret.length === 0) {
-          warnings.push('JWT_SECRET vazio: o login GitHub falha em createSessionToken');
-        }
-        res.status(200).json({
-          ok: true,
-          database: 'ok',
-          tabelas: names?.length ?? 0,
-          jwtSecretConfigurado: ENV.cookieSecret.length > 0,
-          warnings,
-        });
-      } catch (error) {
+    try {
+      await db.execute(sql`SELECT 1`);
+      const names = await listTableNames();
+      const warnings: string[] = [];
+      if (names && !names.includes("users")) {
+        warnings.push("tabela `users` ausente: o login GitHub falha em upsertUser");
+      }
+      if (ENV.cookieSecret.length === 0) {
+        warnings.push("JWT_SECRET vazio: o login GitHub falha em createSessionToken");
+      }
+      res.status(200).json({
+        ok: true,
+        database: "ok",
+        tabelas: names?.length ?? 0,
+        jwtSecretConfigurado: ENV.cookieSecret.length > 0,
+        warnings,
+      });
+    } catch (error) {
       console.error("[readyz] banco inacessivel:", error);
       res.status(503).json({ ok: false, database: "erro" });
     }
