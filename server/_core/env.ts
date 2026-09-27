@@ -29,15 +29,9 @@ export const ENV = {
   agentTotalTimeoutMs: Number(process.env.AGENT_TOTAL_TIMEOUT_MS ?? "120000"),
   agentMaxIterations: Number(process.env.AGENT_MAX_ITERATIONS ?? "4"),
   mcpCatalogTtlMs: Number(process.env.MCP_CATALOG_TTL_MS ?? "300000"),
-  publicAppUrl: process.env.PUBLIC_APP_URL ?? "",
-  mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server.onrender.com",
-  mcpCronogramaUrl:
-    process.env.MCP_CRONOGRAMA_URL ??
-    "https://mcp-cronograma-server.onrender.com",
-  mcpGanttLobUrl:
-    process.env.MCP_GANTT_LOB_URL ??
-    "https://mcp-gantt-lob-server.onrender.com",
-  priceVariationThresholdPct: Number(
-    process.env.PRICE_VARIATION_THRESHOLD_PCT ?? "30"
-  ),
+  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app",
+  mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server-rafael-5864.vercel.app",
+  mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "https://mcp-cronograma-server-rafael-5864.vercel.app",
+  mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "https://mcp-gantt-lob-server-rafael-5864.vercel.app",
+  priceVariationThresholdPct: Number(process.env.PRICE_VARIATION_THRESHOLD_PCT ?? "30"),
 };

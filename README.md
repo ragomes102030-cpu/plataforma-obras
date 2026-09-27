@@ -89,3 +89,17 @@ A próxima evolução deve adicionar dependências persistidas, calendários, ba
 A camada inicial de integração está em `server/integrations/`, com cliente MCP para sessões Streamable HTTP/SSE, adaptadores dos três servidores e política de ferramentas. O backend expõe `integrations.mcpStatus` e `integrations.mcpReadOnlyCall` como operações protegidas; nenhuma escrita externa é executada automaticamente.
 
 O plano versionado, com fases, checkpoints, regras de segurança e ordem de retomada, está em [PLANO-EVOLUCAO.md](./PLANO-EVOLUCAO.md).
+
+## Documentação para agentes
+
+A base de conhecimento do sistema está em `/docs/`:
+
+| Arquivo | Descrição |
+|---|---|
+| `docs/README.md` | Visão geral do sistema, arquitetura, MCPs, skills |
+| `docs/DECISIONS.md` | Decisões de arquitetura (Vercel vs Render, Aiven, etc.) |
+| `docs/SETUP.md` | Como configurar e rodar (banco, frontend, backend, MCPs, tokens) |
+| `docs/IMPROVEMENTS.md` | Melhorias e mudanças feitas (Sep/2026) |
+| `docs/AGENTS.md` | Guia para agentes — como usar o sistema |
+
+Qualquer agente que entre no projeto deve ler `docs/AGENTS.md` primeiro.

@@ -3,9 +3,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 // Backend MCP servers (SSE protocol)
 const MCP_SERVERS = {
-  eap: { url: "https://mcp-eap-server.onrender.com/mcp", name: "eap-server" },
-  cronograma: { url: "https://mcp-cronograma-server.onrender.com/mcp", name: "cronograma-server" },
-  gantt: { url: "https://mcp-gantt-lob-server.onrender.com/mcp", name: "mcp-gantt-lob-server" },
+  eap: { url: "https://mcp-eap-server-rafael-5864.vercel.app/mcp", name: "eap-server" },
+  cronograma: { url: "https://mcp-cronograma-server-rafael-5864.vercel.app/mcp", name: "cronograma-server" },
+  gantt: { url: "https://mcp-gantt-lob-server-rafael-5864.vercel.app/mcp", name: "mcp-gantt-lob-server" },
 };
 
 type ServerKey = keyof typeof MCP_SERVERS;

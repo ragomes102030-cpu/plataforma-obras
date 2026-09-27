@@ -36,7 +36,7 @@ describe("GitHub OAuth", () => {
   it("redirects to GitHub with a callback URL and a CSRF state cookie", async () => {
     process.env.GITHUB_CLIENT_ID = "github-client-test";
     process.env.GITHUB_CLIENT_SECRET = "github-secret-test";
-    process.env.PUBLIC_APP_URL = "https://plataforma-obras-api.onrender.com";
+    process.env.PUBLIC_APP_URL = "https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app";
     const { server, baseUrl } = await startTestServer();
 
     try {
@@ -91,7 +91,7 @@ describe("GitHub OAuth", () => {
   it("exchanges the code, upserts the GitHub user, and creates a session", async () => {
     process.env.GITHUB_CLIENT_ID = "github-client-test";
     process.env.GITHUB_CLIENT_SECRET = "github-secret-test";
-    process.env.PUBLIC_APP_URL = "https://plataforma-obras-api.onrender.com";
+    process.env.PUBLIC_APP_URL = "https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
