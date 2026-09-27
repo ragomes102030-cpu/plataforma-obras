@@ -1,6 +1,10 @@
 export const ENV = {
   appId: process.env.VITE_APP_ID?.trim() || "plataforma-obras",
-  cookieSecret: process.env.JWT_SECRET ?? "",
+  // O .trim() + ?? "" permitia que uma variavel presente com valor vazio
+  // virasse string vazia sem sinal: o boot passava e o login quebrava depois,
+  // em createSessionToken, com "Zero-length key is not supported". O valor
+  // e normalizado aqui e a presenca real e verificada no boot.
+  cookieSecret: process.env.JWT_SECRET?.trim() ?? "",
   databaseUrl: process.env.DATABASE_URL ?? "",
   allowDemoData: process.env.ALLOW_DEMO_DATA === "true",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",

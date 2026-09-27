@@ -7,6 +7,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { sql } from "drizzle-orm";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
+import { ENV } from "./env";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
 
@@ -74,6 +75,18 @@ async function ensurePlanVersionSchema() {
     }
   }
 
+  async function listTableNames(): Promise<string[] | null> {
+    const db = await getDb();
+    if (!db) return null;
+    const [tables] = await db.execute(sql`
+      SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+    `);
+    return Array.isArray(tables)
+      ? tables.map((row: Record<string, unknown>) => String(row.TABLE_NAME))
+      : [];
+  }
+
   // O healthcheck (/readyz) so executa `SELECT 1`: prova reachability, nao
   // schema. Um MySQL recem-provisionado passa no healthcheck e so quebra no
   // login, porque upsertUser e o primeiro e unico passo do fluxo OAuth que
@@ -86,13 +99,7 @@ async function ensurePlanVersionSchema() {
       return;
     }
     try {
-      const [tables] = await db.execute(sql`
-        SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-      `);
-      const names = Array.isArray(tables)
-        ? tables.map((row: Record<string, unknown>) => String(row.TABLE_NAME))
-        : [];
+      const names = (await listTableNames()) ?? [];
       console.log(`[schema] ${names.length} tabela(s) no banco: ${names.join(', ') || '(nenhuma)'}`);
       if (names.includes('users')) {
         return;
@@ -124,6 +131,11 @@ async function startServer() {
   const server = createServer(app);
 
     await ensureUsersTable();
+    if (ENV.cookieSecret.length === 0) {
+      console.warn(
+        '[startup] JWT_SECRET ausente, vazio ou so espacos: o boot passa mas o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). Defina um valor real na Railway.'
+      );
+    }
     await ensurePlanVersionSchema();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
@@ -154,10 +166,24 @@ async function startServer() {
       res.status(503).json({ ok: false, database: "indisponivel" });
       return;
     }
-    try {
-      await db.execute(sql`SELECT 1`);
-      res.status(200).json({ ok: true, database: "ok" });
-    } catch (error) {
+      try {
+        await db.execute(sql`SELECT 1`);
+        const names = await listTableNames();
+        const warnings: string[] = [];
+        if (names && !names.includes('users')) {
+          warnings.push('tabela `users` ausente: o login GitHub falha em upsertUser');
+        }
+        if (ENV.cookieSecret.length === 0) {
+          warnings.push('JWT_SECRET vazio: o login GitHub falha em createSessionToken');
+        }
+        res.status(200).json({
+          ok: true,
+          database: 'ok',
+          tabelas: names?.length ?? 0,
+          jwtSecretConfigurado: ENV.cookieSecret.length > 0,
+          warnings,
+        });
+      } catch (error) {
       console.error("[readyz] banco inacessivel:", error);
       res.status(503).json({ ok: false, database: "erro" });
     }

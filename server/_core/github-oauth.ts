@@ -52,6 +52,57 @@ async function githubJson<T>(
   return JSON.parse(body) as T;
 }
 
+type OAuthStage =
+  | "config"
+  | "token_exchange"
+  | "user_lookup"
+  | "email_lookup"
+  | "db_write"
+  | "session";
+
+// Resposta por estagio, sem ecoar o corpo bruto do GitHub no cliente: ele pode
+// refletir host ou identificador da OAuth App. O erro completo fica no log.
+function describeFailure(stage: OAuthStage): { code: string; message: string } {
+  switch (stage) {
+    case "token_exchange":
+      return {
+        code: "oauth_token_exchange_failed",
+        message:
+          "GitHub recusou a troca do token. Verifique GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET e o Callback URL da OAuth App.",
+      };
+    case "user_lookup":
+      return {
+        code: "oauth_user_lookup_failed",
+        message:
+          "GitHub recusou a leitura do seu perfil. Verifique o escopo read:user da OAuth App.",
+      };
+    case "email_lookup":
+      return {
+        code: "oauth_email_lookup_failed",
+        message:
+          "GitHub recusou a leitura dos seus e-mails. Verifique o escopo user:email da OAuth App.",
+      };
+    case "db_write":
+      return {
+        code: "oauth_db_write_failed",
+        message:
+          "Nao foi possivel salvar seu usuario no banco. Verifique as migrations e o schema.",
+      };
+    case "session":
+      return {
+        code: "oauth_session_failed",
+        message:
+          "Nao foi possivel criar sua sessao. Verifique se JWT_SECRET tem um valor real e nao vazio.",
+      };
+    default:
+      return {
+        code: "oauth_not_configured",
+        message:
+          "O GitHub OAuth nao esta configurado. Defina GITHUB_CLIENT_ID e GITHUB_CLIENT_SECRET.",
+      };
+  }
+}
+
 export function registerGitHubOAuthRoutes(app: Express) {
   app.get("/api/auth/github", (req: Request, res: Response) => {
     try {
@@ -96,9 +147,11 @@ export function registerGitHubOAuthRoutes(app: Express) {
     }
     res.clearCookie(STATE_COOKIE, getSessionCookieOptions(req));
 
+    let stage: OAuthStage = "config";
     try {
       const { clientId, clientSecret } = requireConfig();
       const redirectUri = getRedirectUri(req);
+      stage = "token_exchange";
       const token = await githubJson<{ access_token?: string }>(
         GITHUB_TOKEN_URL,
         {
@@ -125,6 +178,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "plataforma-obras-api",
       };
+      stage = "user_lookup";
       const profile = await githubJson<{
         id: number;
         login: string;
@@ -133,6 +187,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
       }>(`${GITHUB_API_URL}/user`, { headers }, "user lookup");
       let email = profile.email ?? null;
       if (!email) {
+        stage = "email_lookup";
         const emails = await githubJson<
           Array<{ email: string; primary: boolean; verified: boolean }>
         >(`${GITHUB_API_URL}/user/emails`, { headers }, "email lookup");
@@ -143,6 +198,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
       }
 
       const openId = `github:${profile.id}`;
+      stage = "db_write";
       await db.upsertUser({
         openId,
         name: profile.name || profile.login,
@@ -150,6 +206,7 @@ export function registerGitHubOAuthRoutes(app: Express) {
         loginMethod: "github",
         lastSignedIn: new Date(),
       });
+      stage = "session";
       const sessionToken = await sdk.createSessionToken(openId, {
         name: profile.name || profile.login,
       });
@@ -159,15 +216,14 @@ export function registerGitHubOAuthRoutes(app: Express) {
       });
       res.redirect(302, "/");
     } catch (error) {
-      console.error("[GitHub OAuth] Callback failed", error);
-      // Diagnostico: o 502 generico esconde a causa real e Obriga a caçar no
-      // log do Railway. githubJson ja inclui status e corpo na mensagem.
-      // TEMPORARIO: remover assim que o login estiver estavel.
-      const detail =
-        error instanceof Error ? error.message : String(error);
-      res
-        .status(502)
-        .json({ error: "GitHub login failed", detail: detail.slice(0, 300) });
+      console.error(`[GitHub OAuth] Callback failed at stage=${stage}`, error);
+      const failure = describeFailure(stage);
+      res.status(502).json({
+        error: "GitHub login failed",
+        stage,
+        code: failure.code,
+        message: failure.message,
+      });
     }
   });
 }
