@@ -1,1 +1,20 @@
-{"buildCommand":"pnpm build","outputDirectory":"dist/public","installCommand":"pnpm install --frozen-lockfile","framework":"vite","output":"server","regions":["iad1"],"env":{"VITE_APP_ID":"plataforma-obras","PUBLIC_APP_URL":"https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app","DATABASE_URL":"@DATABASE_URL","JWT_SECRET":"@JWT_SECRET","GITHUB_CLIENT_ID":"@GITHUB_CLIENT_ID","GITHUB_CLIENT_SECRET":"@GITHUB_CLIENT_SECRET","NODE_ENV":"production"},"github":{"silentDeploys":true}}
+{
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install --frozen-lockfile --prefer-offline",
+  "framework": "vite",
+  "regions": ["iad1"],
+  "env": {
+    "VITE_APP_ID": "plataforma-obras",
+    "PUBLIC_APP_URL": "https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app"
+  },
+  "github": {
+    "silentDeploys": true
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://plataforma-obras-production.up.railway.app/api/:path*"
+    }
+  ]
+}
