@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic } from "./serve-static";
 
 async function ensurePlanVersionSchema() {
   const db = await getDb();
@@ -135,6 +135,11 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    // Specifier nao-literal de proposito: o esbuild so empacota specifiers
+    // literais, entao `vite` e suas devDependencies ficam fora do bundle de prod
+    // (que instala so --prod). `pnpm dev` roda este arquivo via tsx, nunca o bundle.
+    const devEntry = ["./", "vite"].join("");
+    const { setupVite } = await import(devEntry);
     await setupVite(app, server);
   } else {
     serveStatic(app);
