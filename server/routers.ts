@@ -28,9 +28,11 @@ import {
   activityResourceAllocations,
   scheduleBaselines,
   scheduleBaselineItems,
+  workCalendars,
+  calendarExceptions,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
-import { defaultCalendar, elapsedWorkingDays } from "@shared/work-calendar";
+import { defaultCalendar, elapsedWorkingDays, type WorkCalendar, type DayType, type WeekPattern } from "@shared/work-calendar";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
@@ -3024,16 +3026,46 @@ export const appRouter = router({
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
         const asOf = input.asOf ?? new Date();
-        // Progresso em DIAS ÚTEIS, não dias corridos. O CPM já
-        // trabalha em índices de dias úteis, então comparar com
-        // (asOf - plannedStart) / 86400000 daria um número que não
-        // bate com o índice do CPM sempre que houver feriado ou
+        // Progresso em DIAS ÚTEIS, nao dias corridos. O CPM ja
+        // trabalha em indices de dias uteis, entao comparar com
+        // (asOf - plannedStart) / 86400000 daria um numero que nao
+        // bate com o indice do CPM sempre que houver feriado ou
         // fim de semana no meio.
-        const calendar = defaultCalendar(
-          project?.plannedStart
-            ? project.plannedStart.getFullYear()
-            : asOf.getFullYear()
-        );
+        // Tenta o calendario do projeto (work_calendars); se nao
+        // existir, usa o padrao BR 5x2 derivado do ano de plannedStart.
+        const year = project?.plannedStart
+          ? project.plannedStart.getFullYear()
+          : asOf.getFullYear();
+        let calendar: WorkCalendar = defaultCalendar(year);
+        try {
+          const [wc] = await db
+            .select()
+            .from(workCalendars)
+            .where(eq(workCalendars.projectId, input.projectId))
+            .limit(1);
+          if (wc) {
+            const wp = JSON.parse(
+              typeof wc.weekPattern === "string"
+                ? wc.weekPattern
+                : JSON.stringify(wc.weekPattern)
+            ) as WeekPattern;
+            const exRows = await db
+              .select()
+              .from(calendarExceptions)
+              .where(eq(calendarExceptions.calendarId, wc.id))
+              .orderBy(calendarExceptions.date);
+            calendar = {
+              weekPattern: wp,
+              exceptions: exRows.map(e => ({
+                date: e.date,
+                type: e.type as DayType,
+                name: e.name ?? undefined,
+              })),
+            };
+          }
+        } catch {
+          // calendario malformado — mantem o padrao
+        }
         const localIso = (d: Date) =>
           `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const startIso = project?.plannedStart
