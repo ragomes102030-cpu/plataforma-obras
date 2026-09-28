@@ -204,7 +204,7 @@ export function EapView({
         <div className="panel-heading eap-heading">
           <div>
             <h3>Estrutura de entregas</h3>
-            <p>{nodes.length} itens persistidos · expanda os ramos para editar no contexto hierárquico.</p>
+            <p>{nodes.length} itens na estrutura · expanda cada etapa para editar seus pacotes.</p>
           </div>
           <div className="eap-tree-actions">
             <button className="outline-button" onClick={expandAll} disabled={!nodes.length || allVisibleStructuralPending}><Plus size={13} /> Expandir</button>
@@ -223,7 +223,7 @@ export function EapView({
         ) : wbsQuery.isError ? (
           <div className="module-empty eap-empty-state"><span>Não foi possível carregar a EAP: {wbsQuery.error.message}</span><button className="outline-button" onClick={() => void wbsQuery.refetch()}><RefreshCw size={13} /> Tentar novamente</button></div>
         ) : nodes.length === 0 ? (
-          <div className="module-empty eap-empty-state"><span>Esta obra ainda não possui uma EAP montada.</span><button className="primary-button" disabled={initializeMutation.isPending} onClick={() => initializeMutation.mutate({ projectId })}>{initializeMutation.isPending ? "Montando..." : "Montar plano inicial"}</button></div>
+          <div className="module-empty eap-empty-state"><strong>Comece pela estrutura da obra (EAP)</strong><span>Gere um modelo com 5 grandes etapas — serviços preliminares, fundação, estrutura, vedação e instalações, acabamentos e entrega — já com um cronograma inicial encadeado. Depois é só renomear, incluir ou remover itens para adaptar à sua obra.</span><button className="primary-button" disabled={initializeMutation.isPending} onClick={() => initializeMutation.mutate({ projectId })}>{initializeMutation.isPending ? "Gerando estrutura..." : "Gerar estrutura modelo"}</button></div>
         ) : (
           <div className="eap-tree" role="tree" aria-label="Árvore hierárquica da EAP">
             {visibleNodes.map(({ node, depth }) => {
