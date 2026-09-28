@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 type Dep = { predecessorId: number; successorId: number; type: string; lag?: number };
@@ -21,6 +21,15 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [cols, setCols] = useState({ eap: true, nome: true, inicio: true, termino: true, dur: true, pct: true });
   const [colsOpen, setColsOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [expanded]);
   const [drag, setDrag] = useState<{ id: number; mode: "move" | "resize"; startX: number; origStart: number; origDur: number } | null>(null);
   const [linkMode, setLinkMode] = useState(false);
   const [linkFrom, setLinkFrom] = useState<number | null>(null);
@@ -226,8 +235,11 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
   };
 
   return (
-    <div style={{ background: "var(--bg)", color: "var(--text)", padding: 16 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--primary)" }}>Gantt da obra</h2>
+    <div style={expanded ? { position: "fixed", inset: 0, zIndex: 1000, overflow: "auto", background: "var(--bg)", color: "var(--text)", padding: 16 } : { background: "var(--bg)", color: "var(--text)", padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--primary)" }}>Gantt da obra</h2>
+        <button onClick={() => setExpanded(v => !v)} aria-label={expanded ? "Fechar tela cheia" : "Expandir Gantt"} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)", background: expanded ? "var(--primary)" : "var(--surf)", color: expanded ? "#fff" : "var(--text)" }}>{expanded ? "Fechar ✕" : "Expandir ⤢"}</button>
+      </div>
       <p style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
         Atividades: {total} · visíveis: {rows.length} · Críticas: {criticalCount} · Dependências: {dependencies.length} ·
         início da obra {projectStart === null ? "não informado" : new Date(projectStart).toLocaleDateString("pt-BR")} · dias corridos, sem feriados
@@ -280,7 +292,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity }: { proje
         </div>
       )}
 
-      <div style={{ overflow: "auto", maxHeight: 460, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surf)" }}>
+      <div style={{ overflow: "auto", maxHeight: expanded ? "calc(100vh - 190px)" : 460, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surf)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", minWidth: 0, position: "sticky", top: 0, zIndex: 3 }}>
           <div style={{ flex: `0 0 ${LABEL_W}px`, height: HEADER_H, background: "var(--thead-bg)" }} />
           <svg ref={headerSvgRef} width={chartW + 20} height={HEADER_H} style={{ flex: "0 0 auto" }} aria-hidden="true">
