@@ -1418,13 +1418,12 @@ export const appRouter = router({
           const semeadura = await semearEapDoCatalogo(seedDb, createdId.id, {
             tipoDeObra: input.tipoDeObra,
           });
-          // seedSolarAcaciasPlan é um plano de demonstração e não deve ser
-          // acionado por texto no nome da obra digitado por um usuário real.
-          // Uso apenas manual/administrativo (chamar seedSolarAcaciasPlan
-          // diretamente, se necessário) fora deste fluxo de criação.
-          if (semeadura.nosCriados === 0 && ENV.allowDemoData) {
-            await seedStarterPlan(seedDb, createdId.id);
-          }
+          // Sem fallback de demonstração aqui de propósito. O `seedStarterPlan`
+          // montava uma EAP de 12 nós com códigos que não existem na SEINFRA, e
+          // ainda assim o painel mostrava "EAP: Concluído" — o usuário via uma
+          // estrutura pronta, sem preço e sem ligação com o catálogo, e não
+          // tinha como saber que o motivo era falta de base importada.
+          // Sem catálogo, a obra nasce sem EAP e o aviso aponta o caminho.
           const [created] = await tx
             .select()
             .from(projects)
@@ -1432,6 +1431,25 @@ export const appRouter = router({
             .limit(1);
           return { ...created, semeadura };
         });
+      }),
+    generateEapFromCatalog: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          tipoDeObra: z
+            .enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"])
+            .default("edificio"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        // Idempotente por construção: o seeder não mexe em obra que já tem nós.
+        const semeadura = await semearEapDoCatalogo(db, input.projectId, {
+          tipoDeObra: input.tipoDeObra,
+        });
+        return { semeadura };
       }),
     initializePlan: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))

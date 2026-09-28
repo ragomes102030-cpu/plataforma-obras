@@ -5,6 +5,7 @@ import { McpE2EWorkbench } from "./McpE2EWorkbench";
 import { McpMutationWorkbench } from "./McpMutationWorkbench";
 import { McpProjectMapping } from "./McpProjectMapping";
 import { Phase7ImportWorkbench } from "./Phase7ImportWorkbench";
+import { TIPOS_DE_OBRA, type TipoDeObra } from "@shared/eap-engine";
 
 export function EapView({
   projectId,
@@ -35,6 +36,24 @@ export function EapView({
 
   const initializeMutation = trpc.projects.initializePlan.useMutation({
     onSuccess: () => void wbsQuery.refetch(),
+    onError: error => setOperationError(error.message),
+  });
+  // Regenera a EAP a partir do catálogo de preços. Só faz sentido quando a obra
+  // nasceu sem base importada: com nós já existentes, o seeder é idempotente
+  // e devolve aviso em vez de duplicar a estrutura.
+  const [eapNotice, setEapNotice] = useState<string | null>(null);
+  const [eapKind, setEapKind] = useState<TipoDeObra>("edificio");
+  const generateEap = trpc.projects.generateEapFromCatalog.useMutation({
+    onSuccess: async result => {
+      const s = result.semeadura;
+      setEapNotice(
+        s.nosCriados > 0
+          ? `EAP gerada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços.`
+          : s.aviso
+      );
+      await utils.projects.wbs.invalidate({ projectId });
+      await wbsQuery.refetch();
+    },
     onError: error => setOperationError(error.message),
   });
   const updateNode = trpc.projects.updateWbsNode.useMutation({
@@ -223,7 +242,46 @@ export function EapView({
         ) : wbsQuery.isError ? (
           <div className="module-empty eap-empty-state"><span>Não foi possível carregar a EAP: {wbsQuery.error.message}</span><button className="outline-button" onClick={() => void wbsQuery.refetch()}><RefreshCw size={13} /> Tentar novamente</button></div>
         ) : nodes.length === 0 ? (
-          <div className="module-empty eap-empty-state"><strong>Comece pela estrutura da obra (EAP)</strong><span>Gere um modelo com 5 grandes etapas — serviços preliminares, fundação, estrutura, vedação e instalações, acabamentos e entrega — já com um cronograma inicial encadeado. Depois é só renomear, incluir ou remover itens para adaptar à sua obra.</span><button className="primary-button" disabled={initializeMutation.isPending} onClick={() => initializeMutation.mutate({ projectId })}>{initializeMutation.isPending ? "Gerando estrutura..." : "Gerar estrutura modelo"}</button></div>
+          <div className="module-empty eap-empty-state">
+            <strong>Esta obra ainda não tem EAP</strong>
+            <span>
+              A estrutura é montada a partir dos serviços da base oficial de
+              preços (SEINFRA), e não de um modelo genérico: cada item carrega o
+              código do serviço, e é isso que faz o orçamento encontrar o preço
+              sem você digitá-lo.
+            </span>
+            {eapNotice && <span style={{ color: "var(--warn)" }}>{eapNotice}</span>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", alignItems: "center", marginTop: 4 }}>
+              <select
+                value={eapKind}
+                onChange={event => setEapKind(event.target.value as TipoDeObra)}
+                style={{ fontSize: 12, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surf)" }}
+                aria-label="Tipo de obra"
+              >
+                {TIPOS_DE_OBRA.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              <button
+                className="primary-button"
+                disabled={generateEap.isPending}
+                onClick={() => generateEap.mutate({ projectId, tipoDeObra: eapKind })}
+              >
+                {generateEap.isPending ? "Gerando..." : "Gerar EAP do catálogo"}
+              </button>
+              <button
+                className="outline-button"
+                disabled={initializeMutation.isPending}
+                onClick={() => initializeMutation.mutate({ projectId })}
+                title="Estrutura genérica de demonstração, sem ligação com o catálogo de preços"
+              >
+                {initializeMutation.isPending ? "Gerando..." : "Usar estrutura modelo"}
+              </button>
+            </div>
+            {eapNotice?.includes("Nenhuma base") && (
+              <span>Sem base importada, a EAP não pode ser gerada. Vá ao <strong>Catálogo</strong> e importe a planilha da SEINFRA.</span>
+            )}
+          </div>
         ) : (
           <div className="eap-tree" role="tree" aria-label="Árvore hierárquica da EAP">
             {visibleNodes.map(({ node, depth }) => {

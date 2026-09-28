@@ -869,6 +869,7 @@ export default function Home() {
   const [newProjectDescricao, setNewProjectDescricao] = useState("");
   const [createError, setCreateError] = useState("");
   const [createNotice, setCreateNotice] = useState<string | null>(null);
+  const [createNeedsCatalog, setCreateNeedsCatalog] = useState(false);
   const utils = trpc.useUtils();
   const createProjectMutation = trpc.projects.create.useMutation({
     onSuccess: project => {
@@ -887,9 +888,10 @@ export default function Home() {
       setNewProjectOpen(false);
       setActiveNav("EAP");
       // A EAP nasce do catálogo de preços. Sem catálogo, a obra nasce sem
-      // estrutura — e o aviso precisa aparecer, senão o usuário conclui que a
-      // EAP está vazia por falha e não por falta de base importada.
+      // estrutura — e o aviso precisa aparecer E apontar o caminho, senão o
+      // usuário conclui que a EAP está vazia por falha e não por falta de base.
       const s = project.semeadura;
+      setCreateNeedsCatalog(s.nosCriados === 0);
       setCreateNotice(
         s.nosCriados > 0
           ? `EAP criada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços.`
@@ -1234,11 +1236,23 @@ export default function Home() {
                     padding: "10px 12px",
                     borderRadius: 8,
                     fontSize: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
                     background: "var(--surf)",
                     border: "1px solid var(--border)",
                   }}
                 >
-                  {createNotice}
+                  <span style={{ flex: 1, minWidth: 220 }}>{createNotice}</span>
+                  {createNeedsCatalog && (
+                    <button
+                      className="outline-button"
+                      onClick={() => setActiveNav("Catálogo")}
+                    >
+                      <BookOpen size={14} /> Ir para o Catálogo e importar a SEINFRA
+                    </button>
+                  )}
                 </div>
               )}
               <section className="metrics-grid">

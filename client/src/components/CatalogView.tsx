@@ -164,8 +164,8 @@ export function CatalogView() {
 
       {!(catalogQuery.data?.catalogs.length) && (
         <section className="module-card catalog-onboarding-card">
-          <div className="panel-heading"><div><h3>Como começar o catálogo</h3><p>O catálogo é uma biblioteca de preços reutilizável; ele não é criado automaticamente com cada obra.</p></div><BookOpen size={18} className="sparkle" /></div>
-          <div className="focus-list"><div className="focus-item"><div className="focus-icon blue"><span>1</span></div><div><strong>Crie uma fonte de preços</strong><span>Informe nome, origem e período de referência.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>2</span></div><div><strong>Cadastre itens ou importe uma base</strong><span>Materiais, mão de obra, equipamentos e serviços.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>3</span></div><div><strong>Monte composições</strong><span>Use coeficientes para formar o custo unitário do serviço.</span></div></div></div>
+          <div className="panel-heading"><div><h3>Como começar o catálogo</h3><p>Importe a base oficial abaixo. Ela é a fonte da estrutura (EAP) das novas obras — sem ela, a obra é criada sem EAP.</p></div><BookOpen size={18} className="sparkle" /></div>
+          <div className="focus-list"><div className="focus-item"><div className="focus-icon blue"><span>1</span></div><div><strong>Baixe a planilha da SEINFRA no site oficial</strong><span>Tabela de Insumos (I...) ou Planos de Serviços (C...), em .xls ou .xlsx. O download é manual, de propósito: mantém a auditoria de origem do preço.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>2</span></div><div><strong>Importe no formulário abaixo</strong><span>Informe o período de referência (ex.: 09/2026) e a UF. Cada importação vira um catálogo versionado; meses anteriores não são sobrescritos.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>3</span></div><div><strong>Crie a obra</strong><span>A EAP é montada a partir dos serviços (C...) importados, e cada item carrega o código oficial. Por isso o orçamento encontra o preço sem você digitá-lo.</span></div></div></div>
         </section>
       )}
 
@@ -176,7 +176,7 @@ export function CatalogView() {
           <label>Tipo<select value={sourceType} onChange={event => setSourceType(event.target.value as typeof sourceType)}><option value="propria">Base própria</option><option value="SINAPI">SINAPI</option><option value="SEINFRA">SEINFRA</option><option value="fornecedor">Fornecedor</option></select></label>
           <label>UF<input value={catalogState} onChange={event => setCatalogState(event.target.value)} placeholder="SP" maxLength={2} /></label>
           <label>Referência<input value={catalogPeriod} onChange={event => setCatalogPeriod(event.target.value)} placeholder="09/2026" required /></label>
-          <div className="catalog-form-footer"><span>Importação CSV/XLSX entra na próxima evolução do catálogo.</span><button className="primary-button" disabled={createCatalog.isPending}><Plus size={14} /> Criar fonte</button></div>
+          <div className="catalog-form-footer"><span>Para base oficial, use a importação de planilha logo abaixo — é mais rápido e já traz os códigos.</span><button className="primary-button" disabled={createCatalog.isPending}><Plus size={14} /> Criar fonte</button></div>
         </form>
         {createCatalog.error && <p className="form-error">{createCatalog.error.message}</p>}
       </section>
