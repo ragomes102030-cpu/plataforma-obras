@@ -66,24 +66,52 @@ Cada linha foi verificada no código. A coluna "Impacto" diz o que quebra se nã
 | G13 | **Sem local/pavimento; LOB só no cliente** | `production_units` **sem campo de sequência** (`schema.ts:436-446`); sem `planning.lob` no router; LOB desenhada em SVG no browser | Linha de balanço real (tempo × pavimento) **não é computável no servidor** |
 | G14 | **Auditoria quase vazia** | `project_audit_events` com 3 inserts (`routers.ts:1485, 2530, 2616`). Sem log de CPM, baseline, edição, medição, aprovação, transição de portão | Fluxo de aprovação não é auditável |
 | G15 | **Zero teste nos números que o usuário vê** | `planning.evm/scurve/control/leveling`, `captureBaseline`, `confirmEntry` sem teste. `vitest.config.ts:17` só `server/**` e `shared/**`; cliente nunca testado | Confiança zero nos indicadores |
-| G16 | **Migrações Drizzle nunca aplicadas** | 22 arquivos `drizzle/00NN_*.sql`; pre-deploy só roda `bootstrap-db.mjs` (log: *"banco já inicializado; nada a fazer"*) | **Estamos prestes a adicionar ~15 tabelas.** Sem migração real, cada onda é uma bomba |
+| G16 | **Migrações Drizzle nunca aplicadas — e quebradas** | 22 arquivos `drizzle/00NN_*.sql`; pre-deploy só roda `bootstrap-db.mjs` (log: *"banco já inicializado; nada a fazer"*) | **Estamos prestes a adicionar ~15 tabelas.** Sem migração real, cada onda é uma bomba |
 | G17 | **Sem partes interessadas, comunicação, documentos** | grep `stakeholder\|interessado\|transmittal` → 0 hits. Só `RestrictionsView` (texto curto) | PMBOK 6parties/Communications ausente |
 
 **Nota de qualidade (contraweight honesto):** o motor CPM é correto, determinístico e testado; a lógica de mover nós da EAP trata a colisão do índice único corretamente; a regra de cobertura de custo 100% é disciplina real de PMBOK; o matching de preço recusa auto-link (decisão que a maioria erra); preview-then-apply e os 10 portões com gate de cobertura de custo é governança de verdade; os testes estáticos de access-guard e error-codes são melhores que a maioria dos projetos. O problema é o **modelo parar exatamente onde planejamento de obra fica difícil**.
 
 ---
 
+### 3.1 Onda 0.1 — Pipeline de migração (resolvido)
+
+**O achado que mudou a recomendação:** as 22 migrações não eram apenas *não aplicadas* — eram **irreplayáveis**. Aplicadas do zero, quebravam em `0015` com `ER_TOO_LONG_IDENT`: o drizzle gera nomes de FK como
+
+```
+activity_resource_allocations_activityId_schedule_activities_id_fk   (67 chars)
+```
+
+e o MySQL aceita no máximo 64. Os nomes curtos (`act_res_alloc_activity_fk`) existem em `schema.ts:375-376`, mas foram escritos **depois** da geração e a migração nunca foi regenerada. Ou seja: `drizzle-kit migrate` — a recomendação original — **nunca ia funcionar**.
+
+**O que foi feito**
+
+| | |
+|---|---|
+| `scripts/migrate-db.mjs` | Aplica as migrações. Decide por **estado real do banco**, não por flag: vazio → do zero; legado (tabelas sem `__drizzle_migrations`) → baseline sem reexecutar DDL; normal → só pendentes. Flags `--dry-run` e `--status`. Falha alto se `drizzle/meta/_journal.json` não estiver na imagem (senão o pre-deploy passaria verde sem aplicar nada). |
+| `drizzle/0000_baseline.sql` | As 22 migrações foram substituídas por **um baseline gerado do `schema.ts` atual**. Perde-se um histórico que ninguém conseguia reproduzir de qualquer forma. |
+| `server/migrations.test.ts` | 9 testes de regressão: identificador ≤ 64, journal × disco bidirecional, `when` estritamente crescente, e baseline × `schema.ts` nos dois sentidos. **Verificado que falha** reintroduzindo o bug original. |
+| `server/_core/index.ts` | `ensureUsersTable` e `ensurePlanVersionSchema` removidos — não há mais DDL no boot. Sobrou `logSchemaInventory()`, somente leitura. |
+| Removidos | `bootstrap-db.mjs`, `full-schema.sql`. |
+| Pre-deploy | `node scripts/migrate-db.mjs` (Railway). |
+
+**Prova de equivalência** (o que autorizou apagar o `full-schema.sql`): schema descartável criado, migrações aplicadas do zero, comparação com o banco real — **32 tabelas, 344 colunas, 133 entradas de índice, 61 chaves estrangeiras, idênticos**. Repetível com `pnpm db:verify:scratch`.
+
+> O plano original propunha preservar as 22 migrações (opção A) e mudar para squashed (opção B) só se necessário. A evidência inverteu: histórico quebrado é pior que histórico limpo.
+
+**Ainda pendente (não bloqueia as ondas):** `railway.json` diz `builder: DOCKERFILE`, mas o serviço roda `RAILPACK` — Config as Code duplicado, com hard stop anunciado para **2026-12-01**.
+
+---
+
 ## 4. Ondas
 
 Ordenadas por dependência, não por "interessante" ou por esforço.
-interessante" ou esforço. Cada onda é mergeável e não quebra a anterior.
 
 ### Onda 0 — Pilares: migração + calendário + caminho dos 100%
 
 **Motivo de vir primeiro:** G1 e G16 invalidam tudo. Datas erradas em cima de migração quebrada = lixo acumulado. Enquanto G1 estiver aberto, qualquer número de prazo que a gente construa em cima vai precisar ser refeito.
 
 **Entregas**
-1. **Pipeline de migração real.** `drizzle-kit migrate` no pre-deploy, removendo `full-schema.sql` como fonte. Matar `ensureUsersTable`/`ensurePlanVersionSchema` (`_core/index.ts:105,153`) depois que a migração passar. *(G16)*
+1. ~~**Pipeline de migração real.**~~ **FEITO (Onda 0.1).** Ver §3.1.
 2. **Calendário de trabalho.** Tabela `work_calendars` (tipo: BR-nacional, 5×2, 6×1, custom) + `calendar_exceptions` (feriados, ponto facultativo, dias de chuva). Datas reais em `schedule_activities` (`plannedStart/plannedFinish`, `actualStart/actualFinish`), migração de `startOffset` → data usando o calendário padrão. *(G1, G2)*
 3. **CPM ciente de calendário** e `dataDate` (data de status) — passe direto a partir da data de status, não de `start=0`. *(G1, G2)*
 4. **Folga livre (FF) e de interferência (IF)** no resultado, além da total. *(G3)*
