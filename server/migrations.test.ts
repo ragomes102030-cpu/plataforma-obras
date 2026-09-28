@@ -290,6 +290,52 @@ describe("DDL no MySQL e implicit-commit: a aplicacao precisa ser idempotente", 
     expect(alvoDoStatement("SELECT 1")).toBeNull();
   });
 
+  // Colunas reais de cada tabela do INFORMATION_SCHEMA. Um mapeamento que aponte
+  // para uma coluna inexistente da ER_BAD_FIELD_ERROR no pre-deploy -- foi o que
+  // matou o segundo deploy, com TABLE_CONSTRAINTS consultando COLUMN_NAME.
+  const COLUNAS_INFORMATION_SCHEMA: Record<string, string[]> = {
+    TABLES: ["TABLE_SCHEMA", "TABLE_NAME"],
+    COLUMNS: ["TABLE_SCHEMA", "TABLE_NAME", "COLUMN_NAME"],
+    TABLE_CONSTRAINTS: ["TABLE_SCHEMA", "TABLE_NAME", "CONSTRAINT_NAME"],
+    STATISTICS: ["TABLE_SCHEMA", "TABLE_NAME", "INDEX_NAME"],
+  };
+
+  function consultaPorTipo(tipo: string): { tabela: string; coluna: string | null } {
+    const m = script.match(/const CONSULTA_POR_TIPO = \{[\s\S]*?\n\};/);
+    if (!m) throw new Error("CONSULTA_POR_TIPO nao encontrada em scripts/migrate-db.mjs");
+    const ler = new Function(m[0] + " return CONSULTA_POR_TIPO;");
+    return ler()[tipo];
+  }
+
+  it.each(["table", "coluna", "constraint", "index"])(
+    "a consulta de %s usa uma coluna que existe na tabela do INFORMATION_SCHEMA",
+    tipo => {
+      const { tabela, coluna } = consultaPorTipo(tipo);
+      const colunas = COLUNAS_INFORMATION_SCHEMA[tabela];
+      expect(colunas, `INFORMATION_SCHEMA.${tabela} fora do mapa do teste`).toBeDefined();
+      if (coluna !== null) {
+        expect(
+          colunas,
+          `INFORMATION_SCHEMA.${tabela} nao tem a coluna ${coluna} — ` +
+            `a consulta estouraria ER_BAD_FIELD_ERROR no pre-deploy`
+        ).toContain(coluna);
+      }
+    }
+  );
+
+  it("todo tipo emitido por alvoDoStatement tem consulta mapeada", () => {
+    const tipos = new Set(
+      statementsDasMigracoes()
+        .map(s => alvoDoStatement(s))
+        .filter((a): a is { tipo: string } => a !== null)
+        .map(a => a.tipo)
+    );
+    expect(tipos.size).toBeGreaterThan(0);
+    for (const tipo of tipos) {
+      expect(() => consultaPorTipo(tipo), `tipo sem mapeamento: ${tipo}`).not.toThrow();
+    }
+  });
+
   it("todo statement das migracoes cai em um dos formatos reconhecidos", () => {
     // Se um statement novo nao for reconhecido, ele passa sem verificacao e
     // volta a ser falha-eterna: o statement silenciosamente nao idempotente.

@@ -168,12 +168,30 @@ function alvoDoStatement(stmt) {
   return null;
 }
 
+// Qual tabela do INFORMATION_SCHEMA responde por cada tipo, e por qual coluna.
+// Estas colunas sao reais: consultar uma coluna que a tabela nao tem da
+// ER_BAD_FIELD_ERROR, que matava o pre-deploy.
+const CONSULTA_POR_TIPO = {
+  table: { tabela: "TABLES", coluna: null },
+  coluna: { tabela: "COLUMNS", coluna: "COLUMN_NAME" },
+  constraint: { tabela: "TABLE_CONSTRAINTS", coluna: "CONSTRAINT_NAME" },
+  index: { tabela: "STATISTICS", coluna: "INDEX_NAME" },
+};
+
+function alvoDeConsulta(alvo) {
+  const def = CONSULTA_POR_TIPO[alvo.tipo];
+  if (!def) throw new Error(`tipo de DDL nao mapeado: ${alvo.tipo}`);
+  return def;
+}
+
 async function jaExiste(alvo) {
+  const { tabela: infoTable, coluna } = alvoDeConsulta(alvo);
   const [rows] = await conn.query(
-    `SELECT 1 AS found FROM INFORMATION_SCHEMA.${alvo.tipo === "table" ? "TABLES" : alvo.tipo === "coluna" ? "COLUMNS" : alvo.tipo === "constraint" ? "TABLE_CONSTRAINTS" : "STATISTICS"}` +
-      ` WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?${alvo.tipo === "table" ? "" : " AND " + (alvo.tipo === "index" ? "INDEX_NAME" : "COLUMN_NAME") + " = ?"}` +
+    `SELECT 1 AS found FROM INFORMATION_SCHEMA.${infoTable}` +
+      ` WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?` +
+      (coluna ? ` AND ${coluna} = ?` : "") +
       ` LIMIT 1`,
-    alvo.tipo === "table" ? [alvo.tabela] : [alvo.tabela, alvo.nome]
+    coluna ? [alvo.tabela, alvo.nome] : [alvo.tabela]
   );
   return rows.length > 0;
 }
