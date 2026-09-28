@@ -147,6 +147,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
   const visible = useMemo(() => (onlyCritical ? activities.filter((a) => a.critical === 1) : activities), [activities, onlyCritical]);
   const total = activities.length;
   const criticalCount = activities.filter((a) => a.critical === 1).length;
+  const infeasibleCount = activities.filter((a) => (a.totalFloat ?? 0) < 0).length;
   const progressAvg = total ? activities.reduce((s, a) => s + (a.progress ?? 0), 0) / total : 0;
 
   const maxDay = useMemo(() => Math.max(1, ...visible.map((a) => (a.startOffset ?? 0) + (a.durationDays ?? 1))), [visible]);
@@ -167,6 +168,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
         critical: a.critical === 1,
         progress: a.progress ?? 0,
         freeFloat: a.freeFloat ?? null,
+        infeasible: (a.totalFloat ?? 0) < 0,
         mustStartOnLabel: a.mustStartOn ? constraintLabel(a.mustStartOn) : null,
         finishNoLaterThanLabel: a.finishNoLaterThan ? constraintLabel(a.finishNoLaterThan) : null,
       })),
@@ -270,7 +272,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
     <div style={{ background: "var(--bg)", color: "var(--text)", padding: 16 }}>
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--primary)" }}>Gantt da obra</h2>
       <p style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
-        Atividades: {total} · visíveis: {rows.length} · Críticas: {criticalCount} · Dependências: {dependencies.length} ·
+        Atividades: {total} · visíveis: {rows.length} · Críticas: {criticalCount} · Conflitos de restrição: {infeasibleCount} · Dependências: {dependencies.length} ·
         início da obra {projectStart === null ? "não informado" : new Date(projectStart).toLocaleDateString("pt-BR")} · calendário de dias úteis {calendar ? "(com feriados)" : ""}
       </p>
 
@@ -374,7 +376,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
                   {cols.inicio && <td style={{ padding: "0 5px" }}>{r.inicio}</td>}
                   {cols.termino && <td style={{ padding: "0 5px" }}>{r.termino}</td>}
                   {cols.dur && <td style={{ padding: "0 5px" }}>{r.duration}d</td>}
-                  {cols.fft && <td style={{ padding: "0 5px", color: (r.freeFloat ?? 0) > 0 ? "var(--text2)" : "var(--warn)" }}>{r.freeFloat ?? 0}d</td>}
+                  {cols.fft && <td style={{ padding: "0 5px", color: r.infeasible ? "var(--crit)" : (r.freeFloat ?? 0) > 0 ? "var(--text2)" : "var(--warn)", fontWeight: r.infeasible ? 700 : 400 }}>{r.freeFloat ?? 0}d{r.infeasible ? " !" : ""}</td>}
                   {cols.pct && <td style={{ padding: "0 5px", fontWeight: 600, color: r.progress > 0 ? "var(--ok)" : "var(--text2)" }}>{r.progress}%</td>}
                 </tr>
               ))}
@@ -429,9 +431,15 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
                       onSelectActivity?.(r.id);
                     }}
                   >
-                    <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | FFL: ${r.freeFloat ?? 0}d | Progresso: ${r.progress}%${r.mustStartOnLabel ? ` | MSO: ${r.mustStartOnLabel}` : ""}${r.finishNoLaterThanLabel ? ` | FNLT: ${r.finishNoLaterThanLabel}` : ""} | arraste p/ mover`}</title>
+                    <title>{`${r.wbsCode}: ${r.name} | ${r.inicio} a ${r.termino} | Dur: ${r.duration}d | FFL: ${r.freeFloat ?? 0}d | Progresso: ${r.progress}%${r.mustStartOnLabel ? ` | MSO: ${r.mustStartOnLabel}` : ""}${r.finishNoLaterThanLabel ? ` | FNLT: ${r.finishNoLaterThanLabel}` : ""}${r.infeasible ? " | ATENCAO: folga total negativa - restricoes incompativeis" : ""} | arraste p/ mover`}</title>
                   </rect>
                   <rect x={p.x0} y={p.y + 6} width={Math.max(3, w * (r.progress / 100))} height={14} rx={3} fill="#1e8a4f" opacity={0.6} style={{ pointerEvents: "none" }} />
+                  {r.infeasible && (
+                    <g style={{ pointerEvents: "none" }}>
+                      <rect x={p.x0} y={p.y + 6} width={w} height={14} rx={3} fill="none" stroke="#c2181a" strokeWidth={2} strokeDasharray="2 2" />
+                      <text x={p.x1 + 4} y={p.y + 12} fontSize={8} fill="#c2181a" fontWeight={700}>! folga negativa</text>
+                    </g>
+                  )}
                   {r.mustStartOnLabel && (
                     <g style={{ pointerEvents: "none" }}>
                       <line x1={p.x0} y1={p.y + 2} x2={p.x0} y2={p.y + 24} stroke="#5b21b6" strokeWidth={2} strokeDasharray="3 2" />
@@ -474,7 +482,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
 
       <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 10 }}>
         <b>M5:</b> arraste a barra para mover; arraste a alça direita para mudar a duração; use "Ligar" e clique em 2 barras para criar FS. Cada ação grava via API e recalcula o CPM.
-        <b> M6:</b> exporte PNG ou PDF. <b>M3/M4:</b> setas FS/SS com lag, zoom, colunas, filtro. <b>Onda 0.4:</b> MSO (roxo tracejado) = <i>must start on</i>; FNLT (ambar tracejado) = <i>finish no later than</i>; FFL = folga livre em dias uteis.
+        <b> M6:</b> exporte PNG ou PDF. <b>M3/M4:</b> setas FS/SS com lag, zoom, colunas, filtro. <b>Onda 0.4:</b> MSO (roxo tracejado) = <i>must start on</i>; FNLT (ambar tracejado) = <i>finish no later than</i>; FFL = folga livre; contorno vermelho tracejado = folga total negativa (restricoes incompativeis).
       </div>
     </div>
   );

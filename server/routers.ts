@@ -3122,7 +3122,7 @@ export const appRouter = router({
         const enrichedActivities = activities.map(a => ({ ...a, mustStartOnDay: a.mustStartOn ? indexOf(calendar, startIso, localIso(a.mustStartOn)) : undefined, finishNoLaterThanDay: a.finishNoLaterThan ? indexOf(calendar, startIso, localIso(a.finishNoLaterThan)) : undefined }));
 
         const result = calculateDeterministicCpm(activities, dependencies);
-        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
+        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], infeasibleActivities: [] as number[], issues: result.issues, infeasible: result.infeasible };
         const calculatedAt = new Date();
         const schedule = result.schedule;
         const items = schedule.activities;
@@ -3153,7 +3153,7 @@ export const appRouter = router({
             `);
           });
         }
-        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
+        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), infeasible: result.infeasible, infeasibleActivities: result.schedule.infeasibleActivities.map(Number), issues: result.issues };
       }),
     createResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(180), resourceType: z.enum(["mao_de_obra", "equipamento", "material"]), unit: z.string().trim().min(1).max(32), capacityPerDay: z.number().positive().optional(), costPerDay: z.number().nonnegative().optional() }))

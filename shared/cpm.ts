@@ -24,6 +24,8 @@ export type CpmResult = CpmActivity & {
   totalFloat: number;
   /** Folga livre: quanto a atividade pode atrasar sem atrasar o earlyStart de QUALQUER sucessora. */
   freeFloat: number;
+  /** Verdadeiro quando as restrições tornam a rede inviável (folga total negativa). */
+  infeasible: boolean;
   critical: boolean;
 };
 
@@ -31,6 +33,8 @@ export type ScheduleResult = {
   activities: CpmResult[];
   projectDuration: number;
   criticalPath: string[];
+  /** Atividades cuja folga total ficou negativa por conflito de restrições. */
+  infeasibleActivities: string[];
 };
 
 /**
@@ -183,6 +187,7 @@ export function calculateCpm(
       totalFloat,
       freeFloat: freeFloat.get(activity.id) ?? 0,
       critical: totalFloat <= 0,
+      infeasible: totalFloat < 0,
     };
   });
   return {
@@ -190,6 +195,10 @@ export function calculateCpm(
     projectDuration,
     criticalPath: results
       .filter(activity => activity.critical)
+      .sort((a, b) => a.earlyStart - b.earlyStart || a.id.localeCompare(b.id))
+      .map(activity => activity.id),
+    infeasibleActivities: results
+      .filter(activity => activity.infeasible)
       .sort((a, b) => a.earlyStart - b.earlyStart || a.id.localeCompare(b.id))
       .map(activity => activity.id),
   };

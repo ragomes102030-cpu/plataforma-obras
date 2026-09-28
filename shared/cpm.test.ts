@@ -155,4 +155,45 @@ describe("calculateCpm", () => {
     expect(result.activities.find(item => item.id === "A")!.freeFloat).toBe(0);
     expect(result.activities.find(item => item.id === "B")!.freeFloat).toBe(0);
   });
+
+  it("sinaliza folga total negativa quando as restrições são incompatíveis", () => {
+    // A: mustStartOn=5, duration=2, finishNoLaterThan=6 -> ES=5, EF=7.
+    // lateFinish = min(projectDuration=7, 6) = 6 -> LS=4. totalFloat = 4-5 = -1.
+    const result = calculateCpm(
+      [{ id: "A", duration: 2, mustStartOn: 5, finishNoLaterThan: 6 }],
+      []
+    );
+    const a = result.activities[0];
+    expect(a.totalFloat).toBe(-1);
+    expect(a.infeasible).toBe(true);
+    expect(a.critical).toBe(true);
+    expect(result.infeasibleActivities).toEqual(["A"]);
+  });
+
+  it("rede viável não lista atividades infeasíveis", () => {
+    // A dur=2, mustStartOn=5, finishNoLaterThan=9 -> ES=5, EF=7, LF=min(7,9)=7, LS=5, TF=0.
+    const result = calculateCpm(
+      [{ id: "A", duration: 2, mustStartOn: 5, finishNoLaterThan: 9 }],
+      []
+    );
+    expect(result.activities[0].infeasible).toBe(false);
+    expect(result.infeasibleActivities).toEqual([]);
+  });
+
+  it("rede sem restrições permanece viável", () => {
+    const result = calculateCpm(
+      [{ id: "A", duration: 3 }, { id: "B", duration: 2 }],
+      [{ predecessorId: "A", successorId: "B", type: "FS" }]
+    );
+    expect(result.activities.every(a => !a.infeasible)).toBe(true);
+    expect(result.infeasibleActivities).toEqual([]);
+  });
+
+  it("freeFloat permanece zero mesmo quando a atividade é inviável", () => {
+    const result = calculateCpm(
+      [{ id: "A", duration: 2, mustStartOn: 5, finishNoLaterThan: 6 }],
+      []
+    );
+    expect(result.activities[0].freeFloat).toBe(0);
+  });
 });
