@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   boolean,
   int,
   mysqlEnum,
@@ -363,13 +364,16 @@ export const activityResourceAllocations = mysqlTable(
   "activity_resource_allocations",
   {
     id: int("id").autoincrement().primaryKey(),
-    activityId: int("activityId").notNull().references(() => scheduleActivities.id),
-    resourceId: int("resourceId").notNull().references(() => planningResources.id),
+    activityId: int("activityId").notNull(),
+    resourceId: int("resourceId").notNull(),
     quantity: decimal("quantity", { precision: 14, scale: 3 }).default("1").notNull(),
     productivity: decimal("productivity", { precision: 14, scale: 3 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [
+    // Nome explícito: o automático (>64 chars) é recusado pelo MySQL num banco novo.
+    foreignKey({ name: "act_res_alloc_activity_fk", columns: [table.activityId], foreignColumns: [scheduleActivities.id] }),
+    foreignKey({ name: "act_res_alloc_resource_fk", columns: [table.resourceId], foreignColumns: [planningResources.id] }),
     uniqueIndex("activity_resource_unique_idx").on(table.activityId, table.resourceId),
     index("activity_resource_activity_idx").on(table.activityId),
   ]

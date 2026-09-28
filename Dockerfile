@@ -65,5 +65,10 @@ RUN pnpm install --frozen-lockfile --prod
 # e o bundle vive em dist/ — entao o front precisa estar em dist/public.
 COPY --from=build /app/dist ./dist
 
+# Bootstrap de banco vazio (staging / recuperacao). Nao roda sozinho: so quando
+# o comando de start do servico o chama; em producao o CMD abaixo nao o usa.
+COPY scripts/bootstrap-db.mjs ./scripts/bootstrap-db.mjs
+COPY drizzle/full-schema.sql ./drizzle/full-schema.sql
+
 EXPOSE 3000
 CMD ["pnpm", "start"]
