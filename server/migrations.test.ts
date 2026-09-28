@@ -333,7 +333,57 @@ describe("o runtime recebe o que o pre-deploy precisa", () => {
     const railway = JSON.parse(readFileSync("railway.json", "utf-8")) as {
       deploy: { preDeployCommand?: string[] };
     };
-    expect(railway.deploy.preDeployCommand).toEqual(["node scripts/migrate-db.mjs"]);
+    expect(railway.deploy.preDeployCommand?.[0]).toBe("node scripts/migrate-db.mjs");
+  });
+
+  it("o pre-deploy tambem roda a auditoria de schema, sem bloquear o deploy", () => {
+    // A auditoria le INFORMATION_SCHEMA e so esta na rede da Railway — e
+    // exatamente onde ninguem consegue conferir a mao depois de um deploy.
+    // Rodando no pre-deploy, o relatorio fica no log do deploy.
+    //
+    // `|| true` e deliberado: divergencia de schema nao deve derrubar o deploy
+    // por surpresa. Bloquear aqui ja custou tres deploys seguidos nesta mesma
+    // Onda; a auditoria existe para INFORMAR, nao para barrar.
+    const railway = JSON.parse(readFileSync("railway.json", "utf-8")) as {
+      deploy: { preDeployCommand?: string[] };
+    };
+    const cmd = railway.deploy.preDeployCommand ?? [];
+    const auditoria = cmd.find(c => c.includes("audit-schema.mjs"));
+    expect(auditoria, "a auditoria de schema nao roda no pre-deploy").toBeDefined();
+    expect(auditoria).toMatch(/\|\|\s*true/);
+  });
+
+  it("a auditoria de schema so escreve: so executa SELECT", () => {
+    // Ela roda no pre-deploy de producao. Se um dia alguem "melhorar" o
+    // relatorio e acrescentar uma escrita, isto acusa.
+    //
+    // A deteccao usa o indice de cada `conn.query(` e a proxima aspa
+    // delimitadora, nao um unico regex. Regex com quantifiedor guloso ou
+    // preguicoso erra o alvo em silencio e o teste vaza: foi o que aconteceu
+    // duas vezes aqui, com o teste VERDE enquanto a mutacao estava presente.
+    const src = readFileSync(join("scripts", "audit-schema.mjs"), "utf-8");
+    const escritas: string[] = [];
+    let pos = 0;
+    for (;;) {
+      const i = src.indexOf("conn.query(", pos);
+      if (i === -1) break;
+      pos = i + 1;
+      const abre = src.indexOf("(", i);
+      let cursor = abre + 1;
+      while (cursor < src.length && /\s/.test(src[cursor]!)) cursor++;
+      const aspa = src[cursor];
+      if (aspa !== "`" && aspa !== '"' && aspa !== "'") continue;
+      const fim = src.indexOf(aspa, cursor + 1);
+      if (fim === -1) continue;
+      const sql = src.slice(cursor + 1, fim).trim();
+      if (!/^SELECT\b/i.test(sql)) escritas.push(sql.slice(0, 60));
+    }
+
+    expect(
+      escritas,
+      "audit-schema.mjs executa algo que nao e SELECT — ela e de leitura pura " +
+        "e roda no pre-deploy de producao:\n  " + escritas.join("\n  ")
+    ).toEqual([]);
   });
 
   it("o script do pre-deploy e tudo que ele importa estao na imagem de runtime", () => {

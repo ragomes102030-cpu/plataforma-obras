@@ -76,6 +76,8 @@ COPY --from=build /app/dist ./dist
 COPY drizzle/ ./drizzle/
 COPY scripts/migrate-db.mjs ./scripts/migrate-db.mjs
 COPY scripts/migrate-core.mjs ./scripts/migrate-core.mjs
+# Auditoria de schema: le INFORMATION_SCHEMA e compara com as migracoes.
+COPY scripts/audit-schema.mjs ./scripts/audit-schema.mjs
 
 EXPOSE 3000
 CMD ["pnpm", "start"]
