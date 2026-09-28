@@ -78,6 +78,7 @@ COPY scripts/migrate-db.mjs ./scripts/migrate-db.mjs
 COPY scripts/migrate-core.mjs ./scripts/migrate-core.mjs
 # Auditoria de schema: le INFORMATION_SCHEMA e compara com as migracoes.
 COPY scripts/audit-schema.mjs ./scripts/audit-schema.mjs
+COPY scripts/sentinel.mjs ./scripts/sentinel.mjs
 
 EXPOSE 3000
 CMD ["pnpm", "start"]
