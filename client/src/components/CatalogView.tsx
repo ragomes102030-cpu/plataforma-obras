@@ -44,7 +44,7 @@ export function CatalogView() {
   const [seinfraPeriod, setSeinfraPeriod] = useState("");
   const [seinfraUf, setSeinfraUf] = useState("CE");
   const [seinfraName, setSeinfraName] = useState("");
-  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; skipped: number; referenceHint: string | null } | null>(null);
+  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; skipped: number; referenceHint: string | null; aviso: string | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [acQuery, setAcQuery] = useState("");
   const [acOpen, setAcOpen] = useState(false);
@@ -191,7 +191,7 @@ export function CatalogView() {
           <div className="catalog-form-footer"><span>Arquivos aceitos: Tabela de Insumos (I...) e Planos de Serviços (C...) da SEINFRA.</span><button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || importSheet.isPending}><Upload size={14} /> {importSheet.isPending ? "Importando..." : "Importar planilha"}</button></div>
         </form>
         {importSheet.error && <p className="form-error">{importSheet.error.message}</p>}
-        {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span></div></div>}
+        {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span>{importResult.aviso && <span style={{ color: "var(--warn)" }}>{importResult.aviso}</span>}</div></div>}
       </section>
 
       <div className="catalog-two-column">

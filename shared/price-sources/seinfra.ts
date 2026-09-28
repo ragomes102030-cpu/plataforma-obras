@@ -4,8 +4,14 @@
  * Formatos oficiais (download manual do site, sem scraping):
  * - Tabela-de-Insumos-<versão>---....xls  → códigos I....
  * - Planos-de-Servicos-<versão>---....xls → códigos C....
+ * - Composicoes-<versão>---....xls        → bloco por composição, e não
+ *   tabela plana (ver `reconhecerPlanilhaSeinfra`).
+ *
  * Layout varia entre versões mensais: NÃO hardcoded índice de célula —
  * a linha de cabeçalho é sniffada por sinônimos (Código/Descrição/Unidade/Valor).
+ *
+ * Os três arquivos NÃO são intercambiáveis. Só o Planos-de-Serviços tem
+ * serviço, e é o único que gera EAP — ver o README desta pasta.
  */
 
 import type {
@@ -13,6 +19,74 @@ import type {
   ParsedPriceRecord,
   PriceSourceAdapter,
 } from "./types";
+
+/** Qual dos três arquivos oficiais a planilha é. */
+export type PlanilhaSeinfra =
+  | "servicos"
+  | "insumos"
+  | "composicoes"
+  | "desconhecida";
+
+/**
+ * Reconhece qual arquivo oficial chegou, para o importador explicar em vez de
+ * devolver "cabeçalho não identificado".
+ *
+ * Sem isso, importar o arquivo de Composições devolvia "Nenhum preço
+ * reconhecido na planilha" — mensagem verdadeira e inútil, porque a causa é
+ * que aquela planilha não É uma tabela de preços: é um relatório de composições,
+ * com um bloco por serviço (seção, coeficiente, custo unitário).
+ *
+ * A distinção importa também no outro sentido: a Tabela de Insumos importa
+ * 11.828 itens CORRETAMENTE e mesmo assim não gera EAP, porque não tem nenhum
+ * serviço. O usuário precisa ouvir isso na hora, e não descobrir depois.
+ */
+export function reconhecerPlanilhaSeinfra(rows: SheetRow[]): PlanilhaSeinfra {
+  // O arquivo de Composições tem 63 mil linhas, então a busca fica nas
+  // primeiras. Dois sinais, porque cada um sozinho é frágil:
+  //
+  // - o título, que em algumas versões vem na coluna 1 e não na 0;
+  // - uma linha de serviço "C1802 - BOMBA..." com "Coeficiente" logo abaixo,
+  //   que é o cabeçalho do bloco de insumos. "coeficiente" sozinho não serve:
+  //   o Planos-de-Serviços tem serviço cujo nome cita coeficiente.
+  const limite = Math.min(rows.length, 200);
+  for (let r = 0; r < limite; r += 1) {
+    const celulas = (rows[r] ?? []).map(normalizeCell);
+    if (
+      celulas.some(
+        celula =>
+          celula === "relatorio de composicoes" ||
+          celula === "relatorio de composicao" ||
+          celula === "composicoes"
+      )
+    ) {
+      return "composicoes";
+    }
+    if (/^c\d{3,}\s*-\s*\S/.test(celulas[0] ?? "")) {
+      const janela = [1, 2, 3]
+        .map(d => (rows[r + d] ?? []).map(normalizeCell).join(" "))
+        .join(" ");
+      if (janela.includes("coeficiente")) return "composicoes";
+    }
+  }
+
+  const header = findHeaderRow(rows);
+  if (!header) return "desconhecida";
+
+  // Amostra os dados para ver qual família de código aparece.
+  let servicos = 0;
+  let insumos = 0;
+  let vistas = 0;
+  for (let r = header.rowIndex + 1; r < rows.length && vistas < 200; r += 1) {
+    const code = String((rows[r] ?? [])[header.code] ?? "").trim();
+    if (!code) continue;
+    vistas += 1;
+    if (/^C\s*\d/i.test(code)) servicos += 1;
+    else if (/^[IG]\s*\d/i.test(code)) insumos += 1;
+  }
+  if (servicos > insumos) return "servicos";
+  if (insumos > 0) return "insumos";
+  return "desconhecida";
+}
 
 const HEADER_SYNONYMS = {
   // A coluna `CÓDIGO` do Planos-de-Serviços é o código oficial do serviço
@@ -186,6 +260,17 @@ export function extractReferenceHint(fileName: string): string | null {
   const monthYear = fileName.match(/(\d{2})[/-](\d{4})/);
   if (monthYear) return `${monthYear[1]}/${monthYear[2]}`;
   return null;
+}
+
+/**
+ * Lê a primeira aba de um .xls/.xlsx em linhas.
+ *
+ * Exportado porque o importador precisa reconhecer qual dos três arquivos
+ * oficiais chegou antes de decidir o que fazer com ele, e reler a planilha por
+ * fora do adapter duplicaria a lógica de leitura.
+ */
+export async function lerPrimeiraAba(bytes: Uint8Array): Promise<SheetRow[]> {
+  return readSheetRows(bytes);
 }
 
 /** Parser de bytes .xls/.xlsx via SheetJS (comum a file input e Buffer). */

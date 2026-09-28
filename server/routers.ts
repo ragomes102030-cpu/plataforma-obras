@@ -33,7 +33,11 @@ import {
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { defaultCalendar, elapsedWorkingDays, indexOf, type WorkCalendar, type DayType, type WeekPattern } from "@shared/work-calendar";
-import { seinfraAdapter } from "@shared/price-sources/seinfra";
+import {
+  lerPrimeiraAba,
+  reconhecerPlanilhaSeinfra,
+  seinfraAdapter,
+} from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
   findCandidates,
@@ -2864,8 +2868,24 @@ export const appRouter = router({
           throw badRequest("Formato não suportado. Envie .xls ou .xlsx da SEINFRA (download manual do site).");
         }
         const parsed = await seinfraAdapter.parse(input.fileName, uint8);
+        // A Tabela Unificada vem em três arquivos que NÃO são intercambiáveis,
+        // e o erro genérico ("cabeçalho não identificado") não diz qual deles
+        // chegou nem o que fazer. Reconhecer o arquivo é o que transforma uma
+        // mensagem verdadeira e inútil em instrução.
+        const planilha = reconhecerPlanilhaSeinfra(
+          await lerPrimeiraAba(uint8)
+        );
+        if (planilha === "composicoes") {
+          throw badRequest(
+            "Este é o arquivo de Composições, e não a tabela de preços. Ele traz cada serviço como um bloco com mão de obra, materiais, coeficientes e custo unitário — os insumos também têm código I..., que o catálogo já tem. Para gerar a EAP, importe o Planos-de-Serviços (é ele que tem os códigos C... dos serviços)."
+          );
+        }
         if (!parsed.records.length) {
-          throw badRequest("Nenhum preço reconhecido na planilha (cabeçalho não identificado).");
+          throw badRequest(
+            planilha === "desconhecida"
+              ? "Nenhum preço reconhecido: o cabeçalho da planilha não foi identificado. Envie a Tabela de Insumos ou o Planos-de-Serviços da SEINFRA."
+              : "Nenhum preço reconhecido nas linhas de dados."
+          );
         }
         const referencePeriod = input.referencePeriod || parsed.referenceHint || "s/ ref";
         // Cada import = 1 NOVO priceCatalogs; nunca sobrescreve meses anteriores.
@@ -2907,6 +2927,13 @@ export const appRouter = router({
           imported: parsed.records.length,
           skipped: parsed.skipped,
           referenceHint: parsed.referenceHint,
+          // A Tabela de Insumos importa 11.828 itens corretamente e mesmo assim
+          // não gera EAP: não tem nenhum serviço. Dizer isso agora evita que o
+          // usuário crie a obra esperando estrutura e descubra depois.
+          aviso:
+            planilha === "insumos"
+              ? "Catálogo de insumos carregado. Para a EAP nascer com os códigos oficiais, importe também o Planos-de-Serviços — é ele que tem os serviços (C...)."
+              : null,
         };
       }),
     searchPrices: protectedProcedure
