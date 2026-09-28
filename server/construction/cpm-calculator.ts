@@ -10,6 +10,8 @@ export type DeterministicCpmResult = {
   valid: boolean;
   schedule: ScheduleResult | null;
   issues: ValidationIssue[];
+  /** Verdadeiro quando alguma atividade ficou com folga total negativa. */
+  infeasible: boolean;
 };
 
 export function calculateDeterministicCpm(
@@ -18,7 +20,7 @@ export function calculateDeterministicCpm(
 ): DeterministicCpmResult {
   const validation = validateDependencies(activities, dependencies);
   if (!validation.valid) {
-    return { valid: false, schedule: null, issues: validation.issues };
+    return { valid: false, schedule: null, issues: validation.issues, infeasible: false };
   }
 
   try {
@@ -26,6 +28,8 @@ export function calculateDeterministicCpm(
       activities.map(activity => ({
         id: String(activity.id),
         duration: activity.durationDays,
+        mustStartOn: activity.mustStartOnDay ?? undefined,
+        finishNoLaterThan: activity.finishNoLaterThanDay ?? undefined,
       })),
       dependencies.map(dependency => ({
         predecessorId: String(dependency.predecessorId),
@@ -34,11 +38,19 @@ export function calculateDeterministicCpm(
         lag: dependency.lag,
       }))
     );
-    return { valid: true, schedule, issues: [] };
+    const infeasible = schedule.activities.filter(activity => activity.infeasible);
+    const issues: ValidationIssue[] = infeasible.map(activity => ({
+      code: "cpm_constraint_conflict",
+      severity: "warning" as const,
+      entityRef: activity.id,
+      message: `Folga total negativa (${activity.totalFloat} dias): as restrições desta atividade são incompatíveis com a rede.`,
+    }));
+    return { valid: true, schedule, issues, infeasible: infeasible.length > 0 };
   } catch (error) {
     return {
       valid: false,
       schedule: null,
+      infeasible: false,
       issues: [
         {
           code: "cpm_calculation_failed",

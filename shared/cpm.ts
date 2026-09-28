@@ -10,6 +10,10 @@ export type Dependency = {
 export type CpmActivity = {
   id: string;
   duration: number;
+  /** Índice do dia útil (CPM) em que a atividade DEVE começar no mais cedo. */
+  mustStartOn?: number;
+  /** Índice do dia útil (CPM) mais tarde em que a atividade PODE terminar. */
+  finishNoLaterThan?: number;
 };
 
 export type CpmResult = CpmActivity & {
@@ -18,6 +22,10 @@ export type CpmResult = CpmActivity & {
   lateStart: number;
   lateFinish: number;
   totalFloat: number;
+  /** Folga livre: quanto a atividade pode atrasar sem atrasar o earlyStart de QUALQUER sucessora. */
+  freeFloat: number;
+  /** Verdadeiro quando as restrições tornam a rede inviável (folga total negativa). */
+  infeasible: boolean;
   critical: boolean;
 };
 
@@ -25,6 +33,8 @@ export type ScheduleResult = {
   activities: CpmResult[];
   projectDuration: number;
   criticalPath: string[];
+  /** Atividades cuja folga total ficou negativa por conflito de restrições. */
+  infeasibleActivities: string[];
 };
 
 /**
@@ -108,6 +118,10 @@ export function calculateCpm(
               : predecessor.start + lag - activity.duration;
       start = Math.max(start, candidate);
     }
+    // Constraint: mustStartOn é um piso no início mais cedo
+    if (activity.mustStartOn !== undefined) {
+      start = Math.max(start, activity.mustStartOn);
+    }
     early.set(id, { start, finish: start + activity.duration });
   }
 
@@ -133,7 +147,31 @@ export function calculateCpm(
               : successor.finish - lag + activity.duration;
       finish = Math.min(finish, candidate);
     }
+    // Constraint: finishNoLaterThan é um teto no término mais tarde
+    if (activity.finishNoLaterThan !== undefined) {
+      finish = Math.min(finish, activity.finishNoLaterThan);
+    }
     late.set(id, { start: finish - activity.duration, finish });
+  }
+
+  // ------------------------------------------------- folga livre --------
+  // freeFloat(A) = min(earlyStart de todas as sucessoras) - earlyFinish(A).
+  // Se A não tem sucessoras, freeFloat = projectDuration - earlyFinish(A).
+  const freeFloat = new Map<string, number>();
+  for (const id of order) {
+    const successors = outgoing.get(id) ?? [];
+    let ff: number;
+    if (successors.length === 0) {
+      ff = projectDuration - early.get(id)!.finish;
+    } else {
+      let minSES = Infinity;
+      for (const dep of outgoing.get(id) ?? []) {
+        const ses = early.get(dep.successorId)!.start;
+        minSES = Math.min(minSES, ses);
+      }
+      ff = minSES - early.get(id)!.finish;
+    }
+    freeFloat.set(id, Math.max(0, ff));
   }
 
   const results = activities.map(activity => {
@@ -147,7 +185,9 @@ export function calculateCpm(
       lateStart: lateValue.start,
       lateFinish: lateValue.finish,
       totalFloat,
+      freeFloat: freeFloat.get(activity.id) ?? 0,
       critical: totalFloat <= 0,
+      infeasible: totalFloat < 0,
     };
   });
   return {
@@ -155,6 +195,10 @@ export function calculateCpm(
     projectDuration,
     criticalPath: results
       .filter(activity => activity.critical)
+      .sort((a, b) => a.earlyStart - b.earlyStart || a.id.localeCompare(b.id))
+      .map(activity => activity.id),
+    infeasibleActivities: results
+      .filter(activity => activity.infeasible)
       .sort((a, b) => a.earlyStart - b.earlyStart || a.id.localeCompare(b.id))
       .map(activity => activity.id),
   };

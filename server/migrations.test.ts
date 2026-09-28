@@ -101,38 +101,106 @@ describe("identificadores das migracoes", () => {
   );
 });
 
-describe("a migracao baseline cobre o schema declarado", () => {
-  const baseline = journal.entries[0];
+// A cobertura do schema e verificada sobre a UNIAO de todas as migracoes, nao
+// so sobre a primeira. Antes desta regra o teste lia apenas
+// `journal.entries[0]`, o que dava cobertura gratis a DDL acrescentado depois
+// dentro do proprio 0000_baseline.sql -- um arquivo que o migrator do drizzle
+// jamais reexecuta num banco onde o baseline ja consta como aplicado. Era
+// exatamente assim que as Ondas 0.2b e 0.4 "passavam" no teste local e
+// quebrariam em producao com `Unknown column` / `Table doesn't exist`.
+describe("as migracoes cobrem o schema declarado", () => {
+  function criadasEmTodas(): Set<string> {
+    const criadas = new Set<string>();
+    for (const entry of journal.entries) {
+      const sql = readMigration(entry.tag);
+      for (const m of sql.matchAll(/CREATE TABLE `([^`]+)`/g)) criadas.add(m[1]);
+    }
+    return criadas;
+  }
 
-  it("existe e cria todas as tabelas do schema.ts", () => {
-    const sql = readMigration(baseline.tag);
-    const criadas = new Set(
-      [...sql.matchAll(/CREATE TABLE `([^`]+)`/g)].map(m => m[1])
-    );
+  function declaradasNoSchema(): Set<string> {
     const schema = readFileSync(join(MIGRATIONS_FOLDER, "schema.ts"), "utf-8");
-    const declaradas = new Set(
+    return new Set(
       [...schema.matchAll(/mysqlTable\(\s*["']([^"']+)["']/g)].map(m => m[1])
     );
+  }
+
+  it("existe e cria todas as tabelas do schema.ts", () => {
+    const criadas = criadasEmTodas();
+    const declaradas = declaradasNoSchema();
     const faltando = [...declaradas].filter(t => !criadas.has(t));
     expect(
       faltando,
-      `tabelas de schema.ts ausentes no baseline:\n  ${faltando.join("\n  ")}`
+      `tabelas de schema.ts ausentes das migracoes:\n  ${faltando.join("\n  ")}`
     ).toEqual([]);
   });
 
   it("nao cria tabelas que schema.ts nao declara", () => {
-    const sql = readMigration(baseline.tag);
-    const criadas = new Set(
-      [...sql.matchAll(/CREATE TABLE `([^`]+)`/g)].map(m => m[1])
-    );
-    const schema = readFileSync(join(MIGRATIONS_FOLDER, "schema.ts"), "utf-8");
-    const declaradas = new Set(
-      [...schema.matchAll(/mysqlTable\(\s*["']([^"']+)["']/g)].map(m => m[1])
-    );
+    const criadas = criadasEmTodas();
+    const declaradas = declaradasNoSchema();
     const sobrando = [...criadas].filter(t => !declaradas.has(t));
     expect(
       sobrando,
-      `tabelas no baseline que schema.ts nao declara:\n  ${sobrando.join("\n  ")}`
+      `tabelas nas migracoes que schema.ts nao declara:\n  ${sobrando.join("\n  ")}`
+    ).toEqual([]);
+  });
+});
+
+// Trava do defeito que a Onda 0.4 introduzia: DDL de schema novo dentro de
+// um arquivo de migracao ja aplicado e o drizzle nunca o executa, porque so
+// compara `created_at` (drizzle-orm/mysql-core/dialect.js). O pre-deploy passa
+// verde e o app quebra em runtime.
+describe("DDL novo nao depende de migracao ja aplicada", () => {
+  const BASELINE_TAG = "0000_baseline";
+
+  it("existe mais de uma migracao no journal", () => {
+    expect(
+      journal.entries.length,
+      "So o 0000_baseline no journal: qualquer DDL novo acrescentado a ele " +
+        "nunca sera aplicado num banco que ja rodou o baseline."
+    ).toBeGreaterThan(1);
+  });
+
+  it("nenhuma migracao posterior ao baseline ALTERa tabela que ele cria", () => {
+    // Uma tabela criada no 0000 e depois alterada na 0001 e legitimo (coluna
+    // nova em tabela existente). O que nao pode e re-CREAR tabela do baseline
+    // ou mexer em colunas que o schema.ts ja declarava na epoca do 0000.
+    const baseline = readMigration(BASELINE_TAG);
+    const criadasNoBaseline = new Set(
+      [...baseline.matchAll(/CREATE TABLE `([^`]+)`/g)].map(m => m[1])
+    );
+    const posteriores = journal.entries.filter(e => e.tag !== BASELINE_TAG);
+    const recriadas: string[] = [];
+    for (const entry of posteriores) {
+      const sql = readMigration(entry.tag);
+      for (const m of sql.matchAll(/CREATE TABLE `([^`]+)`/g)) {
+        if (criadasNoBaseline.has(m[1])) recriadas.push(`${entry.tag}: ${m[1]}`);
+      }
+    }
+    expect(
+      recriadas,
+      `migracoes posteriores recriando tabela do baseline:\n  ${recriadas.join("\n  ")}`
+    ).toEqual([]);
+  });
+
+  it("o DDL de 0001_planning nao repete colunas que o baseline ja cria", () => {
+    const entry = journal.entries.find(e => e.tag === "0001_planning");
+    expect(entry, "0001_planning ausente do journal").toBeDefined();
+    const baseline = readMigration(BASELINE_TAG);
+    const sql = readMigration(entry!.tag);
+    // Colunas declaradas no CREATE TABLE do baseline para schedule_activities
+    const bloco = baseline.match(/CREATE TABLE `schedule_activities` \(([\s\S]*?)\n\);/);
+    expect(bloco, "nao encontrei o CREATE TABLE de schedule_activities").not.toBeNull();
+    const colunasDoBaseline = new Set(
+      [...bloco![1].matchAll(/^\s*`([^`]+)`/gm)].map(m => m[1])
+    );
+    const repetidas = [...sql.matchAll(/ADD COLUMN `([^`]+)`/g)]
+      .map(m => m[1])
+      .filter(c => colunasDoBaseline.has(c));
+    expect(
+      repetidas,
+      `0001_planning repete coluna que o baseline ja cria ` +
+        `(ALTER TABLE falharia com duplicate column):\n  ${repetidas.join("\n  ")}`
     ).toEqual([]);
   });
 });

@@ -263,6 +263,9 @@ export const scheduleActivities = mysqlTable(
     lateStart: int("lateStart"),
     lateFinish: int("lateFinish"),
     totalFloat: int("totalFloat"),
+    freeFloat: int("freeFloat"),
+    mustStartOn: timestamp("mustStartOn"),
+    finishNoLaterThan: timestamp("finishNoLaterThan"),
     cpmCalculatedAt: timestamp("cpmCalculatedAt"),
     versionId: int("versionId").references(() => projectPlanVersions.id),
     sortOrder: int("sortOrder").default(0).notNull(),
@@ -832,6 +835,47 @@ export const projectAuditEvents = mysqlTable(
   ]
 );
 
+export const workCalendars = mysqlTable(
+  "work_calendars",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    projectId: int("projectId")
+      .notNull()
+      .references(() => projects.id),
+    name: varchar("name", { length: 180 }).notNull(),
+    weekPattern: json("weekPattern").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    index("work_calendars_projectId_idx").on(table.projectId),
+    uniqueIndex("work_calendars_projectId_unique").on(table.projectId),
+  ]
+);
+
+export const calendarExceptions = mysqlTable(
+  "calendar_exceptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    calendarId: int("calendarId")
+      .notNull()
+      .references(() => workCalendars.id),
+    date: varchar("date", { length: 10 }).notNull(),
+    type: mysqlEnum("type", [
+      "working",
+      "national_holiday",
+      "facultative",
+      "observance",
+    ]).notNull(),
+    name: varchar("name", { length: 180 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("calendar_exceptions_calendarId_idx").on(table.calendarId),
+    index("calendar_exceptions_date_idx").on(table.date),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
@@ -864,3 +908,7 @@ export type AgentRun = typeof agentRuns.$inferSelect;
 export type InsertAgentRun = typeof agentRuns.$inferInsert;
 export type AgentRunEvent = typeof agentRunEvents.$inferSelect;
 export type InsertAgentRunEvent = typeof agentRunEvents.$inferInsert;
+export type WorkCalendar = typeof workCalendars.$inferSelect;
+export type InsertWorkCalendar = typeof workCalendars.$inferInsert;
+export type CalendarException = typeof calendarExceptions.$inferSelect;
+export type InsertCalendarException = typeof calendarExceptions.$inferInsert;

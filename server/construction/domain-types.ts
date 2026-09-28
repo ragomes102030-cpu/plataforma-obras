@@ -41,6 +41,10 @@ export type ScheduleEvidenceActivity = {
   status: string;
   critical: number;
   sortOrder: number;
+  /** Índice do dia útil (CPM) derivado de mustStartOn (timestamp). */
+  mustStartOnDay?: number | null;
+  /** Índice do dia útil (CPM) derivado de finishNoLaterThan (timestamp). */
+  finishNoLaterThanDay?: number | null;
 };
 
 export type ScheduleEvidenceDependency = {

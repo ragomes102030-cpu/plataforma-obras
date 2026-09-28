@@ -28,8 +28,11 @@ import {
   activityResourceAllocations,
   scheduleBaselines,
   scheduleBaselineItems,
+  workCalendars,
+  calendarExceptions,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
+import { defaultCalendar, elapsedWorkingDays, indexOf, type WorkCalendar, type DayType, type WeekPattern } from "@shared/work-calendar";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
@@ -3023,8 +3026,55 @@ export const appRouter = router({
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
         const asOf = input.asOf ?? new Date();
-        const start = project?.plannedStart?.getTime() ?? asOf.getTime();
-        const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
+        // Progresso em DIAS ÚTEIS, nao dias corridos. O CPM ja
+        // trabalha em indices de dias uteis, entao comparar com
+        // (asOf - plannedStart) / 86400000 daria um numero que nao
+        // bate com o indice do CPM sempre que houver feriado ou
+        // fim de semana no meio.
+        // Tenta o calendario do projeto (work_calendars); se nao
+        // existir, usa o padrao BR 5x2 derivado do ano de plannedStart.
+        const year = project?.plannedStart
+          ? project.plannedStart.getFullYear()
+          : asOf.getFullYear();
+        let calendar: WorkCalendar = defaultCalendar(year);
+        try {
+          const [wc] = await db
+            .select()
+            .from(workCalendars)
+            .where(eq(workCalendars.projectId, input.projectId))
+            .limit(1);
+          if (wc) {
+            const wp = JSON.parse(
+              typeof wc.weekPattern === "string"
+                ? wc.weekPattern
+                : JSON.stringify(wc.weekPattern)
+            ) as WeekPattern;
+            const exRows = await db
+              .select()
+              .from(calendarExceptions)
+              .where(eq(calendarExceptions.calendarId, wc.id))
+              .orderBy(calendarExceptions.date);
+            calendar = {
+              weekPattern: wp,
+              exceptions: exRows.map(e => ({
+                date: e.date,
+                type: e.type as DayType,
+                name: e.name ?? undefined,
+              })),
+            };
+          }
+        } catch {
+          // calendario malformado — mantem o padrao
+        }
+        const localIso = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const startIso = project?.plannedStart
+          ? localIso(project.plannedStart)
+          : localIso(asOf);
+        const elapsedDays = Math.max(
+          0,
+          elapsedWorkingDays(calendar, startIso, localIso(asOf))
+        );
         const rows = activities.map(activity => {
           const plannedQuantity = Number(activity.plannedQuantity ?? 0);
           const actualQuantity = actualByActivity.get(activity.id) ?? 0;
@@ -3059,8 +3109,20 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+
+        const year = project?.plannedStart ? project.plannedStart.getFullYear() : new Date().getFullYear();
+
+        const calendar = defaultCalendar(year);
+
+        const localIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+        const startIso = project?.plannedStart ? localIso(project.plannedStart) : localIso(new Date());
+
+        const enrichedActivities = activities.map(a => ({ ...a, mustStartOnDay: a.mustStartOn ? indexOf(calendar, startIso, localIso(a.mustStartOn)) : undefined, finishNoLaterThanDay: a.finishNoLaterThan ? indexOf(calendar, startIso, localIso(a.finishNoLaterThan)) : undefined }));
+
         const result = calculateDeterministicCpm(activities, dependencies);
-        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
+        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], infeasibleActivities: [] as number[], issues: result.issues, infeasible: result.infeasible };
         const calculatedAt = new Date();
         const schedule = result.schedule;
         const items = schedule.activities;
@@ -3072,6 +3134,8 @@ export const appRouter = router({
           const lsCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`), sql` `);
           const lfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`), sql` `);
           const tfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`), sql` `);
+          const ffCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.freeFloat ?? 0}`), sql` `);
+
           await db.transaction(async tx => {
             await tx.execute(sql`
               UPDATE schedule_activities
@@ -3081,13 +3145,15 @@ export const appRouter = router({
                   lateStart = CASE id ${lsCase} END,
                   lateFinish = CASE id ${lfCase} END,
                   totalFloat = CASE id ${tfCase} END,
+                  freeFloat = CASE id ${ffCase} END,
+
                   cpmCalculatedAt = ${calculatedAt}
               WHERE projectId = ${input.projectId}
                 AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
             `);
           });
         }
-        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
+        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), infeasible: result.infeasible, infeasibleActivities: result.schedule.infeasibleActivities.map(Number), issues: result.issues };
       }),
     createResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(180), resourceType: z.enum(["mao_de_obra", "equipamento", "material"]), unit: z.string().trim().min(1).max(32), capacityPerDay: z.number().positive().optional(), costPerDay: z.number().nonnegative().optional() }))
