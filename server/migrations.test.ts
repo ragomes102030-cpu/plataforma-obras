@@ -136,3 +136,96 @@ describe("a migracao baseline cobre o schema declarado", () => {
     ).toEqual([]);
   });
 });
+
+describe("o Dockerfile encontra tudo que copia", () => {
+  // Custo real desta trava: o pre-deploy passou de `bootstrap-db.mjs` para
+  // `migrate-db.mjs`, o par `bootstrap-db.mjs` + `full-schema.sql` foi
+  // removido, e o Dockerfile ainda fazia
+  //   COPY scripts/bootstrap-db.mjs ./scripts/bootstrap-db.mjs
+  //   COPY drizzle/full-schema.sql ./drizzle/full-schema.sql
+  // O deploy de producao morreu em
+  //   failed to calculate checksum: "/drizzle/full-schema.sql": not found
+  // Nenhum teste local pegou: o unico sinal estava no build da Railway.
+  const dockerfile = readFileSync("Dockerfile", "utf-8");
+
+  function sourcesDeCopy(): Array<{ linha: number; fonte: string }> {
+    const out: Array<{ linha: number; fonte: string }> = [];
+    dockerfile.split(/\r?\n/).forEach((linha, i) => {
+      const copia = linha.match(/^\s*COPY\s+(.*)$/);
+      if (!copia) return;
+      // `COPY --from=build ...` le de outro estagio, nao do disco do repo.
+      if (copia[1].includes("--from")) return;
+      // O ultimo token e o destino; o resto sao fontes.
+      const tokens = copia[1].trim().split(/\s+/).slice(0, -1);
+      for (const fonte of tokens) out.push({ linha: i + 1, fonte });
+    });
+    return out;
+  }
+
+  it("tem linhas COPY para verificar", () => {
+    expect(sourcesDeCopy().length).toBeGreaterThan(0);
+  });
+
+  it.each(sourcesDeCopy().map(s => [s.fonte, s.linha] as const))(
+    "a fonte %s (linha %i) existe no repo",
+    (fonte, linha) => {
+      // Glob (ex.: drizzle/*.sql) e diretorio com barra final.
+      const limpo = fonte.replace(/\/+$/, "");
+      if (/[*?[]/.test(limpo)) {
+        const padre = limpo.split("/").slice(0, -1).join("/");
+        expect(
+          existeAlgum(limpo),
+          `Dockerfile:${linha} — glob "${fonte}" nao casa com nada`
+        ).toBe(true);
+        return;
+      }
+      expect(
+        existsSync(limpo),
+        `Dockerfile:${linha} — fonte "${fonte}" nao existe. ` +
+          `O build de producao falha com 'not found' e nenhum teste local acusa.`
+      ).toBe(true);
+    }
+  );
+
+  function existeAlgum(padrao: string): boolean {
+    const partes = padrao.split("/");
+    const nome = partes[partes.length - 1];
+    const dir = partes.slice(0, -1).join("/") || ".";
+    if (!existsSync(dir)) return false;
+    const re = new RegExp(
+      "^" + nome.replace(/[.+^${}()|\\]/g, "\\$&").replace(/\*/g, "[^/]*").replace(/\?/g, ".") + "$"
+    );
+    return readdirSync(dir).some(f => re.test(f));
+  }
+});
+
+describe("o runtime recebe o que o pre-deploy precisa", () => {
+  it("o pre-deploy do Railway aponta para o script de migracao", () => {
+    const railway = JSON.parse(readFileSync("railway.json", "utf-8")) as {
+      deploy: { preDeployCommand?: string[] };
+    };
+    expect(railway.deploy.preDeployCommand).toEqual(["node scripts/migrate-db.mjs"]);
+  });
+
+  it("o script do pre-deploy esta na imagem de runtime", () => {
+    const dockerfile = readFileSync("Dockerfile", "utf-8");
+    expect(dockerfile).toMatch(/COPY\s+scripts\/migrate-db\.mjs\s/);
+  });
+
+  it("o runtime recebe o journal que o script le", () => {
+    // O estagio de build copia `drizzle/` para compilar o bundle, mas o
+    // pre-deploy roda no estagio de runtime. Se `drizzle/meta/` faltar la,
+    // `migrate-db.mjs` aborta — o que e o comportamento desejado, desde que
+    // o Dockerfile realmente entregue o arquivo.
+    const runtime = readFileSync("Dockerfile", "utf-8").split(/FROM\s+node:22-slim\s+AS\s+runtime/)[1] ?? "";
+    expect(runtime).toMatch(/COPY\s+drizzle\/\s+\.\/drizzle\//);
+  });
+
+  it("nao ha bootstrap em DDL no boot do servidor", () => {
+    // `ensureUsersTable`/`ensurePlanVersionSchema` faziam DDL no start.
+    // Se voltarem, a divergencia entre codigo e banco deixa de aparecer.
+    const core = readFileSync(join("server", "_core", "index.ts"), "utf-8");
+    const ddl = core.match(/CREATE\s+TABLE|ALTER\s+TABLE/gi);
+    expect(ddl, `DDL no boot do servidor:\n  ${(ddl ?? []).join("\n  ")}`).toBeNull();
+  });
+});

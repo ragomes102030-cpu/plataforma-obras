@@ -98,7 +98,9 @@ e o MySQL aceita no máximo 64. Os nomes curtos (`act_res_alloc_activity_fk`) ex
 
 > O plano original propunha preservar as 22 migrações (opção A) e mudar para squashed (opção B) só se necessário. A evidência inverteu: histórico quebrado é pior que histórico limpo.
 
-**Ainda pendente (não bloqueia as ondas):** `railway.json` diz `builder: DOCKERFILE`, mas o serviço roda `RAILPACK` — Config as Code duplicado, com hard stop anunciado para **2026-12-01**.
+**Ainda pendente (não bloqueia as ondas):** o `railway.json` é Config as Code, com hard stop anunciado para **2026-12-01** — depois disso o Railway deixa de lê-lo e o serviço passa a depender só do painel/API. Precisa migrar para `.railway/railway.ts`.
+
+> **Correção de uma conclusão anterior.** A API do Railway reportava `builder: RAILPACK`, e eu tinha anotado "config duplicado: `railway.json` diz DOCKERFILE, o serviço roda RAILPACK". O log de build desmente: as 12 etapas `FROM node:22-slim`, `COPY patches/`, dois `pnpm install` (build e runtime) e o `[runtime 9/9] COPY drizzle/full-schema.sql` só existem no `Dockerfile`. **O `railway.json` estava certo** e a leitura da API é que era enganosa. Isso não é detalhe — foi o que matou o primeiro deploy da Onda 0.1: o Dockerfile copiava `bootstrap-db.mjs` e `full-schema.sql` **por nome**, e a remoção deles quebrou o cache de build com `"/drizzle/full-schema.sql": not found`, sinal que só existe no build de produção. Daí `server/migrations.test.ts` também validar todo `COPY` do Dockerfile, e o pre-deploy estar declarado no `railway.json` para o serviço ser recriável do zero.
 
 ---
 

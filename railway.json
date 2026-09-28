@@ -5,6 +5,8 @@
   },
   "deploy": {
     "startCommand": "pnpm start",
+    "preDeployCommand": ["node scripts/migrate-db.mjs"],
+    "preDeployTimeoutSeconds": 180,
     "healthcheckPath": "/healthz",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
