@@ -1,1 +1,0 @@
-ALTER TABLE `wbs_nodes` ADD CONSTRAINT `wbs_nodes_project_code_unique_idx` UNIQUE(`projectId`,`code`);

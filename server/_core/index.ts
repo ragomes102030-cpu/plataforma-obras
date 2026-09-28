@@ -11,71 +11,30 @@ import { ENV } from "./env";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
 
-async function ensurePlanVersionSchema() {
+// O schema e responsabilidade de `scripts/migrate-db.mjs`, rodado no
+// pre-deploy. Nao ha, e nao deve haver, DDL no boot do servidor: um remendo
+// de runtime esconde o problema em vez de resolver, e mascara divergencia
+// entre o codigo e o banco.
+async function logSchemaInventory() {
   const db = await getDb();
   if (!db) {
-    console.warn('ensurePlanVersionSchema: database unavailable, skipping');
+    console.warn('[schema] banco indisponivel; inventario omitido');
     return;
   }
   try {
-    const [tables] = await db.execute(sql`
-      SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project_plan_versions'
-    `);
-    if (Array.isArray(tables) && tables.length === 0) {
-      await db.execute(sql`
-        CREATE TABLE project_plan_versions (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          projectId INT NOT NULL,
-          versionNumber INT NOT NULL,
-          status ENUM('draft', 'proposed', 'approved', 'superseded') NOT NULL DEFAULT 'draft',
-          baseVersionId INT NULL,
-          decisionId INT NULL,
-          approvedAt TIMESTAMP NULL,
-          notes TEXT NULL,
-          createdBy INT NULL,
-          createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE INDEX project_plan_versions_project_version_idx (projectId, versionNumber),
-          INDEX project_plan_versions_project_idx (projectId),
-          INDEX project_plan_versions_base_idx (baseVersionId),
-          INDEX project_plan_versions_decision_idx (decisionId),
-          INDEX project_plan_versions_createdby_idx (createdBy)
-      `);
-      // FKs adicionadas separadamente (MySQL rejeita self-reference inline e
-      // nomes de tabela incorretos no mesmo CREATE TABLE).
-      await db.execute(sql`
-        ALTER TABLE project_plan_versions
-        ADD CONSTRAINT fk_ppv_project FOREIGN KEY (projectId) REFERENCES projects(id)
-      `);
-    }
-    const [colsSA] = await db.execute(sql`
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'schedule_activities' AND COLUMN_NAME = 'versionId'
-    `);
-    if (Array.isArray(colsSA) && colsSA.length === 0) {
-      await db.execute(sql`ALTER TABLE schedule_activities ADD COLUMN versionId INT NULL`);
-    }
-    const [colsWN] = await db.execute(sql`
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wbs_nodes' AND COLUMN_NAME = 'versionId'
-    `);
-    if (Array.isArray(colsWN) && colsWN.length === 0) {
-      await db.execute(sql`ALTER TABLE wbs_nodes ADD COLUMN versionId INT NULL`);
-    }
-    const [colsSD] = await db.execute(sql`
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'schedule_dependencies' AND COLUMN_NAME = 'versionId'
-    `);
-    if (Array.isArray(colsSD) && colsSD.length === 0) {
-      await db.execute(sql`ALTER TABLE schedule_dependencies ADD COLUMN versionId INT NULL`);
-    }
-    } catch (error) {
-      console.warn('ensurePlanVersionSchema error (non-fatal):', error);
-    }
+    const names = (await listTableNames()) ?? [];
+    const REQUIRED = ['users', 'projects', 'schedule_activities', 'wbs_nodes'];
+    const ausentes = REQUIRED.filter(t => !names.includes(t));
+    console.log(
+      `[schema] ${names.length} tabela(s) no banco` +
+        (ausentes.length ? ` — AUSENTE: ${ausentes.join(', ')}` : '')
+    );
+  } catch (error) {
+    console.warn('[schema] inventario indisponivel:', error);
   }
+}
 
-  async function listTableNames(): Promise<string[] | null> {
+async function listTableNames(): Promise<string[] | null> {
     const db = await getDb();
     if (!db) return null;
     const [tables] = await db.execute(sql`
@@ -97,50 +56,11 @@ async function ensurePlanVersionSchema() {
       .sort();
   }
 
-  // O healthcheck (/readyz) so executa `SELECT 1`: prova reachability, nao
-  // schema. Um MySQL recem-provisionado passa no healthcheck e so quebra no
-  // login, porque upsertUser e o primeiro e unico passo do fluxo OAuth que
-  // toca o banco (github-oauth.ts:146). Inventariamos as tabelas para o log
-  // dizer a verdade, e garantimos a `users`, que e a que o login exige.
-  async function ensureUsersTable() {
-    const db = await getDb();
-    if (!db) {
-      console.warn('ensureUsersTable: database unavailable, skipping');
-      return;
-    }
-    try {
-      const names = (await listTableNames()) ?? [];
-      console.log(`[schema] ${names.length} tabela(s) no banco: ${names.join(', ') || '(nenhuma)'}`);
-      if (names.includes('users')) {
-        return;
-      }
-      console.warn('[schema] tabela `users` AUSENTE — criando (o login GitHub dependia dela)');
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS users (
-          id int AUTO_INCREMENT NOT NULL,
-          openId varchar(64) NOT NULL,
-          name text,
-          email varchar(320),
-          loginMethod varchar(64),
-          role enum('user','admin') NOT NULL DEFAULT 'user',
-          createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          lastSignedIn timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY users_openId_unique (openId)
-        )
-      `);
-      console.log('[schema] tabela `users` criada com sucesso');
-    } catch (error) {
-      console.warn('ensureUsersTable error (non-fatal):', error);
-    }
-  }
-
 async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  await ensureUsersTable();
+  await logSchemaInventory();
   const configVars = configVarNames();
   console.log(
     `[config] variaveis de ambiente casando com jwt/secret/session (nome apenas): ${configVars.join(", ") || "(nenhuma)"}`
@@ -150,7 +70,6 @@ async function startServer() {
       `[startup] JWT_SECRET ausente, vazio ou so espacos (len=${ENV.cookieSecret.length}). O boot passa e o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). variaveis presentes: ${configVars.join(", ") || "(nenhuma)"}`
     );
   }
-  await ensurePlanVersionSchema();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

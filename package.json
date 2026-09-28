@@ -13,6 +13,10 @@
     "phase1:battery": "tsx scripts/phase1-readonly-battery.ts",
     "e2e:fictitious": "tsx scripts/e2e-fictitious.ts",
     "db:push": "tsx scripts/repair-wbs-identity.ts && drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate-db.mjs",
+    "db:migrate:check": "node scripts/migrate-db.mjs --dry-run",
+    "db:verify:scratch": "node scripts/verify-migration-from-scratch.mjs",
     "db:migrate:integrity": "tsx scripts/repair-wbs-identity.ts && tsx scripts/migrate-wbs-integrity.ts"
   },
   "dependencies": {
