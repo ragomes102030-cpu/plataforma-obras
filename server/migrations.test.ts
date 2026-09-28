@@ -205,6 +205,124 @@ describe("DDL novo nao depende de migracao ja aplicada", () => {
   });
 });
 
+describe("DDL no MySQL e implicit-commit: a aplicacao precisa ser idempotente", () => {
+  // Custo real desta trava: o deploy da Onda 0.4 rodou a 0001 e morreu em
+  //   ER_DEFAULT_VAL_GENERATED_NAMED_FUNCTION_IS_NOT_ALLOWED (errno 3770)
+  // no CREATE TABLE de work_calendars. Como DDL no MySQL faz implicit commit,
+  // os tres ALTER TABLE anteriores JA estavam aplicados, mas a migracao nao
+  // consta em __drizzle_migrations (o INSERT vem depois de todos os statements).
+  // Reexecutar o script sem consertar isso repetiria os ALTER e estouraria com
+  // duplicate column -- falha eterna a cada novo deploy.
+  const script = readFileSync(join("scripts", "migrate-db.mjs"), "utf-8");
+
+  function statementsDasMigracoes(): string[] {
+    const out: string[] = [];
+    for (const entry of journal.entries) {
+      for (const s of readMigration(entry.tag).split("--> statement-breakpoint")) {
+        if (s.trim()) out.push(s.trim());
+      }
+    }
+    return out;
+  }
+
+  // Extrai a funcao real do script e a executa. Testar por grep no codigo-fonte
+  // era fragil demais: basta uma refatoracao cosmetica (escape, quebra de linha)
+  // para o teste passar sem a logica existir.
+  function alvoDoStatement(stmt: string): { tipo: string; tabela: string; nome?: string } | null {
+    const corpo = script.match(/function alvoDoStatement\(stmt\) \{[\s\S]*?\n\}/);
+    if (!corpo) throw new Error("alvoDoStatement nao encontrada em scripts/migrate-db.mjs");
+    const fn = eval(`(${corpo[0].replace("function alvoDoStatement", "function")})`);
+    return fn(stmt);
+  }
+
+  it("o script nao importa nem chama migrate() do drizzle", () => {
+    // migrate() do drizzle aplica tudo em uma transacao e aborta no primeiro
+    // erro, sem tolerar DDL ja aplicado.
+    expect(script).not.toMatch(/import\s*\{[^}]*\bmigrate\b[^}]*\}\s*from/);
+    expect(script).not.toMatch(/await\s+migrate\s*\(/);
+  });
+
+  it("consulta INFORMATION_SCHEMA antes de aplicar cada statement", () => {
+    expect(script).toMatch(/INFORMATION_SCHEMA/);
+    expect(script).toMatch(/TABLE_SCHEMA\s*=\s*DATABASE\(\)/);
+  });
+
+  it("a checagem de existencia e de fato chamada, e nao apenas definida", () => {
+    // Check de presenca de texto passaria mesmo com o call site removido: foi
+    // exatamente o que aconteceu na primeira versao deste teste. Aqui conta-se
+    // quantas vezes `jaExiste` aparece -- definicao + call site.
+    const ocorrencias = (script.match(/jaExiste\s*\(/g) ?? []).length;
+    expect(
+      ocorrencias,
+      "jaExiste aparece so na definicao: o loop de aplicacao nao esta " +
+        "consultando o estado do banco, entao a migracao volta a ser nao " +
+        "idempotente (falha eterna com duplicate column)"
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("o loop de aplicacao pula o statement quando o alvo ja existe", () => {
+    // O `continue` dentro da guarda de existencia e o que torna a aplicacao
+    // idempotente. Sem ele, o statement e reexecutado.
+    const laudo = script.match(/if\s*\(\s*alvo\s*&&[\s\S]{0,600}?continue;/);
+    expect(
+      laudo,
+      "o loop de aplicacao nao pula statement ja aplicado " +
+        "(falta `continue` na guarda de existencia)"
+    ).not.toBeNull();
+  });
+
+  it.each([
+    ["CREATE TABLE `x` (", "table", "x", undefined],
+    ["ALTER TABLE `x` ADD COLUMN `c` timestamp NULL;", "coluna", "x", "c"],
+    ["ALTER TABLE `x` ADD `c` timestamp NULL;", "coluna", "x", "c"],
+    ["ALTER TABLE `x` ADD CONSTRAINT `fk` FOREIGN KEY (`a`) REFERENCES `y`(`id`);", "constraint", "x", "fk"],
+    ["CREATE INDEX `i` ON `x` (`a`);", "index", "x", "i"],
+    ["CREATE UNIQUE INDEX `i` ON `x` (`a`);", "index", "x", "i"],
+  ])("reconhece %s", (stmt, tipo, tabela, nome) => {
+    const alvo = alvoDoStatement(stmt as string)!;
+    expect(alvo).not.toBeNull();
+    expect(alvo.tipo).toBe(tipo);
+    expect(alvo.tabela).toBe(tabela);
+    expect(alvo.nome).toBe(nome);
+  });
+
+  it("devolve null para statement que nao e DDL rastreavel", () => {
+    expect(alvoDoStatement("SELECT 1")).toBeNull();
+  });
+
+  it("todo statement das migracoes cai em um dos formatos reconhecidos", () => {
+    // Se um statement novo nao for reconhecido, ele passa sem verificacao e
+    // volta a ser falha-eterna: o statement silenciosamente nao idempotente.
+    const naoReconhecidos = statementsDasMigracoes().filter(s => !alvoDoStatement(s));
+    expect(
+      naoReconhecidos,
+      `statements que a idempotencia nao cobre (falha eterna em retry):\n  ` +
+        naoReconhecidos.join("\n  ")
+    ).toEqual([]);
+  });
+
+  it("nao usa DEFAULT (on_update_current_timestamp()), que o MySQL recusa", () => {
+    // `ON UPDATE CURRENT_TIMESTAMP` e atributo de coluna, nao funcao. Como
+    // DEFAULT, o MySQL responde ER_DEFAULT_VAL_GENERATED_NAMED_FUNCTION_IS_NOT_ALLOWED.
+    const offenders = journal.entries
+      .map(e => [e.tag, readMigration(e.tag)] as const)
+      .filter(([, sql]) => /on_update_current_timestamp\s*\(\s*\)/i.test(sql))
+      .map(([tag]) => tag);
+    expect(
+      offenders,
+      `migracoes com default invalido (errno 3770):\n  ${offenders.join("\n  ")}`
+    ).toEqual([]);
+  });
+
+  it("colunas updatedAt usam a forma DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP", () => {
+    const sql = readMigration("0001_planning");
+    const comUpdatedAt = [...sql.matchAll(/`updatedAt`[^,\n]*/g)].map(m => m[0]);
+    for (const decl of comUpdatedAt) {
+      expect(decl).toMatch(/DEFAULT\s+\(now\(\)\)\s+ON UPDATE CURRENT_TIMESTAMP/i);
+    }
+  });
+});
+
 describe("o Dockerfile encontra tudo que copia", () => {
   // Custo real desta trava: o pre-deploy passou de `bootstrap-db.mjs` para
   // `migrate-db.mjs`, o par `bootstrap-db.mjs` + `full-schema.sql` foi

@@ -7,7 +7,7 @@ CREATE TABLE `work_calendars` (
 	`name` varchar(180) NOT NULL,
 	`weekPattern` json NOT NULL,
 	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (on_update_current_timestamp()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT `work_calendars_id` PRIMARY KEY(`id`),
 	CONSTRAINT `work_calendars_projectId_unique` UNIQUE(`projectId`)
 );

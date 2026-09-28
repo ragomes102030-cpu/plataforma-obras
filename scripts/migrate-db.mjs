@@ -28,8 +28,6 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createConnection } from "mysql2/promise";
-import { drizzle } from "drizzle-orm/mysql2";
-import { migrate } from "drizzle-orm/mysql2/migrator";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 
 const MIGRATIONS_FOLDER = "drizzle";
@@ -125,7 +123,7 @@ if (isFresh) {
   console.log(
     `[migrate] banco normal: ${appliedCount} migracao(oes) aplicada(s), ${pending.length} pendente(s)`
   );
-  for (const m of pending) {
+for (const m of aAplicar) {
     console.log(`[migrate]   pendente ${m.folderMillis}`);
   }
 }
@@ -137,7 +135,94 @@ if (dryRun) {
 }
 
 // ------------------------------------------------------------- aplicar ----
-await migrate(drizzle(conn), { migrationsFolder: MIGRATIONS_FOLDER });
+// DDL no MySQL faz implicit commit: se um statement falha no meio, os
+// anteriores JA ficam aplicados, mas a migracao nao e registrada em
+// `__drizzle_migrations` (o INSERT vem depois de todos os statements).
+// Rodando o script de novo, os mesmos statements estourariam com
+// `duplicate column` / `table already exists` -- falha eternal.
+//
+// Por isso cada statement e conferido contra INFORMATION_SCHEMA antes de
+// executar, e o que ja existir e apenas logado e pulado.
+function alvoDoStatement(stmt) {
+  const criarTabela = stmt.match(
+    /^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`([^`]+)`/i
+  );
+  if (criarTabela) return { tipo: "table", tabela: criarTabela[1] };
+
+  const addColuna = stmt.match(
+    /^\s*ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+(?:COLUMN\s+)?`([^`]+)`/i
+  );
+  if (addColuna) return { tipo: "coluna", tabela: addColuna[1], nome: addColuna[2] };
+
+  const addConstraint = stmt.match(
+    /^\s*ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+(?:CONSTRAINT\s+)?`([^`]+)`/i
+  );
+  if (addConstraint)
+    return { tipo: "constraint", tabela: addConstraint[1], nome: addConstraint[2] };
+
+  const criarIndex = stmt.match(
+    /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+`([^`]+)`\s+ON\s+`([^`]+)`/i
+  );
+  if (criarIndex) return { tipo: "index", tabela: criarIndex[2], nome: criarIndex[1] };
+
+  return null;
+}
+
+async function jaExiste(alvo) {
+  const [rows] = await conn.query(
+    `SELECT 1 AS found FROM INFORMATION_SCHEMA.${alvo.tipo === "table" ? "TABLES" : alvo.tipo === "coluna" ? "COLUMNS" : alvo.tipo === "constraint" ? "TABLE_CONSTRAINTS" : "STATISTICS"}` +
+      ` WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?${alvo.tipo === "table" ? "" : " AND " + (alvo.tipo === "index" ? "INDEX_NAME" : "COLUMN_NAME") + " = ?"}` +
+      ` LIMIT 1`,
+    alvo.tipo === "table" ? [alvo.tabela] : [alvo.tabela, alvo.nome]
+  );
+  return rows.length > 0;
+}
+
+// `pending` foi calculado antes do bloco do banco legado poder ter inserido
+// registros em `__drizzle_migrations`. Rele o estado real aqui para nao
+// reaplicar DDL que ja consta como aplicado.
+let lastAppliedReal = null;
+if (tableNames.has(MIGRATIONS_TABLE)) {
+  const [rowsReal] = await conn.query(
+    `SELECT created_at FROM \`${MIGRATIONS_TABLE}\` ORDER BY created_at DESC LIMIT 1`
+  );
+  if (rowsReal.length > 0) lastAppliedReal = Number(Object.values(rowsReal[0])[0]);
+}
+const aAplicar =
+  lastAppliedReal === null
+    ? migrations
+    : migrations.filter(m => m.folderMillis > lastAppliedReal);
+if (aAplicar.length !== pending.length) {
+  console.log(
+    `[migrate] releitura do journal: ${aAplicar.length} migracao(oes) a aplicar (antes: ${pending.length})`
+  );
+}
+
+let aplicados = 0;
+for (const m of aAplicar) {
+  let executados = 0;
+  let pulados = 0;
+  for (const stmt of m.sql) {
+    if (!stmt.trim()) continue;
+    const alvo = alvoDoStatement(stmt);
+    if (alvo && (await jaExiste(alvo))) {
+      console.log(
+        `[migrate]   ja aplicado, pulado: ${alvo.tipo} \`${alvo.nome ?? alvo.tabela}\` em \`${alvo.tabela}\``
+      );
+      pulados++;
+      continue;
+    }
+    await conn.query(stmt);
+    executados++;
+  }
+  await conn.query(
+    "INSERT INTO `__drizzle_migrations` (`hash`, `created_at`) VALUES (?, ?)",
+    [m.hash, m.folderMillis]
+  );
+  aplicados++;
+  console.log(`[migrate] aplicada ${m.folderMillis}: ${executados} executado(s), ${pulados} ja existente(s)`);
+}
+if (aplicados === 0) console.log("[migrate] nada pendente; nenhum DDL executado.");
 
 // ------------------------------------------------------------ verificar ---
 const [after] = await conn.query(
