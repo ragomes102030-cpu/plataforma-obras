@@ -87,6 +87,27 @@ const MUTACOES = [
     para: "      description: (trilha.join(' - ') + ' - ' + descricao).slice(0, 240),",
     teste: "shared/price-sources/seinfra-hierarquia.test.ts",
   },
+  {
+    nome: "importador deixa de recusar Composicoes com explicacao",
+    arquivo: "server/routers.ts",
+    de: '        if (planilha === "composicoes") {',
+    para: "        if (planilha === String.fromCharCode(35)) {",
+    teste: "server/eap-visibilidade.test.ts",
+  },
+  {
+    nome: "Tabela de Insumos deixa de avisar que nao gera EAP",
+    arquivo: "server/routers.ts",
+    de: '            planilha === "insumos"',
+    para: '            planilha === String.fromCharCode(35)',
+    teste: "server/eap-visibilidade.test.ts",
+  },
+  {
+    nome: "reconhecimento para de distinguir insumo de servico",
+    arquivo: "shared/price-sources/seinfra.ts",
+    de: '  if (servicos > insumos) return "servicos";\n  if (insumos > 0) return "insumos";',
+    para: '  if (servicos + insumos > 0) return "servicos";',
+    teste: "shared/price-sources/reconhecer-planilha.test.ts",
+  },
 ];
 
 let problemas = 0;

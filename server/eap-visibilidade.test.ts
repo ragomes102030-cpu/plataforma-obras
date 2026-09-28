@@ -81,3 +81,41 @@ describe("o Catálogo se explica em termos do que destrava", () => {
     expect(catalogView).not.toMatch(/entra na próxima evolução/i);
   });
 });
+
+describe("a importação diz qual dos tres arquivos da SEINFRA chegou", () => {
+  /**
+   * Trecho do `catalog.importPriceSheet`: da procedure até a próxima.
+   * Janela fixa de caracteres não serve — a mutation tem ~90 linhas e o
+   * `aviso` do fim ficava fora dela. E não pode ser `indexOf("Procedure")`:
+   * o nome da procedure está logo no início da busca.
+   */
+  function corpoDoImport(): string {
+    const inicio = router.indexOf("importPriceSheet");
+    expect(inicio, "importPriceSheet nao existe no router").toBeGreaterThan(-1);
+    const resto = router.slice(inicio);
+    const proxima = resto.slice(1).search(/\n {4}\w+: (protected|public)Procedure/);
+    return proxima === -1 ? resto : resto.slice(0, proxima + 1);
+  }
+
+  it("reconhece a planilha antes de decidir o que fazer com ela", () => {
+    expect(corpoDoImport()).toMatch(/reconhecerPlanilhaSeinfra/);
+  });
+
+  it("recusa o arquivo de Composicoes dizendo o que ele e", () => {
+    // Antes devolvia "cabecalho nao identificado": verdadeiro e inutil, porque
+    // aquele arquivo nao e uma tabela de precos, e um relatorio de composicoes.
+    expect(corpoDoImport()).toMatch(/planilha === "composicoes"/);
+    expect(corpoDoImport()).toMatch(/Planos-de-Servi/);
+  });
+
+  it("a Tabela de Insumos importa, mas avisa que nao gera EAP", () => {
+    // Os 11.828 itens entram corretos e nao ha nenhum servico: sem este aviso o
+    // usuario fica achando que a obra vai nascer com estrutura.
+    expect(corpoDoImport()).toMatch(/planilha === "insumos"/);
+    expect(corpoDoImport()).toMatch(/aviso:/);
+  });
+
+  it("a UI mostra o aviso da importacao", () => {
+    expect(catalogView).toMatch(/importResult\.aviso/);
+  });
+});
