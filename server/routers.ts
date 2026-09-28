@@ -57,6 +57,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
+import { semearEapDoCatalogo } from "./construction/eap-seeder";
 import {
   allowedSourcesFor,
   canTransitionFinding,
@@ -1356,6 +1357,15 @@ export const appRouter = router({
             location: z.string().trim().min(2).max(180).default("A cadastrar"),
             plannedStart: z.coerce.date().optional(),
             plannedFinish: z.coerce.date().optional(),
+            // Escolhe quais grupos do catálogo entram na EAP. O default
+            // mantém o comportamento útil para quem só dá nome e local.
+            tipoDeObra: z
+              .enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"])
+              .default("edificio"),
+            // Texto livre sobre a obra. NÃO é a fonte da EAP: a EAP nasce dos
+            // serviços do catálogo, para que o orçamento case por código. Este
+            // campo é o insumo para a IA conversar sobre a obra.
+            descricao: z.string().trim().max(4000).optional(),
           })
           .refine(
             data =>
@@ -1387,6 +1397,7 @@ export const appRouter = router({
               code,
               name: input.name,
               location: input.location,
+              descricao: input.descricao ?? null,
               status: "Planejamento",
               progress: 0,
               plannedStart,
@@ -1394,17 +1405,32 @@ export const appRouter = router({
             })
             .$returningId();
           const seedDb = tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>;
+          // A EAP nasce dos SERVIÇOS (C...) do catálogo de preços oficial, não de
+          // um modelo fixo de pacotes. Cada folha guarda o código oficial em
+          // `externalId`, e é isso que amarra o orçamento à estrutura: o
+          // matching vira acerto por código em vez de aposta por similaridade
+          // de texto.
+          //
+          // Sem catálogo carregado a obra nasce sem EAP, e a semeadura devolve
+          // um aviso para a UI orientar o upload. É preferível à estrutura
+          // inventada de antes: aquela não casava com preço nenhum e ainda
+          // aparecia como "Concluído" no painel, escondendo o que faltava.
+          const semeadura = await semearEapDoCatalogo(seedDb, createdId.id, {
+            tipoDeObra: input.tipoDeObra,
+          });
           // seedSolarAcaciasPlan é um plano de demonstração e não deve ser
           // acionado por texto no nome da obra digitado por um usuário real.
           // Uso apenas manual/administrativo (chamar seedSolarAcaciasPlan
           // diretamente, se necessário) fora deste fluxo de criação.
-          await seedStarterPlan(seedDb, createdId.id);
+          if (semeadura.nosCriados === 0 && ENV.allowDemoData) {
+            await seedStarterPlan(seedDb, createdId.id);
+          }
           const [created] = await tx
             .select()
             .from(projects)
             .where(eq(projects.id, createdId.id))
             .limit(1);
-          return created;
+          return { ...created, semeadura };
         });
       }),
     initializePlan: protectedProcedure

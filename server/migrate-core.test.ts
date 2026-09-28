@@ -11,7 +11,10 @@ import {
 
 const MIGRATIONS_FOLDER = "drizzle";
 const migrations = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
-const umMil = migrations.find(m => m.folderMillis === 1790776191243)!;
+// Derivados do journal, nunca literais: hardcodar `folderMillis` fez estes
+// testes quebrarem sozinhos quando a 0002 entrou no journal.
+const BASELINE = migrations[0].folderMillis;
+const ULTIMA = migrations[migrations.length - 1].folderMillis;
 
 function statements(): string[] {
   const out: string[] = [];
@@ -74,10 +77,31 @@ describe("alvoDoStatement", () => {
   });
 
   it("todo statement das migracoes cai em formato reconhecido", () => {
+    // Se um statement novo nao for reconhecido, ele passa sem verificacao e
+    // volta a ser falha-eterna: o statement silenciosamente nao idempotente.
+    //
+    // Este teste pegou a 0002 com comentario de cabecalho: o drizzle fatia por
+    // `--> statement-breakpoint`, entao o comentario do topo ficou grudado no
+    // primeiro ALTER e deixou de parecer DDL. Por isso os `.sql` sao DDL puro
+    // e a justificativa fica no README e no commit.
     const naoReconhecidos = statements().filter(s => !alvoDoStatement(s));
     expect(
       naoReconhecidos,
       `statements sem verificacao (falha eterna em retry):\n  ${naoReconhecidos.join("\n  ")}`
+    ).toEqual([]);
+  });
+
+  it("nenhuma migracao comeca com comentario", () => {
+    // O fatiamento do drizzle manda o texto antes do primeiro breakpoint como
+    // statement. Comentario de cabecalho vira um statement que nao e DDL.
+    const comComentario = migrations
+      .map(m => [m.folderMillis, m.sql[0] ?? ""] as const)
+      .filter(([, primeiro]) => primeiro.trimStart().startsWith("--"))
+      .map(([folderMillis]) => folderMillis);
+    expect(
+      comComentario,
+      `migracoes comecando com comentario (o fatiamento gruda o texto no ` +
+        `primeiro statement):\n  ${comComentario.join("\n  ")}`
     ).toEqual([]);
   });
 });
@@ -138,7 +162,7 @@ describe("aplicarMigracoes executa de verdade", () => {
     }
   });
 
-  it("reproduz o estado real de producao: 0-3 aplicados e migracao nao registrada", async () => {
+  it("reproduz o estado real de producao: parte aplicada, migracao nao registrada", async () => {
     // Foi o que o 2o deploy deixou no banco: implicit commit aplicou os 3
     // ALTER TABLE e o CREATE TABLE, mas a FK Abortou e nada foi registrado.
     const presentes = new Set([
@@ -151,21 +175,23 @@ describe("aplicarMigracoes executa de verdade", () => {
     const { relatorio } = await aplicarMigracoes({
       conn,
       migrations,
-      jaAplicado: 1790603791243,
+      jaAplicado: BASELINE,
     });
 
-    expect(relatorio).toHaveLength(1);
-    const r = relatorio[0];
-    expect(r.folderMillis).toBe(1790776191243);
-    // pula exatamente os 4 ja aplicados
-    expect(r.pulados.map(p => p.nome ?? p.tabela).sort()).toEqual([
+    // Tudo que vier depois do baseline esta pendente, inclusive migracoes novas.
+    const esperado = migrations.filter(m => m.folderMillis > BASELINE);
+    expect(relatorio).toHaveLength(esperado.length);
+
+    // A primeira pendente e a 0001: 4 pula, executa o resto.
+    const primeira = relatorio[0];
+    expect(primeira.folderMillis).toBe(esperado[0].folderMillis);
+    expect(primeira.pulados.map(p => p.nome ?? p.tabela).sort()).toEqual([
       "finishNoLaterThan",
       "freeFloat",
       "mustStartOn",
       "work_calendars",
     ]);
-    // e executa o resto
-    const executados = r.executados.join("\n");
+    const executados = primeira.executados.join("\n");
     expect(executados).toContain("work_calendars_projectId_projects_id_fk");
     expect(executados).toContain("CREATE TABLE `calendar_exceptions`");
     expect(executados).toContain("calendar_exceptions_calendarId_idx");
@@ -174,12 +200,13 @@ describe("aplicarMigracoes executa de verdade", () => {
     expect(executados).not.toContain("freeFloat");
   });
 
-  it("registra a migracao no journal depois de aplicar", async () => {
+  it("registra cada migracao aplicada no journal", async () => {
     const conn = connFalsa(new Set());
-    await aplicarMigracoes({ conn, migrations, jaAplicado: 1790603791243 });
+    await aplicarMigracoes({ conn, migrations, jaAplicado: BASELINE });
     const inserts = conn.queries.filter(q => /INSERT INTO `__drizzle_migrations`/.test(q.sql));
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0].params[1]).toBe(1790776191243);
+    const esperado = migrations.filter(m => m.folderMillis > BASELINE);
+    expect(inserts).toHaveLength(esperado.length);
+    expect(inserts.map(i => Number(i.params[1]))).toEqual(esperado.map(m => m.folderMillis));
   });
 
   it("nao aplica nada quando nada esta pendente", async () => {
@@ -199,8 +226,7 @@ describe("aplicarMigracoes executa de verdade", () => {
 
   it("nao volta a registrar a mesma migracao duas vezes", async () => {
     const conn = connFalsa(new Set());
-    const jaAplicado = umMil.folderMillis;
-    const { aAplicar } = await aplicarMigracoes({ conn, migrations, jaAplicado });
-    expect(aAplicar.every(m => m.folderMillis > jaAplicado)).toBe(true);
+    const { aAplicar } = await aplicarMigracoes({ conn, migrations, jaAplicado: ULTIMA });
+    expect(aAplicar).toHaveLength(0);
   });
 });

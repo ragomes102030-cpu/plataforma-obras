@@ -1,20 +1,27 @@
 {
-    "entries":  [
-                    {
-                        "idx":  0,
-                        "breakpoints":  true,
-                        "when":  1790603791243,
-                        "version":  "5",
-                        "tag":  "0000_baseline"
-                    },
-                    {
-                        "idx":  1,
-                        "breakpoints":  true,
-                        "when":  1790776191243,
-                        "version":  "5",
-                        "tag":  "0001_planning"
-                    }
-                ],
-    "version":  "7",
-    "dialect":  "mysql"
+    "entries": [
+        {
+            "idx": 0,
+            "breakpoints": true,
+            "when": 1790603791243,
+            "version": "5",
+            "tag": "0000_baseline"
+        },
+        {
+            "idx": 1,
+            "breakpoints": true,
+            "when": 1790776191243,
+            "version": "5",
+            "tag": "0001_planning"
+        },
+        {
+            "idx": 2,
+            "breakpoints": true,
+            "when": 1790862591243,
+            "version": "5",
+            "tag": "0002_descritivo"
+        }
+    ],
+    "version": "7",
+    "dialect": "mysql"
 }

@@ -2,6 +2,10 @@ import { trpc } from "@/lib/trpc";
 import { startLogin } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
+  TIPOS_DE_OBRA,
+  type TipoDeObra as ProjectKind,
+} from "@shared/eap-engine";
+import {
   Activity,
   AlertTriangle,
   BarChart3,
@@ -861,7 +865,10 @@ export default function Home() {
   const [newProjectLocation, setNewProjectLocation] = useState("");
   const [newProjectStart, setNewProjectStart] = useState("");
   const [newProjectFinish, setNewProjectFinish] = useState("");
+  const [newProjectTipo, setNewProjectTipo] = useState<ProjectKind>("edificio");
+  const [newProjectDescricao, setNewProjectDescricao] = useState("");
   const [createError, setCreateError] = useState("");
+  const [createNotice, setCreateNotice] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const createProjectMutation = trpc.projects.create.useMutation({
     onSuccess: project => {
@@ -875,9 +882,19 @@ export default function Home() {
       setNewProjectLocation("");
       setNewProjectStart("");
       setNewProjectFinish("");
+      setNewProjectDescricao("");
       setCreateError("");
       setNewProjectOpen(false);
       setActiveNav("EAP");
+      // A EAP nasce do catálogo de preços. Sem catálogo, a obra nasce sem
+      // estrutura — e o aviso precisa aparecer, senão o usuário conclui que a
+      // EAP está vazia por falha e não por falta de base importada.
+      const s = project.semeadura;
+      setCreateNotice(
+        s.nosCriados > 0
+          ? `EAP criada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços.`
+          : s.aviso
+      );
     },
     onError: error => setCreateError(error.message),
   });
@@ -1007,6 +1024,8 @@ export default function Home() {
       location: newProjectLocation.trim() || "A cadastrar",
       plannedStart: newProjectStart ? new Date(`${newProjectStart}T00:00:00`) : undefined,
       plannedFinish: newProjectFinish ? new Date(`${newProjectFinish}T00:00:00`) : undefined,
+      tipoDeObra: newProjectTipo,
+      descricao: newProjectDescricao.trim() || undefined,
     });
   };
   const createPending = createProjectMutation.isPending;
@@ -1207,6 +1226,21 @@ export default function Home() {
                   <Plus size={16} /> Nova obra
                 </button>
               </section>
+              {createNotice && (
+                <div
+                  role="status"
+                  style={{
+                    marginBottom: 12,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    background: "var(--surf)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  {createNotice}
+                </div>
+              )}
               <section className="metrics-grid">
                 <MetricCard
                   label="Obras ativas"
@@ -1531,12 +1565,33 @@ export default function Home() {
             </label>
             <div className="modal-form-grid">
               <label>Local<input value={newProjectLocation} onChange={event => setNewProjectLocation(event.target.value)} placeholder="Ex.: Juazeiro do Norte - CE" /></label>
+              <label>
+                Tipo de obra
+                <select value={newProjectTipo} onChange={event => setNewProjectTipo(event.target.value as ProjectKind)}>
+                  {TIPOS_DE_OBRA.map(tipo => (
+                    <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
+                  ))}
+                </select>
+              </label>
               <label>Início previsto<input type="date" value={newProjectStart} onChange={event => setNewProjectStart(event.target.value)} /></label>
               <label>Fim previsto<input type="date" value={newProjectFinish} onChange={event => setNewProjectFinish(event.target.value)} /></label>
             </div>
+            <label>
+              Descrição da obra
+              <textarea
+                value={newProjectDescricao}
+                onChange={event => setNewProjectDescricao(event.target.value)}
+                rows={3}
+                placeholder="Ex.: Edifício residencial de 12 pavimentos, 2 subsolos, em Juazeiro do Norte. Fundação em estacas hélice contínua."
+              />
+            </label>
             <p className="modal-note">
-              A obra é salva com um planejamento inicial em branco — você
-              adiciona a estrutura (EAP), o orçamento e o cronograma depois.
+              A estrutura (EAP) é montada a partir dos serviços da base oficial
+              de preços — o Catálogo. Cada item da EAP carrega o código da
+              SEINFRA, e é por isso que o orçamento encontra o preço sem você
+              digitá-lo. Sem base importada, a obra é criada sem EAP e o aviso
+              aparece aqui.
+              {newProjectDescricao.trim() && " A descrição é usada pela IA para conversar sobre a obra; ela não define a EAP."}
             </p>
             {createError && (
               <p className="modal-note text-red-700">{createError}</p>

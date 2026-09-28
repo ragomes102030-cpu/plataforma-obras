@@ -41,6 +41,9 @@ export const projects = mysqlTable("projects", {
     .default("Planejamento")
     .notNull(),
   progress: int("progress").default(0).notNull(),
+  // Descrição livre da obra. É o insumo para a IA conversar sobre o que está
+  // sendo construído; a EAP em si vem do catálogo de preços, não daqui.
+  descricao: text("descricao"),
   plannedStart: timestamp("plannedStart").notNull(),
   plannedFinish: timestamp("plannedFinish").notNull(),
   baseReferencia: mysqlEnum("baseReferencia", ["SEINFRA", "SINAPI", "PROPRIA"]),
