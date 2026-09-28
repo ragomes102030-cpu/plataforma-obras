@@ -30,6 +30,7 @@ import {
   scheduleBaselineItems,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
+import { defaultCalendar, elapsedWorkingDays } from "@shared/work-calendar";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
@@ -3023,8 +3024,25 @@ export const appRouter = router({
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
         const asOf = input.asOf ?? new Date();
-        const start = project?.plannedStart?.getTime() ?? asOf.getTime();
-        const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
+        // Progresso em DIAS ÚTEIS, não dias corridos. O CPM já
+        // trabalha em índices de dias úteis, então comparar com
+        // (asOf - plannedStart) / 86400000 daria um número que não
+        // bate com o índice do CPM sempre que houver feriado ou
+        // fim de semana no meio.
+        const calendar = defaultCalendar(
+          project?.plannedStart
+            ? project.plannedStart.getFullYear()
+            : asOf.getFullYear()
+        );
+        const localIso = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const startIso = project?.plannedStart
+          ? localIso(project.plannedStart)
+          : localIso(asOf);
+        const elapsedDays = Math.max(
+          0,
+          elapsedWorkingDays(calendar, startIso, localIso(asOf))
+        );
         const rows = activities.map(activity => {
           const plannedQuantity = Number(activity.plannedQuantity ?? 0);
           const actualQuantity = actualByActivity.get(activity.id) ?? 0;

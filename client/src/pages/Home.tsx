@@ -48,6 +48,7 @@ import { FrentesView } from "@/components/FrentesView";
 import { MedicaoView } from "@/components/MedicaoView";
 import { GraficosView } from "@/components/GraficosView";
 import { FormulasView } from "@/components/FormulasView";
+import { dateAt as dateAtWorkCalendar, defaultCalendar } from "@shared/work-calendar";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -204,6 +205,12 @@ function GanttView({
       : 0;
     return Date.now() - minOffset * 86_400_000;
   }, [plannedStart, activities]);
+  const calendar = useMemo(() => {
+    if (!plannedStart) return undefined;
+    return defaultCalendar(new Date(new Date(plannedStart).getTime()).getFullYear());
+  }, [plannedStart]);
+  const localIso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const filtered = useMemo(
     () =>
       activities.filter(
@@ -453,16 +460,12 @@ function GanttView({
                   </td>
                   <td>
 {formatDate(
-                       new Date(projectStart + (activity.earlyStart ?? activity.startOffset) * 86400000)
+                       dateAtWorkCalendar(calendar!, localIso(new Date(projectStart)), activity.earlyStart ?? activity.startOffset)
                      )}
                    </td>
                    <td>
                      {formatDate(
-                       new Date(
-                         projectStart +
-                           ((activity.earlyStart ?? activity.startOffset) + activity.durationDays) *
-                             86400000
-                       )
+                       dateAtWorkCalendar(calendar!, localIso(new Date(projectStart)), (activity.earlyStart ?? activity.startOffset) + activity.durationDays)
                      )}
                   </td>
                   <td>{activity.progress}%</td>
@@ -880,6 +883,13 @@ export default function Home() {
   });
   const selected =
     projects.find(project => project.id === selectedId) ?? projects[0];
+  const plannedStart = selected?.plannedStart;
+  const calendar = useMemo(() => {
+    if (!plannedStart) return undefined;
+    return defaultCalendar(new Date(plannedStart).getFullYear());
+  }, [plannedStart]);
+  const localIso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const activitiesQuery = trpc.projects.activities.useQuery({
     projectId: selected?.id ?? 1,
   });
@@ -1220,7 +1230,7 @@ export default function Home() {
                 />
                 <MetricCard
                   label="Próximo marco"
-                  value={nextMilestone ? formatDate(new Date(Date.parse(selected?.plannedStart?.toString() ?? new Date().toISOString()) + nextMilestone.startOffset * 86400000)) : "—"}
+                  value={nextMilestone ? formatDate(dateAtWorkCalendar(calendar!, localIso(new Date(plannedStart)), nextMilestone.startOffset)) : "—"}
                   detail={nextMilestone?.name ?? "Nenhuma atividade pendente"}
                   icon={Clock3}
                   tone="amber"

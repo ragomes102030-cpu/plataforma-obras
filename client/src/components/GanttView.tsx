@@ -1,5 +1,9 @@
 ﻿import { useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import {
+  defaultCalendar,
+  dateAt as dateAtWorkCalendar,
+} from "@shared/work-calendar";
 
 type Dep = { predecessorId: number; successorId: number; type: string; lag?: number };
 type Activity = { id: number; wbsCode?: string; name?: string; durationDays?: number; startOffset?: number; critical?: number; progress?: number; phase?: string; status?: string; earlyStart?: number | null };
@@ -118,7 +122,18 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
     return null;
   }, [plannedStart]);
 
-  const dateAt = (o: number) => (projectStart === null ? `+${o}d` : new Date(projectStart + o * 86400000).toLocaleDateString("pt-BR"));
+  const calendar = useMemo(() => {
+    if (!projectStart) return undefined;
+    return defaultCalendar(new Date(projectStart).getFullYear());
+  }, [projectStart]);
+
+  const localIso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const dateAt = (o: number) =>
+    projectStart === null || !calendar
+      ? `+${o}d`
+      : dateAtWorkCalendar(calendar, localIso(new Date(projectStart)), o);
 
   const visible = useMemo(() => (onlyCritical ? activities.filter((a) => a.critical === 1) : activities), [activities, onlyCritical]);
   const total = activities.length;
@@ -230,7 +245,7 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--primary)" }}>Gantt da obra</h2>
       <p style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
         Atividades: {total} · visíveis: {rows.length} · Críticas: {criticalCount} · Dependências: {dependencies.length} ·
-        início da obra {projectStart === null ? "não informado" : new Date(projectStart).toLocaleDateString("pt-BR")} · dias corridos, sem feriados
+        início da obra {projectStart === null ? "não informado" : new Date(projectStart).toLocaleDateString("pt-BR")} · calendário de dias úteis {calendar ? "(com feriados)" : ""}
       </p>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
