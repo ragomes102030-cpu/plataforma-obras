@@ -33,6 +33,7 @@ import { join, resolve } from "node:path";
 import { createConnection } from "mysql2/promise";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { aplicarMigracoes } from "./migrate-core.mjs";
+import { auditarSchema } from "./audit-schema.mjs";
 
 const MIGRATIONS_FOLDER = "drizzle";
 const MIGRATIONS_TABLE = "__drizzle_migrations";
@@ -182,5 +183,28 @@ const [finalTables] = await conn.query(
   "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()"
 );
 console.log(`[migrate] OK: ${finalTables[0].n} tabela(s) no schema \`${parsed.pathname.replace(/^\//, "")}\`.`);
+
+// ------------------------------------------------------------- auditar ----
+// A auditoria roda AQUI, e nao como um segundo comando do pre-deploy, por dois
+// motivos que custaram dois deploys de diagnostico para descobrir:
+//
+//   1. a Railway nao executa todos os comandos de um array — em
+//      ["a", "b"] ela rodou so o segundo
+//   2. nem com `&&`/`||` num comando unico, porque ela nao passa por shell:
+//      o `&&` vira argumento literal do node
+//
+// Chamando como funcao, com a mesma conexao, a auditoria nao depende de
+// interpretacao de comando nem abre uma segunda conexao.
+//
+// Ela informa e nao barra: divergencia de schema e motivo para investigar, nao
+// para impedir o deploy automatico. Quem decide e o time.
+const auditoria = await auditarSchema({ conn });
+for (const linha of auditoria.linhas) console.log(`[audit] ${linha}`);
+if (!auditoria.ok) {
+  console.warn("[audit] DIVERGENCIA: o banco nao confere com as migracoes deste repo.");
+  for (const d of auditoria.divergencias) console.warn(`[audit]   ${d}`);
+} else {
+  console.log(`[audit] banco confere com as migracoes (${auditoria.tabelasNoBanco} tabela(s)).`);
+}
 
 await conn.end();
