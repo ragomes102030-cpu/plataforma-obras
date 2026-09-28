@@ -21,6 +21,9 @@
  * schema a partir de um arquivo unico e nunca acompanhava as migracoes, de
  * modo que 22 migracoes do Drizzle jamais chegavam a um banco em uso.
  *
+ * A logica de aplicacao esta em `migrate-core.mjs`, separada deste arquivo para
+ * poder ser executada de verdade nos testes com uma conexao falsa.
+ *
  * Uso:
  *   node scripts/migrate-db.mjs             aplica
  *   node scripts/migrate-db.mjs --dry-run   relata e nao escreve nada
@@ -29,6 +32,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createConnection } from "mysql2/promise";
 import { readMigrationFiles } from "drizzle-orm/migrator";
+import { aplicarMigracoes } from "./migrate-core.mjs";
 
 const MIGRATIONS_FOLDER = "drizzle";
 const MIGRATIONS_TABLE = "__drizzle_migrations";
@@ -123,7 +127,7 @@ if (isFresh) {
   console.log(
     `[migrate] banco normal: ${appliedCount} migracao(oes) aplicada(s), ${pending.length} pendente(s)`
   );
-for (const m of aAplicar) {
+  for (const m of pending) {
     console.log(`[migrate]   pendente ${m.folderMillis}`);
   }
 }
@@ -135,112 +139,29 @@ if (dryRun) {
 }
 
 // ------------------------------------------------------------- aplicar ----
-// DDL no MySQL faz implicit commit: se um statement falha no meio, os
-// anteriores JA ficam aplicados, mas a migracao nao e registrada em
-// `__drizzle_migrations` (o INSERT vem depois de todos os statements).
-// Rodando o script de novo, os mesmos statements estourariam com
-// `duplicate column` / `table already exists` -- falha eternal.
-//
-// Por isso cada statement e conferido contra INFORMATION_SCHEMA antes de
-// executar, e o que ja existir e apenas logado e pulado.
-function alvoDoStatement(stmt) {
-  const criarTabela = stmt.match(
-    /^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`([^`]+)`/i
-  );
-  if (criarTabela) return { tipo: "table", tabela: criarTabela[1] };
+// O nucleo decide, statement a statement, o que ja existe e o que ainda falta.
+// DDL no MySQL faz implicit commit, entao um deploy que falhou no meio deixou
+// parte do DDL aplicada sem ter registrado a migracao; sem essa checagem o
+// proximo deploy estouraria com `duplicate column`.
 
-  const addColuna = stmt.match(
-    /^\s*ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+(?:COLUMN\s+)?`([^`]+)`/i
-  );
-  if (addColuna) return { tipo: "coluna", tabela: addColuna[1], nome: addColuna[2] };
-
-  const addConstraint = stmt.match(
-    /^\s*ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+(?:CONSTRAINT\s+)?`([^`]+)`/i
-  );
-  if (addConstraint)
-    return { tipo: "constraint", tabela: addConstraint[1], nome: addConstraint[2] };
-
-  const criarIndex = stmt.match(
-    /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+`([^`]+)`\s+ON\s+`([^`]+)`/i
-  );
-  if (criarIndex) return { tipo: "index", tabela: criarIndex[2], nome: criarIndex[1] };
-
-  return null;
-}
-
-// Qual tabela do INFORMATION_SCHEMA responde por cada tipo, e por qual coluna.
-// Estas colunas sao reais: consultar uma coluna que a tabela nao tem da
-// ER_BAD_FIELD_ERROR, que matava o pre-deploy.
-const CONSULTA_POR_TIPO = {
-  table: { tabela: "TABLES", coluna: null },
-  coluna: { tabela: "COLUMNS", coluna: "COLUMN_NAME" },
-  constraint: { tabela: "TABLE_CONSTRAINTS", coluna: "CONSTRAINT_NAME" },
-  index: { tabela: "STATISTICS", coluna: "INDEX_NAME" },
-};
-
-function alvoDeConsulta(alvo) {
-  const def = CONSULTA_POR_TIPO[alvo.tipo];
-  if (!def) throw new Error(`tipo de DDL nao mapeado: ${alvo.tipo}`);
-  return def;
-}
-
-async function jaExiste(alvo) {
-  const { tabela: infoTable, coluna } = alvoDeConsulta(alvo);
-  const [rows] = await conn.query(
-    `SELECT 1 AS found FROM INFORMATION_SCHEMA.${infoTable}` +
-      ` WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?` +
-      (coluna ? ` AND ${coluna} = ?` : "") +
-      ` LIMIT 1`,
-    coluna ? [alvo.tabela, alvo.nome] : [alvo.tabela]
-  );
-  return rows.length > 0;
-}
-
-// `pending` foi calculado antes do bloco do banco legado poder ter inserido
-// registros em `__drizzle_migrations`. Rele o estado real aqui para nao
-// reaplicar DDL que ja consta como aplicado.
-let lastAppliedReal = null;
-if (tableNames.has(MIGRATIONS_TABLE)) {
+// O `lastApplied` acima foi lido ANTES do bloco de banco legado, que pode ter
+// inserido registros. Rele aqui, senao um banco legado receberia de novo o DDL
+// que ja tem e o pre-deploy morreria com `table already exists`.
+let lastAppliedReal = lastApplied;
+if (hasMigrationTable) {
   const [rowsReal] = await conn.query(
     `SELECT created_at FROM \`${MIGRATIONS_TABLE}\` ORDER BY created_at DESC LIMIT 1`
   );
   if (rowsReal.length > 0) lastAppliedReal = Number(Object.values(rowsReal[0])[0]);
 }
-const aAplicar =
-  lastAppliedReal === null
-    ? migrations
-    : migrations.filter(m => m.folderMillis > lastAppliedReal);
-if (aAplicar.length !== pending.length) {
-  console.log(
-    `[migrate] releitura do journal: ${aAplicar.length} migracao(oes) a aplicar (antes: ${pending.length})`
-  );
-}
 
-let aplicados = 0;
-for (const m of aAplicar) {
-  let executados = 0;
-  let pulados = 0;
-  for (const stmt of m.sql) {
-    if (!stmt.trim()) continue;
-    const alvo = alvoDoStatement(stmt);
-    if (alvo && (await jaExiste(alvo))) {
-      console.log(
-        `[migrate]   ja aplicado, pulado: ${alvo.tipo} \`${alvo.nome ?? alvo.tabela}\` em \`${alvo.tabela}\``
-      );
-      pulados++;
-      continue;
-    }
-    await conn.query(stmt);
-    executados++;
-  }
-  await conn.query(
-    "INSERT INTO `__drizzle_migrations` (`hash`, `created_at`) VALUES (?, ?)",
-    [m.hash, m.folderMillis]
-  );
-  aplicados++;
-  console.log(`[migrate] aplicada ${m.folderMillis}: ${executados} executado(s), ${pulados} ja existente(s)`);
-}
-if (aplicados === 0) console.log("[migrate] nada pendente; nenhum DDL executado.");
+await aplicarMigracoes({
+  conn,
+  migrations,
+  jaAplicado: lastAppliedReal,
+  migrationsTable: MIGRATIONS_TABLE,
+  log: msg => console.log(msg),
+});
 
 // ------------------------------------------------------------ verificar ---
 const [after] = await conn.query(

@@ -75,6 +75,7 @@ COPY --from=build /app/dist ./dist
 # mascarava divergencia entre codigo e banco em vez de revela-la.
 COPY drizzle/ ./drizzle/
 COPY scripts/migrate-db.mjs ./scripts/migrate-db.mjs
+COPY scripts/migrate-core.mjs ./scripts/migrate-core.mjs
 
 EXPOSE 3000
 CMD ["pnpm", "start"]
