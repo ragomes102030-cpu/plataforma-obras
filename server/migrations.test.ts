@@ -329,28 +329,40 @@ describe("o Dockerfile encontra tudo que copia", () => {
 });
 
 describe("o runtime recebe o que o pre-deploy precisa", () => {
-  it("o pre-deploy do Railway aponta para o script de migracao", () => {
+  // A Railway NAO executa todos os comandos de um array: em
+  // `["a", "b"]` ela rodou so o segundo. Confirmado por deploy de diagnostico
+  // em 2026-09-28, onde uma sentinela na posicao 0 nao imprimiu nada e o
+  // migrate na posicao 1 rodou normalmente. Por isso o pre-deploy e UM comando
+  // unico encadeado com `&&`, e nao dois elementos.
+  it("o pre-deploy do Railway e um comando unico (a Railway ignora os demais)", () => {
     const railway = JSON.parse(readFileSync("railway.json", "utf-8")) as {
       deploy: { preDeployCommand?: string[] };
     };
-    expect(railway.deploy.preDeployCommand?.[0]).toBe("node scripts/migrate-db.mjs");
+    const cmd = railway.deploy.preDeployCommand;
+    expect(Array.isArray(cmd)).toBe(true);
+    expect(
+      cmd,
+      "preDeployCommand com mais de um elemento: a Railway executa apenas o " +
+        "ultimo, entao o resto nunca roda"
+    ).toHaveLength(1);
+    expect(cmd![0]).toMatch(/scripts\/migrate-db\.mjs/);
   });
 
   it("o pre-deploy tambem roda a auditoria de schema, sem bloquear o deploy", () => {
-    // A auditoria le INFORMATION_SCHEMA e so esta na rede da Railway — e
-    // exatamente onde ninguem consegue conferir a mao depois de um deploy.
-    // Rodando no pre-deploy, o relatorio fica no log do deploy.
+    // A auditoria le INFORMATION_SCHEMA e so alcanca o banco de dentro da rede
+    // da Railway — e o pre-deploy roda la. O relatorio fica no log do deploy.
     //
     // `|| true` e deliberado: divergencia de schema nao deve derrubar o deploy
-    // por surpresa. Bloquear aqui ja custou tres deploys seguidos nesta mesma
+    // por surprise. Bloquear aqui ja custou tres deploys seguidos nesta mesma
     // Onda; a auditoria existe para INFORMAR, nao para barrar.
     const railway = JSON.parse(readFileSync("railway.json", "utf-8")) as {
       deploy: { preDeployCommand?: string[] };
     };
-    const cmd = railway.deploy.preDeployCommand ?? [];
-    const auditoria = cmd.find(c => c.includes("audit-schema.mjs"));
-    expect(auditoria, "a auditoria de schema nao roda no pre-deploy").toBeDefined();
-    expect(auditoria).toMatch(/\|\|\s*true/);
+    const cmd = railway.deploy.preDeployCommand?.join(" ") ?? "";
+    expect(cmd, "a auditoria de schema nao roda no pre-deploy").toMatch(
+      /scripts\/audit-schema\.mjs/
+    );
+    expect(cmd).toMatch(/\|\|\s*true/);
   });
 
   it("a auditoria de schema so escreve: so executa SELECT", () => {

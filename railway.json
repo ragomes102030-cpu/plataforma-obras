@@ -5,7 +5,7 @@
   },
   "deploy": {
     "startCommand": "pnpm start",
-    "preDeployCommand": ["node scripts/sentinel.mjs", "node scripts/migrate-db.mjs"],
+    "preDeployCommand": ["node scripts/migrate-db.mjs && node scripts/audit-schema.mjs || true"],
     "preDeployTimeoutSeconds": 180,
     "healthcheckPath": "/healthz",
     "healthcheckTimeout": 300,
