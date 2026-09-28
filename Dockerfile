@@ -65,10 +65,16 @@ RUN pnpm install --frozen-lockfile --prod
 # e o bundle vive em dist/ — entao o front precisa estar em dist/public.
 COPY --from=build /app/dist ./dist
 
-# Bootstrap de banco vazio (staging / recuperacao). Nao roda sozinho: so quando
-# o comando de start do servico o chama; em producao o CMD abaixo nao o usa.
-COPY scripts/bootstrap-db.mjs ./scripts/bootstrap-db.mjs
-COPY drizzle/full-schema.sql ./drizzle/full-schema.sql
+# Migracoes do Drizzle, aplicadas no pre-deploy do Railway
+# (`node scripts/migrate-db.mjs`). O script precisa do journal e dos .sql;
+# `schema.ts` e os snapshots viajam junto e sao inertes em runtime.
+#
+# Isto substitui o antigo par bootstrap-db.mjs + full-schema.sql, que criava
+# o schema a partir de um arquivo achatado e nunca acompanhava as migracoes.
+# Manter o pre-deploy como unico ponto de escrita no schema: DDL no boot
+# mascarava divergencia entre codigo e banco em vez de revela-la.
+COPY drizzle/ ./drizzle/
+COPY scripts/migrate-db.mjs ./scripts/migrate-db.mjs
 
 EXPOSE 3000
 CMD ["pnpm", "start"]
