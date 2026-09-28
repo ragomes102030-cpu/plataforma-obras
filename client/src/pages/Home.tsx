@@ -172,6 +172,15 @@ function GanttView({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<"gantt" | "table" | "lob">(initialTab);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [fullscreen]);
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
   const [drafts, setDrafts] = useState<Record<number, any>>({});
@@ -308,7 +317,7 @@ function GanttView({
     setExpandedActivityId(null);
   };
   return (
-    <section className="panel gantt-panel">
+    <section className={`panel gantt-panel${fullscreen ? " gantt-fullscreen" : ""}`}>
       <div className="panel-heading gantt-heading">
         <div>
           <div className="title-with-badge">
@@ -334,6 +343,13 @@ function GanttView({
             onClick={() => setFiltersOpen(!filtersOpen)}
           >
             <SlidersHorizontal size={15} /> Filtros
+          </button>
+          <button
+            className={`outline-button ${fullscreen ? "selected-control" : ""}`}
+            onClick={() => setFullscreen(v => !v)}
+            aria-label={fullscreen ? "Fechar tela cheia" : "Expandir em tela cheia"}
+          >
+            {fullscreen ? "Fechar ✕" : "Expandir ⤢"}
           </button>
           <button
             className="icon-button"
@@ -401,7 +417,7 @@ function GanttView({
         </div>
       </div>
       {tab === "gantt" && (
-        <GanttM2 projectId={projectId} plannedStart={plannedStart} onSelectActivity={id => setExpandedActivityId(id)} />
+        <GanttM2 fill={fullscreen} projectId={projectId} plannedStart={plannedStart} onSelectActivity={id => setExpandedActivityId(id)} />
       )}
       {tab === "table" && (
         <div className="schedule-table-wrap">
