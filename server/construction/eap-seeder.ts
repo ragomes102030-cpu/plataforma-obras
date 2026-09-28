@@ -22,6 +22,7 @@ import {
   type CategoriaDeObra,
   type TipoDeObra,
 } from "../../shared/eap-engine";
+import { extrairTrilha } from "../../shared/price-sources/seinfra";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -124,6 +125,7 @@ export async function semearEapDoCatalogo(
       description: priceItems.description,
       unit: priceItems.unit,
       unitPrice: priceItems.unitPrice,
+      notes: priceItems.notes,
     })
     .from(priceItems)
     .where(eq(priceItems.catalogId, catalogo.id));
@@ -134,6 +136,11 @@ export async function semearEapDoCatalogo(
       description: s.description,
       unit: s.unit,
       unitPrice: Number(s.unitPrice),
+      // A trilha (capítulo > subgrupo da planilha oficial) é o que faz a
+      // classificação acertar; sem ela o motor cai na palavra solta e põe a
+      // peça na ala errada. O importador a gravou em `notes` ao ler a planilha
+      // — ver `extrairTrilha` em shared/price-sources/seinfra.ts.
+      trilha: extrairTrilha(s.notes),
     })),
     { tipoDeObra: opcoes.tipoDeObra }
   );

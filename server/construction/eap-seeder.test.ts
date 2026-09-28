@@ -18,7 +18,7 @@ function dbFalso(opcoes: {
   nosExistentes?: Linha[];
   projetoRef?: string | null;
 } = {}) {
-  const inserts: Array<{ tabela: unknown; valores: Linha[] }> = [];
+  const inserts: Array<{ tabela: unknown; valores: Linha[]; ids: number[] }> = [];
   const catalogo = {
     id: 1,
     name: "SEINFRA-CE 028.1",
@@ -70,8 +70,11 @@ function dbFalso(opcoes: {
       const registrar = (vals: Linha | Linha[]) => {
         const lista = Array.isArray(vals) ? vals : [vals];
         // Uma chamada de `values()` é UM insert em lote, como o drizzle faz.
-        inserts.push({ tabela, valores: lista });
-        return { $returningId: async () => lista.map(() => ({ id: proximoId++ })) };
+        // O id só existe no retorno de `$returningId`, e é ele que o
+        // `parentId` da folha referencia — então o falso guarda os dois juntos.
+        const ids = lista.map(() => proximoId++);
+        inserts.push({ tabela, valores: lista, ids });
+        return { $returningId: async () => ids.map(id => ({ id })) };
       };
       return { values: registrar, $returningId: async () => [{ id: proximoId++ }] };
     },
@@ -81,11 +84,11 @@ function dbFalso(opcoes: {
 }
 
 describe("semearEapDoCatalogo", () => {
-  /** Todos os nós gravados, achatando os inserts. */
-  function nosGravados(inserts: Array<{ tabela: unknown; valores: Linha[] }>) {
+  /** Todos os nós gravados, achatando os inserts, com o id que o banco deu. */
+  function nosGravados(inserts: Array<{ tabela: unknown; valores: Linha[]; ids: number[] }>) {
     return inserts
       .filter(i => i.tabela === wbsNodes)
-      .flatMap(i => i.valores);
+      .flatMap(i => i.valores.map((v, indice) => ({ ...v, _id: i.ids[indice] })));
   }
 
   it("grava grupos antes das folhas, porque o pai e NOT NULL", async () => {
@@ -186,5 +189,64 @@ describe("semearEapDoCatalogo", () => {
     expect(r.nosCriados).toBe(0);
     expect(r.aviso).toBeTruthy();
     expect(inserts).toHaveLength(0);
+  });
+
+  it("a trilha de notes decide o grupo, nao a palavra da descricao", async () => {
+    // Estas descricoes, lidas sem a trilha, caem em grupos errados: "CABO"
+    // leva protensao para Instalacoes e "DISJUNTOR ... NA PORTA DO Q.D." leva
+    // para Revestimentos. A trilha gravada em `notes` pelo importador e o que
+    // corrige, e ela precisa chegar viva do banco ate o motor.
+    const itens = [
+      {
+        code: "C3334",
+        description: "ANCORAGEM ATIVA PARA CABO COM 6 CORDOALHA DE 12,7mm",
+        unit: "un",
+        unitPrice: "667.28",
+        notes: "item 6.6.81 | FUNDAÇÕES E  ESTRUTURAS > ARMADURAS",
+      },
+      {
+        code: "C2266",
+        description: "DISJUNTOR TRIPOLAR C/ACIONAMENTO NA PORTA DO Q.D.ATE 63A",
+        unit: "un",
+        unitPrice: "98.00",
+        notes:
+          "item 18.8.81 | INST. ELÉTRICAS, TELEFONIA, LÓGICA, SOM E SISTEMAS DE CONTROLE > BASES, CHAVES E DISJUNTORES",
+      },
+      {
+        code: "C2820",
+        description: "EXECUÇÃO DE SONDAGEM ELÉTRICA VERTICAL AB/2 ATÉ 150m - SEV",
+        unit: "un",
+        unitPrice: "623.05",
+        notes: "item 1.1.1 | SERVICOS PRELIMINARES > SONDAGENS",
+      },
+    ];
+    const { db, inserts } = dbFalso({ itens });
+    const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+    expect(r.servicosUsados).toBe(3);
+
+    const nos = nosGravados(inserts);
+    const paiDe = (codigo: string) => {
+      const folha = nos.find(v => v.externalId === codigo);
+      return nos.find(v => v._id === folha?.parentId)?.name;
+    };
+    expect(paiDe("C3334")).toBe("Estrutura");
+    expect(paiDe("C2266")).toBe("Instalações e redes");
+    expect(paiDe("C2820")).toBe("Serviços preliminares e mobilização");
+    // E o nome da folha e a descricao limpa, sem o capitulo prefixado.
+    const folhaC2820 = nos.find(v => v.externalId === "C2820");
+    expect(folhaC2820?.name).toBe(
+      "EXECUÇÃO DE SONDAGEM ELÉTRICA VERTICAL AB/2 ATÉ 150m - SEV"
+    );
+  });
+
+  it("item sem trilha ainda classifica pela descricao", async () => {
+    // Catalogo de cadastro manual: nao tem `notes` com hierarquia, e nao pode
+    // ficar sem EAP por causa disso.
+    const { db, inserts } = dbFalso();
+    const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+    expect(r.servicosUsados).toBeGreaterThan(0);
+    expect(nosGravados(inserts).filter(v => v.level === 2).length).toBe(
+      r.servicosUsados
+    );
   });
 });

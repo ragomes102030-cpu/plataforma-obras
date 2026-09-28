@@ -41,6 +41,12 @@ export type ServicoDoCatalogo = {
   description: string;
   unit: string;
   unitPrice: number;
+  /**
+   * Caminho hierárquico na planilha oficial (capítulo > subgrupo). Vem das
+   * linhas de agrupamento do `Planos-de-Serviços` e é o sinal mais forte de
+   * classificação. Ausente em catálogo sem hierarquia, e aí vale a descrição.
+   */
+  trilha?: readonly string[];
 };
 
 export type CategoriaDeObra =
@@ -49,6 +55,7 @@ export type CategoriaDeObra =
   | "estrutura"
   | "vedacao"
   | "instalacoes"
+  | "cobertura"
   | "revestimentos"
   | "terraplenagem"
   | "pavimentacao";
@@ -79,15 +86,33 @@ export const GRUPOS: GrupoDaEap[] = [
     termos: [
       "canteiro",
       "mobilizacao",
-      "demobilizacao",
+      // "desmobilizacao" e não "demobilizacao": o `includes` antigo casava por
+      // acidente, porque "desmobilizacao" contém a sequência "demobilizacao".
+      // Com casamento por palavra inteira o erro apareceu.
+      "desmobilizacao",
       "instalacao provisoria",
       "provisoria",
       "placa de obra",
+      "placas padrao",
       "sinalizacao",
       "limpeza de canteiro",
+      "limpeza mecanizada de terreno",
+      "raspagem",
+      "retirada de arvores",
+      "remocao de camada vegetal",
       "bem feitor",
       "administracao da obra",
       "articulacao",
+      // Instalações de apoio do canteiro. Só entram como rede de segurança:
+      // com a trilha da planilha (ver `CAPITULOS_SEINFRA`) a taxonomia oficial
+      // decide, e estes termos ficam para catálogo sem hierarquia.
+      "alojamento",
+      "barracao",
+      "refeitorio",
+      "fossa sumidouro",
+      "sanitario provisorio",
+      "letreiro",
+      "vigia",
     ],
   },
   {
@@ -122,6 +147,7 @@ export const GRUPOS: GrupoDaEap[] = [
       "concreto aparente",
       "laje",
       "viga",
+      "vigamento",
       "pilar",
       "viga baldrame",
       "armação",
@@ -152,7 +178,11 @@ export const GRUPOS: GrupoDaEap[] = [
   },
   {
     categoria: "instalacoes",
-    nome: "Instalações prediais",
+    // "Instalações e redes", e não "Instalações prediais": o capítulo 16 da
+    // SEINFRA é o maior da planilha (1.082 serviços) e é rede de água e
+    // esgoto — ramal,collector, poço de visita, ligação predial. Num edifício
+    // é instalação predial; numa obra de saneamento é a própria obra.
+    nome: "Instalações e redes",
     termos: [
       "instalacao eletrica",
       "instalacao hidrossanitaria",
@@ -175,6 +205,11 @@ export const GRUPOS: GrupoDaEap[] = [
       "ventilacao",
       "ar condicionado",
       "gas",
+      // "gasometro" e "regulador de gas" entraram porque o casamento por
+      // palavra inteira deixou o termo "gas" de alcançar as duas: "GASÔMETRO"
+      // é uma palavra só, e não contém "gas" como palavra.
+      "gasometro",
+      "regulador de gas",
     ],
   },
   {
@@ -200,6 +235,27 @@ export const GRUPOS: GrupoDaEap[] = [
       "guarda-corpo",
       "impermeabilizacao de piso",
       "polimento",
+    ],
+  },
+  {
+    // Grupo novo. Sem ele, o capítulo 11 da SEINFRA (154 serviços: telhas,
+    // madeira, metálica, domos) não tinha onde cair e uma obra de edifício
+    // saía sem cobertura nenhuma — o serviço que fecha a casa.
+    categoria: "cobertura",
+    nome: "Cobertura",
+    termos: [
+      "cobertura",
+      "telhado",
+      "telha",
+      "cumeeira",
+      "calha",
+      "rufo",
+      "beiral",
+      "domo",
+      "agua-furtada",
+      "estrutura de madeira",
+      "estrutura metalica",
+      "forro de madeira",
     ],
   },
   {
@@ -240,6 +296,91 @@ export const GRUPOS: GrupoDaEap[] = [
   },
 ];
 
+/**
+ * Taxonomia oficial da SEINFRA: capítulo → grupo da EAP.
+ *
+ * POR QUE A TRILHA DA PLANILHA MANDA, E NÃO A PALAVRA SOLTA
+ *
+ * Medido no `Planos-de-Serviços` da SEINFRA-CE 028 (4.435 serviços), classificar
+ * só pela descrição errava de forma estrutural: `EXECUÇÃO DE SONDAGEM ELÉTRICA`
+ * e `PROTENSÃO E INJEÇÃO EM CABO` caíam em Instalações (por "cabo"), e
+ * `DISJUNTOR TRIPOLAR C/ACIONAMENTO NA PORTA DO Q.D.` caía em Revestimentos
+ * (por "porta"). Com a trilha, `C2820` é `1.1.1 SERVICOS PRELIMINARES > SONDAGENS`
+ * e `C3343` é `6 FUNDAÇÕES E ESTRUTURAS > ESTACAS` — sem ambiguidade.
+ *
+ * Os 30 capítulos e os subgrupos citados aqui vieram da leitura da planilha
+ * 028. É a taxonomia da própria SEINFRA, não invenção do motor.
+ */
+const CAPITULOS_SEINFRA: Record<string, CategoriaDeObra> = {
+  "servicos preliminares": "preliminares",
+  "movimento de terra": "terraplenagem",
+  "servicos auxiliares": "preliminares",
+  "obras de drenagem": "terraplenagem",
+  "argamassas": "revestimentos",
+  "fundacoes e estruturas": "estrutura",
+  "contencoes": "fundacao",
+  "paredes e paineis": "vedacao",
+  "esquadrias e ferragens": "revestimentos",
+  "vidros": "revestimentos",
+  "cobertura": "cobertura",
+  "impermeabilizacao": "fundacao",
+  "protecao termica": "revestimentos",
+  "revestimentos": "revestimentos",
+  "pisos": "revestimentos",
+  "instalacoes hidraulicas": "instalacoes",
+  "servicos operacionais": "preliminares",
+  "inst eletricas telefonia logica som e sistemas de controle": "instalacoes",
+  "pintura": "revestimentos",
+  "pavimentacao do sistema viario": "pavimentacao",
+  "conservacao do sistema viario": "pavimentacao",
+  "obras portuarias": "terraplenagem",
+  "transportes para obras rodoviarias": "preliminares",
+  "sinalizacao do sistema viario": "pavimentacao",
+  "urbanizacao paisagismo": "terraplenagem",
+  "muros e fechamentos": "vedacao",
+  "sistema de ar condicionado": "instalacoes",
+  "rede de distribuicao de gas natural": "instalacoes",
+  "acessibilidade a edificacoes e espacos": "revestimentos",
+};
+
+/**
+ * Subgrupos que divergem do capítulo.
+ *
+ * Só o necessário. "FUNDAÇÕES E ESTRUTURAS" mistura tubulão (fundação) e formas
+ * (estrutura); "IMPERMEABILIZAÇÃO" mistura baldrame (fundação), calha
+ * (cobertura) e reservatório (instalações); "ACESSIBILIDADE" reagrupa serviços
+ * que a SEINFRA distribui por naturezas distintas. O resto segue o capítulo.
+ */
+const SUBGRUPOS_SEINFRA: Array<[string, CategoriaDeObra]> = [
+  ["tubuloes a ceu aberto", "fundacao"],
+  ["tubuloes a ar comprimido", "fundacao"],
+  ["estacas", "fundacao"],
+  // 6.4 EMBASAMENTOS E BALDRAMES vai para fundação, e não para o capítulo
+  // (estrutura): é o peito de alvenaria sob a carga que se distribui para o
+  // solo, e não um elemento estrutural do pavimento acima.
+  ["embasamentos e baldrames", "fundacao"],
+  ["formas", "estrutura"],
+  ["armaduras", "estrutura"],
+  ["concretos", "estrutura"],
+  ["elementos de concreto pre fabricado", "estrutura"],
+  ["junta de dilatacao", "estrutura"],
+  ["recuperacao estrutural", "estrutura"],
+  ["rasgo em concreto para tubulacoes", "estrutura"],
+  // 12 IMPERMEABILIZAÇÃO
+  ["baldrames", "fundacao"],
+  ["calhas", "cobertura"],
+  ["coberturas", "cobertura"],
+  ["reservatorios", "instalacoes"],
+  ["cortina", "fundacao"],
+  ["impermeabilizacao utilizando manta", "fundacao"],
+  // 29 ACESSIBILIDADE — a SEINFRA reagrupa aqui serviços de naturezas distintas
+  ["instalacoes loucas e acessorios", "instalacoes"],
+  ["sinalizacao", "pavimentacao"],
+];
+
+const SUBGRUPOS_NORMALIZADOS: Array<[string, CategoriaDeObra]> =
+  SUBGRUPOS_SEINFRA.map(([nome, categoria]) => [normalizar(nome), categoria]);
+
 /** Id do tipo de obra, como vai no formulário e no schema. */
 export type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
 
@@ -258,6 +399,7 @@ export const TIPOS_DE_OBRA: Array<{
       "estrutura",
       "vedacao",
       "instalacoes",
+      "cobertura",
       "revestimentos",
     ],
   },
@@ -274,7 +416,12 @@ export const TIPOS_DE_OBRA: Array<{
   {
     value: "saneamento",
     label: "Saneamento básico",
-    grupos: ["preliminares", "terraplenagem"],
+    // `instalacoes` entrou porque, na taxonomia da SEINFRA, a rede de água e
+    // esgoto É o capítulo 16 (TUBOS E CONEXÕES, POÇOS E CAIXAS, LIGAÇÕES
+    // PREDIAIS) — o maior da planilha, com 1.082 serviços. Sem ele, uma obra
+    // de saneamento saía sem um único tubo: só escavação e bueiro, e ainda
+    // pegando "OBRAS PORTUÁRIAS" e "TOTEM RODOVIÁRIO" para preencher cota.
+    grupos: ["preliminares", "terraplenagem", "instalacoes"],
   },
   {
     value: "todos",
@@ -283,13 +430,93 @@ export const TIPOS_DE_OBRA: Array<{
   },
 ];
 
-/** Qual grupo um serviço pertence, pela descrição. `null` se não casar. */
-export function classificarServico(descricao: string): CategoriaDeObra | null {
+/**
+ * Casa o termo como PALAVRA INTEIRA, aceitando plural.
+ *
+ * O casamento por `includes` puro errava feio em português: `porta` casava
+ * dentro de "PORTARIA" e "IMPORTAÇÃO", e `gas` casava dentro de "VIGAS" — o
+ * serviço ia para o grupo errado e virava folha da EAP.
+ *
+ * A fronteira é início/fim de palavra (espaço no texto normalizado, que já
+ * substituiu pontuação e hífen) com sufixo opcional `s`, porque a planilha
+ * escreve "PISOS CERÂMICOS" e "CABOS" no plural.
+ */
+function padraoDoTermo(termo: string): RegExp {
+  const alvo = normalizar(termo);
+  const escapado = alvo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|\\s)${escapado}s?(?=\\s|$)`);
+}
+
+/**
+ * `GRUPOS` com os padrões já compilados.
+ *
+ * Compilado uma vez na carga do módulo, e não a cada chamada: `gerarEap` roda
+ * contra ~4.400 serviços da SEINFRA-CE, o que dá quase um milhão de testes de
+ * regex por EAP. Nada aqui é mutável em tempo de execução — a ordem de
+ * consulta continua sendo a ordem de `GRUPOS`, que é a regra de precedência.
+ */
+const GRUPOS_COMPILADOS: Array<{ categoria: CategoriaDeObra; padroes: RegExp[] }> =
+  GRUPOS.map(grupo => ({
+    categoria: grupo.categoria,
+    padroes: grupo.termos.map(padraoDoTermo),
+  }));
+
+/**
+ * Grupo do serviço pela taxonomia oficial da planilha.
+ *
+ * `trilha` é o caminho lido da hierarquia (`["INSTALAÇÕES HIDRÁULICAS",
+ * "TUBOS E CONEXÕES DE PVC"]`). O subgrupo tem precedência sobre o capítulo
+ * porque é ele que distingue, por exemplo, "6.5 FORMAS" (estrutura) de
+ * "6.1 TUBULÕES" (fundação) dentro do mesmo capítulo.
+ *
+ * Devolve `undefined` — não `null` — quando não há opinião sobre a linha, para
+ * o chamador cair na classificação por descrição.
+ */
+export function classificarPorTrilha(
+  trilha: readonly string[] | null | undefined
+): CategoriaDeObra | undefined {
+  if (!trilha || !trilha.length) return undefined;
+  const nomes = [...trilha].reverse().map(normalizar);
+  // Duas passadas: igualdade exata primeiro, para não deixar um prefixo curto
+  // ("cortina") ganhar de um nome mais específico que só começa igual.
+  for (const nome of nomes) {
+    for (const [subgrupo, categoria] of SUBGRUPOS_NORMALIZADOS) {
+      if (nome === subgrupo) return categoria;
+    }
+  }
+  // A planilha embute a norma técnica no título do subgrupo — 12.8 é
+  // "IMPERMEABILIZAÇÃO UTILIZANDO MANTA ASFÁLTICA (ABNT NBR 9952:2014)" —, e
+  // essa parte muda a cada revisão da norma. Casar por prefixo evita reescrever
+  // o mapa a cada versão.
+  for (const nome of nomes) {
+    for (const [subgrupo, categoria] of SUBGRUPOS_NORMALIZADOS) {
+      if (nome.startsWith(subgrupo)) return categoria;
+    }
+  }
+  const capitulo = normalizar(trilha[0]!);
+  return Object.prototype.hasOwnProperty.call(CAPITULOS_SEINFRA, capitulo)
+    ? CAPITULOS_SEINFRA[capitulo]
+    : undefined;
+}
+
+/**
+ * Qual grupo um serviço pertence.
+ *
+ * A trilha da planilha manda; a descrição é a rede de segurança para catálogo
+ * sem hierarquia (cadastro manual, outra fonte) e para linha que a taxonomia
+ * não cobre — o capítulo 30 "SERVIÇOS DIVERSOS" é exatamente esse caso.
+ */
+export function classificarServico(
+  descricao: string,
+  trilha?: readonly string[] | null
+): CategoriaDeObra | null {
+  const pelaTrilha = classificarPorTrilha(trilha);
+  if (pelaTrilha) return pelaTrilha;
   const texto = normalizar(descricao);
   if (!texto) return null;
-  for (const grupo of GRUPOS) {
-    for (const termo of grupo.termos) {
-      if (texto.includes(normalizar(termo))) return grupo.categoria;
+  for (const grupo of GRUPOS_COMPILADOS) {
+    for (const padrao of grupo.padroes) {
+      if (padrao.test(texto)) return grupo.categoria;
     }
   }
   return null;
@@ -344,7 +571,7 @@ export function gerarEap(
   let semGrupo = 0;
 
   for (const servico of soServicos) {
-    const categoria = classificarServico(servico.description);
+    const categoria = classificarServico(servico.description, servico.trilha);
     if (!categoria) {
       semGrupo += 1;
       continue;
@@ -419,22 +646,56 @@ function resolverGrupos(tipoDeObra?: string): Set<CategoriaDeObra> {
 }
 
 /**
- * Escolhe no máximo N serviços de um grupo, preservando a ordem do catálogo.
+ * Escolhe no máximo N serviços de um grupo que representem o grupo inteiro.
  *
- * A ordem do catálogo é a ordem oficial da planilha, que segue a sequência de
- * execução dentro do grupo. Em vez de pegar os N primeiros (que num catálogo
- * grande vira só uma família de serviço, ex.: todos "concreto"), espalha pelo
- * grupo preservando o relativo.
+ * Duas passadas. A primeira dá UM serviço de cada subgrupo da planilha, na
+ * ordem em que a SEINFRA os organiza; a segunda completa a cota com o que
+ * sobrou. Sem a primeira passada, o grupo "Instalações e redes" (que tem 1.882
+ * serviços na SEINFRA-CE 028) saía com quatro conexões PVC de diâmetro
+ * diferente em sequência e nenhumatubulação de aço, nenhum poço de visita,
+ * nenhuma ligação predial — folha de EAP que não descreve a obra.
+ *
+ * Sem trilha (catálogo sem hierarquia), cai no espalhamento por índice, que
+ * preserva o relativo sem inventar agrupamento.
  */
 function escolherRepresentantes(
   candidatos: ServicoDoCatalogo[],
   maximo: number
 ): ServicoDoCatalogo[] {
   if (candidatos.length <= maximo) return candidatos;
-  const out: ServicoDoCatalogo[] = [];
-  const passo = candidatos.length / maximo;
-  for (let i = 0; i < maximo; i += 1) {
-    out.push(candidatos[Math.floor(i * passo)]);
+
+  const comTrilha = candidatos.every(c => c.trilha && c.trilha.length);
+  if (!comTrilha) {
+    const out: ServicoDoCatalogo[] = [];
+    const passo = candidatos.length / maximo;
+    for (let i = 0; i < maximo; i += 1) {
+      out.push(candidatos[Math.floor(i * passo)]!);
+    }
+    return out;
   }
-  return out;
+
+  const escolhidos: ServicoDoCatalogo[] = [];
+  const escolhidosIds = new Set<string>();
+  const vistos = new Set<string>();
+  for (const servico of candidatos) {
+    if (escolhidos.length >= maximo) break;
+    const chave = normalizar(servico.trilha!.join(" > "));
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    escolhidos.push(servico);
+    escolhidosIds.add(servico.code);
+  }
+  // Segunda passada pelo que sobrou, espalhado: senão a cota remanescente
+  // inteira vem do subgrupo mais populoso, e "Estrutura" saía com quatro
+  // "FORMA" em sequência.
+  const restantes = candidatos.filter(s => !escolhidosIds.has(s.code));
+  if (restantes.length) {
+    const passo = restantes.length / (maximo - escolhidos.length);
+    for (let i = 0; escolhidos.length < maximo; i += 1) {
+      const indice = Math.floor(i * passo);
+      if (indice >= restantes.length) break;
+      escolhidos.push(restantes[indice]!);
+    }
+  }
+  return escolhidos;
 }
