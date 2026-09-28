@@ -9,6 +9,10 @@ type Dep = { predecessorId: number; successorId: number; type: string; lag?: num
 type Activity = { id: number; wbsCode?: string; name?: string; durationDays?: number; startOffset?: number; critical?: number; progress?: number; phase?: string; status?: string; earlyStart?: number | null };
 type Zoom = "dia" | "semana" | "mes";
 
+const localIso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const MONTH_NAMES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const ROW_H = 26;
 const LABEL_W = 320;
 const HEADER_H = 46;
@@ -127,9 +131,6 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
     return defaultCalendar(new Date(projectStart).getFullYear());
   }, [projectStart]);
 
-  const localIso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
   const dateAt = (o: number) =>
     projectStart === null || !calendar
       ? `+${o}d`
@@ -179,6 +180,20 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
     for (let d = 0; d <= maxDay + step; d += step) out.push(d);
     return out;
   }, [maxDay, zoom]);
+
+  const monthGroups = useMemo(() => {
+    if (!calendar) return new Map<string, number>();
+    const groups = new Map<string, number>();
+    const start = localIso(new Date(projectStart!));
+    for (const d of ticks) {
+      const ds = dateAtWorkCalendar(calendar, start, d);
+      if (ds.startsWith("+")) continue;
+      const [, mm, yyyy] = ds.split("/");
+      const label = `${MONTH_NAMES[parseInt(mm) - 1]} ${yyyy}`;
+      if (!groups.has(label)) groups.set(label, d);
+    }
+    return groups;
+  }, [maxDay, zoom, calendar, projectStart]);
 
   const svgH = rows.length * ROW_H + 40;
 
@@ -300,6 +315,11 @@ export function GanttView({ projectId, plannedStart, onSelectActivity, fill = fa
           <div style={{ flex: `0 0 ${LABEL_W}px`, height: HEADER_H, background: "var(--thead-bg)" }} />
           <svg ref={headerSvgRef} width={chartW + 20} height={HEADER_H} style={{ flex: "0 0 auto" }} aria-hidden="true">
             <rect x={0} y={0} width={chartW} height={HEADER_H - 16} fill="var(--primary)" rx="4" />
+            {Array.from(monthGroups).map(([label, idx]) => (
+              <text key={`m-${label}`} x={idx * scale + 4} y={13} fill="#ffffff" fontSize={10} fontWeight={700}>
+                {label}
+              </text>
+            ))}
             {ticks.map((d) => (
               <g key={`htick-${d}`}>
                 <line x1={d * scale} y1={HEADER_H - 16} x2={d * scale} y2={HEADER_H} stroke="#8b98a8" strokeWidth={0.5} opacity={0.28} />
