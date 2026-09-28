@@ -32,7 +32,7 @@ import {
   calendarExceptions,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
-import { defaultCalendar, elapsedWorkingDays, type WorkCalendar, type DayType, type WeekPattern } from "@shared/work-calendar";
+import { defaultCalendar, elapsedWorkingDays, indexOf, type WorkCalendar, type DayType, type WeekPattern } from "@shared/work-calendar";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
@@ -3109,6 +3109,18 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+
+        const year = project?.plannedStart ? project.plannedStart.getFullYear() : new Date().getFullYear();
+
+        const calendar = defaultCalendar(year);
+
+        const localIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+        const startIso = project?.plannedStart ? localIso(project.plannedStart) : localIso(new Date());
+
+        const enrichedActivities = activities.map(a => ({ ...a, mustStartOnDay: a.mustStartOn ? indexOf(calendar, startIso, localIso(a.mustStartOn)) : undefined, finishNoLaterThanDay: a.finishNoLaterThan ? indexOf(calendar, startIso, localIso(a.finishNoLaterThan)) : undefined }));
+
         const result = calculateDeterministicCpm(activities, dependencies);
         if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
         const calculatedAt = new Date();
@@ -3122,6 +3134,8 @@ export const appRouter = router({
           const lsCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`), sql` `);
           const lfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`), sql` `);
           const tfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`), sql` `);
+          const ffCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.freeFloat ?? 0}`), sql` `);
+
           await db.transaction(async tx => {
             await tx.execute(sql`
               UPDATE schedule_activities
@@ -3131,6 +3145,8 @@ export const appRouter = router({
                   lateStart = CASE id ${lsCase} END,
                   lateFinish = CASE id ${lfCase} END,
                   totalFloat = CASE id ${tfCase} END,
+                  freeFloat = CASE id ${ffCase} END,
+
                   cpmCalculatedAt = ${calculatedAt}
               WHERE projectId = ${input.projectId}
                 AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})

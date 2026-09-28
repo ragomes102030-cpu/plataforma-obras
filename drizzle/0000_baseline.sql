@@ -386,6 +386,7 @@ CREATE TABLE `schedule_activities` (
 	`lateStart` int,
 	`lateFinish` int,
 	`totalFloat` int,
+	`freeFloat` int,
 	`cpmCalculatedAt` timestamp,
 	`versionId` int,
 	`sortOrder` int NOT NULL DEFAULT 0,
@@ -603,3 +604,6 @@ ALTER TABLE `work_calendars` ADD CONSTRAINT `work_calendars_projectId_projects_i
 ALTER TABLE `calendar_exceptions` ADD CONSTRAINT `calendar_exceptions_calendarId_work_calendars_id_fk` FOREIGN KEY (`calendarId`) REFERENCES `work_calendars`(`id`) ON DELETE CASCADE ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX `work_calendars_projectId_idx` ON `work_calendars` (`projectId`);--> statement-breakpoint
 CREATE INDEX `calendar_exceptions_calendarId_idx` ON `calendar_exceptions` (`calendarId`);
+--> statement-breakpoint
+ALTER TABLE `schedule_activities` ADD COLUMN `mustStartOn` timestamp NULL;--> statement-breakpoint
+ALTER TABLE `schedule_activities` ADD COLUMN `finishNoLaterThan` timestamp NULL;

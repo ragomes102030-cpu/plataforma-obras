@@ -26,6 +26,8 @@ export function calculateDeterministicCpm(
       activities.map(activity => ({
         id: String(activity.id),
         duration: activity.durationDays,
+        mustStartOn: activity.mustStartOnDay ?? undefined,
+        finishNoLaterThan: activity.finishNoLaterThanDay ?? undefined,
       })),
       dependencies.map(dependency => ({
         predecessorId: String(dependency.predecessorId),
