@@ -386,7 +386,6 @@ CREATE TABLE `schedule_activities` (
 	`lateStart` int,
 	`lateFinish` int,
 	`totalFloat` int,
-	`freeFloat` int,
 	`cpmCalculatedAt` timestamp,
 	`versionId` int,
 	`sortOrder` int NOT NULL DEFAULT 0,
@@ -578,32 +577,3 @@ CREATE INDEX `schedule_dependencies_plan_version_idx` ON `schedule_dependencies`
 CREATE INDEX `service_compositions_source_idx` ON `service_compositions` (`sourceCatalogId`);--> statement-breakpoint
 CREATE INDEX `wbs_nodes_project_idx` ON `wbs_nodes` (`projectId`);--> statement-breakpoint
 CREATE INDEX `wbs_nodes_plan_version_idx` ON `wbs_nodes` (`versionId`);
---> statement-breakpoint
-CREATE TABLE `work_calendars` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`name` varchar(180) NOT NULL,
-	`weekPattern` json NOT NULL,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (on_update_current_timestamp()),
-	CONSTRAINT `work_calendars_id` PRIMARY KEY(`id`),
-	CONSTRAINT `work_calendars_projectId_unique` UNIQUE(`projectId`)
-);
---> statement-breakpoint
-CREATE TABLE `calendar_exceptions` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`calendarId` int NOT NULL,
-	`date` varchar(10) NOT NULL,
-	`type` enum('working','national_holiday','facultative','observance') NOT NULL,
-	`name` varchar(180),
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `calendar_exceptions_id` PRIMARY KEY(`id`)
-);
---> statement-breakpoint
-ALTER TABLE `work_calendars` ADD CONSTRAINT `work_calendars_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE CASCADE ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `calendar_exceptions` ADD CONSTRAINT `calendar_exceptions_calendarId_work_calendars_id_fk` FOREIGN KEY (`calendarId`) REFERENCES `work_calendars`(`id`) ON DELETE CASCADE ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX `work_calendars_projectId_idx` ON `work_calendars` (`projectId`);--> statement-breakpoint
-CREATE INDEX `calendar_exceptions_calendarId_idx` ON `calendar_exceptions` (`calendarId`);
---> statement-breakpoint
-ALTER TABLE `schedule_activities` ADD COLUMN `mustStartOn` timestamp NULL;--> statement-breakpoint
-ALTER TABLE `schedule_activities` ADD COLUMN `finishNoLaterThan` timestamp NULL;

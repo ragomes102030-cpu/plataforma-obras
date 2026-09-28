@@ -6,6 +6,13 @@
                         "when":  1790603791243,
                         "version":  "5",
                         "tag":  "0000_baseline"
+                    },
+                    {
+                        "idx":  1,
+                        "breakpoints":  true,
+                        "when":  1790776191243,
+                        "version":  "5",
+                        "tag":  "0001_planning"
                     }
                 ],
     "version":  "7",
