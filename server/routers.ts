@@ -37,6 +37,7 @@ import {
   priceVariation,
   type ComparableRecord,
 } from "@shared/price-sources/matching";
+import { badRequest, conflict, forbidden, notFound } from "./_core/errors";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
@@ -299,7 +300,7 @@ async function seedStarterPlan(
   const wbsIdsByCode = new Map<string, number>();
   starterWbs.forEach(([code], index) => {
     const id = insertedWbs[index]?.id;
-    if (!id) throw new Error(`EAP inicial inválida: ID ausente para ${code}.`);
+    if (!id) throw notFound(`EAP inicial inválida: ID ausente para ${code}.`);
     wbsIdsByCode.set(code, id);
   });
   for (const [code] of starterWbs) {
@@ -307,7 +308,7 @@ async function seedStarterPlan(
     if (!parentCode) continue;
     const nodeId = wbsIdsByCode.get(code);
     const parentId = wbsIdsByCode.get(parentCode);
-    if (!nodeId || !parentId) throw new Error(`EAP inicial inválida: pai ausente para ${code}.`);
+    if (!nodeId || !parentId) throw notFound(`EAP inicial inválida: pai ausente para ${code}.`);
     await db.update(wbsNodes).set({ parentId }).where(and(eq(wbsNodes.id, nodeId), eq(wbsNodes.projectId, projectId)));
   }
   const inserted = await db
@@ -318,7 +319,7 @@ async function seedStarterPlan(
           projectId,
           wbsNodeId: (() => {
             const nodeId = wbsIdsByCode.get(wbsCode);
-            if (!nodeId) throw new Error(`Atividade inicial sem nó EAP para ${wbsCode}.`);
+            if (!nodeId) throw badRequest(`Atividade inicial sem nó EAP para ${wbsCode}.`);
             return nodeId;
           })(),
           wbsCode,
@@ -356,7 +357,7 @@ async function seedSolarAcaciasPlan(
   const nodeIdsByCode = new Map<string, number>();
   const requireNodeId = (code: string) => {
     const id = nodeIdsByCode.get(code);
-    if (!id) throw new Error(`EAP Solar inválida: nó ausente para ${code}.`);
+    if (!id) throw notFound(`EAP Solar inválida: nó ausente para ${code}.`);
     return id;
   };
   const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
@@ -524,7 +525,7 @@ async function assertAccessibleProject(
     .where(accessibleProjectCondition(projectId, userId))
     .limit(1);
   if (!project)
-    throw new Error("Obra não encontrada ou sem permissão de acesso.");
+    throw forbidden("Obra não encontrada ou sem permissão de acesso.");
 }
 
 async function assertAvailableWbsCode(
@@ -535,13 +536,13 @@ async function assertAvailableWbsCode(
 ) {
   const conditions = [eq(wbsNodes.projectId, projectId), eq(wbsNodes.code, code)];
   if (exceptNodeId) conditions.push(ne(wbsNodes.id, exceptNodeId));
-  const [conflict] = await db
+  const [existingCode] = await db
     .select({ id: wbsNodes.id })
     .from(wbsNodes)
     .where(and(...conditions))
     .limit(1);
-  if (conflict) {
-    throw new Error(`O código WBS ${code} já está em uso nesta obra.`);
+  if (existingCode) {
+    throw conflict(`O código WBS ${code} já está em uso nesta obra.`);
   }
 }
 
@@ -754,7 +755,7 @@ async function buildPhase7PlanForProject(
       item => item.provider === provider
     )?.externalProjectId;
     if (!value || value.toLowerCase() === "default") {
-      throw new Error(
+      throw badRequest(
         `Cadastre um project_id de homologação válido para o MCP ${provider}.`
       );
     }
@@ -799,7 +800,7 @@ async function persistPhase7Plan(
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
-  if (!project) throw new Error("Obra não encontrada para importar o plano.");
+  if (!project) throw notFound("Obra não encontrada para importar o plano.");
   return db.transaction(async tx => {
     const localWbsByExternalId = new Map<string, number>();
     for (const node of plan.wbsNodes) {
@@ -880,7 +881,7 @@ async function persistPhase7Plan(
         .limit(1);
       const wbsNodeId = localWbsByExternalId.get(activity.eapRef);
       if (!wbsNodeId) {
-        throw new Error(`Atividade ${activity.externalId} referencia EAP inexistente: ${activity.eapRef}.`);
+        throw badRequest(`Atividade ${activity.externalId} referencia EAP inexistente: ${activity.eapRef}.`);
       }
       const values = {
         projectId,
@@ -935,7 +936,7 @@ async function persistPhase7Plan(
         dependency.successorExternalId
       );
       if (!predecessorId || !successorId)
-        throw new Error("Dependência sem atividades locais correspondentes.");
+        throw badRequest("Dependência sem atividades locais correspondentes.");
       const existing = await tx
         .select({ id: scheduleDependencies.id })
         .from(scheduleDependencies)
@@ -1077,7 +1078,7 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!activity) throw new Error("Atividade não encontrada nesta obra.");
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
         await db
           .update(scheduleActivities)
           .set({
@@ -1134,7 +1135,7 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+        if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
         await assertAvailableWbsCode(
           db,
           input.projectId,
@@ -1180,7 +1181,7 @@ export const appRouter = router({
         const parent = input.parentId
           ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId))).limit(1))[0]
           : undefined;
-        if (input.parentId && !parent) throw new Error("O pai selecionado não pertence a esta obra.");
+        if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence a esta obra.");
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
@@ -1215,14 +1216,14 @@ export const appRouter = router({
           const parent = input.targetParentId === null
             ? null
             : all.find(item => item.id === input.targetParentId) ?? null;
-          if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
-          if (input.targetParentId !== null && !parent) throw new Error("Destino inválido.");
+          if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
+          if (input.targetParentId !== null && !parent) throw badRequest("Destino inválido.");
 
           const byId = new Map(all.map(item => [item.id, item]));
           let ancestor = parent;
           while (ancestor) {
             if (ancestor.id === node.id) {
-              throw new Error("Não é possível mover um item para dentro de sua própria descendência.");
+              throw badRequest("Não é possível mover um item para dentro de sua própria descendência.");
             }
             ancestor = ancestor.parentId === null ? null : byId.get(ancestor.parentId) ?? null;
           }
@@ -1302,7 +1303,7 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
-        if (!source) throw new Error("Item da EAP não encontrado nesta obra.");
+        if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
         const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = source.parentId
@@ -1319,17 +1320,17 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
-        if (!node) throw new Error("Item da EAP não encontrado nesta obra.");
+        if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
         const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
         const linkedActivities = ids.length
           ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.wbsNodeId, ids)))
           : [];
-        if (linkedActivities.length) throw new Error("Não é possível excluir uma EAP vinculada a atividades. Realoque ou remova as atividades primeiro.");
+        if (linkedActivities.length) throw badRequest("Não é possível excluir uma EAP vinculada a atividades. Realoque ou remova as atividades primeiro.");
         const linkedBudgetItems = ids.length
           ? await db.select({ id: budgetItems.id }).from(budgetItems).where(inArray(budgetItems.wbsNodeId, ids))
           : [];
-        if (linkedBudgetItems.length) throw new Error("Não é possível excluir uma EAP vinculada ao orçamento. Realoque ou remova os itens primeiro.");
+        if (linkedBudgetItems.length) throw badRequest("Não é possível excluir uma EAP vinculada ao orçamento. Realoque ou remova os itens primeiro.");
         if (ids.length) await db.delete(wbsNodes).where(inArray(wbsNodes.id, ids));
         return { deleted: true as const, count: ids.length };
       }),
@@ -1414,7 +1415,7 @@ export const appRouter = router({
           .where(accessibleProjectCondition(input.projectId, ctx.user.id))
           .limit(1);
         if (!project)
-          throw new Error("Obra não encontrada ou sem permissão de acesso.");
+          throw forbidden("Obra não encontrada ou sem permissão de acesso.");
         const existing = await db
           .select({ id: wbsNodes.id })
           .from(wbsNodes)
@@ -1451,7 +1452,7 @@ export const appRouter = router({
           .from(projects)
           .where(eq(projects.id, input.projectId))
           .limit(1);
-        if (!project) throw new Error("Obra não encontrada.");
+        if (!project) throw notFound("Obra não encontrada.");
         const previousBase = project.baseReferencia;
         const changing =
           previousBase !== null &&
@@ -1469,7 +1470,7 @@ export const appRouter = router({
             )
             .limit(1);
           if (approved && !input.confirm) {
-            throw new Error(
+            throw conflict(
               "Esta obra já tem orçamento aprovado com a base atual. Confirme explicitamente a troca (confirm=true); preços congelados não serão alterados."
             );
           }
@@ -1640,7 +1641,7 @@ export const appRouter = router({
           .where(accessibleProjectCondition(input.projectId, ctx.user.id))
           .limit(1);
         if (!project)
-          throw new Error("Obra não encontrada ou sem permissão de acesso.");
+          throw forbidden("Obra não encontrada ou sem permissão de acesso.");
         const [front, team, unit, activity] = await Promise.all([
           db
             .select({ id: productionFronts.id })
@@ -1689,10 +1690,10 @@ export const appRouter = router({
           .where(eq(wbsNodes.projectId, input.projectId))
           .limit(1);
         if (!planningNodes.length) {
-          throw new Error("Monte e valide a EAP antes de lançar produção.");
+          throw badRequest("Monte e valide a EAP antes de lançar produção.");
         }
         if (!front.length || !team.length || !unit.length || !activity.length) {
-          throw new Error(
+          throw badRequest(
             "Frente, equipe, unidade e atividade devem pertencer à mesma obra."
           );
         }
@@ -1753,7 +1754,7 @@ export const appRouter = router({
           units.length !== unitIds.length ||
           activitiesFound.length !== activityIds.length
         )
-          throw new Error("Uma ou mais referências não pertencem à obra.");
+          throw forbidden("Uma ou mais referências não pertencem à obra.");
         await db.insert(productionEntries).values(
           input.entries.map(item => ({
             projectId: input.projectId,
@@ -1777,7 +1778,7 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
-        if (!entry) throw new Error("Medição não encontrada nesta obra.");
+        if (!entry) throw notFound("Medição não encontrada nesta obra.");
         await db.update(productionEntries).set({ status: "confirmada" }).where(eq(productionEntries.id, input.entryId));
         const [activity] = await db.select({ id: scheduleActivities.id, plannedQuantity: scheduleActivities.plannedQuantity }).from(scheduleActivities).where(eq(scheduleActivities.id, entry.activityId)).limit(1);
         if (activity) {
@@ -2022,9 +2023,9 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!version) throw new Error("Versão de orçamento não encontrada.");
+        if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "aprovado" || version.status === "arquivado")
-          throw new Error("Esta versão não aceita novos itens.");
+          throw conflict("Esta versão não aceita novos itens.");
         let effectiveUnitPrice = input.unitPrice;
         let compositionNote: string | null = null;
         if (input.compositionId) {
@@ -2033,12 +2034,12 @@ export const appRouter = router({
             .from(serviceCompositions)
             .where(eq(serviceCompositions.id, input.compositionId))
             .limit(1);
-          if (!composition) throw new Error("Composição não encontrada.");
+          if (!composition) throw notFound("Composição não encontrada.");
           const components = await db
             .select()
             .from(compositionComponents)
             .where(eq(compositionComponents.compositionId, input.compositionId));
-          if (!components.length) throw new Error("A composição não possui componentes.");
+          if (!components.length) throw badRequest("A composição não possui componentes.");
           effectiveUnitPrice = components.reduce(
             (sum, component) =>
               sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
@@ -2108,9 +2109,9 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!version) throw new Error("Versão de orçamento não encontrada.");
+        if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "aprovado" || version.status === "arquivado")
-          throw new Error("Esta versão não aceita novos itens.");
+          throw conflict("Esta versão não aceita novos itens.");
         const compositionIds = Array.from(
           new Set(
             input.items
@@ -2130,7 +2131,7 @@ export const appRouter = router({
             .where(inArray(compositionComponents.compositionId, compositionIds));
           for (const composition of compositions) {
             const parts = components.filter(item => item.compositionId === composition.id);
-            if (!parts.length) throw new Error(`A composição ${composition.code} não possui componentes.`);
+            if (!parts.length) throw badRequest(`A composição ${composition.code} não possui componentes.`);
             const price = parts.reduce(
               (sum, part) => sum + Number(part.coefficient) * Number(part.unitPriceSnapshot),
               0
@@ -2143,7 +2144,7 @@ export const appRouter = router({
         }
         const rows = input.items.map(item => {
           const composition = item.compositionId ? compositionMap.get(item.compositionId) : undefined;
-          if (item.compositionId && !composition) throw new Error("Composição não encontrada.");
+          if (item.compositionId && !composition) throw notFound("Composição não encontrada.");
           const effectiveUnitPrice = composition ? composition.price : item.unitPrice;
           const calculatedDuration = item.productivity
             ? Math.max(1, Math.ceil(item.quantity / item.productivity))
@@ -2490,9 +2491,9 @@ export const appRouter = router({
             .orderBy(desc(budgetVersions.versionNumber))
             .limit(1)
         )[0];
-        if (!activeVersion) throw new Error("Nenhuma versão de orçamento ativa.");
+        if (!activeVersion) throw badRequest("Nenhuma versão de orçamento ativa.");
         if (activeVersion.status === "aprovado" || activeVersion.status === "arquivado")
-          throw new Error("Versão aprovada/arquivada não aceita reconciliação.");
+          throw badRequest("Versão aprovada/arquivada não aceita reconciliação.");
         cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
         const itemIds = input.decisions.map(d => d.budgetItemId);
         const existing = await db
@@ -2519,7 +2520,7 @@ export const appRouter = router({
         let exceptions = 0;
         for (const decision of input.decisions) {
           const item = byId.get(decision.budgetItemId);
-          if (!item) throw new Error(`Item ${decision.budgetItemId} não nesta versão.`);
+          if (!item) throw badRequest(`Item ${decision.budgetItemId} não nesta versão.`);
           const manualPrice = Number(item.unitPrice);
           if (decision.action === "keep_manual") {
             await db
@@ -2543,7 +2544,7 @@ export const appRouter = router({
             continue;
           }
           if (!decision.matchKind || !decision.matchId)
-            throw new Error("apply_match exige matchKind e matchId.");
+            throw badRequest("apply_match exige matchKind e matchId.");
           let suggested: {
             description: string;
             unitPrice: number;
@@ -2594,7 +2595,7 @@ export const appRouter = router({
             }
           }
           if (!suggested || suggested.unitPrice <= 0)
-            throw new Error(
+            throw notFound(
               `Match ${decision.matchKind}:${decision.matchId} não encontrado ou sem preço.`
             );
           const variation = priceVariation(manualPrice, suggested.unitPrice);
@@ -2741,7 +2742,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         const [catalog] = await db.select({ id: priceCatalogs.id }).from(priceCatalogs).where(eq(priceCatalogs.id, input.catalogId)).limit(1);
-        if (!catalog) throw new Error("Catálogo não encontrado.");
+        if (!catalog) throw notFound("Catálogo não encontrado.");
         const [createdId] = await db.insert(priceItems).values({
           catalogId: input.catalogId,
           code: input.code,
@@ -2780,7 +2781,7 @@ export const appRouter = router({
           .from(priceCatalogs)
           .where(eq(priceCatalogs.id, input.catalogId))
           .limit(1);
-        if (!catalog) throw new Error("Catálogo não encontrado.");
+        if (!catalog) throw notFound("Catálogo não encontrado.");
         await db.insert(priceItems).values(
           input.items.map(item => ({
             catalogId: input.catalogId,
@@ -2810,14 +2811,14 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         const bytes = Buffer.from(input.fileDataBase64, "base64");
-        if (!bytes.length) throw new Error("Arquivo vazio ou base64 inválido.");
+        if (!bytes.length) throw badRequest("Arquivo vazio ou base64 inválido.");
         const uint8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
         if (!seinfraAdapter.canParse(input.fileName, uint8)) {
-          throw new Error("Formato não suportado. Envie .xls ou .xlsx da SEINFRA (download manual do site).");
+          throw badRequest("Formato não suportado. Envie .xls ou .xlsx da SEINFRA (download manual do site).");
         }
         const parsed = await seinfraAdapter.parse(input.fileName, uint8);
         if (!parsed.records.length) {
-          throw new Error("Nenhum preço reconhecido na planilha (cabeçalho não identificado).");
+          throw badRequest("Nenhum preço reconhecido na planilha (cabeçalho não identificado).");
         }
         const referencePeriod = input.referencePeriod || parsed.referenceHint || "s/ ref";
         // Cada import = 1 NOVO priceCatalogs; nunca sobrescreve meses anteriores.
@@ -2955,9 +2956,9 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         const [item] = await db.select({ unitPrice: priceItems.unitPrice }).from(priceItems).where(eq(priceItems.id, input.priceItemId)).limit(1);
-        if (!item) throw new Error("Insumo não encontrado.");
+        if (!item) throw notFound("Insumo não encontrado.");
         const [composition] = await db.select({ id: serviceCompositions.id }).from(serviceCompositions).where(eq(serviceCompositions.id, input.compositionId)).limit(1);
-        if (!composition) throw new Error("Composição não encontrada.");
+        if (!composition) throw notFound("Composição não encontrada.");
         const [createdId] = await db.insert(compositionComponents).values({
           compositionId: input.compositionId,
           priceItemId: input.priceItemId,
@@ -3045,7 +3046,7 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
-        if (!activities.length) throw new Error("Não há atividades para congelar como baseline.");
+        if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).$returningId();
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length };
@@ -3113,7 +3114,7 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!wbsNode) throw new Error("O código informado não corresponde a um item da EAP desta obra.");
+        if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP desta obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
         const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).$returningId();
@@ -3191,9 +3192,9 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        if (input.predecessorId === input.successorId) throw new Error("Uma atividade não pode depender dela mesma.");
+        if (input.predecessorId === input.successorId) throw badRequest("Uma atividade não pode depender dela mesma.");
         const rows = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, [input.predecessorId, input.successorId])));
-        if (rows.length !== 2) throw new Error("As duas atividades precisam pertencer à obra.");
+        if (rows.length !== 2) throw forbidden("As duas atividades precisam pertencer à obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).$returningId();
         return { id: createdId.id };
@@ -3218,7 +3219,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         for (const dependency of input.dependencies) {
           if (dependency.predecessorId === dependency.successorId)
-            throw new Error("Uma atividade não pode depender dela mesma.");
+            throw badRequest("Uma atividade não pode depender dela mesma.");
         }
         const ids = Array.from(
           new Set(input.dependencies.flatMap(item => [item.predecessorId, item.successorId]))
@@ -3233,7 +3234,7 @@ export const appRouter = router({
             )
           );
         if (found.length !== ids.length)
-          throw new Error("Uma ou mais atividades não pertencem à obra.");
+          throw forbidden("Uma ou mais atividades não pertencem à obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         await db.insert(scheduleDependencies).values(
           input.dependencies.map(item => ({
@@ -3281,7 +3282,7 @@ export const appRouter = router({
             )
           );
         if (found.length !== new Set(activityIds).size)
-          throw new Error("Uma ou mais atividades não pertencem à obra.");
+          throw forbidden("Uma ou mais atividades não pertencem à obra.");
         const idsSql = sql.join(activityIds.map(id => sql`${id}`), sql`, `);
         const applyField = async (field: string, values: Array<[number, unknown]>) => {
           if (!values.length) return;
@@ -3318,7 +3319,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [activity] = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
         const [resource] = await db.select({ id: planningResources.id }).from(planningResources).where(and(eq(planningResources.id, input.resourceId), eq(planningResources.projectId, input.projectId))).limit(1);
-        if (!activity || !resource) throw new Error("Atividade ou recurso não pertence à obra.");
+        if (!activity || !resource) throw forbidden("Atividade ou recurso não pertence à obra.");
         const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).$returningId();
         return { id: createdId.id };
       }),
@@ -3350,7 +3351,7 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!resource) throw new Error("Recurso não pertence à obra.");
+        if (!resource) throw forbidden("Recurso não pertence à obra.");
         const activityIds = Array.from(new Set(input.allocations.map(item => item.activityId)));
         const validActivities = await db
           .select({ id: scheduleActivities.id })
@@ -3362,7 +3363,7 @@ export const appRouter = router({
             )
           );
         if (validActivities.length !== activityIds.length)
-          throw new Error("Uma ou mais atividades não pertencem à obra.");
+          throw forbidden("Uma ou mais atividades não pertencem à obra.");
         await db
           .insert(activityResourceAllocations)
           .values(
@@ -3643,14 +3644,14 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
-        if (!activity) throw new Error("Atividade não encontrada.");
+        if (!activity) throw notFound("Atividade não encontrada.");
         const float = activity.totalFloat ?? 0;
         const current = activity.earlyStart ?? activity.startOffset;
         if (activity.critical === 1 && input.newStartOffset !== current) {
-          throw new Error("Atividade crítica não pode ser deslocada no nivelamento.");
+          throw badRequest("Atividade crítica não pode ser deslocada no nivelamento.");
         }
         if (input.newStartOffset < current || input.newStartOffset > current + float) {
-          throw new Error(`Deslocamento fora da folga total (${float} dia(s)).`);
+          throw badRequest(`Deslocamento fora da folga total (${float} dia(s)).`);
         }
         await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId)));
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
@@ -3729,7 +3730,7 @@ export const appRouter = router({
         }
         if (!state) throw new Error("Não foi possível inicializar o estado do coordenador.");
         if (input.stage !== state.stage) {
-          throw new Error(
+          throw conflict(
             `Estado desatualizado: a obra está em ${state.stage}, mas a decisão foi enviada para ${input.stage}. Atualize o painel e tente novamente.`
           );
         }
@@ -3751,7 +3752,7 @@ export const appRouter = router({
           ),
         });
         if (!transition.allowed) {
-          throw new Error(
+          throw conflict(
             `Transição bloqueada: ${transition.errors.join(" ")}`
           );
         }
@@ -3883,9 +3884,9 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!finding) throw new Error("Achado não encontrado nesta obra.");
+        if (!finding) throw notFound("Achado não encontrado nesta obra.");
         if (!canTransitionFinding(finding.status, input.to)) {
-          throw new Error(
+          throw badRequest(
             `Transição inválida: ${finding.status} → ${input.to}. Permitido a partir de: ${allowedSourcesFor(input.to).join(", ")}.`
           );
         }
@@ -3919,7 +3920,7 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         if (input.scope === "project") {
           if (!input.projectId)
-            throw new Error("Memória de obra exige projectId.");
+            throw badRequest("Memória de obra exige projectId.");
           await assertAccessibleProject(db, input.projectId, ctx.user.id);
         }
         const [created] = await db
@@ -3954,7 +3955,7 @@ export const appRouter = router({
           )
           .limit(1);
         if (!memory)
-          throw new Error("Memória não encontrada ou sem permissão.");
+          throw forbidden("Memória não encontrada ou sem permissão.");
         if (memory.projectId)
           await assertAccessibleProject(db, memory.projectId, ctx.user.id);
         await db
@@ -3993,7 +3994,7 @@ export const appRouter = router({
             .where(accessibleProjectCondition(input.projectId, ctx.user.id))
             .limit(1);
           if (!row)
-            throw new Error("Obra não encontrada ou sem permissão de acesso.");
+            throw forbidden("Obra não encontrada ou sem permissão de acesso.");
           project = row;
           activities = await db
             .select()
@@ -4005,7 +4006,7 @@ export const appRouter = router({
             throw new Error("Banco de dados não configurado.");
           project = demoProjects.find(item => item.id === input.projectId);
           activities = input.projectId === 1 ? demoActivities : [];
-          if (!project) throw new Error("Obra não encontrada.");
+          if (!project) throw notFound("Obra não encontrada.");
         }
         const mcpProjectIds: Partial<
           Record<"eap" | "cronograma" | "ganttLob", string>
@@ -4121,7 +4122,7 @@ export const appRouter = router({
           input.requestId,
           ctx.user.id
         );
-        if (!status) throw new Error("Execução do agente não encontrada.");
+        if (!status) throw notFound("Execução do agente não encontrada.");
         return status;
       }),
     orchestrate: protectedProcedure
@@ -4177,7 +4178,7 @@ export const appRouter = router({
             .where(accessibleProjectCondition(input.projectId, ctx.user.id))
             .limit(1);
           if (!row)
-            throw new Error("Obra não encontrada ou sem permissão de acesso.");
+            throw forbidden("Obra não encontrada ou sem permissão de acesso.");
           project = row;
           activities = await db
             .select()
@@ -4189,7 +4190,7 @@ export const appRouter = router({
             throw new Error("Banco de dados não configurado.");
           project = demoProjects.find(item => item.id === input.projectId);
           activities = input.projectId === 1 ? demoActivities : [];
-          if (!project) throw new Error("Obra não encontrada.");
+          if (!project) throw notFound("Obra não encontrada.");
         }
         const coordinator = db
           ? await loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id)
@@ -4320,7 +4321,7 @@ export const appRouter = router({
               item => item.provider === provider
             )?.externalProjectId;
             if (!value || value.toLowerCase() === "default") {
-              throw new Error(
+              throw badRequest(
                 `Cadastre o project_id externo do MCP ${provider} antes da homologação.`
               );
             }
@@ -4408,13 +4409,13 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         if (!CONTROLLED_MUTATION_POLICY[input.provider].has(input.toolName)) {
-          throw new Error(
+          throw forbidden(
             `A ferramenta ${input.toolName} ainda não está liberada para mutação controlada.`
           );
         }
         const argsJson = JSON.stringify(input.args);
         if (argsJson.length > 16_000) {
-          throw new Error(
+          throw badRequest(
             "Os argumentos da mutação excedem o limite permitido."
           );
         }
@@ -4433,7 +4434,7 @@ export const appRouter = router({
           !externalProjectId ||
           externalProjectId.toLowerCase() === "default"
         ) {
-          throw new Error(
+          throw badRequest(
             "Cadastre um project_id externo válido antes da prévia."
           );
         }
@@ -4445,7 +4446,7 @@ export const appRouter = router({
           .limit(1);
         if (existing[0]) {
           if (existing[0].userId !== ctx.user.id) {
-            throw new Error(
+            throw conflict(
               "A chave de idempotência já pertence a outro usuário."
             );
           }
@@ -4494,7 +4495,7 @@ export const appRouter = router({
           )
           .limit(1);
         const operation = operations[0];
-        if (!operation) throw new Error("Prévia não encontrada.");
+        if (!operation) throw notFound("Prévia não encontrada.");
         await assertAccessibleProject(db, operation.projectId, ctx.user.id);
         if (operation.status === "succeeded") {
           return {
@@ -4509,7 +4510,7 @@ export const appRouter = router({
           operation.status !== "preview" ||
           operation.confirmationToken !== input.confirmationToken
         ) {
-          throw new Error("A prévia não está aguardando confirmação válida.");
+          throw badRequest("A prévia não está aguardando confirmação válida.");
         }
         const claimed = await db
           .update(mcpMutationOperations)
@@ -4521,7 +4522,7 @@ export const appRouter = router({
             )
           );
         if (!("affectedRows" in claimed) || claimed.affectedRows !== 1) {
-          throw new Error("A operação já foi confirmada ou está em execução.");
+          throw conflict("A operação já foi confirmada ou está em execução.");
         }
         try {
           const result = await callControlledMcpTool(
@@ -4583,9 +4584,9 @@ export const appRouter = router({
             )
             .limit(1);
           if (!operation[0])
-            throw new Error("Mutação de evidência não encontrada.");
+            throw notFound("Mutação de evidência não encontrada.");
           if (operation[0].status !== "succeeded") {
-            throw new Error("A mutação de evidência precisa estar concluída.");
+            throw badRequest("A mutação de evidência precisa estar concluída.");
           }
           mutationEvidence = {
             operationId: operation[0].id,
@@ -4603,7 +4604,7 @@ export const appRouter = router({
               item => item.provider === provider
             )?.externalProjectId;
             if (!value || value.toLowerCase() === "default") {
-              throw new Error(
+              throw badRequest(
                 `Cadastre o project_id externo do MCP ${provider} antes do E2E.`
               );
             }
@@ -4653,7 +4654,7 @@ export const appRouter = router({
           .from(mcpHomologationRuns)
           .where(eq(mcpHomologationRuns.requestId, requestId))
           .limit(1);
-        if (!runRows[0]) throw new Error("Execução E2E não foi registrada.");
+        if (!runRows[0]) throw notFound("Execução E2E não foi registrada.");
         await db
           .update(mcpHomologationRuns)
           .set({
@@ -4705,7 +4706,7 @@ export const appRouter = router({
           PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName) &&
           (!externalProjectId || externalProjectId.toLowerCase() === "default")
         ) {
-          throw new Error(
+          throw forbidden(
             `Nenhum project_id autorizado para o MCP ${input.domain}.`
           );
         }
