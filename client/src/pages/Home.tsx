@@ -939,6 +939,16 @@ export default function Home() {
   })();
   const wbsNodes = wbsQuery.data ?? [];
   const baselines = planningQuery.data?.baselines ?? [];
+  const budgetItemsList = budgetQuery.data?.items ?? [];
+  // Depois desta onda, um item de orçamento pode ter preço do catálogo e
+  // quantidade 0 ao mesmo tempo — "sem preços lançados" ficaria enganoso
+  // nesse caso (o preço existe; falta é medir). As três contagens abaixo
+  // existem só para o texto do painel não confundir as duas coisas.
+  const itensComPreco = budgetItemsList.filter(i => Number(i.unitPrice) > 0).length;
+  const itensComQuantidade = budgetItemsList.filter(i => Number(i.quantity) > 0).length;
+  const atividadesDimensionadas = (planningQuery.data?.activities ?? []).filter(
+    a => a.plannedQuantity !== null
+  ).length;
   const planningSteps = [
     {
       key: "eap",
@@ -953,21 +963,35 @@ export default function Home() {
     {
       key: "orcamento",
       label: "Orçamento",
-      done: Boolean(budgetQuery.data?.activeVersionId) && (budgetQuery.data?.total ?? 0) > 0,
+      done: (budgetQuery.data?.total ?? 0) > 0,
       detail: !budgetQuery.data?.activeVersionId
         ? "nenhuma versão criada"
-        : (budgetQuery.data?.total ?? 0) > 0
-          ? "com preços lançados"
-          : "criado, mas sem preços lançados",
-      next: !budgetQuery.data?.activeVersionId ? "Criar a primeira versão do orçamento" : "Lançar os preços do orçamento",
+        : !budgetItemsList.length
+          ? "versão criada, nenhum serviço"
+          : (budgetQuery.data?.total ?? 0) > 0
+            ? `com preços e quantidades — ${itensComQuantidade}/${budgetItemsList.length} serviço(s) medido(s)`
+            : itensComPreco > 0
+              ? `${itensComPreco} item(ns) já com preço do catálogo — faltam as quantidades`
+              : "criado, mas sem preços lançados",
+      next: !budgetQuery.data?.activeVersionId
+        ? "Criar a primeira versão do orçamento"
+        : itensComPreco > 0
+          ? "Lançar as quantidades medidas"
+          : "Lançar os preços do orçamento",
       nav: "Orçamento" as const,
     },
     {
       key: "atividades",
       label: "Cronograma",
       done: activities.length > 0,
-      detail: activities.length ? `${activities.length} atividades cadastradas` : "ainda sem atividades",
-      next: "Cadastrar as atividades do cronograma",
+      detail: !activities.length
+        ? "ainda sem atividades"
+        : atividadesDimensionadas > 0
+          ? `${activities.length} atividades, ${atividadesDimensionadas} já dimensionada(s)`
+          : `${activities.length} atividades (esqueleto automático — duração provisória, ainda sem quantidade real)`,
+      next: activities.length
+        ? "Revisar as durações e dimensionar as atividades"
+        : "Cadastrar as atividades do cronograma",
       nav: "Cronogramas" as const,
     },
     {
