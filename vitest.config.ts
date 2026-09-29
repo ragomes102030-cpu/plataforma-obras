@@ -14,6 +14,15 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["server/**/*.test.ts", "server/**/*.spec.ts", "shared/**/*.test.ts", "shared/**/*.spec.ts"],
+    // `drizzle/**` entra pelo contrato do schema: o teste mora ao lado do
+    // arquivo que ele trava, e sem esta linha ele simplesmente nao roda — o que
+    // e pior do que nao existir, porque parece coberto.
+    include: [
+      "server/**/*.test.ts",
+      "server/**/*.spec.ts",
+      "shared/**/*.test.ts",
+      "shared/**/*.spec.ts",
+      "drizzle/**/*.test.ts",
+    ],
   },
 });
