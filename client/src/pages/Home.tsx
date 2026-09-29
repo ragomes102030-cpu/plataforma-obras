@@ -56,6 +56,7 @@ import { dateAt as dateAtWorkCalendar, defaultCalendar } from "@shared/work-cale
 import { PlanilhaObra } from "@/components/PlanilhaObra";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
+import { abaPorId } from "@shared/abas-ares";
 import type { IdDaVisaoLateral } from "@shared/abas-ares";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
@@ -950,6 +951,9 @@ export default function Home() {
   // podem discordar sobre onde a pessoa está — era esse o defeito da casca
   // anterior, que mantinha um estado para o menu lateral e outro para a barra.
   const [abaAres, setAbaAres] = useState<string>("cronograma");
+  // O rotulo da aba ativa, usado no cabecalho. A casca tambem sabe, mas
+  // o cabecalho e do Home e nao deve puxar estado de dentro dela.
+  const abaRotulo = abaPorId(abaAres).rotulo;
 
   // A grade vem pronta do motor. O componente recebe as colunas derivadas e não
   // recalcula nenhuma delas.
@@ -983,6 +987,7 @@ export default function Home() {
     if (aba === "cronograma") {
       return (
         <GradeCronograma
+          obra={selected?.name ?? "Obra"}
           calendario={calendarioDaGrade}
           hoje={hojeDaGrade}
           linhas={linhasDaGrade}
@@ -994,7 +999,7 @@ export default function Home() {
     }
     if (aba === "producao") {
       return (
-        <div className="pl-grade-vazia">
+        <div className="xl-vazia-folha">
           <p>A PRODUCAO da planilha é uma grade por data.</p>
           <p>
             O lançamento por atividade já existe e continua valendo. O que falta
@@ -1008,7 +1013,7 @@ export default function Home() {
   };
 
   const renderVisaoLateral = (visao: IdDaVisaoLateral) => (
-    <div className="pl-grade-vazia">
+    <div className="xl-vazia-folha">
       <p>{visao === "gantt" ? "Gantt" : "Linha de Balanço"}</p>
       <p>
         A grade de meses e as barras por status saem do mesmo motor que já produz
@@ -1161,108 +1166,87 @@ export default function Home() {
   const createPending = createProjectMutation.isPending;
   return (
     <div className="app-frame">
-      {mobileNavOpen && (
-        <button
-          className="mobile-nav-backdrop"
-          aria-label="Fechar menu"
-          onClick={() => setMobileNavOpen(false)}
-        />
-      )}
-      <aside className={`app-sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
-        <div className="brand-lockup">
-          <div className="brand-mark">
-            <Layers3 size={18} />
+      <main className="main-canvas">
+        <header className="xl-titlebar">
+          <div className="xl-titlebar-marca">
+            <Layers3 size={15} />
+            <strong>{ehDestinoDoApp(activeNav) ? "plataformaobras" : (selected?.name ?? "Obra")}</strong>
+            <span className="xl-titlebar-sub">
+              {ehDestinoDoApp(activeNav) ? activeNav : (selected?.code || "obra")}
+            </span>
           </div>
-          <div>
-            <div className="brand-name">
-              plataforma<span>obras</span>
-            </div>
-            <div className="brand-subtitle">planejamento integrado</div>
-          </div>
-        </div>
-        <div className="workspace-select">
-          <div>
-            <span className="eyebrow">ESPAÇO DE TRABALHO</span>
-            <strong>{user?.name ? `${user.name} · workspace` : "Área pública"}</strong>
-          </div>
-          <ChevronDown size={15} />
-        </div>
-        <nav className="main-nav">
-          <span className="nav-caption">APLICATIVO</span>
-          {nav
-            .filter(item => ehDestinoDoApp(item.label))
-            .filter(item => !item.adminOnly || user?.role === "admin")
-            .map(item => (
+
+          <div className="xl-titlebar-obras">
+            {projects.map(project => (
               <button
-                key={item.label}
-                className={`nav-item ${activeNav === item.label ? "active" : ""}`}
+                key={project.id}
+                type="button"
+                className={`xl-obra-chip${project.id === selected?.id && !ehDestinoDoApp(activeNav) ? " ativa" : ""}`}
                 onClick={() => {
-                  setActiveNav(item.label);
-                  setMobileNavOpen(false);
+                  setSelectedId(project.id);
+                  if (ehDestinoDoApp(activeNav)) {
+                    setAbaAres(PRIMEIRA_ABA);
+                    setActiveNav(PRIMEIRA_ABA);
+                  }
                 }}
+                title={project.name}
               >
-                <item.icon size={17} />
-                <span>{item.label}</span>
+                {project.name}
               </button>
             ))}
-        </nav>
-        <div className="sidebar-projects">
-          <div className="sidebar-section-head">
-            <span className="nav-caption">OBRAS ATIVAS</span>
             <button
-              className="icon-button"
+              type="button"
+              className="xl-obra-chip xl-obra-nova"
               onClick={() => setNewProjectOpen(true)}
               title="Nova obra"
             >
-              <Plus size={15} />
+              <Plus size={12} />
             </button>
           </div>
-          {projects.map(project => (
+
+          <div className="xl-titlebar-fim">
             <button
-              key={project.id}
-              onClick={() => {
-                setSelectedId(project.id);
-                // Escolher uma obra é ENTRAR na obra. Sem isto, clicar numa obra
-                // a partir do Portfólio deixava a tela no Portfólio.
-                if (ehDestinoDoApp(activeNav)) {
-                  setAbaAres(PRIMEIRA_ABA);
-                  setActiveNav(PRIMEIRA_ABA);
-                }
-                setMobileNavOpen(false);
-              }}
-              className={`project-mini ${selected?.id === project.id ? "selected" : ""}`}
+              type="button"
+              className={"xl-tb-btn" + (activeNav === "Portfólio" ? " ativo" : "")}
+              onClick={() => setActiveNav("Portfólio")}
             >
-              <span className="project-dot" />
-              <span className="truncate">{project.name}</span>
-              <span className="project-progress">{project.progress}%</span>
+              Portfólio
             </button>
-          ))}
-        </div>
-        <div className="sidebar-bottom">
-          <div className="sync-status">
-            <span className={`sync-dot ${projectsQuery.isError ? "error" : ""}`} />
-            {projectsQuery.isPending
-              ? "Carregando dados"
-              : projectsQuery.isError
-                ? "Falha ao carregar"
-                : "Banco sincronizado"}
-            <span className="ml-auto">{projectsQuery.isFetching ? "atualizando" : "agora"}</span>
+            <button
+              type="button"
+              className={"xl-tb-btn" + (activeNav === "Catálogo" ? " ativo" : "")}
+              onClick={() => setActiveNav("Catálogo")}
+            >
+              Catálogo
+            </button>
+            <button
+              type="button"
+              className={"xl-tb-btn" + (activeNav === "Relatórios" ? " ativo" : "")}
+              onClick={() => setActiveNav("Relatórios")}
+            >
+              Relatórios
+            </button>
+            {user?.role === "admin" && (
+              <button
+                type="button"
+                className={"xl-tb-btn" + (activeNav === "Configurações" ? " ativo" : "")}
+                onClick={() => setActiveNav("Configurações")}
+              >
+                Configurações
+              </button>
+            )}
+            <button
+              type="button"
+              className="xl-tb-btn xl-tb-agente"
+              onClick={() => setAgentOpen(true)}
+            >
+              <Sparkles size={13} /> Agente
+            </button>
+            <span className="xl-tb-user" title={user?.name || "Conta"}>
+              {(user?.name || "R").charAt(0).toUpperCase()}
+            </span>
           </div>
-          <div className="user-card">
-            <div className="avatar">
-              {user?.name?.charAt(0).toUpperCase() || "R"}
-            </div>
-            <div className="min-w-0">
-              <strong className="truncate block">
-                {user?.name || "Rafael Gomes"}
-              </strong>
-              <span className="truncate block">Planejamento</span>
-            </div>
-            <MoreHorizontal size={16} className="ml-auto text-slate-400" />
-          </div>
-        </div>
-      </aside>
-      <main className="main-canvas">
+        </header>
         <header className="topbar">
           <div className="topbar-left">
             <button
@@ -1275,17 +1259,8 @@ export default function Home() {
             </button>
             <div>
               <span className="breadcrumb">
-                {ehDestinoDoApp(activeNav)
-                  ? activeNav
-                  : (selected?.code || "Obras")}
+                {ehDestinoDoApp(activeNav) ? activeNav : abaRotulo}
               </span>
-              <h1>
-                {ehDestinoDoApp(activeNav)
-                  ? activeNav === "Portfólio"
-                    ? "Visão geral"
-                    : activeNav
-                  : (selected?.name ?? "Obra")}
-              </h1>
             </div>
           </div>
           <div className="topbar-actions">

@@ -23,8 +23,8 @@ function pct(n: number): string {
 export function PainelDoCronograma({ agregado }: Props) {
   if (!agregado || agregado.totalAtividades === 0) {
     return (
-      <div className="pl-painel">
-        <p className="pl-painel-vazio">
+      <div className="xl-painel">
+        <p className="xl-painel-vazio">
           Sem atividades no cronograma, não há avanço para medir. A aba
           CRONOGRAMA diz o que falta.
         </p>
@@ -36,8 +36,8 @@ export function PainelDoCronograma({ agregado }: Props) {
   const atrasadas = c.Atrasado;
 
   return (
-    <div className="pl-painel">
-      <div className="pl-cartoes">
+    <div className="xl-painel">
+      <div className="xl-cartoes">
         <Cartao titulo="Avanço físico" valor={pct(agregado.avancoFisico)}>
           ponderado por quantidade, em {agregado.linhasPonderadas} de{" "}
           {agregado.totalAtividades} atividades
@@ -61,15 +61,15 @@ export function PainelDoCronograma({ agregado }: Props) {
         </Cartao>
       </div>
 
-      <div className="pl-status-blocos">
-        <Status titulo="Concluído" n={c.Concluido} total={agregado.totalAtividades} classe="pl-concluido" />
-        <Status titulo="Em andamento" n={c["Em andamento"]} total={agregado.totalAtividades} classe="pl-em-andamento" />
-        <Status titulo="Atrasado" n={c.Atrasado} total={agregado.totalAtividades} classe="pl-atrasado" />
-        <Status titulo="Não iniciado" n={c["Nao iniciado"]} total={agregado.totalAtividades} classe="pl-nao-iniciado" />
+      <div className="xl-status-blocos">
+        <Status titulo="Concluído" n={c.Concluido} total={agregado.totalAtividades} classe="xl-concluido" />
+        <Status titulo="Em andamento" n={c["Em andamento"]} total={agregado.totalAtividades} classe="xl-andamento" />
+        <Status titulo="Atrasado" n={c.Atrasado} total={agregado.totalAtividades} classe="xl-atrasado" />
+        <Status titulo="Não iniciado" n={c["Nao iniciado"]} total={agregado.totalAtividades} classe="xl-nao-iniciado" />
       </div>
 
       {atrasadas > 0 && (
-        <p className="pl-painel-alerta">
+        <p className="xl-painel-alerta">
           {atrasadas} {atrasadas === 1 ? "atividade está" : "atividades estão"} sem
           execução e com o fim já passado. A coluna Status da aba CRONOGRAMA
           mostra quais.
@@ -77,7 +77,7 @@ export function PainelDoCronograma({ agregado }: Props) {
       )}
 
       {agregado.linhasSemQuantidade > 0 && (
-        <p className="pl-painel-nota">
+        <p className="xl-painel-nota">
           {agregado.linhasSemQuantidade}{" "}
           {agregado.linhasSemQuantidade === 1
             ? "atividade está"
@@ -102,10 +102,10 @@ function Cartao({
   tom?: "ruim" | "bom";
 }) {
   return (
-    <div className={`pl-cartao${tom ? ` pl-cartao-${tom}` : ""}`}>
-      <span className="pl-cartao-titulo">{titulo}</span>
-      <strong className="pl-cartao-valor">{valor}</strong>
-      {children && <span className="pl-cartao-nota">{children}</span>}
+    <div className={`xl-cartao${tom ? ` xl-cartao-${tom}` : ""}`}>
+      <span className="xl-cartao-titulo">{titulo}</span>
+      <strong className="xl-cartao-valor">{valor}</strong>
+      {children && <span className="xl-cartao-nota">{children}</span>}
     </div>
   );
 }
@@ -123,15 +123,15 @@ function Status({
 }) {
   const fracao = total > 0 ? n / total : 0;
   return (
-    <div className={`pl-status ${classe}`}>
-      <div className="pl-status-topo">
+    <div className={`xl-status ${classe}`}>
+      <div className="xl-status-topo">
         <span>{titulo}</span>
         <strong>{n}</strong>
       </div>
-      <div className="pl-status-barra">
+      <div className="xl-status-barra">
         <span style={{ width: `${Math.round(fracao * 100)}%` }} />
       </div>
-      <span className="pl-status-nota">{pct(fracao)} das atividades</span>
+      <span className="xl-status-nota">{pct(fracao)} das atividades</span>
     </div>
   );
 }

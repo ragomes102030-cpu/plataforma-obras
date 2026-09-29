@@ -1,92 +1,538 @@
-/* ---------------------------------------------------------- a obra como planilha
- *
- * Abas embaixo, uma navegação só. A lateral abre no Gantt e é o lugar da
- * Linha de Balanço.
- *
- * As cores de status são as mesmas da planilha: verde = concluído, amarelo =
- * em andamento, vermelho = atrasado, neutro = não iniciado. Na planilha elas
- * são pintadas à mão e desandam; aqui saem do motor.
- */
+/* ==========================================================================
+   A PLANILHA
+   ==========================================================================
 
-.pl-obra {
+   O sistema é uma planilha. Não há menu lateral, não há painel, não há
+   cartão. Tem: barra de título no alto, folha com letra de coluna e número
+   de linha no meio, abas embaixo.
+
+   As posições seguem a planilha de referência: cabeçalho na linha 4, dados a
+   partir da linha 5, colunas A e B congeladas. Quem conhece planilha sabe
+   usar esta tela.
+   ========================================================================== */
+
+/* --------------------------------------------------------------- a pasta */
+
+.xl-pasta {
   display: flex;
   flex-direction: column;
-  min-height: 0;
   height: 100%;
-  background: #ffffff;
-  border: 1px solid var(--pl-borda, #dfe4ea);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.pl-corpo {
-  display: flex;
   min-height: 0;
-  flex: 1 1 auto;
+  background: #ffffff;
 }
 
-.pl-area {
+.xl-area {
   flex: 1 1 auto;
-  min-width: 0;
+  min-height: 0;
   overflow: auto;
+  background: #ffffff;
 }
 
-/* ------------------------------------------------------------------ rodapé/abas */
+/* ---------------------------------------------------------- barra de titulo */
 
-.pl-rodape {
+.xl-titlebar {
   flex: 0 0 auto;
   display: flex;
-  align-items: stretch;
-  gap: 12px;
-  border-top: 1px solid #dfe4ea;
-  background: #f5f7f9;
-  padding-right: 12px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  height: 38px;
+  background: #1f6f8b;
+  color: #ffffff;
 }
 
-.pl-abas {
+.xl-titlebar-marca {
   display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.xl-titlebar-marca strong {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.xl-titlebar-sub {
+  font-size: 11px;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.xl-titlebar-obras {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
-.pl-aba {
+.xl-titlebar-obras::-webkit-scrollbar {
+  display: none;
+}
+
+.xl-obra-chip {
   appearance: none;
-  border: 0;
-  border-right: 1px solid #e4e8ec;
-  background: transparent;
-  color: #5a6672;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
   font: inherit;
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
-  padding: 9px 16px;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 3px;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.xl-obra-chip:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.xl-obra-chip.ativa {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #1f6f8b;
+  font-weight: 600;
+}
+
+.xl-obra-nova {
+  padding: 3px 7px;
+}
+
+.xl-titlebar-fim {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.xl-tb-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.xl-tb-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.xl-tb-btn.ativo {
+  background: rgba(0, 0, 0, 0.16);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.xl-tb-agente {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.xl-tb-user {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+/* ------------------------------------------------------------ a folha */
+
+.xl-folha-area {
+  padding: 0;
+  min-height: 100%;
+}
+
+.xl-folha {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 12.5px;
+  color: #1f2933;
+  background: #ffffff;
+}
+
+.xl-folha th,
+.xl-folha td {
+  border-right: 1px solid #dfe3e8;
+  border-bottom: 1px solid #dfe3e8;
+  padding: 0;
+  height: 22px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.xl-folha th {
+  font-weight: 400;
+}
+
+/* Linha 1: título da folha. */
+.xl-cab-titulo {
+  text-align: left;
+  padding: 8px 10px !important;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1f2933;
+  background: #f4f6f8;
+  border-top: none;
+  border-left: none;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+/* Linha 2: a nota com as fórmulas, escrita por extenso. */
+.xl-cab-nota {
+  text-align: left;
+  padding: 4px 10px 6px !important;
+  font-size: 11px;
+  font-style: italic;
+  color: #7a848e;
+  background: #f4f6f8;
+  border-left: none;
+  position: sticky;
+  top: 31px;
+  z-index: 6;
+}
+
+/* Linha 3: vazia, como na planilha. */
+.xl-cab-vazio th {
+  height: 7px;
+  padding: 0 !important;
+  background: #ffffff;
+  border-left: none;
+}
+
+/* Linha 4a: a letra da coluna. */
+.xl-cab-linha th {
+  position: sticky;
+  top: 60px;
+  z-index: 5;
+  background: #eef1f4;
+  color: #8b95a1;
+  font-size: 10px;
+  text-align: center;
+  padding: 2px 0 !important;
+  border-top: 1px solid #cfd6dd;
+}
+
+/* Linha 4b: o nome da coluna. */
+.xl-cab-nomes th {
+  position: sticky;
+  top: 76px;
+  z-index: 5;
+  background: #e4e8ec;
+  color: #3c4a57;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding: 4px 7px !important;
+  border-top: none;
+  border-bottom: 2px solid #c2cbd4;
+}
+
+.xl-cab-nomes th.xl-derivada {
+  background: #dde3e9;
+  color: #6b7683;
+}
+
+.xl-cab-linha .xl-canto,
+.xl-cab-nomes .xl-canto {
+  left: 0;
+  z-index: 7;
+  width: 42px;
+  min-width: 42px;
+  background: #dde3e9;
+  text-align: center;
+  color: #8b95a1;
+  font-size: 10px;
+}
+
+.xl-cab-linha .xl-canto {
+  z-index: 8;
+}
+
+/* Numero da linha, fixo na esquerda. */
+.xl-num {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f4f6f8;
+  color: #9aa5b1;
+  font-size: 10.5px;
+  text-align: center;
+  padding: 0 !important;
+  width: 42px;
+  min-width: 42px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xl-linha:hover .xl-num,
+tr:hover .xl-num {
+  background: #e8edf1;
+}
+
+/* Colunas A e B congeladas, como `freeze_panes = "C5"`. */
+.xl-codigo,
+.xl-cab-nomes th:nth-child(2),
+.xl-cab-linha th:nth-child(2) {
+  position: sticky;
+  left: 42px;
+  z-index: 2;
+  background: #ffffff;
+}
+
+.xl-cab-nomes th:nth-child(2) {
+  z-index: 7;
+  background: #e4e8ec;
+}
+
+.xl-cab-linha th:nth-child(2) {
+  left: 42px;
+  z-index: 8;
+  background: #eef1f4;
+}
+
+tr:hover .xl-codigo {
+  background: #f7f9fb;
+}
+
+.xl-codigo {
+  color: #6b7683;
+  font-size: 11px;
+  padding: 0 7px !important;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+/* Celula digitavel. */
+.xl-digitavel {
+  background: #ffffff;
+  padding: 0 !important;
+}
+
+.xl-input {
+  width: 100%;
+  height: 100%;
+  min-height: 22px;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  padding: 0 7px;
+}
+
+.xl-input:hover {
+  border-color: #cfd6dd;
+}
+
+.xl-input:focus {
+  outline: 2px solid #1f6f8b;
+  outline-offset: -2px;
+  background: #ffffff;
+}
+
+/* Celula calculada: cinza, e o title diz por que. */
+.xl-calc {
+  background: #f4f6f8;
+  color: #55636f;
+  padding: 0 7px !important;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.xl-pct {
+  display: table-cell;
+  text-align: right;
+}
+
+.xl-medidor {
+  display: inline-block;
+  width: 30px;
+  height: 5px;
+  background: #dde3e9;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.xl-medidor > span {
+  display: block;
+  height: 100%;
+  background: #1f6f8b;
+}
+
+.xl-status {
+  text-align: left;
+}
+
+.xl-etiqueta {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+/* As três cores da planilha. */
+.xl-concluido .xl-etiqueta {
+  background: #c6efce;
+  color: #1c5c31;
+}
+
+.xl-andamento .xl-etiqueta {
+  background: #ffeb9c;
+  color: #6b5310;
+}
+
+.xl-atrasado .xl-etiqueta {
+  background: #ffc7ce;
+  color: #8a1f2c;
+}
+
+.xl-nao-iniciado .xl-etiqueta {
+  background: #e4e8ec;
+  color: #6b7683;
+}
+
+.xl-concluido .xl-medidor > span {
+  background: #2e9e5b;
+}
+
+.xl-andamento .xl-medidor > span {
+  background: #d9a441;
+}
+
+.xl-atrasado .xl-medidor > span {
+  background: #d1495b;
+}
+
+/* Linha TOTAL. */
+.xl-total td,
+.xl-total th {
+  background: #eef1f4;
+  border-top: 2px solid #c2cbd4;
+  font-weight: 600;
+  color: #3c4a57;
+  font-size: 11.5px;
+  padding: 0 7px !important;
+}
+
+.xl-total-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Folha sem dados. */
+.xl-vazia {
+  padding: 40px !important;
+  text-align: center;
+  color: #6b7683;
+  height: auto !important;
+}
+
+.xl-vazia strong {
+  display: block;
+  color: #3c4a57;
+  margin-bottom: 6px;
+}
+
+/* --------------------------------------------------------- abas embaixo */
+
+.xl-rodape {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 26px;
+  padding: 0 10px;
+  background: #dde3e9;
+  border-top: 1px solid #c2cbd4;
+}
+
+.xl-abas {
+  display: flex;
+  align-items: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 1px;
+}
+
+.xl-abas::-webkit-scrollbar {
+  display: none;
+}
+
+.xl-aba {
+  appearance: none;
+  border: 1px solid #c2cbd4;
+  border-bottom: none;
+  background: #e9edf1;
+  color: #5a6672;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 3px 3px 0 0;
   position: relative;
+  top: 0;
 }
 
-.pl-aba:hover {
-  background: #eef2f5;
-  color: #2c3a47;
-}
-
-.pl-aba.ativa {
+/* A aba ativa é branca e sobe 1px, ligada ao corpo da folha. */
+.xl-aba.ativa {
   background: #ffffff;
   color: #1f6f8b;
   font-weight: 600;
-  box-shadow: inset 0 -2px 0 #1f6f8b;
+  border-bottom: 1px solid #ffffff;
+  height: 27px;
 }
 
-.pl-aba[data-status="pendente"] {
+.xl-aba:hover:not(.ativa) {
+  background: #f1f4f6;
+  color: #2c3a47;
+}
+
+.xl-aba[data-status="pendente"] {
   color: #9aa5b1;
+  font-style: italic;
 }
 
-/* Marcador discreto de aba incompleta — não é alarme, é aviso. */
-.pl-aba[data-status="parcial"]::after {
+.xl-aba[data-status="parcial"]::after {
   content: "";
   position: absolute;
-  top: 5px;
+  top: 4px;
   right: 5px;
   width: 4px;
   height: 4px;
@@ -94,277 +540,29 @@
   background: #d9a441;
 }
 
-.pl-rodape-info {
+.xl-rodape-info {
   flex: 0 0 auto;
-  align-self: center;
-  font-size: 11px;
-  color: #8b95a1;
+  font-size: 10.5px;
+  color: #7a848e;
+  padding-bottom: 5px;
   white-space: nowrap;
 }
 
-/* ------------------------------------------------------------------- lateral */
+/* ------------------------------------------------------------ aba vazia */
 
-.pl-lateral {
-  flex: 0 0 auto;
-  width: 0;
-  overflow: hidden;
-  border-left: 1px solid #dfe4ea;
-  background: #fafbfc;
-  transition: width 0.14s ease;
-}
-
-.pl-lateral.aberta {
-  width: 420px;
-}
-
-.pl-lateral-topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px 8px 14px;
-  border-bottom: 1px solid #e4e8ec;
-  font-size: 12px;
-  color: #3c4a57;
-}
-
-.pl-lateral-fechar {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #7c8794;
-  cursor: pointer;
-  padding: 2px;
-  display: flex;
-}
-
-.pl-lateral-fechar:hover {
-  color: #1f6f8b;
-}
-
-.pl-lateral-escolha {
-  display: flex;
-  gap: 4px;
-  padding: 8px 10px;
-  border-bottom: 1px solid #e4e8ec;
-}
-
-.pl-lateral-item {
-  appearance: none;
-  flex: 1 1 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid #dfe4ea;
-  background: #ffffff;
-  color: #5a6672;
-  font: inherit;
-  font-size: 12px;
-  padding: 6px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.pl-lateral-item:hover {
-  border-color: #b9c6d1;
-  color: #2c3a47;
-}
-
-.pl-lateral-item.ativa {
-  background: #1f6f8b;
-  border-color: #1f6f8b;
-  color: #ffffff;
-}
-
-.pl-lateral-corpo {
-  padding: 12px 14px;
-  overflow: auto;
-  max-height: calc(100vh - 220px);
-}
-
-/* -------------------------------------------------------------------- grade */
-
-.pl-grade-area {
-  padding: 0;
-}
-
-.pl-grade {
-  display: flex;
-  flex-direction: column;
-  min-width: 1380px;
-}
-
-.pl-linha {
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid #eef1f4;
-}
-
-.pl-linha:not(.pl-cabecalho):hover {
-  background: #f7f9fb;
-}
-
-.pl-cabecalho {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f5f7f9;
-  border-bottom: 1px solid #d7dde3;
-}
-
-.pl-celula {
-  flex: 0 0 auto;
-  padding: 6px 8px;
-  font-size: 12.5px;
-  color: #2c3a47;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-}
-
-.pl-cabecalho-celula {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: #6b7683;
-}
-
-/* Coluna derivada: cinza, e o título diz por quê. */
-.pl-derivada,
-.pl-derivada-cabecalho {
-  background: #fafbfc;
-  color: #6b7683;
-  justify-content: flex-end;
-}
-
-.pl-derivada-cabecalho {
-  justify-content: flex-end;
-}
-
-.pl-codigo {
-  font-variant-numeric: tabular-nums;
-  color: #6b7683;
-  font-size: 11.5px;
-}
-
-.pl-input {
-  width: 100%;
-  border: 1px solid transparent;
-  background: transparent;
-  font: inherit;
-  font-size: 12.5px;
-  color: inherit;
-  padding: 2px 3px;
-  border-radius: 2px;
-}
-
-.pl-input:hover {
-  border-color: #e4e8ec;
-}
-
-.pl-input:focus {
-  outline: none;
-  border-color: #1f6f8b;
-  background: #ffffff;
-}
-
-.pl-pct {
-  gap: 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.pl-barra {
-  display: inline-block;
-  width: 38px;
-  height: 5px;
-  background: #e4e8ec;
-  border-radius: 3px;
-  overflow: hidden;
-  flex: 0 0 auto;
-}
-
-.pl-barra-cheia {
-  display: block;
-  height: 100%;
-  background: #1f6f8b;
-}
-
-.pl-status {
-  justify-content: flex-start;
-}
-
-.pl-etiqueta {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-/* As três cores da planilha. */
-.pl-concluido .pl-etiqueta {
-  background: #c6efce;
-  color: #1c5c31;
-}
-
-.pl-em-andamento .pl-etiqueta {
-  background: #ffeb9c;
-  color: #6b5310;
-}
-
-.pl-atrasado .pl-etiqueta {
-  background: #ffc7ce;
-  color: #8a1f2c;
-}
-
-.pl-nao-iniciado .pl-etiqueta {
-  background: #eceff2;
-  color: #6b7683;
-}
-
-.pl-concluido .pl-barra-cheia {
-  background: #2e9e5b;
-}
-
-.pl-em-andamento .pl-barra-cheia {
-  background: #d9a441;
-}
-
-.pl-atrasado .pl-barra-cheia {
-  background: #d1495b;
-}
-
-.pl-grade-vazia {
-  padding: 40px;
-  text-align: center;
-  color: #6b7683;
-  font-size: 13px;
-}
-
-.pl-grade-vazia p {
-  margin: 0 0 6px;
-}
-
-/* ------------------------------------------------------------------ aba vazia */
-
-.pl-vazia {
+.xl-vazia-folha {
   padding: 48px 32px;
-  max-width: 640px;
-  margin: 0 auto;
-  color: #4a5764;
+  max-width: 660px;
 }
 
-.pl-vazia h3 {
+.xl-vazia-folha h3 {
   margin: 0 0 12px;
   font-size: 16px;
   font-weight: 600;
   color: #2c3a47;
 }
 
-.pl-vazia-falta {
+.xl-vazia-falta {
   margin: 0 0 16px;
   padding: 12px 14px;
   background: #fdf6e7;
@@ -375,7 +573,7 @@
   color: #5c4a1a;
 }
 
-.pl-vazia-nota {
+.xl-vazia-nota {
   margin: 0;
   font-size: 12.5px;
   color: #8b95a1;
@@ -384,26 +582,26 @@
 
 /* ------------------------------------------------------------------ painel */
 
-.pl-painel {
+.xl-painel {
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.pl-painel-vazio {
+.xl-painel-vazio {
   color: #6b7683;
   font-size: 13px;
   padding: 32px 0;
 }
 
-.pl-cartoes {
+.xl-cartoes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
-.pl-cartao {
+.xl-cartao {
   border: 1px solid #e4e8ec;
   border-radius: 4px;
   padding: 12px 14px;
@@ -413,47 +611,47 @@
   gap: 4px;
 }
 
-.pl-cartao-titulo {
+.xl-cartao-titulo {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #6b7683;
 }
 
-.pl-cartao-valor {
+.xl-cartao-valor {
   font-size: 24px;
   font-weight: 600;
   color: #2c3a47;
   line-height: 1.1;
 }
 
-.pl-cartao-ruim .pl-cartao-valor {
+.xl-cartao-ruim .xl-cartao-valor {
   color: #c33d4f;
 }
 
-.pl-cartao-bom .pl-cartao-valor {
+.xl-cartao-bom .xl-cartao-valor {
   color: #2e8b52;
 }
 
-.pl-cartao-nota {
+.xl-cartao-nota {
   font-size: 11.5px;
   color: #8b95a1;
   line-height: 1.4;
 }
 
-.pl-status-blocos {
+.xl-status-blocos {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
 }
 
-.pl-status {
+.xl-status {
   border: 1px solid #e4e8ec;
   border-radius: 4px;
   padding: 10px 12px;
 }
 
-.pl-status-topo {
+.xl-status-topo {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -461,12 +659,12 @@
   color: #5a6672;
 }
 
-.pl-status-topo strong {
+.xl-status-topo strong {
   font-size: 17px;
   color: #2c3a47;
 }
 
-.pl-status-barra {
+.xl-status-barra {
   height: 5px;
   background: #eceff2;
   border-radius: 3px;
@@ -474,22 +672,22 @@
   overflow: hidden;
 }
 
-.pl-status-barra span {
+.xl-status-barra span {
   display: block;
   height: 100%;
   background: #9aa5b1;
 }
 
-.pl-concluido .pl-status-barra span { background: #2e9e5b; }
-.pl-em-andamento .pl-status-barra span { background: #d9a441; }
-.pl-atrasado .pl-status-barra span { background: #d1495b; }
+.xl-concluido .xl-status-barra span { background: #2e9e5b; }
+.xl-andamento .xl-status-barra span { background: #d9a441; }
+.xl-atrasado .xl-status-barra span { background: #d1495b; }
 
-.pl-status-nota {
+.xl-status-nota {
   font-size: 11px;
   color: #8b95a1;
 }
 
-.pl-painel-alerta {
+.xl-painel-alerta {
   margin: 0;
   padding: 10px 12px;
   background: #fdf0f1;
@@ -500,7 +698,7 @@
   line-height: 1.5;
 }
 
-.pl-painel-nota {
+.xl-painel-nota {
   margin: 0;
   font-size: 12px;
   color: #6b7683;
