@@ -61,9 +61,7 @@ export const ABAS: readonly AbaDoSistema[] = [
   {
     id: "producao",
     rotulo: "PRODUÇÃO",
-    status: "pendente",
-    falta:
-      "A tabela de lançamentos por data e atividade já existe no banco, e é dela que sai o % Real. Falta a grade por linha × data, e o cálculo do executado consolidado por atividade.",
+    status: "pronta",
   },
   {
     id: "financeiro",

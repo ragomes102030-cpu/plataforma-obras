@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -3501,6 +3501,183 @@ export const appRouter = router({
 
         return { id: createdId.id, inicioObra: projeto?.plannedStart ?? null };
       }),
+    /**
+     * Os lançamentos de produção de uma obra, agrupados como a planilha mostra:
+     * uma linha por data, uma coluna por atividade, e o total embaixo.
+     *
+     * A planilha de referência tem a aba PRODUCAO como a FONTE do `% Real`: o
+     * `% Real` da aba CRONOGRAMA é a soma desta aba dividida pela quantidade
+     * planejada. Sem esta aba, o avanço real é zero por construção, e o painel
+     * pondera só o que ninguém mediu.
+     *
+     * Por que devolve em grade e não em lista: a forma de planilha é o que
+     * permite bater o olho em "a alvenaria parou em novembro" sem somar coluna
+     * por coluna. A soma por atividade vem junto, porque é o que o motor usa.
+     */
+    listarLancamentos: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          de: z.coerce.date().optional(),
+          ate: z.coerce.date().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { datas: [], porAtividade: {}, totalGeral: "0.000" };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const condicoes = [eq(productionEntries.projectId, input.projectId)];
+        if (input.de) condicoes.push(gte(productionEntries.productionDate, input.de));
+        if (input.ate) condicoes.push(lte(productionEntries.productionDate, input.ate));
+
+        const rows = await db
+          .select({
+            id: productionEntries.id,
+            activityId: productionEntries.activityId,
+            data: productionEntries.productionDate,
+            quantidade: productionEntries.quantity,
+            unidade: productionEntries.measurementUnit,
+            obs: productionEntries.notes,
+            status: productionEntries.status,
+          })
+          .from(productionEntries)
+          .where(and(...condicoes))
+          .orderBy(productionEntries.productionDate);
+
+        // Chave "dataISO" -> { "idAtividade": quantidade }. O agrupamento
+        // acontece aqui e não no componente: a tela desenha, e um `reduce` no
+        // cliente para formar a grade é o tipo de conta que diverge do motor.
+        const datas = new Map<string, Record<string, string>>();
+        const porAtividade: Record<string, string> = {};
+        let soma = 0;
+        for (const r of rows) {
+          if (r.status !== "confirmada") continue;
+          const dia = localIso(r.data);
+          const qtd = Number(r.quantidade);
+          const linha = datas.get(dia) ?? {};
+          const anterior = Number(linha[String(r.activityId)] ?? 0);
+          linha[String(r.activityId)] = (anterior + qtd).toFixed(3);
+          datas.set(dia, linha);
+          const chave = String(r.activityId);
+          porAtividade[chave] = (Number(porAtividade[chave] ?? 0) + qtd).toFixed(3);
+          soma += qtd;
+        }
+
+        return {
+          datas: [...datas.keys()].sort(),
+          grade: Object.fromEntries(datas),
+          porAtividade,
+          totalGeral: soma.toFixed(3),
+        };
+      }),
+
+    /**
+     * Registra a produção executada de uma atividade numa data.
+     *
+     * `frontId`, `teamId` e `unitId` ficam nulos de propósito. Eles apontam
+     * para `production_fronts`, `production_teams` e `production_units`, que
+     * nenhuma obra gerada a partir do catálogo tem — o catálogo gera EAP e
+     * preço, não organograma de campo. Exigir essas três chaves estrangulava o
+     * lancamento: a obra vinda do catalogo nao conseguia registrar producao, e
+     * por isso o `% Real` ficava em zero sem ninguem saber por que.
+     *
+     * A frente continua existindo: e `schedule_activities.phase`, a coluna que
+     * a grade ja mostra. Criar uma segunda dimensao de frente seria a mesma
+     * duplicacao que a casca de abas teve.
+     */
+    registrar: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          atividadeId: z.number().int().positive(),
+          data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data em AAAA-MM-DD."),
+          quantidade: z.string().max(40),
+          unidade: z.string().trim().max(32).default("un"),
+          observacao: z.string().max(2000).optional(),
+          confirmar: z.boolean().default(true),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [atividade] = await db
+          .select({ id: scheduleActivities.id, unidade: scheduleActivities.unit })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.id, input.atividadeId),
+              eq(scheduleActivities.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!atividade) throw notFound("Atividade não encontrada nesta obra.");
+
+        const texto = input.quantidade.replace(",", ".").trim();
+        if (!texto) throw badRequest("A quantidade é obrigatória no lançamento.");
+        const qtd = Number(texto);
+        if (!Number.isFinite(qtd) || qtd < 0) {
+          throw badRequest("A quantidade é um número, ou zero para registrar que não houve produção.");
+        }
+        if (qtd > 0 && !input.unidade) {
+          throw badRequest("A unidade é obrigatória quando há quantidade.");
+        }
+
+        // Data local. `new Date("2026-09-30")` é UTC meia-noite, que no
+        // fuso do servidor vira dia anterior ou posterior — a data do lancamento
+        // mudaria sozinha. Montar com o construtor local e o mesmo
+        // `localIso` do resto do sistema.
+        const [ano, mes, dia] = input.data.split("-").map(Number);
+        const quando = new Date(ano!, mes! - 1, dia!, 12, 0, 0);
+
+        const [inserido] = await db
+          .insert(productionEntries)
+          .values({
+            projectId: input.projectId,
+            activityId: input.atividadeId,
+            productionDate: quando,
+            quantity: qtd.toFixed(3),
+            measurementUnit: input.unidade || atividade.unidade || "un",
+            notes: input.observacao ?? null,
+            status: input.confirmar ? "confirmada" : "rascunho",
+            createdBy: ctx.user.id,
+          })
+          .$returningId();
+
+        return { id: inserido.id, data: localIso(quando), quantidade: qtd.toFixed(3) };
+      }),
+
+    /**
+     * Apaga um lancamento.
+     *
+     * Lançamento errado em obra é comum —.launch duplicado, data trocada — e
+     * corrigir o valor faria o histórico mentindo. Apagar e recomeçar deixa o
+     * registro verdadeiro.
+     */
+    apagarLancamento: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          lancamentoId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        await db
+          .delete(productionEntries)
+          .where(
+            and(
+              eq(productionEntries.id, input.lancamentoId),
+              eq(productionEntries.projectId, input.projectId)
+            )
+          );
+        return { ok: true };
+      }),
+
 
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))

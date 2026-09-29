@@ -6,6 +6,7 @@ import { localIsoDe } from "@/lib/datas";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
 import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
+import { AbaProducao } from "@/components/AbaProducao";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { ABAS, type IdDaAba } from "@/modules/abas";
@@ -191,6 +192,8 @@ function Obra({
             idPorCodigo={idPorCodigo}
             aoPedirEap={() => onAba("eap")}
           />
+        ) : aba === "producao" ? (
+          <AbaProducao projetoId={projetoId} />
         ) : aba === "dashboard" ? (
           <PainelDoCronograma agregado={agregado} />
         ) : (
@@ -220,7 +223,7 @@ function Obra({
           ))}
         </div>
         <span className="xl-rodape-info" aria-hidden="true">
-          {obra}
+          {obra} · {definicao?.rotulo ?? ""}
         </span>
       </div>
     </div>

@@ -471,15 +471,30 @@ export const productionEntries = mysqlTable("production_entries", {
   projectId: int("projectId")
     .notNull()
     .references(() => projects.id),
-  frontId: int("frontId")
-    .notNull()
-    .references(() => productionFronts.id),
-  teamId: int("teamId")
-    .notNull()
-    .references(() => productionTeams.id),
-  unitId: int("unitId")
-    .notNull()
-    .references(() => productionUnits.id),
+  /**
+   * Frente, equipe e unidade de produção, todas OPCIONAIS.
+   *
+   * Apontavam para `production_fronts`, `production_teams` e
+   * `production_units`, e eram NOT NULL. Essas três tabelas são o organograma
+   * de campo — frente de serviço, equipe nominal, unidade de produção — e
+   * nenhuma obra gerada a partir do catálogo as tem: o catálogo gera EAP e
+   * preço, não gente.
+   *
+   * O efeito era um sistema em que a obra não conseguia registrar produção. O
+   * `% Real` da aba CRONOGRAMA é a soma de `production_entries` dividida pela
+   * quantidade planejada, e sem lançamento o avanço real era zero por
+   * construção — sem erro, sem aviso, só a coluna em 0%.
+   *
+   * A frente não se perde: ela é `schedule_activities.phase`, a coluna que a
+   * grade do cronograma já mostra e que agrupa por etapa. Criar uma segunda
+   * dimensão de frente seria duplicar o mesmo dado com dois nomes.
+   *
+   * Equipe e unidade continuam aqui, opcionais, para quando a Linha de Balanço
+   * precisar balancear ritmo entre equipes.
+   */
+  frontId: int("frontId").references(() => productionFronts.id),
+  teamId: int("teamId").references(() => productionTeams.id),
+  unitId: int("unitId").references(() => productionUnits.id),
   activityId: int("activityId")
     .notNull()
     .references(() => scheduleActivities.id),
