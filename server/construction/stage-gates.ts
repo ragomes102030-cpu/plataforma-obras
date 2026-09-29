@@ -9,7 +9,31 @@ export type StageGateEvidence = {
   hasDescription: boolean;
   eapNodeCount: number;
   eapValid: boolean;
+  /**
+   * Atividades na grade. Diz que a folha foi puxada da EAP, e nada mais.
+   */
   activityCount: number;
+  /**
+   * Atividades COM PRAZO: início informado e duração maior que zero.
+   *
+   * Esta é a distinção que faltava. O gate antigo só olhava `activityCount`, e
+   * aprovava um cronograma inteiro de atividades com duração zero — cadeia de
+   * sete atividades com zero dia tem CPM trivialmente válido, caminho crítico
+   * calculado sobre nada. É a mesma estrutura que parece pronta que o seeder
+   * criava com cinco dias inventados, agora com zero dias em vez de cinco.
+   *
+   * Duração zero é dado faltando, não prazo curto: é a diferença entre "a
+   * pessoa não planejou ainda" e "a atividade cabe em um dia".
+   */
+  activitiesPlanned: number;
+  /**
+   * Atividades sem quantidade planejada. NÃO reprova o gate de cronograma.
+   *
+   * Medir quantidade é trabalho de campo, e reprovar o cronograma por isso
+   * seria obrigar a inventar número antes de planejar — o defeito inverso, e
+   * pior: leva a quantia medida a ser preenchida com estimativa.
+   */
+  activitiesWithoutQuantity: number;
   dependenciesValid: boolean;
   cpmValid: boolean;
   blockerCount: number;
@@ -20,7 +44,21 @@ export type StageGateCheck = {
   code: string;
   label: string;
   valid: boolean;
+  /**
+   * O que está faltando, em número. Vazio quando o gate passa.
+   *
+   * O gate que diz apenas "não tem atividades cadastradas" obriga a pessoa a
+   * contar as atividades para saber quantas faltam. Com `detail`, ela lê.
+   */
+  detail?: string;
 };
+
+/** "3 de 7 atividades sem duração." */
+function detalheDoPrazo(evidence: StageGateEvidence): string {
+  const faltam = evidence.activityCount - evidence.activitiesPlanned;
+  if (faltam <= 0) return "";
+  return `${faltam} de ${evidence.activityCount} atividade${evidence.activityCount === 1 ? "" : "s"} sem duração informada.`;
+}
 
 export type StageTransitionInput = {
   currentStage: CoordinatorStage;
@@ -89,6 +127,12 @@ function checksForTarget(
           label: "A obra possui atividades cadastradas",
           valid: evidence.activityCount > 0,
         },
+        {
+          code: "activities_planned",
+          label: "Toda atividade tem início e duração informados",
+          valid: evidence.activityCount > 0 && evidence.activitiesPlanned === evidence.activityCount,
+          detail: detalheDoPrazo(evidence),
+        },
       ];
     case "CPM_VALIDADO":
       return [
@@ -97,6 +141,16 @@ function checksForTarget(
           code: "activities_exist",
           label: "A obra possui atividades cadastradas",
           valid: evidence.activityCount > 0,
+        },
+        {
+          // O gate que faltava. Uma cadeia com duração zero tem CPM válido —
+          // caminho crítico calculado sobre nada — e o gate antigo aprovava
+          // por causa disso. Agora ele reprova e diz quantas atividades estão
+          // sem duração.
+          code: "activities_planned",
+          label: "Toda atividade tem duração informada",
+          valid: evidence.activityCount > 0 && evidence.activitiesPlanned === evidence.activityCount,
+          detail: detalheDoPrazo(evidence),
         },
         {
           code: "dependencies_valid",

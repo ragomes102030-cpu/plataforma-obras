@@ -752,6 +752,28 @@ async function loadStageGateEvidence(
     eapNodeCount: eapNodes.length,
     eapValid: eapValidation.valid,
     activityCount: activities.length,
+    /**
+     * Atividades com PRAZO, e não apenas existentes.
+     *
+     * `durationDays > 0` é o teste. Duração zero é dado faltando — a pessoa
+     * puxou a folha da EAP e ainda não planejou — e é diferente de "a atividade
+     * cabe em um dia". A distinção é o que separa uma grade preenchida de um
+     * cronograma, e o gate depende dela para não aprovar os dois como iguais.
+     *
+     * `startOffset > 0` entra junto porque atividade no dia zero da obra, com
+     * duração mas sem início, não tem posição no calendário.
+     */
+    activitiesPlanned: activities.filter(
+      (a) => a.durationDays > 0 && a.startOffset > 0
+    ).length,
+    /**
+     * Atividades sem quantidade planejada. Não reprova o gate de cronograma:
+     * medir é trabalho de campo, e reprovar aqui obrigaria a inventar número
+     * antes de planejar.
+     */
+    activitiesWithoutQuantity: activities.filter(
+      a => a.plannedQuantity == null || Number(a.plannedQuantity) <= 0
+    ).length,
     dependenciesValid: cpm.issues.every(issue => issue.code !== "invalid_dependency"),
     cpmValid: cpm.valid,
     blockerCount,
