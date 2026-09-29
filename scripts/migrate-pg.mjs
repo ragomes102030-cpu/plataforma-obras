@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import { readMigrationFiles } from "drizzle-orm/migrator";
-import { aplicarMigracoes } from "./migrate-core-pg.mjs";
+import { aplicarMigracoes, verificarSeDdlEstaNoBanco } from "./migrate-core-pg.mjs";
 import { auditarSchema } from "./audit-schema-pg.mjs";
 
 const MIGRATIONS_FOLDER = "drizzle";
@@ -145,10 +145,35 @@ if (dryRun) {
 // --------------------------------------------------------------- aplicar ----
 const lastAppliedReal = (await ultimaRegistrada()) ?? lastApplied;
 
+// O journal diz o que foi aplicado; ele nao diz se o DDL esta no banco. As duas
+// coisas divergiram em producao e o estado nao se descrevia: 33 tabelas, 32 enums,
+// journal completo, e 23 triggers declaradas e ausentes. `updatedAt` de 23
+// tabelas parado, e o `/readyz` respondendo "ok" com 34 tabelas.
+//
+// A conferences statement a statement e o que impede isso de se repetir, e e
+// barata: o `CREATE TRIGGER` e idempotente por natureza.
+const conferencia = await verificarSeDdlEstaNoBanco({
+  conn,
+  migrations,
+  jaAplicado: lastAppliedReal,
+});
+if (conferencia.pendentes.length > 0) {
+  for (const p of conferencia.pendentes) {
+    console.warn(
+      `[migrate] DIVERGENCIA: a migration ${p.folderMillis} consta no journal, ` +
+        `mas ${p.faltando.length} objeto(s) nao estao no banco. Reaplicando.`
+    );
+    for (const f of p.faltando.slice(0, 5)) {
+      console.warn(`[migrate]   faltando: ${f.tipo} "${f.nome ?? f.tabela}" em "${f.tabela}"`);
+    }
+  }
+}
+
 await aplicarMigracoes({
   conn,
   migrations,
   jaAplicado: lastAppliedReal,
+  reaplicarMarcadas: conferencia.pendentes.length > 0,
   migrationsTable: MIGRATIONS_TABLE,
   log: msg => console.log(msg),
 });

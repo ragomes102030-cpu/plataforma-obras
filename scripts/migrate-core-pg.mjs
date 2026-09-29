@@ -86,6 +86,57 @@ export const CONSULTA_POR_TIPO = {
 };
 
 /**
+ * Verifica, migration a migration, se o DDL declarado está INTEIRO no banco.
+ *
+ * POR QUE ISTO EXISTE
+ *
+ * O journal diz quais migrations JÁ FORAM aplicadas. Ele não diz se o que elas
+ * declararam está no banco — e as duas coisas divergiram em produção:
+ *
+ *   [migrate] banco normal: 2 migration(oes) aplicada(s), 0 pendente(s)
+ *   [audit] triggers: 23 declaradas, 0 no banco | AUSENTES: (todas)
+ *
+ * A migration 0001 estava registrada como aplicada e nenhuma das 23 triggers
+ * existia. O motivo: o deploy anterior CRASHOU no `INSERT` de registro, depois
+ * de o DDL ter executado; a tentativa seguinte leu o banco como legado e
+ * baselineou as duas migrations sem reexecutar nada. O `/readyz` respondeu
+ * "ok" com 34 tabelas.
+ *
+ * Nenhum teste via antes. O de DDL aplicava as migrations do zero, e nesse
+ * caminho nada falta. O que falta é o MEIO: banco marcado como aplicado e DDL
+ * ausente.
+ *
+ * O QUE ESTE FAZ
+ *
+ * Para cada migration que o journal considera aplicada, confere se TODOS os
+ * alvos de DDL que ela declara existem. Se falta um, a migration é devolvida
+ * como pendente de reaplicação — o verificador por statement dela pula o que já
+ * está lá e cria só o que falta, que é exatamente o que `CREATE TRIGGER` faz
+ * quando a tabela existe e a trigger não.
+ */
+export async function verificarSeDdlEstaNoBanco({ conn, migrations, jaAplicado }) {
+  const jaExiste = criarVerificador(conn);
+  const marcadas = migrations.filter(m => m.folderMillis <= jaAplicado);
+  const pendentes = [];
+
+  for (const m of marcadas) {
+    // Uma migration sem nenhum alvo reconhecível não pode ser conferida, e
+    // dizer que ela está incompleta seria chutar. Fica de fora, e a lista
+    // devolvida mostra qual ficou sem conference.
+    const alvos = m.sql.map(alvoDoStatement).filter(Boolean);
+    if (alvos.length === 0) continue;
+
+    const faltando = [];
+    for (const alvo of alvos) {
+      if (!(await jaExiste(alvo))) faltando.push(alvo);
+    }
+    if (faltando.length > 0) pendentes.push({ folderMillis: m.folderMillis, faltando });
+  }
+
+  return { pendentes, tags: pendentes.map(p => p.folderMillis) };
+}
+
+/**
  * Reconhece o DDL que as migrations deste repo usam e devolve o alvo a conferir.
  * Devolve `null` para o que não for DDL rastreável, e nesses casos o statement é
  * executado sem conferência.
@@ -187,6 +238,7 @@ export async function aplicarMigracoes({
   conn,
   migrations,
   jaAplicado,
+  reaplicarMarcadas = false,
   migrationsTable = "__drizzle_migrations",
   log = () => {},
 }) {
@@ -212,10 +264,15 @@ export async function aplicarMigracoes({
       "id serial primary key, hash text not null, created_at bigint)"
   );
 
+  // Reaplicar uma migration JA registrada no journal so faz sentido quando o
+  // verificador por statement esta ligado: sem ele, o `CREATE TABLE` rodaria de
+  // novo e o banco recusaria com `already exists`.
   const aAplicar =
     jaAplicado === null || jaAplicado === undefined
       ? migrations
-      : migrations.filter(m => m.folderMillis > jaAplicado);
+      : reaplicarMarcadas
+        ? migrations
+        : migrations.filter(m => m.folderMillis > jaAplicado);
 
   const jaExiste = criarVerificador(conn);
   const relatorio = [];
@@ -236,10 +293,17 @@ export async function aplicarMigracoes({
       await conn.query(stmt);
       executados.push(stmt);
     }
-    await conn.query(
-      `INSERT INTO "${migrationsTable}" ("hash", "created_at") VALUES ($1, $2)`,
-      [m.hash, m.folderMillis]
-    );
+    // Registrar de novo so faz sentido para migration que NAO estava registrada.
+    // Reaplicar uma ja registrada (o caminho do `reaplicarMarcadas`) deixaria
+    // um registro duplicado, e a contagem do journal passaria a mentir sobre
+    // quantas migrations existem.
+    const jaRegistrada = (jaAplicado ?? 0) >= m.folderMillis;
+    if (!jaRegistrada) {
+      await conn.query(
+        `INSERT INTO "${migrationsTable}" ("hash", "created_at") VALUES ($1, $2)`,
+        [m.hash, m.folderMillis]
+      );
+    }
     relatorio.push({ folderMillis: m.folderMillis, executados, pulados });
     log(
       `[migrate] aplicada ${m.folderMillis}: ${executados.length} executado(s), ${pulados.length} ja existente(s)`

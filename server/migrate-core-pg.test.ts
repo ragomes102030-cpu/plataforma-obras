@@ -6,9 +6,9 @@ import {
   CONSULTA_POR_TIPO,
   alvoDoStatement,
   aplicarMigracoes,
-  asegurarTabelaDeMigracoes,
   criarVerificador,
   queryDeExistencia,
+  verificarSeDdlEstaNoBanco,
 } from "../scripts/migrate-core-pg.mjs";
 
 /**
@@ -281,6 +281,83 @@ describe("aplicarMigracoes num banco vazio", () => {
       );
       // 33 do schema + a de registro.
       expect(tabelas.rows[0]!.n).toBe(34);
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it("um DDL faltando e recriado, mesmo com a migration marcada no journal", async () => {
+    // Este e o estado em que o Render ficou, e ele NAO se descreve.
+    //
+    // O primeiro deploy crashou com 42P01 — as 33 tabelas e os 32 enums
+    // Creates ja tinham executado, e o INSERT de registro falhou. Na
+    // tentativa seguinte o banco foi lido como "legado" (tabelas existem, zero
+    // registros) e as DUAS migrations foram marcadas como aplicadas SEM
+    // reexecutar o DDL. O baseline assume que tudo que a migration declara
+    // esta no banco — e aqui nao estava: as 23 triggers nunca chegaram a
+    // rodar.
+    //
+    // O resultado final era o esperado: 33 tabelas, 32 enums, journal completo,
+    // e `updatedAt` de 23 tabelas PARADO sem que nada no banco dissentisse. O
+    // `/readyz` dizia "ok" com 34 tabelas.
+    //
+    // O que este teste exige e o que o baseline promete: marcar como aplicada
+    // so a migration cujo DDL esta INTEIRO no banco. A 0001 nao esta, entao ela
+    // roda — e as 23 triggers aparecem.
+    const pg = await PGlite.create();
+    try {
+      const conn = conexao(pg);
+      const migrations = migrationsDoDisco();
+
+      // Aplica a 0000 inteira, e a 0001 PARCIALMENTE: a funcao existe, as
+      // triggers nao. E o estado mais perigoso — parte da migration entrou, o
+      // registro inteiro nao.
+      for (const s of migrations[0]!.sql) await pg.query(s);
+      await pg.exec(`CREATE FUNCTION "set_updated_at"() RETURNS trigger AS $$
+        BEGIN NEW."updatedAt" := now(); RETURN NEW; END; $$ LANGUAGE plpgsql`);
+
+      // O caminho herdado: baseline marca as duas sem reexecutar.
+      await pg.exec(
+        `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (` +
+          `id serial primary key, hash text not null, created_at bigint)`
+      );
+      for (const mm of migrations) {
+        await pg.query(
+          `INSERT INTO "__drizzle_migrations" ("hash","created_at") VALUES ($1, $2)`,
+          [mm.hash, mm.folderMillis]
+        );
+      }
+
+      const antes = await pg.query<{ n: number }>(
+        "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
+      );
+      expect(antes.rows[0]!.n).toBe(0);
+
+      // O que o proximo deploy precisa fazer: a 0001 consta no journal, mas o
+      // DDL dela nao esta no banco. Marker de baseline resolve isso, e nada
+      // mais resolve.
+      const conferencia = await verificarSeDdlEstaNoBanco({
+        conn: conn as never,
+        migrations,
+        jaAplicado: migrations[migrations.length - 1]!.folderMillis,
+      });
+      // A 0000 esta inteira; so a 0001 diverge.
+      expect(conferencia.pendentes.map(p => p.folderMillis)).toEqual([
+        migrations[1]!.folderMillis,
+      ]);
+      expect(conferencia.pendentes[0]!.faltando).toHaveLength(23);
+
+      await aplicarMigracoes({
+        conn: conn as never,
+        migrations,
+        jaAplicado: migrations[migrations.length - 1]!.folderMillis,
+        reaplicarMarcadas: true,
+      });
+
+      const depois = await pg.query<{ n: number }>(
+        "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
+      );
+      expect(depois.rows[0]!.n).toBe(23);
     } finally {
       await pg.close();
     }
