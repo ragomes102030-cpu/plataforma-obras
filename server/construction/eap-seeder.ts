@@ -11,9 +11,13 @@
 
 import { eq } from "drizzle-orm";
 import {
+  budgetItems,
+  budgetVersions,
   priceCatalogs,
   priceItems,
   projects,
+  scheduleActivities,
+  scheduleDependencies,
   wbsNodes,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -35,7 +39,23 @@ export type ResultadoDaSemeadura = {
   catalogo: { id: number; nome: string; referencia: string; fonte: string } | null;
   /** Texto para a UI quando a EAP não pôde ser gerada. */
   aviso: string | null;
+  /** Itens de orçamento criados junto com a EAP (preço do catálogo, quantidade 0). */
+  itensDeOrcamentoCriados: number;
+  /**
+   * Atividades de cronograma criadas junto com a EAP, uma por folha, em
+   * sequência FS. Duração de placeholder — ver `DURACAO_PADRAO_DIAS`.
+   */
+  atividadesCriadas: number;
 };
+
+/**
+ * Duração inicial de cada atividade gerada, em dias. É um placeholder
+ * explícito: sem quantitativo medido (a folha nasce com `quantity: 0`) não
+ * há como calcular duração real (quantidade ÷ produtividade), e gravar um
+ * número "realista" inventado seria pior do que um valor óbvio de ajustar.
+ * O usuário edita a duração real assim que tiver o quantitativo e a equipe.
+ */
+export const DURACAO_PADRAO_DIAS = 5;
 
 const CATALOGO_VAZIO: ResultadoDaSemeadura = {
   nosCriados: 0,
@@ -44,6 +64,8 @@ const CATALOGO_VAZIO: ResultadoDaSemeadura = {
   gruposVazios: [],
   catalogo: null,
   aviso: null,
+  itensDeOrcamentoCriados: 0,
+  atividadesCriadas: 0,
 };
 
 /**
@@ -189,6 +211,104 @@ export async function semearEapDoCatalogo(
     idPorCodigo.set(no.code, row.id);
   }
 
+  // O orçamento nasce junto da EAP, folha a folha: mesmo código oficial,
+  // mesmo preço do catálogo (`unitPrice` já vem calculado pelo motor). A
+  // quantidade fica em 0 de propósito — só quem mede o projeto sabe o
+  // quantitativo real, e gravar um número inventado seria pior do que
+  // deixar em branco. Sem isto, o orçamento nascia sempre "sem preços"
+  // mesmo quando o catálogo já tinha o preço disponível.
+  const folhas = gerado.nos.filter(n => n.nodeType === "entrega" && n.externalId);
+  let itensDeOrcamentoCriados = 0;
+  const budgetItemIdPorCodigo = new Map<string, number>();
+  if (folhas.length) {
+    const [versao] = await db
+      .insert(budgetVersions)
+      .values({
+        projectId,
+        name: `Orçamento — preços do catálogo ${catalogo.nome} (${catalogo.referencia})`,
+        versionNumber: 1,
+        status: "rascunho",
+        currency: "BRL",
+        notes:
+          "Preço unitário vem do catálogo importado; quantidade ainda não foi medida e está em 0 — preencher antes de aprovar.",
+      })
+      .$returningId();
+    const linhasInseridas = await db
+      .insert(budgetItems)
+      .values(
+        folhas.map(no => ({
+          budgetVersionId: versao.id,
+          wbsNodeId: idPorCodigo.get(no.code) ?? null,
+          code: no.externalId!,
+          description: no.name,
+          unit: no.unit ?? "un",
+          quantity: "0.000",
+          unitPrice: (no.unitPrice ?? 0).toFixed(2),
+          source: catalogo.fonte,
+          referencePeriod: catalogo.referencia,
+          sortOrder: no.sortOrder,
+        }))
+      )
+      .$returningId();
+    folhas.forEach((no, index) => {
+      const id = linhasInseridas[index]?.id;
+      if (id) budgetItemIdPorCodigo.set(no.code, id);
+    });
+    itensDeOrcamentoCriados = folhas.length;
+  }
+
+  // O cronograma nasce junto: uma atividade por folha, ligada ao mesmo
+  // wbsNode e à mesma linha de orçamento (`budgetItemId`) — é o que faz
+  // Gantt, Orçamento e EAP mostrarem a mesma obra, em vez de três estruturas
+  // que por acaso têm nomes parecidos. `phase` vem do grupo que a contém,
+  // para a Linha de Balanço e os filtros por frente terem o que agrupar.
+  // Encadeadas em FS simples dentro do grupo (a única ordem que dá para
+  // inferir sem saber a obra); dá pra reordenar depois no Gantt.
+  let atividadesCriadas = 0;
+  if (folhas.length) {
+    const nomeDoGrupoPorCodigo = new Map<string, string>();
+    for (const no of gerado.nos.filter(n => n.level === 1)) {
+      nomeDoGrupoPorCodigo.set(no.code, no.name);
+    }
+    let offset = 0;
+    const atividadesParaInserir = folhas.map(no => {
+      const codigoGrupo = no.code.split(".").slice(0, -1).join(".");
+      const linha = {
+        projectId,
+        wbsNodeId: idPorCodigo.get(no.code)!,
+        externalId: no.externalId,
+        wbsCode: no.code,
+        name: no.name,
+        phase: nomeDoGrupoPorCodigo.get(codigoGrupo) ?? "Geral",
+        startOffset: offset,
+        durationDays: DURACAO_PADRAO_DIAS,
+        budgetItemId: budgetItemIdPorCodigo.get(no.code) ?? null,
+        progress: 0,
+        status: "Não iniciado" as const,
+        critical: 0,
+        sortOrder: no.sortOrder,
+      };
+      offset += DURACAO_PADRAO_DIAS;
+      return linha;
+    });
+    const inseridas = await db
+      .insert(scheduleActivities)
+      .values(atividadesParaInserir)
+      .$returningId();
+    if (inseridas.length > 1) {
+      await db.insert(scheduleDependencies).values(
+        inseridas.slice(0, -1).map((atividade, index) => ({
+          projectId,
+          predecessorId: atividade.id,
+          successorId: inseridas[index + 1].id,
+          type: "FS" as const,
+          lag: 0,
+        }))
+      );
+    }
+    atividadesCriadas = inseridas.length;
+  }
+
   return {
     nosCriados: gerado.nos.length,
     servicosUsados: gerado.servicosUsados,
@@ -196,5 +316,7 @@ export async function semearEapDoCatalogo(
     gruposVazios: gerado.gruposVazios,
     catalogo,
     aviso: gerado.aviso,
+    itensDeOrcamentoCriados,
+    atividadesCriadas,
   };
 }
