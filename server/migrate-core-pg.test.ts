@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
 import {
   CONSULTA_POR_TIPO,
   alvoDoStatement,
+  aplicarMigracoes,
+  asegurarTabelaDeMigracoes,
   criarVerificador,
   queryDeExistencia,
 } from "../scripts/migrate-core-pg.mjs";
@@ -199,5 +202,114 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
       }
     }
     expect(conta).toEqual({ table: 33, type: 32, trigger: 23 });
+  });
+});
+
+/**
+ * O ENTRYPOINT contra um banco vazio de verdade.
+ *
+ * Este bloco é o teste que faltava no primeiro deploy, e ele existe porque o
+ * deploy quebrou de um jeito que nenhum teste anterior viu.
+ *
+ * O DDL das migrations ja era testado contra PGlite e passava. O que nao era
+ * testado era o `aplicarMigracoes`: ele grava o que aplicou com
+ * `INSERT INTO "__drizzle_migrations"`, e no caminho de banco VAZIO aquela
+ * tabela nunca era criada. O resultado em producao foi o seguinte:
+ *
+ *   [migrate] banco vazio: aplicando 2 migracao(oes) do zero
+ *   error: relation "__drizzle_migrations" does not exist     (code 42P01)
+ *
+ * As 33 tabelas tinham nascido. O container reiniciou, a segunda tentativa caiu
+ * no caminho de banco legado — que sempre teve o `CREATE TABLE` — e completou.
+ * O servico ficou no ar e o caminho, errado. Um banco novo, que e o primeiro
+ * deploy de qualquer projeto novo, era justamente o que quebrava.
+ */
+describe("aplicarMigracoes num banco vazio", () => {
+  /** Conexao com a forma que o nucleo espera: `query(sql, params) -> { rows }`. */
+  function conexao(pg: PGlite) {
+    return {
+      query: async (sql: string, params?: unknown[]) => {
+        const r = await pg.query(sql, params as never[]);
+        return { rows: r.rows, rowCount: r.affectedRows };
+      },
+    };
+  }
+
+  function migrationsDoDisco() {
+    const pasta = "drizzle";
+    const journal = JSON.parse(
+      readFileSync(join(pasta, "meta", "_journal.json"), "utf-8")
+    ) as { entries: { tag: string; when: number }[] };
+    return journal.entries.map(e => {
+      const sql = readFileSync(join(pasta, `${e.tag}.sql`), "utf-8");
+      return {
+        folderMillis: e.when,
+        hash: `hash-${e.tag}`,
+        sql: sql
+          .split("--> statement-breakpoint")
+          .map(b =>
+            b
+              .split("\n")
+              .filter(l => !l.trim().startsWith("--"))
+              .join("\n")
+              .trim()
+          )
+          .filter(Boolean),
+      };
+    });
+  }
+
+  it("cria a tabela de registro, aplica tudo e nao quebra", async () => {
+    const pg = await PGlite.create();
+    try {
+      const conn = conexao(pg);
+
+      await aplicarMigracoes({
+        conn: conn as never,
+        migrations: migrationsDoDisco(),
+        jaAplicado: null,
+      });
+
+      const registradas = await pg.query<{ n: number }>(
+        'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
+      );
+      expect(registradas.rows[0]!.n).toBe(2);
+
+      const tabelas = await pg.query<{ n: number }>(
+        "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
+          " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+      );
+      // 33 do schema + a de registro.
+      expect(tabelas.rows[0]!.n).toBe(34);
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it("rodar de novo nao reaplica DDL e nao duplica registro", async () => {
+    const pg = await PGlite.create();
+    try {
+      const conn = conexao(pg);
+      const migrations = migrationsDoDisco();
+
+      await aplicarMigracoes({ conn: conn as never, migrations, jaAplicado: null });
+
+      // O segundo deploy. E o que prova que o verificador por statement existe:
+      // sem ele, os 33 CREATE TABLE rodariam de novo e o banco recusaria com
+      // `already exists`.
+      const segunda = await aplicarMigracoes({
+        conn: conn as never,
+        migrations,
+        jaAplicado: migrations[migrations.length - 1]!.folderMillis,
+      });
+      expect(segunda.relatorio).toEqual([]);
+
+      const registradas = await pg.query<{ n: number }>(
+        'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
+      );
+      expect(registradas.rows[0]!.n).toBe(2);
+    } finally {
+      await pg.close();
+    }
   });
 });

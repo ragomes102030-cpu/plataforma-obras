@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Aplica as migrations do PostgreSQL e audita o resultado.
  *
  * Este é o script que o pre-deploy executa. Ele é separado de

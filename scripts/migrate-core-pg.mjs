@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Núcleo da aplicação de migrações no PostgreSQL, sem I/O de rede e sem
  * `process.exit`.
  *
@@ -190,6 +190,28 @@ export async function aplicarMigracoes({
   migrationsTable = "__drizzle_migrations",
   log = () => {},
 }) {
+  // A tabela de registro e criada AQUI, e nao no entrypoint.
+  //
+  // No primeiro deploy ela faltava no caminho de banco VAZIO, e o efeito foi
+  // este, inteiro, em producao:
+  //
+  //   [migrate] banco vazio: aplicando 2 migracao(oes) do zero
+  //   error: relation "__drizzle_migrations" does not exist      (code 42P01)
+  //
+  // As 33 tabelas tinham nascido. O container reiniciou, a segunda tentativa
+  // caiu no caminho de banco legado — que sempre teve o `CREATE TABLE` — e
+  // baselineou. O servico subiu e o caminho, errado. Um banco novo, que e o
+  // primeiro deploy de qualquer projeto novo, era justamente o que quebrava.
+  //
+  // Fica dentro desta funcao por invariante, e nao por convenience: quem grava
+  // o que aplicou e quem garante que a tabela onde grava existe. Se o entrypoint
+  // precisar lembrar, a proxima chamada que esquecer quebra o deploy do zero.
+  // `IF NOT EXISTS` torna isso seguro nos dois caminhos e a cada retry.
+  await conn.query(
+    `CREATE TABLE IF NOT EXISTS "${migrationsTable}" (` +
+      "id serial primary key, hash text not null, created_at bigint)"
+  );
+
   const aAplicar =
     jaAplicado === null || jaAplicado === undefined
       ? migrations
