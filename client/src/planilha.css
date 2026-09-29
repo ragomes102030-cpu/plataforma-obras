@@ -1,0 +1,508 @@
+/* ---------------------------------------------------------- a obra como planilha
+ *
+ * Abas embaixo, uma navegação só. A lateral abre no Gantt e é o lugar da
+ * Linha de Balanço.
+ *
+ * As cores de status são as mesmas da planilha: verde = concluído, amarelo =
+ * em andamento, vermelho = atrasado, neutro = não iniciado. Na planilha elas
+ * são pintadas à mão e desandam; aqui saem do motor.
+ */
+
+.pl-obra {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: #ffffff;
+  border: 1px solid var(--pl-borda, #dfe4ea);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pl-corpo {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.pl-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* ------------------------------------------------------------------ rodapé/abas */
+
+.pl-rodape {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  border-top: 1px solid #dfe4ea;
+  background: #f5f7f9;
+  padding-right: 12px;
+}
+
+.pl-abas {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.pl-aba {
+  appearance: none;
+  border: 0;
+  border-right: 1px solid #e4e8ec;
+  background: transparent;
+  color: #5a6672;
+  font: inherit;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  padding: 9px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+
+.pl-aba:hover {
+  background: #eef2f5;
+  color: #2c3a47;
+}
+
+.pl-aba.ativa {
+  background: #ffffff;
+  color: #1f6f8b;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 #1f6f8b;
+}
+
+.pl-aba[data-status="pendente"] {
+  color: #9aa5b1;
+}
+
+/* Marcador discreto de aba incompleta — não é alarme, é aviso. */
+.pl-aba[data-status="parcial"]::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #d9a441;
+}
+
+.pl-rodape-info {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 11px;
+  color: #8b95a1;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------- lateral */
+
+.pl-lateral {
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  border-left: 1px solid #dfe4ea;
+  background: #fafbfc;
+  transition: width 0.14s ease;
+}
+
+.pl-lateral.aberta {
+  width: 420px;
+}
+
+.pl-lateral-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid #e4e8ec;
+  font-size: 12px;
+  color: #3c4a57;
+}
+
+.pl-lateral-fechar {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #7c8794;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+}
+
+.pl-lateral-fechar:hover {
+  color: #1f6f8b;
+}
+
+.pl-lateral-escolha {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e4e8ec;
+}
+
+.pl-lateral-item {
+  appearance: none;
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #dfe4ea;
+  background: #ffffff;
+  color: #5a6672;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pl-lateral-item:hover {
+  border-color: #b9c6d1;
+  color: #2c3a47;
+}
+
+.pl-lateral-item.ativa {
+  background: #1f6f8b;
+  border-color: #1f6f8b;
+  color: #ffffff;
+}
+
+.pl-lateral-corpo {
+  padding: 12px 14px;
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+}
+
+/* -------------------------------------------------------------------- grade */
+
+.pl-grade-area {
+  padding: 0;
+}
+
+.pl-grade {
+  display: flex;
+  flex-direction: column;
+  min-width: 1380px;
+}
+
+.pl-linha {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #eef1f4;
+}
+
+.pl-linha:not(.pl-cabecalho):hover {
+  background: #f7f9fb;
+}
+
+.pl-cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f5f7f9;
+  border-bottom: 1px solid #d7dde3;
+}
+
+.pl-celula {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  color: #2c3a47;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.pl-cabecalho-celula {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6b7683;
+}
+
+/* Coluna derivada: cinza, e o título diz por quê. */
+.pl-derivada,
+.pl-derivada-cabecalho {
+  background: #fafbfc;
+  color: #6b7683;
+  justify-content: flex-end;
+}
+
+.pl-derivada-cabecalho {
+  justify-content: flex-end;
+}
+
+.pl-codigo {
+  font-variant-numeric: tabular-nums;
+  color: #6b7683;
+  font-size: 11.5px;
+}
+
+.pl-input {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  padding: 2px 3px;
+  border-radius: 2px;
+}
+
+.pl-input:hover {
+  border-color: #e4e8ec;
+}
+
+.pl-input:focus {
+  outline: none;
+  border-color: #1f6f8b;
+  background: #ffffff;
+}
+
+.pl-pct {
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-barra {
+  display: inline-block;
+  width: 38px;
+  height: 5px;
+  background: #e4e8ec;
+  border-radius: 3px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.pl-barra-cheia {
+  display: block;
+  height: 100%;
+  background: #1f6f8b;
+}
+
+.pl-status {
+  justify-content: flex-start;
+}
+
+.pl-etiqueta {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* As três cores da planilha. */
+.pl-concluido .pl-etiqueta {
+  background: #c6efce;
+  color: #1c5c31;
+}
+
+.pl-em-andamento .pl-etiqueta {
+  background: #ffeb9c;
+  color: #6b5310;
+}
+
+.pl-atrasado .pl-etiqueta {
+  background: #ffc7ce;
+  color: #8a1f2c;
+}
+
+.pl-nao-iniciado .pl-etiqueta {
+  background: #eceff2;
+  color: #6b7683;
+}
+
+.pl-concluido .pl-barra-cheia {
+  background: #2e9e5b;
+}
+
+.pl-em-andamento .pl-barra-cheia {
+  background: #d9a441;
+}
+
+.pl-atrasado .pl-barra-cheia {
+  background: #d1495b;
+}
+
+.pl-grade-vazia {
+  padding: 40px;
+  text-align: center;
+  color: #6b7683;
+  font-size: 13px;
+}
+
+.pl-grade-vazia p {
+  margin: 0 0 6px;
+}
+
+/* ------------------------------------------------------------------ aba vazia */
+
+.pl-vazia {
+  padding: 48px 32px;
+  max-width: 640px;
+  margin: 0 auto;
+  color: #4a5764;
+}
+
+.pl-vazia h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3a47;
+}
+
+.pl-vazia-falta {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: #fdf6e7;
+  border-left: 3px solid #d9a441;
+  border-radius: 0 3px 3px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #5c4a1a;
+}
+
+.pl-vazia-nota {
+  margin: 0;
+  font-size: 12.5px;
+  color: #8b95a1;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ painel */
+
+.pl-painel {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pl-painel-vazio {
+  color: #6b7683;
+  font-size: 13px;
+  padding: 32px 0;
+}
+
+.pl-cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.pl-cartao {
+  border: 1px solid #e4e8ec;
+  border-radius: 4px;
+  padding: 12px 14px;
+  background: #fbfcfd;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pl-cartao-titulo {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7683;
+}
+
+.pl-cartao-valor {
+  font-size: 24px;
+  font-weight: 600;
+  color: #2c3a47;
+  line-height: 1.1;
+}
+
+.pl-cartao-ruim .pl-cartao-valor {
+  color: #c33d4f;
+}
+
+.pl-cartao-bom .pl-cartao-valor {
+  color: #2e8b52;
+}
+
+.pl-cartao-nota {
+  font-size: 11.5px;
+  color: #8b95a1;
+  line-height: 1.4;
+}
+
+.pl-status-blocos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.pl-status {
+  border: 1px solid #e4e8ec;
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.pl-status-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: #5a6672;
+}
+
+.pl-status-topo strong {
+  font-size: 17px;
+  color: #2c3a47;
+}
+
+.pl-status-barra {
+  height: 5px;
+  background: #eceff2;
+  border-radius: 3px;
+  margin: 7px 0 5px;
+  overflow: hidden;
+}
+
+.pl-status-barra span {
+  display: block;
+  height: 100%;
+  background: #9aa5b1;
+}
+
+.pl-concluido .pl-status-barra span { background: #2e9e5b; }
+.pl-em-andamento .pl-status-barra span { background: #d9a441; }
+.pl-atrasado .pl-status-barra span { background: #d1495b; }
+
+.pl-status-nota {
+  font-size: 11px;
+  color: #8b95a1;
+}
+
+.pl-painel-alerta {
+  margin: 0;
+  padding: 10px 12px;
+  background: #fdf0f1;
+  border-left: 3px solid #d1495b;
+  border-radius: 0 3px 3px 0;
+  font-size: 12.5px;
+  color: #8a1f2c;
+  line-height: 1.5;
+}
+
+.pl-painel-nota {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7683;
+  line-height: 1.5;
+}

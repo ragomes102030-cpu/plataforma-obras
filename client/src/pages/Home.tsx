@@ -53,11 +53,14 @@ import { MedicaoView } from "@/components/MedicaoView";
 import { GraficosView } from "@/components/GraficosView";
 import { FormulasView } from "@/components/FormulasView";
 import { dateAt as dateAtWorkCalendar, defaultCalendar } from "@shared/work-calendar";
-import { AresWorkspace, type AbaDoAres } from "@/components/AresWorkspace";
-import { VisaoLateral } from "@/components/VisaoLateral";
-import { ROTULO_DO_MODULO, ehAbaDeTrabalho } from "@shared/abas-ares";
+import { PlanilhaObra } from "@/components/PlanilhaObra";
+import { GradeCronograma } from "@/components/GradeCronograma";
+import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import type { IdDaVisaoLateral } from "@shared/abas-ares";
-import "@/ares-shell.css";
+import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
+import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
+import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
+import "@/planilha.css";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -919,39 +922,77 @@ export default function Home() {
   });
   const activities = activitiesQuery.data ?? [];
 
-  // Aba ativa da pasta de trabalho. Mora ao lado de `activeNav` de proposito:
-  // estados separados para a lateral e para a barra de abas divergem sobre
-  // "em que aba estou", e essa divergencia e estado duplicado.
-  const [abaAres, setAbaAres] = useState<AbaDoAres>("eap");
+  // A aba ativa da planilha. Um estado só: a casca e a barra de abas não
+  // podem discordar sobre onde a pessoa está — era esse o defeito da casca
+  // anterior, que mantinha um estado para o menu lateral e outro para a barra.
+  const [abaAres, setAbaAres] = useState<string>("cronograma");
 
-  // A casca escolhe a ABA; o modulo existente faz o trabalho. Reaproveitar em
-  // vez de reescrever: EapView, BudgetView, ProductionView, FrentesView,
-  // MedicaoView, GraficosView, FormulasView e GanttView ja falam com o backend.
-  const renderAbaDaAba = (aba: AbaDoAres) => (
-    <ModuleView
-      name={ROTULO_DO_MODULO[aba] ?? "EAP"}
-      icon={Layers3}
-      description=""
-      onBack={() => setActiveNav("Portfólio")}
-      onNavigate={setActiveNav}
-      projectId={selected?.id ?? 1}
-      projectName={selected?.name ?? "Obra"}
-      activities={activities}
-      search={search}
-      setSearch={setSearch}
-      plannedStart={selected?.plannedStart}
-    />
+  // A grade vem pronta do motor. O componente recebe as colunas derivadas e não
+  // recalcula nenhuma delas.
+  const gradeQuery = trpc.planning.grade.useQuery(
+    { projectId: selected?.id ?? 1 },
+    { enabled: Boolean(selected) }
   );
+
+  // O backend devolveu as linhas já com inicio, fim e status, calculados no
+  // calendário que ele usou, e devolveu também a data de hoje. Se aqui
+  // houvesse outra conta de data, as barras e os números contariam dias
+  // diferentes dos que o motor usou.
+  const calendarioDaGrade: WorkCalendar = CALENDARIO_CORRIDO;
+  const hojeDaGrade: IsoDate = gradeQuery.data?.hoje ?? "";
+  const linhasDaGrade: EntradaDaLinha[] = (gradeQuery.data?.linhas ?? []).map(l => ({
+    codigo: l.codigo,
+    atividade: l.atividade,
+    frente: l.frente,
+    pavimento: l.pavimento,
+    inicio: l.inicio,
+    duracao: l.duracao,
+    quantidade: l.quantidade,
+    unidade: l.unidade,
+    executado: l.executado,
+  }));
+  const agregadoDaGrade: AgregadoDoCronograma | undefined = gradeQuery.data?.agregado;
+
+  // A casca escolhe a ABA; o conteúdo vem do motor. Aba "pendente" nunca chega
+  // aqui — a casca desenha o estado vazio com o que falta.
+  const renderAbaDaAba = (aba: string) => {
+    if (aba === "cronograma") {
+      return (
+        <GradeCronograma
+          calendario={calendarioDaGrade}
+          hoje={hojeDaGrade}
+          linhas={linhasDaGrade}
+        />
+      );
+    }
+    if (aba === "dashboard") {
+      return <PainelDoCronograma agregado={agregadoDaGrade} />;
+    }
+    if (aba === "producao") {
+      return (
+        <div className="pl-grade-vazia">
+          <p>A PRODUCAO da planilha é uma grade por data.</p>
+          <p>
+            O lançamento por atividade já existe e continua valendo. O que falta
+            aqui é a forma de linha × data com a soma embaixo — e isso é
+            cálculo, não tela.
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const renderVisaoLateral = (visao: IdDaVisaoLateral) => (
-    <VisaoLateral
-      visao={visao}
-      projectId={selected?.id ?? 1}
-      projectName={selected?.name ?? "Obra"}
-      activities={activities}
-      plannedStart={selected?.plannedStart}
-    />
+    <div className="pl-grade-vazia">
+      <p>{visao === "gantt" ? "Gantt" : "Linha de Balanço"}</p>
+      <p>
+        A grade de meses e as barras por status saem do mesmo motor que já produz
+        inicio, fim e status na aba CRONOGRAMA. Falta desenhar.
+      </p>
+    </div>
   );
+
   const budgetQuery = trpc.budgets.list.useQuery(
     { projectId: selected?.id ?? 1 },
     { enabled: Boolean(selected) }
@@ -1240,14 +1281,14 @@ export default function Home() {
           <div key={activeNav} className="tab-content-root">
           {activeNav === "Configurações" ? (
             <AdminLlmSettings />
-          ) : activeNav !== "Portfólio" && ehAbaDeTrabalho(activeNav) ? (
-            <AresWorkspace
+          ) : activeNav !== "Portfólio" ? (
+            <PlanilhaObra
               obra={selected?.name ?? "Obra"}
               projetoId={selected?.id ?? 1}
               aba={abaAres}
               onAba={setAbaAres}
-              renderAba={renderAbaDaAba}
-              renderVisao={renderVisaoLateral}
+              renderConteudo={renderAbaDaAba}
+              renderLateral={renderVisaoLateral}
             />
           ) : activeNav !== "Portfólio" ? (
             <ModuleView

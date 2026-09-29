@@ -32,7 +32,13 @@ import {
   calendarExceptions,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
-import { elapsedWorkingDays, indexOf } from "@shared/work-calendar";
+import { dateAt, elapsedWorkingDays, indexOf } from "@shared/work-calendar";
+import {
+  CALENDARIO_CORRIDO,
+  agregadoDoCronograma,
+  gradeDoCronograma,
+  type EntradaDaLinha,
+} from "@shared/cronograma-colunas";
 import { carregarCalendarioDaObra, localIso } from "./construction/calendario-obra";
 import {
   lerPrimeiraAba,
@@ -3085,6 +3091,107 @@ export const appRouter = router({
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
         return { activities, dependencies, resources, baselines };
+      }),
+
+    /**
+     * A grade do CRONOGRAMA.
+     *
+     * Uma linha por atividade, com as cinco colunas que na planilha são fórmula
+     * (Fim, Produtividade, % Planej., % Real, Status) já calculadas pelo motor de
+     * `shared/cronograma-colunas.ts`. O frontend não recalcula nada: ele
+     * desenha o que vem daqui.
+     *
+     * POR QUE O CALENDÁRIO É ESCOLHIDO AQUI
+     *
+     * A planilha conta dias corridos (`Fim = Início + Duração − 1`, sem
+     * feriado). O resto do sistema usa dias úteis. A obra decide: se ela tem
+     * calendário cadastrado, ele vale; se não tem, vale o dia corrido, que é o
+     * que a planilha de referência faz. A escolha vem de `origem`, que o
+     * `carregarCalendarioDaObra` já devolve — assim não existe caminho
+     * paralelo de data.
+     */
+    grade: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        const hoje = localIso(input.asOf ?? new Date());
+        if (!db) {
+          const vazio = gradeDoCronograma(CALENDARIO_CORRIDO, hoje, []);
+          return {
+            linhas: vazio,
+            agregado: agregadoDoCronograma(vazio),
+            calendario: "corrido" as const,
+            hoje,
+            inicioObra: null,
+          };
+        }
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [project] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId))
+          .orderBy(scheduleActivities.sortOrder);
+
+        const entries = await db
+          .select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity })
+          .from(productionEntries)
+          .where(
+            and(
+              eq(productionEntries.projectId, input.projectId),
+              eq(productionEntries.status, "confirmada")
+            )
+          );
+        const executadoPorAtividade = new Map<number, number>();
+        for (const e of entries) {
+          executadoPorAtividade.set(
+            e.activityId,
+            (executadoPorAtividade.get(e.activityId) ?? 0) + Number(e.quantity)
+          );
+        }
+
+        const asOf = input.asOf ?? new Date();
+        const carregado = await carregarCalendarioDaObra(
+          db,
+          input.projectId,
+          project?.plannedStart ? project.plannedStart.getFullYear() : asOf.getFullYear()
+        );
+        const usaCalendarioDaObra = carregado.origem === "obra";
+        const calendario = usaCalendarioDaObra ? carregado.calendar : CALENDARIO_CORRIDO;
+        const baseIso = project?.plannedStart ? localIso(project.plannedStart) : hoje;
+
+        // O `startOffset` da atividade é um índice de dias a partir do início
+        // da obra. Convertê-lo em data é o mesmo `dateAt` que o CPM usa — não
+        // uma aritmética nova de milissegundos.
+        const entradas: EntradaDaLinha[] = activities.map(a => ({
+          codigo: a.wbsCode,
+          atividade: a.name,
+          frente: a.phase,
+          pavimento: null,
+          inicio: dateAt(calendario, baseIso, a.startOffset),
+          duracao: a.durationDays,
+          quantidade: a.plannedQuantity == null ? null : Number(a.plannedQuantity),
+          unidade: null,
+          executado: executadoPorAtividade.get(a.id) ?? 0,
+        }));
+
+        const linhas = gradeDoCronograma(calendario, hoje, entradas);
+        return {
+          linhas,
+          agregado: agregadoDoCronograma(linhas),
+          calendario: usaCalendarioDaObra ? ("obra" as const) : ("corrido" as const),
+          // A data de hoje vem junto. O cliente nao calcula data: se ele
+          // chamasse `new Date()` para saber que dia e, a grade contaria um
+          // dia a mais que o motor no fuso do navegador.
+          hoje,
+          inicioObra: baseIso,
+        };
       }),
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
