@@ -108,6 +108,27 @@ const MUTACOES = [
     para: '  if (servicos + insumos > 0) return "servicos";',
     teste: "shared/price-sources/reconhecer-planilha.test.ts",
   },
+  {
+    nome: "CPM volta a descartar as restricoes (passa a lista original)",
+    arquivo: "server/routers.ts",
+    de: "calculateDeterministicCpm(enrichedActivities, dependencies)",
+    para: "calculateDeterministicCpm(activities, dependencies)",
+    teste: "server/cpm-restricoes.test.ts",
+  },
+  {
+    nome: "CPM volta a ignorar work_calendars e usar o padrao do ano",
+    arquivo: "server/routers.ts",
+    de: "        } = await carregarCalendarioDaObra(db, input.projectId, ano);",
+    para: "        } = { calendar: defaultCalendar(ano), origem: \"padrao_br\", nome: null };",
+    teste: "server/cpm-restricoes.test.ts",
+  },
+  {
+    nome: "o calendario volta a ser lido duas vezes no router",
+    arquivo: "server/routers.ts",
+    de: "        const { calendar } = await carregarCalendarioDaObra(",
+    para: "        const { calendar } = await db.select().from(workCalendars).where(eq(workCalendars.projectId, input.projectId)).then(rows => ({ calendar: defaultCalendar(2026), rows })) as never; const calendarioDb = await db",
+    teste: "server/cpm-restricoes.test.ts",
+  },
 ];
 
 let problemas = 0;

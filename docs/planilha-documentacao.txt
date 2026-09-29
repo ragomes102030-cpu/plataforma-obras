@@ -1,0 +1,229 @@
+
+======================================================================
+ABA DASHBOARD
+======================================================================
+  L1  ARES — PAINEL DA OBRA (MODELO PADRÃO)
+  L35  Fonte: indicadores derivados do domínio — ver abas SERVIÇOS, INDICADORES e GRÁFICOS. Produção ≠ medição.
+  L36  ARES — MODELO DE ENGENHARIA
+  L37  Modelo: | Produtividade Simplificada
+
+======================================================================
+ABA CADASTRO
+======================================================================
+  L1  ARES — CADASTRO DA OBRA (MODELO PADRÃO)
+  L11  Cliente | Incorporadora Exemplo S.A.
+  L26  LOCAL-AC01 | AREA_COMUM | Praça com fonte | LOCAL-AC00 | TIP-003 | Tipologia 3 | 57.78 | 2 | confirmada (material do usuário)
+  L29  LOCAL-AC04 | AREA_COMUM | Coworking Navona | LOCAL-AC00 | Distribuição das tipologias por apartamento: PENDENTE de confirmação (AP01 e AP06 descritos como maiores).
+
+======================================================================
+ABA EAP
+======================================================================
+  L3  Decomposição hierárquica do escopo até o PACOTE DE TRABALHO (item controlável). Nunca usar Torre/Pavimento/Apartamento como nível (pertence ao CADASTRO) e nunca transformar FRENTE-xxx em EAP. Itens não definidos: PENDENTE DE DEFINIÇÃO.
+  L91  CONEXÃO FUTURA: SERVIÇO = EAP × FRENTE × LOCALIZAÇÃO. Exemplo conceitual: EAP = 'Pisos cerâmicos' × FRENTE = 'Assentamento de piso' × LOCAL = 'LOCAL-T1-P05-AP03' → SERVIÇO (unidade operacional). Este serviço NÃO é criado nesta fase.
+
+======================================================================
+ABA ORÇAMENTO
+======================================================================
+  L1  ARES — ORÇAMENTO (FORMAÇÃO DE CUSTOS E PREÇOS — ARQUITETURA A2) | DADOS LEGADOS DO MODELO ANTERIOR (tbOrcamento antiga) — PRESERVADOS SEM MIGRAÇÃO
+  L2  EAP → SERVIÇO → ITEM → COMPOSIÇÃO → RECURSOS → CUSTO → BDI → PREÇO → VALOR. ORÇADO ≠ CONTRATADO ≠ PRODUZIDO ≠ MEDIDO. Valores numéricos dos exemplos são HIPOTÉTICOS (pedagógicos). O ORÇAMENTO NÃO define escopo/local/frente — herda do SERVIÇO. | Classificação: LEGADO/DEMONSTRATIVO — 11 códigos órfãos (LOC-001..ESQ-001) e valores digitados sem fonte. NÃO remapeados automaticamente. Preservados para rastreabilidade.
+  L3  ARES — ORÇAMENTO (MODELO PADRÃO)
+  L4  RESUMO DO ORÇAMENTO | Custo previsto x realizado — derivado dos serviços cadastrados (sem digitação manual)
+  L8  BDI aplicado | Ver BDI_TOTAL em CONFIGURAÇÕES (F49) — percentuais somente com fonte | Custo realizado (produzido) | 20585.9
+  L20  COMO LER UM ORÇAMENTO | CMP-010 | ORC-004 | RECURSO-002 | 0.2 | 18 | 3.6 | HID-001 | Instalações hidráulicas | pt | 0 | 266000 | -8499 | 8500
+  L25  CUSTO_UNITARIO = Σ custos parciais. CUSTO_DIRETO = QTD_ORCADA × CUSTO_UNITARIO. | Nota: custo realizado = quantidade produzida × preço unitário (derivado do domínio; ver abas SERVIÇOS e PRODUÇÃO).
+  L29  COMO MONTAR UM ITEM DE ORÇAMENTO
+  L39  10 — Forme o CUSTO_DIRETO (QTD_ORCADA × CUSTO_UNITARIO — derivado).
+  L40  11 — Aplique BDI documentado (composto, na CONFIGURAÇÕES; % só com fonte).
+  L42  13 — Forme o VALOR ORÇADO (QTD × PREÇO — derivado, nunca digitado).
+  L44  15 — Execute a auditoria (conferir unidades, coeficientes, fonte de custos).
+  L45  COMO O VALOR FOI FORMADO
+  L46  RECURSO (tbRecursos) — custo unitário do insumo (com fonte).
+
+======================================================================
+ABA SERVIÇOS
+======================================================================
+  L3  QUANTIDADE CONTRATADA (SERVIÇOS) ≠ QUANTIDADE EXECUTADA (PRODUÇÃO) ≠ QUANTIDADE MEDIDA (MEDIÇÃO). SERVIÇOS guarda a referência contratada/orçada do serviço. Nenhum dado real foi inventado; a linha marcada é EXEMPLO PEDAGÓGICO.
+  L5  SERVICO-001 | Pisos cerâmicos — Apto 03 Pav 05 Torre 1 | EAP-054 | FRENTE-010 | LOCAL-T1-P05-AP03 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L6  SERVICO-002 | Alvenaria de vedação — Apto 01 Pav 02 Torre 1 | EAP-017 | FRENTE-007 | LOCAL-T1-P02-AP01 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L7  SERVICO-003 | Instalações elétricas — Apto 02 Pav 03 Torre 1 | EAP-034 | FRENTE-008 | LOCAL-T1-P03-AP02 | pt | 0 | Liberado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L8  SERVICO-004 | Hidráulica/sanitária (água fria) — Apto 03 Pav 04 | EAP-028 | FRENTE-009 | LOCAL-T1-P04-AP03 | pt | 0 | Em execução | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L9  SERVICO-005 | Assentamento de piso cerâmico — Apto 04 Pav 06 | EAP-052 | FRENTE-010 | LOCAL-T1-P06-AP04 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L10  SERVICO-006 | Revestimento de fachada — Torre 1 | EAP-064 | FRENTE-011 | LOCAL-T1 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L11  SERVICO-007 | Impermeabilização de subsolo — Torre 1 | EAP-024 | FRENTE-012 | LOCAL-T1-SB | m² | 0 | Liberado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L12  SERVICO-008 | Forro de gesso — Apto 05 Pav 07 Torre 1 | EAP-061 | FRENTE-013 | LOCAL-T1-P07-AP05 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L13  SERVICO-009 | Pintura de paredes e tetos — Apto 06 Pav 08 | EAP-067 | FRENTE-014 | LOCAL-T1-P08-AP06 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L14  SERVICO-010 | Esquadrias de alumínio — Apto 01 Pav 09 Torre 1 | EAP-040 | FRENTE-015 | LOCAL-T1-P09-AP01 | un | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L15  SERVICO-011 | Pintura de fachada — Torre 1 | EAP-068 | FRENTE-014 | LOCAL-T1 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L16  SERVICO-012 | Impermeabilização de áreas molhadas — Apto 01 P02 | EAP-025 | FRENTE-012 | LOCAL-T1-P02-AP01 | m² | 0 | Planejado | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L60  COMO LER UM SERVIÇO
+  L61  EAP = o que está no escopo (dimensão da EAP) · FRENTE = quem/natureza especializada executa · LOCAL = onde será executado (CADASTRO) · SERVIÇO = combinação controlável dessas dimensões
+  L62  COMO MONTAR UM SERVIÇO NO ARES
+  L72  FONTES: PRODUÇÃO = quantidade EXECUTADA · MEDIÇÃO = quantidade MEDIDA/APROVADA · SERVIÇOS = referência CONTRATADA/ORÇADA. VALOR_CONTRATADO é derivado (=QTD_CONTRATADA×PRECO_UNITARIO), nunca digitado.
+
+======================================================================
+ABA PLANEJAMENTO
+======================================================================
+  L1  ARES — PLANEJAMENTO (MODELO PADRÃO)
+  L2  Fonte única do cronograma — o GANTT é derivado desta tabela (datas reais dd/mm/yyyy)
+  L3  DADOS LEGADOS — PRESERVADOS SEM MIGRAÇÃO (MODELO ANTIGO — 15 ATIVIDADES)
+  L20  PLANEJAMENTO ATIVO — MODELO A2 (ATIVIDADES DE CRONOGRAMA)
+  L21  PLANEJAMENTO ≠ SERVIÇO · cada linha é uma ATIVIDADE (1 SERVICO_ID → N PLAN-xxx) · FRENTE/LOCAL/UNIDADE derivados do serviço · %REAL derivado da PRODUÇÃO · EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L26  PLAN-004 | MARCO | MARCO-01 | 46262 | 46262 | 1 | vb | 1 | CONCLUÍDO | ATRASADO | MARCO: sem serviço/quantidade (datas pontuais) | COMO MONTAR UMA ATIVIDADE
+  L27  PLAN-005 | ESPECIAL | ADM-01 | 46237 | 46325 | 89 | vb | 1 | EM ANDAMENTO | EM ANDAMENTO | ADMINISTRAÇÃO: sem SERVICO_ID artificial | 1) Escolha TIPO_ATIVIDADE (SERVIÇO/ESPECIAL/MARCO/MOBILIZAÇÃO/ADMINISTRAÇÃO). 2) Se SERVIÇO, informe SERVICO_ID e EQUIPE_ID (obrigatórios). 3) Informe INÍCIO e FIM (a duração é calculada). 4) Opcional: QTD_PLANEJADA, %PLAN, PREDECESSORA_ID.
+  L29  vb | SEM DATAS | COMO AS DATAS FUNCIONAM
+  L30  vb | SEM DATAS | INÍCIO + FIM são a fonte de verdade. DURACAO_PLAN = FIM − INÍCIO + 1 (calculada). FIM anterior a INÍCIO sinaliza erro (não é mascarado).
+  L32  vb | SEM DATAS | COMO AS PREDECESSORAS FUNCIONAM
+  L33  vb | SEM DATAS | PREDECESSORA_ID = PLAN-xxx anterior. Predecessora inexistente ou auto-referência são inválidas. Ciclos (A→B→A) são bloqueados; ciclos maiores são limitação documentada (validação manual).
+  L35  vb | SEM DATAS | COMO LER O % PLANEJADO
+  L36  vb | SEM DATAS | %PLAN é o avanço planejado da atividade até a data-base (0–100), digitado com controle. Não confundir com % executado.
+  L38  vb | SEM DATAS | COMO O % REAL É FORMADO
+  L39  vb | SEM DATAS | %REAL = QTD_PRODUZIDA ÷ QTD_PLANEJADA, DERIVADO da PRODUÇÃO (SUMIFS por SERVICO_ID na janela da atividade). Nunca digitado. Produção acima do planejado mostra >100% (alerta, não esconde).
+  L41  vb | SEM DATAS | NÃO CONFUNDIR
+  L44  vb | SEM DATAS | COMO O PLANEJAMENTO ENTRA NA CADEIA
+
+======================================================================
+ABA FRENTES
+======================================================================
+  L6  FRENTE-000 | Preliminares | EXECUÇÃO | Descontinuada | Serviços preliminares e de mobilização | Eng. Coordenador | 0 | Descontinuada (FASE 05C): agrupamento pertence à EAP futura (pacote 'Preliminares'). Mantida p/ rastreabilidade do código.
+  L7  FRENTE-001 | Fundações | EXECUÇÃO | Ativa | Cavas, blocos e estrutura de fundação | Eng. Fundações | 0 | Especialidade preservada (FASE 05C); confirmar com o usuário quando a obra iniciar o controle desta fase.
+  L8  FRENTE-002 | Estrutura | EXECUÇÃO | Ativa | Pilares, vigas e lajes (concreto armado) | Eng. Estrutura | 0 | Especialidade preservada (FASE 05C); confirmar com o usuário quando a obra iniciar o controle desta fase.
+  L9  FRENTE-003 | Vedações | EXECUÇÃO | Descontinuada | Alvenaria de vedação e blocos | Eng. Vedações | 0 | Descontinuada (FASE 05C): agrupamento pertence à EAP (pacote 'Vedações'); serviços → Frente Alvenaria (FRENTE-007).
+  L10  FRENTE-004 | Revestimentos | ACABAMENTO | Descontinuada | Revestimento interno, contrapiso e acabamentos | Eng. Acabamentos | 0 | Descontinuada (FASE 05C): agrupamento pertence à EAP (pacote 'Revestimentos'); serviços → frentes especializadas.
+  L11  FRENTE-005 | Instalações | INSTALAÇÃO | Descontinuada | Instalações elétricas e hidráulicas | Eng. Instalações | 0 | Descontinuada (FASE 05C): agrupamento pertence à EAP (pacote 'Instalações'); serviços → FRENTE-008 e FRENTE-009.
+  L12  FRENTE-006 | Acabamentos | ACABAMENTO | Descontinuada | Impermeabilização, pintura e esquadrias | Eng. Acabamentos | 0 | Descontinuada (FASE 05C): agrupamento pertence à EAP (pacote 'Acabamentos'); serviços → frentes de acabamento confirmadas.
+  L15  FRENTE-009 | Hidráulica/sanitária | INSTALAÇÃO | Ativa | 1 | Confirmada pelo usuário (obra-laboratório). Preenchida na FASE 05C — slot estava vazio.
+  L18  FRENTE-012 | Impermeabilização | EXECUÇÃO | Ativa | 2 | Confirmada pelo usuário. TIPO reclassificado (ACABAMENTO→EXECUÇÃO) na FASE 05C.
+  L21  FRENTE-015 | Esquadrias/vidros | INSTALAÇÃO | Ativa | 1 | Confirmada pelo usuário. TIPO reclassificado (ACABAMENTO→INSTALAÇÃO) na FASE 05C.
+  L22  Frentes com STATUS = Descontinuada são mantidas apenas como histórico arquitetural — códigos preservados e não reutilizados.
+
+======================================================================
+ABA REDE
+======================================================================
+  L2  Lógica da rede de atividades — estrutura criada na FASE 02; aguarda modelagem.
+  L3  ID ELO | PREDECESSORA | SUCESSORA | TIPO DE RELAÇÃO | DEFASAGEM | ORIGEM DA REGRA | LÓGICA
+  L4  REDE-001 | PLAN-001 | ALV-ATV2 | FS | 3 | R1: precedente explicito do legado | Precedente explicito: PLAN-001 precede ALV-ATV2.
+  L5  REDE-002 | EST-ATV3 | CON-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: EST-ATV3 precede CON-ATV.
+  L6  REDE-003 | EST-ATV2 | ELE-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: EST-ATV2 precede ELE-ATV.
+  L7  REDE-004 | ALV-ATV2 | ESQ-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: ALV-ATV2 precede ESQ-ATV.
+  L8  REDE-005 | FUN-ATV | EST-ATV1 | FS | 3 | R1: precedente explicito do legado | Precedente explicito: FUN-ATV precede EST-ATV1.
+  L9  REDE-006 | EST-ATV1 | EST-ATV2 | FS | 3 | R1: precedente explicito do legado | Precedente explicito: EST-ATV1 precede EST-ATV2.
+  L10  REDE-007 | EST-ATV2 | EST-ATV3 | FS | 3 | R1: precedente explicito do legado | Precedente explicito: EST-ATV2 precede EST-ATV3.
+  L11  REDE-008 | LOC-ATV | FUN-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: LOC-ATV precede FUN-ATV.
+  L12  REDE-009 | EST-ATV2 | HID-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: EST-ATV2 precede HID-ATV.
+  L13  REDE-010 | EST-ATV3 | IMP-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: EST-ATV3 precede IMP-ATV.
+  L14  REDE-011 | REV-ATV2 | PIN-ATV | FS | 3 | R1: precedente explicito do legado | Precedente explicito: REV-ATV2 precede PIN-ATV.
+  L15  REDE-012 | EST-ATV2 | PLAN-001 | FS | 59 | R1-SUBST: precedente explicito do legado herdado pelo substituto PLAN-001 | Precedente explicito: EST-ATV2 precede PLAN-001.
+  L20  REDE-017 | PLAN-001 | REV-ATV1 | FS | 0 | R1: precedente explicito do legado | Precedente explicito: PLAN-001 precede REV-ATV1.
+  L21  REDE-018 | ALV-ATV2 | REV-ATV2 | FS | 0 | R1: precedente explicito do legado | Precedente explicito: ALV-ATV2 precede REV-ATV2.
+
+======================================================================
+ABA LINHA DE BALANÇO
+======================================================================
+  L1  ARES — LINHA DE BALANÇO PROFISSIONAL (MODELO PADRÃO)
+  L2  TEMPO na HORIZONTAL → · SERVIÇOS na VERTICAL ↓ · datas do cabeçalho rotacionadas 90° · FONTE: tbPlanejamentoLegado + CADASTRO (obra 05/01/2026 → 30/06/2027) · HOJE destacado (TODAY()).
+  L4  05/01/yyyy | 30/06/yyyy | 10/09/yyyy | 48% | 48% | 5 | 5 | 1 | SEM DADO | SEM DADO
+  L5  GRADE TEMPO × SERVIÇO — LINHA DE BALANÇO (obra completa) | COMO LER UMA LINHA DE BALANÇO
+  L10  LOCAÇÃO | Locação de obra | LOCAÇÃO | LOCAÇÃO | COMO O RITMO FUNCIONA
+  L15  CONTRAPISO | Contrapiso | CONTRAPISO | CONTRAPISO | CONTRAPISO | CONTRAPISO | CONTRAPISO | CONTRAPISO | CONTRAPISO | CONTRAPISO | CONTRAPISO | COMO IDENTIFICAR ATRASOS
+  L16  ELÉTRICAS | Instalações elétricas | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | ELÉTRICAS | Atividade com DATA_FIM < HOJE e %REAL < 100% é candidata a atraso (lógica do legado).
+  L17  HIDRÁULICAS | Instalações hidráulicas | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | HIDRÁULICAS | O status 'atrasado' já existe no tbPlanejamentoLegado (CON-ATV).
+  L20  ESQUADRIAS | Esquadrias | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | ESQUADRIAS | COMO IDENTIFICAR CONFLITOS
+  L22  LEGENDA | HOJE: SEM DADO — critério e buffer ainda não definidos (GAP).
+  L25  ■ | ESTRUTURA (Estrutura) | PLANEJADO: faixas derivadas de INÍCIO/FIM do tbPlanejamentoLegado.
+  L26  ■ | ALVENARIA (Alvenaria) | REALIZADO: %REAL do legado (dado real da obra). Onde não houver dado: SEM DADO (nunca 0).
+  L28  ■ | CONTRAPISO (Contrapiso) | NÃO CONFUNDIR RITMO COM DURAÇÃO
+  L31  ■ | IMPERMEABILIZAÇÃO (Impermeabilização) | Produtividade do legado (unidade/dia) não é ritmo.
+  L34  ■ | Borda azul = HOJE (coluna da data atual, automática) | TODAS as visões derivam do PLANEJAMENTO (novo + legado).
+  L35  PLANEJADO = faixa colorida (período ativo real do legado) · REALIZADO = %REAL/STATUS no legado · SEM DADO onde não houver fonte. | GANTT: quando. LOB: como avança. CPM: folgas (futuro). REDE: precedências.
+  L37  FONTE DOS DADOS
+  L38  tbPlanejamentoLegado (A4:O19): 15 atividades reais com INÍCIO/FIM/%/STATUS.
+  L41  EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L42  O tbPlanejamento novo (PLAN-001..003) é EXEMPLO PEDAGÓGICO — não misturar com o legado real.
+  L43  A LOB FINAL usa o LEGADO (dados reais) nas faixas; os exemplos ficam na tabela estruturada.
+  L49  5. Como interpretar a inclinação/duração
+  L51  7. Como identificar atraso
+  L52  8. Como identificar conflito
+  L54  10. Onde alterar o prazo
+  L55  11. Por que a LOB não deve possuir datas independentes
+
+======================================================================
+ABA CAMINHO CRÍTICO
+======================================================================
+  L2  Cálculo de caminho crítico/folgas — estrutura criada na FASE 02; aguarda modelagem.
+
+======================================================================
+ABA GANTT
+======================================================================
+  L1  ARES — CRONOGRAMA GANTT (MODELO PADRÃO)
+
+======================================================================
+ABA RECURSOS
+======================================================================
+  L2  RECURSO = o que é necessário para executar um SERVIÇO. EQUIPE = composição de recursos. FRENTE ≠ EQUIPE ≠ RECURSO ≠ CONTRATADA. Nenhum dado real inventado; exemplos marcados como pedagógicos.
+  L4  RECURSO-001 | Pedreiro | MÃO DE OBRA | h | Ativo | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L5  RECURSO-002 | Servente | MÃO DE OBRA | h | Ativo | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L6  RECURSO-003 | Betoneira | EQUIPAMENTO | h | Ativo | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L7  RECURSO-004 | Cimento | MATERIAL | kg | Ativo | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L8  RECURSO-005 | Argamassa | MATERIAL | m³ | Ativo | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L11  EQUIPE-004 | RECURSO-001 | 2 | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L12  EQUIPE-004 | RECURSO-002 | 1 | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L13  EQUIPE-003 | RECURSO-003 | 1 | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L14  EQUIPE-011 | RECURSO-005 | 1 | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L17  SERVICO-002 | RECURSO-001 | h | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L18  SERVICO-002 | RECURSO-002 | h | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L19  SERVICO-002 | RECURSO-004 | kg | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L20  SERVICO-005 | RECURSO-005 | m³ | EXEMPLO PEDAGÓGICO — NÃO É DADO REAL DA OBRA
+  L21  COMO MONTAR UM RECURSO NO ARES
+  L23  2 — Gere/obtenha o RECURSO_ID (RECURSO-xxx, gerado automaticamente — nunca reutilize código de outra entidade).
+  L26  5 — Registre CUSTO_UNITARIO somente quando houver fonte (nunca inventar).
+  L31  10 — Verifique a rastreabilidade: sempre referencie por ID (RECURSO_ID, EQUIPE_ID, SERVICO_ID).
+  L32  COMO LER UM RECURSO
+  L36  LOCAL = onde será executado (CADASTRO).
+  L42  DADOS LEGADOS DO MODELO ANTERIOR (MÃO DE OBRA) — PRESERVADOS SEM MIGRAÇÃO
+  L43  Classificação: LEGADO/PEDAGÓGICO — sem fonte comprovada de dados reais; NÃO vinculados aos novos RECURSOS. Preservados para rastreabilidade. Não remapeados automaticamente.
+  L44  ARES — MÃO DE OBRA (MODELO PADRÃO)
+  L45  Efetivo e produtividade por equipe — derivado dos registros de produção
+
+======================================================================
+ABA PRODUÇÃO
+======================================================================
+  L1  ARES — PRODUÇÃO (MODELO PADRÃO)
+
+======================================================================
+ABA MEDIÇÃO
+======================================================================
+  L1  ARES — MEDIÇÃO (MODELO PADRÃO)
+  L20  Nota: a medição reconhece financeiramente o que foi executado. Valores acumulados são derivados dos registros de medição.
+
+======================================================================
+ABA CONTROLE
+======================================================================
+  L2  Acompanhamento planejado vs realizado — estrutura criada na FASE 02; aguarda modelagem.
+
+======================================================================
+ABA INDICADORES
+======================================================================
+  L1  ARES — INDICADORES (MODELO PADRÃO)
+
+======================================================================
+ABA GRÁFICOS
+======================================================================
+  L1  ARES — GRÁFICOS (MODELO PADRÃO)
+  L2  Gráficos ligados aos dados (título, fonte, unidade e legenda identificados)
+  L50  Fonte geral: séries derivadas do domínio (planejamento, produção e medição) — abas SERVIÇOS, INDICADORES e DASHBOARD.
+
+======================================================================
+ABA FÓRMULAS
+======================================================================
+  L1  ARES — FÓRMULAS (MODELO PADRÃO)
+  L2  Referência documental das fórmulas do modelo — texto explicativo, não código
+  L3  NOME | FÓRMULA | DESCRIÇÃO | ENTRADAS | SAÍDA | UNIDADE | ONDE É UTILIZADA
+  L12  Avanço planejado | %Plan = Σ(Qi × %Pli) / ΣQi | Avanço previsto do serviço ponderado pelas quantidades das atividades vinculadas. | Qi (quantidade da atividade), %Pli (% planejado da atividade) | % planejado | % | INDICADORES · GRÁFICOS
+  L14  Nota: as fórmulas são documentais (texto explicativo). Os valores das abas são calculados pelo domínio (PlanningEngine, ProductionStore e view-model) — não por fórmulas do Excel.
+
+======================================================================
+ABA CONFIGURAÇÕES
+======================================================================
+  L2  Parâmetros globais do sistema — vazio na FASE 02 (nada definido ainda).
+  L39  ESPECIAL | COMPONENTE | % | FONTE | OBSERVAÇÃO
+  L47  CONCLUÍDO | BDI_TOTAL (composto TCU) | 0 | Fórmula TCU: [(1+AC)(1+S)(1+G)(1+R)(1+DF)(1+L)/(1−T)]−1 | Percentuais somente com fonte. Vazio = 0 (PENDENTE).

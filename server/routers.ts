@@ -32,7 +32,8 @@ import {
   calendarExceptions,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
-import { defaultCalendar, elapsedWorkingDays, indexOf, type WorkCalendar, type DayType, type WeekPattern } from "@shared/work-calendar";
+import { elapsedWorkingDays, indexOf } from "@shared/work-calendar";
+import { carregarCalendarioDaObra, localIso } from "./construction/calendario-obra";
 import {
   lerPrimeiraAba,
   reconhecerPlanilhaSeinfra,
@@ -3102,43 +3103,17 @@ export const appRouter = router({
         // (asOf - plannedStart) / 86400000 daria um numero que nao
         // bate com o indice do CPM sempre que houver feriado ou
         // fim de semana no meio.
-        // Tenta o calendario do projeto (work_calendars); se nao
-        // existir, usa o padrao BR 5x2 derivado do ano de plannedStart.
-        const year = project?.plannedStart
-          ? project.plannedStart.getFullYear()
-          : asOf.getFullYear();
-        let calendar: WorkCalendar = defaultCalendar(year);
-        try {
-          const [wc] = await db
-            .select()
-            .from(workCalendars)
-            .where(eq(workCalendars.projectId, input.projectId))
-            .limit(1);
-          if (wc) {
-            const wp = JSON.parse(
-              typeof wc.weekPattern === "string"
-                ? wc.weekPattern
-                : JSON.stringify(wc.weekPattern)
-            ) as WeekPattern;
-            const exRows = await db
-              .select()
-              .from(calendarExceptions)
-              .where(eq(calendarExceptions.calendarId, wc.id))
-              .orderBy(calendarExceptions.date);
-            calendar = {
-              weekPattern: wp,
-              exceptions: exRows.map(e => ({
-                date: e.date,
-                type: e.type as DayType,
-                name: e.name ?? undefined,
-              })),
-            };
-          }
-        } catch {
-          // calendario malformado — mantem o padrao
-        }
-        const localIso = (d: Date) =>
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        // O calendario vem do helper unico. A copia anterior deste bloco
+        // existia aqui e em `calculateCpm`, e divergiam: esta lia o banco, a
+        // outra nao. Duas copias do mesmo dado eo principio de fonte unica
+        // ja quebrado na origem.
+        const { calendar } = await carregarCalendarioDaObra(
+          db,
+          input.projectId,
+          project?.plannedStart
+            ? project.plannedStart.getFullYear()
+            : asOf.getFullYear()
+        );
         const startIso = project?.plannedStart
           ? localIso(project.plannedStart)
           : localIso(asOf);
@@ -3182,18 +3157,52 @@ export const appRouter = router({
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
 
-        const year = project?.plannedStart ? project.plannedStart.getFullYear() : new Date().getFullYear();
+        const ano = project?.plannedStart
+          ? project.plannedStart.getFullYear()
+          : new Date().getFullYear();
 
-        const calendar = defaultCalendar(year);
+        // O calendario e DADO DA OBRA. Este era o segundo bug: a procedure
+        // montava `defaultCalendar(ano)` e ignorava `work_calendars`, que
+        // existe no banco, tem migration e nao tinha consumidor aqui. Obra que
+        // trabalha sabado, ou que para no feriado da prefeitura, recebia
+        // cronograma de 5x2 sem nenhum aviso.
+        const {
+          calendar,
+          origem: origemCalendario,
+          nome: nomeCalendario,
+        } = await carregarCalendarioDaObra(db, input.projectId, ano);
 
-        const localIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const startIso = project?.plannedStart
+          ? localIso(project.plannedStart)
+          : localIso(new Date());
 
-        const startIso = project?.plannedStart ? localIso(project.plannedStart) : localIso(new Date());
+        // E este era o primeiro: as restricoes eram convertidas para indice de
+        // dia util e a lista ORIGINAL seguia para o CPM. `mustStartOn` e
+        // `finishNoLaterThan` existiam no schema, a tela os oferecia, o calculo
+        // rodava - e o resultado ia para o lixo. Restricao inexistente, sem
+        // erro e sem aviso.
+        const enrichedActivities = activities.map(a => ({
+          ...a,
+          mustStartOnDay: a.mustStartOn
+            ? indexOf(calendar, startIso, localIso(a.mustStartOn))
+            : undefined,
+          finishNoLaterThanDay: a.finishNoLaterThan
+            ? indexOf(calendar, startIso, localIso(a.finishNoLaterThan))
+            : undefined,
+        }));
 
-        const enrichedActivities = activities.map(a => ({ ...a, mustStartOnDay: a.mustStartOn ? indexOf(calendar, startIso, localIso(a.mustStartOn)) : undefined, finishNoLaterThanDay: a.finishNoLaterThan ? indexOf(calendar, startIso, localIso(a.finishNoLaterThan)) : undefined }));
-
-        const result = calculateDeterministicCpm(activities, dependencies);
-        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], infeasibleActivities: [] as number[], issues: result.issues, infeasible: result.infeasible };
+        const result = calculateDeterministicCpm(enrichedActivities, dependencies);
+        if (!result.valid || !result.schedule) {
+          return {
+            valid: false as const,
+            projectDuration: 0,
+            criticalPath: [] as number[],
+            infeasibleActivities: [] as number[],
+            issues: result.issues,
+            infeasible: result.infeasible,
+            calendario: { origem: origemCalendario, nome: nomeCalendario },
+          };
+        }
         const calculatedAt = new Date();
         const schedule = result.schedule;
         const items = schedule.activities;
@@ -3224,7 +3233,25 @@ export const appRouter = router({
             `);
           });
         }
-        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), infeasible: result.infeasible, infeasibleActivities: result.schedule.infeasibleActivities.map(Number), issues: result.issues };
+        return {
+          valid: true as const,
+          projectDuration: result.schedule.projectDuration,
+          criticalPath: result.schedule.criticalPath.map(Number),
+          infeasible: result.infeasible,
+          infeasibleActivities: result.schedule.infeasibleActivities.map(Number),
+          issues: result.issues,
+          calendario: { origem: origemCalendario, nome: nomeCalendario },
+          // Quantas atividades TINHAM restricao e quantas receberam indice de
+          // dia util utilizavel. Divergencia entre os dois significa que a
+          // restricao aponta para fora do calendario - antes isso era
+          // silencioso, agora vira numero que a tela mostra.
+          restricoes: {
+          declaradas: activities.filter(a => a.mustStartOn || a.finishNoLaterThan).length,
+            aplicadas: enrichedActivities.filter(
+              a => a.mustStartOnDay !== undefined || a.finishNoLaterThanDay !== undefined
+            ).length,
+          },
+        };
       }),
     createResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(180), resourceType: z.enum(["mao_de_obra", "equipamento", "material"]), unit: z.string().trim().min(1).max(32), capacityPerDay: z.number().positive().optional(), costPerDay: z.number().nonnegative().optional() }))

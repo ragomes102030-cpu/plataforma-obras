@@ -1,0 +1,452 @@
+TABELAS: 33
+
+========================================================================
+users   (export users, linha 17)
+  PK: (id autoincrement)
+
+========================================================================
+projects   (export projects, linha 29)
+  PK: (id autoincrement)
+
+========================================================================
+project_mcp_integrations   (export projectMcpIntegrations, linha 55)
+  PK: id
+  INDEX: project_mcp_integrations_project_idx (table.projectId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    provider: mysqlEnum("provider", [
+    externalProjectId: varchar("externalProjectId", { length: 180 })
+    endpointUrl: varchar("endpointUrl", { length: 500 }).notNull()
+    syncState: mysqlEnum("syncState", [
+    lastSyncedAt: timestamp("lastSyncedAt")
+    lastError: text("lastError")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+agent_decisions   (export agentDecisions, linha 91)
+  PK: id
+  INDEX: agent_decisions_project_idx (table.projectId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    userId: int("userId")
+    stage: varchar("stage", { length: 50 }).notNull()
+    decision: mysqlEnum("decision", [
+    scopeJson: text("scopeJson").notNull()
+    reason: text("reason")
+    impactJson: text("impactJson")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+
+========================================================================
+project_plan_versions   (export projectPlanVersions, linha 122)
+  PK: id
+  FK: baseVersionId -> ?, decisionId -> id, createdBy -> id
+  INDEX: project_plan_versions_project_idx (table.projectId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    versionNumber: int("versionNumber").notNull()
+    status: mysqlEnum("status", ["draft", "proposed", "approved", "superseded"])
+    baseVersionId: int("baseVersionId").references(
+    decisionId: int("decisionId").references(() => agentDecisions.id)
+    approvedAt: timestamp("approvedAt")
+    notes: text("notes")
+    createdBy: int("createdBy").references(() => users.id)
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+mcp_mutation_operations   (export mcpMutationOperations, linha 152)
+  PK: id
+  INDEX: mcp_mutation_operations_project_idx (table.projectId); mcp_mutation_operations_user_idx (table.userId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    userId: int("userId")
+    provider: mysqlEnum("provider", [
+    toolName: varchar("toolName", { length: 100 }).notNull()
+    externalProjectId: varchar("externalProjectId", { length: 180 }).notNull()
+    idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull()
+    confirmationToken: varchar("confirmationToken", { length: 64 }).notNull()
+    argsJson: text("argsJson").notNull()
+    resultJson: text("resultJson")
+    error: text("error")
+    status: mysqlEnum("status", [
+    confirmedAt: timestamp("confirmedAt")
+    executedAt: timestamp("executedAt")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+mcp_homologation_runs   (export mcpHomologationRuns, linha 198)
+  PK: id
+  INDEX: mcp_homologation_runs_project_idx (table.projectId); mcp_homologation_runs_user_idx (table.userId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    userId: int("userId")
+    requestId: varchar("requestId", { length: 128 }).notNull()
+    status: mysqlEnum("status", [
+    planJson: text("planJson").notNull()
+    readOnlyResultJson: text("readOnlyResultJson")
+    reconciliationJson: text("reconciliationJson")
+    error: text("error")
+    startedAt: timestamp("startedAt")
+    finishedAt: timestamp("finishedAt")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+schedule_activities   (export scheduleActivities, linha 234)
+  PK: id
+  FK: versionId -> id
+  INDEX: schedule_activities_project_idx (table.projectId); schedule_activities_plan_version_idx (table.versionId); schedule_activities_wbs_node_idx (table.wbsNodeId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    wbsNodeId: int("wbsNodeId")
+    externalId: varchar("externalId", { length: 180 })
+    eapRef: varchar("eapRef", { length: 180 })
+    wbsCode: varchar("wbsCode", { length: 32 }).notNull()
+    name: varchar("name", { length: 220 }).notNull()
+    phase: varchar("phase", { length: 80 }).notNull()
+    startOffset: int("startOffset").notNull()
+    durationDays: int("durationDays").notNull()
+    plannedQuantity: decimal("plannedQuantity", { precision: 14, scale: 3 })
+    productivity: decimal("productivity", { precision: 14, scale: 3 })
+    budgetItemId: int("budgetItemId")
+    progress: int("progress").default(0).notNull()
+    status: mysqlEnum("status", [
+    critical: int("critical").default(0).notNull()
+    earlyStart: int("earlyStart")
+    earlyFinish: int("earlyFinish")
+    lateStart: int("lateStart")
+    lateFinish: int("lateFinish")
+    totalFloat: int("totalFloat")
+    freeFloat: int("freeFloat")
+    mustStartOn: timestamp("mustStartOn")
+    finishNoLaterThan: timestamp("finishNoLaterThan")
+    cpmCalculatedAt: timestamp("cpmCalculatedAt")
+    versionId: int("versionId").references(() => projectPlanVersions.id)
+    sortOrder: int("sortOrder").default(0).notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+wbs_nodes   (export wbsNodes, linha 289)
+  PK: id
+  FK: parentId -> ?, versionId -> id
+  INDEX: wbs_nodes_project_idx (table.projectId); wbs_nodes_plan_version_idx (table.versionId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    externalId: varchar("externalId", { length: 180 })
+    externalUid: varchar("externalUid", { length: 180 })
+    parentId: int("parentId").references((): AnyMySqlColumn => wbsNodes.id, {
+    onDelete: "restrict"
+    code: varchar("code", { length: 32 }).notNull()
+    name: varchar("name", { length: 220 }).notNull()
+    level: int("level").default(1).notNull()
+    nodeType: mysqlEnum("nodeType", ["grupo", "pacote", "entrega"])
+    unit: varchar("unit", { length: 32 })
+    plannedQuantity: int("plannedQuantity")
+    versionId: int("versionId").references(() => projectPlanVersions.id)
+    sortOrder: int("sortOrder").default(0).notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+schedule_dependencies   (export scheduleDependencies, linha 328)
+  PK: id
+  FK: versionId -> id
+  INDEX: schedule_dependencies_plan_version_idx (table.versionId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    externalId: varchar("externalId", { length: 180 })
+    predecessorId: int("predecessorId")
+    successorId: int("successorId")
+    type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull()
+    lag: int("lag").default(0).notNull()
+    versionId: int("versionId").references(() => projectPlanVersions.id)
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+
+========================================================================
+planning_resources   (export planningResources, linha 356)
+  PK: (id autoincrement)
+
+========================================================================
+activity_resource_allocations   (export activityResourceAllocations, linha 369)
+  PK: id
+  UNIQUE: activity_resource_unique_idx (table.activityId, table.resourceId)
+  INDEX: activity_resource_activity_idx (table.activityId)
+    id: int("id").autoincrement().primaryKey()
+    activityId: int("activityId").notNull()
+    resourceId: int("resourceId").notNull()
+    quantity: decimal("quantity", { precision: 14, scale: 3 }).default("1").notNull()
+    productivity: decimal("productivity", { precision: 14, scale: 3 })
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+
+========================================================================
+schedule_baselines   (export scheduleBaselines, linha 388)
+  PK: (id autoincrement)
+
+========================================================================
+schedule_baseline_items   (export scheduleBaselineItems, linha 397)
+  PK: id
+  FK: baselineId -> id, activityId -> id
+  UNIQUE: schedule_baseline_activity_idx (table.baselineId, table.activityId)
+  INDEX: schedule_baseline_items_baseline_idx (table.baselineId)
+    id: int("id").autoincrement().primaryKey()
+    baselineId: int("baselineId").notNull().references(() => scheduleBaselines.id)
+    activityId: int("activityId").notNull().references(() => scheduleActivities.id)
+    startOffset: int("startOffset").notNull()
+    durationDays: int("durationDays").notNull()
+    earlyStart: int("earlyStart")
+    earlyFinish: int("earlyFinish")
+
+========================================================================
+production_fronts   (export productionFronts, linha 414)
+  PK: (id autoincrement)
+
+========================================================================
+production_teams   (export productionTeams, linha 429)
+  PK: (id autoincrement)
+
+========================================================================
+production_units   (export productionUnits, linha 442)
+  PK: (id autoincrement)
+
+========================================================================
+production_entries   (export productionEntries, linha 454)
+  PK: (id autoincrement)
+
+========================================================================
+budget_versions   (export budgetVersions, linha 483)
+  PK: id
+  FK: createdBy -> id
+  INDEX: budget_versions_project_idx (table.projectId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    name: varchar("name", { length: 160 }).notNull()
+    versionNumber: int("versionNumber").notNull()
+    status: mysqlEnum("status", ["rascunho", "em_revisao", "aprovado", "arquivado"])
+    currency: varchar("currency", { length: 3 }).default("BRL").notNull()
+    notes: text("notes")
+    createdBy: int("createdBy").references(() => users.id)
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+budget_items   (export budgetItems, linha 510)
+  PK: id
+  FK: wbsNodeId -> id
+  INDEX: budget_items_version_idx (table.budgetVersionId)
+    id: int("id").autoincrement().primaryKey()
+    budgetVersionId: int("budgetVersionId")
+    wbsNodeId: int("wbsNodeId").references(() => wbsNodes.id)
+    code: varchar("code", { length: 48 }).notNull()
+    description: varchar("description", { length: 240 }).notNull()
+    unit: varchar("unit", { length: 32 }).notNull()
+    quantity: decimal("quantity", { precision: 14, scale: 3 }).notNull()
+    unitPrice: decimal("unitPrice", { precision: 14, scale: 2 }).notNull()
+    compositionId: int("compositionId")
+    compositionUnitCost: decimal("compositionUnitCost", { precision: 14, scale: 2 })
+    productivity: decimal("productivity", { precision: 14, scale: 3 })
+    plannedDurationDays: int("plannedDurationDays")
+    source: varchar("source", { length: 80 })
+    referencePeriod: varchar("referencePeriod", { length: 20 })
+    compositionNote: text("compositionNote")
+    isPriceException: boolean("isPriceException").default(false).notNull()
+    sortOrder: int("sortOrder").default(0).notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+price_catalogs   (export priceCatalogs, linha 544)
+  PK: id
+  FK: createdBy -> id
+  INDEX: price_catalogs_reference_idx (table.referencePeriod)
+    id: int("id").autoincrement().primaryKey()
+    name: varchar("name", { length: 160 }).notNull()
+    sourceType: mysqlEnum("sourceType", ["propria", "SINAPI", "SEINFRA", "fornecedor"])
+    state: varchar("state", { length: 2 })
+    referencePeriod: varchar("referencePeriod", { length: 20 }).notNull()
+    status: mysqlEnum("status", ["ativo", "arquivado"]).default("ativo").notNull()
+    notes: text("notes")
+    createdBy: int("createdBy").references(() => users.id)
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+price_items   (export priceItems, linha 562)
+  PK: id
+  UNIQUE: price_items_catalog_code_idx (table.catalogId, table.code)
+  INDEX: price_items_catalog_idx (table.catalogId)
+    id: int("id").autoincrement().primaryKey()
+    catalogId: int("catalogId")
+    code: varchar("code", { length: 64 }).notNull()
+    description: varchar("description", { length: 240 }).notNull()
+    unit: varchar("unit", { length: 32 }).notNull()
+    itemType: mysqlEnum("itemType", ["material", "mao_de_obra", "equipamento", "servico"])
+    unitPrice: decimal("unitPrice", { precision: 14, scale: 2 }).notNull()
+    notes: text("notes")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+service_compositions   (export serviceCompositions, linha 585)
+  PK: id
+  FK: sourceCatalogId -> id, createdBy -> id
+  UNIQUE: service_compositions_code_idx (table.code)
+  INDEX: service_compositions_source_idx (table.sourceCatalogId)
+    id: int("id").autoincrement().primaryKey()
+    code: varchar("code", { length: 64 }).notNull()
+    description: varchar("description", { length: 240 }).notNull()
+    unit: varchar("unit", { length: 32 }).notNull()
+    sourceCatalogId: int("sourceCatalogId").references(() => priceCatalogs.id)
+    referencePeriod: varchar("referencePeriod", { length: 20 })
+    status: mysqlEnum("status", ["rascunho", "validada", "arquivada"])
+    createdBy: int("createdBy").references(() => users.id)
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+composition_components   (export compositionComponents, linha 607)
+  PK: id
+  INDEX: composition_components_composition_idx (table.compositionId)
+    id: int("id").autoincrement().primaryKey()
+    compositionId: int("compositionId")
+    priceItemId: int("priceItemId")
+    componentType: mysqlEnum("componentType", ["material", "mao_de_obra", "equipamento"])
+    coefficient: decimal("coefficient", { precision: 14, scale: 6 }).notNull()
+    unitPriceSnapshot: decimal("unitPriceSnapshot", { precision: 14, scale: 2 }).notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+
+========================================================================
+llm_provider_settings   (export llmProviderSettings, linha 632)
+  PK: (id autoincrement)
+
+========================================================================
+agent_project_states   (export agentProjectStates, linha 640)
+  PK: id
+  UNIQUE: agent_project_states_project_idx (table.projectId)
+  INDEX: agent_project_states_stage_idx (table.stage)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    stage: mysqlEnum("stage", [
+    activeSection: varchar("activeSection", { length: 40 })
+    activeSubtab: varchar("activeSubtab", { length: 40 })
+    blockerCount: int("blockerCount").default(0).notNull()
+    lastSummary: text("lastSummary")
+    version: int("version").default(1).notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+agent_findings   (export agentFindings, linha 677)
+  PK: id
+  FK: resolvedBy -> id
+  INDEX: agent_findings_project_idx (table.projectId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    stage: varchar("stage", { length: 50 }).notNull()
+    classification: mysqlEnum("classification", [
+    entityType: varchar("entityType", { length: 50 }).notNull()
+    entityRef: varchar("entityRef", { length: 180 })
+    sourceJson: text("sourceJson").notNull()
+    originalValueJson: text("originalValueJson")
+    proposedValueJson: text("proposedValueJson")
+    description: text("description").notNull()
+    impact: text("impact")
+    confidence: mysqlEnum("confidence", ["high", "medium", "low"])
+    status: mysqlEnum("status", [
+    resolvedAt: timestamp("resolvedAt")
+    resolvedBy: int("resolvedBy").references(() => users.id)
+    resolutionNote: text("resolutionNote")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+agent_memories   (export agentMemories, linha 724)
+  PK: id
+  FK: projectId -> id, approvedBy -> id
+  INDEX: agent_memories_project_idx (table.projectId); agent_memories_owner_scope_idx (table.ownerUserId, table.scope); agent_memories_status_idx (table.status)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId").references(() => projects.id)
+    ownerUserId: int("ownerUserId")
+    scope: mysqlEnum("scope", ["project", "client", "library"]).notNull()
+    category: varchar("category", { length: 80 }).notNull()
+    memoryKey: varchar("memoryKey", { length: 180 }).notNull()
+    valueJson: text("valueJson").notNull()
+    sourceType: varchar("sourceType", { length: 80 }).notNull()
+    sourceRef: varchar("sourceRef", { length: 180 })
+    confidence: mysqlEnum("confidence", ["high", "medium", "low"])
+    status: mysqlEnum("status", [
+    approvedBy: int("approvedBy").references(() => users.id)
+    approvedAt: timestamp("approvedAt")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+agent_runs   (export agentRuns, linha 761)
+  PK: id
+  INDEX: agent_runs_project_idx (table.projectId); agent_runs_user_idx (table.userId); agent_runs_status_idx (table.status)
+    id: int("id").autoincrement().primaryKey()
+    requestId: varchar("requestId", { length: 128 }).notNull().unique()
+    projectId: int("projectId")
+    userId: int("userId")
+    status: mysqlEnum("status", [
+    currentStep: varchar("currentStep", { length: 120 })
+    provider: varchar("provider", { length: 80 })
+    model: varchar("model", { length: 160 })
+    contextJson: text("contextJson").notNull()
+    resultJson: text("resultJson")
+    errorCode: varchar("errorCode", { length: 100 })
+    errorMessage: text("errorMessage")
+    iterations: int("iterations").default(0).notNull()
+    startedAt: timestamp("startedAt").defaultNow().notNull()
+    finishedAt: timestamp("finishedAt")
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+agent_run_events   (export agentRunEvents, linha 802)
+  PK: id
+  INDEX: agent_run_events_request_idx (table.requestId); agent_run_events_project_idx (table.projectId); agent_run_events_user_idx (table.userId)
+    id: int("id").autoincrement().primaryKey()
+    requestId: varchar("requestId", { length: 128 }).notNull()
+    projectId: int("projectId")
+    userId: int("userId")
+    eventType: varchar("eventType", { length: 80 }).notNull()
+    eventJson: text("eventJson").notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+
+========================================================================
+project_audit_events   (export projectAuditEvents, linha 824)
+  PK: id
+  FK: userId -> id
+  INDEX: project_audit_events_project_idx (table.projectId, table.action)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    userId: int("userId").references(() => users.id)
+    action: varchar("action", { length: 64 }).notNull()
+    payload: json("payload").notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+
+========================================================================
+work_calendars   (export workCalendars, linha 841)
+  PK: id
+  UNIQUE: work_calendars_projectId_unique (table.projectId)
+  INDEX: work_calendars_projectId_idx (table.projectId)
+    id: int("id").autoincrement().primaryKey()
+    projectId: int("projectId")
+    name: varchar("name", { length: 180 }).notNull()
+    weekPattern: json("weekPattern").notNull()
+    createdAt: timestamp("createdAt").defaultNow().notNull()
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+
+========================================================================
+calendar_exceptions   (export calendarExceptions, linha 859)
+  PK: id
+  INDEX: calendar_exceptions_calendarId_idx (table.calendarId); calendar_exceptions_date_idx (table.date)
+    id: int("id").autoincrement().primaryKey()
+    calendarId: int("calendarId")
+    date: varchar("date", { length: 10 }).notNull()
+    type: mysqlEnum("type", [
+    name: varchar("name", { length: 180 })
+    createdAt: timestamp("createdAt").defaultNow().notNull()

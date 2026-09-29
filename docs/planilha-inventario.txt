@@ -1,0 +1,45 @@
+arquivo: C:\Users\Correta Engenharia\Desktop\ARES_MODELO_EXCEL_NATIVO_MVP_LOB_PROFISSIONAL_FINAL_WORK.xlsx
+bytes: 164673
+abas: 19
+
+=== RESUMO POR ABA ===
+DASHBOARD                ref=A1:Z63         linhas=   47 celulas=   193 formulas=     7
+CADASTRO                 ref=A1:Z249        linhas=  247 celulas=   967 formulas=     0
+EAP                      ref=A1:J92         linhas=   91 celulas=   601 formulas=    85
+ORÇAMENTO                ref=A1:AC62        linhas=   59 celulas=   346 formulas=   104
+SERVIÇOS                 ref=A1:M74         linhas=   72 celulas=   180 formulas=    55
+PLANEJAMENTO             ref=A1:Z55         linhas=   52 celulas=   389 formulas=   165
+FRENTES                  ref=A1:I45         linhas=   41 celulas=   214 formulas=    16
+REDE                     ref=A1:G22         linhas=   21 celulas=   135 formulas=     0
+LINHA DE BALANÇO         ref=A1:CD59        linhas=   55 celulas=   420 formulas=   944
+CAMINHO CRÍTICO          ref=A1:H4          linhas=    3 celulas=    10 formulas=     0
+GANTT                    ref=A1:BI23        linhas=   22 celulas=   173 formulas=     0
+RECURSOS                 ref=A1:T114        linhas=  101 celulas=   668 formulas=     0
+PRODUÇÃO                 ref=A1:Z49         linhas=   47 celulas=   491 formulas=   117
+MEDIÇÃO                  ref=A1:Z23         linhas=   20 celulas=   157 formulas=    81
+CONTROLE                 ref=A1:E4          linhas=    3 celulas=     7 formulas=     0
+INDICADORES              ref=A1:Z13         linhas=   11 celulas=    43 formulas=     6
+GRÁFICOS                 ref=A1:Z80         linhas=   50 celulas=   110 formulas=     5
+FÓRMULAS                 ref=A1:Z16         linhas=   14 celulas=    80 formulas=     0
+CONFIGURAÇÕES            ref=A1:I52         linhas=   50 celulas=    97 formulas=     1
+
+=== FUNCOES MAIS USADAS (toda a pasta) ===
+    1296  IF
+     860  SUMPRODUCT
+     217  TODAY
+     138  AND
+     120  ISBLANK
+     113  INDEX
+     113  MATCH
+     110  COUNTIFS
+      95  IFERROR
+      90  OR
+      78  WEEKNUM
+      72  SUMIF
+      60  ISNUMBER
+      36  SUMIFS
+      10  SUM
+       5  TEXT
+       3  COUNTIF
+       2  COUNTA
+       2  AVERAGE
