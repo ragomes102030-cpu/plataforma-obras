@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { trpc } from "@/lib/trpc";
 import {
   gradeDoCronograma,
   type EntradaDaLinha,
@@ -12,25 +13,39 @@ import { formatDate, type IsoDate, type WorkCalendar } from "@shared/work-calend
  *
  * COLUNAS A..M
  *
- * A letra da coluna e o numero da linha existem de verdade, e as posicoes
- * batem com a planilha de referencia: cabecalho na linha 4, dados a partir da
- * linha 5, A e B congeladas (`freeze_panes = "C5"` no arquivo). Quem conhece
- * planilha sabe usar esta tela, e a referencia "L14" funciona dos dois lados.
+ * A letra da coluna e o número da linha existem de verdade, e as posições batem
+ * com a planilha de referência: cabeçalho na linha 4, dados a partir da linha 5,
+ * A e B congeladas (`freeze_panes = "C5"` no arquivo).
  *
  * COLUNAS CINZA
  *
- * F, J, K, L e M são fórmula na planilha. Aqui chegam prontas do motor
- * (`shared/cronograma-colunas.ts`) e nao sao digitaveis. Se aparecer aritmetica
- * neste arquivo, e defeito: significa que a regra do backend foi contornada e
- * existem duas verdades sobre a mesma celula.
+ * F, J, K, L e M são fórmula na planilha e chegam prontas do motor
+ * (`shared/cronograma-colunas.ts`). Se aparecer aritmética neste arquivo, é
+ * defeito: existiriam duas verdades sobre a mesma célula.
+ *
+ * SALVAMENTO
+ *
+ * A célula é um input controlado local e grava sozinha depois de 600ms parado.
+ * Sem o atraso, cada tecla viraria uma mutation — a grade tem 84 linhas e a
+ * pessoa digita duração ou quantidade numa de cada vez. O input continua
+ * controlado pela linha para não perder o que está sendo digitado enquanto a
+ * resposta não volta.
+ *
+ * A data de início vai como DATA, e o backend converte para o índice de dias
+ * que o banco guarda. A conversão é do lado dele porque a leitura usa um
+ * calendário que a tela não conhece.
  */
 
 type Props = {
   obra: string;
+  projetoId: number;
   calendario: WorkCalendar;
   hoje: IsoDate;
   linhas: EntradaDaLinha[];
-  onEditar?: (codigo: string, campo: CampoEditavel, valor: string) => void;
+  /** `linha.codigo` -> id da atividade no banco. */
+  idPorCodigo: Map<string, number>;
+  /** Leva à aba EAP, de onde as folhas vêm. */
+  aoPedirEap?: () => void;
 };
 
 export type CampoEditavel =
@@ -53,15 +68,15 @@ type Coluna = {
 
 /** A..M, na ordem da planilha. A letra é o identificador da coluna na tela. */
 const COLUNAS: Coluna[] = [
-  { letra: "A", titulo: "Codigo", derivada: false, largura: 78, campo: undefined },
+  { letra: "A", titulo: "Codigo", derivada: true, largura: 78 },
   { letra: "B", titulo: "Atividade", derivada: false, largura: 300, campo: "atividade", tipo: "text" },
   { letra: "C", titulo: "Frente", derivada: false, largura: 120, campo: "frente", tipo: "text" },
   { letra: "D", titulo: "Pavimento", derivada: false, largura: 104, campo: "pavimento", tipo: "text" },
-  { letra: "E", titulo: "Inicio", derivada: false, largura: 100, campo: "inicio", tipo: "date" },
+  { letra: "E", titulo: "Inicio", derivada: false, largura: 108, campo: "inicio", tipo: "date" },
   { letra: "F", titulo: "Fim", derivada: true, largura: 100 },
   { letra: "G", titulo: "Duracao (d)", derivada: false, largura: 96, campo: "duracao", tipo: "number" },
   { letra: "H", titulo: "Quantidade", derivada: false, largura: 108, campo: "quantidade", tipo: "number" },
-  { letra: "I", titulo: "Unid", derivada: false, largura: 76, campo: "unidade", tipo: "text" },
+  { letra: "I", titulo: "Unid", derivada: false, largura: 80, campo: "unidade", tipo: "text" },
   { letra: "J", titulo: "Produtividade", derivada: true, largura: 118 },
   { letra: "K", titulo: "% Planej.", derivada: true, largura: 104 },
   { letra: "L", titulo: "% Real", derivada: true, largura: 104 },
@@ -69,7 +84,8 @@ const COLUNAS: Coluna[] = [
 ];
 
 /** A nota da linha 2 da planilha: as fórmulas, escritas por extenso. */
-const NOTA = "Duracao = (Fim - Inicio + 1)  ·  Produtividade = Quantidade / Duracao  ·  % Planej. = (Hoje - Inicio + 1) / Duracao  ·  % Real = Executado / Quantidade";
+const NOTA =
+  "Duracao = (Fim - Inicio + 1)  ·  Produtividade = Quantidade / Duracao  ·  % Planej. = (Hoje - Inicio + 1) / Duracao  ·  % Real = Executado / Quantidade";
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
@@ -103,17 +119,85 @@ function rotuloDoStatus(s: StatusDaLinha): string {
   }
 }
 
-export function GradeCronograma({ obra, calendario, hoje, linhas, onEditar }: Props) {
-  // A ordenacao e as cinco colunas derivadas saem do motor, nunca daqui.
+export function GradeCronograma({
+  obra,
+  projetoId,
+  calendario,
+  hoje,
+  linhas,
+  idPorCodigo,
+  aoPedirEap,
+}: Props) {
+  // A ordenação e as cinco colunas derivadas saem do motor, nunca daqui.
   const computadas = useMemo(
     () => gradeDoCronograma(calendario, hoje, linhas),
     [calendario, hoje, linhas]
   );
 
+  const utils = trpc.useUtils();
+  const salvar = trpc.planning.atualizarAtividade.useMutation({
+    onSuccess: async () => {
+      await utils.planning.grade.invalidate({ projectId: projetoId });
+    },
+  });
+
+  // Estado de edição: chave "id|campo" -> o que está na tela agora. Vive fora
+  // das linhas para não brigar com o refetch do motor.
+  const [rascunho, setRascunho] = useState<Record<string, string>>({});
+  const [erro, setErro] = useState<Record<string, string>>({});
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Se a mutation falhou, o valor na tela é mentira. Volta para o do banco.
+  useEffect(() => {
+    if (!salvar.isError) return;
+    const mensagem = salvar.error?.message ?? "Não foi possível gravar.";
+    setErro(antigo => ({ ...antigo, geral: mensagem }));
+    setRascunho({});
+  }, [salvar.isError, salvar.error]);
+
+  const agendarSalvar = useCallback(
+    (idAtividade: number, campo: CampoEditavel, valor: string) => {
+      const chave = `${idAtividade}|${campo}`;
+      setRascunho(antigo => ({ ...antigo, [chave]: valor }));
+      const anterior = timers.current.get(chave);
+      if (anterior) clearTimeout(anterior);
+      timers.current.set(
+        chave,
+        setTimeout(() => {
+          timers.current.delete(chave);
+          salvar.mutate({ projectId: projetoId, atividadeId: idAtividade, campo, valor });
+        }, 600)
+      );
+    },
+    [projetoId, salvar]
+  );
+
+  // Um timer pendente quando a pessoa sai da tela = tecla perdida.
+  useEffect(() => {
+    const mapa = timers.current;
+    return () => {
+      for (const t of mapa.values()) clearTimeout(t);
+      mapa.clear();
+    };
+  }, []);
+
   const totalColunas = COLUNAS.length;
+
+  if (computadas.length === 0) {
+    return <CronogramaVazio aoPedirEap={aoPedirEap} />;
+  }
 
   return (
     <div className="xl-folha-area">
+      {erro.geral && (
+        <div className="xl-aviso-erro" role="alert">
+          {erro.geral}
+          <button type="button" onClick={() => setErro({})}>
+            fechar
+          </button>
+        </div>
+      )}
+
       <table className="xl-folha">
         <colgroup>
           <col style={{ width: 42 }} />
@@ -123,7 +207,6 @@ export function GradeCronograma({ obra, calendario, hoje, linhas, onEditar }: Pr
         </colgroup>
 
         <thead>
-          {/* Linha 1 e 2: título e nota, como na planilha. */}
           <tr>
             <th className="xl-cab-titulo" colSpan={totalColunas + 1}>
               CRONOGRAMA DE OBRA — {obra}
@@ -137,7 +220,6 @@ export function GradeCronograma({ obra, calendario, hoje, linhas, onEditar }: Pr
           <tr className="xl-cab-vazio">
             <th colSpan={totalColunas + 1} />
           </tr>
-          {/* Linha 4: letra da coluna acima do nome. */}
           <tr className="xl-cab-linha">
             <th className="xl-canto" />
             {COLUNAS.map(c => (
@@ -164,39 +246,17 @@ export function GradeCronograma({ obra, calendario, hoje, linhas, onEditar }: Pr
         </thead>
 
         <tbody>
-          {computadas.length === 0 ? (
-            <tr>
-              <td className="xl-vazia" colSpan={totalColunas + 1}>
-                <strong>Nenhuma atividade no cronograma.</strong>
-                <span>
-                  A obra precisa de atividades. Elas nascem da EAP, quando o
-                  catálogo é importado — ou entram aqui uma a uma.
-                </span>
-              </td>
-            </tr>
-          ) : (
-            computadas.map((l, i) => (
-              <Linha key={l.codigo || `l${i}`} n={i + 5} linha={l} onEditar={onEditar} />
-            ))
-          )}
+          {computadas.map((l, i) => (
+            <Linha
+              key={l.codigo || `l${i}`}
+              n={i + 5}
+              linha={l}
+              idAtividade={idPorCodigo.get(l.codigo)}
+              rascunho={rascunho}
+              aoDigitar={agendarSalvar}
+            />
+          ))}
         </tbody>
-
-        {computadas.length > 0 && (
-          <tfoot>
-            <tr className="xl-total">
-              <td />
-              <td className="xl-total-rotulo">TOTAL</td>
-              <td colSpan={4} />
-              <td className="xl-total-num">
-                {num(
-                  computadas.reduce((s, l) => s + (l.quantidade ?? 0), 0),
-                  0
-                )}
-              </td>
-              <td colSpan={5} />
-            </tr>
-          </tfoot>
-        )}
       </table>
     </div>
   );
@@ -205,36 +265,42 @@ export function GradeCronograma({ obra, calendario, hoje, linhas, onEditar }: Pr
 function Linha({
   n,
   linha,
-  onEditar,
+  idAtividade,
+  rascunho,
+  aoDigitar,
 }: {
   n: number;
   linha: LinhaDoCronograma;
-  onEditar?: Props["onEditar"];
+  idAtividade: number | undefined;
+  rascunho: Record<string, string>;
+  aoDigitar: (id: number, campo: CampoEditavel, valor: string) => void;
 }) {
-  const celula = (indice: number) => COLUNAS[indice]!;
+  const c = (i: number) => COLUNAS[i]!;
+  const celula = (indice: number) => {
+    const coluna = c(indice);
+    const chave = `${idAtividade}|${coluna.campo}`;
+    const emEdicao = rascunho[chave];
+    return { coluna, valor: emEdicao ?? String(valorPadrao(indice, linha)) };
+  };
+
   return (
     <tr className={CLASSE_DO_STATUS[linha.status]}>
       <th className="xl-num" scope="row">
         {n}
       </th>
-      <td className="xl-codigo" title={linha.codigo}>
+      <td className="xl-codigo xl-calc" title="Código da folha na EAP">
         {linha.codigo}
       </td>
-      <Celula valor={linha.atividade} c={celula(1)} linha={linha} onEditar={onEditar} />
-      <Celula valor={linha.frente} c={celula(2)} linha={linha} onEditar={onEditar} />
-      <Celula valor={linha.pavimento ?? ""} c={celula(3)} linha={linha} onEditar={onEditar} />
-      <Celula valor={linha.inicio} c={celula(4)} linha={linha} onEditar={onEditar} />
+      <Celula {...celula(1)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
+      <Celula {...celula(2)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
+      <Celula {...celula(3)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
+      <Celula {...celula(4)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
       <td className="xl-calc" title="Início + Duração − 1">
         {formatDate(linha.fim)}
       </td>
-      <Celula valor={String(linha.duracao)} c={celula(6)} linha={linha} onEditar={onEditar} />
-      <Celula
-        valor={linha.quantidade == null ? "" : String(linha.quantidade)}
-        c={celula(7)}
-        linha={linha}
-        onEditar={onEditar}
-      />
-      <Celula valor={linha.unidade ?? ""} c={celula(8)} linha={linha} onEditar={onEditar} />
+      <Celula {...celula(6)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
+      <Celula {...celula(7)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
+      <Celula {...celula(8)} idAtividade={idAtividade} aoDigitar={aoDigitar} />
       <td className="xl-calc" title="Quantidade ÷ Duração">
         {linha.produtividade == null ? "—" : `${num(linha.produtividade, 2)} /dia`}
       </td>
@@ -257,33 +323,98 @@ function Linha({
   );
 }
 
+function valorPadrao(indice: number, l: LinhaDoCronograma): string | number {
+  switch (indice) {
+    case 1:
+      return l.atividade;
+    case 2:
+      return l.frente;
+    case 3:
+      return l.pavimento ?? "";
+    case 4:
+      return l.inicio;
+    case 6:
+      return String(l.duracao);
+    case 7:
+      return l.quantidade == null ? "" : String(l.quantidade);
+    case 8:
+      return l.unidade ?? "";
+    default:
+      return "";
+  }
+}
+
 function Celula({
+  coluna,
   valor,
-  c,
-  linha,
-  onEditar,
+  idAtividade,
+  aoDigitar,
 }: {
+  coluna: Coluna;
   valor: string;
-  c: Coluna;
-  linha: LinhaDoCronograma;
-  onEditar?: Props["onEditar"];
+  idAtividade: number | undefined;
+  aoDigitar: (id: number, campo: CampoEditavel, valor: string) => void;
 }) {
-  if (!c.campo) {
+  // Coluna derivada: não é input. E uma coluna sem `campo` não tem o que
+  // gravar.
+  if (coluna.derivada || !coluna.campo) {
     return (
-      <td className="xl-calc" title={c.titulo}>
+      <td className="xl-calc" title={coluna.titulo}>
         {valor}
       </td>
     );
   }
+
+  // Atividade sem id não existe no banco ainda: o input ficaria accepting
+  // digits that go nowhere, que é pior que não ser digitável.
+  if (idAtividade == null) {
+    return (
+      <td className="xl-calc" title="Esta linha ainda não está no cronograma">
+        {valor}
+      </td>
+    );
+  }
+
   return (
-    <td className="xl-digitavel" data-col={c.letra}>
+    <td className="xl-digitavel" data-col={coluna.letra}>
       <input
         className="xl-input"
         value={valor}
-        type={c.tipo === "text" ? "text" : (c.tipo ?? "text")}
-        title={`${c.letra} · ${c.titulo}`}
-        onChange={e => onEditar?.(linha.codigo, c.campo!, e.target.value)}
+        type={coluna.tipo === "text" ? "text" : (coluna.tipo ?? "text")}
+        title={`${coluna.letra} · ${coluna.titulo}`}
+        onChange={e => aoDigitar(idAtividade, coluna.campo!, e.target.value)}
       />
     </td>
+  );
+}
+
+/**
+ * Cronograma vazio.
+ *
+ * Diz o que fazer e não desenha grade vazia. A EAP é o que vem do catálogo; o
+ * cronograma é ato de planejamento, e começa com as folhas do usuário puxando
+ * para dentro dele.
+ */
+function CronogramaVazio({ aoPedirEap }: { aoPedirEap?: () => void }) {
+  return (
+    <div className="xl-vazia-folha">
+      <h3>O cronograma está vazio</h3>
+      <p className="xl-vazia-falta">
+        Isso é o estado certo, e não um defeito. A estrutura da obra vem do
+        catálogo de preços e já está na aba EAP. O prazo não vem: duração é
+        informada por quem planeja, e é por isso que esta aba nasce sem
+        nenhuma linha. Puxe as folhas da EAP para cá e informe início e
+        duração de cada uma.
+      </p>
+      <p className="xl-vazia-nota">
+        Nasce aqui também a diferença que importa: catálogo gera escopo, escopo
+        não gera prazo.
+      </p>
+      {aoPedirEap && (
+        <button type="button" className="eap-btn" onClick={aoPedirEap}>
+          Ir para a EAP
+        </button>
+      )}
+    </div>
   );
 }

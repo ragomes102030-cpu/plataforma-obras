@@ -246,9 +246,24 @@ export const scheduleActivities = mysqlTable(
     wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
     name: varchar("name", { length: 220 }).notNull(),
     phase: varchar("phase", { length: 80 }).notNull(),
+    /**
+     * Onde a atividade acontece dentro da frente: pavimento, bloco, setor,
+     * trecho. É a dimensão de LOCAL, e é ela que permite repetir o mesmo
+     * serviço em andares diferentes como linhas distintas do cronograma. Sem
+     * ela, "concreto do pavimento 3" e "concreto do pavimento 4" são a mesma
+     * linha, e a Linha de Balanço perde a repetição que existe em obra de
+     * vários pavimentos.
+     */
+    pavimento: varchar("pavimento", { length: 80 }),
     startOffset: int("startOffset").notNull(),
     durationDays: int("durationDays").notNull(),
     plannedQuantity: decimal("plannedQuantity", { precision: 14, scale: 3 }),
+    /**
+     * Unidade de medida do quantitativo, herdada da folha da EAP. Fica na
+     * atividade porque é ela que o % Real divide: "128 /dia" não significa
+     * nada sem saber se a unidade é m3, m2 ou un.
+     */
+    unit: varchar("unit", { length: 16 }),
     productivity: decimal("productivity", { precision: 14, scale: 3 }),
     budgetItemId: int("budgetItemId"),
     progress: int("progress").default(0).notNull(),

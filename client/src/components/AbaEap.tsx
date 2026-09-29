@@ -42,7 +42,70 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [aberto, setAberto] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
 
+  const utils = trpc.useUtils();
+  const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
+
+  /**
+   * Traz uma folha da EAP para o cronograma.
+   *
+   * A folha é o lugar natural de puxar a linha: é ela que tem o código oficial
+   * e a unidade, e é pelo código que o orçamento casa o preço. A atividade
+   * nasce com duração ZERO — prazo é informado por quem planeja, e a grade
+   * mostra "Não iniciado" até isso acontecer.
+   */
+  const trazer = trpc.planning.criarAtividadeDaFolha.useMutation({
+    onSuccess: async () => {
+      await recarregar();
+      await utils.planning.grade.invalidate({ projectId: projetoId });
+    },
+  });
+
+  // Quais folhas já viraram atividade. Vem do cronograma, e sem isso o botão
+  // ficaria ativo em linha que já está lá e o erro seria "já está no
+  // cronograma" — uma viagem de ida e volta para aprender o que a tela podia
+  // ter dito.
+  const grade = trpc.planning.grade.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const codigosNoCronograma = new Set(
+    (grade.data?.linhas ?? []).map((l: { codigo: string }) => l.codigo)
+  );
+  const jaNoCronograma = (codigo: string) => codigosNoCronograma.has(codigo);
+
+  /**
+   * Refazer a EAP do zero.
+   *
+   * Existe por causa de um estado sem saída que o botão "Gerar" produzia antes
+   * da transação: se uma gravação falhasse no meio, os nós ficavam gravados, a
+   * guarda de idempotência respondia "a obra já tem estrutura" para sempre, e
+   * o único botão que geraria a EAP era justamente o que recusava. Não havia
+   * rota, botão nem script que tirasse a obra de lá.
+   *
+   * Isto apaga o que a geração anterior gravou e refaz, na mesma transação.
+   * Apaga a árvore, as atividades e a versão de orçamento que o seeder criou —
+   * e nada mais: uma versão de orçamento criada à mão não é tocada.
+   */
+  const refazer = trpc.projects.generateEapFromCatalog.useMutation({
+    onSuccess: async () => {
+      await recarregar();
+      await utils.planning.grade.invalidate({ projectId: projetoId });
+    },
+  });
+
   const nos = (wbs.data ?? []) as No[];
+
+  // Erro visível das duas ações. Sem isto: clique, nada acontece, silêncio.
+  const [erro, setErro] = useState<string | null>(null);
+  useEffect(() => {
+    if (trazer.isError) setErro(trazer.error.message);
+  }, [trazer.isError, trazer.error]);
+  useEffect(() => {
+    if (refazer.isError) setErro(refazer.error.message);
+  }, [refazer.isError, refazer.error]);
+  useEffect(() => {
+    if (trazer.isSuccess || refazer.isSuccess) setErro(null);
+  }, [trazer.isSuccess, refazer.isSuccess]);
 
   // Os grupos de primeiro nível começam abertos. Uma EAP com tudo fechado
   // exige um clique por grupo antes de se ver qualquer serviço, e a EAP nasce
@@ -79,12 +142,41 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   return (
     <div className="eap">
+      {erro && (
+        <div className="xl-aviso-erro" role="alert">
+          {erro}
+          <button type="button" onClick={() => setErro(null)}>
+            fechar
+          </button>
+        </div>
+      )}
+
       <div className="eap-topo">
         <div>
           <h2>ESTRUTURA ANALÍTICA DA OBRA</h2>
           <p>
             {total} nós · {grupos} grupos · {folhas} folhas de serviço
           </p>
+        </div>
+        <div className="eap-topo-acoes">
+          <button
+            type="button"
+            className="eap-btn-secundario"
+            disabled={refazer.isPending}
+            title="Apaga a estrutura gerada e refaz a partir do catálogo. Atividades e versão de orçamento criadas à mão são preservadas."
+            onClick={() => {
+              const ok = window.confirm(
+                "Refazer a EAP?\n\n" +
+                  "A estrutura gerada pelo catálogo é apagada e refeita. " +
+                  "As atividades do cronograma e a versão de orçamento são apagadas junto, " +
+                  "porque nasceram dela. Uma versão de orçamento criada à mão é preservada."
+              );
+              if (!ok) return;
+              refazer.mutate({ projectId: projetoId, tipoDeObra: "edificio", refazer: true });
+            }}
+          >
+            {refazer.isPending ? "Refazendo…" : "Refazer"}
+          </button>
         </div>
         <input
           className="eap-busca"
@@ -109,6 +201,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                 return novo;
               })
             }
+            aoTrazer={id => trazer.mutate({ projectId: projetoId, wbsNodeId: id })}
+            jaNoCronograma={jaNoCronograma}
             profundidade={0}
           />
         ))}
@@ -177,11 +271,15 @@ function NoDaArvore({
   ramo,
   abertos,
   onAlternar,
+  aoTrazer,
+  jaNoCronograma,
   profundidade,
 }: {
   ramo: Ramo;
   abertos: Set<number>;
   onAlternar: (id: number) => void;
+  aoTrazer: (id: number) => void;
+  jaNoCronograma: (codigo: string) => boolean;
   profundidade: number;
 }) {
   const { no, filhos } = ramo;
@@ -214,6 +312,22 @@ function NoDaArvore({
           </span>
         )}
         {no.unit && <span className="eap-unidade">{no.unit}</span>}
+
+        {no.nodeType === "entrega" &&
+          (jaNoCronograma(no.code) ? (
+            <span className="eap-no-crono" title="Esta folha já está no cronograma">
+              no cronograma
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="eap-trazer"
+              onClick={() => aoTrazer(no.id)}
+              title="Trazer esta folha para o cronograma, com duração a informar"
+            >
+              trazer p/ cronograma
+            </button>
+          ))}
       </div>
 
       {temFilhos && aberto && (
@@ -224,6 +338,8 @@ function NoDaArvore({
               ramo={f}
               abertos={abertos}
               onAlternar={onAlternar}
+              aoTrazer={aoTrazer}
+              jaNoCronograma={jaNoCronograma}
               profundidade={profundidade + 1}
             />
           ))}

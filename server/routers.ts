@@ -3142,6 +3142,7 @@ export const appRouter = router({
           const vazio = gradeDoCronograma(CALENDARIO_CORRIDO, hoje, []);
           return {
             linhas: vazio,
+            idsPorCodigo: {},
             agregado: agregadoDoCronograma(vazio),
             calendario: "corrido" as const,
             hoje,
@@ -3205,8 +3206,16 @@ export const appRouter = router({
         }));
 
         const linhas = gradeDoCronograma(calendario, hoje, entradas);
+        // O id vai ao lado, e não dentro da linha: `gradeDoCronograma` é
+        // função pura e não conhece id de banco. A grade precisa dele para
+        // gravar a célula que a pessoa editou.
+        const idsPorCodigo: Record<string, number> = {};
+        for (const a of activities) {
+          if (a.wbsCode) idsPorCodigo[a.wbsCode] = a.id;
+        }
         return {
           linhas,
+          idsPorCodigo,
           agregado: agregadoDoCronograma(linhas),
           calendario: usaCalendarioDaObra ? ("obra" as const) : ("corrido" as const),
           // A data de hoje vem junto. O cliente nao calcula data: se ele
@@ -3216,6 +3225,283 @@ export const appRouter = router({
           inicioObra: baseIso,
         };
       }),
+    /**
+     * Edita UMA célula do cronograma.
+     *
+     * POR QUE ISTO EXISTE E NÃO O `projects.updateActivity`
+     *
+     * O `updateActivity` é da tela de módulo: exige o registro inteiro (nome,
+     * fase, offset, duração, progresso, status) e recebe `startOffset` como
+     * número. A grade da planilha manda data e texto, e o que ela quer é
+     * "mudei esta célula". Uma coisa que substitui a outra inteira obriga o
+     * cliente a mandar dado que ele não tem, e foi assim que a versão anterior
+     * da grade ficou com campo editável e sem handler: a mutation não existia.
+     *
+     * POR QUE A DATA VIRA OFFSET AQUI
+     *
+     * A pessoa digita uma data. O banco guarda \`startOffset\`, que é um índice
+     * de dias a partir do início da obra. A conversão é o inverso de \`dateAt\`,
+     * com o mesmo calendário que \`planning.grade\` usou para ler. Se a
+     * conversão estivesse no cliente, a data salva e a data mostrada seriam
+     * round-trip por dois calendários diferentes.
+     *
+     * POR QUE CADA CAMPO TEM SUA REGRA
+     *
+     * A coluna aceita é estreita de propósito. Duração zero é dado faltando e
+     * vira "Não iniciado", não "Atrasado" — isso é do motor, e o motor reavalia
+     * depois do save. Quantidade negativa é rejeitada. Data fora da obra não
+     * é rejeitada aqui: o motor vai mostrá-laStarting antes do início, e quem
+     * julga isso é o painel de status, não o validador de campo.
+     */
+    atualizarAtividade: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          atividadeId: z.number().int().positive(),
+          campo: z.enum([
+            "atividade",
+            "frente",
+            "pavimento",
+            "inicio",
+            "duracao",
+            "quantidade",
+            "unidade",
+          ]),
+          valor: z.string().max(220),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+
+        const [activity] = await db
+          .select({
+            id: scheduleActivities.id,
+            phase: scheduleActivities.phase,
+            unit: scheduleActivities.unit,
+          })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.id, input.atividadeId),
+              eq(scheduleActivities.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const bruto = input.valor.trim();
+        const dados: Record<string, string | number | null> = {};
+
+        switch (input.campo) {
+          case "atividade": {
+            if (bruto.length < 2) {
+              throw badRequest("O nome da atividade precisa de pelo menos 2 caracteres.");
+            }
+            dados.name = bruto;
+            break;
+          }
+          case "frente": {
+            if (!bruto) throw badRequest("A frente não pode ficar vazia.");
+            if (bruto.length > 80) {
+              throw badRequest("A frente tem no máximo 80 caracteres.");
+            }
+            dados.phase = bruto;
+            break;
+          }
+          case "pavimento": {
+            dados.pavimento = bruto || null;
+            break;
+          }
+          case "unidade": {
+            if (bruto.length > 16) {
+              throw badRequest("A unidade tem no máximo 16 caracteres.");
+            }
+            dados.unit = bruto || null;
+            break;
+          }
+          case "duracao": {
+            const n = Number(bruto);
+            if (!Number.isInteger(n) || n < 0) {
+              throw badRequest("A duração é um número inteiro de dias, zero ou mais.");
+            }
+            if (n > 3650) {
+              throw badRequest("A duração de 3.650 dias não é plausível. Verifique o valor.");
+            }
+            dados.durationDays = n;
+            break;
+          }
+          case "quantidade": {
+            // Vazio é dado não medido, e é diferente de zero. Medido zero é
+            // zero. A coluna trata os dois: a linha com quantidade nula fica
+            // fora da média ponderada e é contada à parte.
+            if (!bruto) {
+              dados.plannedQuantity = null;
+              break;
+            }
+            const n = Number(bruto.replace(",", "."));
+            if (!Number.isFinite(n) || n < 0) {
+              throw badRequest("A quantidade é um número, ou fica vazia se não foi medida.");
+            }
+            dados.plannedQuantity = n.toFixed(3);
+            break;
+          }
+          case "inicio": {
+            if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(bruto)) {
+              throw badRequest("A data deve estar no formato AAAA-MM-DD.");
+            }
+            const [projeto] = await db
+              .select({ plannedStart: projects.plannedStart })
+              .from(projects)
+              .where(eq(projects.id, input.projectId))
+              .limit(1);
+            const base = projeto?.plannedStart ? localIso(projeto.plannedStart) : localIso(new Date());
+
+            const carregado = await carregarCalendarioDaObra(
+              db,
+              input.projectId,
+              projeto?.plannedStart ? projeto.plannedStart.getFullYear() : new Date().getFullYear()
+            );
+            // Mesma regra do `grade`: obra com calendário usa o dela; obra sem
+            // calendário usa dia corrido, que é o que a planilha de referência
+            // faz. Se as duas pontas usassem calendários diferentes, a data
+            // salva voltaria errada na leitura.
+            const calendario =
+              carregado.origem === "obra" ? carregado.calendar : CALENDARIO_CORRIDO;
+
+            const inicio = bruto as never;
+            const baseIso = base as never;
+            const deslocamento = indexOf(calendario, baseIso, inicio);
+            if (deslocamento < 0) {
+              throw badRequest("A data é anterior ao início da obra.");
+            }
+            dados.startOffset = deslocamento;
+            break;
+          }
+        }
+
+        await db
+          .update(scheduleActivities)
+          .set(dados)
+          .where(
+            and(
+              eq(scheduleActivities.id, input.atividadeId),
+              eq(scheduleActivities.projectId, input.projectId)
+            )
+          );
+
+        return { ok: true, campo: input.campo };
+      }),
+
+    /**
+     * Cria uma atividade a partir de uma folha da EAP.
+     *
+     * A EAP vem do catálogo e o cronograma não. Cada folha precisa virar uma
+     * atividade para que alguém informe início e duração — e a folha é o
+     * lugar natural de puxar a linha, porque é ela que tem o código oficial e a
+     * unidade, e é por eles que o orçamento casa o preço.
+     */
+    criarAtividadeDaFolha: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          wbsNodeId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [folha] = await db
+          .select({
+            id: wbsNodes.id,
+            code: wbsNodes.code,
+            name: wbsNodes.name,
+            parentId: wbsNodes.parentId,
+            unit: wbsNodes.unit,
+            sortOrder: wbsNodes.sortOrder,
+            parentPhase: wbsNodes.name,
+          })
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.id, input.wbsNodeId),
+              eq(wbsNodes.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!folha) throw notFound("Folha não encontrada nesta obra.");
+
+        // A mesma folha não pode virar duas atividades: o índice único é por
+        // (projectId, externalId), e `externalId` aqui é o código da folha.
+        const [jaExiste] = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.eapRef, folha.code)
+            )
+          )
+          .limit(1);
+        if (jaExiste) {
+          throw conflict("Esta folha já está no cronograma.");
+        }
+
+        // A frente vem do nó do mesmo nível mais próximo que já tem fase.
+        // Herdar do pai é o que faz a coluna FRENTE agrupar, e a LOB é lida por
+        // ela.
+        const [projeto] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+
+        const [ultima] = await db
+          .select({ n: scheduleActivities.sortOrder })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId))
+          .orderBy(desc(scheduleActivities.sortOrder))
+          .limit(1);
+
+        // Preço: a folha que tem item de orçamento é a que o catálogo casou.
+        // `budget_items.code` guarda o código oficial, igual a `externalId` da
+        // folha.
+        const [item] = await db
+          .select({ id: budgetItems.id })
+          .from(budgetItems)
+          .where(eq(budgetItems.code, folha.code))
+          .limit(1);
+
+        const [createdId] = await db
+          .insert(scheduleActivities)
+          .values({
+            projectId: input.projectId,
+            wbsNodeId: folha.id,
+            externalId: folha.code,
+            eapRef: folha.code,
+            wbsCode: folha.code,
+            name: folha.name,
+            phase: folha.parentPhase || "Geral",
+            // Duração zero, não cinco. A grade mostra "Não iniciado" e a
+            // pessoa informa a duração. Cronograma que nasce com prazo é
+            // cronograma que ninguém planejou.
+            startOffset: 0,
+            durationDays: 0,
+            plannedQuantity: null,
+            budgetItemId: item?.id ?? null,
+            progress: 0,
+            status: "Não iniciado",
+            critical: 0,
+            sortOrder: (ultima?.n ?? 0) + 1,
+          })
+          .$returningId();
+
+        return { id: createdId.id, inicioObra: projeto?.plannedStart ?? null };
+      }),
+
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
       .query(async ({ ctx, input }) => {

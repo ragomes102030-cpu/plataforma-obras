@@ -171,6 +171,9 @@ function Obra({
     executado: l.executado,
   }));
   const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
+  // O id de cada linha, para a grade gravar a célula certa. Vem do backend
+  // ao lado das linhas porque o motor é função pura e não conhece id.
+  const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
   const definicao = ABAS.find(a => a.id === aba);
 
   return (
@@ -181,9 +184,12 @@ function Obra({
         ) : aba === "cronograma" ? (
           <GradeCronograma
             obra={obra}
+            projetoId={projetoId}
             calendario={calendario}
             hoje={hoje}
             linhas={linhas}
+            idPorCodigo={idPorCodigo}
+            aoPedirEap={() => onAba("eap")}
           />
         ) : aba === "dashboard" ? (
           <PainelDoCronograma agregado={agregado} />
