@@ -1,4 +1,6 @@
 import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { addDays } from "date-fns";
+import type { IsoDate } from "@shared/work-calendar";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -3091,6 +3093,43 @@ export const appRouter = router({
         cacheClearPrefix("reconcilePreview:");
         return { ok: true };
       }),
+    /**
+     * Carrega uma obra de EXEMPLO: quantitativo e produção, para avaliar a forma
+     * do sistema.
+     *
+     * POR QUE EXISTE
+     *
+     * Painel ponderado, curva, status colorido e % Real acendem só quando há
+     * quantidade E produção. Sem elas a tela está certa e vazia, e não dá para
+     * julgar se o modelo serve. Com elas dá — e o que está na tela é exemplo,
+     * não medido.
+     *
+     * POR QUE É REVERSÍVEL E IDEMPOTENTE
+     *
+     * Só escreve onde `exemplo` está zerado, e marca o que escreve. A limpeza
+     * apaga exatamente o marcado e devolve a quantidade a `null` — que é o
+     * estado de "não medida", distinto de zero. Rodar duas vezes não duplica:
+     * a segunda não acha onde escrever.
+     *
+     * POR QUE OS NÚMEROS SÃO DE UMA OBRA DE 14 PAVIMENTOS
+     *
+     * Porque o Aurora é. As quantidades estão na mesma ordem de grandeza de uma
+     * obra residencial de médio porte, e a produção cobre só o que está de fato
+     * em curso na data-base — as primeiras atividades. Atividade futura
+     * recebe produção zero, que é o que uma obra no primeiro mês de fato tem.
+     * Se o exemplo mostrasse 80% em tudo, ensinaria a ler a telaerrada.
+     */
+
+    /**
+     * Remove o que a carga de exemplo gravou.
+     *
+     * Apaga os lançamentos marcados e devolve a quantidade das atividades a
+     * `null` — que é "não medida", e não zero. A diferença importa: quantidade
+     * nula fica fora da média ponderada e é contada à parte, e é o que permite
+     * ao painel dizer que existem atividades sem quantitativo em vez de diluí-las
+     * com peso zero.
+     */
+
     removeComponent: protectedProcedure
       .input(z.object({ componentId: z.number().int().positive() }))
       .mutation(async ({ input }) => {
@@ -3143,6 +3182,7 @@ export const appRouter = router({
           return {
             linhas: vazio,
             idsPorCodigo: {},
+            exemploPorCodigo: {},
             agregado: agregadoDoCronograma(vazio),
             calendario: "corrido" as const,
             hoje,
@@ -3210,12 +3250,19 @@ export const appRouter = router({
         // função pura e não conhece id de banco. A grade precisa dele para
         // gravar a célula que a pessoa editou.
         const idsPorCodigo: Record<string, number> = {};
+        // A marca de exemplo vai ao lado, pelo mesmo motivo do id: o motor é
+        // função pura e não conhece colunas do banco. Sem ela na tela, um
+        // número de exemplo aparece com a mesma cara de um número medido.
+        const exemploPorCodigo: Record<string, number> = {};
         for (const a of activities) {
-          if (a.wbsCode) idsPorCodigo[a.wbsCode] = a.id;
+          if (!a.wbsCode) continue;
+          idsPorCodigo[a.wbsCode] = a.id;
+          if (a.exemplo === 1) exemploPorCodigo[a.wbsCode] = 1;
         }
         return {
           linhas,
           idsPorCodigo,
+          exemploPorCodigo,
           agregado: agregadoDoCronograma(linhas),
           calendario: usaCalendarioDaObra ? ("obra" as const) : ("corrido" as const),
           // A data de hoje vem junto. O cliente nao calcula data: se ele
@@ -3677,6 +3724,243 @@ export const appRouter = router({
           );
         return { ok: true };
       }),
+    carregarExemplo: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const atividades = await db
+          .select({
+            id: scheduleActivities.id,
+            wbsCode: scheduleActivities.wbsCode,
+            nome: scheduleActivities.name,
+            inicio: scheduleActivities.startOffset,
+            duracao: scheduleActivities.durationDays,
+            exemplo: scheduleActivities.exemplo,
+            jaTemQuantidade: scheduleActivities.plannedQuantity,
+          })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId))
+          .orderBy(scheduleActivities.sortOrder);
+
+        if (atividades.length === 0) {
+          throw badRequest("A obra não tem atividades. Traga as folhas da EAP antes.");
+        }
+
+        // Quantitativo e unidade por fase. A unidade é a mesma da planilha de
+        // referência: área, volume, metro linear e unidade.
+        const QUANTITATIVO: Record<
+          string,
+          { quantidade: number; unidade: string }
+        > = {
+          "1.1": { quantidade: 1200, unidade: "m2" },
+          "2.1": { quantidade: 3200, unidade: "m3" },
+          "3.1": { quantidade: 4800, unidade: "m3" },
+          "4.1": { quantidade: 5600, unidade: "m2" },
+          "4.2": { quantidade: 14000, unidade: "m" },
+          "5.1": { quantidade: 2400, unidade: "m2" },
+          "5.2": { quantidade: 1, unidade: "un" },
+        };
+
+        // Data-base da obra: o início mais o offset da primeira atividade. Serve
+        // de âncora para as datas de lançamento.
+        const [projeto] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        const base = projeto?.plannedStart ?? new Date();
+        const dataBase = new Date(
+          base.getFullYear(),
+          base.getMonth(),
+          base.getDate(),
+          12,
+          0,
+          0
+        );
+
+        const carregados = await carregarCalendarioDaObra(
+          db,
+          input.projectId,
+          base.getFullYear()
+        );
+        const calendario =
+          carregados.origem === "obra" ? carregados.calendar : CALENDARIO_CORRIDO;
+        const baseIso = localIso(base);
+
+        const datas = new Map<number, IsoDate>();
+        for (const a of atividades) {
+          datas.set(a.id, dateAt(calendario, baseIso, a.inicio));
+        }
+
+        // Avanço só nas atividades que já começaram na data-base, e sempre
+        // abaixo do planejado. Um exemplo que mostra 100% em tudo ensinaria a
+        // ler a tela errada.
+        const AVANCO_EXEMPLO: Record<string, number> = {
+          "1.1": 0.72,
+          "2.1": 0.18,
+        };
+
+        let quantitativos = 0;
+        for (const a of atividades) {
+          if (a.exemplo === 1) continue;
+          const q = QUANTITATIVO[a.wbsCode];
+          if (!q) continue;
+          await db
+            .update(scheduleActivities)
+            .set({
+              plannedQuantity: q.quantidade.toFixed(3),
+              unit: q.unidade,
+              exemplo: 1,
+            })
+            .where(eq(scheduleActivities.id, a.id));
+          quantitativos += 1;
+        }
+
+        // Produção: uma semana de lançamentos na primeira atividade, duas na
+        // segunda, e nada depois. A soma reproduz o AVANCO_EXEMPLO acima.
+        const lancamentos: Array<{
+          atividadeId: number;
+          data: IsoDate;
+          quantidade: number;
+          unidade: string;
+        }> = [];
+
+        const planejar = (
+          wbsCode: string,
+          semanas: number,
+          fracao: number
+        ) => {
+          const a = atividades.find(x => x.wbsCode === wbsCode);
+          if (!a) return;
+          const q = QUANTITATIVO[wbsCode];
+          if (!q) return;
+          const inicio = datas.get(a.id);
+          if (!inicio) return;
+          const total = q.quantidade * fracao;
+          // A primeira leva a metade, e as demais dividem o resto. É a forma
+          // que uma obra realmente começa: carga inicial maior que a
+          // steady state.
+          const primeira = total * 0.5;
+          const resto = semanas > 1 ? (total - primeira) / (semanas - 1) : 0;
+          for (let s = 0; s < semanas; s += 1) {
+            const dia = localIso(addDays(new Date(`${inicio}T12:00:00`), s * 7));
+            if (dia > localIso(dataBase)) break; // não lança no futuro
+            lancamentos.push({
+              atividadeId: a.id,
+              data: dia,
+              quantidade: s === 0 ? primeira : resto,
+              unidade: q.unidade,
+            });
+          }
+        };
+
+        planejar("1.1", 4, 0.72);
+        planejar("2.1", 2, 0.18);
+
+        // Só grava o que ainda não está marcado como exemplo. A verificação é
+        // por atividade inteira: um lançamento de exemplo é sempre do mesmo
+        // conjunto que o quantitativo, e misturar os dois deixaria a limpeza
+        // pela metade.
+        const jaMarcadas = await db
+          .select({ id: productionEntries.id })
+          .from(productionEntries)
+          .where(
+            and(
+              eq(productionEntries.projectId, input.projectId),
+              eq(productionEntries.exemplo, 1)
+            )
+          )
+          .limit(1);
+        if (jaMarcadas.length > 0) {
+          return {
+            jaCarregado: true,
+            quantitativos: 0,
+            lancamentos: 0,
+            mensagem:
+              "Esta obra já tem dados de exemplo. Use 'Limpar exemplo' antes de carregar de novo.",
+          };
+        }
+
+        for (const l of lancamentos) {
+          if (l.quantidade <= 0) continue;
+          const [y, m, d] = l.data.split("-").map(Number);
+          await db.insert(productionEntries).values({
+            projectId: input.projectId,
+            activityId: l.atividadeId,
+            productionDate: new Date(y!, m! - 1, d!, 12, 0, 0),
+            quantity: l.quantidade.toFixed(3),
+            measurementUnit: l.unidade,
+            notes: "Dado de EXEMPLO — não medido. Use 'Limpar exemplo' para remover.",
+            status: "confirmada",
+            exemplo: 1,
+            createdBy: ctx.user.id,
+          });
+        }
+
+        return {
+          jaCarregado: false,
+          quantitativos,
+          lancamentos: lancamentos.length,
+          mensagem: `${quantitativos} quantitativos e ${lancamentos.length} lançamentos de exemplo gravados.`,
+        };
+      }),
+
+    limparExemplo: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        // A contagem vem ANTES do apagamento: o driver mysql do Drizzle só
+        // devolve linhas afetadas em `insert`. Contar depois devolveria zero
+        // depois de apagar tudo, e a tela diria "0 removidos".
+        const lancamentos = await db
+          .select({ id: productionEntries.id })
+          .from(productionEntries)
+          .where(
+            and(
+              eq(productionEntries.projectId, input.projectId),
+              eq(productionEntries.exemplo, 1)
+            )
+          );
+        const atividades = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.exemplo, 1)
+            )
+          );
+
+        await db
+          .delete(productionEntries)
+          .where(
+            and(
+              eq(productionEntries.projectId, input.projectId),
+              eq(productionEntries.exemplo, 1)
+            )
+          );
+        await db
+          .update(scheduleActivities)
+          .set({ plannedQuantity: null, exemplo: 0 })
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.exemplo, 1)
+            )
+          );
+
+        return {
+          lancamentosRemovidos: lancamentos.length,
+          quantitativosRemovidos: atividades.length,
+        };
+      }),
+
 
 
     control: protectedProcedure

@@ -267,6 +267,16 @@ export const scheduleActivities = mysqlTable(
     productivity: decimal("productivity", { precision: 14, scale: 3 }),
     budgetItemId: int("budgetItemId"),
     progress: int("progress").default(0).notNull(),
+    /**
+     * Marcado como dado de EXEMPLO, não medido.
+     *
+     * Serve para avaliar a forma do sistema — ver o painel ponderado, a curva,
+     * o status colorido — sem confundir número de tela com quantitativo real.
+     * A carga de exemplo só escreve onde esta marca está zerada, e a limpeza
+     * apaga exatamente o que tem marca, o que torna as duas operações
+     * reversíveis e idempotentes.
+     */
+    exemplo: int("exemplo").default(0).notNull(),
     status: mysqlEnum("status", [
       "Não iniciado",
       "Em andamento",
@@ -505,6 +515,10 @@ export const productionEntries = mysqlTable("production_entries", {
   status: mysqlEnum("status", ["rascunho", "confirmada"])
     .default("rascunho")
     .notNull(),
+  /**
+   * Marcado como dado de EXEMPLO, não medido. Ver `schedule_activities.exemplo`.
+   */
+  exemplo: int("exemplo").default(0).notNull(),
   createdBy: int("createdBy").references(() => users.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

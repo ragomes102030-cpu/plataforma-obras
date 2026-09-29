@@ -462,3 +462,77 @@
   border-radius: 2px;
   font-size: 11px;
 }
+
+/* --------------------------------------- dados de exemplo */
+
+.pl-exemplo-barra {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: #fdf6e7;
+  border-left: 3px solid #d9a441;
+  border-radius: 0 3px 3px 0;
+}
+
+.pl-exemplo-ativo {
+  background: #eef4f8;
+  border-left-color: #1f6f8b;
+}
+
+.pl-exemplo-texto {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.pl-exemplo-texto strong {
+  display: block;
+  font-size: 12.5px;
+  color: #5c4a1a;
+  margin-bottom: 2px;
+}
+
+.pl-exemplo-ativo .pl-exemplo-texto strong {
+  color: #1a5c74;
+}
+
+.pl-exemplo-texto span {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #7a6a3a;
+}
+
+.pl-exemplo-ativo .pl-exemplo-texto span {
+  color: #4a6773;
+}
+
+.pl-exemplo-erro {
+  margin: 0;
+  font-size: 11.5px;
+  color: #8a1f2c;
+  flex: 0 0 auto;
+}
+
+.pl-exemplo-aviso {
+  margin: 0;
+  font-size: 11.5px;
+  color: #1c5c31;
+  flex: 0 0 auto;
+}
+
+/* Selo na coluna Status. */
+.xl-exemplo {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #1f6f8b;
+  color: #ffffff;
+  vertical-align: middle;
+}

@@ -34,6 +34,13 @@
             "when": 1800000000001,
             "version": "5",
             "tag": "0004_producao_sem_dimensao_obrigatoria"
+        },
+        {
+            "idx": 5,
+            "breakpoints": true,
+            "when": 1800000000002,
+            "version": "5",
+            "tag": "0005_marca_de_exemplo"
         }
     ],
     "version": "7",

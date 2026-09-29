@@ -175,6 +175,9 @@ function Obra({
   // O id de cada linha, para a grade gravar a célula certa. Vem do backend
   // ao lado das linhas porque o motor é função pura e não conhece id.
   const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
+  const exemploPorCodigo = new Set(
+    Object.keys(grade.data?.exemploPorCodigo ?? {})
+  );
   const definicao = ABAS.find(a => a.id === aba);
 
   return (
@@ -190,12 +193,17 @@ function Obra({
             hoje={hoje}
             linhas={linhas}
             idPorCodigo={idPorCodigo}
+            exemploPorCodigo={exemploPorCodigo}
             aoPedirEap={() => onAba("eap")}
           />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : aba === "dashboard" ? (
-          <PainelDoCronograma agregado={agregado} />
+          <PainelDoCronograma
+            agregado={agregado}
+            projetoId={projetoId}
+            temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0}
+          />
         ) : (
           <AbaVazia
             titulo={definicao?.rotulo ?? aba}

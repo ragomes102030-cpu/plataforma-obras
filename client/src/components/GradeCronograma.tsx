@@ -44,6 +44,8 @@ type Props = {
   linhas: EntradaDaLinha[];
   /** `linha.codigo` -> id da atividade no banco. */
   idPorCodigo: Map<string, number>;
+  /** Códigos cujo quantitativo é de EXEMPLO, não medido. */
+  exemploPorCodigo?: Set<string>;
   /** Leva à aba EAP, de onde as folhas vêm. */
   aoPedirEap?: () => void;
 };
@@ -126,6 +128,7 @@ export function GradeCronograma({
   hoje,
   linhas,
   idPorCodigo,
+  exemploPorCodigo,
   aoPedirEap,
 }: Props) {
   // A ordenação e as cinco colunas derivadas saem do motor, nunca daqui.
@@ -252,6 +255,7 @@ export function GradeCronograma({
               n={i + 5}
               linha={l}
               idAtividade={idPorCodigo.get(l.codigo)}
+              exemplo={exemploPorCodigo?.has(l.codigo) ?? false}
               rascunho={rascunho}
               aoDigitar={agendarSalvar}
             />
@@ -266,12 +270,14 @@ function Linha({
   n,
   linha,
   idAtividade,
+  exemplo,
   rascunho,
   aoDigitar,
 }: {
   n: number;
   linha: LinhaDoCronograma;
   idAtividade: number | undefined;
+  exemplo?: boolean;
   rascunho: Record<string, string>;
   aoDigitar: (id: number, campo: CampoEditavel, valor: string) => void;
 }) {
@@ -318,6 +324,11 @@ function Linha({
       </td>
       <td className="xl-calc xl-status">
         <span className="xl-etiqueta">{rotuloDoStatus(linha.status)}</span>
+        {exemplo && (
+          <span className="xl-exemplo" title="Quantitativo de EXEMPLO — não medido">
+            exemplo
+          </span>
+        )}
       </td>
     </tr>
   );
