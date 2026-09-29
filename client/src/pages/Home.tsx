@@ -894,7 +894,7 @@ export default function Home() {
       setCreateNeedsCatalog(s.nosCriados === 0);
       setCreateNotice(
         s.nosCriados > 0
-          ? `EAP criada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços. Orçamento inicial gerado com ${s.itensDeOrcamentoCriados} itens já com preço do catálogo — falta só lançar as quantidades.`
+          ? `EAP criada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços. Orçamento inicial com ${s.itensDeOrcamentoCriados} itens já com preço do catálogo (faltam as quantidades) e cronograma com ${s.atividadesCriadas} atividades encadeadas (duração inicial de 5 dias cada — ajuste conforme a produtividade real).`
           : s.aviso
       );
     },

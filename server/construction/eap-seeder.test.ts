@@ -5,9 +5,15 @@ import {
   priceCatalogs,
   priceItems,
   projects,
+  scheduleActivities,
+  scheduleDependencies,
   wbsNodes,
 } from "../../drizzle/schema";
-import { semearEapDoCatalogo, type ResultadoDaSemeadura } from "./eap-seeder";
+import {
+  DURACAO_PADRAO_DIAS,
+  semearEapDoCatalogo,
+  type ResultadoDaSemeadura,
+} from "./eap-seeder";
 
 /**
  * Testa o gravador da EAP com um drizzle falso.
@@ -248,6 +254,77 @@ describe("semearEapDoCatalogo", () => {
       const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
       expect(r.itensDeOrcamentoCriados).toBe(0);
       expect(itensGravados(inserts)).toHaveLength(0);
+    });
+  });
+
+  // O cronograma tinha o mesmo buraco que o orçamento: `scheduleActivities`
+  // só nascia do plano-modelo genérico (`seedStarterPlan`), nunca da EAP real
+  // gerada do catálogo. Por isso toda obra ficava sem Gantt até alguém clicar
+  // em "inicializar plano" — e aí ganhava um cronograma sem nenhuma relação
+  // com a estrutura que acabara de ser criada.
+  describe("cronograma nasce junto da EAP", () => {
+    function atividadesGravadas(inserts: Array<{ tabela: unknown; valores: Linha[] }>) {
+      return inserts.filter(i => i.tabela === scheduleActivities).flatMap(i => i.valores);
+    }
+    function dependenciasGravadas(inserts: Array<{ tabela: unknown; valores: Linha[] }>) {
+      return inserts.filter(i => i.tabela === scheduleDependencies).flatMap(i => i.valores);
+    }
+
+    it("cria uma atividade por folha, uma para cada linha de orçamento", async () => {
+      const { db, inserts } = dbFalso();
+      const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const atividades = atividadesGravadas(inserts);
+      expect(atividades.length).toBe(r.itensDeOrcamentoCriados);
+      expect(r.atividadesCriadas).toBe(atividades.length);
+    });
+
+    it("cada atividade aponta para o nó da EAP e para a linha de orçamento certos", async () => {
+      const { db, inserts } = dbFalso();
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const nos = nosGravados(inserts).map((v, i) => ({ ...v, id: i + 1 }));
+      const itens = inserts
+        .filter(i => i.tabela === budgetItems)
+        .flatMap(i => i.valores)
+        // +1 pela versão de orçamento, que consome um id antes das linhas.
+        .map((v, i) => ({ ...v, id: nos.length + 2 + i }));
+      for (const atividade of atividadesGravadas(inserts)) {
+        const no = nos.find(n => n.id === atividade.wbsNodeId);
+        expect(no).toBeTruthy();
+        expect(no?.level).toBe(2);
+        expect(atividade.wbsCode).toBe(no?.code);
+        const item = itens.find(i => i.id === atividade.budgetItemId);
+        expect(item?.code).toBe(no?.externalId);
+      }
+    });
+
+    it("usa a duração padrão e encadeia os offsets sem sobreposição", async () => {
+      const { db, inserts } = dbFalso();
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const atividades = atividadesGravadas(inserts) as Array<{
+        startOffset: number;
+        durationDays: number;
+      }>;
+      atividades.forEach((atividade, index) => {
+        expect(atividade.durationDays).toBe(DURACAO_PADRAO_DIAS);
+        expect(atividade.startOffset).toBe(index * DURACAO_PADRAO_DIAS);
+      });
+    });
+
+    it("encadeia as atividades em FS, n-1 dependências para n atividades", async () => {
+      const { db, inserts } = dbFalso();
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const atividades = atividadesGravadas(inserts);
+      const deps = dependenciasGravadas(inserts);
+      expect(deps.length).toBe(Math.max(0, atividades.length - 1));
+      expect(deps.every(d => d.type === "FS" && d.lag === 0)).toBe(true);
+    });
+
+    it("sem catálogo, não cria cronograma nenhum", async () => {
+      const { db, inserts } = dbFalso({ catalogos: [] });
+      const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      expect(r.atividadesCriadas).toBe(0);
+      expect(atividadesGravadas(inserts)).toHaveLength(0);
+      expect(dependenciasGravadas(inserts)).toHaveLength(0);
     });
   });
 });
