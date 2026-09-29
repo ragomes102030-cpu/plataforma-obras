@@ -30,6 +30,8 @@ function dbFalso(opcoes: {
   itens?: Linha[];
   nosExistentes?: Linha[];
   projetoRef?: string | null;
+  /** Versões de orçamento que já existem na obra. Alimenta o MAX+1. */
+  versoes?: Linha[];
 } = {}) {
   const inserts: Array<{ tabela: unknown; valores: Linha[]; ids: number[] }> = [];
   const catalogo = {
@@ -49,6 +51,8 @@ function dbFalso(opcoes: {
     { code: "I10101", description: "Cimento CP II", unit: "sc", unitPrice: "38.90" },
   ];
   const nosExistentes = opcoes.nosExistentes ?? [];
+  const versoes = opcoes.versoes ?? [];
+  const deletes: unknown[] = [];
   let proximoId = 1;
 
   // A cadeia do drizzle e preguicosa e a mesma query pode parar em `.where()`,
@@ -71,6 +75,7 @@ function dbFalso(opcoes: {
     if (tabela === priceCatalogs) return cadeia(() => catalogos as Linha[]);
     if (tabela === priceItems) return cadeia(() => itens as Linha[]);
     if (tabela === wbsNodes) return cadeia(() => nosExistentes as Linha[]);
+    if (tabela === budgetVersions) return cadeia(() => versoes as Linha[]);
     if (tabela === projects) {
       return cadeia(() => [{ baseReferenciaRef: opcoes.projetoRef ?? null }] as Linha[]);
     }
@@ -91,9 +96,15 @@ function dbFalso(opcoes: {
       };
       return { values: registrar, $returningId: async () => [{ id: proximoId++ }] };
     },
+    delete: (tabela: unknown) => ({
+      where: async () => {
+        deletes.push(tabela);
+        return undefined;
+      },
+    }),
   };
 
-  return { db: db as never, inserts };
+  return { db: db as never, inserts, deletes };
 }
 
 describe("semearEapDoCatalogo", () => {
@@ -389,5 +400,83 @@ describe("semearEapDoCatalogo", () => {
       expect(atividadesGravadas(inserts)).toHaveLength(0);
       expect(dependenciasGravadas(inserts)).toHaveLength(0);
     });
+  });
+});
+
+/**
+ * Recuperação e versionamento.
+ *
+ * O botão "Gerar EAP do catálogo" grava em cinco tabelas. Duas propriedades
+ * o tornam seguro, e ambas são testadas aqui:
+ *
+ *  1. `refazer` existe. A guarda de idempotência recusa sempre que há
+ *     qualquer nó, e ela não distingue "estrutura inteira" de "metade de uma
+ *     estrutura". Sem `refazer`, uma semeadura interrompida deixava a obra
+ *     num estado sem botão, rota ou script que tirasse dali.
+ *  2. A versão de orçamento é MAX + 1, e não 1 fixa. `budget_versions` tem
+ *     índice único em (projectId, versionNumber), então a 1 fixa estourava
+ *     ER_DUP_ENTRY em toda obra que já tivesse versão criada à mão.
+ *
+ * O que NÃO é testável aqui: a atomicidade. Ela vem do `db.transaction` na
+ * mutation `generateEapFromCatalog`, e este drizzle falso não transaciona.
+ */
+describe("semeadura — recuperação e versionamento", () => {
+  it("recusa obra com nós e aponta a saída", async () => {
+    const { db, inserts } = dbFalso({ nosExistentes: [{ id: 1 }] });
+    const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+
+    expect(inserts).toHaveLength(0);
+    expect(r.aviso).toContain("já tem estrutura");
+    // Quem ficou preso não adivinha que existe "Refazer" — a mensagem tem que
+    // dizer. Um aviso que só recusa é beco sem saída com texto nicer.
+    expect(r.aviso).toMatch(/Refazer/i);
+  });
+
+  it("refazer apaga a estrutura antes de gravar de novo", async () => {
+    const { db, deletes, inserts } = dbFalso({ nosExistentes: [{ id: 1 }] });
+    await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio", refazer: true });
+
+    // Ordem importa: `wbs_nodes` é referenciado com `onDelete: "restrict"`,
+    // então os nós têm de ser os últimos a sair.
+    expect(deletes).toContain(scheduleDependencies);
+    expect(deletes).toContain(scheduleActivities);
+    expect(deletes).toContain(wbsNodes);
+    expect(deletes.indexOf(wbsNodes)).toBeGreaterThan(deletes.indexOf(scheduleDependencies));
+    expect(inserts.length).toBeGreaterThan(0);
+  });
+
+  it("sem refazer, não apaga nada", async () => {
+    const { db, deletes } = dbFalso({ nosExistentes: [{ id: 1 }] });
+    await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("pega a próxima versão quando a obra já tem a 1", async () => {
+    const { db, inserts } = dbFalso({ versoes: [{ n: 1 }] });
+    await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+
+    const versoes = inserts.filter(i => i.tabela === budgetVersions);
+    expect(versoes.length).toBeGreaterThan(0);
+    expect(versoes[0]!.valores[0]!.versionNumber).toBe(2);
+  });
+
+  it("obra sem versão começa na 1", async () => {
+    const { db, inserts } = dbFalso({ versoes: [] });
+    await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+
+    const versoes = inserts.filter(i => i.tabela === budgetVersions);
+    expect(versoes[0]!.valores[0]!.versionNumber).toBe(1);
+  });
+
+  it("a versão nova é sempre maior que a última, e nunca a 1 fixa", async () => {
+    // Este é o teste que trava o bug: obra com a versão 1 criada à mão no
+    // Orçamento + catálogo importado + "Gerar EAP" => ER_DUP_ENTRY, e sem
+    // transação a obra ficava com EAP e sem orçamento.
+    for (const ultima of [1, 2, 7]) {
+      const { db, inserts } = dbFalso({ versoes: [{ n: ultima }] });
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const versoes = inserts.filter(i => i.tabela === budgetVersions);
+      expect(versoes[0]!.valores[0]!.versionNumber, `ultima versão ${ultima}`).toBe(ultima + 1);
+    }
   });
 });

@@ -1443,6 +1443,25 @@ export const appRouter = router({
           return { ...created, semeadura };
         });
       }),
+    /**
+     * Gera a EAP da obra a partir do catálogo importado.
+     *
+     * POR QUE ESTA MUTATION ABRE TRANSAÇÃO
+     *
+     * O seeder grava em cinco tabelas: nós da EAP, versão de orçamento, itens,
+     * atividades e dependências. Sem transação, cada `insert` faz autocommit: se
+     * o terceiro falhar, os dois primeiros ficam gravados, a guarda de
+     * idempotência passa a responder "a obra já tem estrutura" para sempre, e o
+     * único botão que geraria a EAP é justamente o que recusa. Não havia rota,
+     * botão nem script que tirasse a obra de lá.
+     *
+     * O outro chamador do seeder (`projects.create`) já passava `tx`; este
+     * passava o handle raiz, e o cast `tx as unknown as ...` apagava do
+     * typechecker a diferença entre os dois.
+     *
+     * `refazer` é a saída para quem já caiu nesse estado: apaga o que a
+     * semeadura anterior deixou e refaz, na mesma transação.
+     */
     generateEapFromCatalog: protectedProcedure
       .input(
         z.object({
@@ -1450,15 +1469,19 @@ export const appRouter = router({
           tipoDeObra: z
             .enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"])
             .default("edificio"),
+          refazer: z.boolean().default(false),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        // Idempotente por construção: o seeder não mexe em obra que já tem nós.
-        const semeadura = await semearEapDoCatalogo(db, input.projectId, {
-          tipoDeObra: input.tipoDeObra,
+        const semeadura = await db.transaction(async tx => {
+          return await semearEapDoCatalogo(
+            tx as unknown as NonNullable<typeof db>,
+            input.projectId,
+            { tipoDeObra: input.tipoDeObra, refazer: input.refazer }
+          );
         });
         return { semeadura };
       }),

@@ -9,7 +9,7 @@
  * schema — por isso esta onda não precisa de migração.
  */
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import {
   budgetItems,
   budgetVersions,
@@ -108,7 +108,25 @@ export async function catalogoAtivo(
 export async function semearEapDoCatalogo(
   db: Db,
   projectId: number,
-  opcoes: { tipoDeObra?: TipoDeObra | string; fonte?: "SEINFRA" | "SINAPI" }
+  opcoes: {
+    tipoDeObra?: TipoDeObra | string;
+    fonte?: "SEINFRA" | "SINAPI";
+    /**
+     * Apaga o que uma semeadura anterior deixou pela metade e refaz.
+     *
+     * A guarda de idempotência abaixo recusa sempre que existe qualquer nó, e
+     * ela existe para não duplicar estrutura quando o usuário clica duas
+     * vezes. O problema é que ela não distingue "estrutura inteira" de "metade
+     * de uma estrutura": uma semeadura interrompida deixa a obra num estado em
+     * que o botão recusa, o segundo clique recusa, e não há rota, botão nem
+     * script que tire a obra de lá. Com "refazer", esse estado tem saída.
+     *
+     * Apaga SOMENTE o que o seeder grava: a árvore de nós, as atividades e
+     * dependências, e a versão de orçamento cujo nome segue o padrão daqui.
+     * Uma versão de orçamento criada à mão não é tocada.
+     */
+    refazer?: boolean;
+  }
 ): Promise<ResultadoDaSemeadura> {
   const fonte = opcoes.fonte ?? "SEINFRA";
 
@@ -128,17 +146,45 @@ export async function semearEapDoCatalogo(
     };
   }
 
-  const existentes = await db
-    .select({ id: wbsNodes.id })
-    .from(wbsNodes)
-    .where(eq(wbsNodes.projectId, projectId))
-    .limit(1);
-  if (existentes.length) {
-    return {
-      ...CATALOGO_VAZIO,
-      catalogo,
-      aviso: "A obra já tem estrutura; nada foi gerado.",
-    };
+  if (opcoes.refazer) {
+    // Ordem inversa da criação: dependências, atividades, itens, versão, nós.
+    // Sem esta ordem o `onDelete: "restrict"` dos nós bloqueia a limpeza.
+    await db
+      .delete(scheduleDependencies)
+      .where(eq(scheduleDependencies.projectId, projectId));
+    await db
+      .delete(scheduleActivities)
+      .where(eq(scheduleActivities.projectId, projectId));
+
+    const versoesDoSeeder = await db
+      .select({ id: budgetVersions.id })
+      .from(budgetVersions)
+      .where(
+        and(
+          eq(budgetVersions.projectId, projectId),
+          like(budgetVersions.name, "Orçamento — preços do catálogo%")
+        )
+      );
+    for (const v of versoesDoSeeder) {
+      await db.delete(budgetItems).where(eq(budgetItems.budgetVersionId, v.id));
+      await db.delete(budgetVersions).where(eq(budgetVersions.id, v.id));
+    }
+
+    await db.delete(wbsNodes).where(eq(wbsNodes.projectId, projectId));
+  } else {
+    const existentes = await db
+      .select({ id: wbsNodes.id })
+      .from(wbsNodes)
+      .where(eq(wbsNodes.projectId, projectId))
+      .limit(1);
+    if (existentes.length) {
+      return {
+        ...CATALOGO_VAZIO,
+        catalogo,
+        aviso:
+          "A obra já tem estrutura; nada foi gerado. Se esta estrutura veio de uma geração interrompida, use 'Refazer' para recomeçar do zero.",
+      };
+    }
   }
 
   const servicos = await db
@@ -228,12 +274,26 @@ export async function semearEapDoCatalogo(
   let itensDeOrcamentoCriados = 0;
   const budgetItemIdPorCodigo = new Map<string, number>();
   if (folhas.length) {
+    // MAX + 1, e não 1 fixo: `budget_versions` tem índice único em
+    // (projectId, versionNumber). Caminho curto para o bug: obra criada sem
+    // catálogo, o usuário abre o Orçamento e cria a versão 1 à mão, importa o
+    // catálogo e clica em "Gerar EAP" — os nós entram e este insert estoura
+    // ER_DUP_ENTRY. `createVersion` e `ensureVersion` em routers.ts já faziam
+    // MAX + 1; a regra foi aplicada nos dois caminhos irmãos e esquecida aqui.
+    const [ultima] = await db
+      .select({ n: budgetVersions.versionNumber })
+      .from(budgetVersions)
+      .where(eq(budgetVersions.projectId, projectId))
+      .orderBy(desc(budgetVersions.versionNumber))
+      .limit(1);
+    const proximaVersao = (ultima?.n ?? 0) + 1;
+
     const [versao] = await db
       .insert(budgetVersions)
       .values({
         projectId,
         name: `Orçamento — preços do catálogo ${catalogo.nome} (${catalogo.referencia})`,
-        versionNumber: 1,
+        versionNumber: proximaVersao,
         status: "rascunho",
         currency: "BRL",
         notes:
