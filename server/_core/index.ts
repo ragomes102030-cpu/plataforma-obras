@@ -37,13 +37,18 @@ async function logSchemaInventory() {
 async function listTableNames(): Promise<string[] | null> {
     const db = await getDb();
     if (!db) return null;
-    const [tables] = await db.execute(sql`
-      SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA = DATABASE()
+    // `DATABASE()` e MySQL. No PostgreSQL o schema corrente e `current_schema()`,
+    // e o nome da coluna volta em minuscula: identificador sem aspas dobra para
+    // minuscula no PostgreSQL e nao no MySQL.
+    const resultado = await db.execute(sql`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = current_schema()
     `);
-    return Array.isArray(tables)
-      ? tables.map((row: Record<string, unknown>) => String(row.TABLE_NAME))
-      : [];
+    // O `execute` do MySQL devolvia `[linhas, campos]`; o do PostgreSQL devolve
+    // um `QueryResult`, que nao e array. Desestruturar aqui dava `undefined` sem
+    // erro, e o `/readyz` reportaria zero tabelas num banco cheio.
+    const linhas = (resultado as { rows?: Record<string, unknown>[] }).rows ?? [];
+    return linhas.map(linha => String(linha.table_name));
   }
 
   // Diagnostico temporario: expoe NOMES de variaveis, nunca valores. O filtro

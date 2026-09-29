@@ -91,7 +91,12 @@ export async function saveStoredLlmProvider(
       encryptedConfig: encryptConfig(config),
       updatedBy: userId,
     })
-    .onDuplicateKeyUpdate({
+    // `onDuplicateKeyUpdate` e MySQL. No PostgreSQL e `onConflictDoUpdate`, e a
+    // coluna de conflito e obrigatoria: o banco nao adivinha qual unicidade o
+    // INSERT pretendia. Aqui e a chave primaria, que e o que o `id: SETTINGS_ID`
+    // logo acima esta affirmando ao fazer o INSERT.
+    .onConflictDoUpdate({
+      target: llmProviderSettings.id,
       set: {
         encryptedConfig: encryptConfig(config),
         updatedBy: userId,

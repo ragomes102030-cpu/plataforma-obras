@@ -1,20 +1,40 @@
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+﻿import { eq, type ColumnsSelection } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { PgInsertBase, PgQueryResultHKT, PgTable } from "drizzle-orm/pg-core";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-/** Normalize CLI-style MySQL URL options before handing them to mysql2. */
+/**
+ * Normaliza a connection string para o `pg`.
+ *
+ * `pg` e `mysql2` nao falam a mesma lingua de URL. O MySQL usa `ssl-mode` com
+ * hifen e valores proprios; o PostgreSQL usa `sslmode` sem hifen. E o `pg` le
+ * `sslmode` da propria URL e sabe o que fazer com ele — mas um `ssl-mode`
+ * esquecido na URL passaria batido e a conexao cairia para texto claro, que e o
+ * pior desfecho possível sem erro visível.
+ *
+ * Por isso o `ssl` volta explícito: o teste consegue afirmar o comportamento em
+ * vez de confiar que o driver adivinhou certo.
+ */
 export function normalizeDatabaseConnection(databaseUrl: string) {
   const url = new URL(databaseUrl);
-  const sslMode = url.searchParams.get("ssl-mode")?.toLowerCase();
+  const sslMode = (
+    url.searchParams.get("ssl-mode") ?? url.searchParams.get("sslmode")
+  )?.toLowerCase();
   url.searchParams.delete("ssl-mode");
+  // `charset` e parametro do MySQL. O `pg` nao o conhece e nao faz nada com
+  // ele: deixei-lo ali seria carregar um parametro morto para dentro de toda
+  // conexao, achando que ele ainda diz alguma coisa.
+  url.searchParams.delete("charset");
+  const desligado = sslMode === "disable" || sslMode === "disabled";
+  if (desligado) {
+    url.searchParams.delete("sslmode");
+  }
   return {
     uri: url.toString(),
-    ...(sslMode && sslMode !== "disabled"
-      ? { ssl: { rejectUnauthorized: false } }
-      : {}),
+    ...(!desligado && sslMode ? { ssl: { rejectUnauthorized: false } } : {}),
   };
 }
 
@@ -22,9 +42,7 @@ export function normalizeDatabaseConnection(databaseUrl: string) {
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle({
-        connection: normalizeDatabaseConnection(process.env.DATABASE_URL),
-      });
+      _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -32,6 +50,41 @@ export async function getDb() {
   }
   return _db;
 }
+
+/**
+ * Traduz o retorno do `INSERT` para o que o codigo consome.
+ *
+ * No MySQL, `$returningId()` devolvia `number[]`. No PostgreSQL, `returning()`
+ * devolve a linha inteira. Duas tentativas de porta por substituicao de texto
+ * falharam aqui: a primeira porque o codigo quebra linha entre `db` e `.insert`,
+ * e a segunda porque ha `;` dentro de texto (`notes: "... cadastro; precos ..."`)
+ * e de template literal. Nenhuma das duas acusou erro — apenas nao transformou,
+ * que e a pior forma de falhar.
+ *
+ * Por isso a diferenca mora aqui, num metodo do builder, e a troca no codigo
+ * passa a ser uma substituicao de token IDENTICA nos 37 sitios: sem emenda de
+ * sentenca, sem aritmetica de indice, sem chance de corromper o arquivo.
+ * `const [x]` continua desestruturando `number`, e `const x` continua `number[]`.
+ */
+declare module "drizzle-orm/pg-core" {
+  interface PgInsertBase<
+    TTable extends PgTable,
+    TQueryResult extends PgQueryResultHKT,
+    TSelectedFields extends ColumnsSelection | undefined = undefined,
+    TReturning extends Record<string, unknown> | undefined = undefined,
+    TDynamic extends boolean = false,
+    TExcludedMethods extends string = never,
+  > {
+    $returningIds(): Promise<number[]>;
+  }
+}
+
+PgInsertBase.prototype.$returningIds = function (
+  this: { returning: () => Promise<Record<string, unknown>[]> }
+): Promise<number[]> {
+  // `returning()` sem argumento traz a linha inteira; so o `id` interessa.
+  return this.returning().then(linhas => linhas.map(linha => Number(linha.id)));
+};
 
 type UserDatabase = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 

@@ -139,13 +139,13 @@ export async function ensureWritablePlanVersion(
       createdBy: userId,
       notes: null,
     })
-    .$returningId();
+    .$returningIds();
   if (!created) {
     throw new Error("Não foi possível criar uma versão do plano.");
   }
-  await associateOrphanPlanNodes(projectId, created.id);
+  await associateOrphanPlanNodes(projectId, created);
   return {
-    id: created.id,
+    id: created,
     versionNumber: decision.nextNumber,
     status: "draft",
   };

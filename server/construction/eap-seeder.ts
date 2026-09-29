@@ -238,8 +238,8 @@ export async function semearEapDoCatalogo(
         parentId: null,
         sortOrder: no.sortOrder,
       })
-      .$returningId();
-    idPorCodigo.set(no.code, row.id);
+      .$returningIds();
+    idPorCodigo.set(no.code, row);
   }
 
   for (const no of gerado.nos.filter(n => n.level > 1)) {
@@ -260,8 +260,8 @@ export async function semearEapDoCatalogo(
         unit: no.unit,
         sortOrder: no.sortOrder,
       })
-      .$returningId();
-    idPorCodigo.set(no.code, row.id);
+      .$returningIds();
+    idPorCodigo.set(no.code, row);
   }
 
   // O orçamento nasce junto da EAP, folha a folha: mesmo código oficial,
@@ -299,12 +299,12 @@ export async function semearEapDoCatalogo(
         notes:
           "Preço unitário vem do catálogo importado; quantidade ainda não foi medida e está em 0 — preencher antes de aprovar.",
       })
-      .$returningId();
+      .$returningIds();
     const linhasInseridas = await db
       .insert(budgetItems)
       .values(
         folhas.map(no => ({
-          budgetVersionId: versao.id,
+          budgetVersionId: versao,
           wbsNodeId: idPorCodigo.get(no.code) ?? null,
           code: no.externalId!,
           description: no.name,
@@ -316,9 +316,9 @@ export async function semearEapDoCatalogo(
           sortOrder: no.sortOrder,
         }))
       )
-      .$returningId();
+      .$returningIds();
     folhas.forEach((no, index) => {
-      const id = linhasInseridas[index]?.id;
+      const id = linhasInseridas[index];
       if (id) budgetItemIdPorCodigo.set(no.code, id);
     });
     itensDeOrcamentoCriados = folhas.length;

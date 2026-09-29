@@ -84,13 +84,18 @@ function dbFalso(opcoes: {
       const registrar = (vals: Linha | Linha[]) => {
         const lista = Array.isArray(vals) ? vals : [vals];
         // Uma chamada de `values()` é UM insert em lote, como o drizzle faz.
-        // O id só existe no retorno de `$returningId`, e é ele que o
+        // O id só existe no retorno de `$returningIds`, e é ele que o
         // `parentId` da folha referencia — então o falso guarda os dois juntos.
+        //
+        // O método devolve `number[]`, e não a linha. No PostgreSQL,
+        // `returning()` traz o objeto inteiro, e quem traduz para numero é o
+        // `$returningIds` definido em `server/db.ts`; um falso que devolvesse
+        // objeto deixaria o teste passar com um contrato que o banco não tem.
         const ids = lista.map(() => proximoId++);
         inserts.push({ tabela, valores: lista, ids });
-        return { $returningId: async () => ids.map(id => ({ id })) };
+        return { $returningIds: async () => ids };
       };
-      return { values: registrar, $returningId: async () => [{ id: proximoId++ }] };
+      return { values: registrar, $returningIds: async () => [proximoId++] };
     },
     delete: (tabela: unknown) => ({
       where: async () => {
