@@ -79,6 +79,30 @@ const nav = [
   { label: "Agente IA", icon: Sparkles },
   { label: "Configurações", icon: Settings, adminOnly: true },
 ];
+/**
+ * Destinos de NÍVEL DE OBRA — não entram no menu.
+ *
+ * Estes oito módulos (EAP, Orçamento, Cronogramas, Linha de Balanço, Frentes,
+ * Produção, Medição, Restrições) viraram abas da planilha. Deixá-los no menu
+ * lateral ao lado das abas é o "sistema dentro do sistema": dois jeitos de
+ * chegar ao mesmo lugar, e o menu discordando da tela. A lista `nav` continua
+ * inteira porque o roteamento (NAV_PATHS) depende dela.
+ */
+const EH_DESTINO_DO_APP = [
+  "Portfólio",
+  "Catálogo",
+  "Relatórios",
+  "Agente IA",
+  "Configurações",
+];
+
+function ehDestinoDoApp(label: string): boolean {
+  return EH_DESTINO_DO_APP.includes(label);
+}
+
+/** A primeira aba da planilha, onde a obra abre. */
+const PRIMEIRA_ABA = "cronograma";
+
 const phaseColors: Record<string, string> = {
   Preparação: "#7e9bb4",
   Estrutura: "#4f7c8f",
@@ -1164,23 +1188,23 @@ export default function Home() {
           <ChevronDown size={15} />
         </div>
         <nav className="main-nav">
-          <span className="nav-caption">GESTÃO</span>
-          {nav.filter(item => !item.adminOnly || user?.role === "admin").map(item => (
-            <button
-              key={item.label}
-              className={`nav-item ${activeNav === item.label ? "active" : ""}`}
-              onClick={() => {
-                setActiveNav(item.label);
-                setMobileNavOpen(false);
-              }}
-            >
-              <item.icon size={17} />
-              <span>{item.label}</span>
-              {item.label === "Restrições" && riskActivities.length > 0 && (
-                <span className="nav-count">{riskActivities.length}</span>
-              )}
-            </button>
-          ))}
+          <span className="nav-caption">APLICATIVO</span>
+          {nav
+            .filter(item => ehDestinoDoApp(item.label))
+            .filter(item => !item.adminOnly || user?.role === "admin")
+            .map(item => (
+              <button
+                key={item.label}
+                className={`nav-item ${activeNav === item.label ? "active" : ""}`}
+                onClick={() => {
+                  setActiveNav(item.label);
+                  setMobileNavOpen(false);
+                }}
+              >
+                <item.icon size={17} />
+                <span>{item.label}</span>
+              </button>
+            ))}
         </nav>
         <div className="sidebar-projects">
           <div className="sidebar-section-head">
@@ -1198,6 +1222,12 @@ export default function Home() {
               key={project.id}
               onClick={() => {
                 setSelectedId(project.id);
+                // Escolher uma obra é ENTRAR na obra. Sem isto, clicar numa obra
+                // a partir do Portfólio deixava a tela no Portfólio.
+                if (ehDestinoDoApp(activeNav)) {
+                  setAbaAres(PRIMEIRA_ABA);
+                  setActiveNav(PRIMEIRA_ABA);
+                }
                 setMobileNavOpen(false);
               }}
               className={`project-mini ${selected?.id === project.id ? "selected" : ""}`}
@@ -1245,9 +1275,17 @@ export default function Home() {
             </button>
             <div>
               <span className="breadcrumb">
-                {activeNav} / {selected?.code || "Obras"}
+                {ehDestinoDoApp(activeNav)
+                  ? activeNav
+                  : (selected?.code || "Obras")}
               </span>
-              <h1>{activeNav === "Portfólio" ? "Visão geral" : activeNav}</h1>
+              <h1>
+                {ehDestinoDoApp(activeNav)
+                  ? activeNav === "Portfólio"
+                    ? "Visão geral"
+                    : activeNav
+                  : (selected?.name ?? "Obra")}
+              </h1>
             </div>
           </div>
           <div className="topbar-actions">
@@ -1281,7 +1319,7 @@ export default function Home() {
           <div key={activeNav} className="tab-content-root">
           {activeNav === "Configurações" ? (
             <AdminLlmSettings />
-          ) : activeNav !== "Portfólio" ? (
+          ) : !ehDestinoDoApp(activeNav) ? (
             <PlanilhaObra
               obra={selected?.name ?? "Obra"}
               projetoId={selected?.id ?? 1}
