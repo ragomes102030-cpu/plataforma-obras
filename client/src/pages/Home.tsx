@@ -53,6 +53,11 @@ import { MedicaoView } from "@/components/MedicaoView";
 import { GraficosView } from "@/components/GraficosView";
 import { FormulasView } from "@/components/FormulasView";
 import { dateAt as dateAtWorkCalendar, defaultCalendar } from "@shared/work-calendar";
+import { AresWorkspace, type AbaDoAres } from "@/components/AresWorkspace";
+import { VisaoLateral } from "@/components/VisaoLateral";
+import { ROTULO_DO_MODULO, ehAbaDeTrabalho } from "@shared/abas-ares";
+import type { IdDaVisaoLateral } from "@shared/abas-ares";
+import "@/ares-shell.css";
 
 const nav = [
   { label: "Portfólio", icon: FolderKanban },
@@ -913,6 +918,40 @@ export default function Home() {
     projectId: selected?.id ?? 1,
   });
   const activities = activitiesQuery.data ?? [];
+
+  // Aba ativa da pasta de trabalho. Mora ao lado de `activeNav` de proposito:
+  // estados separados para a lateral e para a barra de abas divergem sobre
+  // "em que aba estou", e essa divergencia e estado duplicado.
+  const [abaAres, setAbaAres] = useState<AbaDoAres>("eap");
+
+  // A casca escolhe a ABA; o modulo existente faz o trabalho. Reaproveitar em
+  // vez de reescrever: EapView, BudgetView, ProductionView, FrentesView,
+  // MedicaoView, GraficosView, FormulasView e GanttView ja falam com o backend.
+  const renderAbaDaAba = (aba: AbaDoAres) => (
+    <ModuleView
+      name={ROTULO_DO_MODULO[aba] ?? "EAP"}
+      icon={Layers3}
+      description=""
+      onBack={() => setActiveNav("Portfólio")}
+      onNavigate={setActiveNav}
+      projectId={selected?.id ?? 1}
+      projectName={selected?.name ?? "Obra"}
+      activities={activities}
+      search={search}
+      setSearch={setSearch}
+      plannedStart={selected?.plannedStart}
+    />
+  );
+
+  const renderVisaoLateral = (visao: IdDaVisaoLateral) => (
+    <VisaoLateral
+      visao={visao}
+      projectId={selected?.id ?? 1}
+      projectName={selected?.name ?? "Obra"}
+      activities={activities}
+      plannedStart={selected?.plannedStart}
+    />
+  );
   const budgetQuery = trpc.budgets.list.useQuery(
     { projectId: selected?.id ?? 1 },
     { enabled: Boolean(selected) }
@@ -1177,6 +1216,15 @@ export default function Home() {
           <div key={activeNav} className="tab-content-root">
           {activeNav === "Configurações" ? (
             <AdminLlmSettings />
+          ) : activeNav !== "Portfólio" && ehAbaDeTrabalho(activeNav) ? (
+            <AresWorkspace
+              obra={selected?.name ?? "Obra"}
+              projetoId={selected?.id ?? 1}
+              aba={abaAres}
+              onAba={setAbaAres}
+              renderAba={renderAbaDaAba}
+              renderVisao={renderVisaoLateral}
+            />
           ) : activeNav !== "Portfólio" ? (
             <ModuleView
               name={activeNav}

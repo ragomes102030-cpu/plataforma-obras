@@ -1,0 +1,253 @@
+/* ============================================================== casca ARES
+   A casca é chrome: barra de abas, lateral e moldura. Nenhuma regra de
+   planejamento mora aqui — o frontend não calcula data, duração nem CPM
+   (ver AUDITORIA_MOTOR_DE_PLANEJAMENTO.md §10). */
+
+.ares-shell {
+  --ares-barra: 34px;
+  --ares-lateral: 150px;
+  display: grid;
+  grid-template-rows: 38px minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  background: var(--surf);
+}
+
+.ares-topo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel, var(--surf));
+  font-size: 12px;
+}
+.ares-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.ares-obra {
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ares-topo-fim {
+  margin-left: auto;
+}
+.ares-status {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.ares-status-pendente {
+  border-color: var(--warn, #b8860b);
+  color: var(--warn, #b8860b);
+}
+
+.ares-corpo {
+  display: grid;
+  grid-template-columns: var(--ares-lateral) minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ lateral */
+.ares-lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.ares-lateral-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.ares-lateral-item:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.08));
+  color: var(--fg);
+}
+.ares-lateral-item.ativa {
+  border-color: var(--border);
+  background: var(--panel, var(--surf));
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------- área */
+.ares-area {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ares-grade-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ares-visao {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ares-visao-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ares-visao-topo h2 {
+  font-size: 13px;
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+.ares-visao-corpo {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ---------------------------------------------------------------- vazia */
+.ares-vazia {
+  margin: auto;
+  max-width: 560px;
+  padding: 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ares-vazia svg {
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+.ares-vazia h3 {
+  color: var(--fg);
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+.ares-vazia-nota {
+  margin-top: 14px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* --------------------------------------------------------------- rodapé */
+.ares-rodape {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border-top: 1px solid var(--border);
+  background: var(--panel, var(--surf));
+  min-height: var(--ares-barra);
+}
+.ares-abas {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex: 1;
+  min-width: 0;
+}
+.ares-abas::-webkit-scrollbar {
+  height: 4px;
+}
+.ares-abas::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+.ares-aba {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ares-aba:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.08));
+  color: var(--fg);
+}
+.ares-aba.ativa {
+  color: var(--fg);
+  border-color: var(--border);
+  border-bottom-color: transparent;
+  background: var(--surf);
+}
+
+/* O ponto avisa o estado sem obrigar a ler o rótulo: cheia, incompleta ou
+   vazia. Cor não é o único sinal — a forma do ponto também muda. */
+.ares-aba-ponto {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+}
+.ares-aba[data-status="pronta"] .ares-aba-ponto {
+  opacity: 0.9;
+}
+.ares-aba[data-status="parcial"] .ares-aba-ponto {
+  border-radius: 1px;
+  opacity: 0.9;
+}
+.ares-aba[data-status="pendente"] .ares-aba-ponto {
+  background: transparent;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+}
+.ares-aba.ativa .ares-aba-ponto {
+  opacity: 1;
+}
+
+.ares-atalhos {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .ares-shell {
+    --ares-lateral: 44px;
+  }
+  .ares-lateral-item span {
+    display: none;
+  }
+  .ares-atalhos {
+    display: none;
+  }
+}
