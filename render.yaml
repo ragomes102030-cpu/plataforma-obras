@@ -4,8 +4,30 @@ services:
     runtime: node
     plan: free
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: node scripts/ensure-plan-version-column.mjs && pnpm exec drizzle-kit push && pnpm start
+    # Migration por ARQUIVO, e nao por estado do schema.
+    #
+    # Antes era `pnpm exec drizzle-kit push`. O `push` compara o schema do codigo
+    # com o banco e altera o que achar diferente, direto, sem registrar qual
+    # migration rodou. O resultado e um banco que tem as tabelas e nao tem
+    # `__drizzle_migrations` — um estado que nenhum relatorio consegue explicar.
+    #
+    # `migrate-db.mjs` trata esse estado: `scripts/migrate-db.mjs:97` classifica
+    # como legado (tabelas existem, zero migrations aplicadas) e `:110` marca as
+    # seis como aplicadas SEM reexecutar o DDL. Trocar o `push` por ele nao
+    # duplica tabela e nao reaplica migration em cima de banco ja montado.
+    #
+    # Os `;` sao deliberados, e nao `&&`: cada passo roda mesmo que o anterior
+    # tenha falhado, e a falha de um nao impede o `pnpm start`. A aplicacao
+    # precisa subir para responder `/readyz` e dizer o que esta errado. Com
+    # `&&`, um erro de migration impediria o boot e o servico ficaria em
+    # crash-loop sem nunca reportar a causa. O `railway.json` usa a forma com
+    # `&& || true`, que funciona, mas depende da precedencia de `&&` e `||`
+    # ficar correta para o `pnpm start` rodar mesmo assim.
+    startCommand: node scripts/ensure-plan-version-column.mjs; node scripts/migrate-db.mjs; node scripts/audit-schema.mjs; pnpm start
     autoDeploy: true
+    # `/healthz` e proposital: ele devolve 200 sem tocar o banco. `/readyz` faz
+    # `SELECT 1` e conta tabelas, e um servico que demora para acordar seria
+    # marcado como morto pelo proprio health check.
     healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION
