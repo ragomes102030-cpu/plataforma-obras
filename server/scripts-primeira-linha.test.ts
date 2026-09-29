@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // linha com o caret embaixo do `#`. Isso faz parecer problema de codificação
 // quando é de sintaxe, e custou três passes de diagnóstico.
 //
-// Shebang (`#!`) NÃO é problema: `scripts/audit-schema.mjs` e
+// Shebang (`#!`) NÃO é problema: `scripts/audit-schema-pg.mjs` e
 // `scripts/migrate-db.mjs` começam assim, os dois são copiados para o container
 // e rodam em todo boot. Se shebang quebrasse, nenhum deploy passaria — e os
 // deploys passam.
@@ -54,7 +54,7 @@ describe("scripts .mjs", () => {
   });
 
   it("shebang é aceito — dois scripts de produção começam assim", () => {
-    for (const f of ["migrate-db.mjs", "audit-schema.mjs"]) {
+    for (const f of ["migrate-pg.mjs", "audit-schema-pg.mjs"]) {
       expect(arquivos, `${f} sumiu de scripts/`).toContain(f);
       expect(
         comecaComHashSolto(join(RAIZ, f)),

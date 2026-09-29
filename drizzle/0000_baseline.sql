@@ -1,579 +1,655 @@
-CREATE TABLE `activity_resource_allocations` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`activityId` int NOT NULL,
-	`resourceId` int NOT NULL,
-	`quantity` decimal(14,3) NOT NULL DEFAULT '1',
-	`productivity` decimal(14,3),
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `activity_resource_allocations_id` PRIMARY KEY(`id`),
-	CONSTRAINT `activity_resource_unique_idx` UNIQUE(`activityId`,`resourceId`)
+-- Baseline do PostgreSQL.
+--
+-- Gerado por `drizzle-kit generate` a partir de `drizzle/schema.ts`, e
+-- complementado a mao nos dois pontos em que o drizzle nao chega:
+--
+-- 1. Os 32 tipos de enum. O drizzle emite as colunas como
+--    `"projects_status"` e nao emite o `CREATE TYPE`. Aplicado assim, o banco
+--    recusaria na primeira tabela com `type "projects_status" does not exist`.
+-- 2. Nenhuma tabela depende de migration ja aplicada: este arquivo cria as 33
+--    do zero, e a 0001 apenas acrescenta trigger.
+
+CREATE TYPE "users_role" AS ENUM ('user', 'admin');
+--> statement-breakpoint
+CREATE TYPE "projects_status" AS ENUM ('Em execução', 'Planejamento', 'Concluída', 'Em risco');
+--> statement-breakpoint
+CREATE TYPE "projects_baseReferencia" AS ENUM ('SEINFRA', 'SINAPI', 'PROPRIA');
+--> statement-breakpoint
+CREATE TYPE "project_mcp_integrations_provider" AS ENUM ('eap', 'cronograma', 'ganttLob');
+--> statement-breakpoint
+CREATE TYPE "project_mcp_integrations_syncState" AS ENUM ('unconfigured', 'ready', 'pending', 'error');
+--> statement-breakpoint
+CREATE TYPE "agent_decisions_decision" AS ENUM ('approved', 'partially_approved', 'rejected', 'reopen');
+--> statement-breakpoint
+CREATE TYPE "project_plan_versions_status" AS ENUM ('draft', 'proposed', 'approved', 'superseded');
+--> statement-breakpoint
+CREATE TYPE "mcp_mutation_operations_provider" AS ENUM ('eap', 'cronograma', 'ganttLob');
+--> statement-breakpoint
+CREATE TYPE "mcp_mutation_operations_status" AS ENUM ('preview', 'confirmed', 'executing', 'succeeded', 'failed', 'cancelled');
+--> statement-breakpoint
+CREATE TYPE "mcp_homologation_runs_status" AS ENUM ('planned', 'read_only_running', 'read_only_passed', 'read_only_degraded', 'reconciled', 'failed');
+--> statement-breakpoint
+CREATE TYPE "schedule_activities_status" AS ENUM ('Não iniciado', 'Em andamento', 'Concluído', 'Em risco');
+--> statement-breakpoint
+CREATE TYPE "wbs_nodes_nodeType" AS ENUM ('grupo', 'pacote', 'entrega');
+--> statement-breakpoint
+CREATE TYPE "schedule_dependencies_type" AS ENUM ('FS', 'SS', 'FF', 'SF');
+--> statement-breakpoint
+CREATE TYPE "planning_resources_resourceType" AS ENUM ('mao_de_obra', 'equipamento', 'material');
+--> statement-breakpoint
+CREATE TYPE "schedule_baselines_status" AS ENUM ('rascunho', 'ativa', 'arquivada');
+--> statement-breakpoint
+CREATE TYPE "production_fronts_status" AS ENUM ('ativa', 'pausada', 'concluida');
+--> statement-breakpoint
+CREATE TYPE "production_entries_status" AS ENUM ('rascunho', 'confirmada');
+--> statement-breakpoint
+CREATE TYPE "budget_versions_status" AS ENUM ('rascunho', 'em_revisao', 'aprovado', 'arquivado');
+--> statement-breakpoint
+CREATE TYPE "price_catalogs_sourceType" AS ENUM ('propria', 'SINAPI', 'SEINFRA', 'fornecedor');
+--> statement-breakpoint
+CREATE TYPE "price_catalogs_status" AS ENUM ('ativo', 'arquivado');
+--> statement-breakpoint
+CREATE TYPE "price_items_itemType" AS ENUM ('material', 'mao_de_obra', 'equipamento', 'servico');
+--> statement-breakpoint
+CREATE TYPE "service_compositions_status" AS ENUM ('rascunho', 'validada', 'arquivada');
+--> statement-breakpoint
+CREATE TYPE "composition_components_componentType" AS ENUM ('material', 'mao_de_obra', 'equipamento');
+--> statement-breakpoint
+CREATE TYPE "agent_project_states_stage" AS ENUM ('DESCRITIVO', 'EAP_PROPOSTA', 'EAP_REVISAO', 'ATIVIDADES_PROPOSTA', 'DEPENDENCIAS_PROPOSTA', 'CPM_VALIDADO', 'CRONOGRAMA_PROPOSTO', 'BASELINE_PROPOSTA', 'GANTT_LOB_PROPOSTO', 'CONTROLE');
+--> statement-breakpoint
+CREATE TYPE "agent_findings_classification" AS ENUM ('blocker', 'alert', 'recommendation');
+--> statement-breakpoint
+CREATE TYPE "agent_findings_confidence" AS ENUM ('high', 'medium', 'low');
+--> statement-breakpoint
+CREATE TYPE "agent_findings_status" AS ENUM ('open', 'confirmed', 'rejected', 'resolved', 'obsolete');
+--> statement-breakpoint
+CREATE TYPE "agent_memories_scope" AS ENUM ('project', 'client', 'library');
+--> statement-breakpoint
+CREATE TYPE "agent_memories_confidence" AS ENUM ('high', 'medium', 'low');
+--> statement-breakpoint
+CREATE TYPE "agent_memories_status" AS ENUM ('proposed', 'approved', 'rejected', 'obsolete');
+--> statement-breakpoint
+CREATE TYPE "agent_runs_status" AS ENUM ('executando', 'respondido', 'falhou', 'timeout', 'aguardando_confirmacao', 'dados_incompletos');
+--> statement-breakpoint
+CREATE TYPE "calendar_exceptions_type" AS ENUM ('working', 'national_holiday', 'facultative', 'observance');
+--> statement-breakpoint
+CREATE TABLE "activity_resource_allocations" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "activity_resource_allocations_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"activityId" integer NOT NULL,
+	"resourceId" integer NOT NULL,
+	"quantity" numeric(14, 3) DEFAULT '1' NOT NULL,
+	"productivity" numeric(14, 3),
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `agent_decisions` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`userId` int NOT NULL,
-	`stage` varchar(50) NOT NULL,
-	`decision` enum('approved','partially_approved','rejected','reopen') NOT NULL,
-	`scopeJson` text NOT NULL,
-	`reason` text,
-	`impactJson` text,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `agent_decisions_id` PRIMARY KEY(`id`)
+CREATE TABLE "agent_decisions" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "agent_decisions_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"userId" integer NOT NULL,
+	"stage" varchar(50) NOT NULL,
+	"decision" "agent_decisions_decision" NOT NULL,
+	"scopeJson" text NOT NULL,
+	"reason" text,
+	"impactJson" text,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `agent_findings` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`stage` varchar(50) NOT NULL,
-	`classification` enum('blocker','alert','recommendation') NOT NULL,
-	`entityType` varchar(50) NOT NULL,
-	`entityRef` varchar(180),
-	`sourceJson` text NOT NULL,
-	`originalValueJson` text,
-	`proposedValueJson` text,
-	`description` text NOT NULL,
-	`impact` text,
-	`confidence` enum('high','medium','low') NOT NULL DEFAULT 'medium',
-	`status` enum('open','confirmed','rejected','resolved','obsolete') NOT NULL DEFAULT 'open',
-	`resolvedAt` timestamp,
-	`resolvedBy` int,
-	`resolutionNote` text,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `agent_findings_id` PRIMARY KEY(`id`)
+CREATE TABLE "agent_findings" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "agent_findings_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"stage" varchar(50) NOT NULL,
+	"classification" "agent_findings_classification" NOT NULL,
+	"entityType" varchar(50) NOT NULL,
+	"entityRef" varchar(180),
+	"sourceJson" text NOT NULL,
+	"originalValueJson" text,
+	"proposedValueJson" text,
+	"description" text NOT NULL,
+	"impact" text,
+	"confidence" "agent_findings_confidence" DEFAULT 'medium' NOT NULL,
+	"status" "agent_findings_status" DEFAULT 'open' NOT NULL,
+	"resolvedAt" timestamp with time zone,
+	"resolvedBy" integer,
+	"resolutionNote" text,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `agent_memories` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int,
-	`ownerUserId` int NOT NULL,
-	`scope` enum('project','client','library') NOT NULL,
-	`category` varchar(80) NOT NULL,
-	`memoryKey` varchar(180) NOT NULL,
-	`valueJson` text NOT NULL,
-	`sourceType` varchar(80) NOT NULL,
-	`sourceRef` varchar(180),
-	`confidence` enum('high','medium','low') NOT NULL DEFAULT 'medium',
-	`status` enum('proposed','approved','rejected','obsolete') NOT NULL DEFAULT 'proposed',
-	`approvedBy` int,
-	`approvedAt` timestamp,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `agent_memories_id` PRIMARY KEY(`id`)
+CREATE TABLE "agent_memories" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "agent_memories_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer,
+	"ownerUserId" integer NOT NULL,
+	"scope" "agent_memories_scope" NOT NULL,
+	"category" varchar(80) NOT NULL,
+	"memoryKey" varchar(180) NOT NULL,
+	"valueJson" text NOT NULL,
+	"sourceType" varchar(80) NOT NULL,
+	"sourceRef" varchar(180),
+	"confidence" "agent_memories_confidence" DEFAULT 'medium' NOT NULL,
+	"status" "agent_memories_status" DEFAULT 'proposed' NOT NULL,
+	"approvedBy" integer,
+	"approvedAt" timestamp with time zone,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `agent_project_states` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`stage` enum('DESCRITIVO','EAP_PROPOSTA','EAP_REVISAO','ATIVIDADES_PROPOSTA','DEPENDENCIAS_PROPOSTA','CPM_VALIDADO','CRONOGRAMA_PROPOSTO','BASELINE_PROPOSTA','GANTT_LOB_PROPOSTO','CONTROLE') NOT NULL DEFAULT 'DESCRITIVO',
-	`activeSection` varchar(40) NOT NULL DEFAULT 'portfolio',
-	`activeSubtab` varchar(40),
-	`blockerCount` int NOT NULL DEFAULT 0,
-	`lastSummary` text,
-	`version` int NOT NULL DEFAULT 1,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `agent_project_states_id` PRIMARY KEY(`id`),
-	CONSTRAINT `agent_project_states_project_idx` UNIQUE(`projectId`)
+CREATE TABLE "agent_project_states" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "agent_project_states_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"stage" "agent_project_states_stage" DEFAULT 'DESCRITIVO' NOT NULL,
+	"activeSection" varchar(40) DEFAULT 'portfolio' NOT NULL,
+	"activeSubtab" varchar(40),
+	"blockerCount" integer DEFAULT 0 NOT NULL,
+	"lastSummary" text,
+	"version" integer DEFAULT 1 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `agent_run_events` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`requestId` varchar(128) NOT NULL,
-	`projectId` int NOT NULL,
-	`userId` int NOT NULL,
-	`eventType` varchar(80) NOT NULL,
-	`eventJson` text NOT NULL,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `agent_run_events_id` PRIMARY KEY(`id`)
+CREATE TABLE "agent_run_events" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "agent_run_events_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"requestId" varchar(128) NOT NULL,
+	"projectId" integer NOT NULL,
+	"userId" integer NOT NULL,
+	"eventType" varchar(80) NOT NULL,
+	"eventJson" text NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `agent_runs` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`requestId` varchar(128) NOT NULL,
-	`projectId` int NOT NULL,
-	`userId` int NOT NULL,
-	`status` enum('executando','respondido','falhou','timeout','aguardando_confirmacao','dados_incompletos') NOT NULL DEFAULT 'executando',
-	`currentStep` varchar(120),
-	`provider` varchar(80),
-	`model` varchar(160),
-	`contextJson` text NOT NULL,
-	`resultJson` text,
-	`errorCode` varchar(100),
-	`errorMessage` text,
-	`iterations` int NOT NULL DEFAULT 0,
-	`startedAt` timestamp NOT NULL DEFAULT (now()),
-	`finishedAt` timestamp,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `agent_runs_id` PRIMARY KEY(`id`),
-	CONSTRAINT `agent_runs_requestId_unique` UNIQUE(`requestId`)
+CREATE TABLE "agent_runs" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "agent_runs_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"requestId" varchar(128) NOT NULL,
+	"projectId" integer NOT NULL,
+	"userId" integer NOT NULL,
+	"status" "agent_runs_status" DEFAULT 'executando' NOT NULL,
+	"currentStep" varchar(120),
+	"provider" varchar(80),
+	"model" varchar(160),
+	"contextJson" text NOT NULL,
+	"resultJson" text,
+	"errorCode" varchar(100),
+	"errorMessage" text,
+	"iterations" integer DEFAULT 0 NOT NULL,
+	"startedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"finishedAt" timestamp with time zone,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "agent_runs_requestId_unique" UNIQUE("requestId")
 );
 --> statement-breakpoint
-CREATE TABLE `budget_items` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`budgetVersionId` int NOT NULL,
-	`wbsNodeId` int,
-	`code` varchar(48) NOT NULL,
-	`description` varchar(240) NOT NULL,
-	`unit` varchar(32) NOT NULL,
-	`quantity` decimal(14,3) NOT NULL,
-	`unitPrice` decimal(14,2) NOT NULL,
-	`compositionId` int,
-	`compositionUnitCost` decimal(14,2),
-	`productivity` decimal(14,3),
-	`plannedDurationDays` int,
-	`source` varchar(80),
-	`referencePeriod` varchar(20),
-	`compositionNote` text,
-	`isPriceException` boolean NOT NULL DEFAULT false,
-	`sortOrder` int NOT NULL DEFAULT 0,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `budget_items_id` PRIMARY KEY(`id`),
-	CONSTRAINT `budget_items_version_code_idx` UNIQUE(`budgetVersionId`,`code`)
+CREATE TABLE "budget_items" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "budget_items_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"budgetVersionId" integer NOT NULL,
+	"wbsNodeId" integer,
+	"code" varchar(48) NOT NULL,
+	"description" varchar(240) NOT NULL,
+	"unit" varchar(32) NOT NULL,
+	"quantity" numeric(14, 3) NOT NULL,
+	"unitPrice" numeric(14, 2) NOT NULL,
+	"compositionId" integer,
+	"compositionUnitCost" numeric(14, 2),
+	"productivity" numeric(14, 3),
+	"plannedDurationDays" integer,
+	"source" varchar(80),
+	"referencePeriod" varchar(20),
+	"compositionNote" text,
+	"isPriceException" boolean DEFAULT false NOT NULL,
+	"sortOrder" integer DEFAULT 0 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `budget_versions` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`name` varchar(160) NOT NULL,
-	`versionNumber` int NOT NULL,
-	`status` enum('rascunho','em_revisao','aprovado','arquivado') NOT NULL DEFAULT 'rascunho',
-	`currency` varchar(3) NOT NULL DEFAULT 'BRL',
-	`notes` text,
-	`createdBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `budget_versions_id` PRIMARY KEY(`id`),
-	CONSTRAINT `budget_versions_project_version_idx` UNIQUE(`projectId`,`versionNumber`)
+CREATE TABLE "budget_versions" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "budget_versions_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"name" varchar(160) NOT NULL,
+	"versionNumber" integer NOT NULL,
+	"status" "budget_versions_status" DEFAULT 'rascunho' NOT NULL,
+	"currency" varchar(3) DEFAULT 'BRL' NOT NULL,
+	"notes" text,
+	"createdBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `composition_components` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`compositionId` int NOT NULL,
-	`priceItemId` int NOT NULL,
-	`componentType` enum('material','mao_de_obra','equipamento') NOT NULL,
-	`coefficient` decimal(14,6) NOT NULL,
-	`unitPriceSnapshot` decimal(14,2) NOT NULL,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `composition_components_id` PRIMARY KEY(`id`),
-	CONSTRAINT `composition_components_unique_idx` UNIQUE(`compositionId`,`priceItemId`)
+CREATE TABLE "calendar_exceptions" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "calendar_exceptions_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"calendarId" integer NOT NULL,
+	"date" varchar(10) NOT NULL,
+	"type" "calendar_exceptions_type" NOT NULL,
+	"name" varchar(180),
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `llm_provider_settings` (
-	`id` int NOT NULL,
-	`encryptedConfig` text NOT NULL,
-	`updatedBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `llm_provider_settings_id` PRIMARY KEY(`id`)
+CREATE TABLE "composition_components" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "composition_components_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"compositionId" integer NOT NULL,
+	"priceItemId" integer NOT NULL,
+	"componentType" "composition_components_componentType" NOT NULL,
+	"coefficient" numeric(14, 6) NOT NULL,
+	"unitPriceSnapshot" numeric(14, 2) NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `mcp_homologation_runs` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`userId` int NOT NULL,
-	`requestId` varchar(128) NOT NULL,
-	`status` enum('planned','read_only_running','read_only_passed','read_only_degraded','reconciled','failed') NOT NULL DEFAULT 'planned',
-	`planJson` text NOT NULL,
-	`readOnlyResultJson` text,
-	`reconciliationJson` text,
-	`error` text,
-	`startedAt` timestamp,
-	`finishedAt` timestamp,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `mcp_homologation_runs_id` PRIMARY KEY(`id`)
+CREATE TABLE "llm_provider_settings" (
+	"id" integer PRIMARY KEY NOT NULL,
+	"encryptedConfig" text NOT NULL,
+	"updatedBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `mcp_mutation_operations` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`userId` int NOT NULL,
-	`provider` enum('eap','cronograma','ganttLob') NOT NULL,
-	`toolName` varchar(100) NOT NULL,
-	`externalProjectId` varchar(180) NOT NULL,
-	`idempotencyKey` varchar(128) NOT NULL,
-	`confirmationToken` varchar(64) NOT NULL,
-	`argsJson` text NOT NULL,
-	`resultJson` text,
-	`error` text,
-	`status` enum('preview','confirmed','executing','succeeded','failed','cancelled') NOT NULL DEFAULT 'preview',
-	`confirmedAt` timestamp,
-	`executedAt` timestamp,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `mcp_mutation_operations_id` PRIMARY KEY(`id`),
-	CONSTRAINT `mcp_mutation_operations_idempotency_idx` UNIQUE(`idempotencyKey`)
+CREATE TABLE "mcp_homologation_runs" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "mcp_homologation_runs_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"userId" integer NOT NULL,
+	"requestId" varchar(128) NOT NULL,
+	"status" "mcp_homologation_runs_status" DEFAULT 'planned' NOT NULL,
+	"planJson" text NOT NULL,
+	"readOnlyResultJson" text,
+	"reconciliationJson" text,
+	"error" text,
+	"startedAt" timestamp with time zone,
+	"finishedAt" timestamp with time zone,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `planning_resources` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`name` varchar(180) NOT NULL,
-	`resourceType` enum('mao_de_obra','equipamento','material') NOT NULL,
-	`unit` varchar(32) NOT NULL,
-	`capacityPerDay` decimal(14,3),
-	`costPerDay` decimal(14,2),
-	`active` int NOT NULL DEFAULT 1,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `planning_resources_id` PRIMARY KEY(`id`)
+CREATE TABLE "mcp_mutation_operations" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "mcp_mutation_operations_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"userId" integer NOT NULL,
+	"provider" "mcp_mutation_operations_provider" NOT NULL,
+	"toolName" varchar(100) NOT NULL,
+	"externalProjectId" varchar(180) NOT NULL,
+	"idempotencyKey" varchar(128) NOT NULL,
+	"confirmationToken" varchar(64) NOT NULL,
+	"argsJson" text NOT NULL,
+	"resultJson" text,
+	"error" text,
+	"status" "mcp_mutation_operations_status" DEFAULT 'preview' NOT NULL,
+	"confirmedAt" timestamp with time zone,
+	"executedAt" timestamp with time zone,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `price_catalogs` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`name` varchar(160) NOT NULL,
-	`sourceType` enum('propria','SINAPI','SEINFRA','fornecedor') NOT NULL,
-	`state` varchar(2),
-	`referencePeriod` varchar(20) NOT NULL,
-	`status` enum('ativo','arquivado') NOT NULL DEFAULT 'ativo',
-	`notes` text,
-	`createdBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `price_catalogs_id` PRIMARY KEY(`id`)
+CREATE TABLE "planning_resources" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "planning_resources_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"name" varchar(180) NOT NULL,
+	"resourceType" "planning_resources_resourceType" NOT NULL,
+	"unit" varchar(32) NOT NULL,
+	"capacityPerDay" numeric(14, 3),
+	"costPerDay" numeric(14, 2),
+	"active" integer DEFAULT 1 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `price_items` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`catalogId` int NOT NULL,
-	`code` varchar(64) NOT NULL,
-	`description` varchar(240) NOT NULL,
-	`unit` varchar(32) NOT NULL,
-	`itemType` enum('material','mao_de_obra','equipamento','servico') NOT NULL,
-	`unitPrice` decimal(14,2) NOT NULL,
-	`notes` text,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `price_items_id` PRIMARY KEY(`id`),
-	CONSTRAINT `price_items_catalog_code_idx` UNIQUE(`catalogId`,`code`)
+CREATE TABLE "price_catalogs" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "price_catalogs_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"name" varchar(160) NOT NULL,
+	"sourceType" "price_catalogs_sourceType" NOT NULL,
+	"state" varchar(2),
+	"referencePeriod" varchar(20) NOT NULL,
+	"status" "price_catalogs_status" DEFAULT 'ativo' NOT NULL,
+	"notes" text,
+	"createdBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `production_entries` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`frontId` int NOT NULL,
-	`teamId` int NOT NULL,
-	`unitId` int NOT NULL,
-	`activityId` int NOT NULL,
-	`productionDate` timestamp NOT NULL,
-	`quantity` decimal(12,3) NOT NULL,
-	`measurementUnit` varchar(32) NOT NULL,
-	`notes` text,
-	`status` enum('rascunho','confirmada') NOT NULL DEFAULT 'rascunho',
-	`createdBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `production_entries_id` PRIMARY KEY(`id`)
+CREATE TABLE "price_items" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "price_items_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"catalogId" integer NOT NULL,
+	"code" varchar(64) NOT NULL,
+	"description" varchar(240) NOT NULL,
+	"unit" varchar(32) NOT NULL,
+	"itemType" "price_items_itemType" NOT NULL,
+	"unitPrice" numeric(14, 2) NOT NULL,
+	"notes" text,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `production_fronts` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`code` varchar(32) NOT NULL,
-	`name` varchar(180) NOT NULL,
-	`location` varchar(180),
-	`status` enum('ativa','pausada','concluida') NOT NULL DEFAULT 'ativa',
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `production_fronts_id` PRIMARY KEY(`id`)
+CREATE TABLE "production_entries" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "production_entries_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"frontId" integer,
+	"teamId" integer,
+	"unitId" integer,
+	"activityId" integer NOT NULL,
+	"productionDate" timestamp with time zone NOT NULL,
+	"quantity" numeric(12, 3) NOT NULL,
+	"measurementUnit" varchar(32) NOT NULL,
+	"notes" text,
+	"status" "production_entries_status" DEFAULT 'rascunho' NOT NULL,
+	"exemplo" integer DEFAULT 0 NOT NULL,
+	"createdBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `production_teams` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`name` varchar(180) NOT NULL,
-	`trade` varchar(120) NOT NULL,
-	`memberCount` int NOT NULL DEFAULT 0,
-	`active` int NOT NULL DEFAULT 1,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `production_teams_id` PRIMARY KEY(`id`)
+CREATE TABLE "production_fronts" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "production_fronts_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"code" varchar(32) NOT NULL,
+	"name" varchar(180) NOT NULL,
+	"location" varchar(180),
+	"status" "production_fronts_status" DEFAULT 'ativa' NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `production_units` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`code` varchar(32) NOT NULL,
-	`name` varchar(180) NOT NULL,
-	`unitType` varchar(80) NOT NULL,
-	`sortOrder` int NOT NULL DEFAULT 0,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `production_units_id` PRIMARY KEY(`id`)
+CREATE TABLE "production_teams" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "production_teams_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"name" varchar(180) NOT NULL,
+	"trade" varchar(120) NOT NULL,
+	"memberCount" integer DEFAULT 0 NOT NULL,
+	"active" integer DEFAULT 1 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `project_audit_events` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`userId` int,
-	`action` varchar(64) NOT NULL,
-	`payload` json NOT NULL,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `project_audit_events_id` PRIMARY KEY(`id`)
+CREATE TABLE "production_units" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "production_units_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"code" varchar(32) NOT NULL,
+	"name" varchar(180) NOT NULL,
+	"unitType" varchar(80) NOT NULL,
+	"sortOrder" integer DEFAULT 0 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `project_mcp_integrations` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`provider` enum('eap','cronograma','ganttLob') NOT NULL,
-	`externalProjectId` varchar(180),
-	`endpointUrl` varchar(500) NOT NULL,
-	`syncState` enum('unconfigured','ready','pending','error') NOT NULL DEFAULT 'unconfigured',
-	`lastSyncedAt` timestamp,
-	`lastError` text,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `project_mcp_integrations_id` PRIMARY KEY(`id`),
-	CONSTRAINT `project_mcp_integrations_project_provider_idx` UNIQUE(`projectId`,`provider`)
+CREATE TABLE "project_audit_events" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "project_audit_events_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"userId" integer,
+	"action" varchar(64) NOT NULL,
+	"payload" jsonb NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `project_plan_versions` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`versionNumber` int NOT NULL,
-	`status` enum('draft','proposed','approved','superseded') NOT NULL DEFAULT 'draft',
-	`baseVersionId` int,
-	`decisionId` int,
-	`approvedAt` timestamp,
-	`notes` text,
-	`createdBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `project_plan_versions_id` PRIMARY KEY(`id`),
-	CONSTRAINT `project_plan_versions_project_version_idx` UNIQUE(`projectId`,`versionNumber`)
+CREATE TABLE "project_mcp_integrations" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "project_mcp_integrations_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"provider" "project_mcp_integrations_provider" NOT NULL,
+	"externalProjectId" varchar(180),
+	"endpointUrl" varchar(500) NOT NULL,
+	"syncState" "project_mcp_integrations_syncState" DEFAULT 'unconfigured' NOT NULL,
+	"lastSyncedAt" timestamp with time zone,
+	"lastError" text,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `projects` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`ownerUserId` int,
-	`code` varchar(32) NOT NULL,
-	`name` varchar(180) NOT NULL,
-	`location` varchar(180) NOT NULL,
-	`status` enum('Em execução','Planejamento','Concluída','Em risco') NOT NULL DEFAULT 'Planejamento',
-	`progress` int NOT NULL DEFAULT 0,
-	`plannedStart` timestamp NOT NULL,
-	`plannedFinish` timestamp NOT NULL,
-	`baseReferencia` enum('SEINFRA','SINAPI','PROPRIA'),
-	`baseReferenciaRef` varchar(20),
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `projects_id` PRIMARY KEY(`id`),
-	CONSTRAINT `projects_code_unique` UNIQUE(`code`)
+CREATE TABLE "project_plan_versions" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "project_plan_versions_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"versionNumber" integer NOT NULL,
+	"status" "project_plan_versions_status" DEFAULT 'draft' NOT NULL,
+	"baseVersionId" integer,
+	"decisionId" integer,
+	"approvedAt" timestamp with time zone,
+	"notes" text,
+	"createdBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `schedule_activities` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`wbsNodeId` int NOT NULL,
-	`externalId` varchar(180),
-	`eapRef` varchar(180),
-	`wbsCode` varchar(32) NOT NULL,
-	`name` varchar(220) NOT NULL,
-	`phase` varchar(80) NOT NULL,
-	`startOffset` int NOT NULL,
-	`durationDays` int NOT NULL,
-	`plannedQuantity` decimal(14,3),
-	`productivity` decimal(14,3),
-	`budgetItemId` int,
-	`progress` int NOT NULL DEFAULT 0,
-	`status` enum('Não iniciado','Em andamento','Concluído','Em risco') NOT NULL DEFAULT 'Não iniciado',
-	`critical` int NOT NULL DEFAULT 0,
-	`earlyStart` int,
-	`earlyFinish` int,
-	`lateStart` int,
-	`lateFinish` int,
-	`totalFloat` int,
-	`cpmCalculatedAt` timestamp,
-	`versionId` int,
-	`sortOrder` int NOT NULL DEFAULT 0,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `schedule_activities_id` PRIMARY KEY(`id`),
-	CONSTRAINT `schedule_activities_project_external_idx` UNIQUE(`projectId`,`externalId`)
+CREATE TABLE "projects" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "projects_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"ownerUserId" integer,
+	"code" varchar(32) NOT NULL,
+	"name" varchar(180) NOT NULL,
+	"location" varchar(180) NOT NULL,
+	"status" "projects_status" DEFAULT 'Planejamento' NOT NULL,
+	"progress" integer DEFAULT 0 NOT NULL,
+	"descricao" text,
+	"plannedStart" timestamp with time zone NOT NULL,
+	"plannedFinish" timestamp with time zone NOT NULL,
+	"baseReferencia" "projects_baseReferencia",
+	"baseReferenciaRef" varchar(20),
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "projects_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
-CREATE TABLE `schedule_baseline_items` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`baselineId` int NOT NULL,
-	`activityId` int NOT NULL,
-	`startOffset` int NOT NULL,
-	`durationDays` int NOT NULL,
-	`earlyStart` int,
-	`earlyFinish` int,
-	CONSTRAINT `schedule_baseline_items_id` PRIMARY KEY(`id`),
-	CONSTRAINT `schedule_baseline_activity_idx` UNIQUE(`baselineId`,`activityId`)
+CREATE TABLE "schedule_activities" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "schedule_activities_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"wbsNodeId" integer NOT NULL,
+	"externalId" varchar(180),
+	"eapRef" varchar(180),
+	"wbsCode" varchar(32) NOT NULL,
+	"name" varchar(220) NOT NULL,
+	"phase" varchar(80) NOT NULL,
+	"pavimento" varchar(80),
+	"startOffset" integer NOT NULL,
+	"durationDays" integer NOT NULL,
+	"plannedQuantity" numeric(14, 3),
+	"unit" varchar(16),
+	"productivity" numeric(14, 3),
+	"budgetItemId" integer,
+	"progress" integer DEFAULT 0 NOT NULL,
+	"exemplo" integer DEFAULT 0 NOT NULL,
+	"status" "schedule_activities_status" DEFAULT 'Não iniciado' NOT NULL,
+	"critical" integer DEFAULT 0 NOT NULL,
+	"earlyStart" integer,
+	"earlyFinish" integer,
+	"lateStart" integer,
+	"lateFinish" integer,
+	"totalFloat" integer,
+	"freeFloat" integer,
+	"mustStartOn" timestamp with time zone,
+	"finishNoLaterThan" timestamp with time zone,
+	"cpmCalculatedAt" timestamp with time zone,
+	"versionId" integer,
+	"sortOrder" integer DEFAULT 0 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `schedule_baselines` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`name` varchar(160) NOT NULL,
-	`status` enum('rascunho','ativa','arquivada') NOT NULL DEFAULT 'ativa',
-	`createdBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `schedule_baselines_id` PRIMARY KEY(`id`)
+CREATE TABLE "schedule_baseline_items" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "schedule_baseline_items_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"baselineId" integer NOT NULL,
+	"activityId" integer NOT NULL,
+	"startOffset" integer NOT NULL,
+	"durationDays" integer NOT NULL,
+	"earlyStart" integer,
+	"earlyFinish" integer
 );
 --> statement-breakpoint
-CREATE TABLE `schedule_dependencies` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`externalId` varchar(180),
-	`predecessorId` int NOT NULL,
-	`successorId` int NOT NULL,
-	`type` enum('FS','SS','FF','SF') NOT NULL DEFAULT 'FS',
-	`lag` int NOT NULL DEFAULT 0,
-	`versionId` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `schedule_dependencies_id` PRIMARY KEY(`id`),
-	CONSTRAINT `schedule_dependencies_project_external_idx` UNIQUE(`projectId`,`externalId`)
+CREATE TABLE "schedule_baselines" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "schedule_baselines_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"name" varchar(160) NOT NULL,
+	"status" "schedule_baselines_status" DEFAULT 'ativa' NOT NULL,
+	"createdBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `service_compositions` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`code` varchar(64) NOT NULL,
-	`description` varchar(240) NOT NULL,
-	`unit` varchar(32) NOT NULL,
-	`sourceCatalogId` int,
-	`referencePeriod` varchar(20),
-	`status` enum('rascunho','validada','arquivada') NOT NULL DEFAULT 'rascunho',
-	`createdBy` int,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `service_compositions_id` PRIMARY KEY(`id`),
-	CONSTRAINT `service_compositions_code_idx` UNIQUE(`code`)
+CREATE TABLE "schedule_dependencies" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "schedule_dependencies_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"externalId" varchar(180),
+	"predecessorId" integer NOT NULL,
+	"successorId" integer NOT NULL,
+	"type" "schedule_dependencies_type" DEFAULT 'FS' NOT NULL,
+	"lag" integer DEFAULT 0 NOT NULL,
+	"versionId" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `users` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`openId` varchar(64) NOT NULL,
-	`name` text,
-	`email` varchar(320),
-	`loginMethod` varchar(64),
-	`role` enum('user','admin') NOT NULL DEFAULT 'user',
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	`lastSignedIn` timestamp NOT NULL DEFAULT (now()),
-	CONSTRAINT `users_id` PRIMARY KEY(`id`),
-	CONSTRAINT `users_openId_unique` UNIQUE(`openId`)
+CREATE TABLE "service_compositions" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "service_compositions_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"code" varchar(64) NOT NULL,
+	"description" varchar(240) NOT NULL,
+	"unit" varchar(32) NOT NULL,
+	"sourceCatalogId" integer,
+	"referencePeriod" varchar(20),
+	"status" "service_compositions_status" DEFAULT 'rascunho' NOT NULL,
+	"createdBy" integer,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `wbs_nodes` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`projectId` int NOT NULL,
-	`externalId` varchar(180),
-	`externalUid` varchar(180),
-	`parentId` int,
-	`code` varchar(32) NOT NULL,
-	`name` varchar(220) NOT NULL,
-	`level` int NOT NULL DEFAULT 1,
-	`nodeType` enum('grupo','pacote','entrega') NOT NULL DEFAULT 'pacote',
-	`unit` varchar(32),
-	`plannedQuantity` int,
-	`versionId` int,
-	`sortOrder` int NOT NULL DEFAULT 0,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `wbs_nodes_id` PRIMARY KEY(`id`),
-	CONSTRAINT `wbs_nodes_project_external_idx` UNIQUE(`projectId`,`externalId`),
-	CONSTRAINT `wbs_nodes_project_code_unique_idx` UNIQUE(`projectId`,`code`)
+CREATE TABLE "users" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "users_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"openId" varchar(64) NOT NULL,
+	"name" text,
+	"email" varchar(320),
+	"loginMethod" varchar(64),
+	"role" "users_role" DEFAULT 'user' NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"lastSignedIn" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "users_openId_unique" UNIQUE("openId")
 );
 --> statement-breakpoint
-ALTER TABLE `activity_resource_allocations` ADD CONSTRAINT `act_res_alloc_activity_fk` FOREIGN KEY (`activityId`) REFERENCES `schedule_activities`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `activity_resource_allocations` ADD CONSTRAINT `act_res_alloc_resource_fk` FOREIGN KEY (`resourceId`) REFERENCES `planning_resources`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_decisions` ADD CONSTRAINT `agent_decisions_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_decisions` ADD CONSTRAINT `agent_decisions_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_findings` ADD CONSTRAINT `agent_findings_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_findings` ADD CONSTRAINT `agent_findings_resolvedBy_users_id_fk` FOREIGN KEY (`resolvedBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_memories` ADD CONSTRAINT `agent_memories_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_memories` ADD CONSTRAINT `agent_memories_ownerUserId_users_id_fk` FOREIGN KEY (`ownerUserId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_memories` ADD CONSTRAINT `agent_memories_approvedBy_users_id_fk` FOREIGN KEY (`approvedBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_project_states` ADD CONSTRAINT `agent_project_states_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_run_events` ADD CONSTRAINT `agent_run_events_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_run_events` ADD CONSTRAINT `agent_run_events_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_runs` ADD CONSTRAINT `agent_runs_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `agent_runs` ADD CONSTRAINT `agent_runs_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `budget_items` ADD CONSTRAINT `budget_items_budgetVersionId_budget_versions_id_fk` FOREIGN KEY (`budgetVersionId`) REFERENCES `budget_versions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `budget_items` ADD CONSTRAINT `budget_items_wbsNodeId_wbs_nodes_id_fk` FOREIGN KEY (`wbsNodeId`) REFERENCES `wbs_nodes`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `budget_versions` ADD CONSTRAINT `budget_versions_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `budget_versions` ADD CONSTRAINT `budget_versions_createdBy_users_id_fk` FOREIGN KEY (`createdBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `composition_components` ADD CONSTRAINT `composition_components_compositionId_service_compositions_id_fk` FOREIGN KEY (`compositionId`) REFERENCES `service_compositions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `composition_components` ADD CONSTRAINT `composition_components_priceItemId_price_items_id_fk` FOREIGN KEY (`priceItemId`) REFERENCES `price_items`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `llm_provider_settings` ADD CONSTRAINT `llm_provider_settings_updatedBy_users_id_fk` FOREIGN KEY (`updatedBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `mcp_homologation_runs` ADD CONSTRAINT `mcp_homologation_runs_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `mcp_homologation_runs` ADD CONSTRAINT `mcp_homologation_runs_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `mcp_mutation_operations` ADD CONSTRAINT `mcp_mutation_operations_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `mcp_mutation_operations` ADD CONSTRAINT `mcp_mutation_operations_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `planning_resources` ADD CONSTRAINT `planning_resources_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_catalogs` ADD CONSTRAINT `price_catalogs_createdBy_users_id_fk` FOREIGN KEY (`createdBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `price_items` ADD CONSTRAINT `price_items_catalogId_price_catalogs_id_fk` FOREIGN KEY (`catalogId`) REFERENCES `price_catalogs`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_entries` ADD CONSTRAINT `production_entries_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_entries` ADD CONSTRAINT `production_entries_frontId_production_fronts_id_fk` FOREIGN KEY (`frontId`) REFERENCES `production_fronts`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_entries` ADD CONSTRAINT `production_entries_teamId_production_teams_id_fk` FOREIGN KEY (`teamId`) REFERENCES `production_teams`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_entries` ADD CONSTRAINT `production_entries_unitId_production_units_id_fk` FOREIGN KEY (`unitId`) REFERENCES `production_units`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_entries` ADD CONSTRAINT `production_entries_activityId_schedule_activities_id_fk` FOREIGN KEY (`activityId`) REFERENCES `schedule_activities`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_entries` ADD CONSTRAINT `production_entries_createdBy_users_id_fk` FOREIGN KEY (`createdBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_fronts` ADD CONSTRAINT `production_fronts_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_teams` ADD CONSTRAINT `production_teams_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `production_units` ADD CONSTRAINT `production_units_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_audit_events` ADD CONSTRAINT `project_audit_events_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_audit_events` ADD CONSTRAINT `project_audit_events_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_mcp_integrations` ADD CONSTRAINT `project_mcp_integrations_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_plan_versions` ADD CONSTRAINT `project_plan_versions_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_plan_versions` ADD CONSTRAINT `project_plan_versions_baseVersionId_project_plan_versions_id_fk` FOREIGN KEY (`baseVersionId`) REFERENCES `project_plan_versions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_plan_versions` ADD CONSTRAINT `project_plan_versions_decisionId_agent_decisions_id_fk` FOREIGN KEY (`decisionId`) REFERENCES `agent_decisions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `project_plan_versions` ADD CONSTRAINT `project_plan_versions_createdBy_users_id_fk` FOREIGN KEY (`createdBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `projects` ADD CONSTRAINT `projects_ownerUserId_users_id_fk` FOREIGN KEY (`ownerUserId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_activities` ADD CONSTRAINT `schedule_activities_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_activities` ADD CONSTRAINT `schedule_activities_wbsNodeId_wbs_nodes_id_fk` FOREIGN KEY (`wbsNodeId`) REFERENCES `wbs_nodes`(`id`) ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_activities` ADD CONSTRAINT `schedule_activities_versionId_project_plan_versions_id_fk` FOREIGN KEY (`versionId`) REFERENCES `project_plan_versions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_baseline_items` ADD CONSTRAINT `schedule_baseline_items_baselineId_schedule_baselines_id_fk` FOREIGN KEY (`baselineId`) REFERENCES `schedule_baselines`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_baseline_items` ADD CONSTRAINT `schedule_baseline_items_activityId_schedule_activities_id_fk` FOREIGN KEY (`activityId`) REFERENCES `schedule_activities`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_baselines` ADD CONSTRAINT `schedule_baselines_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_baselines` ADD CONSTRAINT `schedule_baselines_createdBy_users_id_fk` FOREIGN KEY (`createdBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_dependencies` ADD CONSTRAINT `schedule_dependencies_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_dependencies` ADD CONSTRAINT `schedule_dependencies_predecessorId_schedule_activities_id_fk` FOREIGN KEY (`predecessorId`) REFERENCES `schedule_activities`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_dependencies` ADD CONSTRAINT `schedule_dependencies_successorId_schedule_activities_id_fk` FOREIGN KEY (`successorId`) REFERENCES `schedule_activities`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `schedule_dependencies` ADD CONSTRAINT `schedule_dependencies_versionId_project_plan_versions_id_fk` FOREIGN KEY (`versionId`) REFERENCES `project_plan_versions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `service_compositions` ADD CONSTRAINT `service_compositions_sourceCatalogId_price_catalogs_id_fk` FOREIGN KEY (`sourceCatalogId`) REFERENCES `price_catalogs`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `service_compositions` ADD CONSTRAINT `service_compositions_createdBy_users_id_fk` FOREIGN KEY (`createdBy`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `wbs_nodes` ADD CONSTRAINT `wbs_nodes_projectId_projects_id_fk` FOREIGN KEY (`projectId`) REFERENCES `projects`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `wbs_nodes` ADD CONSTRAINT `wbs_nodes_parentId_wbs_nodes_id_fk` FOREIGN KEY (`parentId`) REFERENCES `wbs_nodes`(`id`) ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE `wbs_nodes` ADD CONSTRAINT `wbs_nodes_versionId_project_plan_versions_id_fk` FOREIGN KEY (`versionId`) REFERENCES `project_plan_versions`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX `activity_resource_activity_idx` ON `activity_resource_allocations` (`activityId`);--> statement-breakpoint
-CREATE INDEX `agent_decisions_project_idx` ON `agent_decisions` (`projectId`);--> statement-breakpoint
-CREATE INDEX `agent_decisions_project_stage_idx` ON `agent_decisions` (`projectId`,`stage`);--> statement-breakpoint
-CREATE INDEX `agent_findings_project_idx` ON `agent_findings` (`projectId`);--> statement-breakpoint
-CREATE INDEX `agent_findings_project_status_idx` ON `agent_findings` (`projectId`,`status`);--> statement-breakpoint
-CREATE INDEX `agent_memories_project_idx` ON `agent_memories` (`projectId`);--> statement-breakpoint
-CREATE INDEX `agent_memories_owner_scope_idx` ON `agent_memories` (`ownerUserId`,`scope`);--> statement-breakpoint
-CREATE INDEX `agent_memories_status_idx` ON `agent_memories` (`status`);--> statement-breakpoint
-CREATE INDEX `agent_project_states_stage_idx` ON `agent_project_states` (`stage`);--> statement-breakpoint
-CREATE INDEX `agent_run_events_request_idx` ON `agent_run_events` (`requestId`);--> statement-breakpoint
-CREATE INDEX `agent_run_events_project_idx` ON `agent_run_events` (`projectId`);--> statement-breakpoint
-CREATE INDEX `agent_run_events_user_idx` ON `agent_run_events` (`userId`);--> statement-breakpoint
-CREATE INDEX `agent_runs_project_idx` ON `agent_runs` (`projectId`);--> statement-breakpoint
-CREATE INDEX `agent_runs_user_idx` ON `agent_runs` (`userId`);--> statement-breakpoint
-CREATE INDEX `agent_runs_status_idx` ON `agent_runs` (`status`);--> statement-breakpoint
-CREATE INDEX `budget_items_version_idx` ON `budget_items` (`budgetVersionId`);--> statement-breakpoint
-CREATE INDEX `budget_versions_project_idx` ON `budget_versions` (`projectId`);--> statement-breakpoint
-CREATE INDEX `composition_components_composition_idx` ON `composition_components` (`compositionId`);--> statement-breakpoint
-CREATE INDEX `mcp_homologation_runs_project_idx` ON `mcp_homologation_runs` (`projectId`);--> statement-breakpoint
-CREATE INDEX `mcp_homologation_runs_user_idx` ON `mcp_homologation_runs` (`userId`);--> statement-breakpoint
-CREATE INDEX `mcp_mutation_operations_project_idx` ON `mcp_mutation_operations` (`projectId`);--> statement-breakpoint
-CREATE INDEX `mcp_mutation_operations_user_idx` ON `mcp_mutation_operations` (`userId`);--> statement-breakpoint
-CREATE INDEX `price_catalogs_reference_idx` ON `price_catalogs` (`referencePeriod`);--> statement-breakpoint
-CREATE INDEX `price_items_catalog_idx` ON `price_items` (`catalogId`);--> statement-breakpoint
-CREATE INDEX `project_audit_events_project_idx` ON `project_audit_events` (`projectId`,`action`);--> statement-breakpoint
-CREATE INDEX `project_mcp_integrations_project_idx` ON `project_mcp_integrations` (`projectId`);--> statement-breakpoint
-CREATE INDEX `project_plan_versions_project_idx` ON `project_plan_versions` (`projectId`);--> statement-breakpoint
-CREATE INDEX `schedule_activities_project_idx` ON `schedule_activities` (`projectId`);--> statement-breakpoint
-CREATE INDEX `schedule_activities_plan_version_idx` ON `schedule_activities` (`versionId`);--> statement-breakpoint
-CREATE INDEX `schedule_activities_wbs_node_idx` ON `schedule_activities` (`wbsNodeId`);--> statement-breakpoint
-CREATE INDEX `schedule_baseline_items_baseline_idx` ON `schedule_baseline_items` (`baselineId`);--> statement-breakpoint
-CREATE INDEX `schedule_dependencies_plan_version_idx` ON `schedule_dependencies` (`versionId`);--> statement-breakpoint
-CREATE INDEX `service_compositions_source_idx` ON `service_compositions` (`sourceCatalogId`);--> statement-breakpoint
-CREATE INDEX `wbs_nodes_project_idx` ON `wbs_nodes` (`projectId`);--> statement-breakpoint
-CREATE INDEX `wbs_nodes_plan_version_idx` ON `wbs_nodes` (`versionId`);
+CREATE TABLE "wbs_nodes" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "wbs_nodes_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"externalId" varchar(180),
+	"externalUid" varchar(180),
+	"parentId" integer,
+	"code" varchar(32) NOT NULL,
+	"name" varchar(220) NOT NULL,
+	"level" integer DEFAULT 1 NOT NULL,
+	"nodeType" "wbs_nodes_nodeType" DEFAULT 'pacote' NOT NULL,
+	"unit" varchar(32),
+	"plannedQuantity" integer,
+	"versionId" integer,
+	"sortOrder" integer DEFAULT 0 NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "work_calendars" (
+	"id" integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY (sequence name "work_calendars_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"projectId" integer NOT NULL,
+	"name" varchar(180) NOT NULL,
+	"weekPattern" jsonb NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "activity_resource_allocations" ADD CONSTRAINT "act_res_alloc_activity_fk" FOREIGN KEY ("activityId") REFERENCES "public"."schedule_activities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "activity_resource_allocations" ADD CONSTRAINT "act_res_alloc_resource_fk" FOREIGN KEY ("resourceId") REFERENCES "public"."planning_resources"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_decisions" ADD CONSTRAINT "agent_decisions_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_decisions" ADD CONSTRAINT "agent_decisions_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_findings" ADD CONSTRAINT "agent_findings_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_findings" ADD CONSTRAINT "agent_findings_resolvedBy_users_id_fk" FOREIGN KEY ("resolvedBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_memories" ADD CONSTRAINT "agent_memories_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_memories" ADD CONSTRAINT "agent_memories_ownerUserId_users_id_fk" FOREIGN KEY ("ownerUserId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_memories" ADD CONSTRAINT "agent_memories_approvedBy_users_id_fk" FOREIGN KEY ("approvedBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_project_states" ADD CONSTRAINT "agent_project_states_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_run_events" ADD CONSTRAINT "agent_run_events_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_run_events" ADD CONSTRAINT "agent_run_events_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_runs" ADD CONSTRAINT "agent_runs_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_runs" ADD CONSTRAINT "agent_runs_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "budget_items" ADD CONSTRAINT "budget_items_budgetVersionId_budget_versions_id_fk" FOREIGN KEY ("budgetVersionId") REFERENCES "public"."budget_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "budget_items" ADD CONSTRAINT "budget_items_wbsNodeId_wbs_nodes_id_fk" FOREIGN KEY ("wbsNodeId") REFERENCES "public"."wbs_nodes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "budget_versions" ADD CONSTRAINT "budget_versions_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "budget_versions" ADD CONSTRAINT "budget_versions_createdBy_users_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calendar_exceptions" ADD CONSTRAINT "calendar_exceptions_calendarId_work_calendars_id_fk" FOREIGN KEY ("calendarId") REFERENCES "public"."work_calendars"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "composition_components" ADD CONSTRAINT "composition_components_compositionId_service_compositions_id_fk" FOREIGN KEY ("compositionId") REFERENCES "public"."service_compositions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "composition_components" ADD CONSTRAINT "composition_components_priceItemId_price_items_id_fk" FOREIGN KEY ("priceItemId") REFERENCES "public"."price_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "llm_provider_settings" ADD CONSTRAINT "llm_provider_settings_updatedBy_users_id_fk" FOREIGN KEY ("updatedBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mcp_homologation_runs" ADD CONSTRAINT "mcp_homologation_runs_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mcp_homologation_runs" ADD CONSTRAINT "mcp_homologation_runs_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mcp_mutation_operations" ADD CONSTRAINT "mcp_mutation_operations_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mcp_mutation_operations" ADD CONSTRAINT "mcp_mutation_operations_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "planning_resources" ADD CONSTRAINT "planning_resources_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "price_catalogs" ADD CONSTRAINT "price_catalogs_createdBy_users_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "price_items" ADD CONSTRAINT "price_items_catalogId_price_catalogs_id_fk" FOREIGN KEY ("catalogId") REFERENCES "public"."price_catalogs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_entries" ADD CONSTRAINT "production_entries_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_entries" ADD CONSTRAINT "production_entries_frontId_production_fronts_id_fk" FOREIGN KEY ("frontId") REFERENCES "public"."production_fronts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_entries" ADD CONSTRAINT "production_entries_teamId_production_teams_id_fk" FOREIGN KEY ("teamId") REFERENCES "public"."production_teams"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_entries" ADD CONSTRAINT "production_entries_unitId_production_units_id_fk" FOREIGN KEY ("unitId") REFERENCES "public"."production_units"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_entries" ADD CONSTRAINT "production_entries_activityId_schedule_activities_id_fk" FOREIGN KEY ("activityId") REFERENCES "public"."schedule_activities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_entries" ADD CONSTRAINT "production_entries_createdBy_users_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_fronts" ADD CONSTRAINT "production_fronts_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_teams" ADD CONSTRAINT "production_teams_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_units" ADD CONSTRAINT "production_units_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_audit_events" ADD CONSTRAINT "project_audit_events_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_audit_events" ADD CONSTRAINT "project_audit_events_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_mcp_integrations" ADD CONSTRAINT "project_mcp_integrations_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_plan_versions" ADD CONSTRAINT "project_plan_versions_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_plan_versions" ADD CONSTRAINT "project_plan_versions_baseVersionId_project_plan_versions_id_fk" FOREIGN KEY ("baseVersionId") REFERENCES "public"."project_plan_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_plan_versions" ADD CONSTRAINT "project_plan_versions_decisionId_agent_decisions_id_fk" FOREIGN KEY ("decisionId") REFERENCES "public"."agent_decisions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_plan_versions" ADD CONSTRAINT "project_plan_versions_createdBy_users_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "projects_ownerUserId_users_id_fk" FOREIGN KEY ("ownerUserId") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_activities" ADD CONSTRAINT "schedule_activities_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_activities" ADD CONSTRAINT "schedule_activities_wbsNodeId_wbs_nodes_id_fk" FOREIGN KEY ("wbsNodeId") REFERENCES "public"."wbs_nodes"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_activities" ADD CONSTRAINT "schedule_activities_versionId_project_plan_versions_id_fk" FOREIGN KEY ("versionId") REFERENCES "public"."project_plan_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_baseline_items" ADD CONSTRAINT "schedule_baseline_items_baselineId_schedule_baselines_id_fk" FOREIGN KEY ("baselineId") REFERENCES "public"."schedule_baselines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_baseline_items" ADD CONSTRAINT "schedule_baseline_items_activityId_schedule_activities_id_fk" FOREIGN KEY ("activityId") REFERENCES "public"."schedule_activities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_baselines" ADD CONSTRAINT "schedule_baselines_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_baselines" ADD CONSTRAINT "schedule_baselines_createdBy_users_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_dependencies" ADD CONSTRAINT "schedule_dependencies_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_dependencies" ADD CONSTRAINT "schedule_dependencies_predecessorId_schedule_activities_id_fk" FOREIGN KEY ("predecessorId") REFERENCES "public"."schedule_activities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_dependencies" ADD CONSTRAINT "schedule_dependencies_successorId_schedule_activities_id_fk" FOREIGN KEY ("successorId") REFERENCES "public"."schedule_activities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "schedule_dependencies" ADD CONSTRAINT "schedule_dependencies_versionId_project_plan_versions_id_fk" FOREIGN KEY ("versionId") REFERENCES "public"."project_plan_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "service_compositions" ADD CONSTRAINT "service_compositions_sourceCatalogId_price_catalogs_id_fk" FOREIGN KEY ("sourceCatalogId") REFERENCES "public"."price_catalogs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "service_compositions" ADD CONSTRAINT "service_compositions_createdBy_users_id_fk" FOREIGN KEY ("createdBy") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "wbs_nodes" ADD CONSTRAINT "wbs_nodes_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "wbs_nodes" ADD CONSTRAINT "wbs_nodes_parentId_wbs_nodes_id_fk" FOREIGN KEY ("parentId") REFERENCES "public"."wbs_nodes"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "wbs_nodes" ADD CONSTRAINT "wbs_nodes_versionId_project_plan_versions_id_fk" FOREIGN KEY ("versionId") REFERENCES "public"."project_plan_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "work_calendars" ADD CONSTRAINT "work_calendars_projectId_projects_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "activity_resource_unique_idx" ON "activity_resource_allocations" USING btree ("activityId","resourceId");--> statement-breakpoint
+CREATE INDEX "activity_resource_activity_idx" ON "activity_resource_allocations" USING btree ("activityId");--> statement-breakpoint
+CREATE INDEX "agent_decisions_project_idx" ON "agent_decisions" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "agent_decisions_project_stage_idx" ON "agent_decisions" USING btree ("projectId","stage");--> statement-breakpoint
+CREATE INDEX "agent_findings_project_idx" ON "agent_findings" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "agent_findings_project_status_idx" ON "agent_findings" USING btree ("projectId","status");--> statement-breakpoint
+CREATE INDEX "agent_memories_project_idx" ON "agent_memories" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "agent_memories_owner_scope_idx" ON "agent_memories" USING btree ("ownerUserId","scope");--> statement-breakpoint
+CREATE INDEX "agent_memories_status_idx" ON "agent_memories" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_project_states_project_idx" ON "agent_project_states" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "agent_project_states_stage_idx" ON "agent_project_states" USING btree ("stage");--> statement-breakpoint
+CREATE INDEX "agent_run_events_request_idx" ON "agent_run_events" USING btree ("requestId");--> statement-breakpoint
+CREATE INDEX "agent_run_events_project_idx" ON "agent_run_events" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "agent_run_events_user_idx" ON "agent_run_events" USING btree ("userId");--> statement-breakpoint
+CREATE INDEX "agent_runs_project_idx" ON "agent_runs" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "agent_runs_user_idx" ON "agent_runs" USING btree ("userId");--> statement-breakpoint
+CREATE INDEX "agent_runs_status_idx" ON "agent_runs" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "budget_items_version_code_idx" ON "budget_items" USING btree ("budgetVersionId","code");--> statement-breakpoint
+CREATE INDEX "budget_items_version_idx" ON "budget_items" USING btree ("budgetVersionId");--> statement-breakpoint
+CREATE UNIQUE INDEX "budget_versions_project_version_idx" ON "budget_versions" USING btree ("projectId","versionNumber");--> statement-breakpoint
+CREATE INDEX "budget_versions_project_idx" ON "budget_versions" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "calendar_exceptions_calendarId_idx" ON "calendar_exceptions" USING btree ("calendarId");--> statement-breakpoint
+CREATE INDEX "calendar_exceptions_date_idx" ON "calendar_exceptions" USING btree ("date");--> statement-breakpoint
+CREATE UNIQUE INDEX "composition_components_unique_idx" ON "composition_components" USING btree ("compositionId","priceItemId");--> statement-breakpoint
+CREATE INDEX "composition_components_composition_idx" ON "composition_components" USING btree ("compositionId");--> statement-breakpoint
+CREATE INDEX "mcp_homologation_runs_project_idx" ON "mcp_homologation_runs" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "mcp_homologation_runs_user_idx" ON "mcp_homologation_runs" USING btree ("userId");--> statement-breakpoint
+CREATE UNIQUE INDEX "mcp_mutation_operations_idempotency_idx" ON "mcp_mutation_operations" USING btree ("idempotencyKey");--> statement-breakpoint
+CREATE INDEX "mcp_mutation_operations_project_idx" ON "mcp_mutation_operations" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "mcp_mutation_operations_user_idx" ON "mcp_mutation_operations" USING btree ("userId");--> statement-breakpoint
+CREATE INDEX "price_catalogs_reference_idx" ON "price_catalogs" USING btree ("referencePeriod");--> statement-breakpoint
+CREATE UNIQUE INDEX "price_items_catalog_code_idx" ON "price_items" USING btree ("catalogId","code");--> statement-breakpoint
+CREATE INDEX "price_items_catalog_idx" ON "price_items" USING btree ("catalogId");--> statement-breakpoint
+CREATE INDEX "project_audit_events_project_idx" ON "project_audit_events" USING btree ("projectId","action");--> statement-breakpoint
+CREATE UNIQUE INDEX "project_mcp_integrations_project_provider_idx" ON "project_mcp_integrations" USING btree ("projectId","provider");--> statement-breakpoint
+CREATE INDEX "project_mcp_integrations_project_idx" ON "project_mcp_integrations" USING btree ("projectId");--> statement-breakpoint
+CREATE UNIQUE INDEX "project_plan_versions_project_version_idx" ON "project_plan_versions" USING btree ("projectId","versionNumber");--> statement-breakpoint
+CREATE INDEX "project_plan_versions_project_idx" ON "project_plan_versions" USING btree ("projectId");--> statement-breakpoint
+CREATE UNIQUE INDEX "schedule_activities_project_external_idx" ON "schedule_activities" USING btree ("projectId","externalId");--> statement-breakpoint
+CREATE INDEX "schedule_activities_project_idx" ON "schedule_activities" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "schedule_activities_plan_version_idx" ON "schedule_activities" USING btree ("versionId");--> statement-breakpoint
+CREATE INDEX "schedule_activities_wbs_node_idx" ON "schedule_activities" USING btree ("wbsNodeId");--> statement-breakpoint
+CREATE UNIQUE INDEX "schedule_baseline_activity_idx" ON "schedule_baseline_items" USING btree ("baselineId","activityId");--> statement-breakpoint
+CREATE INDEX "schedule_baseline_items_baseline_idx" ON "schedule_baseline_items" USING btree ("baselineId");--> statement-breakpoint
+CREATE UNIQUE INDEX "schedule_dependencies_project_external_idx" ON "schedule_dependencies" USING btree ("projectId","externalId");--> statement-breakpoint
+CREATE INDEX "schedule_dependencies_plan_version_idx" ON "schedule_dependencies" USING btree ("versionId");--> statement-breakpoint
+CREATE UNIQUE INDEX "service_compositions_code_idx" ON "service_compositions" USING btree ("code");--> statement-breakpoint
+CREATE INDEX "service_compositions_source_idx" ON "service_compositions" USING btree ("sourceCatalogId");--> statement-breakpoint
+CREATE UNIQUE INDEX "wbs_nodes_project_external_idx" ON "wbs_nodes" USING btree ("projectId","externalId");--> statement-breakpoint
+CREATE UNIQUE INDEX "wbs_nodes_project_code_unique_idx" ON "wbs_nodes" USING btree ("projectId","code");--> statement-breakpoint
+CREATE INDEX "wbs_nodes_project_idx" ON "wbs_nodes" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "wbs_nodes_plan_version_idx" ON "wbs_nodes" USING btree ("versionId");--> statement-breakpoint
+CREATE INDEX "work_calendars_projectId_idx" ON "work_calendars" USING btree ("projectId");--> statement-breakpoint
+CREATE UNIQUE INDEX "work_calendars_projectId_unique" ON "work_calendars" USING btree ("projectId");

@@ -1,48 +1,20 @@
 {
-    "entries": [
-        {
-            "idx": 0,
-            "breakpoints": true,
-            "when": 1790603791243,
-            "version": "5",
-            "tag": "0000_baseline"
-        },
-        {
-            "idx": 1,
-            "breakpoints": true,
-            "when": 1790776191243,
-            "version": "5",
-            "tag": "0001_planning"
-        },
-        {
-            "idx": 2,
-            "breakpoints": true,
-            "when": 1790862591243,
-            "version": "5",
-            "tag": "0002_descritivo"
-        },
-        {
-            "idx": 3,
-            "breakpoints": true,
-            "when": 1799999999999,
-            "version": "5",
-            "tag": "0003_local_e_unidade"
-        },
-        {
-            "idx": 4,
-            "breakpoints": true,
-            "when": 1800000000001,
-            "version": "5",
-            "tag": "0004_producao_sem_dimensao_obrigatoria"
-        },
-        {
-            "idx": 5,
-            "breakpoints": true,
-            "when": 1800000000002,
-            "version": "5",
-            "tag": "0005_marca_de_exemplo"
-        }
-    ],
-    "version": "7",
-    "dialect": "mysql"
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790708681417,
+      "tag": "0000_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790708681418,
+      "tag": "0001_updated_at_trigger",
+      "breakpoints": true
+    }
+  ],
+  "version": "7",
+  "dialect": "postgresql"
 }

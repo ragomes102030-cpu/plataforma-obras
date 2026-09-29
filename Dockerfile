@@ -65,19 +65,19 @@ RUN pnpm install --frozen-lockfile --prod
 # e o bundle vive em dist/ — entao o front precisa estar em dist/public.
 COPY --from=build /app/dist ./dist
 
-# Migracoes do Drizzle, aplicadas no pre-deploy do Railway
-# (`node scripts/migrate-db.mjs`). O script precisa do journal e dos .sql;
+# Migracoes do Drizzle, aplicadas antes de o servico subir
+# (`node scripts/migrate-pg.mjs`). O script precisa do journal e dos .sql;
 # `schema.ts` e os snapshots viajam junto e sao inertes em runtime.
 #
 # Isto substitui o antigo par bootstrap-db.mjs + full-schema.sql, que criava
 # o schema a partir de um arquivo achatado e nunca acompanhava as migracoes.
-# Manter o pre-deploy como unico ponto de escrita no schema: DDL no boot
+# Manter a aplicacao como unico ponto de escrita no schema: DDL no boot
 # mascarava divergencia entre codigo e banco em vez de revela-la.
 COPY drizzle/ ./drizzle/
-COPY scripts/migrate-db.mjs ./scripts/migrate-db.mjs
-COPY scripts/migrate-core.mjs ./scripts/migrate-core.mjs
-# Auditoria de schema: le INFORMATION_SCHEMA e compara com as migracoes.
-COPY scripts/audit-schema.mjs ./scripts/audit-schema.mjs
+COPY scripts/migrate-pg.mjs ./scripts/migrate-pg.mjs
+COPY scripts/migrate-core-pg.mjs ./scripts/migrate-core-pg.mjs
+# Auditoria de schema: le o catalogo do PostgreSQL e compara com as migracoes.
+COPY scripts/audit-schema-pg.mjs ./scripts/audit-schema-pg.mjs
 
 EXPOSE 3000
 CMD ["pnpm", "start"]
