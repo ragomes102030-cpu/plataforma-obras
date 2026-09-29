@@ -67,6 +67,19 @@ export function alvoDoStatement(stmt) {
   );
   if (addColuna) return { tipo: "coluna", tabela: addColuna[1], nome: addColuna[2] };
 
+  // `MODIFY COLUMN` e `CHANGE COLUMN` mudam a definicao de uma coluna que
+  // ja existe, entao o alvo e a coluna, e a verificacao de existencia nao
+  // serve: a coluna la esta antes e depois.
+  //
+  // Sem esta linha, `MODIFY COLUMN` caia em `null` e o statement era
+  // executado sem verificacao em todo retry. O teste de migracoes reprova
+  // isso ("statements sem verificacao"), e com razao: a garantia de que o
+  // retry termina e a mesma que sustenta o resto do runner.
+  const alteraColuna = stmt.match(
+    /^\s*ALTER\s+TABLE\s+`([^`]+)`\s+(?:MODIFY|CHANGE|ALTER)\s+(?:COLUMN\s+)?`([^`]+)`/i
+  );
+  if (alteraColuna) return { tipo: "coluna", tabela: alteraColuna[1], nome: alteraColuna[2] };
+
   const addConstraint = stmt.match(
     /^\s*ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s+(?:CONSTRAINT\s+)?`([^`]+)`/i
   );
