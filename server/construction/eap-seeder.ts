@@ -324,66 +324,36 @@ export async function semearEapDoCatalogo(
     itensDeOrcamentoCriados = folhas.length;
   }
 
-  // O cronograma nasce junto: uma atividade por folha, ligada ao mesmo
-  // wbsNode e à mesma linha de orçamento (`budgetItemId`) — é o que faz
-  // Gantt, Orçamento e EAP mostrarem a mesma obra, em vez de três estruturas
-  // que por acaso têm nomes parecidos. `phase` vem do grupo que a contém,
-  // para a Linha de Balanço e os filtros por frente terem o que agrupar.
-  // Encadeadas em FS simples dentro do grupo (a única ordem que dá para
-  // inferir sem saber a obra); dá pra reordenar depois no Gantt.
-  let atividadesCriadas = 0;
-  if (folhas.length) {
-    const nomeDoGrupoPorCodigo = new Map<string, string>();
-    for (const no of gerado.nos.filter(n => n.level === 1)) {
-      nomeDoGrupoPorCodigo.set(no.code, no.name);
-    }
-    let offset = 0;
-    const atividadesParaInserir = folhas.map(no => {
-      const codigoGrupo = no.code.split(".").slice(0, -1).join(".");
-      const linha = {
-        projectId,
-        wbsNodeId: idPorCodigo.get(no.code)!,
-        externalId: no.externalId,
-        wbsCode: no.code,
-        name: no.name,
-        phase: nomeDoGrupoPorCodigo.get(codigoGrupo) ?? "Geral",
-        startOffset: offset,
-        durationDays: DURACAO_PADRAO_DIAS,
-        budgetItemId: budgetItemIdPorCodigo.get(no.code) ?? null,
-        progress: 0,
-        status: "Não iniciado" as const,
-        critical: 0,
-        sortOrder: no.sortOrder,
-      };
-      offset += DURACAO_PADRAO_DIAS;
-      return linha;
-    });
-    const inseridas = await db
-      .insert(scheduleActivities)
-      .values(atividadesParaInserir)
-      .$returningId();
-    if (inseridas.length > 1) {
-      await db.insert(scheduleDependencies).values(
-        inseridas.slice(0, -1).map((atividade, index) => ({
-          projectId,
-          predecessorId: atividade.id,
-          successorId: inseridas[index + 1].id,
-          type: "FS" as const,
-          lag: 0,
-        }))
-      );
-    }
-    atividadesCriadas = inseridas.length;
-  }
-
+  // POR QUE NÃO HÁ CRONOGRAMA AQUI
+  //
+  // Até a onda anterior este seeder criava uma atividade por folha, com
+  // `DURACAO_PADRAO_DIAS = 5` e `startOffset` encadeado, mais as dependências
+  // FS entre elas. O resultado eram 84 atividades com 5 dias que PARECIAM
+  // duration informada: apareciam na grade do cronograma com data de início e
+  // de fim, e um caminho crítico inteiro calculado sobre elas.
+  //
+  // Isso quebra a regra do projeto — duração é informada por quem planeja, e
+  // quantidade/produtividade só confere — e quebra a sequência do
+  // planejamento: catálogo gera ESCOPO, escopo não gera PRAZO. Prazo é ato de
+  // planejamento, não consequência de importar uma planilha de preços.
+  //
+  // O que este seeder faz é o que é derivado do catálogo e, portanto,
+  // correto sem intervenção: a árvore da EAP com o código oficial de cada
+  // serviço, e a versão de orçamento com o preço. O cronograma começa vazio
+  // e é preenchido na aba CRONOGRAMA.
   return {
     nosCriados: gerado.nos.length,
     servicosUsados: gerado.servicosUsados,
     servicosSemGrupo: gerado.servicosSemGrupo,
     gruposVazios: gerado.gruposVazios,
     catalogo,
-    aviso: gerado.aviso,
+    aviso: null,
     itensDeOrcamentoCriados,
-    atividadesCriadas,
+    /**
+     * Zero, e essa é a informação: este seeder não monta cronograma. A EAP e o
+     * orçamento vêm do catálogo; o prazo é digitado na aba CRONOGRAMA.
+     */
+    atividadesCriadas: 0,
   };
 }
+

@@ -15,7 +15,7 @@ import { join } from "node:path";
  */
 const router = readFileSync(join("server", "routers.ts"), "utf-8");
 const home = readFileSync(join("client", "src", "pages", "Home.tsx"), "utf-8");
-const eapView = readFileSync(join("client", "src", "components", "EapView.tsx"), "utf-8");
+const abaEap = readFileSync(join("client", "src", "components", "AbaEap.tsx"), "utf-8");
 const catalogView = readFileSync(
   join("client", "src", "components", "CatalogView.tsx"),
   "utf-8"
@@ -45,27 +45,27 @@ describe("obra sem base de preço não recebe EAP de demonstração", () => {
   });
 });
 
-describe("a UI torna a ausência de base visível e acionável", () => {
-  it("o aviso após criar a obra aponta o caminho para o Catálogo", () => {
-    expect(home).toMatch(/setActiveNav\("Catálogo"\)/);
-    expect(home).toMatch(/createNeedsCatalog/);
+describe("a ausência de base é visível e diz o caminho", () => {
+  it("a aba EAP mostra o caminho quando a obra não tem estrutura", () => {
+    // O caminho é: importar a planilha da SEINFRA no Catálogo e gerar a EAP
+    // daqui. A tela nomeia os dois passos, em vez de oferecer um botão que
+    // nada faz.
+    expect(abaEap).toMatch(/base oficial de preços/);
+    expect(abaEap).toMatch(/Catálogo/);
   });
 
-  it("o aviso só oferece o botão quando a EAP não foi gerada", () => {
-    // Se a EAP veio pronta, o botão de "ir importar" seria ruído.
-    expect(home).toMatch(/setCreateNeedsCatalog\(s\.nosCriados === 0\)/);
+  it("a aba EAP oferece gerar do catálogo, com seletor de tipo", () => {
+    expect(abaEap).toMatch(/generateEapFromCatalog/);
+    expect(abaEap).toMatch(/edificio/);
+    expect(abaEap).toMatch(/saneamento/);
   });
 
-  it("a EAP vazia oferece gerar do catálogo, com seletor de tipo", () => {
-    expect(eapView).toMatch(/generateEapFromCatalog/);
-    expect(eapView).toMatch(/TIPOS_DE_OBRA/);
-  });
-
-  it("a estrutura modelo continua disponível, mas como alternativa explícita", () => {
-    // Não removi: serve para quem só quer desenhar a estrutura. Mas não pode
-    // ser a única porta de entrada nem se passar por EAP pronta.
-    expect(eapView).toMatch(/Usar estrutura modelo/);
-    expect(eapView).toMatch(/sem ligação com o catálogo de preços/);
+  it("o Catálogo é alcançável pela barra de título", () => {
+    // Onde o caminho é offering precisa existir. A versão anterior apontava
+    // `setActiveNav("Catálogo")`, que era o despacho de módulo; agora o
+    // destino é um botão da barra de título.
+    expect(home).toMatch(/destino === "catalogo"/);
+    expect(home).toMatch(/>\s*Catálogo\s*</);
   });
 });
 

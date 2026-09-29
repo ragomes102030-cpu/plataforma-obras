@@ -1,974 +1,165 @@
-import { trpc } from "@/lib/trpc";
-import { startLogin } from "@/const";
+import { Layers3, Plus, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import {
-  TIPOS_DE_OBRA,
-  type TipoDeObra as ProjectKind,
-} from "@shared/eap-engine";
-import {
-  Activity,
-  AlertTriangle,
-  BarChart3,
-  Bell,
-  BookOpen,
-  Calculator,
-  CalendarDays,
-  ChevronDown,
-  Flag,
-  LineChart,
-  Scale,
-  ChevronRight,
-  CircleCheck,
-  Clock3,
-  FolderKanban,
-  Gauge,
-  Layers3,
-  MapPin,
-  Menu,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Settings,
-  SlidersHorizontal,
-  Sparkles,
-  Users,
-  WalletCards,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
-import { useLocation } from "wouter";
-import { NAV_PATHS, labelFromPath } from "@/nav-paths";
-import { AgentView } from "@/components/AgentView";
-import { AgentSidebar } from "@/components/AgentSidebar";
+import { trpc } from "@/lib/trpc";
+import { localIsoDe } from "@/lib/datas";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
-import { EapView } from "@/components/EapView";
-import { ProductionView } from "@/components/ProductionView";
-import { BudgetView } from "@/components/BudgetView";
-import { CatalogView } from "@/components/CatalogView";
-import { PlanningView } from "@/components/PlanningView";
-import { GanttView as GanttM2 } from "@/components/GanttView";
-import { ReportsView, RestrictionsView } from "@/components/OperationalViews";
-import { FrentesView } from "@/components/FrentesView";
-import { MedicaoView } from "@/components/MedicaoView";
-import { GraficosView } from "@/components/GraficosView";
-import { FormulasView } from "@/components/FormulasView";
-import { dateAt as dateAtWorkCalendar, defaultCalendar } from "@shared/work-calendar";
-import { PlanilhaObra } from "@/components/PlanilhaObra";
+import { AbaCatalogo } from "@/components/AbaCatalogo";
+import { AbaEap } from "@/components/AbaEap";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
-import { abaPorId } from "@shared/abas-ares";
-import type { IdDaVisaoLateral } from "@shared/abas-ares";
+import { ABAS, type IdDaAba } from "@/modules/abas";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import "@/planilha.css";
+import "@/eap.css";
 
-const nav = [
-  { label: "Portfólio", icon: FolderKanban },
-  { label: "EAP", icon: Layers3 },
-  { label: "Orçamento", icon: WalletCards },
-  { label: "Catálogo", icon: BookOpen },
-  { label: "Cronogramas", icon: CalendarDays },
-  { label: "Linha de Balanço", icon: Activity },
-  { label: "Frentes", icon: Flag },
-  { label: "Produção", icon: Gauge },
-  { label: "Medição", icon: Scale },
-  { label: "Restrições", icon: AlertTriangle },
-  { label: "Relatórios", icon: BarChart3 },
-  { label: "Gráficos", icon: LineChart },
-  { label: "Fórmulas", icon: Calculator },
-  { label: "Agente IA", icon: Sparkles },
-  { label: "Configurações", icon: Settings, adminOnly: true },
-];
 /**
- * Destinos de NÍVEL DE OBRA — não entram no menu.
+ * A obra como planilha.
  *
- * Estes oito módulos (EAP, Orçamento, Cronogramas, Linha de Balanço, Frentes,
- * Produção, Medição, Restrições) viraram abas da planilha. Deixá-los no menu
- * lateral ao lado das abas é o "sistema dentro do sistema": dois jeitos de
- * chegar ao mesmo lugar, e o menu discordando da tela. A lista `nav` continua
- * inteira porque o roteamento (NAV_PATHS) depende dela.
+ * POR QUE ESTE ARQUIVO É PEQUENO
+ *
+ * A versão anterior desta tela tinha 1.743 linhas e carregava o portfólio, o
+ * painel do agente, o checklist de planejamento, o despacho de módulos, o modal
+ * de nova obra e a planilha — cinco produtos num arquivo só. Qualquer coisa que
+ * se mexesse numa mexia nas outras quatro, e era isso que produzia a sequência
+ * de telas quebradas.
+ *
+ * Aqui não há menu lateral e não há despacho de módulo. A navegação da obra são
+ * as abas, embaixo, e o que não é aba fica na barra de título. O registro das
+ * abas é `modules/abas.ts`, que é dado, não código: acrescentar aba é
+ * acrescentar uma entrada na lista, sem tocar em componente.
+ *
+ * POR QUE NADA CALCULA AQUI
+ *
+ * A grade e o painel recebem do motor (`shared/cronograma-colunas.ts` via
+ * `planning.grade`) as colunas já derivadas, e a data de hoje vem no payload.
+ * Se este arquivo fizesse aritmética de data, duração ou progresso, existiriam
+ * duas verdades sobre a mesma célula.
  */
-const EH_DESTINO_DO_APP = [
-  "Portfólio",
-  "Catálogo",
-  "Relatórios",
-  "Agente IA",
-  "Configurações",
-];
 
-function ehDestinoDoApp(label: string): boolean {
-  return EH_DESTINO_DO_APP.includes(label);
-}
-
-/** A primeira aba da planilha, onde a obra abre. */
-const PRIMEIRA_ABA = "cronograma";
-
-const phaseColors: Record<string, string> = {
-  Preparação: "#7e9bb4",
-  Estrutura: "#4f7c8f",
-  Vedação: "#b78b58",
-  Instalações: "#8e7aa8",
-  Acabamentos: "#7aa28a",
-  Entrega: "#a56b75",
-};
-const statusTone: Record<string, string> = {
-  Concluído: "bg-[#e3f0e8] text-[#37654b]",
-  "Em andamento": "bg-[#e2edf4] text-[#3b6277]",
-  "Não iniciado": "bg-[#eef1f3] text-[#64727c]",
-  "Em risco": "bg-[#f6e7e4] text-[#8b514e]",
-};
-const PROJECT_CATEGORIES = ["Todas", "Em execução", "Planejamento", "Concluída", "Em risco"] as const;
-const projectTone: Record<string, string> = {
-  "Em execução": "bg-[#e2edf4] text-[#3b6277]",
-  Planejamento: "bg-[#f5eee2] text-[#8e7049]",
-  Concluída: "bg-[#e3f0e8] text-[#37654b]",
-  "Em risco": "bg-[#f6e7e4] text-[#8b514e]",
-};
-function formatDate(value: string | Date) {
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" })
-    .format(new Date(value))
-    .replace(" de ", " ");
-}
-const SPARK_POINTS = 12;
-function projectSparkline(project: {
-  plannedStart?: string | Date | null;
-  plannedFinish?: string | Date | null;
-  progress: number;
-}): { line: string; dotLeft: number; dotTop: number } | null {
-  const start = project.plannedStart ? new Date(project.plannedStart).getTime() : NaN;
-  const finish = project.plannedFinish ? new Date(project.plannedFinish).getTime() : NaN;
-  if (!Number.isFinite(start) || !Number.isFinite(finish) || finish <= start) return null;
-  const span = Math.max(1, finish - start);
-  const elapsed = Math.min(1, Math.max(0, (Date.now() - start) / span));
-  // Logística 0..1: S-curve clássica de avanço planejado entre início e fim da obra
-  const px = (t: number) => 1 / (1 + Math.exp(-9 * (t - 0.5)));
-  const xFor = (t: number) => t * 100;
-  const yFor = (v: number) => 28 - Math.min(1, Math.max(0, v)) * 26;
-  const points: string[] = [];
-  for (let i = 0; i < SPARK_POINTS; i++) {
-    const t = i / (SPARK_POINTS - 1);
-    points.push(`${xFor(t).toFixed(2)},${yFor(px(t)).toFixed(2)}`);
-  }
-  return {
-    line: points.join(" "),
-    dotLeft: Number(xFor(elapsed).toFixed(2)),
-    dotTop: Number(((yFor(project.progress / 100) / 32) * 100).toFixed(2)),
-  };
-}
-
-function MetricCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  tone = "blue",
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: typeof Activity;
-  tone?: string;
-}) {
-  const tones: Record<string, string> = {
-    blue: "bg-[#e8f0f4] text-[#426579]",
-    green: "bg-[#e5f0e8] text-[#427052]",
-    amber: "bg-[#f5eee2] text-[#8e7049]",
-    rose: "bg-[#f3e6e6] text-[#8b5b60]",
-  };
-  return (
-    <div className="metric-card">
-      <div className={`metric-icon ${tones[tone]}`}>
-        <Icon size={17} strokeWidth={1.8} />
-      </div>
-      <div className="min-w-0">
-        <p className="metric-label">{label}</p>
-        <p className="metric-value">{value}</p>
-        <p className="metric-detail">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function GanttView({
-  projectId,
-  activities,
-  search,
-  setSearch,
-  selectedName,
-  plannedStart,
-  initialTab = "gantt",
-}: {
-  projectId: number;
-  activities: any[];
-  search: string;
-  setSearch: (value: string) => void;
-  selectedName: string;
-  plannedStart?: string | Date;
-  initialTab?: "gantt" | "table" | "lob";
-}) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [tab, setTab] = useState<"gantt" | "table" | "lob">(initialTab);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-  useEffect(() => {
-    if (!fullscreen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
-    window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
-  }, [fullscreen]);
-  const [onlyCritical, setOnlyCritical] = useState(false);
-  const [expandedActivityId, setExpandedActivityId] = useState<number | null>(null);
-  const [drafts, setDrafts] = useState<Record<number, any>>({});
-  const [draggingBar, setDraggingBar] = useState<{ id: number; startX: number; startOffset: number; durationDays: number } | null>(null);
-  const [lobProductivityDrafts, setLobProductivityDrafts] = useState<Record<number, string>>({});
-  const utils = trpc.useUtils();
-  const updateActivity = trpc.projects.updateActivity.useMutation({
-    onSuccess: async () => {
-      await utils.projects.activities.invalidate({ projectId });
-    },
-  });
-  const projectStart = useMemo(() => {
-    if (plannedStart) {
-      const t = new Date(plannedStart).getTime();
-      if (!Number.isNaN(t)) return t;
-    }
-    const minOffset = activities.length
-      ? Math.min(
-          ...activities.map(a => a.earlyStart ?? a.startOffset ?? 0)
-        )
-      : 0;
-    return Date.now() - minOffset * 86_400_000;
-  }, [plannedStart, activities]);
-  const calendar = useMemo(() => {
-    if (!plannedStart) return undefined;
-    return defaultCalendar(new Date(new Date(plannedStart).getTime()).getFullYear());
-  }, [plannedStart]);
-  const localIso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const filtered = useMemo(
-    () =>
-      activities.filter(
-        item =>
-          item.name.toLowerCase().includes(search.toLowerCase()) &&
-          (!onlyCritical || item.critical === 1)
-      ),
-    [activities, search, onlyCritical]
-  );
-  const maxDays = Math.max(
-    ...activities.map(item => (item.earlyStart ?? item.startOffset) + item.durationDays),
-    220
-  );
-  const weekCount = Math.ceil(maxDays / 7);
-  const grouped = useMemo(
-    () =>
-      filtered.reduce<Record<string, any[]>>((acc, item) => {
-        (acc[item.phase] ||= []).push(item);
-        return acc;
-      }, {}),
-    [filtered],
-  );
-  const lobSeries = useMemo(
-    () =>
-      activities.slice(0, 10).map(activity => ({
-        activity,
-        points: Array.from({ length: weekCount + 1 }, (_, week) => {
-          const day = week * 7;
-          const elapsed = day - (activity.earlyStart ?? activity.startOffset);
-          const plannedProgress =
-            elapsed <= 0
-              ? 0
-              : Math.min(100, (elapsed / Math.max(1, activity.durationDays)) * 100);
-          const x = 42 + (week / Math.max(1, weekCount)) * 640;
-          const y = 244 - (plannedProgress / 100) * 190;
-          return `${x},${y}`;
-        }).join(" "),
-      })),
-    [activities, weekCount]
-  );
-  const lobRows = useMemo(
-    () =>
-      activities.slice(0, 12).map(activity => ({
-        activity,
-        left: ((activity.earlyStart ?? activity.startOffset) / maxDays) * 100,
-        width: Math.max((activity.durationDays / maxDays) * 100, 1.4),
-        end: (activity.earlyStart ?? activity.startOffset) + activity.durationDays,
-      })),
-    [activities, maxDays]
-  );
-  const toggle = (phase: string) =>
-    setCollapsed(prev => ({ ...prev, [phase]: !prev[phase] }));
-  const beginBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDraggingBar({ id: activity.id, startX: event.clientX, startOffset: (activity.earlyStart ?? activity.startOffset), durationDays: activity.durationDays });
-  };
-  const updateBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
-    if (!draggingBar || draggingBar.id !== activity.id) return;
-    const cell = event.currentTarget.parentElement;
-    if (!cell) return;
-    const deltaDays = Math.round(((event.clientX - draggingBar.startX) / cell.getBoundingClientRect().width) * maxDays);
-    const nextStart = Math.max(0, draggingBar.startOffset + deltaDays);
-    setDrafts(prev => ({ ...prev, [activity.id]: { ...(prev[activity.id] ?? activity), earlyStart: nextStart } }));
-  };
-  const finishBarDrag = (event: PointerEvent<HTMLDivElement>, activity: any) => {
-    if (!draggingBar || draggingBar.id !== activity.id) return;
-    const draft = drafts[activity.id] ?? activity;
-    updateActivity.mutate({ projectId, activityId: activity.id, name: draft.name, phase: draft.phase, startOffset: Number(draft.startOffset), ...(Number(draft.earlyStart) !== Number(activity.earlyStart) && { earlyStart: Number(draft.earlyStart) }), durationDays: Number(draft.durationDays), plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined, productivity: draft.productivity ? Number(draft.productivity) : undefined, progress: Number(draft.progress), status: draft.status });
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    setDraggingBar(null);
-  };
-  const saveLobProductivity = (activity: any) => {
-    const value = Number(lobProductivityDrafts[activity.id]);
-    if (!Number.isFinite(value) || value <= 0) return;
-    const plannedQuantity = activity.plannedQuantity ? Number(activity.plannedQuantity) : undefined;
-    const durationDays = plannedQuantity ? Math.max(1, Math.ceil(plannedQuantity / value)) : activity.durationDays;
-    updateActivity.mutate({ projectId, activityId: activity.id, name: activity.name, phase: activity.phase, startOffset: activity.startOffset, durationDays, plannedQuantity, productivity: value, progress: activity.progress, status: activity.status });
-  };
-  const toLocalDate = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-  const setDraftField = (activityId: number, key: string, value: any) => {
-    const activity = activities.find(a => a.id === activityId);
-    if (!activity) return;
-    setDrafts(prev => ({ ...prev, [activityId]: { ...(prev[activityId] ?? activity), [key]: value } }));
-  };
-  const saveDrawerActivity = () => {
-    const id = expandedActivityId;
-    if (id === null) return;
-    const activity = activities.find(a => a.id === id);
-    if (!activity) return;
-    const draft = drafts[id] ?? activity;
-    const startOffset = Number(draft.startOffset ?? activity.startOffset ?? 0);
-    const earlyStart = draft.earlyStart !== undefined ? Number(draft.earlyStart) : undefined;
-    updateActivity.mutate({
-      projectId,
-      activityId: id,
-      name: draft.name ?? activity.name,
-      phase: draft.phase ?? activity.phase,
-      startOffset,
-      ...(earlyStart !== undefined && earlyStart !== startOffset ? { earlyStart } : {}),
-      durationDays: Number(draft.durationDays ?? activity.durationDays ?? 1),
-      plannedQuantity: draft.plannedQuantity ? Number(draft.plannedQuantity) : undefined,
-      productivity: draft.productivity ? Number(draft.productivity) : undefined,
-      progress: Number(draft.progress ?? activity.progress ?? 0),
-      status: draft.status ?? activity.status ?? "Não iniciado",
-    });
-    setExpandedActivityId(null);
-  };
-  return (
-    <section className={`panel gantt-panel${fullscreen ? " gantt-fullscreen" : ""}`}>
-      <div className="panel-heading gantt-heading">
-        <div>
-          <div className="title-with-badge">
-            <h3>Gantt da obra</h3>
-            <span className="live-badge">
-              <span /> AO VIVO
-            </span>
-          </div>
-          <p>{selectedName} · planejamento salvo</p>
-          <p className="gantt-help">Barras por atividade a partir das datas reais do cronograma. Use as abas abaixo para alternar entre Gantt, Tabela e Linha de balanço.</p>
-        </div>
-        <div className="gantt-actions">
-          <div className="compact-search">
-            <Search size={14} />
-            <input
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Filtrar atividades"
-            />
-          </div>
-          <button
-            className={`outline-button ${filtersOpen ? "selected-control" : ""}`}
-            onClick={() => setFiltersOpen(!filtersOpen)}
-          >
-            <SlidersHorizontal size={15} /> Filtros
-          </button>
-          <button
-            className={`outline-button ${fullscreen ? "selected-control" : ""}`}
-            onClick={() => setFullscreen(v => !v)}
-            aria-label={fullscreen ? "Fechar tela cheia" : "Expandir em tela cheia"}
-          >
-            {fullscreen ? "Fechar ✕" : "Expandir ⤢"}
-          </button>
-          <button
-            className="icon-button"
-            title="Limpar filtros"
-            onClick={() => {
-              setSearch("");
-              setOnlyCritical(false);
-            }}
-          >
-            <X size={15} />
-          </button>
-        </div>
-      </div>
-      {filtersOpen && (
-        <div className="filter-strip">
-          <label>
-            <input
-              type="checkbox"
-              checked={onlyCritical}
-              onChange={event => setOnlyCritical(event.target.checked)}
-            />{" "}
-            Apenas atividades críticas
-          </label>
-          <span>
-            {filtered.length} de {activities.length} atividades visíveis
-          </span>
-        </div>
-      )}
-      <div className="gantt-toolbar">
-        <div className="toolbar-left">
-          <button
-            className={`toolbar-tab ${tab === "gantt" ? "active" : ""}`}
-            onClick={() => setTab("gantt")}
-          >
-            Gantt
-          </button>
-          <button
-            className={`toolbar-tab ${tab === "table" ? "active" : ""}`}
-            onClick={() => setTab("table")}
-          >
-            Tabela
-          </button>
-          <button
-            className={`toolbar-tab ${tab === "lob" ? "active" : ""}`}
-            onClick={() => setTab("lob")}
-          >
-            Linha de balanço
-          </button>
-        </div>
-        <div className="toolbar-right">
-          <span className="legend">
-            <i className="legend-line baseline" /> Baseline
-          </span>
-          <span className="legend">
-            <i className="legend-box actual" /> Realizado
-          </span>
-          <span className="legend">
-            <i className="legend-box critical" /> Crítico
-          </span>
-          <select className="scale-select" defaultValue="semanas">
-            <option value="semanas">Semanas</option>
-            <option value="meses">Meses</option>
-            <option value="dias">Dias</option>
-          </select>
-        </div>
-      </div>
-      {tab === "gantt" && (
-        <GanttM2 fill={fullscreen} projectId={projectId} plannedStart={plannedStart} onSelectActivity={id => setExpandedActivityId(id)} />
-      )}
-      {tab === "table" && (
-        <div className="schedule-table-wrap">
-          <table className="schedule-table">
-            <thead>
-              <tr>
-                <th>WBS</th>
-                <th>Atividade</th>
-                <th>Fase</th>
-                <th>Status</th>
-                <th>Início</th>
-                <th>Fim</th>
-                <th>Avanço</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(activity => (
-                <tr key={activity.id} onClick={() => setExpandedActivityId(activity.id)} title="Clique para editar">
-                  <td>{activity.wbsCode}</td>
-                  <td className="table-name">
-                    {activity.name}
-                    {activity.critical === 1 && (
-                      <span className="critical-chip">C</span>
-                    )}
-                  </td>
-                  <td>{activity.phase}</td>
-                  <td>
-                    <span
-                      className={`status-chip ${statusTone[activity.status] || statusTone["Não iniciado"]}`}
-                    >
-                      {activity.status}
-                    </span>
-                  </td>
-                  <td>
-{formatDate(
-                       dateAtWorkCalendar(calendar!, localIso(new Date(projectStart)), activity.earlyStart ?? activity.startOffset)
-                     )}
-                   </td>
-                   <td>
-                     {formatDate(
-                       dateAtWorkCalendar(calendar!, localIso(new Date(projectStart)), (activity.earlyStart ?? activity.startOffset) + activity.durationDays)
-                     )}
-                  </td>
-                  <td>{activity.progress}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {tab === "lob" && (
-        <div className="lob-view">
-          <div className="lob-copy">
-            <p className="eyebrow accent">RITMO POR FRENTE</p>
-            <h4>Linha de Balanço</h4>
-            <p>
-              Acompanhe o avanço acumulado de cada frente ao longo do tempo.
-              Linhas mais paralelas indicam um ritmo mais estável e ajudam a
-              identificar conflitos entre equipes.
-            </p>
-            <div className="lob-kpis">
-              <div><strong>{lobSeries.length}</strong><span>frentes exibidas</span></div>
-              <div><strong>{weekCount}</strong><span>semanas planejadas</span></div>
-              <div><strong>{activities.filter(activity => activity.critical === 1).length}</strong><span>atividades críticas</span></div>
-            </div>
-            <div className="lob-legend">
-              <span><i className="planned-line" /> Planejado</span>
-              <span><i className="actual-line" /> Realizado</span>
-              <span><i className="critical-line" /> Crítico</span>
-            </div>
-          </div>
-          <div className="lob-chart">
-            {lobRows.length ? (
-              <div className="lob-chart-scroll">
-              <div className="lob-chart-frame lob-flow-frame">
-                <div className="lob-chart-title">
-                  <div><strong>Planejamento por serviço e unidade</strong><span>Leia o início, a duração e o fim de cada frente ao longo do calendário</span></div>
-                  <span className="lob-status"><span /> Planejado</span>
-                </div>
-                <div className="lob-flow-head">
-                  <span>FRENTE / ATIVIDADE</span>
-                  <div className="lob-date-axis">
-                    {Array.from({ length: Math.min(weekCount + 1, 13) }, (_, index) => (
-                      <span key={index}>{formatDate(new Date(projectStart + Math.round((index / 12) * weekCount) * 7 * 86400000))}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="lob-flow-body">
-                  <div className="lob-flow-labels">
-                    {lobRows.map(({ activity }) => (
-                      <div key={activity.id} className="lob-flow-label" title={activity.name} onClick={() => setExpandedActivityId(activity.id)}>
-                        <b>{activity.wbsCode}</b><span>{activity.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="lob-flow-grid">
-                    {Array.from({ length: Math.min(weekCount + 1, 13) }, (_, index) => <i key={index} style={{ left: `${(index / Math.max(1, Math.min(weekCount, 12))) * 100}%` }} />)}
-                    {(() => {
-                      const offset = Math.round((Date.now() - projectStart) / 86400000);
-                      const pct = Math.max(0, Math.min(100, (offset / Math.max(1, maxDays)) * 100));
-                      return <div className="lob-today" style={{ left: `${pct}%` }} title={`Hoje · ${formatDate(new Date())}`}><span>Hoje</span></div>;
-                    })()}
-                    {lobRows.map(({ activity, left, width, end }, index) => {
-                      const prev = index > 0 ? lobRows[index - 1] : null;
-                      const startDays = Number(activity.earlyStart ?? activity.startOffset ?? 0);
-                      const bufferDays = prev ? Math.max(0, startDays - (prev.end ?? 0)) : 0;
-                      const bufferLeft = prev ? Math.min((prev.end / maxDays) * 100, 100) : 0;
-                      const bufferWidth = Math.min((bufferDays / maxDays) * 100, 100 - bufferLeft);
-                      return (
-                        <div key={activity.id} className="lob-flow-row">
-                          {bufferDays > 0 && <div className="lob-buffer" style={{ left: `${bufferLeft}%`, width: `${bufferWidth}%` }} title={`Pulmão: ${bufferDays} dia(s)`} />}
-                          <div className={`lob-flow-bar ${activity.critical === 1 ? "critical" : ""}`} style={{ left: `${left}%`, width: `${width}%`, background: phaseColors[activity.phase] || "#6b8292" }} title={`${activity.wbsCode} · ${activity.name} · ${activity.durationDays} dias · ${activity.progress}% · clique para editar`} onClick={() => setExpandedActivityId(activity.id)}>
-                            <i className="lob-realized" style={{ width: `${Math.max(0, Math.min(100, activity.progress ?? 0))}%` }} />
-                            <span>{activity.name}</span><b>{activity.progress}%</b>
-                          </div>
-                          <em style={{ left: `${Math.min((end / maxDays) * 100 + 1, 94)}%` }}>{formatDate(new Date(projectStart + end * 86400000))}</em>
-                          <label className="lob-productivity" title="Produtividade planejada por dia" onPointerDown={event => event.stopPropagation()}>
-                            <span>ritmo</span>
-                            <input type="number" min="0.1" step="0.1" value={lobProductivityDrafts[activity.id] ?? activity.productivity ?? ""} placeholder="—" onChange={event => setLobProductivityDrafts(prev => ({ ...prev, [activity.id]: event.target.value }))} onBlur={() => saveLobProductivity(activity)} onKeyDown={event => { if (event.key === "Enter") saveLobProductivity(activity); }} />
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="lob-flow-footer"><span><i className="planned-line" /> Planejado</span><span><i className="critical-line" /> Atividade crítica</span><span className="lob-flow-note">Use o Gantt para editar datas, duração e avanço</span></div>
-              </div>
-              </div>
-            ) : (
-              <div className="module-empty"><span>Inclua atividades no cronograma para calcular o ritmo planejado.</span></div>
-            )}
-          </div>
-        </div>
-      )}
-      <div className="gantt-footer">
-        <span>
-          <Users size={14} /> Produção ainda não lançada
-        </span>
-        <span>
-          <CalendarDays size={14} /> {activities.length} atividades planejadas
-        </span>
-        <span className="footer-spacer" />
-        <span className="muted">
-          CPM e ritmo real aguardam dados operacionais
-        </span>
-      </div>
-      {expandedActivityId !== null && (() => {
-        const activity = activities.find(a => a.id === expandedActivityId);
-        if (!activity) return null;
-        const draft = drafts[expandedActivityId] ?? activity;
-        const startDay = Number(draft.earlyStart ?? draft.startOffset ?? 0);
-        return (
-          <div className="activity-drawer-overlay" onClick={() => setExpandedActivityId(null)}>
-            <aside className="activity-drawer" onClick={event => event.stopPropagation()}>
-              <div className="activity-drawer-head">
-                <div>
-                  <p className="eyebrow">EDITAR ATIVIDADE</p>
-                  <h4>{activity.wbsCode} · {activity.name}</h4>
-                </div>
-                <button className="icon-button" title="Fechar" onClick={() => setExpandedActivityId(null)}>
-                  <X size={15} />
-                </button>
-              </div>
-              <div className="activity-drawer-fields">
-                <label>
-                  <span>Nome</span>
-                  <input value={draft.name ?? ""} onChange={event => setDraftField(expandedActivityId, "name", event.target.value)} />
-                </label>
-                <label>
-                  <span>Fase</span>
-                  <input value={draft.phase ?? ""} onChange={event => setDraftField(expandedActivityId, "phase", event.target.value)} />
-                </label>
-                <label>
-                  <span>Início</span>
-                  <input
-                    type="date"
-                    value={toLocalDate(projectStart + startDay * 86400000)}
-                    onChange={event => {
-                      const timestamp = new Date(`${event.target.value}T12:00:00`).getTime();
-                      if (Number.isNaN(timestamp)) return;
-                      setDraftField(expandedActivityId, "earlyStart", Math.max(0, Math.round((timestamp - projectStart) / 86400000)));
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>Duração (dias)</span>
-                  <input type="number" min={1} value={draft.durationDays ?? 1} onChange={event => setDraftField(expandedActivityId, "durationDays", Number(event.target.value))} />
-                </label>
-                <label>
-                  <span>Avanço (%)</span>
-                  <input type="number" min={0} max={100} value={draft.progress ?? 0} onChange={event => setDraftField(expandedActivityId, "progress", Number(event.target.value))} />
-                </label>
-                <label>
-                  <span>Status</span>
-                  <select value={draft.status ?? "Não iniciado"} onChange={event => setDraftField(expandedActivityId, "status", event.target.value)}>
-                    {Object.keys(statusTone).map(status => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </label>
-              </div>
-              <div className="activity-drawer-actions">
-                <button className="outline-button" onClick={() => setExpandedActivityId(null)}>Cancelar</button>
-                <button className="primary-button" onClick={saveDrawerActivity}>Salvar alterações</button>
-              </div>
-            </aside>
-          </div>
-        );
-      })()}
-    </section>
-  );
-}
-
-function ModuleView({
-  name,
-  icon: Icon,
-  description,
-  onBack,
-  onNavigate,
-  projectId,
-  projectName,
-  activities,
-  search,
-  setSearch,
-  plannedStart,
-}: {
-  name: string;
-  icon: typeof Activity;
-  description: string;
-  onBack: () => void;
-  onNavigate: (label: string) => void;
-  projectId: number;
-  projectName: string;
-  activities: any[];
-  search: string;
-  setSearch: (value: string) => void;
-  plannedStart?: string | Date;
-}) {
-  const riskActivities = activities.filter(activity => activity.status === "Em risco");
-  const completedActivities = activities.filter(activity => activity.progress >= 100);
-  const setActiveNav = onNavigate;
-  const [cronogramaTab, setCronogramaTab] = useState<"gantt" | "planejamento">("gantt");
-  if (name === "Agente IA") return <AgentView />;
-  if (name === "Orçamento")
-    return <BudgetView projectId={projectId} projectName={projectName} />;
-  if (name === "Catálogo") return <CatalogView />;
-  if (name === "EAP")
-    return <EapView projectId={projectId} projectName={projectName} />;
-  if (name === "Produção")
-    return <ProductionView projectId={projectId} projectName={projectName} />;
-  if (name === "Restrições")
-    return <RestrictionsView projectId={projectId} projectName={projectName} />;
-  if (name === "Relatórios")
-    return <ReportsView projectId={projectId} projectName={projectName} activities={activities} />;
-  if (name === "Frentes")
-    return <FrentesView projectId={projectId} projectName={projectName} />;
-  if (name === "Medição")
-    return <MedicaoView projectId={projectId} projectName={projectName} />;
-  if (name === "Gráficos")
-    return <GraficosView projectId={projectId} projectName={projectName} activities={activities} />;
-  if (name === "Fórmulas")
-    return <FormulasView projectName={projectName} />;
-  if (name === "Cronogramas")
-    return (
-      <div className="module-page">
-        <div className="module-hero">
-          <div className="module-icon"><CalendarDays size={22} /></div>
-          <div>
-            <p className="eyebrow accent">CRONOGRAMA DA OBRA</p>
-            <h2>Cronogramas</h2>
-            <p>Acompanhe o planejamento e o Gantt calculado do projeto.</p>
-          </div>
-          <div className="module-hero-actions">
-            <button
-              type="button"
-              className={`toolbar-tab ${cronogramaTab === "gantt" ? "active" : ""}`}
-              onClick={() => setCronogramaTab("gantt")}
-            >
-              Gantt
-            </button>
-            <button
-              type="button"
-              className={`toolbar-tab ${cronogramaTab === "planejamento" ? "active" : ""}`}
-              onClick={() => setCronogramaTab("planejamento")}
-            >
-              Planejamento
-            </button>
-            <button type="button" className="outline-button" onClick={onBack}>Voltar</button>
-          </div>
-        </div>
-        {cronogramaTab === "gantt" ? (
-          <GanttView
-            key="cronograma-calculado"
-            projectId={projectId}
-            activities={activities}
-            search={search}
-            setSearch={setSearch}
-            selectedName={projectName}
-            plannedStart={plannedStart}
-          />
-        ) : (
-          <PlanningView projectId={projectId} projectName={projectName} />
-        )}
-      </div>
-    );
-  if (name === "Linha de Balanço")
-    return (
-      <div className="module-page">
-        <div className="module-hero">
-          <div className="module-icon"><Activity size={22} /></div>
-          <div>
-            <p className="eyebrow accent">RITMO DE EXECUÇÃO</p>
-            <h2>Linha de Balanço</h2>
-            <p>Visualize o fluxo contínuo das atividades por semana.</p>
-          </div>
-          <div className="module-hero-actions">
-            <button type="button" className="outline-button" onClick={() => onNavigate("Cronogramas")}>Cronograma</button>
-            <button type="button" className="outline-button" onClick={() => onNavigate("Orçamento")}>Orçamento</button>
-            <button type="button" className="outline-button" onClick={onBack}>Voltar</button>
-          </div>
-        </div>
-        <GanttView
-          key="linha-de-balanco"
-          projectId={projectId}
-          activities={activities}
-          search={search}
-          setSearch={setSearch}
-          selectedName={projectName}
-          plannedStart={plannedStart}
-          initialTab="lob"
-        />
-      </div>
-    );
-  return (
-    <div className="module-page">
-      <div className="module-hero">
-        <div className="module-icon">
-          <Icon size={22} />
-        </div>
-        <div>
-          <p className="eyebrow accent">MÓDULO OPERACIONAL</p>
-          <h2>{name}</h2>
-          <p>{description}</p>
-        </div>
-        <button className="outline-button" onClick={onBack}>
-          <ChevronLeftIcon /> Voltar ao portfólio
-        </button>
-      </div>
-      <div className="module-grid">
-        <div className="module-card">
-          <span className="eyebrow">STATUS</span>
-          <strong>{activities.length} atividades carregadas</strong>
-          <p>
-            {riskActivities.length
-              ? `${riskActivities.length} atividade(s) em risco exigem acompanhamento.`
-              : "Nenhuma atividade em risco foi registrada nesta obra."}
-          </p>
-        </div>
-        <div className="module-card">
-          <span className="eyebrow">PRÓXIMA AÇÃO</span>
-          <strong>{name === "Relatórios" ? "Resumo operacional" : "Revisar pendências"}</strong>
-          <p>
-            {name === "Relatórios"
-              ? `${completedActivities.length} atividades concluídas de ${activities.length}.`
-              : "Use o cronograma e a produção para registrar o próximo avanço da obra."}
-          </p>
-        </div>
-        <div className="module-card wide">
-          <span className="eyebrow">VISÃO DO MÓDULO</span>
-          <div className="module-empty">
-            {riskActivities.length ? <AlertTriangle size={20} /> : <CircleCheck size={20} />}
-            <span>
-              {name === "Relatórios"
-                ? "Os indicadores acima são calculados a partir das atividades persistidas."
-                : name === "Restrições"
-                  ? riskActivities.length
-                    ? "As atividades em risco aparecem aqui assim que forem registradas no cronograma."
-                    : "A obra não possui restrições registradas no momento."
-                  : "Este módulo está conectado ao banco e pronto para receber dados operacionais."}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-function ChevronLeftIcon() {
-  return <ChevronRight size={15} className="rotate-180" />;
-}
+type Destino = "obra" | "catalogo" | "config";
 
 export default function Home() {
   const { user } = useAuth();
-  const projectsQuery = trpc.projects.list.useQuery();
-  const serverProjects = projectsQuery.data ?? [];
-  const projects = serverProjects;
-  const [location, setLocation] = useLocation();
-  const [selectedId, setSelectedId] = useState(() => {
-    try {
-      const raw = window.localStorage.getItem("activeProjectId");
-      const parsed = raw ? Number(raw) : 1;
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-    } catch {
-      return 1;
-    }
-  });
-  const [activeNav, setActiveNavState] = useState(() => labelFromPath(location));
-  useEffect(() => {
-    setActiveNavState(labelFromPath(location));
-  }, [location]);
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("activeProjectId", String(selectedId));
-    } catch {
-      // localStorage indisponível (private mode) — seleção vale só na sessão
-    }
-  }, [selectedId]);
-  useEffect(() => {
-    if (!projects.length) return;
-    if (!projects.some(project => project.id === selectedId)) {
-      setSelectedId(projects[0].id);
-    }
-  }, [projects, selectedId]);
-  const setActiveNav = (label: string) => {
-    setActiveNavState(label);
-    const path = NAV_PATHS[label] ?? "/";
-    if (location !== path) setLocation(path);
-  };
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [globalSearch, setGlobalSearch] = useState("");
-  const [portfolioFilter, setPortfolioFilter] = useState<string>("Todas");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectLocation, setNewProjectLocation] = useState("");
-  const [newProjectStart, setNewProjectStart] = useState("");
-  const [newProjectFinish, setNewProjectFinish] = useState("");
-  const [newProjectTipo, setNewProjectTipo] = useState<ProjectKind>("edificio");
-  const [newProjectDescricao, setNewProjectDescricao] = useState("");
-  const [createError, setCreateError] = useState("");
-  const [createNotice, setCreateNotice] = useState<string | null>(null);
-  const [createNeedsCatalog, setCreateNeedsCatalog] = useState(false);
-  const utils = trpc.useUtils();
-  const createProjectMutation = trpc.projects.create.useMutation({
-    onSuccess: project => {
-      void Promise.all([
-        projectsQuery.refetch(),
-        utils.projects.activities.invalidate({ projectId: project.id }),
-        utils.projects.wbs.invalidate({ projectId: project.id }),
-      ]);
-      setSelectedId(project.id);
-      setNewProjectName("");
-      setNewProjectLocation("");
-      setNewProjectStart("");
-      setNewProjectFinish("");
-      setNewProjectDescricao("");
-      setCreateError("");
-      setNewProjectOpen(false);
-      setActiveNav("EAP");
-      // A EAP nasce do catálogo de preços. Sem catálogo, a obra nasce sem
-      // estrutura — e o aviso precisa aparecer E apontar o caminho, senão o
-      // usuário conclui que a EAP está vazia por falha e não por falta de base.
-      const s = project.semeadura;
-      setCreateNeedsCatalog(s.nosCriados === 0);
-      setCreateNotice(
-        s.nosCriados > 0
-          ? `EAP criada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços. Orçamento inicial com ${s.itensDeOrcamentoCriados} itens já com preço do catálogo (faltam as quantidades) e cronograma com ${s.atividadesCriadas} atividades encadeadas (duração inicial de 5 dias cada — ajuste conforme a produtividade real).`
-          : s.aviso
-      );
-    },
-    onError: error => setCreateError(error.message),
-  });
-  const selected =
-    projects.find(project => project.id === selectedId) ?? projects[0];
-  const plannedStart = selected?.plannedStart;
-  const calendar = useMemo(() => {
-    if (!plannedStart) return undefined;
-    return defaultCalendar(new Date(plannedStart).getFullYear());
-  }, [plannedStart]);
-  const localIso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const activitiesQuery = trpc.projects.activities.useQuery({
-    projectId: selected?.id ?? 1,
-  });
-  const activities = activitiesQuery.data ?? [];
+  const [destino, setDestino] = useState<Destino>("obra");
+  const [aba, setAba] = useState<IdDaAba>("eap");
+  const [obraId, setObraId] = useState<number | null>(null);
 
-  // A aba ativa da planilha. Um estado só: a casca e a barra de abas não
-  // podem discordar sobre onde a pessoa está — era esse o defeito da casca
-  // anterior, que mantinha um estado para o menu lateral e outro para a barra.
-  const [abaAres, setAbaAres] = useState<string>("cronograma");
-  // O rotulo da aba ativa, usado no cabecalho. A casca tambem sabe, mas
-  // o cabecalho e do Home e nao deve puxar estado de dentro dela.
-  const abaRotulo = abaPorId(abaAres).rotulo;
+  // `projects.list` devolve o array direto. O tipo é uma união porque o
+  // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
+  // dos dois formatos: só precisa do id, do nome e do código para a barra de
+  // título.
+  const obras = trpc.projects.list.useQuery(undefined, { enabled: Boolean(user) });
+  const lista: Array<{ id: number; name: string; code: string }> =
+    (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
+  const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
+  const projetoId = obra?.id ?? null;
 
-  // A grade vem pronta do motor. O componente recebe as colunas derivadas e não
-  // recalcula nenhuma delas.
-  const gradeQuery = trpc.planning.grade.useQuery(
-    { projectId: selected?.id ?? 1 },
-    { enabled: Boolean(selected) }
+  return (
+    <div className="xl-app">
+      <header className="xl-titlebar">
+        <div className="xl-titlebar-marca">
+          <Layers3 size={15} />
+          <strong>{obra?.name ?? "plataformaobras"}</strong>
+          {obra && <span className="xl-titlebar-sub">{obra.code}</span>}
+        </div>
+
+        <div className="xl-titlebar-obras">
+          {lista.map(o => (
+            <button
+              key={o.id}
+              type="button"
+              className={`xl-obra-chip${o.id === obra?.id && destino === "obra" ? " ativa" : ""}`}
+              onClick={() => {
+                setObraId(o.id);
+                setDestino("obra");
+              }}
+              title={o.name}
+            >
+              {o.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="xl-obra-chip xl-obra-nova"
+            title="Nova obra"
+            onClick={() => {
+              // A criação de obra entra na próxima onda. Por enquanto o botão
+              // diz isso em vez de fingir que abriu um modal.
+              setDestino("obra");
+            }}
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+
+        <div className="xl-titlebar-fim">
+          <button
+            type="button"
+            className={`xl-tb-btn${destino === "obra" ? " ativo" : ""}`}
+            onClick={() => setDestino("obra")}
+          >
+            Obra
+          </button>
+          <button
+            type="button"
+            className={`xl-tb-btn${destino === "catalogo" ? " ativo" : ""}`}
+            onClick={() => setDestino("catalogo")}
+          >
+            Catálogo
+          </button>
+          {user?.role === "admin" && (
+            <button
+              type="button"
+              className={`xl-tb-btn${destino === "config" ? " ativo" : ""}`}
+              onClick={() => setDestino("config")}
+            >
+              <Sparkles size={13} /> Configurações
+            </button>
+          )}
+          <span className="xl-tb-user" title={user?.name || "Conta"}>
+            {(user?.name || "R").charAt(0).toUpperCase()}
+          </span>
+        </div>
+      </header>
+
+      {destino === "config" ? (
+        <AdminLlmSettings />
+      ) : destino === "catalogo" ? (
+        <AbaCatalogo />
+      ) : !projetoId ? (
+        <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
+      ) : (
+        <Obra projetoId={projetoId} obra={obra!.name} aba={aba} onAba={setAba} />
+      )}
+    </div>
+  );
+}
+
+/** A obra: abas embaixo, e no meio a aba que está ativa. */
+function Obra({
+  projetoId,
+  obra,
+  aba,
+  onAba,
+}: {
+  projetoId: number;
+  obra: string;
+  aba: IdDaAba;
+  onAba: (aba: IdDaAba) => void;
+}) {
+  const grade = trpc.planning.grade.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
   );
 
-  // O backend devolveu as linhas já com inicio, fim e status, calculados no
-  // calendário que ele usou, e devolveu também a data de hoje. Se aqui
-  // houvesse outra conta de data, as barras e os números contariam dias
-  // diferentes dos que o motor usou.
-  const calendarioDaGrade: WorkCalendar = CALENDARIO_CORRIDO;
-  const hojeDaGrade: IsoDate = gradeQuery.data?.hoje ?? "";
-  const linhasDaGrade: EntradaDaLinha[] = (gradeQuery.data?.linhas ?? []).map(l => ({
+  // O motor já devolveu as colunas derivadas no calendário que ele usou, e a
+  // data de hoje veio junto. A grade é desenhada com esse mesmo resultado.
+  const calendario: WorkCalendar = CALENDARIO_CORRIDO;
+  const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
+  const linhas: EntradaDaLinha[] = (grade.data?.linhas ?? []).map(l => ({
     codigo: l.codigo,
     atividade: l.atividade,
     frente: l.frente,
@@ -979,781 +170,82 @@ export default function Home() {
     unidade: l.unidade,
     executado: l.executado,
   }));
-  const agregadoDaGrade: AgregadoDoCronograma | undefined = gradeQuery.data?.agregado;
+  const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
+  const definicao = ABAS.find(a => a.id === aba);
 
-  // A casca escolhe a ABA; o conteúdo vem do motor. Aba "pendente" nunca chega
-  // aqui — a casca desenha o estado vazio com o que falta.
-  const renderAbaDaAba = (aba: string) => {
-    if (aba === "cronograma") {
-      return (
-        <GradeCronograma
-          obra={selected?.name ?? "Obra"}
-          calendario={calendarioDaGrade}
-          hoje={hojeDaGrade}
-          linhas={linhasDaGrade}
-        />
-      );
-    }
-    if (aba === "dashboard") {
-      return <PainelDoCronograma agregado={agregadoDaGrade} />;
-    }
-    if (aba === "producao") {
-      return (
-        <div className="xl-vazia-folha">
-          <p>A PRODUCAO da planilha é uma grade por data.</p>
-          <p>
-            O lançamento por atividade já existe e continua valendo. O que falta
-            aqui é a forma de linha × data com a soma embaixo — e isso é
-            cálculo, não tela.
-          </p>
+  return (
+    <div className="xl-pasta">
+      <div className="xl-area">
+        {aba === "eap" ? (
+          <AbaEap projetoId={projetoId} />
+        ) : aba === "cronograma" ? (
+          <GradeCronograma
+            obra={obra}
+            calendario={calendario}
+            hoje={hoje}
+            linhas={linhas}
+          />
+        ) : aba === "dashboard" ? (
+          <PainelDoCronograma agregado={agregado} />
+        ) : (
+          <AbaVazia
+            titulo={definicao?.rotulo ?? aba}
+            falta={definicao?.falta ?? ""}
+          />
+        )}
+      </div>
+
+      <div className="xl-rodape">
+        <div className="xl-abas" role="tablist" aria-label="Abas da obra">
+          {ABAS.map(a => (
+            <button
+              key={a.id}
+              type="button"
+              role="tab"
+              aria-selected={a.id === aba}
+              data-ativa={a.id === aba}
+              data-status={a.status}
+              className={`xl-aba${a.id === aba ? " ativa" : ""}`}
+              onClick={() => onAba(a.id)}
+              title={a.falta ?? a.rotulo}
+            >
+              {a.rotulo}
+            </button>
+          ))}
         </div>
-      );
-    }
-    return null;
-  };
+        <span className="xl-rodape-info" aria-hidden="true">
+          {obra}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-  const renderVisaoLateral = (visao: IdDaVisaoLateral) => (
+/** Aba sem conteúdo: diz o que falta e por quê. */
+function AbaVazia({ titulo, falta }: { titulo: string; falta: string }) {
+  return (
     <div className="xl-vazia-folha">
-      <p>{visao === "gantt" ? "Gantt" : "Linha de Balanço"}</p>
-      <p>
-        A grade de meses e as barras por status saem do mesmo motor que já produz
-        inicio, fim e status na aba CRONOGRAMA. Falta desenhar.
+      <h3>{titulo} ainda não existe</h3>
+      {falta && <p className="xl-vazia-falta">{falta}</p>}
+      <p className="xl-vazia-nota">
+        A aba não desenha tela vazia que pareça funcionando. O que falta está
+        escrito acima porque é o caminho, não um prazo.
       </p>
     </div>
   );
+}
 
-  const budgetQuery = trpc.budgets.list.useQuery(
-    { projectId: selected?.id ?? 1 },
-    { enabled: Boolean(selected) }
-  );
-  const wbsQuery = trpc.projects.wbs.useQuery(
-    { projectId: selected?.id ?? 1 },
-    { enabled: Boolean(selected) }
-  );
-  const planningQuery = trpc.planning.list.useQuery(
-    { projectId: selected?.id ?? 1 },
-    { enabled: Boolean(selected) }
-  );
-  const budgetStatusLine = (() => {
-    if (!budgetQuery.data) return "Orçamento: carregando…";
-    if (budgetQuery.data.unavailable) return "Orçamento: indisponível (sem banco)";
-    if (!budgetQuery.data.activeVersionId) return "Orçamento: sem versão";
-    if (!budgetQuery.data.items.length) return "Orçamento: 0 serviços";
-    const total = budgetQuery.data.total;
-    const money = new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(total);
-    return `Orçamento: ${budgetQuery.data.items.length} serviço(s) · ${money}`;
-  })();
-  const wbsNodes = wbsQuery.data ?? [];
-  const baselines = planningQuery.data?.baselines ?? [];
-  const budgetItemsList = budgetQuery.data?.items ?? [];
-  // Depois desta onda, um item de orçamento pode ter preço do catálogo e
-  // quantidade 0 ao mesmo tempo — "sem preços lançados" ficaria enganoso
-  // nesse caso (o preço existe; falta é medir). As três contagens abaixo
-  // existem só para o texto do painel não confundir as duas coisas.
-  const itensComPreco = budgetItemsList.filter(i => Number(i.unitPrice) > 0).length;
-  const itensComQuantidade = budgetItemsList.filter(i => Number(i.quantity) > 0).length;
-  const atividadesDimensionadas = (planningQuery.data?.activities ?? []).filter(
-    a => a.plannedQuantity !== null
-  ).length;
-  const planningSteps = [
-    {
-      key: "eap",
-      label: "Estrutura da obra (EAP)",
-      done: wbsNodes.length > 0,
-      detail: wbsNodes.length
-        ? `${wbsNodes.length} itens estruturados`
-        : "ainda não criada",
-      next: "Criar a estrutura da obra (EAP)",
-      nav: "EAP" as const,
-    },
-    {
-      key: "orcamento",
-      label: "Orçamento",
-      done: (budgetQuery.data?.total ?? 0) > 0,
-      detail: !budgetQuery.data?.activeVersionId
-        ? "nenhuma versão criada"
-        : !budgetItemsList.length
-          ? "versão criada, nenhum serviço"
-          : (budgetQuery.data?.total ?? 0) > 0
-            ? `com preços e quantidades — ${itensComQuantidade}/${budgetItemsList.length} serviço(s) medido(s)`
-            : itensComPreco > 0
-              ? `${itensComPreco} item(ns) já com preço do catálogo — faltam as quantidades`
-              : "criado, mas sem preços lançados",
-      next: !budgetQuery.data?.activeVersionId
-        ? "Criar a primeira versão do orçamento"
-        : itensComPreco > 0
-          ? "Lançar as quantidades medidas"
-          : "Lançar os preços do orçamento",
-      nav: "Orçamento" as const,
-    },
-    {
-      key: "atividades",
-      label: "Cronograma",
-      done: activities.length > 0,
-      detail: !activities.length
-        ? "ainda sem atividades"
-        : atividadesDimensionadas > 0
-          ? `${activities.length} atividades, ${atividadesDimensionadas} já dimensionada(s)`
-          : `${activities.length} atividades (esqueleto automático — duração provisória, ainda sem quantidade real)`,
-      next: activities.length
-        ? "Revisar as durações e dimensionar as atividades"
-        : "Cadastrar as atividades do cronograma",
-      nav: "Cronogramas" as const,
-    },
-    {
-      key: "baseline",
-      label: "Baseline",
-      done: baselines.length > 0,
-      detail: baselines.length ? `${baselines.length} baseline(s) salva(s)` : "ainda não salva",
-      next: "Salvar a baseline do cronograma",
-      nav: "Cronogramas" as const,
-    },
-  ];
-  const nextPlanningStep = planningSteps.find(step => !step.done);
-  const portfolioProgress = projects.length
-    ? Math.round(
-        projects.reduce((total, project) => total + project.progress, 0) /
-          projects.length
-      )
-    : 0;
-  const criticalActivities = activities.filter(activity => activity.critical === 1);
-  const riskActivities = activities.filter(activity => activity.status === "Em risco");
-  const nextMilestone = activities
-    .filter(activity => activity.progress < 100)
-    .sort((a, b) => a.startOffset - b.startOffset)[0];
-  const agentSection =
-    activeNav === "EAP"
-      ? "eap"
-      : activeNav === "Cronogramas"
-        ? "cronograma"
-        : activeNav === "Linha de Balanço"
-          ? "lob"
-          : activeNav === "Produção"
-            ? "producao"
-            : activeNav === "Medição"
-              ? "medicao"
-              : activeNav === "Restrições"
-                ? "restricoes"
-                : activeNav === "Relatórios"
-                  ? "relatorios"
-                  : "portfolio";
-  const visibleProjects = projects.filter(project => {
-    const matchesSearch = `${project.name} ${project.code} ${project.location}`
-      .toLowerCase()
-      .includes(globalSearch.toLowerCase());
-    const matchesCategory =
-      portfolioFilter === "Todas" || project.status === portfolioFilter;
-    return matchesSearch && matchesCategory;
-  });
-  const createProject = () => {
-    if (!user) {
-      startLogin();
-      return;
-    }
-    if (!newProjectName.trim()) return;
-    createProjectMutation.mutate({
-      name: newProjectName.trim(),
-      location: newProjectLocation.trim() || "A cadastrar",
-      plannedStart: newProjectStart ? new Date(`${newProjectStart}T00:00:00`) : undefined,
-      plannedFinish: newProjectFinish ? new Date(`${newProjectFinish}T00:00:00`) : undefined,
-      tipoDeObra: newProjectTipo,
-      descricao: newProjectDescricao.trim() || undefined,
-    });
-  };
-  const createPending = createProjectMutation.isPending;
+function SemObra({ carregando, temObras }: { carregando: boolean; temObras: boolean }) {
   return (
-    <div className="app-frame">
-      <main className="main-canvas">
-        <header className="xl-titlebar">
-          <div className="xl-titlebar-marca">
-            <Layers3 size={15} />
-            <strong>{ehDestinoDoApp(activeNav) ? "plataformaobras" : (selected?.name ?? "Obra")}</strong>
-            <span className="xl-titlebar-sub">
-              {ehDestinoDoApp(activeNav) ? activeNav : (selected?.code || "obra")}
-            </span>
-          </div>
-
-          <div className="xl-titlebar-obras">
-            {projects.map(project => (
-              <button
-                key={project.id}
-                type="button"
-                className={`xl-obra-chip${project.id === selected?.id && !ehDestinoDoApp(activeNav) ? " ativa" : ""}`}
-                onClick={() => {
-                  setSelectedId(project.id);
-                  if (ehDestinoDoApp(activeNav)) {
-                    setAbaAres(PRIMEIRA_ABA);
-                    setActiveNav(PRIMEIRA_ABA);
-                  }
-                }}
-                title={project.name}
-              >
-                {project.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="xl-obra-chip xl-obra-nova"
-              onClick={() => setNewProjectOpen(true)}
-              title="Nova obra"
-            >
-              <Plus size={12} />
-            </button>
-          </div>
-
-          <div className="xl-titlebar-fim">
-            <button
-              type="button"
-              className={"xl-tb-btn" + (activeNav === "Portfólio" ? " ativo" : "")}
-              onClick={() => setActiveNav("Portfólio")}
-            >
-              Portfólio
-            </button>
-            <button
-              type="button"
-              className={"xl-tb-btn" + (activeNav === "Catálogo" ? " ativo" : "")}
-              onClick={() => setActiveNav("Catálogo")}
-            >
-              Catálogo
-            </button>
-            <button
-              type="button"
-              className={"xl-tb-btn" + (activeNav === "Relatórios" ? " ativo" : "")}
-              onClick={() => setActiveNav("Relatórios")}
-            >
-              Relatórios
-            </button>
-            {user?.role === "admin" && (
-              <button
-                type="button"
-                className={"xl-tb-btn" + (activeNav === "Configurações" ? " ativo" : "")}
-                onClick={() => setActiveNav("Configurações")}
-              >
-                Configurações
-              </button>
-            )}
-            <button
-              type="button"
-              className="xl-tb-btn xl-tb-agente"
-              onClick={() => setAgentOpen(true)}
-            >
-              <Sparkles size={13} /> Agente
-            </button>
-            <span className="xl-tb-user" title={user?.name || "Conta"}>
-              {(user?.name || "R").charAt(0).toUpperCase()}
-            </span>
-          </div>
-        </header>
-        <header className="topbar">
-          <div className="topbar-left">
-            <button
-              className="mobile-menu"
-              aria-label="Abrir menu de navegação"
-              aria-expanded={mobileNavOpen}
-              onClick={() => setMobileNavOpen(true)}
-            >
-              <Menu size={18} />
-            </button>
-            <div>
-              <span className="breadcrumb">
-                {ehDestinoDoApp(activeNav) ? activeNav : abaRotulo}
-              </span>
-            </div>
-          </div>
-          <div className="topbar-actions">
-            <div className="global-search">
-              <Search size={16} />
-              <input
-                value={globalSearch}
-                onChange={event => setGlobalSearch(event.target.value)}
-                placeholder="Buscar obra, atividade..."
-              />
-            </div>
-            <button className="icon-button notification">
-              <Bell size={17} />
-              <span />
-            </button>
-            <button
-              className={`agent-open-button ${agentOpen ? "active" : ""}`}
-              onClick={() => setAgentOpen(true)}
-              title="Abrir agente da obra"
-            >
-              <Sparkles size={15} /> <span>Agente</span>
-            </button>
-            {!user && (
-              <button className="login-button" onClick={() => startLogin()}>
-                Entrar
-              </button>
-            )}
-          </div>
-        </header>
-        <div className="content-wrap">
-          <div key={activeNav} className="tab-content-root">
-          {activeNav === "Configurações" ? (
-            <AdminLlmSettings />
-          ) : !ehDestinoDoApp(activeNav) ? (
-            <PlanilhaObra
-              obra={selected?.name ?? "Obra"}
-              projetoId={selected?.id ?? 1}
-              aba={abaAres}
-              onAba={setAbaAres}
-              renderConteudo={renderAbaDaAba}
-              renderLateral={renderVisaoLateral}
-            />
-          ) : activeNav !== "Portfólio" ? (
-            <ModuleView
-              name={activeNav}
-              icon={
-                nav.find(item => item.label === activeNav)?.icon || Activity
-              }
-              description={
-                {
-                  Orçamento: "Serviços, quantitativos, preços e versões do orçamento.",
-                  Catálogo: "Fontes de preços, insumos e composições de serviço.",
-                  EAP: "Escopo, pacotes de trabalho e estrutura de entregas.",
-                  Cronogramas: "Planejamento, baseline e caminho crítico.",
-                  Frentes: "Onde a execução acontece — código, nome e local/trecho.",
-                  Produção: "Ritmos, equipes e avanço físico.",
-                  Medição: "Períodos de produção e avanço para acompanhamento da medição.",
-                  Restrições: "Pendências que podem impactar o prazo.",
-                  Relatórios: "Indicadores e visões executivas.",
-                  Gráficos: "Planejado × realizado, produção e status das atividades.",
-                  Fórmulas: "Catálogo canônico das fórmulas de domínio.",
-                }[activeNav] || "Gestão integrada de obras."
-              }
-              onBack={() => setActiveNav("Portfólio")}
-              onNavigate={setActiveNav}
-              projectId={selected?.id ?? 1}
-              projectName={selected?.name ?? "Obra selecionada"}
-              activities={activities}
-              search={search}
-              setSearch={setSearch}
-              plannedStart={selected?.plannedStart}
-            />
-          ) : (
-            <>
-              <section className="intro-row">
-                <div>
-                  <p className="eyebrow accent">PAINEL DE CONTROLE</p>
-                  <h2>
-                    Olá, {user?.name?.split(" ")[0] || "gestor"} <span className="wave">—</span>
-                  </h2>
-                  <p className="intro-copy">
-                    Acompanhe o ritmo das suas obras e antecipe os próximos
-                    movimentos.
-                  </p>
-                  <p className="portfolio-context-note">Portfólio consolidado: os indicadores abaixo resumem todas as obras. Os alertas, atividades, EAP, orçamento e cronograma detalhados pertencem somente à obra ativa: <strong>{selected?.name || "nenhuma selecionada"}</strong>.</p>
-                </div>
-                <button
-                  className="primary-button"
-                  onClick={() => setNewProjectOpen(true)}
-                >
-                  <Plus size={16} /> Nova obra
-                </button>
-              </section>
-              {createNotice && (
-                <div
-                  role="status"
-                  style={{
-                    marginBottom: 12,
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    background: "var(--surf)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  <span style={{ flex: 1, minWidth: 220 }}>{createNotice}</span>
-                  {createNeedsCatalog && (
-                    <button
-                      className="outline-button"
-                      onClick={() => setActiveNav("Catálogo")}
-                    >
-                      <BookOpen size={14} /> Ir para o Catálogo e importar a SEINFRA
-                    </button>
-                  )}
-                </div>
-              )}
-              <section className="metrics-grid">
-                <MetricCard
-                  label="Obras ativas"
-                  value={String(projects.length).padStart(2, "0")}
-                  detail={`${projects.filter(project => project.status === "Planejamento").length} em planejamento`}
-                  icon={FolderKanban}
-                />
-                <MetricCard
-                  label="Avanço consolidado"
-                  value={`${portfolioProgress}%`}
-                  detail={selected ? `${selected.name} selecionada` : "Sem obra selecionada"}
-                  icon={Activity}
-                  tone="green"
-                />
-                <MetricCard
-                  label="Atividades críticas"
-                  value={String(criticalActivities.length).padStart(2, "0")}
-                  detail={`${riskActivities.length} com risco nesta obra`}
-                  icon={AlertTriangle}
-                  tone="rose"
-                />
-                <MetricCard
-                  label="Próximo marco"
-                  value={nextMilestone ? formatDate(dateAtWorkCalendar(calendar!, localIso(new Date(plannedStart)), nextMilestone.startOffset)) : "—"}
-                  detail={nextMilestone?.name ?? "Nenhuma atividade pendente"}
-                  icon={Clock3}
-                  tone="amber"
-                />
-              </section>
-              <section className="content-grid">
-                <div className="panel portfolio-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <h3>Obras em acompanhamento</h3>
-                      <p>{visibleProjects.length} obras encontradas</p>
-                    </div>
-                    <button
-                      className="ghost-button"
-                      onClick={() => setGlobalSearch("")}
-                    >
-                      Limpar busca <X size={14} />
-                    </button>
-                  </div>
-                  {selected && (
-                    <div className="portfolio-quick-actions">
-                      <span className="eyebrow">ABRIR NA OBRA ATIVA · {selected.name}</span>
-                      <p className="budget-status-line">{budgetStatusLine}</p>
-                      <div className="planning-checklist">
-                        {planningSteps.map(step => (
-                          <div className="planning-checklist-row" key={step.key}>
-                            <span>
-                              <CircleCheck
-                                size={14}
-                                className={step.done ? "ok" : "pending"}
-                              />
-                              {step.label}
-                            </span>
-                            <strong className={step.done ? "ok" : "pending"}>
-                              {step.done ? "Concluído" : "Pendente"} · {step.detail}
-                            </strong>
-                          </div>
-                        ))}
-                        {nextPlanningStep ? (
-                          <p className="planning-checklist-next">
-                            Próximo passo: {nextPlanningStep.next}
-                          </p>
-                        ) : (
-                          <p className="planning-checklist-next">
-                            Planejamento base completo para esta obra.
-                          </p>
-                        )}
-                      </div>
-                      <div className="portfolio-quick-buttons">
-                        {nextPlanningStep && (
-                          <button
-                            type="button"
-                            className="primary-button"
-                            onClick={() => setActiveNav(nextPlanningStep.nav)}
-                          >
-                            Continuar: {nextPlanningStep.label}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="outline-button"
-                          onClick={() => setActiveNav("Orçamento")}
-                        >
-                          <WalletCards size={14} /> Orçamento
-                        </button>
-                        <button
-                          type="button"
-                          className="outline-button"
-                          onClick={() => setActiveNav("Cronogramas")}
-                        >
-                          <CalendarDays size={14} /> Cronogramas
-                        </button>
-                        <button
-                          type="button"
-                          className="outline-button"
-                          onClick={() => setActiveNav("Linha de Balanço")}
-                        >
-                          <Activity size={14} /> Linha de Balanço
-                        </button>
-                        <button
-                          type="button"
-                          className="outline-button"
-                          onClick={() => setActiveNav("EAP")}
-                        >
-                          <Layers3 size={14} /> EAP
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <div className="portfolio-filters">
-                    {PROJECT_CATEGORIES.map(category => (
-                      <button
-                        key={category}
-                        type="button"
-                        className={`filter-chip ${
-                          portfolioFilter === category ? "active" : ""
-                        }`}
-                        onClick={() => setPortfolioFilter(category)}
-                      >
-                        {category}
-                        <span className="filter-chip-count">
-                          {category === "Todas"
-                            ? projects.length
-                            : projects.filter(p => p.status === category).length}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="portfolio-grid">
-                    {visibleProjects.map(project => {
-                      const active = selected?.id === project.id;
-                      return (
-                        <button
-                          key={project.id}
-                          type="button"
-                          onClick={() => setSelectedId(project.id)}
-                          title="Selecionar obra ativa — use os atalhos acima para abrir Orçamento ou Cronogramas"
-                          className={`portfolio-card ${active ? "active" : ""}`}
-                        >
-                          <div className="portfolio-card-head">
-                            <span
-                              className={`portfolio-status-pill ${
-                                projectTone[project.status] ?? projectTone["Em execução"]
-                              }`}
-                            >
-                              {project.status}
-                            </span>
-                            <span className="portfolio-code">{project.code}</span>
-                          </div>
-                          <strong className="portfolio-card-name">
-                            {project.name}
-                          </strong>
-                          <span className="portfolio-card-location">
-                            <MapPin size={13} /> {project.location}
-                          </span>
-                          {project.baseReferencia && (
-                            <span className="portfolio-card-base">
-                              Referência: {project.baseReferencia}
-                            </span>
-                          )}
-                          <div className="portfolio-card-progress">
-                            <div className="progress-label">
-                              <span>{project.progress}% executado</span>
-                              <span>{formatDate(project.plannedFinish)}</span>
-                            </div>
-                            <div className="progress-track">
-                              <div style={{ width: `${project.progress}%` }} />
-                            </div>
-                          </div>
-                          {(() => {
-                            const spark = projectSparkline(project);
-                            if (!spark) return null;
-                            return (
-                              <div className="portfolio-sparkline" aria-hidden="true">
-                                <svg viewBox="0 0 100 32" preserveAspectRatio="none">
-                                  <polyline className="sparkline-line" points={spark.line} />
-                                </svg>
-                                <span
-                                  className="sparkline-dot"
-                                  style={{ left: `${spark.dotLeft}%`, top: `${spark.dotTop}%` }}
-                                />
-                              </div>
-                            );
-                          })()}
-                          <span
-                            className={`portfolio-card-cta ${active ? "on" : ""}`}
-                          >
-                            {active ? "Obra ativa" : "Abrir obra"}
-                            <ChevronRight size={14} />
-                          </span>
-                        </button>
-                      );
-                    })}
-                    {visibleProjects.length === 0 && (
-                      <div className="portfolio-empty">
-                        Nenhuma obra encontrada para este filtro.
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="panel focus-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <h3>Foco da semana</h3>
-                      <p>Itens que pedem atenção</p>
-                    </div>
-                    <Sparkles size={18} className="sparkle" />
-                  </div>
-                  <div className="focus-list">
-                    {riskActivities.slice(0, 3).map(activity => (
-                      <div className="focus-item" key={`risk-${activity.id}`}>
-                        <div className="focus-icon rose">
-                          <AlertTriangle size={16} />
-                        </div>
-                        <div>
-                          <strong>{activity.name}</strong>
-                          <span>{activity.phase} · atividade em risco</span>
-                        </div>
-                        <span className="focus-tag rose">Atenção</span>
-                      </div>
-                    ))}
-                    {!riskActivities.length && nextMilestone && (
-                      <div className="focus-item">
-                        <div className="focus-icon amber">
-                          <Clock3 size={16} />
-                        </div>
-                        <div>
-                          <strong>{nextMilestone.name}</strong>
-                          <span>{nextMilestone.phase} · próximo marco planejado</span>
-                        </div>
-                        <span className="focus-tag amber">Prazo</span>
-                      </div>
-                    )}
-                    {!riskActivities.length && !nextMilestone && (
-                      <div className="focus-item">
-                        <div className="focus-icon green">
-                          <CircleCheck size={16} />
-                        </div>
-                        <div>
-                          <strong>Nenhum alerta aberto</strong>
-                          <span>As atividades desta obra estão sem pendências registradas.</span>
-                        </div>
-                        <span className="focus-tag green">Estável</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-              <section className="panel portfolio-next-step">
-                <div>
-                  <p className="eyebrow accent">PRÓXIMO PASSO OPERACIONAL</p>
-                  <h3>Planeje a obra ativa em Cronogramas</h3>
-                  <p>
-                    O Portfólio mostra o resumo consolidado. Use Cronogramas
-                    para editar atividades, calcular CPM, controlar baseline e
-                    acompanhar o realizado.
-                  </p>
-                  {selected && <p className="budget-status-line">{budgetStatusLine}</p>}
-                </div>
-                <div className="portfolio-next-actions">
-                  <button
-                    className="outline-button"
-                    onClick={() => setActiveNav("Cronogramas")}
-                  >
-                    Abrir Cronogramas <ChevronRight size={15} />
-                  </button>
-                  <button
-                    className="primary-button"
-                    onClick={() => setActiveNav("Orçamento")}
-                  >
-                    Abrir Orçamento <WalletCards size={15} />
-                  </button>
-                </div>
-              </section>
-            </>
-          )}
-          </div>
-        </div>
-      </main>
-      {agentOpen && selected && (
-        <AgentSidebar
-          projectId={selected.id}
-          projectName={selected.name}
-          activeSection={agentSection}
-          onClose={() => setAgentOpen(false)}
-        />
-      )}
-      {newProjectOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setNewProjectOpen(false)}
-        >
-          <div
-            className="modal-card"
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow accent">CADASTRO RÁPIDO</p>
-                <h3>Nova obra</h3>
-              </div>
-              <button
-                className="icon-button"
-                onClick={() => setNewProjectOpen(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <label>
-              Nome da obra
-              <input
-                autoFocus
-                value={newProjectName}
-                onChange={event => setNewProjectName(event.target.value)}
-                onKeyDown={event => event.key === "Enter" && createProject()}
-                placeholder="Ex.: Edifício Aurora"
-              />
-            </label>
-            <div className="modal-form-grid">
-              <label>Local<input value={newProjectLocation} onChange={event => setNewProjectLocation(event.target.value)} placeholder="Ex.: Juazeiro do Norte - CE" /></label>
-              <label>
-                Tipo de obra
-                <select value={newProjectTipo} onChange={event => setNewProjectTipo(event.target.value as ProjectKind)}>
-                  {TIPOS_DE_OBRA.map(tipo => (
-                    <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label>Início previsto<input type="date" value={newProjectStart} onChange={event => setNewProjectStart(event.target.value)} /></label>
-              <label>Fim previsto<input type="date" value={newProjectFinish} onChange={event => setNewProjectFinish(event.target.value)} /></label>
-            </div>
-            <label>
-              Descrição da obra
-              <textarea
-                value={newProjectDescricao}
-                onChange={event => setNewProjectDescricao(event.target.value)}
-                rows={3}
-                placeholder="Ex.: Edifício residencial de 12 pavimentos, 2 subsolos, em Juazeiro do Norte. Fundação em estacas hélice contínua."
-              />
-            </label>
-            <p className="modal-note">
-              A estrutura (EAP) é montada a partir dos serviços da base oficial
-              de preços — o Catálogo. Cada item da EAP carrega o código da
-              SEINFRA, e é por isso que o orçamento encontra o preço sem você
-              digitá-lo. Sem base importada, a obra é criada sem EAP e o aviso
-              aparece aqui.
-              {newProjectDescricao.trim() && " A descrição é usada pela IA para conversar sobre a obra; ela não define a EAP."}
-            </p>
-            {createError && (
-              <p className="modal-note text-red-700">{createError}</p>
-            )}
-            <div className="modal-actions">
-              <button
-                className="outline-button"
-                onClick={() => setNewProjectOpen(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="primary-button"
-                onClick={createProject}
-                disabled={createPending}
-              >
-                {createProjectMutation.isPending ? "Salvando obra e plano…" : "Criar obra"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+    <div className="xl-area">
+      <div className="xl-vazia-folha">
+        <h3>{carregando ? "Carregando as obras…" : "Nenhuma obra aqui"}</h3>
+        {!carregando && !temObras && (
+          <p className="xl-vazia-falta">
+            Não há obra cadastrada. A criação de obra entra na próxima etapa.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

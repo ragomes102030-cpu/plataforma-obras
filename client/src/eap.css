@@ -1,0 +1,242 @@
+/* ==========================================================================
+   A ABA EAP
+   ==========================================================================
+
+   A estrutura da obra em árvore: grupo, folha, código oficial e unidade. A
+   folha é a linha de serviço da base oficial — é ela que carrega o código que
+   o orçamento casa para achar o preço.
+   ========================================================================== */
+
+.xl-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  background: #ffffff;
+}
+
+.eap {
+  padding: 18px 24px;
+}
+
+.eap-topo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid #e4e8ec;
+  flex-wrap: wrap;
+}
+
+.eap-topo h2 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #1f2933;
+}
+
+.eap-topo p {
+  margin: 0;
+  font-size: 12.5px;
+  color: #6b7683;
+  font-variant-numeric: tabular-nums;
+}
+
+.eap-busca {
+  border: 1px solid #cfd6dd;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 9px;
+  min-width: 260px;
+}
+
+.eap-busca:focus {
+  outline: 2px solid #1f6f8b;
+  outline-offset: -1px;
+}
+
+/* ------------------------------------------------------------------ árvore */
+
+.eap-arvore {
+  border: 1px solid #e4e8ec;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.eap-linha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 0;
+  border-bottom: 1px solid #f0f3f5;
+  font-size: 12.5px;
+  color: #2c3a47;
+  min-height: 26px;
+}
+
+.eap-linha:last-child {
+  border-bottom: none;
+}
+
+.eap-linha:hover {
+  background: #f7f9fb;
+}
+
+/* Grupo: peso e cor própria, para a hierarquia aparecer sem indentação só. */
+.eap-nivel-1 {
+  background: #f4f6f8;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.eap-nivel-1:hover {
+  background: #eef1f4;
+}
+
+/* Folha: a linha de serviço. */
+.eap-folha {
+  color: #4a5764;
+}
+
+.eap-seta {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+}
+
+.eap-seta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+  border-left: 5px solid #7a848e;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: rotate(0deg);
+  transition: transform 0.12s ease;
+}
+
+.eap-seta.aberta::before {
+  transform: rotate(90deg);
+}
+
+.eap-seta-vazia::before {
+  display: none;
+}
+
+.eap-codigo {
+  flex: 0 0 auto;
+  min-width: 72px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #8b95a1;
+}
+
+.eap-nome {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* O código oficial é a âncora com o catálogo de preços. */
+.eap-oficial {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #1f6f8b;
+  background: #eaf2f5;
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+
+.eap-unidade {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: #8b95a1;
+  min-width: 34px;
+  text-align: right;
+}
+
+.eap-nada {
+  margin: 0;
+  padding: 28px;
+  text-align: center;
+  color: #8b95a1;
+  font-size: 12.5px;
+}
+
+/* ------------------------------------------------------ estado sem EAP */
+
+.eap-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.eap-select {
+  border: 1px solid #cfd6dd;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  background: #ffffff;
+}
+
+.eap-btn {
+  appearance: none;
+  border: 1px solid #1f6f8b;
+  background: #1f6f8b;
+  color: #ffffff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.eap-btn:hover:not(:disabled) {
+  background: #1a5c74;
+  border-color: #1a5c74;
+}
+
+.eap-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.eap-erro {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  background: #fdf0f1;
+  border-left: 3px solid #d1495b;
+  border-radius: 0 3px 3px 0;
+  color: #8a1f2c;
+  font-size: 12.5px;
+}
+
+.eap-ok {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  background: #eaf6ee;
+  border-left: 3px solid #2e9e5b;
+  border-radius: 0 3px 3px 0;
+  color: #1c5c31;
+  font-size: 12.5px;
+}

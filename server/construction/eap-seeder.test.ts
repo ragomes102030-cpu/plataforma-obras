@@ -9,11 +9,7 @@ import {
   scheduleDependencies,
   wbsNodes,
 } from "../../drizzle/schema";
-import {
-  DURACAO_PADRAO_DIAS,
-  semearEapDoCatalogo,
-  type ResultadoDaSemeadura,
-} from "./eap-seeder";
+import { semearEapDoCatalogo, type ResultadoDaSemeadura } from "./eap-seeder";
 
 /**
  * Testa o gravador da EAP com um drizzle falso.
@@ -336,7 +332,19 @@ describe("semearEapDoCatalogo", () => {
   // gerada do catálogo. Por isso toda obra ficava sem Gantt até alguém clicar
   // em "inicializar plano" — e aí ganhava um cronograma sem nenhuma relação
   // com a estrutura que acabara de ser criada.
-  describe("cronograma nasce junto da EAP", () => {
+  /**
+   * O seeder NÃO monta cronograma.
+   *
+   * Até a onda anterior ele criava uma atividade por folha, com
+   * DURACAO_PADRAO_DIAS = 5 e startOffset encadeado, mais as dependências FS
+   * entre elas. Eram 84 atividades que pareciam duração informada: apareciam
+   * na grade com início, fim e um caminho crítico inteiro calculado sobre
+   * elas.
+   *
+   * Catálogo gera ESCOPO; escopo não gera PRAZO. Estes testes existem para
+   * ninguém reintroduzir a fabrication.
+   */
+  describe("o seeder não monta cronograma", () => {
     function atividadesGravadas(inserts: Array<{ tabela: unknown; valores: Linha[] }>) {
       return inserts.filter(i => i.tabela === scheduleActivities).flatMap(i => i.valores);
     }
@@ -344,61 +352,37 @@ describe("semearEapDoCatalogo", () => {
       return inserts.filter(i => i.tabela === scheduleDependencies).flatMap(i => i.valores);
     }
 
-    it("cria uma atividade por folha, uma para cada linha de orçamento", async () => {
+    it("não cria nenhuma atividade", async () => {
       const { db, inserts } = dbFalso();
       const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
-      const atividades = atividadesGravadas(inserts);
-      expect(atividades.length).toBe(r.itensDeOrcamentoCriados);
-      expect(r.atividadesCriadas).toBe(atividades.length);
-    });
-
-    it("cada atividade aponta para o nó da EAP e para a linha de orçamento certos", async () => {
-      const { db, inserts } = dbFalso();
-      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
-      const nos = nosGravados(inserts).map((v, i) => ({ ...v, id: i + 1 }));
-      const itens = inserts
-        .filter(i => i.tabela === budgetItems)
-        .flatMap(i => i.valores)
-        // +1 pela versão de orçamento, que consome um id antes das linhas.
-        .map((v, i) => ({ ...v, id: nos.length + 2 + i }));
-      for (const atividade of atividadesGravadas(inserts)) {
-        const no = nos.find(n => n.id === atividade.wbsNodeId);
-        expect(no).toBeTruthy();
-        expect(no?.level).toBe(2);
-        expect(atividade.wbsCode).toBe(no?.code);
-        const item = itens.find(i => i.id === atividade.budgetItemId);
-        expect(item?.code).toBe(no?.externalId);
-      }
-    });
-
-    it("usa a duração padrão e encadeia os offsets sem sobreposição", async () => {
-      const { db, inserts } = dbFalso();
-      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
-      const atividades = atividadesGravadas(inserts) as Array<{
-        startOffset: number;
-        durationDays: number;
-      }>;
-      atividades.forEach((atividade, index) => {
-        expect(atividade.durationDays).toBe(DURACAO_PADRAO_DIAS);
-        expect(atividade.startOffset).toBe(index * DURACAO_PADRAO_DIAS);
-      });
-    });
-
-    it("encadeia as atividades em FS, n-1 dependências para n atividades", async () => {
-      const { db, inserts } = dbFalso();
-      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
-      const atividades = atividadesGravadas(inserts);
-      const deps = dependenciasGravadas(inserts);
-      expect(deps.length).toBe(Math.max(0, atividades.length - 1));
-      expect(deps.every(d => d.type === "FS" && d.lag === 0)).toBe(true);
-    });
-
-    it("sem catálogo, não cria cronograma nenhum", async () => {
-      const { db, inserts } = dbFalso({ catalogos: [] });
-      const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
-      expect(r.atividadesCriadas).toBe(0);
       expect(atividadesGravadas(inserts)).toHaveLength(0);
       expect(dependenciasGravadas(inserts)).toHaveLength(0);
+      expect(r.atividadesCriadas).toBe(0);
+    });
+
+    it("mesmo com muitas folhas do catálogo, o cronograma continua vazio", async () => {
+      // A tentação é "só quando o catálogo é grande". Não. Quantidade de
+      // serviços não é argumento para fabricar prazo.
+      const itens = Array.from({ length: 60 }, (_, i) => ({
+        code: `C${9000 + i}`,
+        description: `SERVIÇO ${i}`,
+        unit: "un",
+        unitPrice: "10.00",
+      }));
+      const { db, inserts } = dbFalso({ itens });
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      expect(atividadesGravadas(inserts)).toHaveLength(0);
+    });
+
+    it("o orçamento continua nascendo com o preço do catálogo", async () => {
+      // A EAP e o orçamento são derivados do catálogo e, por isso, corretos
+      // sem intervenção. Eles continuam.
+      const { db, inserts } = dbFalso();
+      const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const itens = inserts.find(i => i.tabela === budgetItems);
+      expect(itens).toBeTruthy();
+      expect(r.itensDeOrcamentoCriados).toBeGreaterThan(0);
+      expect(r.nosCriados).toBeGreaterThan(0);
     });
   });
 });
