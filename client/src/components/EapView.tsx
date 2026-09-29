@@ -48,11 +48,12 @@ export function EapView({
       const s = result.semeadura;
       setEapNotice(
         s.nosCriados > 0
-          ? `EAP gerada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços.`
+          ? `EAP gerada do catálogo ${s.catalogo?.nome ?? ""} (${s.catalogo?.referencia ?? ""}): ${s.nosCriados} nós, ${s.servicosUsados} serviços. Orçamento inicial gerado com ${s.itensDeOrcamentoCriados} itens já com preço do catálogo — falta só lançar as quantidades.`
           : s.aviso
       );
       await utils.projects.wbs.invalidate({ projectId });
       await wbsQuery.refetch();
+      await utils.budgets.list.invalidate({ projectId });
     },
     onError: error => setOperationError(error.message),
   });

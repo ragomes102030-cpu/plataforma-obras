@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { priceCatalogs, priceItems, projects, wbsNodes } from "../../drizzle/schema";
+import {
+  budgetItems,
+  budgetVersions,
+  priceCatalogs,
+  priceItems,
+  projects,
+  wbsNodes,
+} from "../../drizzle/schema";
 import { semearEapDoCatalogo, type ResultadoDaSemeadura } from "./eap-seeder";
 
 /**
@@ -186,5 +193,61 @@ describe("semearEapDoCatalogo", () => {
     expect(r.nosCriados).toBe(0);
     expect(r.aviso).toBeTruthy();
     expect(inserts).toHaveLength(0);
+  });
+
+  // O orçamento tem de nascer junto da EAP: antes desta onda, `budget_items`
+  // nunca era gravado por este caminho e a obra ficava com "Orçamento: sem
+  // preços" mesmo quando o catálogo já tinha o preço de cada serviço.
+  describe("orçamento nasce junto da EAP", () => {
+    function itensGravados(inserts: Array<{ tabela: unknown; valores: Linha[] }>) {
+      return inserts.filter(i => i.tabela === budgetItems).flatMap(i => i.valores);
+    }
+    function versoesGravadas(inserts: Array<{ tabela: unknown; valores: Linha[] }>) {
+      return inserts.filter(i => i.tabela === budgetVersions).flatMap(i => i.valores);
+    }
+
+    it("cria uma linha de orçamento por folha, com o preço do catálogo", async () => {
+      const { db, inserts } = dbFalso();
+      const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const itens = itensGravados(inserts);
+      // Uma linha por folha (nível 2), nenhuma para os grupos (nível 1).
+      const folhasNaEap = nosGravados(inserts).filter(v => v.level === 2).length;
+      expect(itens.length).toBe(folhasNaEap);
+      expect(r.itensDeOrcamentoCriados).toBe(folhasNaEap);
+      for (const item of itens) {
+        expect(Number(item.unitPrice)).toBeGreaterThan(0);
+        expect(item.quantity).toBe("0.000");
+        expect(String(item.code)).toMatch(/^C\d/i);
+      }
+    });
+
+    it("a linha do orçamento aponta para o nó da EAP que a originou", async () => {
+      const { db, inserts } = dbFalso();
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const nos = nosGravados(inserts);
+      const idsDeFolha = new Set(
+        nos
+          .map((_, i) => i + 1)
+          .filter(id => nos[id - 1]?.level === 2)
+      );
+      for (const item of itensGravados(inserts)) {
+        expect(idsDeFolha.has(Number(item.wbsNodeId))).toBe(true);
+      }
+    });
+
+    it("cria uma única versão de orçamento (rascunho) por semeadura", async () => {
+      const { db, inserts } = dbFalso();
+      await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      const versoes = versoesGravadas(inserts);
+      expect(versoes).toHaveLength(1);
+      expect(versoes[0].status).toBe("rascunho");
+    });
+
+    it("sem catálogo, não cria orçamento nenhum", async () => {
+      const { db, inserts } = dbFalso({ catalogos: [] });
+      const r = await semearEapDoCatalogo(db, 7, { tipoDeObra: "edificio" });
+      expect(r.itensDeOrcamentoCriados).toBe(0);
+      expect(itensGravados(inserts)).toHaveLength(0);
+    });
   });
 });

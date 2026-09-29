@@ -11,6 +11,8 @@
 
 import { eq } from "drizzle-orm";
 import {
+  budgetItems,
+  budgetVersions,
   priceCatalogs,
   priceItems,
   projects,
@@ -35,6 +37,8 @@ export type ResultadoDaSemeadura = {
   catalogo: { id: number; nome: string; referencia: string; fonte: string } | null;
   /** Texto para a UI quando a EAP não pôde ser gerada. */
   aviso: string | null;
+  /** Itens de orçamento criados junto com a EAP (preço do catálogo, quantidade 0). */
+  itensDeOrcamentoCriados: number;
 };
 
 const CATALOGO_VAZIO: ResultadoDaSemeadura = {
@@ -44,6 +48,7 @@ const CATALOGO_VAZIO: ResultadoDaSemeadura = {
   gruposVazios: [],
   catalogo: null,
   aviso: null,
+  itensDeOrcamentoCriados: 0,
 };
 
 /**
@@ -189,6 +194,44 @@ export async function semearEapDoCatalogo(
     idPorCodigo.set(no.code, row.id);
   }
 
+  // O orçamento nasce junto da EAP, folha a folha: mesmo código oficial,
+  // mesmo preço do catálogo (`unitPrice` já vem calculado pelo motor). A
+  // quantidade fica em 0 de propósito — só quem mede o projeto sabe o
+  // quantitativo real, e gravar um número inventado seria pior do que
+  // deixar em branco. Sem isto, o orçamento nascia sempre "sem preços"
+  // mesmo quando o catálogo já tinha o preço disponível.
+  const folhas = gerado.nos.filter(n => n.nodeType === "entrega" && n.externalId);
+  let itensDeOrcamentoCriados = 0;
+  if (folhas.length) {
+    const [versao] = await db
+      .insert(budgetVersions)
+      .values({
+        projectId,
+        name: `Orçamento — preços do catálogo ${catalogo.nome} (${catalogo.referencia})`,
+        versionNumber: 1,
+        status: "rascunho",
+        currency: "BRL",
+        notes:
+          "Preço unitário vem do catálogo importado; quantidade ainda não foi medida e está em 0 — preencher antes de aprovar.",
+      })
+      .$returningId();
+    await db.insert(budgetItems).values(
+      folhas.map(no => ({
+        budgetVersionId: versao.id,
+        wbsNodeId: idPorCodigo.get(no.code) ?? null,
+        code: no.externalId!,
+        description: no.name,
+        unit: no.unit ?? "un",
+        quantity: "0.000",
+        unitPrice: (no.unitPrice ?? 0).toFixed(2),
+        source: catalogo.fonte,
+        referencePeriod: catalogo.referencia,
+        sortOrder: no.sortOrder,
+      }))
+    );
+    itensDeOrcamentoCriados = folhas.length;
+  }
+
   return {
     nosCriados: gerado.nos.length,
     servicosUsados: gerado.servicosUsados,
@@ -196,5 +239,6 @@ export async function semearEapDoCatalogo(
     gruposVazios: gerado.gruposVazios,
     catalogo,
     aviso: gerado.aviso,
+    itensDeOrcamentoCriados,
   };
 }
