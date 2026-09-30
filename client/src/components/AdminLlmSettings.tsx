@@ -12,9 +12,9 @@ export function AdminLlmSettings() {
     },
     onError: error => setError(error.message),
   });
-  const [provider, setProvider] = useState("openrouter");
-  const [baseUrl, setBaseUrl] = useState("https://openrouter.ai/api/v1");
-  const [model, setModel] = useState("openai/gpt-5-mini");
+  const [provider, setProvider] = useState("deepseek");
+  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
+  const [model, setModel] = useState("deepseek-flash");
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -60,7 +60,7 @@ export function AdminLlmSettings() {
         <div className="panel admin-settings-card">
           <div className="panel-heading">
             <div>
-              <h3>Provedor OpenAI-compatible</h3>
+              <h3>Provedor LLM</h3>
               <p>{settingsQuery.data?.configured ? `Configurado: ${settingsQuery.data.provider} · ${settingsQuery.data.model}` : "Ainda não configurado"}</p>
             </div>
             <KeyRound size={18} />
@@ -102,7 +102,7 @@ export function AdminLlmSettings() {
           </p>
           <p>
             Use um modelo que declare suporte a <code>tools</code> e <code>tool_choice</code>.
-            A configuração do OpenRouter com <code>openai/gpt-5-mini</code> já atende a esse requisito.
+            A configuração da DeepSeek usa <code>https://api.deepseek.com</code> e pode usar <code>deepseek-flash</code>. O Arquimedes também usa JSON estruturado para revisar a EAP.
           </p>
         </div>
       </div>
