@@ -22,6 +22,11 @@ import {
   searchRepositoryCode,
   updateRepositoryFile,
 } from "./integrations/repository-tools";
+import {
+  getArquimedesCapabilitySnapshot,
+  installArquimedesCapability,
+  setArquimedesCapabilityEnabled,
+} from "./agent/capability-manager";
 
 const MAX_ITERATIONS = 4;
 const MAX_TOOL_RESULT_CHARS = 12_000;
