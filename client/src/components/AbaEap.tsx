@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Bot, FileText, Maximize2, Minimize2, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -128,6 +129,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     [arvore, busca]
   );
 
+  const expandirTudo = () => setAberto(new Set(nos.filter(n => n.nodeType !== "entrega").map(n => n.id)));
+  const recolherTudo = () => setAberto(new Set());
+  const abrirAgente = () => window.dispatchEvent(new CustomEvent("abrir-agente-eap"));
+
   if (wbs.isPending) {
     return <div className="xl-vazia-folha"><h3>Carregando a estrutura…</h3></div>;
   }
@@ -142,6 +147,20 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   return (
     <div className="eap">
+      <div className="eap-toolbar">
+        <div className="eap-toolbar-identidade">
+          <div className="eap-toolbar-icon"><FileText size={16} /></div>
+          <div>
+            <div className="eap-toolbar-titulo">EAP da obra</div>
+            <div className="eap-toolbar-subtitulo">Estrutura analítica · formato de planilha para conferência</div>
+          </div>
+        </div>
+        <div className="eap-toolbar-acoes">
+          <button type="button" className="eap-tool-btn" onClick={recolherTudo}><Minimize2 size={14} /> Recolher</button>
+          <button type="button" className="eap-tool-btn" onClick={expandirTudo}><Maximize2 size={14} /> Expandir</button>
+          <button type="button" className="eap-tool-btn eap-tool-agent" onClick={abrirAgente}><Bot size={14} /> Analisar com agente</button>
+        </div>
+      </div>
       {erro && (
         <div className="xl-aviso-erro" role="alert">
           {erro}
@@ -152,11 +171,12 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       )}
 
       <div className="eap-topo">
-        <div>
-          <h2>ESTRUTURA ANALÍTICA DA OBRA</h2>
-          <p>
-            {total} nós · {grupos} grupos · {folhas} folhas de serviço
-          </p>
+        <div className="eap-resumo">
+          <div>
+            <h2>ESTRUTURA ANALÍTICA DA OBRA</h2>
+            <p>{total} nós · {grupos} grupos · {folhas} folhas de serviço</p>
+          </div>
+          <span className="eap-status-chip"><span className="eap-status-dot" /> Estrutura carregada</span>
         </div>
         <div className="eap-topo-acoes">
           <button
@@ -178,16 +198,27 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             {refazer.isPending ? "Refazendo…" : "Refazer"}
           </button>
         </div>
-        <input
-          className="eap-busca"
-          value={busca}
-          onChange={e => setBusca(e.target.value)}
-          placeholder="Filtrar por nome ou código…"
-          aria-label="Filtrar a estrutura"
-        />
+        <label className="eap-busca-wrap">
+          <Search size={14} />
+          <input
+            className="eap-busca"
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Filtrar por nome ou código…"
+            aria-label="Filtrar a estrutura"
+          />
+        </label>
       </div>
 
       <div className="eap-arvore" role="tree" aria-label="Estrutura da obra">
+        <div className="eap-grid-head" aria-hidden="true">
+          <span className="eap-grid-canto" />
+          <span className="eap-grid-col eap-col-eap">EAP</span>
+          <span className="eap-grid-col eap-col-servico">SERVIÇO / DESCRIÇÃO</span>
+          <span className="eap-grid-col eap-col-codigo">SEINFRA</span>
+          <span className="eap-grid-col eap-col-unidade">UN.</span>
+          <span className="eap-grid-col eap-col-status">STATUS</span>
+        </div>
         {filtrada.map(no => (
           <NoDaArvore
             key={no.no.id}
@@ -289,45 +320,45 @@ function NoDaArvore({
   return (
     <div role="treeitem" aria-expanded={temFilhos ? aberto : undefined}>
       <div
-        className={`eap-linha eap-nivel-${no.level}${no.nodeType === "entrega" ? " eap-folha" : ""}`}
-        style={{ paddingLeft: 12 + profundidade * 16 }}
+        className={`eap-linha eap-nivel-${no.level}${no.nodeType === "entrega" ? " eap-folha" : " eap-grupo"}`}
       >
-        {temFilhos ? (
-          <button
-            type="button"
-            className={`eap-seta${aberto ? " aberta" : ""}`}
-            onClick={() => onAlternar(no.id)}
-            aria-label={aberto ? `Fechar ${no.name}` : `Abrir ${no.name}`}
-          />
-        ) : (
-          <span className="eap-seta eap-seta-vazia" aria-hidden="true" />
-        )}
-
-        <span className="eap-codigo">{no.code}</span>
-        <span className="eap-nome">{no.name}</span>
-
-        {no.externalId && (
-          <span className="eap-oficial" title="Código oficial do serviço na base de preços">
-            {no.externalId}
-          </span>
-        )}
-        {no.unit && <span className="eap-unidade">{no.unit}</span>}
-
-        {no.nodeType === "entrega" &&
-          (jaNoCronograma(no.code) ? (
-            <span className="eap-no-crono" title="Esta folha já está no cronograma">
-              no cronograma
-            </span>
-          ) : (
+        <span className="eap-rownum" aria-hidden="true">{no.code}</span>
+        <span className="eap-indent" style={{ paddingLeft: profundidade * 18 }}>
+          {temFilhos ? (
             <button
               type="button"
-              className="eap-trazer"
-              onClick={() => aoTrazer(no.id)}
-              title="Trazer esta folha para o cronograma, com duração a informar"
-            >
-              trazer p/ cronograma
-            </button>
-          ))}
+              className={`eap-seta${aberto ? " aberta" : ""}`}
+              onClick={() => onAlternar(no.id)}
+              aria-label={aberto ? `Fechar ${no.name}` : `Abrir ${no.name}`}
+            />
+          ) : (
+            <span className="eap-seta eap-seta-vazia" aria-hidden="true" />
+          )}
+        </span>
+        <span className="eap-codigo">{no.code}</span>
+        <span className="eap-nome" title={no.name}>{no.name}</span>
+        <span className="eap-oficial" title={no.externalId ? "Código oficial do serviço na base de preços" : "Sem vínculo direto com código SEINFRA"}>
+          {no.externalId || "—"}
+        </span>
+        <span className="eap-unidade">{no.unit || "—"}</span>
+        <span className="eap-status-cell">
+          {no.nodeType === "entrega" ? (
+            jaNoCronograma(no.code) ? (
+              <span className="eap-no-crono">No cronograma</span>
+            ) : (
+              <button
+                type="button"
+                className="eap-trazer"
+                onClick={() => aoTrazer(no.id)}
+                title="Trazer esta folha para o cronograma, com duração a informar"
+              >
+                + Cronograma
+              </button>
+            )
+          ) : (
+            <span className="eap-grupo-label">{temFilhos ? `${filhos.length} itens` : "Grupo"}</span>
+          )}
+        </span>
       </div>
 
       {temFilhos && aberto && (
