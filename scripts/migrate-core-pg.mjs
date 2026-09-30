@@ -85,6 +85,15 @@ export const CONSULTA_POR_TIPO = {
   },
 };
 
+/** O mesmo statement, sem as linhas de comentario. */
+export function semComentarios(sql) {
+  return sql
+    .split("\n")
+    .filter(linha => !linha.trim().startsWith("--"))
+    .join("\n")
+    .trim();
+}
+
 /**
  * Verifica, migration a migration, se o DDL declarado está INTEIRO no banco.
  *
@@ -120,16 +129,33 @@ export async function verificarSeDdlEstaNoBanco({ conn, migrations, jaAplicado }
   const pendentes = [];
 
   for (const m of marcadas) {
-    // Uma migration sem nenhum alvo reconhecível não pode ser conferida, e
-    // dizer que ela está incompleta seria chutar. Fica de fora, e a lista
-    // devolvida mostra qual ficou sem conference.
-    const alvos = m.sql.map(alvoDoStatement).filter(Boolean);
-    if (alvos.length === 0) continue;
-
     const faltando = [];
-    for (const alvo of alvos) {
+
+    for (const stmt of m.sql) {
+      // O comentario de cabecalho vem grudado no primeiro statement quando o
+      // arquivo nao separa os dois por `--> statement-breakpoint`.
+      //
+      // Isso e o que crashed em producao. O `alvoDoStatement` devolvia `null`
+      // para o bloco, e `null` significa "executar sem conferencia" — certo. Mas
+      // na conferencia ele era tratado como "objeto sem alvo", e o primeiro
+      // statement da 0000, que e `CREATE TYPE "users_role"`, ficava sem
+      // conferida. A reaplicacao tentava todos os `CREATE TYPE` de novo e o
+      // banco recusava com `42710 type "users_role" already exists`, derrubando o
+      // deploy.
+      //
+      // O comentario nao e objeto, entao nao entra na pergunta ao catalogo.
+      const limpo = semComentarios(stmt);
+      if (!limpo) continue;
+
+      const alvo = alvoDoStatement(limpo);
+      // Um statement sem alvo reconhecivel nao pode ser conferido sem chutar.
+      // Dizer que falta seria fabricar divergencia; dizer que esta inteiro seria
+      // confiar. Fica de fora, e a auditoria reporta a lacuna.
+      if (!alvo) continue;
+
       if (!(await jaExiste(alvo))) faltando.push(alvo);
     }
+
     if (faltando.length > 0) pendentes.push({ folderMillis: m.folderMillis, faltando });
   }
 

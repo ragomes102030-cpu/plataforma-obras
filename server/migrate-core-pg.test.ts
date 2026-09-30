@@ -8,6 +8,7 @@ import {
   aplicarMigracoes,
   criarVerificador,
   queryDeExistencia,
+  semComentarios,
   verificarSeDdlEstaNoBanco,
 } from "../scripts/migrate-core-pg.mjs";
 
@@ -146,6 +147,30 @@ describe("criarVerificador", () => {
   });
 });
 
+describe("semComentarios", () => {
+  it("tira o bloco de comentario do inicio do statement", () => {
+    const bruto =
+      "-- cabecalho da migration\n" +
+      "-- outra linha de comentario\n" +
+      'CREATE TYPE "users_role" AS ENUM (\'user\', \'admin\');';
+    const limpo = semComentarios(bruto);
+    expect(limpo).toBe(`CREATE TYPE "users_role" AS ENUM ('user', 'admin');`);
+    // O que importa: o resultado passa a ter alvo reconhecível. Sem isso, o
+    // statement nao era conferido e a reaplicacao o repetia.
+    expect(alvoDoStatement(limpo)).toEqual({ tipo: "type", nome: "users_role" });
+    expect(alvoDoStatement(bruto)).toBeNull();
+  });
+
+  it("devolve vazio quando o statement e so comentario", () => {
+    expect(semComentarios("-- so isto aqui\n-- e isto")).toBe("");
+  });
+
+  it("preserva o SQL que tem ponto e virgula e aspas", () => {
+    const sql = `INSERT INTO t (a, b) VALUES ('x; y', 'z')`;
+    expect(semComentarios(sql)).toBe(sql);
+  });
+});
+
 describe("as MIGRATIONS REAIS sao reconhecidas", () => {
   const PASTA = "drizzle";
   const arquivos = readdirSync(PASTA)
@@ -281,6 +306,42 @@ describe("aplicarMigracoes num banco vazio", () => {
       );
       // 33 do schema + a de registro.
       expect(tabelas.rows[0]!.n).toBe(34);
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it("o comentario de cabecalho nao vira objeto faltando", async () => {
+    // O arquivo de migration comeca com um bloco de comentario que NAO esta
+    // separado do primeiro statement por `--> statement-breakpoint`. O
+    // `alvoDoStatement` devolve `null` para o bloco, e `null` significa "executa
+    // sem conferencia" — o que e certo para executar e errado para conferir.
+    //
+    // Na conferencia, o bloco era tratado como "objeto sem alvo", o primeiro
+    // statement da 0000 (`CREATE TYPE "users_role"`) ficava sem ser comparado, e
+    // a reaplicacao disparava todos os `CREATE TYPE` de novo. O banco recusava
+    // com `42710 type "users_role" already exists` e o deploy caia.
+    //
+    // Foi o que aconteceu no segundo deploy. O teste verifica o caso geral:
+    // uma migration ja aplicada, com o cabecalho grudado, nao e considerada
+    // incompleta.
+    const pg = await PGlite.create();
+    try {
+      const conn = conexao(pg);
+      const migrations = migrationsDoDisco();
+
+      // Aplica tudo, como o banco de quem ja passou pelo deploy.
+      await aplicarMigracoes({ conn: conn as never, migrations, jaAplicado: null });
+
+      const conferencia = await verificarSeDdlEstaNoBanco({
+        conn: conn as never,
+        migrations,
+        jaAplicado: migrations[migrations.length - 1]!.folderMillis,
+      });
+      expect(
+        conferencia.pendentes,
+        "nenhuma divergencia: as duas migrations estao inteiras no banco"
+      ).toEqual([]);
     } finally {
       await pg.close();
     }
