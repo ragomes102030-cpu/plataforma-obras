@@ -156,7 +156,7 @@ async function readCapability(db: Db, capabilityId: string) {
   return row;
 }
 
-async function assertDependenciesActive(db: Db, dependencies: string[], verb: "instalar" | "ativar") {
+async function assertDependenciesActive(db: Db, dependencies: string[], verb: "ativar") {
   if (!dependencies.length) return;
   const rows = await db
     .select({
@@ -187,6 +187,43 @@ async function assertDependenciesActive(db: Db, dependencies: string[], verb: "i
   }
 }
 
+async function installDependencies(db: Db, userId: number, dependencies: string[]) {
+  for (const dependencyId of dependencies) {
+    const definition = capabilityDefinition(dependencyId);
+    const current = await readCapability(db, dependencyId);
+
+    if (current.status === "installed" && current.enabled) continue;
+
+    if (definition.dependencies.length) {
+      await installDependencies(db, userId, definition.dependencies);
+    }
+
+    const now = new Date();
+    await db
+      .update(arquimedesCapabilities)
+      .set({
+        status: "installed",
+        enabled: true,
+        installedBy: userId,
+        installedAt: current.installedAt ?? now,
+        updatedAt: now,
+      })
+      .where(eq(arquimedesCapabilities.id, dependencyId));
+
+    await recordEvent(db, {
+      capabilityId: dependencyId,
+      userId,
+      action: current.status === "available" ? "dependency-installed" : "dependency-enabled",
+      fromStatus: current.status,
+      toStatus: "installed",
+      detail:
+        'Dependência necessária para outra capacidade: "' +
+        definition.name +
+        '".',
+    });
+  }
+}
+
 export async function installArquimedesCapability(
   userId: number,
   capabilityId: string
@@ -198,7 +235,11 @@ export async function installArquimedesCapability(
   await ensureCatalog(db);
 
   const current = await readCapability(db, capabilityId);
-  await assertDependenciesActive(db, parseDependencies(current.dependenciesJson), "instalar");
+  await installDependencies(
+    db,
+    userId,
+    parseDependencies(current.dependenciesJson)
+  );
 
   const now = new Date();
   await db
