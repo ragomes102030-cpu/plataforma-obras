@@ -871,6 +871,24 @@ tr:hover .xl-codigo {
   text-overflow: ellipsis;
 }
 
+.janela-agente-config {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  margin-left: 2px;
+  color: #5c6874;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.janela-agente-config:hover {
+  color: #2c3a47;
+  background: #dde2e7;
+}
+
 .janela-agente-toggle,
 .janela-agente-fechar {
   display: inline-flex;
