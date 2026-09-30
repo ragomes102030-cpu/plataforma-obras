@@ -203,41 +203,24 @@ function formatContext(context: AgentProjectContext) {
     : "Resumo de evidências locais ainda não carregado.";
   const coordinatorLines = coordinator
     ? [
-        `Marco persistido: ${coordinator.stage}`,
-        `Bloqueadores abertos: ${coordinator.blockerCount}`,
-        `Resumo do coordenador: ${coordinator.lastSummary || "nenhum"}`,
-        "Decisões aprovadas:",
+        `Pendências registradas: ${coordinator.blockerCount}`,
+        `Resumo operacional: ${coordinator.lastSummary || "nenhum"}`,
+        "Decisões já aprovadas:",
         coordinator.approvedDecisions.length
           ? coordinator.approvedDecisions
               .slice(0, 20)
-              .map(
-                decision =>
-                  `${decision.stage} | ${decision.decision} | ${JSON.stringify(decision.scope)} | ${decision.reason || "sem justificativa"}`
-              )
+              .map(decision => `${decision.decision} | ${decision.reason || "sem justificativa"}`)
               .join("\n")
           : "Nenhuma decisão aprovada registrada.",
         "Achados abertos:",
         coordinator.openFindings.length
           ? coordinator.openFindings
               .slice(0, 30)
-              .map(
-                finding =>
-                  `${finding.classification} | ${finding.entityType}:${finding.entityRef || "sem referência"} | ${finding.description} | impacto=${finding.impact || "não informado"} | confiança=${finding.confidence}`
-              )
+              .map(finding => `${finding.description} | impacto=${finding.impact || "não informado"} | confiança=${finding.confidence}`)
               .join("\n")
           : "Nenhum achado aberto registrado.",
-        "Memórias aprovadas relevantes:",
-        coordinator.approvedMemories.length
-          ? coordinator.approvedMemories
-              .slice(0, 30)
-              .map(
-                memory =>
-                  `${memory.category}.${memory.key}=${JSON.stringify(memory.value)} | fonte=${memory.sourceType}:${memory.sourceRef || "sem referência"} | confiança=${memory.confidence}`
-              )
-              .join("\n")
-          : "Nenhuma memória aprovada registrada.",
       ].join("\n")
-    : "Estado persistido do coordenador ainda não carregado.";
+    : "Estado operacional persistido ainda não carregado.";
 
   return [
     `Obra: ${context.project.code} — ${context.project.name}`,
@@ -296,10 +279,8 @@ function buildSystem(
     "Para dúvidas técnicas de planejamento, use os conceitos adequados de EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
     "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora. Não crie um diagnóstico de falha técnica desnecessário.",
     "Não mencione 'MARCO', 'Agent Orchestrator', project_id, nomes internos de MCP, catálogos, políticas internas ou contratos de resposta, a menos que o usuário pergunte explicitamente sobre a arquitetura.",
-    `project_id externo por domínio: ${Object.entries(mcpProjectIds).map(([domain, id]) => `${domain}=${id}`).join(", ") || "nenhum"}.`,
     workspaceContext,
-    "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:
-" + formatContext(context),
+    "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context),
   ].join("\n\n");
 }
 
