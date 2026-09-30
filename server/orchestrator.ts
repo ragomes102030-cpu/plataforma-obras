@@ -153,6 +153,7 @@ export type OrchestratorOptions = {
   mcpProjectId?: string;
   mcpProjectIds?: Partial<Record<ToolDomain, string>>;
   taskId?: string;
+  userId?: number;
   maxIterations?: number;
   deps?: OrchestratorDeps;
   onEvent?: (event: OrchestratorEvent) => void | Promise<void>;
@@ -327,6 +328,48 @@ const RUNTIME_TOOLS: LlmTool[] = [
   {
     type: "function",
     function: {
+      name: "list_archimedes_capabilities",
+      description:
+        "Lista as capacidades instaladas, disponíveis, ativadas e suas dependências. É uma ferramenta administrativa e só pode ser usada por administradores.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "install_archimedes_capability",
+      description:
+        "Instala e ativa uma capacidade do catálogo homologado do Arquimedes. Só execute quando o administrador pedir explicitamente a instalação; dependências precisam estar instaladas e ativas.",
+      parameters: {
+        type: "object",
+        properties: {
+          capabilityId: { type: "string" },
+        },
+        required: ["capabilityId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_archimedes_capability_enabled",
+      description:
+        "Ativa ou desativa uma capacidade já instalada. É administrativo; só execute quando o administrador pedir explicitamente.",
+      parameters: {
+        type: "object",
+        properties: {
+          capabilityId: { type: "string" },
+          enabled: { type: "boolean" },
+        },
+        required: ["capabilityId", "enabled"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_current_datetime",
       description:
         "Retorna a data e hora atuais do runtime na zona America/Fortaleza. Use quando o usuário perguntar que dia é hoje, a hora atual ou precisar de uma referência temporal presente.",
@@ -416,6 +459,7 @@ function buildSystem(
     "Quando o usuário perguntar sobre o próprio código, arquitetura, bugs ou funcionamento interno da Plataforma Obras, use as ferramentas de repositório disponíveis para investigar. Não diga que não possui acesso ao código se a ferramenta puder fornecê-lo.",
     "Antes de modificar código, leia os arquivos envolvidos e confirme a causa do problema. Depois aplique somente a mudança necessária. Não invente que testou algo: use evidências reais.",
     "A ferramenta de atualização do repositório trabalha apenas na branch de trabalho configurada pelo runtime e aplica validações de caminho e concorrência. Nunca trate uma alteração como implantada até existir evidência do deploy.",
+    "A administração de capacidades do Arquimedes é restrita a administradores. Instalação ou ativação só deve ocorrer quando houver um pedido explícito do administrador; não instale uma capacidade apenas porque ela parece útil.",
     "Não mencione 'MARCO', 'Agent Orchestrator', project_id, nomes internos de MCP, catálogos, políticas internas ou contratos de resposta, a menos que o usuário pergunte explicitamente sobre a arquitetura.",
   ];
 
@@ -590,6 +634,76 @@ export async function runProjectOrchestrator(
             type: "tool_finished",
             iteration,
             domain: "repository",
+            toolName,
+            status: "error",
+          });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (
+        toolName === "list_archimedes_capabilities" ||
+        toolName === "install_archimedes_capability" ||
+        toolName === "set_archimedes_capability_enabled"
+      ) {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.userId) {
+            throw new Error("A sessão do usuário não foi identificada para administrar capacidades.");
+          }
+          let value: unknown;
+          if (toolName === "list_archimedes_capabilities") {
+            value = await getArquimedesCapabilitySnapshot(options.userId);
+          } else if (toolName === "install_archimedes_capability") {
+            value = await installArquimedesCapability(
+              options.userId,
+              String(rawArgs.capabilityId ?? "")
+            );
+          } else {
+            value = await setArquimedesCapabilityEnabled(
+              options.userId,
+              String(rawArgs.capabilityId ?? ""),
+              Boolean(rawArgs.enabled)
+            );
+          }
+          audit.push({
+            taskId,
+            iteration,
+            event: "tool_call",
+            domain: "runtime",
+            toolName,
+            status: "success",
+            durationMs: Date.now() - startedAt,
+          });
+          await emit({
+            type: "tool_finished",
+            iteration,
+            domain: "runtime",
+            toolName,
+            status: "success",
+          });
+          return {
+            ok: true,
+            content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS),
+          };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Falha na administração de capacidades.";
+          audit.push({
+            taskId,
+            iteration,
+            event: "tool_call",
+            domain: "runtime",
+            toolName,
+            status: "error",
+            durationMs: Date.now() - startedAt,
+            error: message,
+          });
+          await emit({
+            type: "tool_finished",
+            iteration,
+            domain: "runtime",
             toolName,
             status: "error",
           });
