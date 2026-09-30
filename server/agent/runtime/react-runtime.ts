@@ -1,6 +1,6 @@
 export type AgentRuntimeMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content: string | null | Array<{ type?: string; text?: string; [key: string]: unknown }>;
   tool_call_id?: string;
   tool_calls?: Array<{
     id: string;
@@ -50,7 +50,7 @@ export type AgentRuntimeOptions = {
     messages: AgentRuntimeMessage[];
     tools: AgentRuntimeTool[];
   }) => Promise<AgentRuntimeResponse>;
-  executeTool: (toolName: string, args: Record<string, unknown>) => Promise<AgentRuntimeToolResult>;
+  executeTool: (toolName: string, args: Record<string, unknown>, iteration: number) => Promise<AgentRuntimeToolResult>;
   allowedTools?: ReadonlySet<string>;
   maxToolResultChars?: number;
   onEvent?: (event: AgentRuntimeEvent) => void | Promise<void>;
@@ -130,7 +130,7 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
       await options.onEvent?.({ type: "tool_started", iteration, toolName });
       let result: AgentRuntimeToolResult;
       try {
-        result = await options.executeTool(toolName, args);
+        result = await options.executeTool(toolName, args, iteration);
       } catch (error) {
         result = {
           ok: false,
