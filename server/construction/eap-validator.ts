@@ -11,6 +11,16 @@ export type EapValidationResult = {
   issues: ValidationIssue[];
 };
 
+export type EapDecompositionBasis =
+  | "project"
+  | "deliverable"
+  | "system"
+  | "discipline"
+  | "location"
+  | "phase"
+  | "component"
+  | "other";
+
 export type EapScopeNode = EapEvidenceNode & {
   description?: string | null;
   inclusions?: string | null;
@@ -18,6 +28,7 @@ export type EapScopeNode = EapEvidenceNode & {
   location?: string | null;
   responsible?: string | null;
   acceptanceCriteria?: string | null;
+  decompositionBasis?: string | null;
   scopeStatus?: string | null;
 };
 
@@ -56,6 +67,31 @@ export function validateEapScope(
     });
   }
 
+  const allowedBases = new Set<EapDecompositionBasis>([
+    "project",
+    "deliverable",
+    "system",
+    "discipline",
+    "location",
+    "phase",
+    "component",
+    "other",
+  ]);
+
+  const scopeText = (node: EapScopeNode) =>
+    [node.description, node.inclusions]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join("\n");
+
+  const clauses = (value: string | null | undefined) =>
+    String(value ?? "")
+      .split(/[\\n;,]+/)
+      .map(item => normalized(item))
+      .filter(Boolean);
+
+  const overlaps = (left: string[], right: string[]) =>
+    left.some(a => right.some(b => a === b || a.includes(b) || b.includes(a)));
+
   for (const node of nodes) {
     const childNodes = children.get(String(node.id)) ?? [];
     const isLeaf = childNodes.length === 0;
@@ -71,6 +107,14 @@ export function validateEapScope(
 
     if (node.parentId !== null) {
       const parent = nodes.find(candidate => candidate.id === node.parentId);
+      if (!node.decompositionBasis || !allowedBases.has(node.decompositionBasis as EapDecompositionBasis)) {
+        issues.push({
+          code: "eap_decomposition_basis_missing",
+          severity: "warning",
+          message: `O nó ${node.code} não informa uma base de decomposição válida. Registre se a divisão é por sistema, disciplina, localização, fase, componente ou outro critério explícito.`,
+          entityRef: String(node.id),
+        });
+      }
       if (parent?.nodeType === "entrega") {
         issues.push({
           code: "eap_child_of_delivery",
@@ -129,6 +173,67 @@ export function validateEapScope(
         message: `Há nomes de escopo duplicados entre irmãos de ${node.code}; isso pode representar sobreposição e quebra da exclusividade do escopo.`,
         entityRef: String(node.id),
       });
+    }
+
+    if (childNodes.length > 0) {
+      const childBases = childNodes
+        .map(child => child.decompositionBasis)
+        .filter((basis): basis is string => Boolean(basis));
+      const uniqueBases = [...new Set(childBases)];
+
+      if (uniqueBases.length > 1) {
+        issues.push({
+          code: "eap_mixed_decomposition_basis",
+          severity: "warning",
+          message: `Os filhos de ${node.code} usam bases de decomposição diferentes (${uniqueBases.join(", ")}). Misturar critérios no mesmo nível dificulta provar a cobertura de 100% e a exclusividade do escopo.`,
+          entityRef: String(node.id),
+        });
+      }
+
+      const childScopeClauses = childNodes.map(child => clauses(scopeText(child)));
+      const parentExclusions = clauses(node.exclusions);
+
+      for (let i = 0; i < childNodes.length; i += 1) {
+        for (let j = i + 1; j < childNodes.length; j += 1) {
+          if (overlaps(childScopeClauses[i]!, childScopeClauses[j]!)) {
+            issues.push({
+              code: "eap_scope_overlap_evidence",
+              severity: "error",
+              message: `Há evidência textual de sobreposição entre os irmãos ${childNodes[i]!.code} e ${childNodes[j]!.code} de ${node.code}. Revise inclusões e exclua responsabilidades duplicadas.`,
+              entityRef: String(node.id),
+            });
+          }
+        }
+      }
+
+      for (let i = 0; i < childNodes.length; i += 1) {
+        if (parentExclusions.length && overlaps(parentExclusions, childScopeClauses[i]!)) {
+          issues.push({
+            code: "eap_child_outside_parent_scope",
+            severity: "error",
+            message: `O filho ${childNodes[i]!.code} contém escopo textual que coincide com uma exclusão do pai ${node.code}. Isso indica trabalho fora do escopo aprovado do pai.`,
+            entityRef: String(childNodes[i]!.id),
+          });
+        }
+      }
+
+      if (!scopeText(node).trim()) {
+        issues.push({
+          code: "eap_scope_coverage_not_evidenced",
+          severity: "warning",
+          message: `O pai ${node.code} não possui descrição ou inclusões suficientes para registrar como os filhos cobrem 100% do seu escopo. A regra dos 100% não pode ser comprovada apenas pela hierarquia.`,
+          entityRef: String(node.id),
+        });
+      }
+
+      if (childNodes.some(child => !scopeText(child).trim())) {
+        issues.push({
+          code: "eap_child_scope_not_evidenced",
+          severity: "warning",
+          message: `Um ou mais filhos de ${node.code} não possuem descrição/inclusões. A cobertura de 100% e a exclusividade do nível ainda dependem de julgamento de escopo.`,
+          entityRef: String(node.id),
+        });
+      }
     }
 
     if (
