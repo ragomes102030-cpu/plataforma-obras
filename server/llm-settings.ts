@@ -7,11 +7,12 @@ import { getDb } from "./db";
 const ALGORITHM = "aes-256-gcm";
 const SETTINGS_ID = 1;
 
-type StoredLlmProvider = {
+export type StoredLlmProvider = {
   provider: string;
   baseUrl: string;
   apiKey: string;
   model: string;
+  enabled?: boolean;
 };
 
 function encryptionKey() {
@@ -46,26 +47,23 @@ function decryptConfig(payload: string): StoredLlmProvider | null {
       decipher.update(Buffer.from(encryptedBase64, "base64")),
       decipher.final(),
     ]).toString("utf8");
-    const parsed = JSON.parse(decrypted) as Partial<StoredLlmProvider>;
-    if (
-      typeof parsed.provider !== "string" ||
-      typeof parsed.baseUrl !== "string" ||
-      typeof parsed.apiKey !== "string" ||
-      typeof parsed.model !== "string" ||
-      !parsed.provider.trim() ||
-      !parsed.baseUrl.trim() ||
-      !parsed.apiKey.trim() ||
-      !parsed.model.trim()
-    ) {
-      return null;
+    const parsed = JSON.parse(decrypted) as Partial<StoredLlmProvider> | Array<Partial<StoredLlmProvider>>;
+    const validate = (value: Partial<StoredLlmProvider>) =>
+      typeof value.provider === "string" && typeof value.baseUrl === "string" &&
+      typeof value.apiKey === "string" && typeof value.model === "string" &&
+      Boolean(value.provider.trim()) && Boolean(value.baseUrl.trim()) &&
+      Boolean(value.model.trim());
+    if (Array.isArray(parsed)) {
+      return parsed.filter(validate).map(value => ({ ...value, apiKey: value.apiKey! })) as StoredLlmProvider[];
     }
+    if (!validate(parsed)) return null;
     return parsed as StoredLlmProvider;
   } catch {
     return null;
   }
 }
 
-export async function getStoredLlmProvider(): Promise<StoredLlmProvider | null> {
+export async function getStoredLlmProviders(): Promise<StoredLlmProvider[]> {
   const db = await getDb();
   if (!db) return null;
   const rows = await db
@@ -75,11 +73,19 @@ export async function getStoredLlmProvider(): Promise<StoredLlmProvider | null> 
     .orderBy(desc(llmProviderSettings.updatedAt))
     .limit(1);
   const row = rows[0];
-  return row ? decryptConfig(row.encryptedConfig) : null;
+  if (!row) return [];
+  const config = decryptConfig(row.encryptedConfig);
+  if (!config) return [];
+  return Array.isArray(config) ? config : [config];
 }
 
-export async function saveStoredLlmProvider(
-  config: StoredLlmProvider,
+export async function getStoredLlmProvider(): Promise<StoredLlmProvider | null> {
+  const providers = await getStoredLlmProviders();
+  return providers.find(provider => provider.enabled !== false) ?? providers[0] ?? null;
+}
+
+export async function saveStoredLlmProviders(
+  configs: StoredLlmProvider[],
   userId: number
 ) {
   const db = await getDb();
