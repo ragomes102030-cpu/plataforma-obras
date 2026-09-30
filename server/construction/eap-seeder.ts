@@ -278,8 +278,6 @@ export async function semearEapDoCatalogo(
       .$returningIds();
 
     idPorCodigo.set(codigo, row);
-    // A chave original continua útil para localizar as folhas no orçamento.
-    idPorCodigo.set(codigoOriginal, row);
   }
 
   // O orçamento nasce junto da EAP, folha a folha: mesmo código oficial,
