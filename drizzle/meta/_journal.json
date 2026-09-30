@@ -34,6 +34,13 @@
       "when": 1790782200000,
       "tag": "0004_capability_control",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790782200001,
+      "tag": "0005_eap_decomposition_basis",
+      "breakpoints": true
     }
   ],
   "version": "7",
