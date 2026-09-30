@@ -662,6 +662,9 @@ function EditorEapPanel({
 /** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
+  const criarRaiz = trpc.projects.createWbsNode.useMutation({
+    onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
+  });
   const gerar = trpc.projects.generateEapFromCatalog.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
@@ -671,11 +674,30 @@ function EapVazia({ projetoId }: { projetoId: number }) {
     <div className="xl-vazia-folha">
       <h3>Esta obra ainda não tem EAP</h3>
       <p className="xl-vazia-falta">
-        A EAP canônica deve nascer do escopo da obra, não do catálogo de preços.
-        O catálogo pode ser usado para sugerir serviços, códigos, unidades e
-        preços depois que o escopo estiver definido.
+        Comece pelo escopo. A EAP canônica nasce da entrega que a obra precisa
+        produzir e é refinada em sistemas, componentes e pacotes de trabalho.
+        O catálogo fica como apoio para códigos, unidades e preços.
       </p>
       <div className="eap-acoes">
+        <button
+          type="button"
+          className="eap-btn"
+          disabled={criarRaiz.isPending}
+          onClick={() =>
+            criarRaiz.mutate({
+              projectId: projetoId,
+              name: "Escopo da obra",
+              nodeType: "grupo",
+              decompositionBasis: "project",
+              description: "Escopo consolidado da obra. Preencher a descrição, inclusões, exclusões e critérios de aceitação antes da aprovação.",
+              inclusions: "Todo o trabalho necessário para entregar a obra conforme o escopo contratado.",
+              exclusions: "Trabalhos explicitamente fora do escopo contratado.",
+            })
+          }
+        >
+          {criarRaiz.isPending ? "Criando raiz…" : "Começar pelo escopo"}
+        </button>
+
         <select
           className="eap-select"
           value={tipo}
@@ -689,19 +711,18 @@ function EapVazia({ projetoId }: { projetoId: number }) {
         </select>
         <button
           type="button"
-          className="eap-btn"
+          className="eap-btn-secundario"
           disabled={gerar.isPending}
           onClick={() => gerar.mutate({ projectId: projetoId, tipoDeObra: tipo })}
         >
           {gerar.isPending ? "Preparando sugestão…" : "Importar sugestão do catálogo"}
         </button>
       </div>
-      {gerar.isError && (
-        <p className="eap-erro">{gerar.error.message}</p>
-      )}
+      {criarRaiz.isError && <p className="eap-erro">{criarRaiz.error.message}</p>}
+      {gerar.isError && <p className="eap-erro">{gerar.error.message}</p>}
       {gerar.isSuccess && (
         <p className="eap-ok">
-          {gerar.data.semeadura.nosCriados} nós criados a partir de{" "}
+          {gerar.data.semeadura.nosCriados} nós criados como sugestão a partir de{" "}
           {gerar.data.semeadura.servicosUsados} serviços do catálogo.
         </p>
       )}
