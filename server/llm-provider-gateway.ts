@@ -32,6 +32,7 @@ export type LlmResponse = {
       role?: "assistant";
       content?: LlmMessage["content"];
       reasoning?: string;
+      reasoning_content?: string;
       tool_calls?: LlmMessage["tool_calls"];
     };
   }>;
