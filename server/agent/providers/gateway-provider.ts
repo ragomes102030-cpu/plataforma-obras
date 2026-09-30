@@ -69,6 +69,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       ],
       tools: [],
       responseFormat: { type: "json_object" },
+      maxTokens: 8192,
     };
     const response = await invokeLlmGateway(gatewayRequest);
     return extractText(response);
