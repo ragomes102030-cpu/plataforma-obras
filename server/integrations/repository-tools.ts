@@ -121,6 +121,27 @@ export async function readRepositoryFile(path: string, ref = ENV.arquimedesCodeB
   };
 }
 
+export async function listRepositoryDirectory(path = "") {
+  const { owner, repo } = repoParts();
+  const normalized = path.replace(/^\//, "").replace(/\/$/, "");
+  const suffix = normalized
+    ? `/${encodeURIComponent(normalized).replace(/%2F/g, "/")}`
+    : "";
+  const url = `${GITHUB_API}/repos/${owner}/${repo}/contents${suffix}?ref=${encodeURIComponent(ENV.arquimedesCodeBranch)}`;
+  const result = await githubJson<Array<{
+    type: "file" | "dir";
+    name: string;
+    path: string;
+    sha: string;
+  }>>(url);
+  return result.map(item => ({
+    type: item.type,
+    name: item.name,
+    path: item.path,
+    sha: item.sha,
+  }));
+}
+
 export async function searchRepositoryCode(query: string, topK = 8) {
   const { owner, repo } = repoParts();
   const cleanQuery = query.trim();
