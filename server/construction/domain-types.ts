@@ -23,7 +23,7 @@ export type EapEvidenceNode = {
   level: number;
   nodeType: "grupo" | "pacote" | "entrega";
   unit: string | null;
-  plannedQuantity: number | null;
+  plannedQuantity: number | string | null;
   sortOrder: number;
 };
 
