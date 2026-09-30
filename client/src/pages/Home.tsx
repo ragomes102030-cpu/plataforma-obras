@@ -48,7 +48,7 @@ type Destino = "obra" | "catalogo" | "config";
 export default function Home() {
   const { user } = useAuth();
   const [destino, setDestino] = useState<Destino>("obra");
-  const [aba, setAba] = useState<IdDaAba>("eap");
+  const [aba, setAba] = useState<IdDaAba>("dashboard");
   const [obraId, setObraId] = useState<number | null>(null);
   const [novaObraAberta, setNovaObraAberta] = useState(false);
 
@@ -72,7 +72,7 @@ export default function Home() {
       await obras.refetch();
       setObraId(created.projectId);
       setDestino("obra");
-      setAba("cronograma");
+      setAba("gantt");
     },
   });
 
@@ -251,16 +251,16 @@ function Obra({
   return (
     <div className="xl-pasta">
       <div className="xl-area">
-        {aba === "eap" ? (
+        {aba === "dashboard" ? (
+          <PainelDoCronograma
+            agregado={agregado}
+            projetoId={projetoId}
+            temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0}
+          />
+        ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
-        ) : aba === "cronograma" ? (
-          <>
-            <VisualizacaoPlanejamento
-              linhas={linhas}
-              inicioObra={grade.data?.inicioObra ?? null}
-              hoje={hoje}
-            />
-            <GradeCronograma
+        ) : aba === "atividades" ? (
+          <GradeCronograma
             obra={obra}
             projetoId={projetoId}
             calendario={calendario}
@@ -270,15 +270,12 @@ function Obra({
             exemploPorCodigo={exemploPorCodigo}
             aoPedirEap={() => onAba("eap")}
           />
-          </>
+        ) : aba === "gantt" ? (
+          <VisualizacaoPlanejamento linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
+        ) : aba === "linha-balanco" ? (
+          <VisualizacaoPlanejamento linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
-        ) : aba === "dashboard" ? (
-          <PainelDoCronograma
-            agregado={agregado}
-            projetoId={projetoId}
-            temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0}
-          />
         ) : (
           <AbaVazia
             titulo={definicao?.rotulo ?? aba}
