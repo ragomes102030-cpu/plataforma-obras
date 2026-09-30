@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   Activity,
   BookOpen,
@@ -210,10 +210,10 @@ function CapabilitySection({
   subtitle,
   children,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   subtitle: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="panel" style={{ padding: 0 }}>
