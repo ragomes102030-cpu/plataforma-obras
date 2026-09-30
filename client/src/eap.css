@@ -153,6 +153,24 @@
 }
 
 /* O código oficial é a âncora com o catálogo de preços. */
+.eap-tipo,
+.eap-base {
+  min-width: 0;
+  padding: 0 8px;
+  color: #69777e;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+.eap-tipo {
+  font-weight: 700;
+  color: #51636c;
+}
+.eap-base {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .eap-oficial {
   flex: 0 0 auto;
   font-size: 10.5px;
@@ -679,9 +697,9 @@
   top: 0;
   z-index: 3;
   display: grid;
-  grid-template-columns: 42px 92px minmax(280px,1fr) 86px 58px 150px;
+  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 104px 86px 86px 58px 150px;
   align-items: center;
-  min-width: 760px;
+  min-width: 980px;
   min-height: 30px;
   background: #edf1f3;
   border-bottom: 1px solid #cbd5da;
@@ -706,9 +724,9 @@
 
 .eap-linha {
   display: grid;
-  grid-template-columns: 42px 92px minmax(280px,1fr) 86px 58px 150px;
+  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 104px 86px 86px 58px 150px;
   align-items: center;
-  min-width: 760px;
+  min-width: 980px;
   min-height: 30px;
   padding: 0;
   border-bottom: 1px solid #e8edef;
