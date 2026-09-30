@@ -1,6 +1,6 @@
 export type ArquimedesStage =
   | "DESCRITIVO" | "EAP_PROPOSTA" | "EAP_REVISAO" | "ATIVIDADES_PROPOSTA"
-  | "DEPENDENCIAS_PROPOSTA" | "CPM_VALIDADO" | "CRONOGRAMA_PROPOSTA"
+  | "DEPENDENCIAS_PROPOSTA" | "CPM_VALIDADO" | "CRONOGRAMA_PROPOSTO"
   | "BASELINE_PROPOSTA" | "GANTT_LOB_PROPOSTO" | "CONTROLE";
 
 export type ArquimedesFindingSeverity = "blocker" | "alert" | "recommendation";
