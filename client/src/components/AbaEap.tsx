@@ -7,10 +7,10 @@ import { trpc } from "@/lib/trpc";
  *
  * POR QUE COMEÇA PELA EAP E NÃO PELO CRONOGRAMA
  *
- * Porque a EAP é o que o catálogo gera, e é a única coisa no sistema que pode
- * ser derivada sem que alguém invente dado. O cronograma depende de duração, e
- * duração é informada por quem planeja. Começar pelo cronograma seria começar
- * por uma tela que só fica certa depois que a EAP existe.
+ * Porque a EAP organiza o escopo da obra antes de prazo e orçamento. O catálogo
+ * pode auxiliar com códigos, unidades e preços, mas não define sozinho o que
+ * pertence ao escopo contratado. O cronograma depende de duração, e duração é
+ * informada por quem planeja.
  *
  * POR QUE A ÁRVORE VEM DO BANCO E NÃO É MONTADA AQUI
  *
@@ -37,6 +37,7 @@ type No = {
   location: string | null;
   responsible: string | null;
   acceptanceCriteria: string | null;
+  decompositionBasis: string | null;
   scopeStatus: string;
   sortOrder: number;
 };
@@ -129,9 +130,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     if (trazer.isSuccess || refazer.isSuccess) setErro(null);
   }, [trazer.isSuccess, refazer.isSuccess]);
 
-  // Os grupos de primeiro nível começam abertos. Uma EAP com tudo fechado
-  // exige um clique por grupo antes de se ver qualquer serviço, e a EAP nasce
-  // em duas camadas: grupo → folha.
+  // Os níveis estruturais começam abertos para que a raiz e os sistemas da obra
+  // fiquem visíveis sem esconder a árvore atrás de vários cliques.
   const jaViu = useRef<No[] | null>(null);
   useEffect(() => {
     if (jaViu.current === nos) return;
@@ -139,7 +139,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     if (nos.length === 0) return;
     setAberto(antigo => {
       if (antigo.size > 0) return antigo;
-      const grupos = nos.filter(n => n.level === 1).map(n => n.id);
+      const grupos = nos.filter(n => n.nodeType !== "entrega").map(n => n.id);
       return grupos.length ? new Set(grupos) : antigo;
     });
   }, [nos]);
@@ -165,7 +165,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   }
 
   const total = nos.length;
-  const grupos = nos.filter(n => n.level === 1).length;
+  const grupos = nos.filter(n => n.nodeType === "grupo").length;
   const folhas = nos.filter(n => n.nodeType === "entrega").length;
 
   return (
@@ -364,9 +364,20 @@ type EditorEap =
   | { mode: "create"; parentId: number | null }
   | { mode: "edit"; nodeId: number };
 
+type EapBasis =
+  | "project"
+  | "deliverable"
+  | "system"
+  | "discipline"
+  | "location"
+  | "phase"
+  | "component"
+  | "other";
+
 type DadosEditorEap = {
   name: string;
   nodeType: "grupo" | "pacote" | "entrega";
+  decompositionBasis?: EapBasis;
   unit?: string;
   plannedQuantity?: number;
   description?: string;
@@ -470,7 +481,12 @@ function NoDaArvore({
           )}
         </span>
         <span className="eap-codigo">{no.code}</span>
-        <span className="eap-nome" title={no.name}>{no.name}</span>
+        <span
+          className="eap-nome"
+          title={`${no.name} · Base de decomposição: ${no.decompositionBasis || "não informada"}`}
+        >
+          {no.name}
+        </span>
         <span className="eap-oficial" title={no.externalId ? "Código oficial do serviço na base de preços" : "Sem vínculo direto com código SEINFRA"}>
           {no.externalId || "—"}
         </span>
@@ -549,6 +565,10 @@ function EditorEapPanel({
   const [nodeType, setNodeType] = useState<"grupo" | "pacote" | "entrega">(
     atual?.nodeType === "entrega" ? "entrega" : atual?.nodeType === "grupo" ? "grupo" : "pacote"
   );
+  const [decompositionBasis, setDecompositionBasis] = useState<EapBasis>(
+    (atual?.decompositionBasis as EapBasis | null) ??
+      (editor.mode === "create" && editor.parentId === null ? "project" : "deliverable")
+  );
   const [unit, setUnit] = useState(atual?.unit ?? "");
   const [quantity, setQuantity] = useState(atual?.plannedQuantity == null ? "" : String(atual.plannedQuantity));
   const [description, setDescription] = useState(atual?.description ?? "");
@@ -564,6 +584,7 @@ function EditorEapPanel({
     const dados: DadosEditorEap = {
       name: nome,
       nodeType,
+      decompositionBasis,
       unit: unit.trim() || undefined,
       plannedQuantity: quantity.trim() ? Number(quantity) : undefined,
       description: description.trim() || undefined,
@@ -602,6 +623,19 @@ function EditorEapPanel({
           </select>
         </label>
         <label>
+          <span>Base de decomposição</span>
+          <select value={decompositionBasis} onChange={e => setDecompositionBasis(e.target.value as EapBasis)}>
+            <option value="project">Projeto / escopo total</option>
+            <option value="deliverable">Entrega</option>
+            <option value="system">Sistema</option>
+            <option value="discipline">Disciplina</option>
+            <option value="location">Localização</option>
+            <option value="phase">Fase</option>
+            <option value="component">Componente</option>
+            <option value="other">Outro critério explícito</option>
+          </select>
+        </label>
+        <label>
           <span>Unidade</span>
           <input value={unit} onChange={e => setUnit(e.target.value)} maxLength={32} placeholder="ex.: m², m³, un" />
         </label>
@@ -625,7 +659,7 @@ function EditorEapPanel({
   );
 }
 
-/** Estado vazio: a EAP nasce do catálogo, e o caminho está escrito. */
+/** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
   const gerar = trpc.projects.generateEapFromCatalog.useMutation({
@@ -637,10 +671,9 @@ function EapVazia({ projetoId }: { projetoId: number }) {
     <div className="xl-vazia-folha">
       <h3>Esta obra ainda não tem EAP</h3>
       <p className="xl-vazia-falta">
-        A estrutura é montada a partir dos serviços da base oficial de preços
-        (SEINFRA). Se você ainda não importou a planilha da SEINFRA no Catálogo, é
-        lá que isso começa. Com a base importada, a árvore com o código oficial de
-        cada serviço nasce daqui.
+        A EAP canônica deve nascer do escopo da obra, não do catálogo de preços.
+        O catálogo pode ser usado para sugerir serviços, códigos, unidades e
+        preços depois que o escopo estiver definido.
       </p>
       <div className="eap-acoes">
         <select
@@ -660,7 +693,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           disabled={gerar.isPending}
           onClick={() => gerar.mutate({ projectId: projetoId, tipoDeObra: tipo })}
         >
-          {gerar.isPending ? "Gerando…" : "Gerar EAP do catálogo"}
+          {gerar.isPending ? "Preparando sugestão…" : "Importar sugestão do catálogo"}
         </button>
       </div>
       {gerar.isError && (
