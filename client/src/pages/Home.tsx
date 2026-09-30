@@ -1,5 +1,5 @@
 import { Layers3, Plus, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
@@ -49,6 +49,7 @@ export default function Home() {
   const [destino, setDestino] = useState<Destino>("obra");
   const [aba, setAba] = useState<IdDaAba>("eap");
   const [obraId, setObraId] = useState<number | null>(null);
+  const [novaObraAberta, setNovaObraAberta] = useState(false);
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -65,6 +66,20 @@ export default function Home() {
     (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
+  const criarObra = trpc.projects.create.useMutation({
+    onSuccess: async created => {
+      await obras.refetch();
+      setObraId(created.id);
+      setDestino("obra");
+      setNovaObraAberta(false);
+    },
+  });
+
+  useEffect(() => {
+    const open = () => setNovaObraAberta(true);
+    window.addEventListener("abrir-nova-obra", open);
+    return () => window.removeEventListener("abrir-nova-obra", open);
+  }, []);
 
   return (
     <div className="xl-app">
@@ -94,11 +109,8 @@ export default function Home() {
             type="button"
             className="xl-obra-chip xl-obra-nova"
             title="Nova obra"
-            onClick={() => {
-              // A criação de obra entra na próxima onda. Por enquanto o botão
-              // diz isso em vez de fingir que abriu um modal.
-              setDestino("obra");
-            }}
+            aria-label="Criar nova obra"
+            onClick={() => setNovaObraAberta(true)}
           >
             <Plus size={12} />
           </button>
@@ -133,6 +145,20 @@ export default function Home() {
           </span>
         </div>
       </header>
+
+      {novaObraAberta && (
+        <NovaObraDialog
+          busy={criarObra.isPending}
+          error={criarObra.error?.message ?? null}
+          onClose={() => {
+            if (!criarObra.isPending) {
+              setNovaObraAberta(false);
+              criarObra.reset();
+            }
+          }}
+          onSubmit={values => criarObra.mutate(values)}
+        />
+      )}
 
       {destino === "config" ? (
         <AdminLlmSettings />
@@ -312,15 +338,221 @@ function SemSessao({ carregando }: { carregando: boolean }) {
   );
 }
 
+type NovaObraValues = {
+  name: string;
+  location: string;
+  plannedStart?: Date;
+  plannedFinish?: Date;
+  tipoDeObra: "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
+  descricao?: string;
+};
+
+function NovaObraDialog({
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (values: NovaObraValues) => void;
+}) {
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [plannedStart, setPlannedStart] = useState("");
+  const [plannedFinish, setPlannedFinish] = useState("");
+  const [tipoDeObra, setTipoDeObra] =
+    useState<NovaObraValues["tipoDeObra"]>("edificio");
+  const [descricao, setDescricao] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!name.trim() || !location.trim()) return;
+    onSubmit({
+      name: name.trim(),
+      location: location.trim(),
+      plannedStart: plannedStart ? new Date(`${plannedStart}T12:00:00`) : undefined,
+      plannedFinish: plannedFinish ? new Date(`${plannedFinish}T12:00:00`) : undefined,
+      tipoDeObra,
+      descricao: descricao.trim() || undefined,
+    });
+  }
+
+  return (
+    <div
+      role="presentation"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1000,
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        background: "rgba(15, 23, 42, 0.42)",
+      }}
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nova-obra-titulo"
+        onSubmit={submit}
+        onMouseDown={event => event.stopPropagation()}
+        style={{
+          width: "min(620px, 100%)",
+          maxHeight: "calc(100vh - 48px)",
+          overflowY: "auto",
+          background: "#fff",
+          borderRadius: 12,
+          boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+          padding: 24,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+          <div>
+            <h2 id="nova-obra-titulo" style={{ margin: 0, fontSize: 22 }}>Nova obra</h2>
+            <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
+              Cadastre a obra para começar o planejamento.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar"
+            style={{ border: 0, background: "transparent", fontSize: 24, cursor: busy ? "not-allowed" : "pointer", color: "#64748b" }}>
+            ×
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 16, marginTop: 22 }}>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Nome da obra *</span>
+            <input required minLength={2} maxLength={180} value={name}
+              onChange={event => setName(event.target.value)}
+              placeholder="Ex.: Residencial Solar" autoFocus style={inputStyle} />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Localização *</span>
+            <input required minLength={2} maxLength={180} value={location}
+              onChange={event => setLocation(event.target.value)}
+              placeholder="Cidade, endereço ou região" style={inputStyle} />
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Início previsto</span>
+              <input type="date" value={plannedStart}
+                onChange={event => setPlannedStart(event.target.value)} style={inputStyle} />
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Término previsto</span>
+              <input type="date" value={plannedFinish}
+                onChange={event => setPlannedFinish(event.target.value)} style={inputStyle} />
+            </label>
+          </div>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Tipo de obra</span>
+            <select value={tipoDeObra}
+              onChange={event => setTipoDeObra(event.target.value as NovaObraValues["tipoDeObra"])}
+              style={inputStyle}>
+              <option value="edificio">Edificação</option>
+              <option value="reforma">Reforma</option>
+              <option value="pavimentacao">Pavimentação</option>
+              <option value="saneamento">Saneamento</option>
+              <option value="todos">Todos os serviços</option>
+            </select>
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Descrição</span>
+            <textarea maxLength={4000} rows={4} value={descricao}
+              onChange={event => setDescricao(event.target.value)}
+              placeholder="Informações úteis para o planejamento e para o agente."
+              style={{ ...inputStyle, resize: "vertical" }} />
+          </label>
+
+          {plannedStart && plannedFinish && plannedFinish <= plannedStart && (
+            <p style={{ margin: 0, color: "#b42318", fontSize: 14 }}>
+              O término deve ser posterior ao início.
+            </p>
+          )}
+
+          {error && (
+            <div role="alert" style={{ padding: 12, borderRadius: 8, background: "#fef3f2", color: "#b42318", fontSize: 14 }}>
+              Não foi possível criar a obra: {error}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
+          <button type="button" onClick={onClose} disabled={busy} style={secondaryButtonStyle}>
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={busy || !name.trim() || !location.trim() || (!!plannedStart && !!plannedFinish && plannedFinish <= plannedStart)}
+            style={{ ...primaryButtonStyle, opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? "Criando obra…" : "Criar obra"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box" as const,
+  minHeight: 40,
+  padding: "9px 11px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 7,
+  background: "#fff",
+  color: "#0f172a",
+  fontSize: 14,
+};
+
+const primaryButtonStyle = {
+  border: 0,
+  borderRadius: 7,
+  padding: "10px 16px",
+  background: "#176b87",
+  color: "#fff",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle = {
+  border: "1px solid #cbd5e1",
+  borderRadius: 7,
+  padding: "10px 16px",
+  background: "#fff",
+  color: "#334155",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
 function SemObra({ carregando, temObras }: { carregando: boolean; temObras: boolean }) {
   return (
     <div className="xl-area">
       <div className="xl-vazia-folha">
         <h3>{carregando ? "Carregando as obras…" : "Nenhuma obra aqui"}</h3>
         {!carregando && !temObras && (
-          <p className="xl-vazia-falta">
-            Não há obra cadastrada. A criação de obra entra na próxima etapa.
-          </p>
+          <>
+            <p className="xl-vazia-falta">
+              Não há obra cadastrada. Crie a primeira obra para começar.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("abrir-nova-obra"))}
+              className="xl-btn-entrar"
+            >
+              + Criar obra
+            </button>
+          </>
         )}
       </div>
     </div>
