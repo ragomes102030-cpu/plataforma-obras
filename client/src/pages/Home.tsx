@@ -50,7 +50,9 @@ export default function Home() {
   const [destino, setDestino] = useState<Destino>("obra");
   const [aba, setAba] = useState<IdDaAba>("dashboard");
   const [obraId, setObraId] = useState<number | null>(null);
-  const [novaObraAberta, setNovaObraAberta] = useState(false);\n  const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);\n  const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
+  const [novaObraAberta, setNovaObraAberta] = useState(false);
+  const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);
+  const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -65,7 +67,8 @@ export default function Home() {
   });
   const lista: Array<{ id: number; name: string; code: string }> =
     (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
-  const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));\n  const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
+  const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
+  const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
   const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
