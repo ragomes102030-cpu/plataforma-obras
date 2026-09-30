@@ -15,8 +15,12 @@ const ANALYSIS_PATTERNS = [
   /\b(analise|analisar|avalie|avaliar|revise|revisar|compare|comparar|diagnostique|diagnosticar|verifique|verificar|identifique|identificar)\b/i,
 ];
 
+function stripUiContext(message: string) {
+  return message.replace(/^\s*\[aba:\s*[^\]]+\]\s*/i, "").trim();
+}
+
 export function classifyArquimedesIntent(message: string): ArquimedesIntent {
-  const text = message.trim();
+  const text = stripUiContext(message);
   if (CASUAL_PATTERNS.some(pattern => pattern.test(text))) return "casual";
   if (OPERATION_PATTERNS.some(pattern => pattern.test(text))) return "operacao";
   if (ANALYSIS_PATTERNS.some(pattern => pattern.test(text))) return "analise";
@@ -28,7 +32,7 @@ export function isSimpleCasualMessage(message: string): boolean {
 }
 
 export function casualResponse(message: string): string {
-  const text = message.trim().toLocaleLowerCase("pt-BR");
+  const text = stripUiContext(message).toLocaleLowerCase("pt-BR");
   if (/^(obrigado|obrigada|valeu|vlw|show|beleza|blz|entendi|certo|ok|okay)/i.test(text)) {
     return "Por nada! Quando quiser, podemos continuar o planejamento da obra.";
   }
