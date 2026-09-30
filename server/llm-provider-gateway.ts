@@ -235,6 +235,14 @@ export async function invokeLlmGateway(
     const provider = configuredProviders[index];
     try {
       const response = await callProvider(provider, request);
+      const message = response.choices?.[0]?.message;
+      const hasContent =
+        (typeof message?.content === "string" && Boolean(message.content.trim())) ||
+        (Array.isArray(message?.content) && message.content.some(part => typeof part?.text === "string" && part.text.trim()));
+      const hasToolCalls = Boolean(message?.tool_calls?.length);
+      if (!hasContent && !hasToolCalls && request.tools.length === 0) {
+        throw new Error(`Provedor ${provider.name} retornou resposta vazia.`);
+      }
       return {
         ...response,
         model: response.model || provider.model,
