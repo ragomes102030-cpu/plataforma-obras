@@ -1078,3 +1078,41 @@ tr:hover .xl-codigo {
   background: #eef6f8 !important;
   font-weight: 700 !important;
 }
+
+
+/* --------------------------------------------------------------------------
+   Planejamento principal — ferramentas ocupam a área de trabalho.
+   Gantt e Linha de Balanço são visualizações do mesmo planejamento.
+   -------------------------------------------------------------------------- */
+.pl-visual-full {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 100%;
+}
+
+.pl-visual-full .pl-visual-header {
+  padding: 12px 16px;
+  background: #f4f6f8;
+}
+
+.pl-planejamento-scroll {
+  max-height: none;
+  height: calc(100vh - 122px);
+  min-height: 520px;
+}
+
+.pl-gantt-large {
+  min-width: 1400px;
+}
+
+.pl-lob-vertical {
+  min-width: 1050px;
+}
+
+@media (max-width: 900px) {
+  .pl-planejamento-scroll {
+    height: calc(100vh - 112px);
+  }
+}
