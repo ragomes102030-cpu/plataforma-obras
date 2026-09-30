@@ -379,7 +379,7 @@ async function seedSolarAcaciasPlan(
     return id;
   };
   const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
-    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).$returningIds();
+    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity == null ? null : String(plannedQuantity), sortOrder: order++ }).$returningIds();
     nodeIdsByCode.set(code, created);
     return created;
   };
@@ -880,7 +880,7 @@ async function persistPhase7Plan(
             level: node.level,
             nodeType: node.nodeType,
             unit: node.unit,
-            plannedQuantity: node.plannedQuantity,
+            plannedQuantity: node.plannedQuantity == null ? null : String(node.plannedQuantity),
             sortOrder: node.sortOrder,
           })
           .where(eq(wbsNodes.id, existingByCode[0].id));
@@ -1220,7 +1220,7 @@ export const appRouter = router({
           name: z.string().trim().min(2).max(220),
           nodeType: z.enum(["grupo", "pacote", "entrega"]),
           unit: z.string().trim().max(32).optional(),
-          plannedQuantity: z.number().int().min(0).optional(),
+          plannedQuantity: z.number().min(0).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1252,7 +1252,7 @@ export const appRouter = router({
               name: input.name,
               nodeType: input.nodeType,
               unit: input.unit || null,
-              plannedQuantity: input.plannedQuantity ?? null,
+              plannedQuantity: input.plannedQuantity == null ? null : String(input.plannedQuantity),
             })
             .where(eq(wbsNodes.id, input.nodeId));
           await tx
