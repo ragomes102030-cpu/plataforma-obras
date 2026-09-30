@@ -1288,7 +1288,7 @@ export const appRouter = router({
         );
         const proposal = parseEapProposal(raw);
         const currentValidation = validateEapScope(
-          context.wbs,
+          nodes,
           { requireDictionaryForLeaves: true }
         );
 
