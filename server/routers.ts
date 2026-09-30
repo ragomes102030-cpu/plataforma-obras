@@ -1668,6 +1668,35 @@ export const appRouter = router({
             sortOrder: number;
           }> = [];
 
+          const addActivityAtNode = async (
+            nodeId: number,
+            code: string,
+            name: string,
+            phase: string,
+            floor: number | null,
+            startOffset: number,
+            durationDays: number,
+            quantity: number,
+            unit: string,
+            progress: number,
+            critical = 0,
+          ) => {
+            atividades.push({
+              wbsNodeId: nodeId,
+              wbsCode: code,
+              name,
+              phase,
+              pavimento: floor ? `P${String(floor).padStart(2, "0")}` : null,
+              startOffset,
+              durationDays,
+              plannedQuantity: quantity.toFixed(3),
+              unit,
+              progress,
+              critical,
+              sortOrder: atividades.length,
+            });
+          };
+
           const addActivity = async (
             phaseCode: string,
             floor: number,
@@ -1684,20 +1713,64 @@ export const appRouter = router({
             const parent = nodes.get(phaseCode);
             if (!parent) throw badRequest(`Fase de demonstração ausente: ${phaseCode}`);
             const nodeId = await addNode(parent, floorCode, `${name} — Pavimento ${floor}`, 3, "entrega");
-            atividades.push({
-              wbsNodeId: nodeId,
-              wbsCode: floorCode,
-              name: `${name} — P${String(floor).padStart(2, "0")}`,
+            await addActivityAtNode(
+              nodeId,
+              floorCode,
+              `${name} — P${String(floor).padStart(2, "0")}`,
               phase,
-              pavimento: `P${String(floor).padStart(2, "0")}`,
+              floor,
               startOffset,
               durationDays,
-              plannedQuantity: quantity.toFixed(3),
+              quantity,
               unit,
               progress,
               critical,
-              sortOrder: atividades.length,
-            });
+            );
+          };
+
+          const addStructureFloor = async (floor: number, cycleStart: number, progress: number) => {
+            const floorCode = `1.2.${String(floor).padStart(2, "0")}`;
+            const structurePhase = nodes.get("1.2");
+            if (!structurePhase) throw badRequest("Fase de estrutura da demonstração ausente.");
+            const floorNode = await addNode(
+              structurePhase,
+              floorCode,
+              `Pavimento ${floor}`,
+              3,
+              "pacote",
+            );
+
+            const elements = [
+              ["1", "Pilares", 2.0, 28, 28, 0],
+              ["2", "Vigas", 2.0, 21, 28, 0],
+              ["3", "Lajes", 2.0, 30, 45, 1],
+              ["4", "Escadas", 1.0, 18, 12, 0],
+            ] as const;
+
+            for (const [suffix, element, quantity, duration, offset, critical] of elements) {
+              const code = `${floorCode}.${suffix}`;
+              const nodeId = await addNode(
+                floorNode,
+                code,
+                element,
+                4,
+                "entrega",
+              );
+              const elementProgress = progress >= 100 ? 100 : progress > 0 && suffix === "3" ? progress : 0;
+              await addActivityAtNode(
+                nodeId,
+                code,
+                `${element} — P${String(floor).padStart(2, "0")}`,
+                "Estrutura",
+                floor,
+                cycleStart + offset,
+                duration,
+                quantity,
+                "m³",
+                elementProgress,
+                critical,
+              );
+            }
           };
 
           await addActivity("1.1", 1, "Fundação e contenção", "Fundação", 0, 32, 1, "lote", 100, 1);
@@ -1706,7 +1779,7 @@ export const appRouter = router({
           for (let floor = 1; floor <= 14; floor++) {
             const ciclo = 38 + (floor - 1) * 9;
             const progress = floor <= 3 ? 100 : floor === 4 ? 62 : 0;
-            await addActivity("1.2", floor, "Estrutura de concreto", "Estrutura", ciclo, 9, 145, "m³", progress, 1);
+            await addStructureFloor(floor, ciclo, progress);
             await addActivity("1.3", floor, "Alvenaria de vedação", "Vedação", ciclo + 7, 8, 780, "m²", floor <= 2 ? 100 : floor === 3 ? 45 : 0);
             await addActivity("1.4", floor, "Instalações + acabamento", "Acabamentos", ciclo + 13, 12, 1, "pav", floor <= 1 ? 100 : 0);
           }
@@ -1736,15 +1809,25 @@ export const appRouter = router({
           const byKey = new Map<string, number>();
           atividades.forEach((a, index) => byKey.set(a.wbsCode, inserted[index]!));
           const deps: Array<{ projectId: number; predecessorId: number; successorId: number; type: "FS"; lag: number }> = [];
+
           for (let floor = 1; floor <= 14; floor++) {
-            const s = byKey.get(`1.2.${String(floor).padStart(2, "0")}`);
-            const m = byKey.get(`1.3.${String(floor).padStart(2, "0")}`);
-            const a = byKey.get(`1.4.${String(floor).padStart(2, "0")}`);
-            if (s && m) deps.push({ projectId, predecessorId: s, successorId: m, type: "FS", lag: 0 });
-            if (m && a) deps.push({ projectId, predecessorId: m, successorId: a, type: "FS", lag: 0 });
+            const p = String(floor).padStart(2, "0");
+            const estruturaPilares = byKey.get(`1.2.${p}.1`);
+            const estruturaVigas = byKey.get(`1.2.${p}.2`);
+            const estruturaLajes = byKey.get(`1.2.${p}.3`);
+            const estruturaEscadas = byKey.get(`1.2.${p}.4`);
+            const alvenaria = byKey.get(`1.3.${p}`);
+            const acabamentos = byKey.get(`1.4.${p}`);
+
+            if (estruturaPilares && estruturaVigas) deps.push({ projectId, predecessorId: estruturaPilares, successorId: estruturaVigas, type: "FS", lag: 0 });
+            if (estruturaVigas && estruturaLajes) deps.push({ projectId, predecessorId: estruturaVigas, successorId: estruturaLajes, type: "FS", lag: 0 });
+            if (estruturaLajes && estruturaEscadas) deps.push({ projectId, predecessorId: estruturaLajes, successorId: estruturaEscadas, type: "FS", lag: 0 });
+            if (estruturaLajes && alvenaria) deps.push({ projectId, predecessorId: estruturaLajes, successorId: alvenaria, type: "FS", lag: 0 });
+            if (alvenaria && acabamentos) deps.push({ projectId, predecessorId: alvenaria, successorId: acabamentos, type: "FS", lag: 0 });
+
             if (floor > 1) {
-              const prev = byKey.get(`1.2.${String(floor - 1).padStart(2, "0")}`);
-              if (prev && s) deps.push({ projectId, predecessorId: prev, successorId: s, type: "FS", lag: 0 });
+              const prevEscadas = byKey.get(`1.2.${String(floor - 1).padStart(2, "0")}.4`);
+              if (prevEscadas && estruturaPilares) deps.push({ projectId, predecessorId: prevEscadas, successorId: estruturaPilares, type: "FS", lag: 0 });
             }
           }
           if (deps.length) await tx.insert(scheduleDependencies).values(deps);
