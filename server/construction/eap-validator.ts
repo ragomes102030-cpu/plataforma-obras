@@ -134,11 +134,20 @@ export function validateEapScope(
       });
     }
 
-    if (isLeaf && (node.nodeType === "grupo" || node.nodeType === "pacote")) {
+    if (!isLeaf && node.nodeType === "pacote") {
       issues.push({
-        code: "eap_non_deliverable_leaf",
+        code: "eap_work_package_has_children",
+        severity: "error",
+        message: `Pacote de trabalho ${node.code} (${node.name}) possui filhos. Um pacote de trabalho deve ser terminal para manter controle claro do escopo.`,
+        entityRef: String(node.id),
+      });
+    }
+
+    if (isLeaf && node.nodeType === "grupo") {
+      issues.push({
+        code: "eap_group_without_decomposition",
         severity: "warning",
-        message: `Nó ${node.code} (${node.name}) termina a EAP sem uma entrega explícita. Verifique se ele já representa um pacote de trabalho controlável.`,
+        message: `Grupo ${node.code} (${node.name}) termina a EAP sem decomposição. Confirme se ele deveria ser um pacote de trabalho ou uma entrega terminal.`,
         entityRef: String(node.id),
       });
     }
