@@ -85,6 +85,7 @@ import {
   startAgentExecution,
 } from "./agent-execution";
 import { getPublicLlmSettings, getStoredLlmProviders, saveStoredLlmProviders } from "./llm-settings";
+import { arquimedesCapabilitiesRouter } from "./agent/capability-router";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -1032,6 +1033,7 @@ export const appRouter = router({
     }),
   }),
   admin: router({
+    capabilities: arquimedesCapabilitiesRouter,
     llmSettings: router({
       get: adminProcedure.query(() => getPublicLlmSettings()),
       save: adminProcedure
