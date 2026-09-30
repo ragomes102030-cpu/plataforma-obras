@@ -385,7 +385,7 @@ function buildSystem(
   ].join("\n\n");
 }
 
-function runtimeResultIterationHint(audit: AuditEvent[]) {\n  const last = audit.at(-1);\n  return last ? last.iteration : 1;\n}\n\nfunction validateMessages(messages: AgentMessage[]) {
+function validateMessages(messages: AgentMessage[]) {
   if (messages.length < 1 || messages.length > MAX_MESSAGES)
     throw new Error(`A conversa deve ter entre 1 e ${MAX_MESSAGES} mensagens.`);
   if (
@@ -484,14 +484,13 @@ export async function runProjectOrchestrator(
         tools: input.tools,
       });
     },
-    executeTool: async (toolName, rawArgs) => {
+    executeTool: async (toolName, rawArgs, iteration) => {
       const domain = TOOL_DOMAINS[toolName as keyof typeof TOOL_DOMAINS];
       const startedAt = Date.now();
       if (!domain || !MCP_TOOL_POLICY.readOnly.has(toolName)) {
         throw new Error(`Ferramenta não permitida no Marco 2: ${toolName}`);
       }
 
-      const iteration = runtimeResultIterationHint(audit);
       await emit({ type: "tool_started", iteration, domain, toolName });
 
       const mcpProjectId = mcpProjectIds[domain];
