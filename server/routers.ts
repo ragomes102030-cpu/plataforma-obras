@@ -69,7 +69,7 @@ import { buildAgentProjectContext } from "./agent/context-builder";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
+import { validateEap, validateEapScope, validateWbsCostCoverage } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
 import {
@@ -1211,6 +1211,43 @@ export const appRouter = router({
           .where(eq(wbsNodes.projectId, input.projectId))
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
+    validateWbsStructure: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { valid: true, issues: [], summary: { nodes: 0, leaves: 0, errors: 0, warnings: 0 } };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const nodes = await db.select().from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId)).orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        const evidenceNodes = nodes.map(node => ({
+          id: node.id, projectId: node.projectId, externalId: node.externalId, externalUid: node.externalUid,
+          parentId: node.parentId, code: node.code, name: node.name, level: node.level, nodeType: node.nodeType,
+          unit: node.unit, plannedQuantity: node.plannedQuantity, sortOrder: node.sortOrder,
+          description: node.description, inclusions: node.inclusions, exclusions: node.exclusions,
+          location: node.location, responsible: node.responsible, acceptanceCriteria: node.acceptanceCriteria,
+          scopeStatus: node.scopeStatus,
+        }));
+        const structural = validateEap(evidenceNodes);
+        const scope = validateEapScope(evidenceNodes, { requireDictionaryForLeaves: true });
+        const versions = await db.select({ id: budgetVersions.id }).from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId));
+        const budget = versions.length
+          ? await db.select({ wbsNodeId: budgetItems.wbsNodeId }).from(budgetItems).where(inArray(budgetItems.budgetVersionId, versions.map(version => version.id)))
+          : [];
+        const cost = validateWbsCostCoverage(evidenceNodes, budget.map(item => ({ wbsNodeId: item.wbsNodeId })));
+        const issues = [...structural.issues, ...scope.issues, ...cost.issues];
+        const errors = issues.filter(issue => issue.severity === "error").length;
+        const warnings = issues.filter(issue => issue.severity === "warning").length;
+        const childrenIds = new Set(evidenceNodes.filter(node => node.parentId !== null).map(node => String(node.parentId)));
+        return {
+          valid: errors === 0,
+          issues,
+          summary: {
+            nodes: evidenceNodes.length,
+            leaves: evidenceNodes.filter(node => !childrenIds.has(String(node.id))).length,
+            errors,
+            warnings,
+          },
+        };
+      }),
     updateWbsNode: protectedProcedure
       .input(
         z.object({
@@ -1265,6 +1302,7 @@ export const appRouter = router({
               location: input.location || null,
               responsible: input.responsible || null,
               acceptanceCriteria: input.acceptanceCriteria || null,
+              scopeStatus: "rascunho",
             })
             .where(eq(wbsNodes.id, input.nodeId));
           await tx
@@ -1286,6 +1324,12 @@ export const appRouter = router({
         name: z.string().trim().min(2).max(220),
         nodeType: z.enum(["grupo", "pacote", "entrega"]),
         unit: z.string().trim().max(32).optional(),
+        description: z.string().trim().max(5000).optional(),
+        inclusions: z.string().trim().max(5000).optional(),
+        exclusions: z.string().trim().max(5000).optional(),
+        location: z.string().trim().max(180).optional(),
+        responsible: z.string().trim().max(180).optional(),
+        acceptanceCriteria: z.string().trim().max(5000).optional(),
         plannedQuantity: z.number().min(0).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1310,6 +1354,13 @@ export const appRouter = router({
           nodeType: input.nodeType,
           unit: input.unit || null,
           plannedQuantity: input.plannedQuantity == null ? null : String(input.plannedQuantity),
+          description: input.description || null,
+          inclusions: input.inclusions || null,
+          exclusions: input.exclusions || null,
+          location: input.location || null,
+          responsible: input.responsible || null,
+          acceptanceCriteria: input.acceptanceCriteria || null,
+          scopeStatus: "rascunho",
           sortOrder: siblings.length,
           versionId: writable.id,
         }).$returningIds();
@@ -1424,7 +1475,17 @@ export const appRouter = router({
           ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
           : `${nextNumber}`;
         await assertAvailableWbsCode(db, input.projectId, code);
-        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity == null ? null : String(source.plannedQuantity), sortOrder: siblings.length }).$returningIds();
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType,
+          unit: source.unit,
+          plannedQuantity: source.plannedQuantity == null ? null : String(source.plannedQuantity),
+          description: source.description,
+          inclusions: source.inclusions,
+          exclusions: source.exclusions,
+          location: source.location,
+          responsible: source.responsible,
+          acceptanceCriteria: source.acceptanceCriteria,
+          scopeStatus: "rascunho",
+          sortOrder: siblings.length }).$returningIds();
         return created;
       }),
     deleteWbsNode: protectedProcedure
