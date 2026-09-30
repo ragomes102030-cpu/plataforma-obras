@@ -241,7 +241,7 @@ export default function Home() {
               className={`xl-tb-btn${destino === "config" ? " ativo" : ""}`}
               onClick={() => setDestino("config")}
             >
-              <Sparkles size={13} /> Configurações
+              <Sparkles size={13} /> Central de Comando
             </button>
           )}
           {user ? (
