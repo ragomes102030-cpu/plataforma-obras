@@ -2990,6 +2990,99 @@ export const appRouter = router({
               : null,
         };
       }),
+    importOfficial0281: protectedProcedure
+      .input(z.object({ force: z.boolean().default(false) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+
+        const existing = await db
+          .select({ id: priceCatalogs.id, name: priceCatalogs.name, referencePeriod: priceCatalogs.referencePeriod })
+          .from(priceCatalogs)
+          .where(eq(priceCatalogs.sourceType, "SEINFRA"));
+
+        const already = existing.find(row => row.referencePeriod === "028.1");
+        if (already && !input.force) {
+          const items = await db
+            .select({ id: priceItems.id })
+            .from(priceItems)
+            .where(eq(priceItems.catalogId, already.id));
+          return {
+            catalogId: already.id,
+            referencePeriod: already.referencePeriod,
+            imported: items.length,
+            skipped: 0,
+            referenceHint: "028.1",
+            reused: true,
+          };
+        }
+
+        const url =
+          "https://sites.seinfra.ce.gov.br/siproce/desonerada/Planos-de-Servicos-028.1---ENC.-SOCIAIS-84%2C44.xls?a=1698150884946";
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Não foi possível baixar a base oficial da SEINFRA (HTTP ${response.status}).`);
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (!bytes.length) throw badRequest("A SEINFRA retornou um arquivo vazio.");
+
+        if (!seinfraAdapter.canParse("Planos-de-Servicos-028.1---ENC.-SOCIAIS-84,44.xls", bytes)) {
+          throw badRequest("A base oficial retornada pela SEINFRA não está em formato XLS reconhecível.");
+        }
+
+        const rows = await lerPrimeiraAba(bytes);
+        const planilha = reconhecerPlanilhaSeinfra(rows);
+        if (planilha !== "servicos") {
+          throw badRequest(`A SEINFRA retornou uma planilha inesperada: ${planilha}.`);
+        }
+
+        const parsed = await seinfraAdapter.parse(
+          "Planos-de-Servicos-028.1---ENC.-SOCIAIS-84,44.xls",
+          bytes
+        );
+        if (!parsed.records.length) {
+          throw badRequest("A base oficial da SEINFRA foi baixada, mas nenhum serviço C... foi reconhecido.");
+        }
+
+        const [created] = await db
+          .insert(priceCatalogs)
+          .values({
+            name: "SEINFRA-CE 028.1 — Planos de Serviços (84,44%)",
+            sourceType: "SEINFRA",
+            state: "CE",
+            referencePeriod: "028.1",
+            notes: `Arquivo oficial Planos-de-Serviços 028.1; ${parsed.skipped} linha(s) ignoradas`,
+            createdBy: ctx.user.id,
+          })
+          .$returningIds();
+
+        const chunkSize = 500;
+        for (let i = 0; i < parsed.records.length; i += chunkSize) {
+          const chunk = parsed.records.slice(i, i + chunkSize);
+          await db.insert(priceItems).values(
+            chunk.map(record => ({
+              catalogId: created,
+              code: record.code,
+              description: record.description,
+              unit: record.unit,
+              itemType: record.itemType,
+              unitPrice: record.unitPrice.toFixed(2),
+              notes: record.notes ?? null,
+            }))
+          );
+        }
+
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
+        return {
+          catalogId: created,
+          referencePeriod: "028.1",
+          imported: parsed.records.length,
+          skipped: parsed.skipped,
+          referenceHint: parsed.referenceHint,
+          reused: false,
+        };
+      }),
     searchPrices: protectedProcedure
       .input(
         z.object({
