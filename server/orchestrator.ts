@@ -168,72 +168,6 @@ function parseContent(response: LlmResponse) {
   );
 }
 
-export const READONLY_RESPONSE_SECTIONS = [
-  "MARCO ATUAL",
-  "EVIDÊNCIAS CONSULTADAS",
-  "PROPOSTA",
-  "EXEMPLOS/REFERÊNCIAS",
-  "DIVERGÊNCIAS E LACUNAS",
-  "IMPACTO DE APROVAR",
-  "PRÓXIMA DECISÃO DO CLIENTE",
-] as const;
-
-export function validateReadonlyResponse(content: string) {
-  const normalized = content.toLocaleUpperCase("pt-BR");
-  const missingSections = READONLY_RESPONSE_SECTIONS.filter(
-    section => !normalized.includes(section)
-  );
-  if (missingSections.length) {
-    throw new Error(
-      `Resposta final fora do contrato de leitura; faltam seções: ${missingSections.join(", ")}.`
-    );
-  }
-  const decisionSection = content.slice(
-    normalized.lastIndexOf("PRÓXIMA DECISÃO DO CLIENTE")
-  );
-  if (!decisionSection.includes("?")) {
-    throw new Error(
-      "Resposta final fora do contrato de leitura; a próxima decisão do cliente deve terminar com uma pergunta inequívoca."
-    );
-  }
-  return content;
-}
-
-function normalizeReadonlyResponse(content: string, context: AgentProjectContext) {
-  try {
-    return validateReadonlyResponse(content);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Resposta fora do contrato.";
-    const attention = context.activities
-      .filter(activity => activity.status === "Em risco" || activity.critical)
-      .slice(0, 5)
-      .map(activity => `${activity.wbsCode} · ${activity.name}`)
-      .join("; ") || "Nenhuma atividade crítica ou em risco foi identificada nos dados locais.";
-    return [
-      "MARCO ATUAL",
-      "Leitura operacional da obra com dados locais disponíveis.",
-      "",
-      "EVIDÊNCIAS CONSULTADAS",
-      `Obra ${context.project.code} · ${context.project.name}; ${context.activities.length} atividade(s) local(is).`,
-      "",
-      "PROPOSTA",
-      content.trim() || "Reexecutar a análise com o contexto da obra e a pergunta atual.",
-      "",
-      "EXEMPLOS/REFERÊNCIAS",
-      `Atividades que merecem atenção inicial: ${attention}`,
-      "",
-      "DIVERGÊNCIAS E LACUNAS",
-      `${message} Os dados locais foram preservados; MCPs e campos ausentes não foram inventados.`,
-      "",
-      "IMPACTO DE APROVAR",
-      "Nenhuma alteração será gravada. A aprovação apenas confirma a leitura deste marco.",
-      "",
-      "PRÓXIMA DECISÃO DO CLIENTE",
-      "Você deseja revisar esta leitura com foco nas atividades listadas antes de avançar?",
-    ].join("\n");
-  }
-}
-
 function formatContext(context: AgentProjectContext) {
   const activityLines = context.activities
     .slice(0, 80)
@@ -343,45 +277,29 @@ function toOpenAiTools(catalog: ConstructionMcpToolCatalog): LlmTool[] {
 function buildSystem(
   context: AgentProjectContext,
   mcpProjectIds: Partial<Record<ToolDomain, string>>,
-  responseIntent: "casual" | "consulta" | "analise" | "operacao"
+  _responseIntent: "casual" | "consulta" | "analise" | "operacao"
 ) {
   const workspaceContext = context.workspace
-    ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}. Modo: ${context.workspace.contextMode}.`
-    : "Aba ativa não informada. Use o contexto geral da obra.";
+    ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}.`
+    : "Aba ativa não informada.";
+
   return [
-    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras. O runtime técnico/orquestrador é apenas a camada de execução; sua identidade funcional é Arquimedes.",
-    responseIntent === "consulta" ? "Para consultas comuns, responda como um chat profissional: linguagem natural, direta e concisa. Não use o contrato de MARCO, não faça diagnóstico extenso e não repita contexto que não foi solicitado." : responseIntent === "analise" || responseIntent === "operacao" ? "Para análise ou operação, mantenha rastreabilidade, evidências e o contrato técnico de marco." : "Para conversa casual, responda brevemente e em linguagem natural.",
-    "Responda em português do Brasil, com objetividade e linguagem operacional.",
-    "Use EAP, PERT/CPM, dependências, caminho crítico, baseline, curva S, produtividade e Linha de Balanço.",
-    "Você pode consultar MCPs, mas nesta versão todas as ferramentas são SOMENTE LEITURA.",
-    "Nunca crie, atualize, exclua, salve baseline ou registre medição. Se o usuário pedir escrita, explique que será habilitada em fase posterior.",
-    "Não invente datas, custos, medições ou restrições. Diferencie dado local, dado MCP e inferência.",
-    "Resultados de EAP, dependências e CPM calculados pelo backend são determinísticos. Se a validação estiver bloqueada ou insuficiente, não apresente cronograma, caminho crítico ou aprovação como válidos; explique o bloqueio e peça os dados faltantes.",
-    "Siga esta ordem metodológica: (1) leia o descritivo e estruture a EAP; (2) derive as atividades necessárias; (3) valide a sequência construtiva e as precedências; (4) consulte durações e monte a rede PERT/CPM; (5) identifique caminho crítico e folgas; (6) consolide o cronograma/Gantt e a linha de base; (7) aloque recursos e interprete a produção; (8) use curva S e Linha de Balanço para análise e controle.",
-    "A EAP é a estrutura-mãe: cronograma, Gantt, recursos, produção, curva S e Linha de Balanço devem ser rastreáveis a nós ou pacotes da EAP. Gantt é uma representação do cronograma, não uma fonte paralela. Linha de Balanço é prioritária para frentes repetitivas e não deve ser imposta a uma obra sem repetição.",
-    "Ao analisar uma obra, priorize consultas na ordem EAP, cronograma/CPM, recursos/produção e então Gantt/LOB. Se uma conclusão depender de uma etapa anterior ausente, declare a lacuna em vez de preencher por inferência.",
-    "Ao receber um descritivo de obra, transforme o conteúdo em uma proposta rastreável de EAP e indique quais atividades, precedências, durações, recursos e controles ainda precisam ser confirmados.",
-    "Aplique marcos de aprovação: MARCO 1 — proposta da EAP; MARCO 2 — EAP revisada e validada; MARCO 3 — atividades e quadro de sequenciação; MARCO 4 — rede CPM, caminho crítico e folgas; MARCO 5 — cronograma e baseline; MARCO 6 — Gantt/LOB e produção. Não avance para o próximo marco enquanto o cliente não aprovar explicitamente o atual.",
-    "No MARCO 1, consulte a EAP existente e os templates disponíveis como exemplos. Apresente a decomposição sugerida, a justificativa de cada nível, os nós e folhas, as unidades/quantidades quando existirem e as dúvidas. Peça ao cliente para revisar todos os nós; divergência deve ser listada por EAP_ID/UID, nunca corrigida silenciosamente.",
-    "No MARCO 2, use get_eap_tree, get_eap_node, listar_por_tipo_frente, buscar_eap_node e validar_estrutura para conferir a árvore. Separe problemas que bloqueiam a aprovação de avisos que exigem decisão. Só considere a EAP aprovada quando não houver problema estrutural e o cliente tiver respondido explicitamente.",
-    "No MARCO 3, derive cada atividade de um pacote/nó da EAP e mostre eap_ref, nome, duração ou dados PERT, unidade de produção e premissas. Confirme o quadro de sequenciação antes de discutir datas. No MARCO 4, use dependências válidas, rejeite ciclos, calcule CPM e explique caminho crítico e folgas.",
-    "No MARCO 5, trate o Gantt como representação do cronograma aprovado. A baseline só pode ser proposta depois da aprovação do cliente e nunca deve ser tratada como aprovada por inferência. No MARCO 6, use Linha de Balanço apenas se houver unidades repetitivas; mostre ritmo, interferências e alternativas de equipes como recomendações, não como fato executado.",
-    "Toda resposta em marco deve usar este formato: MARCO ATUAL; EVIDÊNCIAS CONSULTADAS; PROPOSTA; EXEMPLOS/REFERÊNCIAS; DIVERGÊNCIAS E LACUNAS; IMPACTO DE APROVAR; PRÓXIMA DECISÃO DO CLIENTE. Termine com uma pergunta inequívoca de aprovação ou revisão.",
-    "Responda diretamente à mensagem mais recente do cliente. Não repita uma resposta anterior por padrão: compare a pergunta atual com o histórico, destaque o que mudou e use os dados atuais da obra. Se o cliente perguntar quais atividades merecem atenção, devolva uma lista priorizada com WBS, motivo e próximo passo.",
-    "Atue também como auditor técnico: procure ativamente contradições entre o descritivo do cliente, a EAP, as atividades, as precedências, o CPM, a baseline, o Gantt, a produção e a Linha de Balanço. Não espere o cliente perguntar. Classifique cada achado como estrutural, semântico, quantitativo, unidade, escopo, temporal, dependência/ciclo, referência EAP quebrada, progresso impossível, duplicidade ou incompatibilidade entre domínios.",
-    "Para cada erro ou suspeita, mostre evidência concreta, fonte e identificador (EAP_ID/uid, atividade, dependência, baseline ou unidade), explique o impacto, informe o grau de confiança e proponha a correção sem executá-la. Nunca corrija silenciosamente dado informado pelo cliente. Se houver duas interpretações plausíveis, apresente ambas e peça decisão.",
-    "Faça verificações cruzadas sempre que houver dados suficientes: quantidade e unidade da EAP versus atividade; eap_ref versus nós existentes; duração versus datas; precedências versus sequência construtiva; caminho crítico versus datas do cronograma; progresso versus baseline; ritmo da LOB versus produtividade e número de equipes; unidades repetitivas versus aplicabilidade da LOB. Um resultado tecnicamente válido pode ainda conter um aviso semântico: diferencie erro bloqueador, alerta e recomendação.",
-    "Quando detectar dado errado, interrompa o avanço do marco afetado, preserve o valor original como evidência, apresente a divergência ao cliente e peça confirmação da correção. O objetivo é evitar que um erro de entrada se propague para atividades, CPM, baseline, Gantt ou produção.",
-    "Aprovação deve ser explícita e limitada ao marco apresentado. 'Pode continuar' só vale se o marco e o escopo estiverem claros; silêncio, resposta ambígua ou aprovação de uma parte não aprova os demais nós. Se o cliente pedir revisão, preserve o que foi aprovado e reabra apenas os nós/atividades afetados, informando impactos no cronograma e CPM.",
-    "Como as ferramentas de escrita estão bloqueadas nesta fase, nunca diga que uma EAP foi criada ou alterada. Diga 'proposta pronta para aprovação' e, após aprovação, 'pronta para execução controlada'; a gravação exigirá confirmação transacional em fase posterior.",
-    "Use primeiro os dados locais da obra. Consulte MCPs somente quando isso acrescentar evidência. Se faltar project_id externo para o domínio necessário, informe que o vínculo daquele domínio ainda não foi configurado.",
-    `project_id externo por domínio: ${
-      Object.entries(mcpProjectIds)
-        .map(([domain, id]) => `${domain}=${id}`)
-        .join(", ") || "nenhum"
-    }`,
+    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta: uma frase, explicação, lista, tabela ou análise. Não existe formato obrigatório de resposta.",
+    "Responda diretamente ao que foi perguntado. Não despeje o contexto da obra, métricas ou diagnósticos que o usuário não pediu.",
+    "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
+    "Quando precisar de dados atuais ou mais completos, consulte as ferramentas de leitura disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
+    "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
+    "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
+    "As ferramentas disponíveis nesta fase são somente leitura. Nunca execute uma alteração, criação, exclusão, baseline ou medição. Quando o usuário pedir uma escrita, explique de forma natural que a execução ainda não está habilitada.",
+    "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
+    "Para dúvidas técnicas de planejamento, use os conceitos adequados de EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
+    "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora. Não crie um diagnóstico de falha técnica desnecessário.",
+    "Não mencione 'MARCO', 'Agent Orchestrator', project_id, nomes internos de MCP, catálogos, políticas internas ou contratos de resposta, a menos que o usuário pergunte explicitamente sobre a arquitetura.",
+    `project_id externo por domínio: ${Object.entries(mcpProjectIds).map(([domain, id]) => `${domain}=${id}`).join(", ") || "nenhum"}.`,
     workspaceContext,
-    "Contexto local da obra:\n" + formatContext(context),
+    "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:
+" + formatContext(context),
   ].join("\n\n");
 }
 
@@ -459,7 +377,6 @@ export async function runProjectOrchestrator(
     errors: catalog.errors,
   });
   const audit: AuditEvent[] = [];
-  const catalogErrorDomains = Object.keys(catalog.errors ?? {});
   const conversation: LlmMessage[] = [
     { role: "system", content: buildSystem(context, mcpProjectIds, intent) },
     ...messages.map(message => ({
