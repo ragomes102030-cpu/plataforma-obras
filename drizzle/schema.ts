@@ -476,6 +476,7 @@ export const wbsNodes = pgTable(
     location: varchar("location", { length: 180 }),
     responsible: varchar("responsible", { length: 180 }),
     acceptanceCriteria: text("acceptanceCriteria"),
+    decompositionBasis: varchar("decompositionBasis", { length: 32 }),
     scopeStatus: varchar("scopeStatus", { length: 24 }).default("rascunho").notNull(),
     level: integer("level").default(1).notNull(),
     nodeType: enumWbsNodesNodeType("nodeType")
