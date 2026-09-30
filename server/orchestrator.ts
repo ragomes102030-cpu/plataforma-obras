@@ -397,6 +397,9 @@ function buildSystem(
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
     "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora.",
+    "Quando o usuário perguntar sobre o próprio código, arquitetura, bugs ou funcionamento interno da Plataforma Obras, use as ferramentas de repositório disponíveis para investigar. Não diga que não possui acesso ao código se a ferramenta puder fornecê-lo.",
+    "Antes de modificar código, leia os arquivos envolvidos e confirme a causa do problema. Depois aplique somente a mudança necessária. Não invente que testou algo: use evidências reais.",
+    "A ferramenta de atualização do repositório trabalha apenas na branch de trabalho configurada pelo runtime e aplica validações de caminho e concorrência. Nunca trate uma alteração como implantada até existir evidência do deploy.",
     "Não mencione 'MARCO', 'Agent Orchestrator', project_id, nomes internos de MCP, catálogos, políticas internas ou contratos de resposta, a menos que o usuário pergunte explicitamente sobre a arquitetura.",
   ];
 
