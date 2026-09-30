@@ -1309,7 +1309,7 @@ export const appRouter = router({
           level: (parent?.level ?? 0) + 1,
           nodeType: input.nodeType,
           unit: input.unit || null,
-          plannedQuantity: input.plannedQuantity ?? null,
+          plannedQuantity: input.plannedQuantity == null ? null : String(input.plannedQuantity),
           sortOrder: siblings.length,
           versionId: writable.id,
         }).$returningIds();
