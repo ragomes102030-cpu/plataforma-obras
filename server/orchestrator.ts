@@ -341,13 +341,15 @@ function toOpenAiTools(catalog: ConstructionMcpToolCatalog): LlmTool[] {
 
 function buildSystem(
   context: AgentProjectContext,
-  mcpProjectIds: Partial<Record<ToolDomain, string>>
+  mcpProjectIds: Partial<Record<ToolDomain, string>>,
+  responseIntent: "casual" | "consulta" | "analise" | "operacao"
 ) {
   const workspaceContext = context.workspace
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}. Modo: ${context.workspace.contextMode}.`
     : "Aba ativa não informada. Use o contexto geral da obra.";
   return [
     "Você é o Agent Orchestrator da Plataforma Obras, especialista em planejamento e controle de obras no Brasil.",
+    responseIntent === "consulta" ? "Para consultas comuns, responda como um chat profissional: linguagem natural, direta e concisa. Não use o contrato de MARCO, não faça diagnóstico extenso e não repita contexto que não foi solicitado." : responseIntent === "analise" || responseIntent === "operacao" ? "Para análise ou operação, mantenha rastreabilidade, evidências e o contrato técnico de marco." : "Para conversa casual, responda brevemente e em linguagem natural.",
     "Responda em português do Brasil, com objetividade e linguagem operacional.",
     "Use EAP, PERT/CPM, dependências, caminho crítico, baseline, curva S, produtividade e Linha de Balanço.",
     "Você pode consultar MCPs, mas nesta versão todas as ferramentas são SOMENTE LEITURA.",
@@ -458,7 +460,7 @@ export async function runProjectOrchestrator(
   const audit: AuditEvent[] = [];
   const catalogErrorDomains = Object.keys(catalog.errors ?? {});
   const conversation: LlmMessage[] = [
-    { role: "system", content: buildSystem(context, mcpProjectIds) },
+    { role: "system", content: buildSystem(context, mcpProjectIds, intent) },
     ...messages.map(message => ({
       role: message.role,
       content: message.content,
