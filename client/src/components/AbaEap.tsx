@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, FileText, Maximize2, Minimize2, Search } from "lucide-react";
+import { Bot, Check, FileText, Maximize2, Minimize2, Pencil, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { DocumentosDaObra } from "@/components/DocumentosDaObra";
 
 /**
  * A aba EAP: a estrutura analítica da obra.
@@ -43,9 +42,18 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   // exige um clique por grupo antes de se ver qualquer serviço.
   const [aberto, setAberto] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
+  const [editor, setEditor] = useState<EditorEap | null>(null);
 
   const utils = trpc.useUtils();
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
+
+  const criarNo = trpc.projects.createWbsNode.useMutation({
+    onSuccess: async () => { setEditor(null); await recarregar(); },
+  });
+
+  const editarNo = trpc.projects.updateWbsNode.useMutation({
+    onSuccess: async () => { setEditor(null); await recarregar(); },
+  });
 
   /**
    * Traz uma folha da EAP para o cronograma.
@@ -159,11 +167,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         <div className="eap-toolbar-acoes">
           <button type="button" className="eap-tool-btn" onClick={recolherTudo}><Minimize2 size={14} /> Recolher</button>
           <button type="button" className="eap-tool-btn" onClick={expandirTudo}><Maximize2 size={14} /> Expandir</button>
+          <button type="button" className="eap-tool-btn" onClick={() => setEditor({ mode: "create", parentId: null })}><Plus size={14} /> Novo nível</button>
           <button type="button" className="eap-tool-btn eap-tool-agent" onClick={abrirAgente}><Bot size={14} /> Analisar com agente</button>
         </div>
       </div>
-      <DocumentosDaObra projetoId={projetoId} />
-
       {erro && (
         <div className="xl-aviso-erro" role="alert">
           {erro}
@@ -213,6 +220,23 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         </label>
       </div>
 
+      {editor && (
+        <EditorEapPanel
+          editor={editor}
+          nos={nos}
+          busy={criarNo.isPending || editarNo.isPending}
+          error={criarNo.isError ? criarNo.error.message : editarNo.isError ? editarNo.error.message : null}
+          onCancel={() => setEditor(null)}
+          onCreate={dados => criarNo.mutate({ projectId: projetoId, ...dados })}
+          onUpdate={dados => {
+            if (editor.mode !== "edit") return;
+            const no = nos.find(n => n.id === editor.nodeId);
+            if (!no) return;
+            editarNo.mutate({ projectId: projetoId, nodeId: no.id, code: no.code, ...dados });
+          }}
+        />
+      )}
+
       <div className="eap-arvore" role="tree" aria-label="Estrutura da obra">
         <div className="eap-grid-head" aria-hidden="true">
           <span className="eap-grid-canto" />
@@ -237,6 +261,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               })
             }
             aoTrazer={id => trazer.mutate({ projectId: projetoId, wbsNodeId: id })}
+            aoAdicionar={id => setEditor({ mode: "create", parentId: id })}
+            aoEditar={id => setEditor({ mode: "edit", nodeId: id })}
             jaNoCronograma={jaNoCronograma}
             profundidade={0}
           />
@@ -250,6 +276,16 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 }
 
 type Ramo = { no: No; filhos: Ramo[] };
+type EditorEap =
+  | { mode: "create"; parentId: number | null }
+  | { mode: "edit"; nodeId: number };
+
+type DadosEditorEap = {
+  name: string;
+  nodeType: "grupo" | "pacote" | "entrega";
+  unit?: string;
+  plannedQuantity?: number;
+};
 
 /** Monta a hierarquia a partir de `parentId`. Sem recursão sobre o código. */
 function montarArvore(nos: No[]): Ramo[] {
@@ -307,6 +343,8 @@ function NoDaArvore({
   abertos,
   onAlternar,
   aoTrazer,
+  aoAdicionar,
+  aoEditar,
   jaNoCronograma,
   profundidade,
 }: {
@@ -314,6 +352,8 @@ function NoDaArvore({
   abertos: Set<number>;
   onAlternar: (id: number) => void;
   aoTrazer: (id: number) => void;
+  aoAdicionar: (id: number) => void;
+  aoEditar: (id: number) => void;
   jaNoCronograma: (codigo: string) => boolean;
   profundidade: number;
 }) {
@@ -362,6 +402,16 @@ function NoDaArvore({
           ) : (
             <span className="eap-grupo-label">{temFilhos ? `${filhos.length} itens` : "Grupo"}</span>
           )}
+          <span className="eap-acoes-linha">
+            {no.nodeType !== "entrega" && (
+              <button type="button" className="eap-acao-linha" onClick={() => aoAdicionar(no.id)} title="Adicionar filho">
+                <Plus size={12} />
+              </button>
+            )}
+            <button type="button" className="eap-acao-linha" onClick={() => aoEditar(no.id)} title="Editar item">
+              <Pencil size={12} />
+            </button>
+          </span>
         </span>
       </div>
 
@@ -374,12 +424,95 @@ function NoDaArvore({
               abertos={abertos}
               onAlternar={onAlternar}
               aoTrazer={aoTrazer}
+              aoAdicionar={aoAdicionar}
+              aoEditar={aoEditar}
               jaNoCronograma={jaNoCronograma}
               profundidade={profundidade + 1}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function EditorEapPanel({
+  editor,
+  nos,
+  busy,
+  error,
+  onCancel,
+  onCreate,
+  onUpdate,
+}: {
+  editor: EditorEap;
+  nos: No[];
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onCreate: (dados: DadosEditorEap) => void;
+  onUpdate: (dados: DadosEditorEap) => void;
+}) {
+  const atual = editor.mode === "edit" ? nos.find(n => n.id === editor.nodeId) : undefined;
+  const pai = editor.mode === "create" ? nos.find(n => n.id === editor.parentId) : undefined;
+  const [name, setName] = useState(atual?.name ?? "");
+  const [nodeType, setNodeType] = useState<"grupo" | "pacote" | "entrega">(
+    atual?.nodeType === "entrega" ? "entrega" : atual?.nodeType === "grupo" ? "grupo" : "pacote"
+  );
+  const [unit, setUnit] = useState(atual?.unit ?? "");
+  const [quantity, setQuantity] = useState(atual?.plannedQuantity == null ? "" : String(atual.plannedQuantity));
+
+  const salvar = () => {
+    const nome = name.trim();
+    if (!nome) return;
+    const dados: DadosEditorEap = {
+      name: nome,
+      nodeType,
+      unit: unit.trim() || undefined,
+      plannedQuantity: quantity.trim() ? Number(quantity) : undefined,
+    };
+    if (editor.mode === "create") onCreate(dados);
+    else onUpdate(dados);
+  };
+
+  return (
+    <div className="eap-editor" role="region" aria-label={editor.mode === "create" ? "Novo item da EAP" : "Editar item da EAP"}>
+      <div className="eap-editor-titulo">
+        <div>
+          <strong>{editor.mode === "create" ? "Adicionar item à EAP" : "Editar item da EAP"}</strong>
+          <span>{editor.mode === "create"
+            ? pai ? `Pai: ${pai.code} · ${pai.name}` : "Novo item no nível raiz"
+            : atual ? `${atual.code} · código preservado para manter os vínculos` : "Item não encontrado"}</span>
+        </div>
+        <button type="button" className="eap-editor-fechar" onClick={onCancel} aria-label="Cancelar"><X size={15} /></button>
+      </div>
+      <div className="eap-editor-campos">
+        <label>
+          <span>Nome / descrição</span>
+          <input value={name} onChange={e => setName(e.target.value)} autoFocus maxLength={220} />
+        </label>
+        <label>
+          <span>Tipo</span>
+          <select value={nodeType} onChange={e => setNodeType(e.target.value as typeof nodeType)}>
+            <option value="grupo">Grupo</option>
+            <option value="pacote">Pacote de trabalho</option>
+            <option value="entrega">Entrega / serviço</option>
+          </select>
+        </label>
+        <label>
+          <span>Unidade</span>
+          <input value={unit} onChange={e => setUnit(e.target.value)} maxLength={32} placeholder="ex.: m², m³, un" />
+        </label>
+        <label>
+          <span>Quantidade planejada</span>
+          <input type="number" min="0" step="1" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Opcional" />
+        </label>
+        <div className="eap-editor-acoes">
+          <button type="button" className="eap-btn-secundario" onClick={onCancel} disabled={busy}><X size={13} /> Cancelar</button>
+          <button type="button" className="eap-btn" onClick={salvar} disabled={busy || !name.trim()}><Check size={13} /> {busy ? "Salvando…" : "Salvar"}</button>
+        </div>
+      </div>
+      {error && <div className="eap-editor-erro">{error}</div>}
     </div>
   );
 }
