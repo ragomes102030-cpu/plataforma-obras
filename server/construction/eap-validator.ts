@@ -46,9 +46,40 @@ export function validateEapScope(
     }
   }
 
+  const roots = nodes.filter(node => node.parentId === null);
+  if (nodes.length > 0 && roots.length !== 1) {
+    issues.push({
+      code: "eap_root_count_invalid",
+      severity: "error",
+      message: `A EAP deve possuir uma única raiz; foram encontradas ${roots.length}.`,
+      entityRef: "project",
+    });
+  }
+
   for (const node of nodes) {
     const childNodes = children.get(String(node.id)) ?? [];
     const isLeaf = childNodes.length === 0;
+    const codeDepth = node.code.trim().split(".").length;
+    if (node.level !== codeDepth) {
+      issues.push({
+        code: "eap_level_code_mismatch",
+        severity: "error",
+        message: `O nó ${node.code} declara nível ${node.level}, mas o código representa ${codeDepth} nível(is).`,
+        entityRef: String(node.id),
+      });
+    }
+
+    if (node.parentId !== null) {
+      const parent = nodes.find(candidate => candidate.id === node.parentId);
+      if (parent?.nodeType === "entrega") {
+        issues.push({
+          code: "eap_child_of_delivery",
+          severity: "error",
+          message: `O nó ${node.code} está abaixo da entrega ${parent.code}; uma entrega é terminal na EAP.`,
+          entityRef: String(node.id),
+        });
+      }
+    }
 
     if (!isLeaf && node.nodeType === "entrega") {
       issues.push({
