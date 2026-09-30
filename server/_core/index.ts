@@ -81,20 +81,30 @@ async function startServer() {
   registerStorageProxy(app);
   registerGitHubOAuthRoutes(app);
   app.get("/healthz", (_req, res) => {
-      // Railway-first, com fallback Vercel para nao regredir durante a transicao.
+      // O Render vem PRIMEIRO, porque é onde o sistema roda. As duas casas
+      // antigas ficaram depois: sem elas, nenhuma variável existe no Render e o
+      // `/healthz` respondia `commit: "local"` — que é indistinguível de "rodei
+      // na minha máquina", e foi exatamente o que por semanas fez parecer que o
+      // deploy não acontecia.
       const commitSha =
-        process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA;
+        process.env.RENDER_GIT_COMMIT_SHA ??
+        process.env.RAILWAY_GIT_COMMIT_SHA ??
+        process.env.VERCEL_GIT_COMMIT_SHA;
       const branch =
-        process.env.RAILWAY_GIT_COMMIT_BRANCH ?? process.env.VERCEL_GIT_COMMIT_REF;
+        process.env.RENDER_GIT_COMMIT_BRANCH ??
+        process.env.RAILWAY_GIT_COMMIT_BRANCH ??
+        process.env.VERCEL_GIT_COMMIT_REF;
       const deployId =
-        process.env.RAILWAY_DEPLOYMENT_ID ?? process.env.VERCEL_DEPLOYMENT_ID;
+        process.env.RENDER_DEPLOYMENT_ID ??
+        process.env.RAILWAY_DEPLOYMENT_ID ??
+        process.env.VERCEL_DEPLOYMENT_ID;
       res.status(200).json({
         ok: true,
         service: "plataforma-obras-api",
         commit: commitSha?.slice(0, 7) ?? "local",
         branch: branch ?? null,
         deployId: deployId ?? null,
-        environment: process.env.RAILWAY_ENVIRONMENT ?? null,
+        environment: process.env.RENDER_ENVIRONMENT ?? null,
         uptimeSeconds: Math.round(process.uptime()),
       });
     });
