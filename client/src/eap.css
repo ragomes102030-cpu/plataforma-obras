@@ -867,3 +867,161 @@
 .eap-documento-remover{border:0;background:transparent;color:#8993a3;cursor:pointer;padding:5px;border-radius:4px}
 .eap-documento-remover:hover{background:#f3f4f7;color:#b42318}
 .eap-documentos-vazio{padding:11px 14px;font-size:11px;color:#7b8493}
+
+
+/* ------------------------------------------------------ editor da EAP */
+
+.eap-editor {
+  margin: 0 0 10px;
+  padding: 11px 12px;
+  border: 1px solid #cbd9de;
+  border-radius: 5px;
+  background: #fbfdfe;
+}
+
+.eap-editor-titulo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.eap-editor-titulo strong {
+  display: block;
+  font-size: 11.5px;
+  color: #24343c;
+}
+
+.eap-editor-titulo span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: #7a8991;
+}
+
+.eap-editor-fechar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d4dde1;
+  border-radius: 4px;
+  background: #fff;
+  color: #697980;
+  cursor: pointer;
+}
+
+.eap-editor-campos {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.eap-editor-campos label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+  color: #66767e;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.eap-editor-campos label:first-child {
+  flex: 1 1 320px;
+}
+
+.eap-editor-campos input,
+.eap-editor-campos select {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #cfd8dd;
+  border-radius: 4px;
+  background: #fff;
+  color: #263840;
+  font: inherit;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.eap-editor-campos input:focus,
+.eap-editor-campos select:focus {
+  outline: 2px solid rgba(47,111,127,.14);
+  border-color: #8eb4c0;
+}
+
+.eap-editor-acoes {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.eap-editor-acoes .eap-btn,
+.eap-editor-acoes .eap-btn-secundario {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+}
+
+.eap-editor-erro {
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-left: 3px solid #d1495b;
+  background: #fdf0f1;
+  color: #8a1f2c;
+  font-size: 11px;
+}
+
+.eap-acoes-linha {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 5px;
+  opacity: 0;
+  transition: opacity .1s ease;
+}
+
+.eap-linha:hover .eap-acoes-linha,
+.eap-acoes-linha:focus-within {
+  opacity: 1;
+}
+
+.eap-acao-linha {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #6f7f87;
+  cursor: pointer;
+}
+
+.eap-acao-linha:hover {
+  border-color: #cbd9de;
+  background: #edf5f7;
+  color: #2f6f7f;
+}
+
+@media (max-width: 900px) {
+  .eap-editor-campos {
+    align-items: stretch;
+  }
+
+  .eap-editor-campos label {
+    flex: 1 1 180px;
+  }
+
+  .eap-editor-acoes {
+    width: 100%;
+  }
+}
