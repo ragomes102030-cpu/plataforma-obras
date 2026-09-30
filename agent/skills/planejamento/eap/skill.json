@@ -1,0 +1,9 @@
+{
+  "id": "eap-decomposicao",
+  "version": "1.0.0",
+  "domain": "planejamento.eap",
+  "purpose": "Construir e revisar EAP profissional orientada ao escopo e controle.",
+  "requires": ["contexto-da-obra", "regras-eap", "validator-eap"],
+  "outputs": ["eap_proposal", "eap_findings", "missing_information"],
+  "approval_required": true
+}
