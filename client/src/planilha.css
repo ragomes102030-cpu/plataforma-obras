@@ -1027,19 +1027,24 @@ tr:hover .xl-codigo {
   border-top: 1px solid #dde2e7;
 }
 
-.janela-agente-form input {
+.janela-agente-form textarea {
   flex: 1;
   min-width: 0;
-  padding: 6px 9px;
+  min-height: 76px;
+  max-height: 180px;
+  resize: vertical;
+  padding: 8px 9px;
+  box-sizing: border-box;
   font: inherit;
   font-size: 12.5px;
+  line-height: 1.45;
   color: #2c3a47;
   background: #fbfcfd;
   border: 1px solid #d5dbe1;
   border-radius: 4px;
 }
 
-.janela-agente-form input:focus {
+.janela-agente-form textarea:focus {
   outline: none;
   border-color: #4a90a4;
 }
@@ -1062,7 +1067,7 @@ tr:hover .xl-codigo {
   cursor: default;
 }
 
-.janela-agente-form input:disabled {
+ .janela-agente-form textarea:disabled {
   color: #8b95a1;
   background: #f4f6f8;
 }
@@ -1888,8 +1893,9 @@ tr:hover .xl-codigo {
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
   }
 
-  .janela-agente-form input {
-    min-height: 38px;
+  .janela-agente-form textarea {
+    min-height: 68px;
+    max-height: 140px;
   }
 
   .janela-agente-form button {
