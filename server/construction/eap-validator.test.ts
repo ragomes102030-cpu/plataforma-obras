@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateEap, validateWbsCostCoverage } from "./eap-validator";
+import { validateEap, validateEapScope, validateWbsCostCoverage } from "./eap-validator";
 import type { EapEvidenceNode } from "./domain-types";
 
 function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
@@ -118,5 +118,40 @@ describe("validateWbsCostCoverage", () => {
     expect(
       result.issues.filter(issue => issue.code === "wbs_leaf_without_cost")
     ).toHaveLength(2);
+  });
+});
+
+
+describe("validateEapScope", () => {
+  it("rejeita entrega com filhos e nomes de escopo duplicados entre irmãos", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Fundação", nodeType: "entrega", unit: "m3", plannedQuantity: 100 }),
+      node({ id: 3, parentId: 2, code: "1.1.1", name: "Concreto", nodeType: "entrega", unit: "m3", plannedQuantity: 10 }),
+      node({ id: 4, parentId: 1, code: "1.2", name: "Fundação", nodeType: "pacote", unit: "m3", plannedQuantity: 20 }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toEqual(
+      expect.arrayContaining(["eap_delivery_has_children", "possible_scope_overlap"])
+    );
+  });
+
+  it("avisa quando a folha ainda não está pronta para virar pacote controlável", () => {
+    const result = validateEapScope(
+      [node({ id: 1, code: "1", name: "Fundação", nodeType: "entrega" })],
+      { requireDictionaryForLeaves: true }
+    );
+    expect(result.valid).toBe(true);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_leaf_not_ready");
+  });
+
+  it("confere o fechamento quantitativo quando pai e filhos usam a mesma unidade", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Fundação", nodeType: "grupo", unit: "m3", plannedQuantity: 100 }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Bloco A", nodeType: "entrega", unit: "m3", plannedQuantity: 40 }),
+      node({ id: 3, parentId: 1, code: "1.2", name: "Bloco B", nodeType: "entrega", unit: "m3", plannedQuantity: 30 }),
+    ]);
+    expect(result.valid).toBe(true);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_quantity_rollup_mismatch");
   });
 });
