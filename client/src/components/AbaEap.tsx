@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bot, Check, CheckCircle2, FileText, Maximize2, Minimize2, Pencil, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Bot, Check, CheckCircle2, FileText, LockKeyhole, Maximize2, Minimize2, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -52,6 +52,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [aberto, setAberto] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
   const [editor, setEditor] = useState<EditorEap | null>(null);
+  const [controleAberto, setControleAberto] = useState(true);
 
   const utils = trpc.useUtils();
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
@@ -87,6 +88,21 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
+  const coordenador = trpc.agent.snapshot.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const versoes = trpc.agentPlanVersions.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const aprovarEap = trpc.agent.recordDecision.useMutation({
+    onSuccess: async () => {
+      await coordenador.refetch();
+      await versoes.refetch();
+      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+    },
+  });
   const validacao = trpc.projects.validateWbsStructure.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -95,6 +111,19 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     (grade.data?.linhas ?? []).map((l: { codigo: string }) => l.codigo)
   );
   const jaNoCronograma = (codigo: string) => codigosNoCronograma.has(codigo);
+
+  const idsComFilhos = new Set(nos.filter(n => n.parentId !== null).map(n => n.parentId as number));
+  const folhasEap = nos.filter(n => !idsComFilhos.has(n.id));
+  const pacotesTrabalho = nos.filter(n => n.nodeType === "pacote" && !idsComFilhos.has(n.id));
+  const folhasSemDicionario = folhasEap.filter(n =>
+    !n.description?.trim() || !n.inclusions?.trim() || !n.exclusions?.trim() ||
+    !n.location?.trim() || !n.responsible?.trim() || !n.acceptanceCriteria?.trim()
+  );
+  const folhasSemQuantidade = folhasEap.filter(n => !n.unit || n.plannedQuantity == null);
+  const eapProntaParaAprovacao = Boolean(validacao.data?.valid) &&
+    folhasSemDicionario.length === 0 && folhasSemQuantidade.length === 0 &&
+    (coordenador.data?.blockerCount ?? 0) === 0;
+  const podeAprovarEap = coordenador.data?.stage === "EAP_REVISAO" && eapProntaParaAprovacao && !aprovarEap.isPending;
 
   /**
    * Refazer a EAP do zero.
@@ -229,6 +258,39 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       {analisarComArquimedes.error && (
         <div className="xl-aviso-erro" role="alert">Arquimedes: {analisarComArquimedes.error.message}</div>
       )}
+
+      <div className="eap-controle">
+        <div className="eap-controle-cabecalho">
+          <div>
+            <strong><BookOpen size={15} /> Dicionário e controle da EAP</strong>
+            <span>{coordenador.data?.stage ? `Etapa atual: ${coordenador.data.stage}` : "Conferência da estrutura, prontidão e baseline"}</span>
+          </div>
+          <button type="button" className="eap-tool-btn" onClick={() => setControleAberto(value => !value)}>
+            {controleAberto ? "Ocultar controle" : "Mostrar controle"}
+          </button>
+        </div>
+        {controleAberto && <>
+          <div className="eap-controle-grid">
+            <div className={`eap-controle-card ${folhasSemDicionario.length ? "atencao" : "ok"}`}><span>Dicionário</span><strong>{folhasEap.length - folhasSemDicionario.length}/{folhasEap.length}</strong><small>{folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) incompleta(s)` : "Todas as folhas documentadas"}</small></div>
+            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "ok"}`}><span>Controle quantitativo</span><strong>{folhasEap.length - folhasSemQuantidade.length}/{folhasEap.length}</strong><small>{folhasSemQuantidade.length ? `${folhasSemQuantidade.length} sem unidade/quantidade` : "Unidade e quantidade informadas"}</small></div>
+            <div className={`eap-controle-card ${pacotesTrabalho.length ? "ok" : "atencao"}`}><span>Pacotes de trabalho</span><strong>{pacotesTrabalho.length}</strong><small>Folhas terminais controláveis</small></div>
+            <div className={`eap-controle-card ${validacao.data?.valid ? "ok" : "atencao"}`}><span>Critérios de parada</span><strong>{validacao.data?.valid ? "OK" : "REVISAR"}</strong><small>Sem bloqueios estruturais</small></div>
+          </div>
+          <div className="eap-parada">
+            <div><strong>Quando parar a decomposição</strong><span>Parar quando o escopo estiver claro, a unidade de controle definida, a responsabilidade e a medição atribuíveis e o pacote puder virar atividade sem alterar o escopo.</span></div>
+            <div><strong>Quando continuar</strong><span>Continuar quando houver mistura de localização, entregáveis, responsáveis, métodos, quantidades ou trabalhos que precisem ser controlados separadamente.</span></div>
+          </div>
+          <div className="eap-baseline">
+            <div className="eap-baseline-info"><LockKeyhole size={16} /><div><strong>Baseline da EAP</strong><span>{versoes.data?.[0] ? `Versão v${versoes.data[0].versionNumber} · ${versoes.data[0].status}${versoes.data[0].approvedAt ? ` · aprovada em ${new Date(versoes.data[0].approvedAt).toLocaleString("pt-BR")}` : ""}` : "Ainda não existe versão do plano."}</span></div></div>
+            <button type="button" className="eap-btn" disabled={!podeAprovarEap} title={coordenador.data?.stage !== "EAP_REVISAO" ? "A aprovação da EAP ocorre na etapa EAP_REVISAO." : "Aprova a EAP e congela a versão do plano como baseline."} onClick={() => {
+              if (!podeAprovarEap) return;
+              if (!window.confirm("Aprovar a EAP e criar a baseline?\\n\\nA versão atual será congelada para rastrear a estrutura aprovada. Alterações posteriores deverão ocorrer em uma nova versão.")) return;
+              aprovarEap.mutate({ projectId: projetoId, stage: "EAP_REVISAO", decision: "approved", nextStage: "ATIVIDADES_PROPOSTA", scope: { kind: "eap", nodeCount: nos.length, leafCount: folhasEap.length, workPackageCount: pacotesTrabalho.length }, summary: `EAP aprovada: ${nos.length} nós, ${folhasEap.length} folhas e ${pacotesTrabalho.length} pacotes de trabalho.` });
+            }}><PackageCheck size={14} />{aprovarEap.isPending ? "Aprovando…" : "Aprovar EAP / Baseline"}</button>
+          </div>
+          {aprovarEap.error && <div className="xl-aviso-erro" role="alert">Aprovação da EAP: {aprovarEap.error.message}</div>}
+        </>}
+      </div>
 
       <div className="eap-topo">
         <div className="eap-resumo">
