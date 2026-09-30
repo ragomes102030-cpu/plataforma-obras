@@ -1116,3 +1116,19 @@ tr:hover .xl-codigo {
     height: calc(100vh - 112px);
   }
 }
+
+
+/* Validação profissional da EAP: separa bloqueios de alertas sem transformar a árvore em formulário. */
+.eap-validacao{margin:12px 0;border:1px solid var(--pl-border,#dfe3e8);border-radius:8px;background:#fff}
+.eap-validacao-cabecalho{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:10px 12px}
+.eap-validacao-cabecalho>div{display:flex;flex-direction:column;gap:2px}
+.eap-validacao-cabecalho strong{font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.eap-validacao-cabecalho span{font-size:11px;color:#667085}
+.eap-validacao-ok,.eap-validacao-erro{display:inline-flex!important;align-items:center;gap:5px;font-weight:600}
+.eap-validacao-ok{color:#287a4d!important}.eap-validacao-erro{color:#a33b32!important}
+.eap-validacao-lista{display:flex;flex-direction:column;border-top:1px solid var(--pl-border,#dfe3e8)}
+.eap-validacao-item{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:8px 12px;border-bottom:1px solid #eef0f3}
+.eap-validacao-item span{font-size:9px;font-weight:700;letter-spacing:.05em}
+.eap-validacao-item p{margin:0;font-size:11px;color:#475467}
+.eap-validacao-error span{color:#a33b32}.eap-validacao-warning span{color:#946200}
+.eap-validacao-lista small{padding:8px 12px;color:#667085}
