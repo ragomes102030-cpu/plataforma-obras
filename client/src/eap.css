@@ -1025,3 +1025,74 @@
     width: 100%;
   }
 }
+
+@media (max-width: 600px) {
+  .eap {
+    padding: 7px 6px 14px;
+  }
+
+  .eap-toolbar,
+  .eap-topo {
+    padding: 9px;
+  }
+
+  .eap-toolbar-identidade,
+  .eap-resumo {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .eap-toolbar-acoes,
+  .eap-topo-acoes {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .eap-tool-btn,
+  .eap-btn,
+  .eap-btn-secundario {
+    min-height: 36px;
+  }
+
+  .eap-busca-wrap {
+    width: 100%;
+    min-width: 0;
+    flex-basis: 100%;
+    min-height: 36px;
+  }
+
+  .eap-arvore {
+    margin: 7px 0 12px;
+    border-radius: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* A planilha EAP permanece íntegra e ganha rolagem horizontal no telefone. */
+  .eap-grid-head,
+  .eap-linha {
+    min-width: 820px;
+  }
+
+  .eap-editor {
+    margin: 7px 0;
+  }
+
+  .eap-editor-campos {
+    grid-template-columns: 1fr;
+    padding: 9px;
+  }
+
+  .eap-editor-acoes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .eap-editor-acoes button {
+    min-height: 38px;
+  }
+
+  .eap-acoes {
+    gap: 6px;
+  }
+}
