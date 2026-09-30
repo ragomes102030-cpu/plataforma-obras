@@ -295,7 +295,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         <div className="eap-resumo">
           <div>
             <h2>ESTRUTURA ANALÍTICA DA OBRA</h2>
-            <p>{total} nós · {grupos} grupos · {folhas} folhas de serviço</p>
+            <p>{total} nós · {grupos} grupos · {folhas} folhas · profundidade máxima {Math.max(...nos.map(n => n.level), 1)}</p>
           </div>
           <span className="eap-status-chip"><span className="eap-status-dot" /> Estrutura carregada</span>
         </div>
@@ -388,6 +388,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <span className="eap-grid-col" />
           <span className="eap-grid-col">EAP</span>
           <span className="eap-grid-col">SERVIÇO / DESCRIÇÃO</span>
+          <span className="eap-grid-col">TIPO</span>
+          <span className="eap-grid-col">BASE</span>
           <span className="eap-grid-col">SEINFRA</span>
           <span className="eap-grid-col">UN.</span>
           <span className="eap-grid-col">STATUS</span>
@@ -548,6 +550,8 @@ function NoDaArvore({
         >
           {no.name}
         </span>
+        <span className="eap-tipo">{no.nodeType === "grupo" ? "FASE / GRUPO" : no.nodeType === "pacote" ? "SISTEMA / PACOTE" : "ENTREGA"}</span>
+        <span className="eap-base">{no.decompositionBasis || "—"}</span>
         <span className="eap-oficial" title={no.externalId ? "Código oficial do serviço na base de preços" : "Sem vínculo direto com código SEINFRA"}>
           {no.externalId || "—"}
         </span>
