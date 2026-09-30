@@ -26,7 +26,7 @@ Plataforma Obras é um sistema de planejamento e gestão de obras feito em TypeS
 │  Backend: Express + tRPC (server/_core/)                   │
 │  - index.ts: servidor Express + tRPC                       │
 │  - routers.ts: definições dos routers                      │
-│  - db.ts: conexão com banco (Drizzle ORM + MySQL)          │
+│  - db.ts: conexão com banco (Drizzle ORM + PostgreSQL)      │
 │  - integrations/: MCPs e integrações                       │
 │  - agent/: lógica do agente                                │
 │  - construction/: cálculos CPM, dependências                │
@@ -34,11 +34,9 @@ Plataforma Obras é um sistema de planejamento e gestão de obras feito em TypeS
                               │ Drizzle ORM
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Banco de dados: MySQL 8 via Aiven                         │
-│  - Host: mysql-1ca8c074-grafaelalexandre-fe80.f.aivencloud.com │
-│  - Port: 27571                                             │
-│  - SSL: REQUIRED                                           │
-│  - DATABASE_URL: mysql://avnadmin:***@... (ver .env.local) │
+│  Banco de dados: PostgreSQL 16 (Render)                    │
+│  - DATABASE_URL: postgresql://USUARIO:SENHA@host:5432/...   │
+│  - A URL real vive na pagina Environment do servico.        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,18 +90,18 @@ Todos os serviços foram migrados do Render para o Vercel. O `render.yaml` ainda
 
 ## Banco de dados
 
-### Aiven MySQL
+### PostgreSQL no Render
 
-- **Serviço:** MySQL 8 em Aiven
-- **Host:** `mysql-1ca8c074-grafaelalexandre-fe80.f.aivencloud.com`
-- **Porta:** 27571
-- **Banco:** `defaultdb`
-- **Usuário:** `avnadmin`
-- **SSL:** `ssl-mode=REQUIRED`
+- **Serviço:** PostgreSQL 16, na mesma conta do serviço web
+- **Uma moradia:** front, back e banco saem do mesmo dominio
+- **33 tabelas**, criadas pelas migrations em `drizzle/`
 
-**DATABASE_URL:** `mysql://avnadmin:***@mysql-1ca8c074-grafaelalexandre-fe80.f.aivencloud.com:27571/defaultdb?ssl-mode=REQUIRED`
+**DATABASE_URL:** vive na pagina Environment do servico, nunca neste arquivo.
 
-*(Token completo em .env.local — protegido por .gitignore)*
+A string completa que estava aqui — host, porta, usuario e nome do banco de um
+Aiven abandonado — foi removida quando o repositorio passou a ser publico. Host e
+usuario nao sao segredo, mas nao pertencem a um README: sao endereco de um
+servico que ninguem mais usa. Ver `docs/SETUP.md` para a configuracao.
 
 ### Drizzle ORM
 
@@ -183,7 +181,7 @@ GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 GITHUB_TOKEN=ghp_...
 VERCEL_OIDC_TOKEN=...
-COMPASIO_API_KEY=ak_SQrThA3oqjqvMWAhVcoh
+COMPASIO_API_KEY=<a sua chave>
 ```
 
 ### Vercel env vars (via Vercel dashboard)
@@ -229,7 +227,7 @@ COMPASIO_API_KEY=ak_SQrThA3oqjqvMWAhVcoh
 ## GitHub
 
 **User:** ragomes102030-cpu
-**Token:** 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 (scopes: admin:org, repo, workflow, write:packages, read:org)
+**Token:** o token de deploy é um secret do serviço no Render. Nunca em arquivo.
 
 **Repositórios (7):**
 - plataforma-obras (principal)
@@ -316,7 +314,7 @@ LINEAR_TOKEN=...      # para linear
 CLICKUP_TOKEN=...     # para clickup
 ```
 
-Composio já tem token configurado: `ak_SQrThA3oqjqvMWAhVcoh`
+Composio: a chave vive na página de API Keys da Composio, nunca neste arquivo.
 
 ---
 

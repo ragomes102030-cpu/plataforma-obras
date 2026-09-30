@@ -98,8 +98,13 @@
 - **Quando:** Setembro 2026
 - **Por quê:**
   - Acesso a Slack, Google, Notion, HubSpot, etc.
-  - Token configurado: ak_SQrThA3oqjqvMWAhVcoh
   - Base de conhecimento e automação externa
+  - A chave da Composio nunca pertenceu a este arquivo. Ela estava aqui em texto
+    puro desde o commit `ecc1a05`, e o repositório passou a ser público. Um
+    segredo em commit não some de longe: some do arquivo e fica no histórico.
+    O token que estava aqui foi revogado — a Composio responde 410 —, o que
+    encerra o risco, mas não justifica o que ele fazia num repositório. Chave em
+    variável de ambiente, sempre.
 - **Impacto:** Agentes podem interagir com ferramentas externas
 
 ---

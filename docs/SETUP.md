@@ -22,19 +22,30 @@ pnpm install
 
 ## Banco de dados
 
-### Aiven MySQL
+### PostgreSQL
 
-1. Crie conta em https://aiven.io
-2. Crie serviço MySQL (grátis disponível)
-3. Copie a CONNECTION STRING (ex: `mysql://avnadmin:***@...`)
-4. Configure no `.env.local`:
+O Render só oferece PostgreSQL como banco gerenciado, e é onde o sistema roda.
+
+1. Crie o PostgreSQL na mesma conta do serviço web
+2. Copie a **Internal Database URL** da pagina do banco
+3. Configure no `.env.local`:
    ```
-   DATABASE_URL=mysql://avnadmin:***@mysql-1ca8c074-grafaelalexandre-fe80.f.aivencloud.com:27571/defaultdb?ssl-mode=REQUIRED
+   DATABASE_URL=postgresql://USUARIO:SENHA@host-interno:5432/nome
    ```
-5. Roda o push do schema:
+4. Aplique o schema:
    ```bash
-   pnpm db:push
+   node scripts/migrate-pg.mjs
+   node scripts/audit-schema-pg.mjs
    ```
+
+O `audit` confere o banco contra as migrations: contagens de tabelas, enums,
+triggers e índices, e o journal. Ele roda no boot do deploy e imprime
+`banco confere com as migracoes` quando está de acordo.
+
+**A URL do banco não pertence a este arquivo.** Este guia usava trazer a
+connection string inteira, com host, porta e usuário de um Aiven que foi
+abandonado; com o repositório público, endereço de serviço sai do README e a
+senha nunca entra nele.
 
 ### Estrutura de tabelas (Drizzle ORM)
 
@@ -193,7 +204,7 @@ Ver `docs/README.md` → seção "MCPs configurados (30 habilitados)"
 | clickup | CLICKUP_TOKEN | https://clickup.com → Settings → Apps |
 | composio | COMPOSIO_API_KEY | https://composio.dev → API Keys |
 
-Composio já configurado: `ak_SQrThA3oqjqvMWAhVcoh`
+Composio: a chave vive na página de API Keys da Composio, nunca neste arquivo.
 
 ---
 
