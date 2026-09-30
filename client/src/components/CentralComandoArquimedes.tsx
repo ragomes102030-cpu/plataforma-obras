@@ -535,7 +535,7 @@ function CapabilityCard({
       : capabilityTone.disabled;
 
   const dependencyNames = capability.dependencies
-    .map((id: string) => allCapabilities.find(item => item.id === id)?.name ?? id);
+    .map((id: string) => allCapabilities.find((item: any) => item.id === id)?.name ?? id);
 
   return (
     <article style={capabilityCard}>
