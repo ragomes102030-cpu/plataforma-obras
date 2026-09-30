@@ -71,6 +71,30 @@ describe("validateEap", () => {
       "eap_parent_code_mismatch"
     );
   });
+
+  it("rejeita nível incompatível com a profundidade do código", () => {
+    const result = validateEap([
+      node(),
+      node({ id: 2, parentId: 1, code: "1.1", level: 3, name: "Canteiro", nodeType: "pacote" }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain(
+      "eap_level_code_mismatch"
+    );
+  });
+
+  it("rejeita filho abaixo de uma entrega", () => {
+    const result = validateEap([
+      node({ id: 1, code: "1", nodeType: "entrega", name: "Entrega" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Subitem" }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain(
+      "eap_child_of_delivery"
+    );
+  });
 });
 
 describe("validateWbsCostCoverage", () => {
