@@ -22,7 +22,7 @@ function encryptionKey() {
   return createHash("sha256").update(ENV.cookieSecret).digest();
 }
 
-function encryptConfig(config: StoredLlmProvider) {
+function encryptConfig(config: StoredLlmProvider | StoredLlmProvider[]) {
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGORITHM, encryptionKey(), iv);
   const encrypted = Buffer.concat([
@@ -122,6 +122,7 @@ export async function getPublicLlmSettings() {
     .limit(1);
   const row = rows[0];
   const config = row ? decryptConfig(row.encryptedConfig) : null;
+  const providers = config ? (Array.isArray(config) ? config : [config]) : [];
   return {
     configured: Boolean(config),
     provider: config?.provider ?? null,
