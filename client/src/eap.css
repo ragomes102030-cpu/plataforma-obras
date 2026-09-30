@@ -832,3 +832,21 @@
     width: 100%;
   }
 }
+
+
+/* Ajuste fino das colunas da grade EAP: número, árvore, EAP, descrição, SEINFRA, unidade, status. */
+.eap-grid-head {
+  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 86px 58px 150px;
+}
+
+.eap-linha {
+  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 86px 58px 150px;
+}
+
+.eap-grid-head .eap-grid-col {
+  border-left: 1px solid #d9e0e4;
+}
+
+.eap-grid-head .eap-grid-canto {
+  border-right: 1px solid #d9e0e4;
+}
