@@ -497,6 +497,82 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (
+        toolName === "repository_info" ||
+        toolName === "repository_read_file" ||
+        toolName === "repository_search_code" ||
+        toolName === "repository_update_file"
+      ) {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "repository", toolName });
+        try {
+          let value: unknown;
+          if (toolName === "repository_info") {
+            value = repositoryInfo();
+          } else if (toolName === "repository_read_file") {
+            value = await readRepositoryFile(
+              String(rawArgs.path ?? ""),
+              typeof rawArgs.ref === "string" ? rawArgs.ref : undefined
+            );
+          } else if (toolName === "repository_search_code") {
+            value = await searchRepositoryCode(
+              String(rawArgs.query ?? ""),
+              Number(rawArgs.topK ?? 8)
+            );
+          } else {
+            value = await updateRepositoryFile({
+              path: String(rawArgs.path ?? ""),
+              content: String(rawArgs.content ?? ""),
+              message: String(rawArgs.message ?? ""),
+              expectedSha: String(rawArgs.expectedSha ?? ""),
+            });
+          }
+          audit.push({
+            taskId,
+            iteration,
+            event: "tool_call",
+            domain: "repository",
+            toolName,
+            status: "success",
+            durationMs: Date.now() - startedAt,
+          });
+          await emit({
+            type: "tool_finished",
+            iteration,
+            domain: "repository",
+            toolName,
+            status: "success",
+          });
+          return {
+            ok: true,
+            content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS),
+          };
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Falha na ferramenta de repositório.";
+          audit.push({
+            taskId,
+            iteration,
+            event: "tool_call",
+            domain: "repository",
+            toolName,
+            status: "error",
+            durationMs: Date.now() - startedAt,
+            error: message,
+          });
+          await emit({
+            type: "tool_finished",
+            iteration,
+            domain: "repository",
+            toolName,
+            status: "error",
+          });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
       if (toolName === "get_current_datetime") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
