@@ -262,11 +262,18 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
                   perguntar(texto);
                 }}
               >
-                <input
+                <textarea
                   value={texto}
                   onChange={e => setTexto(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      perguntar(texto);
+                    }
+                  }}
                   placeholder="Pergunte sobre a obra…"
                   disabled={ocupado}
+                  rows={3}
                 />
                 <button type="submit" disabled={ocupado || !texto.trim()}>
                   {ocupado ? "…" : "Enviar"}
