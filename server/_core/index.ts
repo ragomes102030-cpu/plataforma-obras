@@ -84,18 +84,24 @@ async function startServer() {
       // O Render vem PRIMEIRO, porque é onde o sistema roda. As duas casas
       // antigas ficaram depois: sem elas, nenhuma variável existe no Render e o
       // `/healthz` respondia `commit: "local"` — que é indistinguível de "rodei
-      // na minha máquina", e foi exatamente o que por semanas fez parecer que o
-      // deploy não acontecia.
+      // na minha máquina", e foi o que fez o deploy parecer que não acontecia.
+      //
+      // OS NOMES FORAM LIDOS DA DOCUMENTACAO, e nao deduzidos por analogia. A
+      // primeira versao escreveu `RENDER_GIT_COMMIT_SHA` e
+      // `RENDER_GIT_COMMIT_BRANCH`, por analogia com a Railway e a Vercel: os
+      // dois nomes nao existem. O `?? "local"` engolia o `undefined` e o
+      // endpoint voltava a dizer "local" com o codigo novo no ar — a mesma
+      // falha que motivou a mudanca, repetida por um nome errado.
       const commitSha =
-        process.env.RENDER_GIT_COMMIT_SHA ??
+        process.env.RENDER_GIT_COMMIT ??
         process.env.RAILWAY_GIT_COMMIT_SHA ??
         process.env.VERCEL_GIT_COMMIT_SHA;
       const branch =
-        process.env.RENDER_GIT_COMMIT_BRANCH ??
+        process.env.RENDER_GIT_BRANCH ??
         process.env.RAILWAY_GIT_COMMIT_BRANCH ??
         process.env.VERCEL_GIT_COMMIT_REF;
       const deployId =
-        process.env.RENDER_DEPLOYMENT_ID ??
+        process.env.RENDER_INSTANCE_ID ??
         process.env.RAILWAY_DEPLOYMENT_ID ??
         process.env.VERCEL_DEPLOYMENT_ID;
       res.status(200).json({
@@ -104,7 +110,7 @@ async function startServer() {
         commit: commitSha?.slice(0, 7) ?? "local",
         branch: branch ?? null,
         deployId: deployId ?? null,
-        environment: process.env.RENDER_ENVIRONMENT ?? null,
+        environment: process.env.RENDER_SERVICE_TYPE ?? null,
         uptimeSeconds: Math.round(process.uptime()),
       });
     });
