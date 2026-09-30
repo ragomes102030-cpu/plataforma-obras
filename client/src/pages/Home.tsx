@@ -244,9 +244,30 @@ export default function Home() {
               <Sparkles size={13} /> Configurações
             </button>
           )}
-          <span className="xl-tb-user" title={user?.name || "Conta"}>
-            {(user?.name || "R").charAt(0).toUpperCase()}
-          </span>
+          {user ? (
+            <>
+              <span className="xl-tb-user" title={user.name || "Conta"}>
+                {(user.name || "R").charAt(0).toUpperCase()}
+              </span>
+              <button
+                type="button"
+                className="xl-tb-btn xl-tb-auth"
+                onClick={() => { window.location.href = "/api/auth/logout"; }}
+                title="Sair da conta e permitir novo login"
+              >
+                Sair
+              </button>
+            </>
+          ) : user === null ? (
+            <button
+              type="button"
+              className="xl-tb-btn xl-tb-auth"
+              onClick={startLogin}
+              title="Entrar com GitHub"
+            >
+              Entrar
+            </button>
+          ) : null}
         </div>
       </header>
 
