@@ -92,7 +92,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
-  const versoes = trpc.agentPlanVersions.useQuery(
+  const versoes = trpc.agent.agentPlanVersions.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
