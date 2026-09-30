@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, FileText, Maximize2, Minimize2, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { DocumentosDaObra } from "@/components/DocumentosDaObra";
 
 /**
  * A aba EAP: a estrutura analítica da obra.
@@ -161,6 +162,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <button type="button" className="eap-tool-btn eap-tool-agent" onClick={abrirAgente}><Bot size={14} /> Analisar com agente</button>
         </div>
       </div>
+      <DocumentosDaObra projetoId={projetoId} />
+
       {erro && (
         <div className="xl-aviso-erro" role="alert">
           {erro}
