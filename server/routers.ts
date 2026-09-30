@@ -83,7 +83,7 @@ import {
   getAgentExecutionStatus,
   startAgentExecution,
 } from "./agent-execution";
-import { getPublicLlmSettings, saveStoredLlmProviders } from "./llm-settings";
+import { getPublicLlmSettings, getStoredLlmProviders, saveStoredLlmProviders } from "./llm-settings";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -1054,7 +1054,19 @@ export const appRouter = router({
           })
         )
         .mutation(async ({ ctx, input }) => {
-          await saveStoredLlmProviders(input.providers, ctx.user.id);
+          const current = await getStoredLlmProviders();
+          const providers = input.providers.map(provider => {
+            const previous = current.find(item => item.provider === provider.provider);
+            return {
+              ...provider,
+              apiKey: provider.apiKey.trim() || previous?.apiKey || "",
+            };
+          });
+          const missingKey = providers.find(provider => !provider.apiKey && provider.provider !== "opencode-free");
+          if (missingKey) {
+            throw badRequest(`Informe a chave API do provedor ${missingKey.provider}.`);
+          }
+          await saveStoredLlmProviders(providers, ctx.user.id);
           return {
             saved: true as const,
             settings: await getPublicLlmSettings(),
