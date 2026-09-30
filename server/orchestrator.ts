@@ -15,6 +15,12 @@ import {
 } from "./llm-provider-gateway";
 import { classifyArquimedesIntent } from "./agent/runtime/intent-router";
 import { runReActAgent } from "./agent/runtime/react-runtime";
+import {
+  readRepositoryFile,
+  repositoryInfo,
+  searchRepositoryCode,
+  updateRepositoryFile,
+} from "./integrations/repository-tools";
 
 const MAX_ITERATIONS = 4;
 const MAX_TOOL_RESULT_CHARS = 12_000;
