@@ -1220,6 +1220,12 @@ export const appRouter = router({
           name: z.string().trim().min(2).max(220),
           nodeType: z.enum(["grupo", "pacote", "entrega"]),
           unit: z.string().trim().max(32).optional(),
+          description: z.string().trim().max(5000).optional(),
+          inclusions: z.string().trim().max(5000).optional(),
+          exclusions: z.string().trim().max(5000).optional(),
+          location: z.string().trim().max(180).optional(),
+          responsible: z.string().trim().max(180).optional(),
+          acceptanceCriteria: z.string().trim().max(5000).optional(),
           plannedQuantity: z.number().min(0).optional(),
         })
       )
@@ -1253,6 +1259,12 @@ export const appRouter = router({
               nodeType: input.nodeType,
               unit: input.unit || null,
               plannedQuantity: input.plannedQuantity == null ? null : String(input.plannedQuantity),
+              description: input.description || null,
+              inclusions: input.inclusions || null,
+              exclusions: input.exclusions || null,
+              location: input.location || null,
+              responsible: input.responsible || null,
+              acceptanceCriteria: input.acceptanceCriteria || null,
             })
             .where(eq(wbsNodes.id, input.nodeId));
           await tx
@@ -1274,7 +1286,7 @@ export const appRouter = router({
         name: z.string().trim().min(2).max(220),
         nodeType: z.enum(["grupo", "pacote", "entrega"]),
         unit: z.string().trim().max(32).optional(),
-        plannedQuantity: z.number().int().min(0).optional(),
+        plannedQuantity: z.number().min(0).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
