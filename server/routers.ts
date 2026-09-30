@@ -1278,6 +1278,7 @@ export const appRouter = router({
             inclusions: node.inclusions,
             exclusions: node.exclusions,
             acceptanceCriteria: node.acceptanceCriteria,
+            decompositionBasis: node.decompositionBasis,
           })),
         };
 
@@ -1350,6 +1351,16 @@ export const appRouter = router({
           location: z.string().trim().max(180).optional(),
           responsible: z.string().trim().max(180).optional(),
           acceptanceCriteria: z.string().trim().max(5000).optional(),
+          decompositionBasis: z.enum([
+            "project",
+            "deliverable",
+            "system",
+            "discipline",
+            "location",
+            "phase",
+            "component",
+            "other",
+          ]).optional(),
           plannedQuantity: z.number().min(0).optional(),
         })
       )
@@ -1358,7 +1369,11 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [node] = await db
-          .select({ id: wbsNodes.id })
+          .select({
+            id: wbsNodes.id,
+            decompositionBasis: wbsNodes.decompositionBasis,
+            parentId: wbsNodes.parentId,
+          })
           .from(wbsNodes)
           .where(
             and(
@@ -1389,6 +1404,10 @@ export const appRouter = router({
               location: input.location || null,
               responsible: input.responsible || null,
               acceptanceCriteria: input.acceptanceCriteria || null,
+              decompositionBasis:
+                input.decompositionBasis ??
+                node.decompositionBasis ??
+                (node.parentId === null ? "project" : "deliverable"),
               scopeStatus: "rascunho",
             })
             .where(eq(wbsNodes.id, input.nodeId));
@@ -1417,6 +1436,16 @@ export const appRouter = router({
         location: z.string().trim().max(180).optional(),
         responsible: z.string().trim().max(180).optional(),
         acceptanceCriteria: z.string().trim().max(5000).optional(),
+        decompositionBasis: z.enum([
+          "project",
+          "deliverable",
+          "system",
+          "discipline",
+          "location",
+          "phase",
+          "component",
+          "other",
+        ]).optional(),
         plannedQuantity: z.number().min(0).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1447,6 +1476,9 @@ export const appRouter = router({
           location: input.location || null,
           responsible: input.responsible || null,
           acceptanceCriteria: input.acceptanceCriteria || null,
+          decompositionBasis:
+            input.decompositionBasis ??
+            (parent ? "deliverable" : "project"),
           scopeStatus: "rascunho",
           sortOrder: siblings.length,
           versionId: writable.id,
