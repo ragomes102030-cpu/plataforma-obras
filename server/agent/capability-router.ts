@@ -1,15 +1,22 @@
+import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { getConstructionMcpStatus, MCP_TOOL_POLICY } from "../integrations/construction-mcps";
 import {
-  ARQUIMEDES_ABILITIES,
-  ARQUIMEDES_PERMISSION_MATRIX,
-  ARQUIMEDES_SKILLS,
-} from "./capability-registry";
+  getArquimedesCapabilitySnapshot,
+  installArquimedesCapability,
+  setArquimedesCapabilityEnabled,
+  uninstallArquimedesCapability,
+} from "./capability-manager";
+import { ARQUIMEDES_PERMISSION_MATRIX } from "./capability-registry";
 
 export const arquimedesCapabilitiesRouter = router({
-  snapshot: adminProcedure.query(async () => {
-    const status = await getConstructionMcpStatus(`central-${Date.now()}`);
-    const mcpDomains = Object.entries(status.servers).map(([id, server]) => ({
+  snapshot: adminProcedure.query(async ({ ctx }) => {
+    const [capabilities, mcpStatus] = await Promise.all([
+      getArquimedesCapabilitySnapshot(ctx.user.id),
+      getConstructionMcpStatus("central-" + Date.now()),
+    ]);
+
+    const mcpDomains = Object.entries(mcpStatus.servers).map(([id, server]) => ({
       id,
       name:
         id === "ganttLob"
@@ -23,12 +30,12 @@ export const arquimedesCapabilitiesRouter = router({
       tools: server.tools,
       lastError: server.lastError,
     }));
+
     return {
-      generatedAt: status.checkedAt,
-      overallStatus: status.status,
+      ...capabilities,
+      generatedAt: mcpStatus.checkedAt,
+      overallMcpStatus: mcpStatus.status,
       mcpDomains,
-      skills: ARQUIMEDES_SKILLS,
-      abilities: ARQUIMEDES_ABILITIES,
       permissions: ARQUIMEDES_PERMISSION_MATRIX,
       policy: {
         readOnlyTools: MCP_TOOL_POLICY.readOnly.size,
@@ -37,4 +44,31 @@ export const arquimedesCapabilitiesRouter = router({
       },
     };
   }),
+
+  install: adminProcedure
+    .input(z.object({ capabilityId: z.string().min(1).max(120) }))
+    .mutation(async ({ ctx, input }) =>
+      installArquimedesCapability(ctx.user.id, input.capabilityId)
+    ),
+
+  setEnabled: adminProcedure
+    .input(
+      z.object({
+        capabilityId: z.string().min(1).max(120),
+        enabled: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) =>
+      setArquimedesCapabilityEnabled(
+        ctx.user.id,
+        input.capabilityId,
+        input.enabled
+      )
+    ),
+
+  uninstall: adminProcedure
+    .input(z.object({ capabilityId: z.string().min(1).max(120) }))
+    .mutation(async ({ ctx, input }) =>
+      uninstallArquimedesCapability(ctx.user.id, input.capabilityId)
+    ),
 });
