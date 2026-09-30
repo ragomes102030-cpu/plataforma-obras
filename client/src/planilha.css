@@ -949,3 +949,132 @@ tr:hover .xl-codigo {
   color: #6b7683;
   line-height: 1.5;
 }
+
+
+/* --------------------------------------------------------------------------
+   Planejamento visual — Gantt e Linha de Balanço
+   -------------------------------------------------------------------------- */
+.pl-visual {
+  margin: 12px 18px 14px;
+  border: 1px solid #cfd8dd;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(31,41,51,.05);
+  overflow: hidden;
+}
+
+.pl-visual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #dce3e7;
+  background: #f3f6f7;
+}
+
+.pl-visual-header > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.pl-visual-header strong {
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: #31434b;
+}
+
+.pl-visual-header span {
+  font-size: 10px;
+  color: #7b8990;
+}
+
+.pl-visual-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.pl-visual-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid #cbd5da;
+  border-radius: 4px;
+  background: #fff;
+  color: #5d6d75;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pl-visual-tabs button.ativo {
+  background: #2f6f7f;
+  border-color: #2f6f7f;
+  color: #fff;
+}
+
+.pl-gantt-scroll,
+.pl-lob-scroll {
+  overflow: auto;
+  max-height: 520px;
+  background: #fff;
+}
+
+.pl-gantt,
+.pl-lob {
+  display: block;
+  width: 100%;
+  min-width: 980px;
+  font-family: Arial, sans-serif;
+}
+
+.pl-gantt-bg,
+.pl-lob-bg { fill: #fff; }
+.pl-gantt-left { fill: #f7f9fa; }
+.pl-gantt-title { font-size: 9px; font-weight: 700; fill: #62737b; letter-spacing: .07em; }
+.pl-gantt-date { font-size: 8px; fill: #75858d; }
+.pl-gantt-grid { stroke: #e4eaed; stroke-width: 1; }
+.pl-gantt-hoje { stroke: #c66b4d; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.pl-gantt-hoje-label { font-size: 8px; font-weight: 700; fill: #a65b43; }
+.pl-gantt-row { fill: #fff; }
+.pl-gantt-row.alt { fill: #fbfcfc; }
+.pl-gantt-code { font-size: 8px; fill: #7b8990; }
+.pl-gantt-name { font-size: 9.5px; fill: #34464e; }
+.pl-gantt-front { font-size: 8px; fill: #718088; }
+.pl-gantt-bar { fill: #6f9eaa; }
+.pl-gantt-bar.critical { fill: #557d89; }
+.pl-gantt-progress { fill: #315d68; opacity: .9; }
+.pl-gantt-duration { font-size: 8px; fill: #64757d; }
+.pl-gantt-note { font-size: 8px; fill: #87949a; }
+
+.pl-lob-grid { stroke: #e2e8eb; stroke-width: 1; }
+.pl-lob-axis { stroke: #9baab0; stroke-width: 1; }
+.pl-lob-floor { font-size: 9px; fill: #687981; }
+.pl-lob-caption { font-size: 9px; fill: #7d8b91; }
+.pl-lob-line { fill: none; stroke-width: 2.5; }
+.pl-lob-line.line-0, .pl-lob-point.line-0 { stroke: #477b89; fill: #477b89; }
+.pl-lob-line.line-1, .pl-lob-point.line-1 { stroke: #7b9a62; fill: #7b9a62; }
+.pl-lob-line.line-2, .pl-lob-point.line-2 { stroke: #b57c57; fill: #b57c57; }
+.pl-lob-line.line-3, .pl-lob-point.line-3 { stroke: #806d9a; fill: #806d9a; }
+.pl-lob-label { font-size: 9px; fill: #52636a; }
+
+.pl-visual-vazio {
+  margin: 12px 18px;
+  padding: 24px;
+  border: 1px dashed #cbd5da;
+  border-radius: 6px;
+  background: #fafcfc;
+}
+.pl-visual-vazio h3 { margin: 0 0 6px; font-size: 13px; color: #34464e; }
+.pl-visual-vazio p { margin: 0; font-size: 11px; color: #7a8991; }
+
+.xl-demo-obra {
+  margin-left: 2px;
+  border-color: #8eb4c0 !important;
+  color: #2f6f7f !important;
+  background: #eef6f8 !important;
+  font-weight: 700 !important;
+}
