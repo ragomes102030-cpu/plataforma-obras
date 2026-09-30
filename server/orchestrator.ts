@@ -249,6 +249,68 @@ const RUNTIME_TOOLS: LlmTool[] = [
   {
     type: "function",
     function: {
+      name: "repository_info",
+      description:
+        "Mostra qual repositório de código está conectado ao Arquimedes e quais capacidades de auditoria estão disponíveis.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "repository_read_file",
+      description:
+        "Lê um arquivo do repositório conectado para auditar a arquitetura ou diagnosticar um problema.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          ref: { type: "string" },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "repository_search_code",
+      description:
+        "Pesquisa símbolos e textos no código do repositório conectado.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+          topK: { type: "integer", minimum: 1, maximum: 20 },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "repository_update_file",
+      description:
+        "Atualiza um arquivo do repositório na branch de trabalho configurada. Leia o arquivo antes e use o SHA retornado pela leitura.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          content: { type: "string" },
+          message: { type: "string" },
+          expectedSha: { type: "string" },
+        },
+        required: ["path", "content", "message", "expectedSha"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_current_datetime",
       description:
         "Retorna a data e hora atuais do runtime na zona America/Fortaleza. Use quando o usuário perguntar que dia é hoje, a hora atual ou precisar de uma referência temporal presente.",
