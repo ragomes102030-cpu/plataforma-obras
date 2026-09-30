@@ -54,6 +54,7 @@ export type GatewayRequest = {
   messages: LlmMessage[];
   tools: LlmTool[];
   responseFormat?: { type: "text" | "json_object" };
+  maxTokens?: number;
 };
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429]);
@@ -191,7 +192,7 @@ async function callProvider(
       body: JSON.stringify({
         model: provider.model,
         temperature: 0.2,
-        max_tokens: Number(process.env.LLM_MAX_TOKENS ?? "1024"),
+        max_tokens: request.maxTokens ?? Number(process.env.LLM_MAX_TOKENS ?? "8192"),
         messages: request.messages,
         ...(request.tools.length
           ? { tools: request.tools, tool_choice: "auto" }
