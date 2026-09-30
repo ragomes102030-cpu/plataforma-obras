@@ -438,21 +438,13 @@ export async function runProjectOrchestrator(
     },
   });
 
-  const rawContent = runtimeResult.text;
-  const responseIntent = lastUserMessage
-    ? classifyArquimedesIntent(lastUserMessage.content)
-    : "consulta";
-  const content =
-    responseIntent === "analise" || responseIntent === "operacao"
-      ? normalizeReadonlyResponse(rawContent, context)
-      : rawContent.trim();
+  const content = runtimeResult.text.trim();
 
-  await emit({ type: "response_parsed" });
   await emit({ type: "response_parsed" });
 
   return {
     taskId,
-    content: `${content}\n\nFontes: dados locais da obra${successfulDomains.length ? `; MCPs consultados (${successfulDomains.join(", ")})` : "; nenhum MCP consultado nesta resposta"}${failedDomains.length ? `. MCPs com falha controlada: ${failedDomains.join(", ")}; valide os dados antes de decidir.` : "."}`,
+    content,
     model: runtimeResult.response.model || ENV.aiModel || "gpt-5-mini",
     provider: runtimeResult.response.provider,
     iterations: runtimeResult.iterations,
@@ -461,9 +453,6 @@ export async function runProjectOrchestrator(
     status: "respondido",
   };
 
-  throw new Error(
-    `O orquestrador atingiu o limite seguro de ${maxIterations} iterações.`
-  );
 }
 
 export { MAX_ITERATIONS, toOpenAiTools };
