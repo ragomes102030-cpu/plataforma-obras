@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
-import { AdminLlmSettings } from "@/components/AdminLlmSettings";
+import { CentralComandoArquimedes } from "@/components/CentralComandoArquimedes";
 import { JanelaAgente } from "@/components/JanelaAgente";
 import { startLogin } from "@/const";
 import { AbaCatalogo } from "@/components/AbaCatalogo";
@@ -286,7 +286,7 @@ export default function Home() {
       )}
 
       {destino === "config" ? (
-        <AdminLlmSettings />
+        <CentralComandoArquimedes />
       ) : destino === "catalogo" ? (
         <AbaCatalogo />
       ) : user === undefined ? (
