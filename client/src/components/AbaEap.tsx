@@ -213,11 +213,12 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       <div className="eap-arvore" role="tree" aria-label="Estrutura da obra">
         <div className="eap-grid-head" aria-hidden="true">
           <span className="eap-grid-canto" />
-          <span className="eap-grid-col eap-col-eap">EAP</span>
-          <span className="eap-grid-col eap-col-servico">SERVIÇO / DESCRIÇÃO</span>
-          <span className="eap-grid-col eap-col-codigo">SEINFRA</span>
-          <span className="eap-grid-col eap-col-unidade">UN.</span>
-          <span className="eap-grid-col eap-col-status">STATUS</span>
+          <span className="eap-grid-col" />
+          <span className="eap-grid-col">EAP</span>
+          <span className="eap-grid-col">SERVIÇO / DESCRIÇÃO</span>
+          <span className="eap-grid-col">SEINFRA</span>
+          <span className="eap-grid-col">UN.</span>
+          <span className="eap-grid-col">STATUS</span>
         </div>
         {filtrada.map(no => (
           <NoDaArvore
