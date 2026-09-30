@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Check, FileText, Maximize2, Minimize2, Pencil, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, Bot, Check, CheckCircle2, FileText, Maximize2, Minimize2, Pencil, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -56,11 +56,11 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
 
   const criarNo = trpc.projects.createWbsNode.useMutation({
-    onSuccess: async () => { setEditor(null); await recarregar(); },
+    onSuccess: async () => { setEditor(null); await recarregar(); await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId }); },
   });
 
   const editarNo = trpc.projects.updateWbsNode.useMutation({
-    onSuccess: async () => { setEditor(null); await recarregar(); },
+    onSuccess: async () => { setEditor(null); await recarregar(); await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId }); },
   });
 
   /**
@@ -83,6 +83,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   // cronograma" — uma viagem de ida e volta para aprender o que a tela podia
   // ter dito.
   const grade = trpc.planning.grade.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const validacao = trpc.projects.validateWbsStructure.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
@@ -226,6 +230,39 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             aria-label="Filtrar a estrutura"
           />
         </label>
+      </div>
+
+      <div className="eap-validacao" role="status" aria-live="polite">
+        <div className="eap-validacao-cabecalho">
+          <div>
+            <strong>Validação da estrutura</strong>
+            <span>
+              {validacao.isPending
+                ? "Analisando cobertura, exclusividade e prontidão…"
+                : validacao.data
+                  ? `${validacao.data.summary.nodes} nós · ${validacao.data.summary.leaves} folhas · ${validacao.data.summary.errors} bloqueios · ${validacao.data.summary.warnings} alertas`
+                  : "Validação indisponível"}
+            </span>
+          </div>
+          {validacao.data?.valid ? (
+            <span className="eap-validacao-ok"><CheckCircle2 size={14} /> Estrutura sem bloqueios</span>
+          ) : validacao.data ? (
+            <span className="eap-validacao-erro"><AlertTriangle size={14} /> Revisão necessária</span>
+          ) : null}
+        </div>
+        {!!validacao.data?.issues.length && (
+          <div className="eap-validacao-lista">
+            {validacao.data.issues.slice(0, 6).map((issue, index) => (
+              <div key={`${issue.code}-${issue.entityRef ?? "obra"}-${index}`} className={`eap-validacao-item eap-validacao-${issue.severity}`}>
+                <span>{issue.severity === "error" ? "BLOQUEIO" : "ATENÇÃO"}</span>
+                <p>{issue.message}</p>
+              </div>
+            ))}
+            {validacao.data.issues.length > 6 && (
+              <small>+ {validacao.data.issues.length - 6} apontamentos. O Arquimedes poderá detalhar os nós afetados.</small>
+            )}
+          </div>
+        )}
       </div>
 
       {editor && (
