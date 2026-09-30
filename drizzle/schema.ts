@@ -1,6 +1,7 @@
 import {
   foreignKey,
   boolean,
+  bytea,
   integer,
   pgEnum,
   pgTable,
@@ -207,6 +208,27 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const projectDocuments = pgTable(
+  "project_documents",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    projectId: integer("projectId").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    ownerUserId: integer("ownerUserId").references(() => users.id),
+    fileName: varchar("fileName", { length: 255 }).notNull(),
+    mimeType: varchar("mimeType", { length: 120 }).notNull(),
+    sizeBytes: integer("sizeBytes").notNull(),
+    content: bytea("content").notNull(),
+    extractedText: text("extractedText"),
+    analysisStatus: varchar("analysisStatus", { length: 32 }).default("pending").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("project_documents_project_idx").on(table.projectId),
+    index("project_documents_project_status_idx").on(table.projectId, table.analysisStatus),
+  ]
+);
 
 export const projectMcpIntegrations = pgTable(
   "project_mcp_integrations",
@@ -1009,6 +1031,8 @@ export const calendarExceptions = pgTable(
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
+export type ProjectDocument = typeof projectDocuments.$inferSelect;
+export type InsertProjectDocument = typeof projectDocuments.$inferInsert;
 export type InsertProject = typeof projects.$inferInsert;
 export type ProjectMcpIntegration = typeof projectMcpIntegrations.$inferSelect;
 export type InsertProjectMcpIntegration =
