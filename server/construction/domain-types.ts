@@ -24,6 +24,7 @@ export type EapEvidenceNode = {
   nodeType: "grupo" | "pacote" | "entrega";
   unit: string | null;
   plannedQuantity: number | string | null;
+  decompositionBasis: string | null;
   sortOrder: number;
 };
 
