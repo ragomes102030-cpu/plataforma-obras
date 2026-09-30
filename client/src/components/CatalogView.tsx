@@ -109,6 +109,22 @@ export function CatalogView() {
     if (!Number.isFinite(value) || value <= 0) return;
     updateComponent.mutate({ componentId: component.id, coefficient: value });
   };
+  const importOfficial0281 = trpc.catalog.importOfficial0281.useMutation({
+    onSuccess: async result => {
+      setImportResult({
+        catalogId: result.catalogId,
+        referencePeriod: result.referencePeriod,
+        imported: result.imported,
+        skipped: result.skipped,
+        referenceHint: result.referenceHint,
+        aviso: result.reused
+          ? "A base oficial 028.1 já estava carregada; nenhum catálogo duplicado foi criado."
+          : "Base oficial da SEINFRA carregada. Ela já pode gerar a EAP com os códigos C....",
+      });
+      await utils.catalog.list.invalidate();
+      setCatalogId(result.catalogId);
+    },
+  });
   const importSheet = trpc.catalog.importPriceSheet.useMutation({
     onSuccess: async result => {
       setImportResult(result);
@@ -188,9 +204,26 @@ export function CatalogView() {
           <label>Período de referência<input value={seinfraPeriod} onChange={event => setSeinfraPeriod(event.target.value)} placeholder="09/2026" required /></label>
           <label>UF<input value={seinfraUf} onChange={event => setSeinfraUf(event.target.value)} placeholder="CE" maxLength={2} /></label>
           <label>Nome do catálogo<input value={seinfraName} onChange={event => setSeinfraName(event.target.value)} placeholder="SEINFRA-CE 09/2026 (opcional)" /></label>
-          <div className="catalog-form-footer"><span>Arquivos aceitos: Tabela de Insumos (I...) e Planos de Serviços (C...) da SEINFRA.</span><button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || importSheet.isPending}><Upload size={14} /> {importSheet.isPending ? "Importando..." : "Importar planilha"}</button></div>
+          <div className="catalog-form-footer">
+            <span>Arquivos aceitos: Tabela de Insumos (I...) e Planos de Serviços (C...) da SEINFRA.</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="outline-button"
+                disabled={importOfficial0281.isPending}
+                onClick={() => importOfficial0281.mutate({ force: false })}
+              >
+                <BookOpen size={14} />
+                {importOfficial0281.isPending ? "Baixando base oficial..." : "Carregar SEINFRA 028.1"}
+              </button>
+              <button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || importSheet.isPending}>
+                <Upload size={14} /> {importSheet.isPending ? "Importando..." : "Importar planilha"}
+              </button>
+            </div>
+          </div>
         </form>
         {importSheet.error && <p className="form-error">{importSheet.error.message}</p>}
+        {importOfficial0281.error && <p className="form-error">{importOfficial0281.error.message}</p>}
         {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span>{importResult.aviso && <span style={{ color: "var(--warn)" }}>{importResult.aviso}</span>}</div></div>}
       </section>
 
