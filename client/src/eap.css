@@ -1096,3 +1096,112 @@
     gap: 6px;
   }
 }
+
+
+/* ------------------------------------------------------ controle EAP */
+.eap-controle {
+  margin: 0 0 14px;
+  border: 1px solid #dfe5ea;
+  border-radius: 6px;
+  background: #fbfcfd;
+  overflow: hidden;
+}
+.eap-controle-cabecalho,
+.eap-baseline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+}
+.eap-controle-cabecalho {
+  border-bottom: 1px solid #e7ebef;
+}
+.eap-controle-cabecalho > div,
+.eap-baseline-info {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.eap-controle-cabecalho strong,
+.eap-baseline strong,
+.eap-parada strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #263440;
+  font-size: 12px;
+}
+.eap-controle-cabecalho span,
+.eap-baseline span,
+.eap-parada span {
+  display: block;
+  color: #6d7883;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.eap-controle-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 14px;
+}
+.eap-controle-card {
+  border: 1px solid #e1e6ea;
+  border-radius: 5px;
+  padding: 9px 10px;
+  background: #fff;
+}
+.eap-controle-card.ok {
+  border-left: 3px solid #3b7f5f;
+}
+.eap-controle-card.atencao {
+  border-left: 3px solid #b27a28;
+}
+.eap-controle-card span,
+.eap-controle-card small {
+  display: block;
+  color: #6d7883;
+  font-size: 10.5px;
+}
+.eap-controle-card strong {
+  display: block;
+  margin: 3px 0;
+  color: #263440;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.eap-parada {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.eap-parada > div {
+  padding: 9px 10px;
+  border-radius: 4px;
+  background: #f2f5f7;
+}
+.eap-baseline {
+  border-top: 1px solid #e7ebef;
+  background: #f7f9fa;
+}
+.eap-baseline-info svg {
+  color: #1f6f8b;
+  flex: 0 0 auto;
+}
+.eap-baseline-info > div {
+  min-width: 0;
+}
+.eap-baseline .eap-btn {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .eap-controle-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eap-parada { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .eap-controle-grid { grid-template-columns: 1fr; }
+  .eap-baseline { align-items: flex-start; flex-direction: column; }
+}
