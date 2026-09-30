@@ -71,7 +71,8 @@ export type ToolDomain =
   | keyof ReturnType<
       typeof import("./integrations/construction-mcps").createConstructionMcpClients
     >
-  | "runtime";
+  | "runtime"
+  | "repository";
 
 export type OrchestratorEvent =
   | { type: "catalog_started" }
