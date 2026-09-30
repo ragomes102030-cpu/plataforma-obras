@@ -11,6 +11,7 @@ import { AbaEap } from "@/components/AbaEap";
 import { AbaProducao } from "@/components/AbaProducao";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
+import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
@@ -66,6 +67,15 @@ export default function Home() {
     (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
+  const criarDemo = trpc.projects.createDemoGantt.useMutation({
+    onSuccess: async created => {
+      await obras.refetch();
+      setObraId(created.projectId);
+      setDestino("obra");
+      setAba("cronograma");
+    },
+  });
+
   const criarObra = trpc.projects.create.useMutation({
     onSuccess: async created => {
       await obras.refetch();
@@ -113,6 +123,15 @@ export default function Home() {
             onClick={() => setNovaObraAberta(true)}
           >
             <Plus size={12} />
+          </button>
+          <button
+            type="button"
+            className="xl-obra-chip xl-demo-obra"
+            disabled={criarDemo.isPending}
+            title="Criar uma obra ilustrativa com Gantt e Linha de Balanço"
+            onClick={() => criarDemo.mutate()}
+          >
+            {criarDemo.isPending ? "Montando…" : "Gantt demo"}
           </button>
         </div>
 
@@ -235,7 +254,13 @@ function Obra({
         {aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "cronograma" ? (
-          <GradeCronograma
+          <>
+            <VisualizacaoPlanejamento
+              linhas={linhas}
+              inicioObra={grade.data?.inicioObra ?? null}
+              hoje={hoje}
+            />
+            <GradeCronograma
             obra={obra}
             projetoId={projetoId}
             calendario={calendario}
@@ -245,6 +270,7 @@ function Obra({
             exemploPorCodigo={exemploPorCodigo}
             aoPedirEap={() => onAba("eap")}
           />
+          </>
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : aba === "dashboard" ? (
