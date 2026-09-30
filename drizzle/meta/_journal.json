@@ -13,6 +13,13 @@
       "when": 1790708681418,
       "tag": "0001_updated_at_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790779376700,
+      "tag": "0002_project_documents",
+      "breakpoints": true
     }
   ],
   "version": "7",
