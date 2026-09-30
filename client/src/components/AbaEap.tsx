@@ -111,6 +111,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     (grade.data?.linhas ?? []).map((l: { codigo: string }) => l.codigo)
   );
   const jaNoCronograma = (codigo: string) => codigosNoCronograma.has(codigo);
+  const nos = (wbs.data ?? []) as No[];
 
   const idsComFilhos = new Set(nos.filter(n => n.parentId !== null).map(n => n.parentId as number));
   const folhasEap = nos.filter(n => !idsComFilhos.has(n.id));
@@ -144,8 +145,6 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       await utils.planning.grade.invalidate({ projectId: projetoId });
     },
   });
-
-  const nos = (wbs.data ?? []) as No[];
 
   // Erro visível das duas ações. Sem isto: clique, nada acontece, silêncio.
   const [erro, setErro] = useState<string | null>(null);
