@@ -34,19 +34,25 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 12px;
+  gap: 10px;
+  padding: 0 10px;
   height: 38px;
+  min-width: 0;
+  overflow: hidden;
   background: #1f6f8b;
   color: #ffffff;
 }
+
+/* A faixa central funciona como uma barra de abas: pode rolar horizontalmente
+   sem empurrar os controles da direita para fora da tela. */
 
 .xl-titlebar-marca {
   display: flex;
   align-items: center;
   gap: 7px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 32vw;
 }
 
 .xl-titlebar-marca strong {
@@ -68,15 +74,23 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  max-width: none;
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.35) transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
 }
 
-.xl-titlebar-obras::-webkit-scrollbar {
-  display: none;
-}
+.xl-titlebar-obras:active { cursor: grabbing; }
+.xl-titlebar-obras::-webkit-scrollbar { height: 4px; }
+.xl-titlebar-obras::-webkit-scrollbar-track { background: transparent; }
+.xl-titlebar-obras::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 999px; }
 
 .xl-obra-chip {
   appearance: none;
@@ -112,6 +126,7 @@
 
 .xl-titlebar-fim {
   flex: 0 0 auto;
+  min-width: max-content;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1502,4 +1517,12 @@ tr:hover .xl-codigo {
   .eap-editor-campos { grid-template-columns: 1fr; }
   .eap-topo-acoes { width: 100%; }
   .eap-busca-wrap { flex-basis: 100%; }
+}
+
+
+@media (max-width: 760px) {
+  .xl-titlebar { gap: 6px; padding: 0 7px; }
+  .xl-titlebar-marca { max-width: 30vw; }
+  .xl-titlebar-marca strong { max-width: 120px; }
+  .xl-titlebar-fim .xl-tb-btn:not(.ativo) { padding-inline: 5px; }
 }
