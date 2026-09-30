@@ -930,6 +930,50 @@ export const agentMemories = pgTable(
   ]
 );
 
+export const arquimedesCapabilities = pgTable(
+  "arquimedes_capabilities",
+  {
+    id: varchar("id", { length: 120 }).primaryKey(),
+    kind: varchar("kind", { length: 32 }).notNull(),
+    name: varchar("name", { length: 180 }).notNull(),
+    version: varchar("version", { length: 40 }).notNull(),
+    domain: varchar("domain", { length: 120 }).notNull(),
+    description: text("description").notNull(),
+    status: varchar("status", { length: 24 }).default("available").notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    removable: boolean("removable").default(true).notNull(),
+    dependenciesJson: text("dependenciesJson").notNull().default("[]"),
+    installedBy: integer("installedBy").references(() => users.id),
+    installedAt: timestamp("installedAt", { withTimezone: true }),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("arquimedes_capabilities_status_idx").on(table.status),
+    index("arquimedes_capabilities_kind_idx").on(table.kind),
+  ]
+);
+
+export const arquimedesCapabilityEvents = pgTable(
+  "arquimedes_capability_events",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    capabilityId: varchar("capabilityId", { length: 120 })
+      .notNull()
+      .references(() => arquimedesCapabilities.id, { onDelete: "cascade" }),
+    userId: integer("userId").references(() => users.id),
+    action: varchar("action", { length: 40 }).notNull(),
+    fromStatus: varchar("fromStatus", { length: 40 }),
+    toStatus: varchar("toStatus", { length: 40 }),
+    detail: text("detail"),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("arquimedes_capability_events_capability_idx").on(table.capabilityId, table.createdAt),
+    index("arquimedes_capability_events_user_idx").on(table.userId, table.createdAt),
+  ]
+);
+
 export const agentRuns = pgTable(
   "agent_runs",
   {
@@ -1069,6 +1113,8 @@ export type AgentFinding = typeof agentFindings.$inferSelect;
 export type InsertAgentFinding = typeof agentFindings.$inferInsert;
 export type AgentMemory = typeof agentMemories.$inferSelect;
 export type InsertAgentMemory = typeof agentMemories.$inferInsert;
+export type ArquimedesCapability = typeof arquimedesCapabilities.$inferSelect;
+export type ArquimedesCapabilityEvent = typeof arquimedesCapabilityEvents.$inferSelect;
 export type AgentRun = typeof agentRuns.$inferSelect;
 export type InsertAgentRun = typeof agentRuns.$inferInsert;
 export type AgentRunEvent = typeof agentRunEvents.$inferSelect;
