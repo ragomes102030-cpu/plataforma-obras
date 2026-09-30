@@ -30,6 +30,14 @@ type No = {
   parentId: number | null;
   externalId: string | null;
   unit: string | null;
+  plannedQuantity: string | null;
+  description: string | null;
+  inclusions: string | null;
+  exclusions: string | null;
+  location: string | null;
+  responsible: string | null;
+  acceptanceCriteria: string | null;
+  scopeStatus: string;
   sortOrder: number;
 };
 
@@ -286,6 +294,12 @@ type DadosEditorEap = {
   nodeType: "grupo" | "pacote" | "entrega";
   unit?: string;
   plannedQuantity?: number;
+  description?: string;
+  inclusions?: string;
+  exclusions?: string;
+  location?: string;
+  responsible?: string;
+  acceptanceCriteria?: string;
 };
 
 /** Monta a hierarquia a partir de `parentId`. Sem recursão sobre o código. */
@@ -462,6 +476,12 @@ function EditorEapPanel({
   );
   const [unit, setUnit] = useState(atual?.unit ?? "");
   const [quantity, setQuantity] = useState(atual?.plannedQuantity == null ? "" : String(atual.plannedQuantity));
+  const [description, setDescription] = useState(atual?.description ?? "");
+  const [inclusions, setInclusions] = useState(atual?.inclusions ?? "");
+  const [exclusions, setExclusions] = useState(atual?.exclusions ?? "");
+  const [location, setLocation] = useState(atual?.location ?? "");
+  const [responsible, setResponsible] = useState(atual?.responsible ?? "");
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState(atual?.acceptanceCriteria ?? "");
 
   const salvar = () => {
     const nome = name.trim();
@@ -471,6 +491,12 @@ function EditorEapPanel({
       nodeType,
       unit: unit.trim() || undefined,
       plannedQuantity: quantity.trim() ? Number(quantity) : undefined,
+      description: description.trim() || undefined,
+      inclusions: inclusions.trim() || undefined,
+      exclusions: exclusions.trim() || undefined,
+      location: location.trim() || undefined,
+      responsible: responsible.trim() || undefined,
+      acceptanceCriteria: acceptanceCriteria.trim() || undefined,
     };
     if (editor.mode === "create") onCreate(dados);
     else onUpdate(dados);
@@ -506,8 +532,14 @@ function EditorEapPanel({
         </label>
         <label>
           <span>Quantidade planejada</span>
-          <input type="number" min="0" step="1" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Opcional" />
+          <input type="number" min="0" step="0.001" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Opcional" />
         </label>
+        <label><span>Localização</span><input value={location} onChange={e => setLocation(e.target.value)} maxLength={180} placeholder="ex.: Torre A · pavimento 04" /></label>
+        <label><span>Responsável</span><input value={responsible} onChange={e => setResponsible(e.target.value)} maxLength={180} placeholder="Responsável pelo pacote" /></label>
+        <label><span>Descrição / escopo</span><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={5000} rows={3} /></label>
+        <label><span>Inclusões</span><textarea value={inclusions} onChange={e => setInclusions(e.target.value)} maxLength={5000} rows={2} /></label>
+        <label><span>Exclusões</span><textarea value={exclusions} onChange={e => setExclusions(e.target.value)} maxLength={5000} rows={2} /></label>
+        <label><span>Critério de aceitação</span><textarea value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} maxLength={5000} rows={2} /></label>
         <div className="eap-editor-acoes">
           <button type="button" className="eap-btn-secundario" onClick={onCancel} disabled={busy}><X size={13} /> Cancelar</button>
           <button type="button" className="eap-btn" onClick={salvar} disabled={busy || !name.trim()}><Check size={13} /> {busy ? "Salvando…" : "Salvar"}</button>
