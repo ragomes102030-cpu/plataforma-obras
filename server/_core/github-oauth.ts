@@ -104,6 +104,10 @@ function describeFailure(stage: OAuthStage): { code: string; message: string } {
 }
 
 export function registerGitHubOAuthRoutes(app: Express) {
+  app.get("/api/auth/logout", (req: Request, res: Response) => {
+    res.clearCookie("app_session_id", getSessionCookieOptions(req));
+    res.redirect(302, "/");
+  });
   app.get("/api/auth/github", (req: Request, res: Response) => {
     try {
       const { clientId } = requireConfig();
