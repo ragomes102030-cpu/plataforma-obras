@@ -31,6 +31,8 @@ import { describe, expect, it } from "vitest";
 const HOME = readFileSync("client/src/pages/Home.tsx", "utf-8");
 const APP = readFileSync("client/src/App.tsx", "utf-8");
 const CONST = readFileSync("client/src/const.ts", "utf-8");
+const COMPONENTE = readFileSync("client/src/components/JanelaAgente.tsx", "utf-8");
+const CSS = readFileSync("client/src/planilha.css", "utf-8");
 
 describe("a tela inicial não pode ficar esperando para sempre", () => {
   it("o ramo sem sessao esta LIGADO na arvore, e nao so declarado", () => {
@@ -93,6 +95,43 @@ describe("a tela inicial não pode ficar esperando para sempre", () => {
     // e a rota que o servidor registra; qualquer outro valor devolve a SPA de
     // novo e parece que o clique nao fez nada.
     expect(CONST).toMatch(/location\.href\s*=\s*"\/api\/auth\/github"/);
+  });
+
+  it("a janela do agente esta MONTADA, e nao so escrita no disco", () => {
+    // O `JanelaAgente` existia ha semanas: completo, com os seis estados
+    // terminais e o polling de `agent.status`, e nenhuma suite o montava nem o
+    // `Home` o renderizava. Codigo orfao nao e codigo em andamento, e um
+    // componente sem montagem custa o mesmo que nao existir — com a diferenca
+    // de que parece pronto.
+    expect(
+      /<JanelaAgente/.test(HOME),
+      "o JanelaAgente existe mas ninguem o renderiza: e codigo morto"
+    ).toBe(true);
+  });
+
+  it("a janela do agente recebe a obra e a aba, e nao um palpite", () => {
+    // O agente responde sobre a obra que esta aberta. Sem `projetoId` ele fala
+    // de outra, e sem `abaAtual` perde a unica informacao que o modelo nao
+    // tem — qual aba a pessoa esta olhando.
+    expect(HOME).toMatch(/<JanelaAgente[^>]*projetoId=\{projetoId\}/);
+    expect(HOME).toMatch(/<JanelaAgente[^>]*abaAtual=\{aba\}/);
+  });
+
+  it("toda classe que a janela usa tem estilo", () => {
+    // Ja aconteceu: o componente existia, o CSS nao. A janela aparecia sem
+    // estilo nenhum, e o sintoma nao era "faltou um CSS" — era "faltou tudo",
+    // sem ninguem dizer o que.
+    const usadas = [
+      ...new Set(
+        (COMPONENTE.match(/janela-agente[a-z-]*|janela-msg-[a-z-]*/g) ?? []).filter(
+          c => c !== "janela-msg-"
+        )
+      ),
+    ];
+    const semEstilo = usadas.filter(
+      classe => !new RegExp("\\." + classe + "\\b").test(CSS)
+    );
+    expect(semEstilo, "classes sem estilo: " + semEstilo.join(", ")).toEqual([]);
   });
 
   it("o App nao esconde a Home atras de um gate que nao existe", () => {

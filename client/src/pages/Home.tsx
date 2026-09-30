@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
+import { JanelaAgente } from "@/components/JanelaAgente";
 import { startLogin } from "@/const";
 import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
@@ -146,7 +147,16 @@ export default function Home() {
       ) : !projetoId ? (
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
-        <Obra projetoId={projetoId} obra={obra!.name} aba={aba} onAba={setAba} />
+        <>
+          <Obra projetoId={projetoId} obra={obra!.name} aba={aba} onAba={setAba} />
+          {/*
+            O agente é janela flutuante sobre as abas, e não uma sétima aba: a
+            pergunta "como está a minha obra?" não pode ser mais um lugar para
+            ir. Ele recebe `aba` para saber o que está aberto, que é informação
+            que só o dono da tela tem.
+          */}
+          <JanelaAgente projetoId={projetoId} obra={obra!.name} abaAtual={aba} />
+        </>
       )}
     </div>
   );
