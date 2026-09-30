@@ -3518,6 +3518,92 @@
 }
 
 
+.admin-llm-rotation {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px 4px;
+}
+.admin-llm-provider {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #dfe8eb;
+  border-radius: 10px;
+  background: var(--card);
+}
+.admin-llm-provider.is-disabled {
+  opacity: .55;
+}
+.admin-llm-order {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 3px;
+  color: #8da0a7;
+  font-size: 10px;
+}
+.admin-llm-main {
+  min-width: 0;
+}
+.admin-llm-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #46616b;
+}
+.admin-llm-title strong {
+  font-size: 13px;
+}
+.admin-llm-badge {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #edf6f2;
+  color: #4c7b69;
+  font-size: 8px;
+  font-weight: 800;
+}
+.admin-llm-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px !important;
+  margin-left: auto;
+  color: #7c8d94 !important;
+  font-size: 9px !important;
+}
+.admin-llm-toggle input {
+  width: auto !important;
+  min-height: 0 !important;
+}
+.admin-llm-fields {
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr);
+  padding: 0;
+  gap: 10px;
+}
+.admin-llm-key {
+  grid-column: 1 / -1;
+}
+.admin-llm-reorder {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+}
+.admin-llm-reorder button {
+  border: 1px solid #dce6e9;
+  border-radius: 6px;
+  background: #f8fafb;
+  color: #6e838c;
+  padding: 5px 8px;
+  font-size: 9px;
+  cursor: pointer;
+}
+.admin-llm-reorder button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
 .lob-legend {
   display: grid;
   gap: 7px;
