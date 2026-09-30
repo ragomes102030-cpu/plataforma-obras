@@ -85,7 +85,7 @@ export function validateEapScope(
 
   const clauses = (value: string | null | undefined) =>
     String(value ?? "")
-      .split(/[\\n;,]+/)
+      .split(/[\n;,]+/)
       .map(item => normalized(item))
       .filter(Boolean);
 
