@@ -413,7 +413,6 @@ export async function runProjectOrchestrator(
     ? classifyArquimedesIntent(lastUserMessage.content)
     : "consulta";
   if (intent === "casual" && lastUserMessage) {
-    await emit({ type: "response_parsed" });
     return {
       taskId,
       content: casualResponse(lastUserMessage.content),
