@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
 import { AdminLlmSettings } from "@/components/AdminLlmSettings";
+import { startLogin } from "@/const";
 import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
 import { AbaProducao } from "@/components/AbaProducao";
@@ -52,7 +53,13 @@ export default function Home() {
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
   // dos dois formatos: só precisa do id, do nome e do código para a barra de
   // título.
-  const obras = trpc.projects.list.useQuery(undefined, { enabled: Boolean(user) });
+  // A consulta so parte com sessao CONFIRMADA. `user === null` e ausencia, e
+  // pedir a lista nesse estado só produziria um 401 que o painel leria como obra
+  // vazia.
+  const obras = trpc.projects.list.useQuery(undefined, {
+    enabled: Boolean(user),
+    retry: false,
+  });
   const lista: Array<{ id: number; name: string; code: string }> =
     (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
@@ -130,6 +137,12 @@ export default function Home() {
         <AdminLlmSettings />
       ) : destino === "catalogo" ? (
         <AbaCatalogo />
+      ) : user === undefined ? (
+        // A sessão ainda está sendo lida. `undefined` é espera; `null` é
+        // ausência. Confundir os dois é o que prendia a tela.
+        <SemSessao carregando />
+      ) : !user ? (
+        <SemSessao carregando={false} />
       ) : !projetoId ? (
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
@@ -248,6 +261,43 @@ function AbaVazia({ titulo, falta }: { titulo: string; falta: string }) {
         A aba não desenha tela vazia que pareça funcionando. O que falta está
         escrito acima porque é o caminho, não um prazo.
       </p>
+    </div>
+  );
+}
+
+/**
+ * A tela de entrada. É o ramo que faltava.
+ *
+ * Sem sessão, `projects.list` roda com `enabled: false` e o React Query marca
+ * a query como `pending` para sempre — não "carregando", "nunca vai carregar".
+ * A tela lia esse `isPending` e escrevia "Carregando as obras…" para sempre, sem
+ * botão, sem erro e sem nenhuma requisição na rede. O usuário via uma página
+ * que parecia trabalhar e não tinha caminho nenhum.
+ *
+ * Aqui a espera é de `user`, que é o que realmente decide se a consulta pode
+ * partir. Enquanto `user` é `undefined` a sessão está sendo lida; quando é
+ * `null`, não há sessão, e isso é um estado, não uma espera.
+ */
+function SemSessao({ carregando }: { carregando: boolean }) {
+  return (
+    <div className="xl-area">
+      <div className="xl-vazia-folha">
+        <h3>{carregando ? "Lendo a sessão…" : "Entre para ver as obras"}</h3>
+        {!carregando && (
+          <>
+            <p className="xl-vazia-falta">
+              As obras são da sua conta. O acesso é pelo GitHub.
+            </p>
+            <button
+              type="button"
+              className="xl-btn-entrar"
+              onClick={startLogin}
+            >
+              Entrar com GitHub
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

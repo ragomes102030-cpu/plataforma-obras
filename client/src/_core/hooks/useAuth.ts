@@ -51,12 +51,29 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    // `JSON.stringify(undefined)` devolve `undefined`, e o `setItem` grava a
+    // palavra "undefined" como texto. A tela lia esse valor depois e achava que
+    // era um usuário. Não é um detalhe: é um dado falso em disco.
+    try {
+      localStorage.setItem(
+        "manus-runtime-user-info",
+        JSON.stringify(meQuery.data ?? null)
+      );
+    } catch {
+      // Armazenamento indisponivel (abao privada, cota cheia). Nao e motivo
+      // para derrubar a tela: o usuario segue autenticado pela sessao.
+    }
     return {
-      user: meQuery.data ?? null,
+      /**
+       * `undefined` enquanto a sessao e lida, `null` quando nao ha sessao.
+       *
+       * Antes este campo era `meQuery.data ?? null`, que transformava as duas
+       * coisas numa so. A tela dependia dessa distincao: com `null` para
+       * ambos, nao havia como dizer "ainda nao sei" de "nao ha sessao", e o
+       * ramo de espera ficava escrevendo "carregando" sobre um estado que nao
+       * ia mudar. Quem consome `user` tem de ver os tres estados.
+       */
+      user: meQuery.data,
       loading: meQuery.isLoading || logoutMutation.isPending,
       error: meQuery.error ?? logoutMutation.error ?? null,
       isAuthenticated: Boolean(meQuery.data),
@@ -72,7 +89,10 @@ export function useAuth(options?: UseAuthOptions) {
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
-    if (state.user) return;
+    // `user === undefined` ainda esta sendo lido. Redirecionar aqui jogaria a
+    // pessoa para o GitHub antes de a resposta do servidor chegar, e ela
+    // voltaria para um login que ela ja tem. Ausencia e `null`, nao falsy.
+    if (state.user !== null) return;
     if (typeof window === "undefined") return;
     if (redirectPath && window.location.pathname === redirectPath) return;
 
