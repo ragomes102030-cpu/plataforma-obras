@@ -37,18 +37,33 @@ export type AbaDoSistema = {
 
 export const ABAS: readonly AbaDoSistema[] = [
   {
+    id: "dashboard",
+    rotulo: "DASHBOARD",
+    status: "pronta",
+  },
+  {
     id: "eap",
     rotulo: "EAP",
     status: "pronta",
   },
   {
-    id: "cronograma",
-    rotulo: "CRONOGRAMA",
+    id: "atividades",
+    rotulo: "ATIVIDADES",
     status: "pronta",
   },
   {
-    id: "dashboard",
-    rotulo: "DASHBOARD",
+    id: "gantt",
+    rotulo: "GANTT",
+    status: "pronta",
+  },
+  {
+    id: "linha-balanco",
+    rotulo: "LINHA DE BALANÇO",
+    status: "pronta",
+  },
+  {
+    id: "producao",
+    rotulo: "CONTROLE",
     status: "pronta",
   },
   {
@@ -56,33 +71,28 @@ export const ABAS: readonly AbaDoSistema[] = [
     rotulo: "SUPRIMENTOS",
     status: "pendente",
     falta:
-      "Material tem prazo antes de existir na obra: requisição, aprovação, fabricação, inspeção, expedição, entrega. O CPM de hoje só sabe que o material chegou. Falta a tabela de marcos de fornecimento e a way de ligá-los ao cronograma.",
-  },
-  {
-    id: "producao",
-    rotulo: "PRODUÇÃO",
-    status: "pronta",
+      "Material tem prazo antes de existir na obra: requisição, aprovação, fabricação, inspeção, expedição, entrega. Falta ligar marcos de fornecimento ao planejamento.",
   },
   {
     id: "financeiro",
     rotulo: "FINANCEIRO",
     status: "pendente",
     falta:
-      "Medição, faturamento e pagamento são três coisas distintas e hoje são uma só. Falta o valor do contrato gravado na obra e a separação entre o que foi medido, o que foi cobrado e o que entrou.",
+      "Medição, faturamento e pagamento são três coisas distintas. Falta a estrutura financeira da obra para comparar planejado, medido, faturado e pago.",
   },
   {
     id: "riscos",
     rotulo: "RISCOS",
     status: "pendente",
     falta:
-      "Registro de risco com responsável, probabilidade, impacto e plano de resposta, e o efeito de cada risco no prazo. Não existe nenhuma tabela de risco no banco.",
+      "Registro de risco com responsável, probabilidade, impacto e plano de resposta, e o efeito de cada risco no prazo.",
   },
   {
     id: "curva-s",
     rotulo: "CURVA S",
     status: "pendente",
     falta:
-      "A curva física e a financeira, comparando planejado e realizado. O motor já devolve o agregado ponderado por quantidade; falta a série histórica e a linha de base para comparar.",
+      "A curva física e a financeira dependem de série histórica e linha de base para comparar planejado e realizado.",
   },
 ];
 
