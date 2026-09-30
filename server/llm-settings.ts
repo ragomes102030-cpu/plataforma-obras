@@ -65,7 +65,7 @@ function decryptConfig(payload: string): StoredLlmProvider | null {
 
 export async function getStoredLlmProviders(): Promise<StoredLlmProvider[]> {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) return [];
   const rows = await db
     .select()
     .from(llmProviderSettings)
@@ -90,21 +90,18 @@ export async function saveStoredLlmProviders(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados não configurado.");
+  const encryptedConfig = encryptConfig(configs);
   await db
     .insert(llmProviderSettings)
     .values({
       id: SETTINGS_ID,
-      encryptedConfig: encryptConfig(config),
+      encryptedConfig,
       updatedBy: userId,
     })
-    // `onDuplicateKeyUpdate` e MySQL. No PostgreSQL e `onConflictDoUpdate`, e a
-    // coluna de conflito e obrigatoria: o banco nao adivinha qual unicidade o
-    // INSERT pretendia. Aqui e a chave primaria, que e o que o `id: SETTINGS_ID`
-    // logo acima esta affirmando ao fazer o INSERT.
     .onConflictDoUpdate({
       target: llmProviderSettings.id,
       set: {
-        encryptedConfig: encryptConfig(config),
+        encryptedConfig,
         updatedBy: userId,
       },
     });
@@ -113,7 +110,7 @@ export async function saveStoredLlmProviders(
 export async function getPublicLlmSettings() {
   const db = await getDb();
   if (!db) {
-    return { configured: false, provider: null, baseUrl: null, model: null, updatedAt: null };
+    return { configured: false, provider: null, baseUrl: null, model: null, providers: [], updatedAt: null };
   }
   const rows = await db
     .select({ encryptedConfig: llmProviderSettings.encryptedConfig, updatedAt: llmProviderSettings.updatedAt })
@@ -124,12 +121,12 @@ export async function getPublicLlmSettings() {
   const config = row ? decryptConfig(row.encryptedConfig) : null;
   const providers = config ? (Array.isArray(config) ? config : [config]) : [];
   return {
-    configured: Boolean(config),
-    provider: config?.provider ?? null,
-    baseUrl: config?.baseUrl ?? null,
-    model: config?.model ?? null,
+    configured: providers.length > 0,
+    provider: providers[0]?.provider ?? null,
+    baseUrl: providers[0]?.baseUrl ?? null,
+    model: providers[0]?.model ?? null,
+    providers: providers.map(({ apiKey: _apiKey, ...provider }) => provider),
     updatedAt: row?.updatedAt ?? null,
   };
 }
-
 export type { StoredLlmProvider };
