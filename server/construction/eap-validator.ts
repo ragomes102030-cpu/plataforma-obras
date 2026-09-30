@@ -34,9 +34,9 @@ export function validateEapScope(
   const normalized = (value: string) =>
     value
       .normalize("NFD")
-      .replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
 
   for (const node of nodes) {
