@@ -131,7 +131,11 @@ export async function semearEapDoCatalogo(
   const fonte = opcoes.fonte ?? "SEINFRA";
 
   const [projeto] = await db
-    .select({ baseReferenciaRef: projects.baseReferenciaRef })
+    .select({
+      name: projects.name,
+      descricao: projects.descricao,
+      baseReferenciaRef: projects.baseReferenciaRef,
+    })
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
@@ -223,45 +227,59 @@ export async function semearEapDoCatalogo(
     };
   }
 
-  // Insere em duas passadas: primeiro os grupos, para ter o id do pai antes de
-  // gravar as folhas (o pai é NOT NULL e referenciado).
-  const idPorCodigo = new Map<string, number>();
-  for (const no of gerado.nos.filter(n => n.level === 1)) {
-    const [row] = await db
-      .insert(wbsNodes)
-      .values({
-        projectId,
-        code: no.code,
-        name: no.name,
-        level: no.level,
-        nodeType: no.nodeType,
-        parentId: null,
-        sortOrder: no.sortOrder,
-      })
-      .$returningIds();
-    idPorCodigo.set(no.code, row);
-  }
+  // A EAP profissional tem uma única raiz. O motor do catálogo devolve
+  // categorias como níveis de primeira ordem; aqui elas entram abaixo da raiz
+  // da obra para que a árvore seja 100% hierárquica e compatível com CPM,
+  // orçamento e versões da EAP.
+  const [raiz] = await db
+    .insert(wbsNodes)
+    .values({
+      projectId,
+      code: "1",
+      name: projeto?.name?.trim() || "Escopo da obra",
+      description: projeto?.descricao?.trim() || "Escopo consolidado da obra.",
+      inclusions: "Todo o escopo contratado e necessário para entregar a obra.",
+      exclusions: "Trabalhos não pertencentes ao escopo contratado.",
+      level: 1,
+      nodeType: "grupo",
+      parentId: null,
+      decompositionBasis: "project",
+      scopeStatus: "rascunho",
+      sortOrder: 0,
+    })
+    .$returningIds();
 
-  for (const no of gerado.nos.filter(n => n.level > 1)) {
-    const codigoPai = no.code.split(".").slice(0, -1).join(".");
-    const parentId = idPorCodigo.get(codigoPai);
-    if (!parentId) continue; // pai ausente: melhor perder a folha que gravar órfã
+  const idPorCodigo = new Map<string, number>([["1", raiz]]);
+
+  // Os códigos gerados pelo motor são relativos ao nível de categoria. Como
+  // existe uma nova raiz, todos os códigos descendentes recebem o prefixo 1.
+  for (const no of gerado.nos) {
+    const codigoOriginal = no.code;
+    const codigo = `1.${codigoOriginal}`;
+    const codigoPaiOriginal = codigoOriginal.split(".").slice(0, -1).join(".");
+    const parentCode = codigoPaiOriginal ? `1.${codigoPaiOriginal}` : "1";
+    const parentId = idPorCodigo.get(parentCode);
+    if (!parentId) continue;
+
     const [row] = await db
       .insert(wbsNodes)
       .values({
         projectId,
-        code: no.code,
+        code: codigo,
         name: no.name,
-        level: no.level,
+        level: no.level + 1,
         nodeType: no.nodeType,
         parentId,
-        // O código oficial do serviço. É isto que amarra o orçamento à EAP.
         externalId: no.externalId,
         unit: no.unit,
+        decompositionBasis: no.level === 1 ? "system" : "deliverable",
         sortOrder: no.sortOrder,
       })
       .$returningIds();
-    idPorCodigo.set(no.code, row);
+
+    idPorCodigo.set(codigo, row);
+    // A chave original continua útil para localizar as folhas no orçamento.
+    idPorCodigo.set(codigoOriginal, row);
   }
 
   // O orçamento nasce junto da EAP, folha a folha: mesmo código oficial,
@@ -305,7 +323,7 @@ export async function semearEapDoCatalogo(
       .values(
         folhas.map(no => ({
           budgetVersionId: versao,
-          wbsNodeId: idPorCodigo.get(no.code) ?? null,
+          wbsNodeId: idPorCodigo.get(`1.${no.code}`) ?? null,
           code: no.externalId!,
           description: no.name,
           unit: no.unit ?? "un",
@@ -342,7 +360,7 @@ export async function semearEapDoCatalogo(
   // serviço, e a versão de orçamento com o preço. O cronograma começa vazio
   // e é preenchido na aba CRONOGRAMA.
   return {
-    nosCriados: gerado.nos.length,
+    nosCriados: gerado.nos.length + 1,
     servicosUsados: gerado.servicosUsados,
     servicosSemGrupo: gerado.servicosSemGrupo,
     gruposVazios: gerado.gruposVazios,
