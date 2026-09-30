@@ -152,7 +152,9 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   const expandirTudo = () => setAberto(new Set(nos.filter(n => n.nodeType !== "entrega").map(n => n.id)));
   const recolherTudo = () => setAberto(new Set());
+  const analisarComArquimedes = trpc.projects.analisarEapComArquimedes.useMutation();
   const abrirAgente = () => window.dispatchEvent(new CustomEvent("abrir-agente-eap"));
+
 
   if (wbs.isPending) {
     return <div className="xl-vazia-folha"><h3>Carregando a estrutura…</h3></div>;
@@ -180,7 +182,14 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <button type="button" className="eap-tool-btn" onClick={recolherTudo}><Minimize2 size={14} /> Recolher</button>
           <button type="button" className="eap-tool-btn" onClick={expandirTudo}><Maximize2 size={14} /> Expandir</button>
           <button type="button" className="eap-tool-btn" onClick={() => setEditor({ mode: "create", parentId: null })}><Plus size={14} /> Novo nível</button>
-          <button type="button" className="eap-tool-btn eap-tool-agent" onClick={abrirAgente}><Bot size={14} /> Analisar com agente</button>
+          <button
+            type="button"
+            className="eap-tool-btn eap-tool-agent"
+            disabled={analisarComArquimedes.isPending}
+            onClick={() => analisarComArquimedes.mutate({ projectId: projetoId })}
+          >
+            <Bot size={14} /> {analisarComArquimedes.isPending ? "Arquimedes analisando…" : "Analisar com Arquimedes"}
+          </button>
         </div>
       </div>
       {erro && (
@@ -190,6 +199,35 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             fechar
           </button>
         </div>
+      )}
+
+      {analisarComArquimedes.data && (
+        <div className="eap-validacao" role="status" aria-live="polite">
+          <div className="eap-validacao-cabecalho">
+            <div>
+              <strong>Arquimedes · revisão da EAP</strong>
+              <span>{analisarComArquimedes.data.proposal.nodes.length} proposta(s) · {analisarComArquimedes.data.proposal.missingInformation.length} informação(ões) pendente(s)</span>
+            </div>
+            <span className="eap-validacao-ok"><Bot size={14} /> Proposta não aplicada</span>
+          </div>
+          {analisarComArquimedes.data.proposal.basis.length > 0 && (
+            <div className="eap-validacao-lista">
+              <div className="eap-validacao-item eap-validacao-warning"><span>BASE</span><p>{analisarComArquimedes.data.proposal.basis.join(" · ")}</p></div>
+            </div>
+          )}
+          {analisarComArquimedes.data.proposal.nodes.slice(0, 8).map((item, index) => (
+            <div key={index} className="eap-validacao-item eap-validacao-warning">
+              <span>{item.operation.toUpperCase()}</span>
+              <p><strong>{item.parentCode ? item.parentCode + " · " : ""}{item.name}</strong> — {item.rationale}</p>
+            </div>
+          ))}
+          {analisarComArquimedes.data.proposal.missingInformation.length > 0 && (
+            <small>Faltam dados: {analisarComArquimedes.data.proposal.missingInformation.join(" · ")}</small>
+          )}
+        </div>
+      )}
+      {analisarComArquimedes.error && (
+        <div className="xl-aviso-erro" role="alert">Arquimedes: {analisarComArquimedes.error.message}</div>
       )}
 
       <div className="eap-topo">
