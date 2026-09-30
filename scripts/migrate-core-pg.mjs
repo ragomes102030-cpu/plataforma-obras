@@ -260,6 +260,53 @@ export function criarVerificador(conn) {
  * @param jaAplicado último `created_at` registrado, ou null se nenhuma
  * @returns o que foi aplicado, statement a statement
  */
+/**
+ * Executa UMA migration, pulando o que o catálogo já contém.
+ *
+ * Chamada por `aplicarMigracoes` duas vezes, e a segunda é o que conserta o
+ * estado do Render:
+ *
+ *   1. do zero, ou o que ainda não foi aplicado;
+ *   2. de novo, quando a conferência disse que algum DDL declarado não está no
+ *      banco. O verificador por statement pula o que existe e executa só o que
+ *      falta.
+ *
+ * Por que a segunda passada é separada e não um `IF NOT EXISTS` em todo DDL:
+ * `CREATE TYPE` e `CREATE TABLE` do PostgreSQL aceitam `IF NOT EXISTS`, mas
+ * `CREATE INDEX` e `CREATE TRIGGER` do drizzle-kit não o recebem, e o
+ * `CREATE TYPE "users_role" AS ENUM (...)` que já está no banco não pode ser
+ * reescrito sem `DROP TYPE` — que derrubaria as colunas que o usam. Reescrever
+ * o DDL para torná-lo idempotente é mudar a migration, e migration aplicada é
+ * lei.
+ *
+ * O verificador por statement é a idempotência, e ele funciona porque cada
+ *statement conhece o objeto que cria. Foi a única forma de reaplicar sem tocar
+ * nas migrations.
+ */
+async function executarMigration(conn, m, jaExiste, log) {
+  const executados = [];
+  const pulados = [];
+
+  for (const stmt of m.sql) {
+    const limpo = semComentarios(stmt);
+    if (!limpo) continue;
+
+    const alvo = alvoDoStatement(limpo);
+    if (alvo && (await jaExiste(alvo))) {
+      pulados.push(alvo);
+      log(
+        `[migrate]   ja aplicado, pulado: ${alvo.tipo} "${alvo.nome ?? alvo.tabela}"` +
+          (alvo.tabela ? ` em "${alvo.tabela}"` : "")
+      );
+      continue;
+    }
+    await conn.query(limpo);
+    executados.push(limpo);
+  }
+
+  return { executados, pulados };
+}
+
 export async function aplicarMigracoes({
   conn,
   migrations,
@@ -304,21 +351,8 @@ export async function aplicarMigracoes({
   const relatorio = [];
 
   for (const m of aAplicar) {
-    const executados = [];
-    const pulados = [];
-    for (const stmt of m.sql) {
-      if (!stmt.trim()) continue;
-      const alvo = alvoDoStatement(stmt);
-      if (alvo && (await jaExiste(alvo))) {
-        pulados.push(alvo);
-        log(
-          `[migrate]   ja aplicado, pulado: ${alvo.tipo} "${alvo.nome ?? alvo.tabela}" em "${alvo.tabela}"`
-        );
-        continue;
-      }
-      await conn.query(stmt);
-      executados.push(stmt);
-    }
+    const { executados, pulados } = await executarMigration(conn, m, jaExiste, log);
+
     // Registrar de novo so faz sentido para migration que NAO estava registrada.
     // Reaplicar uma ja registrada (o caminho do `reaplicarMarcadas`) deixaria
     // um registro duplicado, e a contagem do journal passaria a mentir sobre

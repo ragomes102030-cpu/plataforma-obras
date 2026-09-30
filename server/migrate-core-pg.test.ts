@@ -419,6 +419,23 @@ describe("aplicarMigracoes num banco vazio", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
       );
       expect(depois.rows[0]!.n).toBe(23);
+
+      // E o que o Render derrubou duas vezes: ao reaplicar a 0000 inteira, o
+      // `CREATE TYPE "users_role"` que JA EXISTIA rodava de novo e o banco
+      // recusava com `42710 type "users_role" already exists`.
+      //
+      // A reaplicacao passa pelo verificador por statement, que pula o que o
+      // catalogo tem. Se um `CREATE TYPE` escapar desse pulo, este teste quebra
+      // aqui — e o servico fica no ar.
+      const enums = await pg.query<{ n: number }>(
+        "SELECT COUNT(*)::int AS n FROM pg_type WHERE typtype = 'e'"
+      );
+      expect(enums.rows[0]!.n).toBe(32);
+
+      const registros = await pg.query<{ n: number }>(
+        'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
+      );
+      expect(registros.rows[0]!.n, "registro duplicado no journal").toBe(2);
     } finally {
       await pg.close();
     }
