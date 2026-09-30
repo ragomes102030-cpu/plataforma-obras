@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -50,7 +50,7 @@ export default function Home() {
   const [destino, setDestino] = useState<Destino>("obra");
   const [aba, setAba] = useState<IdDaAba>("dashboard");
   const [obraId, setObraId] = useState<number | null>(null);
-  const [novaObraAberta, setNovaObraAberta] = useState(false);
+  const [novaObraAberta, setNovaObraAberta] = useState(false);\n  const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);\n  const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -65,7 +65,7 @@ export default function Home() {
   });
   const lista: Array<{ id: number; name: string; code: string }> =
     (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
-  const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
+  const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));\n  const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
   const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
@@ -100,21 +100,60 @@ export default function Home() {
           {obra && <span className="xl-titlebar-sub">{obra.code}</span>}
         </div>
 
-        <div className="xl-titlebar-obras">
-          {lista.map(o => (
-            <button
+        <button
+          type="button"
+          className="xl-titlebar-collapse"
+          onClick={() => setFaixaObrasRecolhida(v => !v)}
+          title={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
+          aria-label={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
+        >
+          {faixaObrasRecolhida ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </button>
+        {!faixaObrasRecolhida && <div className="xl-titlebar-obras">
+          {obrasVisiveis.map(o => (
+            <div
               key={o.id}
-              type="button"
-              className={`xl-obra-chip${o.id === obra?.id && destino === "obra" ? " ativa" : ""}`}
-              onClick={() => {
-                setObraId(o.id);
-                setDestino("obra");
-              }}
-              title={o.name}
+              className={`xl-obra-chip-wrap${o.id === obra?.id && destino === "obra" ? " ativa" : ""}`}
             >
-              {o.name}
-            </button>
+              <button
+                type="button"
+                className="xl-obra-chip"
+                onClick={() => {
+                  setObraId(o.id);
+                  setDestino("obra");
+                }}
+                title={o.name}
+              >
+                {o.name}
+              </button>
+              <button
+                type="button"
+                className="xl-obra-chip-fechar"
+                onClick={() => {
+                  setObrasOcultas(ocultas => [...ocultas, o.id]);
+                  if (obraId === o.id) {
+                    const proxima = obrasVisiveis.find(v => v.id !== o.id);
+                    if (proxima) setObraId(proxima.id);
+                  }
+                }}
+                title="Fechar esta aba (não exclui a obra)"
+                aria-label={`Fechar ${o.name}`}
+              >
+                <X size={11} />
+              </button>
+            </div>
           ))}
+          {obrasOcultas.length > 0 && (
+            <button
+              type="button"
+              className="xl-obra-reabrir"
+              onClick={() => setObrasOcultas([])}
+              title="Reabrir todas as obras ocultas"
+            >
+              + {obrasOcultas.length} fechada{obrasOcultas.length > 1 ? "s" : ""}
+            </button>
+          )}
+        </div>}
           <button
             type="button"
             className="xl-obra-chip xl-obra-nova"
