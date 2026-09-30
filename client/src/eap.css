@@ -536,3 +536,299 @@
   color: #ffffff;
   vertical-align: middle;
 }
+
+
+/* --------------------------------------------------------------------------
+   EAP 2.0 — grade profissional em linguagem de planilha
+   -------------------------------------------------------------------------- */
+
+.eap {
+  padding: 14px 18px 24px;
+  background: #f5f7f8;
+  min-height: 100%;
+}
+
+.eap-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #fff;
+  border: 1px solid #d8e0e5;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(31,41,51,.04);
+}
+
+.eap-toolbar-identidade,
+.eap-toolbar-acoes {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.eap-toolbar-icon {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cbd9de;
+  border-radius: 5px;
+  background: #eef5f7;
+  color: #2f6f7f;
+}
+
+.eap-toolbar-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: #24343c;
+}
+
+.eap-toolbar-subtitulo {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #7a8991;
+}
+
+.eap-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #cfd8dd;
+  border-radius: 4px;
+  background: #fff;
+  color: #53636b;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.eap-tool-btn:hover {
+  border-color: #aebfc6;
+  background: #f7fafb;
+  color: #294e5a;
+}
+
+.eap-tool-agent {
+  border-color: #b7d1d8;
+  background: #edf6f8;
+  color: #256074;
+}
+
+.eap-resumo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.eap-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid #d7e5db;
+  border-radius: 999px;
+  background: #f3f8f4;
+  color: #557462;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.eap-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6d9b7a;
+}
+
+.eap-busca-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 280px;
+  padding: 0 9px;
+  border: 1px solid #cfd6dd;
+  border-radius: 4px;
+  background: #fff;
+  color: #8b98a0;
+}
+
+.eap-busca-wrap:focus-within {
+  border-color: #8eb4c0;
+  box-shadow: 0 0 0 2px rgba(47,111,127,.10);
+}
+
+.eap-busca-wrap .eap-busca {
+  border: 0;
+  outline: 0;
+  min-width: 0;
+}
+
+.eap-arvore {
+  border: 1px solid #cfd8dd;
+  border-radius: 5px;
+  overflow: auto;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(31,41,51,.04);
+}
+
+.eap-grid-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 42px 92px minmax(280px,1fr) 86px 58px 150px;
+  align-items: center;
+  min-width: 760px;
+  min-height: 30px;
+  background: #edf1f3;
+  border-bottom: 1px solid #cbd5da;
+  color: #64737b;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .06em;
+}
+
+.eap-grid-col {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px;
+  border-left: 1px solid #d9e0e4;
+}
+
+.eap-grid-canto {
+  height: 100%;
+  border-right: 1px solid #d9e0e4;
+}
+
+.eap-linha {
+  display: grid;
+  grid-template-columns: 42px 92px minmax(280px,1fr) 86px 58px 150px;
+  align-items: center;
+  min-width: 760px;
+  min-height: 30px;
+  padding: 0;
+  border-bottom: 1px solid #e8edef;
+  font-size: 11.5px;
+  background: #fff;
+}
+
+.eap-linha:hover {
+  background: #f5fafb;
+}
+
+.eap-rownum {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: #f7f9fa;
+  border-right: 1px solid #e2e8eb;
+  color: #89969d;
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.eap-indent {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+}
+
+.eap-codigo {
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 10px;
+  color: #7d8a91;
+}
+
+.eap-nome {
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.eap-oficial {
+  justify-self: start;
+  margin: 0 8px;
+}
+
+.eap-unidade {
+  min-width: 0;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.eap-status-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.eap-grupo-label {
+  color: #7a8991;
+  font-size: 9.5px;
+}
+
+.eap-nivel-1 {
+  background: #f7f9fa;
+}
+
+.eap-nivel-1:hover {
+  background: #eef5f7;
+}
+
+.eap-seta {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #74838a;
+}
+
+.eap-seta:hover {
+  color: #2f6f7f;
+}
+
+.eap-seta-vazia {
+  cursor: default;
+}
+
+.eap-trazer {
+  opacity: 0;
+}
+
+.eap-linha:hover .eap-trazer,
+.eap-trazer:focus-visible {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .eap-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .eap-toolbar-acoes {
+    flex-wrap: wrap;
+  }
+
+  .eap-topo {
+    align-items: stretch;
+  }
+
+  .eap-resumo {
+    flex-wrap: wrap;
+  }
+
+  .eap-busca-wrap {
+    min-width: 0;
+    width: 100%;
+  }
+}
