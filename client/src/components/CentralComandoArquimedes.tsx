@@ -561,7 +561,7 @@ function CapabilityCard({
           {dependencyNames.length > 0 && (
             <div style={dependencyLine}>
               <span>Dependências:</span>
-              {dependencyNames.map(name => (
+              {dependencyNames.map((name: string) => (
                 <span key={name} style={dependencyBadge}>{name}</span>
               ))}
             </div>
