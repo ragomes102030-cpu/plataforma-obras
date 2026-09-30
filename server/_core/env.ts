@@ -44,7 +44,7 @@ export const ENV = {
   arquimedesCodeRepository:
     process.env.ARQUIMEDES_CODE_REPOSITORY?.trim() || "ragomes102030-cpu/plataforma-obras",
   arquimedesCodeBranch:
-    process.env.ARQUIMEDES_CODE_BRANCH?.trim() || "develop",
+    process.env.ARQUIMEDES_CODE_BRANCH?.trim() || "arquimedes-agent",
   arquimedesSelfEditEnabled:
     process.env.ARQUIMEDES_SELF_EDIT_ENABLED === "true",
   arquimedesGithubToken: process.env.ARQUIMEDES_GITHUB_TOKEN?.trim() ?? "",
