@@ -35,6 +35,8 @@ import * as schema from "../drizzle/schema";
 
 /** Tabela → colunas, em ordem alfabética. Extraído do schema, não digitado. */
 const CONTRATO: Record<string, string[]> = {
+  arquimedes_capabilities: ["createdAt", "dependenciesJson", "description", "domain", "enabled", "id", "installedAt", "installedBy", "kind", "name", "removable", "status", "updatedAt", "version"],
+  arquimedes_capability_events: ["action", "capabilityId", "createdAt", "detail", "fromStatus", "id", "toStatus", "userId"],
   activity_resource_allocations: ["activityId", "createdAt", "id", "productivity", "quantity", "resourceId"],
   agent_decisions: ["createdAt", "decision", "id", "impactJson", "projectId", "reason", "scopeJson", "stage", "userId"],
   agent_findings: ["classification", "confidence", "createdAt", "description", "entityRef", "entityType", "id", "impact", "originalValueJson", "projectId", "proposedValueJson", "resolutionNote", "resolvedAt", "resolvedBy", "sourceJson", "stage", "status", "updatedAt"],
@@ -98,7 +100,7 @@ function superficie(): Record<string, string[]> {
 }
 
 describe("contrato do schema", () => {
-  it("tem as 33 tabelas do contrato", () => {
+  it("tem as 35 tabelas do contrato", () => {
     const nomes = Object.keys(superficie()).sort();
     expect(nomes).toEqual(Object.keys(CONTRATO).sort());
   });
@@ -130,6 +132,6 @@ describe("contrato do schema", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(361);
+    expect(total).toBe(382);
   });
 });
