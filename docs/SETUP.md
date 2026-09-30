@@ -75,11 +75,48 @@ pnpm build
 DATABASE_URL=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
-PUBLIC_APP_URL=https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app
+# Front, back e banco na MESMA conta. Uma moradia, um domínio.
+PUBLIC_APP_URL=https://plataforma-obras-api.onrender.com
 MCP_EAP_URL=https://mcp-eap-server-rafael-5864.vercel.app
 MCP_CRONOGRAMA_URL=https://mcp-cronograma-server-rafael-5864.vercel.app
 MCP_GANTT_LOB_URL=https://mcp-gantt-lob-server-rafael-5864.vercel.app
 ```
+
+### Login com GitHub: o campo que trava tudo
+
+O `redirect_uri` que o servidor envia ao GitHub sai de `PUBLIC_APP_URL`
+(`server/_core/github-oauth.ts`, `getBaseUrl`), e o GitHub **recusa** qualquer
+valor que não case com uma Callback URL cadastrada no app OAuth. A recusa
+aparece como "url inválida" na tela de login, e ela NÃO é do Render nem do
+código: é um campo na conta do GitHub.
+
+O que precisa estar em **Settings → Developer settings → OAuth Apps**, na
+página do app cujo `client_id` é o de `GITHUB_CLIENT_ID`:
+
+```
+https://plataforma-obras-api.onrender.com/api/auth/github/callback
+```
+
+Para desenvolvimento local, o mesmo servidor serve back e front, então a
+Callback URL local é a mesma acrescida de `localhost`:
+
+```
+http://localhost:3000/api/auth/github/callback
+```
+
+**Um erro que custa tempo:** o GitHub **não** compara a URL inteira quando
+"wildcard matching" está ligado — compara o host, a porta, e exige que o
+caminho da `redirect_uri` seja um subdiretório do caminho cadastrado. Trocar o
+domínio sem trocar o caminho (ou vice-versa) faz a URL passar a não casar sem
+nenhum aviso do lado do GitHub. E trocar o domínio *e* o caminho exige editar a
+Callback URL lá, porque o `redirect_uri` é derivado do código e não de
+variável nenhuma.
+
+**A ordem importa, e ela é invisível:** se o `PUBLIC_APP_URL` estiver errado, o
+servidor pede ao GitHub um retorno num host de terceiro, e o GitHub recusa antes
+de qualquer credencial ser conferida. Por isso, quando o login falhar, cheque
+*neste* ordem: `PUBLIC_APP_URL` → Callback URL no GitHub → `GITHUB_CLIENT_ID`
+→ `GITHUB_CLIENT_SECRET`.
 
 ### Rodar localmente
 
