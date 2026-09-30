@@ -898,7 +898,7 @@ async function persistPhase7Plan(
             level: node.level,
             nodeType: node.nodeType,
             unit: node.unit,
-            plannedQuantity: node.plannedQuantity,
+            plannedQuantity: node.plannedQuantity == null ? null : String(node.plannedQuantity),
             sortOrder: node.sortOrder,
             versionId,
           })
