@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   projects,
+  projectDocuments,
   productionEntries,
   productionFronts,
   productionTeams,
@@ -1065,6 +1066,68 @@ export const appRouter = router({
         .orderBy(desc(projects.updatedAt));
       return rows;
     }),
+    documents: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db
+          .select({
+            id: projectDocuments.id,
+            fileName: projectDocuments.fileName,
+            mimeType: projectDocuments.mimeType,
+            sizeBytes: projectDocuments.sizeBytes,
+            analysisStatus: projectDocuments.analysisStatus,
+            extractedText: projectDocuments.extractedText,
+            createdAt: projectDocuments.createdAt,
+            updatedAt: projectDocuments.updatedAt,
+          })
+          .from(projectDocuments)
+          .where(eq(projectDocuments.projectId, input.projectId))
+          .orderBy(desc(projectDocuments.createdAt));
+      }),
+    uploadDocument: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        fileName: z.string().trim().min(1).max(255),
+        mimeType: z.enum(["application/pdf"]),
+        fileDataBase64: z.string().min(1).max(30_000_000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const bytes = Buffer.from(input.fileDataBase64, "base64");
+        if (!bytes.length) throw badRequest("Arquivo vazio ou base64 inválido.");
+        if (bytes.length > 20 * 1024 * 1024) {
+          throw badRequest("O PDF deve ter no máximo 20 MB nesta primeira versão.");
+        }
+        const [created] = await db.insert(projectDocuments).values({
+          projectId: input.projectId,
+          ownerUserId: ctx.user.id,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          sizeBytes: bytes.length,
+          content: bytes,
+          analysisStatus: "pending",
+        }).$returningIds();
+        return { id: created, fileName: input.fileName, analysisStatus: "pending" as const };
+      }),
+    deleteDocument: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), documentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [doc] = await db.select({ id: projectDocuments.id })
+          .from(projectDocuments)
+          .where(and(eq(projectDocuments.id, input.documentId), eq(projectDocuments.projectId, input.projectId)))
+          .limit(1);
+        if (!doc) throw notFound("Documento não encontrado nesta obra.");
+        await db.delete(projectDocuments).where(eq(projectDocuments.id, input.documentId));
+        return { deleted: true as const };
+      }),
     activities: protectedProcedure
       .input(z.object({ projectId: z.number() }))
       .query(async ({ ctx, input }) => {
