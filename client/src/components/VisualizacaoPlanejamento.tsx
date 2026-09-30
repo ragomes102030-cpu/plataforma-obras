@@ -26,13 +26,21 @@ function fmt(iso: string): string {
   return `${d}/${m}${y !== undefined ? "" : ""}`;
 }
 
-export function VisualizacaoPlanejamento({ linhas, inicioObra, hoje }: Props) {
-  const [view, setView] = useState<View>("gantt");
+export type PlanejamentoView = "gantt" | "lob";
 
+export function VisualizacaoPlanejamento({
+  linhas,
+  inicioObra,
+  hoje,
+  view = "gantt",
+}: Props & { view?: PlanejamentoView }) {
   const dados = useMemo(() => {
     if (!linhas.length) return null;
     const min = linhas.reduce((v, l) => Math.min(v, dateMs(l.inicio)), dateMs(linhas[0]!.inicio));
-    const max = linhas.reduce((v, l) => Math.max(v, dateMs(l.inicio) + Math.max(1, l.duracao - 1) * 86400000), min);
+    const max = linhas.reduce(
+      (v, l) => Math.max(v, dateMs(l.inicio) + Math.max(1, l.duracao - 1) * 86400000),
+      min
+    );
     const inicio = new Date(min);
     inicio.setUTCDate(1);
     const fim = new Date(max);
@@ -47,29 +55,20 @@ export function VisualizacaoPlanejamento({ linhas, inicioObra, hoje }: Props) {
   if (!dados) {
     return (
       <div className="pl-visual-vazio">
-        <h3>Visualização de planejamento</h3>
-        <p>Crie atividades no cronograma para visualizar o Gantt e a linha de balanço.</p>
+        <h3>{view === "gantt" ? "Gantt" : "Linha de Balanço"}</h3>
+        <p>Crie atividades no planejamento para visualizar esta ferramenta.</p>
       </div>
     );
   }
 
   return (
-    <section className="pl-visual">
+    <section className="pl-visual pl-visual-full">
       <header className="pl-visual-header">
         <div>
-          <strong>PLANEJAMENTO VISUAL</strong>
-          <span>Gantt + Linha de Balanço · leitura de engenharia</span>
-        </div>
-        <div className="pl-visual-tabs">
-          <button className={view === "gantt" ? "ativo" : ""} onClick={() => setView("gantt")}>
-            <GanttChartSquare size={14} /> Gantt
-          </button>
-          <button className={view === "lob" ? "ativo" : ""} onClick={() => setView("lob")}>
-            <GitBranch size={14} /> Linha de balanço
-          </button>
+          <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
+          <span>{view === "gantt" ? "Sequência, duração e avanço das atividades" : "Tempo na vertical · localização/frentes na horizontal"}</span>
         </div>
       </header>
-
       {view === "gantt" ? (
         <Gantt linhas={linhas} dados={dados} hoje={hoje} inicioObra={inicioObra} />
       ) : (
@@ -90,53 +89,54 @@ function Gantt({
   hoje: IsoDate;
   inicioObra: IsoDate | null;
 }) {
-  const width = Math.max(980, dados.total * 18);
-  const rowH = 30;
-  const left = 360;
-  const top = 46;
-  const height = top + linhas.length * rowH + 24;
-  const x = (iso: string) => left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * (width - left) / dados.total;
+  const width = Math.max(1400, dados.total * 22);
+  const rowH = 34;
+  const left = 430;
+  const top = 58;
+  const height = top + linhas.length * rowH + 30;
+  const x = (iso: string) =>
+    left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * (width - left) / dados.total;
   const hojeX = x(hoje);
-  const tickStep = dados.total > 150 ? 30 : 15;
+  const tickStep = dados.total > 180 ? 30 : dados.total > 90 ? 14 : 7;
   const ticks: string[] = [];
   for (let d = 0; d <= dados.total; d += tickStep) ticks.push(addDays(dados.start, d));
 
   return (
-    <div className="pl-gantt-scroll">
-      <svg className="pl-gantt" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de Gantt da obra">
+    <div className="pl-gantt-scroll pl-planejamento-scroll">
+      <svg className="pl-gantt pl-gantt-large" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de Gantt da obra">
         <rect x="0" y="0" width={width} height={height} className="pl-gantt-bg" />
         <rect x="0" y="0" width={left} height={height} className="pl-gantt-left" />
-        <text x="14" y="21" className="pl-gantt-title">ATIVIDADE</text>
-        <text x={left + 10} y="21" className="pl-gantt-title">LINHA DO TEMPO</text>
+        <text x="14" y="22" className="pl-gantt-title">ATIVIDADE / LOCALIZAÇÃO</text>
+        <text x={left + 10} y="22" className="pl-gantt-title">LINHA DO TEMPO</text>
         {ticks.map(t => {
           const xx = x(t);
           return (
             <g key={t}>
-              <line x1={xx} x2={xx} y1="32" y2={height - 12} className="pl-gantt-grid" />
-              <text x={xx + 3} y="44" className="pl-gantt-date">{fmt(t)}</text>
+              <line x1={xx} x2={xx} y1="34" y2={height - 14} className="pl-gantt-grid" />
+              <text x={xx + 3} y="48" className="pl-gantt-date">{fmt(t)}</text>
             </g>
           );
         })}
-        {inicioObra && <text x={left + 10} y={height - 5} className="pl-gantt-note">Início da obra: {fmt(inicioObra)}</text>}
-        <line x1={hojeX} x2={hojeX} y1="28" y2={height - 12} className="pl-gantt-hoje" />
-        <text x={hojeX + 4} y="21" className="pl-gantt-hoje-label">HOJE</text>
+        {inicioObra && <text x={left + 10} y={height - 6} className="pl-gantt-note">Início da obra: {fmt(inicioObra)}</text>}
+        <line x1={hojeX} x2={hojeX} y1="30" y2={height - 14} className="pl-gantt-hoje" />
+        <text x={hojeX + 4} y="22" className="pl-gantt-hoje-label">HOJE</text>
 
         {linhas.map((l, i) => {
           const y = top + i * rowH;
           const start = x(l.inicio);
           const end = x(addDays(l.inicio, Math.max(1, l.duracao) - 1));
           const w = Math.max(8, end - start);
-          const critical = /fundação|estrutura|contenção/i.test(l.atividade);
-          const progressW = w * Math.max(0, Math.min(100, l.executado && l.quantidade ? (l.executado / l.quantidade) * 100 : 0)) / 100;
+          const progressW =
+            w * Math.max(0, Math.min(100, l.executado && l.quantidade ? (l.executado / l.quantidade) * 100 : 0)) / 100;
           return (
             <g key={`${l.codigo}-${i}`}>
               <rect x="0" y={y - 1} width={width} height={rowH} className={i % 2 ? "pl-gantt-row alt" : "pl-gantt-row"} />
-              <text x="14" y={y + 18} className="pl-gantt-code">{l.codigo}</text>
-              <text x="70" y={y + 18} className="pl-gantt-name">{l.atividade.slice(0, 39)}</text>
-              <text x={left - 8} y={y + 18} textAnchor="end" className="pl-gantt-front">{l.pavimento || l.frente}</text>
-              <rect x={start} y={y + 7} width={w} height="16" rx="3" className={critical ? "pl-gantt-bar critical" : "pl-gantt-bar"} />
-              {progressW > 0 && <rect x={start} y={y + 7} width={progressW} height="16" rx="3" className="pl-gantt-progress" />}
-              {l.duracao > 0 && <text x={start + w + 5} y={y + 19} className="pl-gantt-duration">{l.duracao}d</text>}
+              <text x="14" y={y + 20} className="pl-gantt-code">{l.codigo}</text>
+              <text x="70" y={y + 20} className="pl-gantt-name">{l.atividade.slice(0, 46)}</text>
+              <text x={left - 8} y={y + 20} textAnchor="end" className="pl-gantt-front">{l.pavimento || l.frente}</text>
+              <rect x={start} y={y + 8} width={w} height="18" rx="3" className="pl-gantt-bar" />
+              {progressW > 0 && <rect x={start} y={y + 8} width={progressW} height="18" rx="3" className="pl-gantt-progress" />}
+              {l.duracao > 0 && <text x={start + w + 5} y={y + 21} className="pl-gantt-duration">{l.duracao}d</text>}
             </g>
           );
         })}
@@ -152,54 +152,72 @@ function LinhaDeBalanco({
   linhas: EntradaDaLinha[];
   dados: { start: string; end: string; total: number };
 }) {
-  const width = Math.max(980, dados.total * 18);
-  const height = 440;
-  const left = 90;
-  const top = 45;
-  const bottom = 45;
-  const plotH = height - top - bottom;
-  const floors = Array.from(new Set(linhas.map(l => l.pavimento).filter(Boolean))) as string[];
-  const floorNames = floors.length ? floors : Array.from(new Set(linhas.map(l => l.frente)));
-  const yByFloor = new Map(floorNames.map((f, i) => [f, top + plotH - (i * plotH) / Math.max(1, floorNames.length - 1)]));
-  const x = (iso: string) => left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * (width - left - 25) / dados.total;
-
+  const width = Math.max(1050, Math.max(1, new Set(linhas.map(l => l.pavimento || l.frente)).size) * 110 + 150);
+  const rowH = 28;
+  const top = 56;
+  const left = 125;
+  const right = 35;
+  const bottom = 25;
+  const height = Math.max(620, top + dados.total * rowH + bottom);
+  const floorNames = Array.from(new Set(linhas.map(l => l.pavimento).filter(Boolean))) as string[];
+  const locations = floorNames.length ? floorNames : Array.from(new Set(linhas.map(l => l.frente)));
+  const xByLocation = new Map(locations.map((f, i) => [f, left + i * ((width - left - right) / Math.max(1, locations.length - 1))]));
+  const y = (iso: string) => top + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * rowH;
   const fases = Array.from(new Set(linhas.map(l => l.frente)));
+
   return (
-    <div className="pl-lob-scroll">
-      <svg className="pl-lob" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Linha de balanço da obra">
+    <div className="pl-lob-scroll pl-planejamento-scroll">
+      <svg className="pl-lob pl-lob-vertical" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Linha de balanço da obra com datas na vertical">
         <rect x="0" y="0" width={width} height={height} className="pl-lob-bg" />
-        <text x="14" y="23" className="pl-gantt-title">PAVIMENTO / FRENTE</text>
-        {floorNames.map((f, i) => {
-          const yy = yByFloor.get(f)!;
+        <text x="14" y="22" className="pl-gantt-title">DATA</text>
+        <text x={left} y="22" className="pl-gantt-title">LOCALIZAÇÃO / FRENTE</text>
+
+        {Array.from({ length: Math.ceil(dados.total / 7) + 1 }, (_, i) => addDays(dados.start, i * 7))
+          .filter(d => dateMs(d) <= dateMs(dados.end))
+          .map(d => {
+            const yy = y(d);
+            return (
+              <g key={d}>
+                <line x1={left} x2={width - right} y1={yy} y2={yy} className="pl-lob-grid" />
+                <text x={left - 10} y={yy + 4} textAnchor="end" className="pl-lob-floor">{fmt(d)}</text>
+              </g>
+            );
+          })}
+
+        {locations.map(location => {
+          const xx = xByLocation.get(location)!;
           return (
-            <g key={f}>
-              <line x1={left} x2={width - 15} y1={yy} y2={yy} className="pl-lob-grid" />
-              <text x={left - 10} y={yy + 4} textAnchor="end" className="pl-lob-floor">{f}</text>
+            <g key={location}>
+              <line x1={xx} x2={xx} y1={top} y2={height - bottom} className="pl-lob-grid" />
+              <text x={xx} y="42" textAnchor="middle" className="pl-lob-floor">{location}</text>
             </g>
           );
         })}
+
+        <line x1={left} x2={width - right} y1={top} y2={top} className="pl-lob-axis" />
         <line x1={left} x2={left} y1={top} y2={height - bottom} className="pl-lob-axis" />
-        <line x1={left} x2={width - 15} y1={height - bottom} y2={height - bottom} className="pl-lob-axis" />
 
         {fases.map((fase, faseIndex) => {
           const pontos = linhas
             .filter(l => l.frente === fase && l.pavimento)
             .map(l => {
-              const yy = yByFloor.get(l.pavimento!)!;
-              return { x: x(l.inicio), y: yy, fim: x(addDays(l.inicio, Math.max(1, l.duracao) - 1)) };
+              const xx = xByLocation.get(l.pavimento!)!;
+              return { x: xx, y: y(l.inicio), yFim: y(addDays(l.inicio, Math.max(1, l.duracao) - 1)) };
             })
-            .sort((a, b) => a.y - b.y);
+            .sort((a, b) => a.x - b.x);
           if (pontos.length < 2) return null;
           return (
             <g key={fase}>
               <polyline points={pontos.map(p => `${p.x},${p.y}`).join(" ")} className={`pl-lob-line line-${faseIndex % 4}`} />
-              {pontos.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="4" className={`pl-lob-point line-${faseIndex % 4}`} />)}
+              {pontos.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r="4" className={`pl-lob-point line-${faseIndex % 4}`} />
+              ))}
               <text x={pontos[pontos.length - 1]!.x + 8} y={pontos[pontos.length - 1]!.y + 4} className="pl-lob-label">{fase}</text>
             </g>
           );
         })}
-        <text x={width / 2} y={height - 10} textAnchor="middle" className="pl-lob-caption">
-          tempo →
+        <text x={width / 2} y={height - 8} textAnchor="middle" className="pl-lob-caption">
+          DATAS NA VERTICAL · LOCALIZAÇÕES / FRENTES NA HORIZONTAL
         </text>
       </svg>
     </div>
