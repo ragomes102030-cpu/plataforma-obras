@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, X, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 /**
