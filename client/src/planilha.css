@@ -1646,3 +1646,285 @@ tr:hover .xl-codigo {
   .xl-titlebar-marca strong { max-width: 120px; }
   .xl-titlebar-fim .xl-tb-btn:not(.ativo) { padding-inline: 5px; }
 }
+
+
+/* --------------------------------------------------------------------------
+   Responsividade mobile — Obras
+   O conteúdo técnico continua com rolagem horizontal quando necessário
+   (EAP/Gantt/LoB), mas a moldura e os controles passam a caber no telefone.
+   -------------------------------------------------------------------------- */
+@media (max-width: 600px) {
+  .xl-titlebar {
+    height: auto;
+    min-height: 46px;
+    padding: 5px 7px;
+    gap: 5px;
+    flex-wrap: wrap;
+    align-content: center;
+  }
+
+  .xl-titlebar-marca {
+    order: 1;
+    flex: 1 1 auto;
+    max-width: calc(100% - 82px);
+    min-width: 0;
+  }
+
+  .xl-titlebar-marca strong {
+    max-width: 46vw;
+    font-size: 12px;
+  }
+
+  .xl-titlebar-sub {
+    display: none;
+  }
+
+  .xl-titlebar-collapse,
+  .xl-titlebar-fechar {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+  }
+
+  .xl-titlebar-collapse { order: 2; }
+  .xl-titlebar-fechar { order: 3; }
+
+  .xl-titlebar-obras {
+    order: 4;
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    min-height: 30px;
+    padding-bottom: 2px;
+  }
+
+  .xl-titlebar-fim {
+    order: 5;
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+  }
+
+  .xl-titlebar-fim::-webkit-scrollbar { display: none; }
+
+  .xl-titlebar-fim .xl-tb-btn {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .xl-titlebar-fim .xl-tb-arquimedes {
+    font-size: 10px;
+  }
+
+  .xl-titlebar-fim .xl-tb-user {
+    flex: 0 0 28px;
+  }
+
+  .xl-titlebar-reabrir {
+    order: 4;
+    flex: 0 0 auto;
+  }
+
+  .xl-pasta {
+    min-height: calc(100dvh - 46px);
+  }
+
+  .xl-area {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .xl-rodape {
+    height: auto;
+    min-height: 42px;
+    padding: 3px 5px 0;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .xl-abas {
+    width: 100%;
+    gap: 2px;
+    align-items: stretch;
+    padding-bottom: 0;
+  }
+
+  .xl-aba {
+    min-height: 38px;
+    padding: 7px 11px;
+    font-size: 10px;
+  }
+
+  .xl-aba.ativa {
+    height: auto;
+    min-height: 38px;
+  }
+
+  .xl-rodape-info {
+    display: none;
+  }
+
+  .xl-painel {
+    padding: 12px 10px 18px;
+    gap: 12px;
+  }
+
+  .xl-cartoes {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .xl-cartao {
+    padding: 10px;
+    min-width: 0;
+  }
+
+  .xl-cartao-valor {
+    font-size: 20px;
+  }
+
+  .xl-vazia-folha {
+    padding: 28px 16px;
+  }
+
+  .xl-btn-entrar {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pl-visual {
+    margin: 7px 6px 10px;
+    border-radius: 5px;
+  }
+
+  .pl-visual-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding: 9px;
+  }
+
+  .pl-visual-header > div:first-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .pl-visual-header strong {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .pl-visual-header span {
+    font-size: 9px;
+  }
+
+  .pl-gantt-scroll,
+  .pl-lob-scroll {
+    max-height: calc(100dvh - 190px);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pl-gantt,
+  .pl-lob {
+    min-width: 900px;
+  }
+
+  .janela-agente-abrir {
+    right: 12px;
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    padding: 10px 13px;
+    font-size: 12px;
+    box-shadow: 0 3px 12px rgba(30, 42, 53, .24);
+  }
+
+  .janela-agente {
+    left: 7px;
+    right: 7px;
+    bottom: calc(48px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: calc(100dvh - 64px);
+    border-radius: 9px;
+  }
+
+  .janela-agente-topo {
+    min-height: 42px;
+    padding: 8px 9px;
+    gap: 6px;
+  }
+
+  .janela-agente-topo strong {
+    font-size: 12px;
+  }
+
+  .janela-agente-obra {
+    font-size: 10px;
+  }
+
+  .janela-agente-fala {
+    min-height: 120px;
+    padding: 10px;
+  }
+
+  .janela-msg {
+    font-size: 12px;
+  }
+
+  .janela-agente-sugestoes {
+    padding: 0 10px 8px;
+  }
+
+  .janela-agente-sugestoes button {
+    min-height: 36px;
+    padding: 7px 9px;
+  }
+
+  .janela-agente-form {
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .janela-agente-form input {
+    min-height: 38px;
+  }
+
+  .janela-agente-form button {
+    min-width: 64px;
+    min-height: 38px;
+  }
+
+  .activity-drawer {
+    width: 100vw;
+    max-width: 100vw;
+    border-left: 0;
+    border-top: 1px solid #e4ebed;
+    padding: 14px;
+  }
+
+  .activity-drawer-overlay {
+    align-items: flex-end;
+  }
+}
+
+@media (max-width: 380px) {
+  .xl-titlebar-marca strong {
+    max-width: 39vw;
+  }
+
+  .xl-titlebar-fim .xl-tb-btn {
+    padding-inline: 7px;
+  }
+
+  .xl-cartoes {
+    grid-template-columns: 1fr;
+  }
+
+  .janela-agente {
+    left: 4px;
+    right: 4px;
+  }
+}
