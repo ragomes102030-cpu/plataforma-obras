@@ -581,21 +581,72 @@ export function gerarEap(
       candidatos.forEach((servico, indice) => nos.push({ code: String(raiz) + ".1." + String(indice + 1), name: servico.description.slice(0,220), level: 3, nodeType: "entrega", externalId: servico.code, unit: servico.unit, unitPrice: Number(servico.unitPrice), categoria: grupo.categoria, sortOrder: order++ }));
       continue;
     }
-    const porTrilha = new Map<string, { labels: string[]; servicos: ServicoDoCatalogo[] }>();
+    /**
+     * Constrói a árvore por prefixos da trilha. Assim, se a fonte trouxer
+     * capítulo > sistema > subsistema > componente, todos os níveis aparecem.
+     * Não colapsamos o caminho no último rótulo.
+     */
+    const filhosPorPai = new Map<string, Map<string, { name: string; code: string; level: number }>>();
+    const folhasPorPai = new Map<string, ServicoDoCatalogo[]>();
+    const garantir = (parentCode: string, name: string, level: number): string => {
+      const chave = normalizar(name);
+      const filhos = filhosPorPai.get(parentCode) ?? new Map();
+      const existente = filhos.get(chave);
+      if (existente) return existente.code;
+      const code = parentCode + "." + String(filhos.size + 1);
+      filhos.set(chave, { name, code, level });
+      filhosPorPai.set(parentCode, filhos);
+      return code;
+    };
+
     for (const servico of candidatos) {
       const labels = (servico.trilha ?? []).map(v => v.trim()).filter(Boolean);
-      const caminho = labels.slice(1).length ? labels.slice(1) : [grupo.nome];
-      const chave = caminho.map(normalizar).join(" > ");
-      const atual = porTrilha.get(chave);
-      if (atual) atual.servicos.push(servico); else porTrilha.set(chave, { labels: caminho, servicos: [servico] });
+      const caminho = labels.slice(1).length ? labels.slice(1) : ["Serviços"];
+      let parentCode = String(raiz);
+      let level = 2;
+      for (const label of caminho) {
+        parentCode = garantir(parentCode, label.slice(0, 220), level);
+        level += 1;
+      }
+      const folhas = folhasPorPai.get(parentCode) ?? [];
+      folhas.push(servico);
+      folhasPorPai.set(parentCode, folhas);
     }
-    let subgrupoIndex = 0;
-    for (const { labels, servicos: folhas } of porTrilha.values()) {
-      subgrupoIndex += 1;
-      const subCode = String(raiz) + "." + String(subgrupoIndex);
-      nos.push({ code: subCode, name: labels[labels.length - 1]!.slice(0,220), level: 2, nodeType: "pacote", externalId: null, unit: null, unitPrice: null, categoria: grupo.categoria, sortOrder: order++ });
-      folhas.forEach((servico, indice) => nos.push({ code: subCode + "." + String(indice + 1), name: servico.description.slice(0,220), level: 3, nodeType: "entrega", externalId: servico.code, unit: servico.unit, unitPrice: Number(servico.unitPrice), categoria: grupo.categoria, sortOrder: order++ }));
-    }
+
+    const emitir = (parentCode: string) => {
+      const filhos = filhosPorPai.get(parentCode);
+      if (filhos) {
+        for (const filho of filhos.values()) {
+          nos.push({
+            code: filho.code,
+            name: filho.name,
+            level: filho.level,
+            nodeType: "pacote",
+            externalId: null,
+            unit: null,
+            unitPrice: null,
+            categoria: grupo.categoria,
+            sortOrder: order++,
+          });
+          emitir(filho.code);
+        }
+      }
+      const folhas = folhasPorPai.get(parentCode) ?? [];
+      folhas.forEach((servico, indice) => {
+        nos.push({
+          code: parentCode + "." + String(indice + 1),
+          name: servico.description.slice(0, 220),
+          level: (parentCode.split(".").length + 1),
+          nodeType: "entrega",
+          externalId: servico.code,
+          unit: servico.unit,
+          unitPrice: Number(servico.unitPrice),
+          categoria: grupo.categoria,
+          sortOrder: order++,
+        });
+      });
+    };
+    emitir(String(raiz));
   }
   const aviso = nos.length ? null : soServicos.length ? "Nenhum serviço do catálogo casou com os grupos deste tipo de obra." : "O catálogo não tem serviços (códigos C...) para gerar a EAP.";
   return { nos, servicosUsados: nos.filter(n => n.externalId !== null).length, servicosSemGrupo: semGrupo, gruposVazios, aviso };
