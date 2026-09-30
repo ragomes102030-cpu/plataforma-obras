@@ -222,6 +222,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
       {editor && (
         <EditorEapPanel
+          key={editor.mode === "edit" ? `edit-${editor.nodeId}` : `create-${editor.parentId ?? "root"}`}
           editor={editor}
           nos={nos}
           busy={criarNo.isPending || editarNo.isPending}
