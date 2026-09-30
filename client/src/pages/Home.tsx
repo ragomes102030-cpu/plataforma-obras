@@ -53,6 +53,7 @@ export default function Home() {
   const [novaObraAberta, setNovaObraAberta] = useState(false);
   const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);
   const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
+  const [faixaObrasFechada, setFaixaObrasFechada] = useState(false);
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -109,16 +110,31 @@ export default function Home() {
           {obra && <span className="xl-titlebar-sub">{obra.code}</span>}
         </div>
 
-        <button
-          type="button"
-          className="xl-titlebar-collapse"
-          onClick={() => setFaixaObrasRecolhida(v => !v)}
-          title={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
-          aria-label={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
-        >
-          {faixaObrasRecolhida ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-        </button>
-        {!faixaObrasRecolhida && <div className="xl-titlebar-obras">
+        {!faixaObrasFechada && (
+          <button
+            type="button"
+            className="xl-titlebar-collapse"
+            onClick={() => setFaixaObrasRecolhida(v => !v)}
+            title={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
+            aria-label={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
+          >
+            {faixaObrasRecolhida ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+        )}
+        {faixaObrasFechada ? (
+          <button
+            type="button"
+            className="xl-titlebar-reabrir"
+            onClick={() => {
+              setFaixaObrasFechada(false);
+              setFaixaObrasRecolhida(false);
+            }}
+            title="Abrir novamente a janela de obras"
+            aria-label="Abrir novamente a janela de obras"
+          >
+            <ChevronDown size={14} /> Obras
+          </button>
+        ) : !faixaObrasRecolhida && <div className="xl-titlebar-obras">
           {obrasVisiveis.map(o => (
             <div
               key={o.id}
@@ -181,6 +197,20 @@ export default function Home() {
             {criarDemo.isPending ? "Montando…" : "Gantt demo"}
           </button>
         </div>}
+        {!faixaObrasFechada && (
+          <button
+            type="button"
+            className="xl-titlebar-fechar"
+            onClick={() => {
+              setFaixaObrasFechada(true);
+              setFaixaObrasRecolhida(false);
+            }}
+            title="Fechar a janela de obras"
+            aria-label="Fechar a janela de obras"
+          >
+            <X size={13} />
+          </button>
+        )}
 
         <div className="xl-titlebar-fim">
           <button
