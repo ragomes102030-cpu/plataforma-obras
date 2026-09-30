@@ -13,7 +13,7 @@ import {
   type LlmResponse,
   type LlmTool,
 } from "./llm-provider-gateway";
-import { classifyArquimedesIntent, casualResponse } from "./agent/runtime/intent-router";
+import { classifyArquimedesIntent } from "./agent/runtime/intent-router";
 import { runReActAgent } from "./agent/runtime/react-runtime";
 
 const MAX_ITERATIONS = 4;
@@ -61,9 +61,11 @@ const PROJECT_SCOPED_TOOLS = new Set([
   "calcular_linha_balanco",
 ]);
 
-export type ToolDomain = keyof ReturnType<
-  typeof import("./integrations/construction-mcps").createConstructionMcpClients
->;
+export type ToolDomain =
+  | keyof ReturnType<
+      typeof import("./integrations/construction-mcps").createConstructionMcpClients
+    >
+  | "runtime";
 
 export type OrchestratorEvent =
   | { type: "catalog_started" }
@@ -236,6 +238,51 @@ function formatContext(context: AgentProjectContext) {
   ].join("\n");
 }
 
+const RUNTIME_TOOLS: LlmTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "get_current_datetime",
+      description:
+        "Retorna a data e hora atuais do runtime na zona America/Fortaleza. Use quando o usuário perguntar que dia é hoje, a hora atual ou precisar de uma referência temporal presente.",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+function currentDateTimeFortaleza() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Fortaleza",
+    dateStyle: "full",
+    timeStyle: "long",
+  });
+  const isoParts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Fortaleza",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const parts = Object.fromEntries(
+    isoParts
+      .filter(part => part.type !== "literal")
+      .map(part => [part.type, part.value])
+  );
+  return {
+    timezone: "America/Fortaleza",
+    iso: `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}-03:00`,
+    human: formatter.format(now),
+  };
+}
+
 function toOpenAiTools(catalog: ConstructionMcpToolCatalog): LlmTool[] {
   const tools: LlmTool[] = [];
   for (const entries of [catalog.eap, catalog.cronograma, catalog.ganttLob]) {
@@ -254,34 +301,44 @@ function toOpenAiTools(catalog: ConstructionMcpToolCatalog): LlmTool[] {
       });
     }
   }
-  return tools;
+  return [...tools, ...RUNTIME_TOOLS];
 }
 
 function buildSystem(
   context: AgentProjectContext,
-  mcpProjectIds: Partial<Record<ToolDomain, string>>,
-  _responseIntent: "casual" | "consulta" | "analise" | "operacao"
+  mcpProjectIds: Partial<Record<Extract<ToolDomain, "eap" | "cronograma" | "ganttLob">, string>>,
+  responseIntent: "casual" | "consulta" | "analise" | "operacao"
 ) {
   const workspaceContext = context.workspace
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}.`
     : "Aba ativa não informada.";
+  const now = currentDateTimeFortaleza();
 
-  return [
+  const base = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
-    "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta: uma frase, explicação, lista, tabela ou análise. Não existe formato obrigatório de resposta.",
+    `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,
+    "Use essa referência quando o usuário perguntar sobre data, dia ou hora atuais. Não diga que não possui relógio.",
+    "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta. Não existe formato obrigatório de resposta.",
     "Responda diretamente ao que foi perguntado. Não despeje o contexto da obra, métricas ou diagnósticos que o usuário não pediu.",
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
-    "Quando precisar de dados atuais ou mais completos, consulte as ferramentas de leitura disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
+    "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
-    "As ferramentas disponíveis nesta fase são somente leitura. Nunca execute uma alteração, criação, exclusão, baseline ou medição. Quando o usuário pedir uma escrita, explique de forma natural que a execução ainda não está habilitada.",
+    "As ferramentas de obra disponíveis nesta fase são somente leitura. Nunca execute uma alteração, criação, exclusão, baseline ou medição.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
-    "Para dúvidas técnicas de planejamento, use os conceitos adequados de EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
-    "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora. Não crie um diagnóstico de falha técnica desnecessário.",
+    "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
+    "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora.",
     "Não mencione 'MARCO', 'Agent Orchestrator', project_id, nomes internos de MCP, catálogos, políticas internas ou contratos de resposta, a menos que o usuário pergunte explicitamente sobre a arquitetura.",
-    workspaceContext,
-    "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context),
-  ].join("\n\n");
+  ];
+
+  if (responseIntent !== "casual") {
+    base.push(
+      workspaceContext,
+      "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context)
+    );
+  }
+
+  return base.join("\n\n");
 }
 
 function validateMessages(messages: AgentMessage[]) {
@@ -309,22 +366,10 @@ export async function runProjectOrchestrator(
   const taskId = options.taskId ?? createTaskId();
   const deps = options.deps ?? {};
 
-  // Conversa casual não precisa de catálogo MCP, contexto técnico ou JSON.
   const lastUserMessage = [...messages].reverse().find(message => message.role === "user");
   const intent = lastUserMessage
     ? classifyArquimedesIntent(lastUserMessage.content)
     : "consulta";
-  if (intent === "casual" && lastUserMessage) {
-    return {
-      taskId,
-      content: casualResponse(lastUserMessage.content),
-      model: "local-conversation",
-      iterations: 0,
-      audit: [],
-      readOnly: true,
-      status: "respondido",
-    };
-  }
   const mcpProjectIds: Partial<Record<ToolDomain, string>> = {
     ...(options.mcpProjectId
       ? {
@@ -383,10 +428,27 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (toolName === "get_current_datetime") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        const value = currentDateTimeFortaleza();
+        audit.push({
+          taskId,
+          iteration,
+          event: "tool_call",
+          domain: "runtime",
+          toolName,
+          status: "success",
+          durationMs: Date.now() - startedAt,
+        });
+        await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+        return { ok: true, content: JSON.stringify(value) };
+      }
+
       const domain = TOOL_DOMAINS[toolName as keyof typeof TOOL_DOMAINS];
       const startedAt = Date.now();
       if (!domain || !MCP_TOOL_POLICY.readOnly.has(toolName)) {
-        throw new Error(`Ferramenta não permitida no Marco 2: ${toolName}`);
+        throw new Error(`Ferramenta não permitida pelo runtime: ${toolName}`);
       }
 
       await emit({ type: "tool_started", iteration, domain, toolName });
