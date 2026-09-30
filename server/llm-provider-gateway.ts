@@ -1,5 +1,5 @@
 import { ENV } from "./_core/env";
-import { getStoredLlmProvider } from "./llm-settings";
+import { getStoredLlmProviders } from "./llm-settings";
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -125,18 +125,18 @@ export async function getConfiguredProvidersAsync(): Promise<
 > {
   const providers = getConfiguredProviders();
   try {
-    const stored = await getStoredLlmProvider();
-    if (stored) {
-      const configured = configuredProvider(
-        stored.provider,
-        stored.baseUrl,
-        stored.apiKey,
-        stored.model
-      );
-      if (configured) {
+    const storedProviders = await getStoredLlmProviders();
+    if (storedProviders.length) {
+      const configuredStored = storedProviders
+        .filter(provider => provider.enabled !== false)
+        .map(provider =>
+          configuredProvider(provider.provider, provider.baseUrl, provider.apiKey, provider.model)
+        )
+        .filter((provider): provider is LlmProviderConfig => Boolean(provider));
+      if (configuredStored.length) {
         const unique = new Map<string, LlmProviderConfig>();
-        for (const provider of [configured, ...providers]) {
-          unique.set(`${provider.baseUrl}|${provider.model}`, provider);
+        for (const provider of [...configuredStored, ...providers]) {
+          unique.set(provider.baseUrl + "|" + provider.model, provider);
         }
         return Array.from(unique.values());
       }
