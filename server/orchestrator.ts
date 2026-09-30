@@ -16,6 +16,7 @@ import {
 import { classifyArquimedesIntent } from "./agent/runtime/intent-router";
 import { runReActAgent } from "./agent/runtime/react-runtime";
 import {
+  listRepositoryDirectory,
   readRepositoryFile,
   repositoryInfo,
   searchRepositoryCode,
@@ -253,6 +254,21 @@ const RUNTIME_TOOLS: LlmTool[] = [
       description:
         "Mostra qual repositório de código está conectado ao Arquimedes e quais capacidades de auditoria estão disponíveis.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "repository_list_directory",
+      description:
+        "Lista arquivos e diretórios do repositório conectado. Use para navegar pelo código quando ainda não souber o caminho do arquivo.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+        },
+        additionalProperties: false,
+      },
     },
   },
   {
@@ -502,6 +518,7 @@ export async function runProjectOrchestrator(
     executeTool: async (toolName, rawArgs, iteration) => {
       if (
         toolName === "repository_info" ||
+        toolName === "repository_list_directory" ||
         toolName === "repository_read_file" ||
         toolName === "repository_search_code" ||
         toolName === "repository_update_file"
@@ -516,6 +533,10 @@ export async function runProjectOrchestrator(
             value = await readRepositoryFile(
               String(rawArgs.path ?? ""),
               typeof rawArgs.ref === "string" ? rawArgs.ref : undefined
+            );
+          } else if (toolName === "repository_list_directory") {
+            value = await listRepositoryDirectory(
+              typeof rawArgs.path === "string" ? rawArgs.path : ""
             );
           } else if (toolName === "repository_search_code") {
             value = await searchRepositoryCode(
