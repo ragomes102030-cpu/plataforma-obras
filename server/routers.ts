@@ -83,7 +83,7 @@ import {
   getAgentExecutionStatus,
   startAgentExecution,
 } from "./agent-execution";
-import { getPublicLlmSettings, saveStoredLlmProvider } from "./llm-settings";
+import { getPublicLlmSettings, saveStoredLlmProviders } from "./llm-settings";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -1036,20 +1036,25 @@ export const appRouter = router({
       save: adminProcedure
         .input(
           z.object({
-            provider: z.string().trim().min(2).max(80),
-            baseUrl: z
-              .string()
-              .trim()
-              .url()
-              .refine(value => value.startsWith("https://"), {
-                message: "A URL do provedor deve usar HTTPS.",
-              }),
-            apiKey: z.string().trim().min(10).max(500),
-            model: z.string().trim().min(2).max(160),
+            providers: z.array(
+              z.object({
+                provider: z.string().trim().min(2).max(80),
+                baseUrl: z
+                  .string()
+                  .trim()
+                  .url()
+                  .refine(value => value.startsWith("https://"), {
+                    message: "A URL do provedor deve usar HTTPS.",
+                  }),
+                apiKey: z.string().trim().min(0).max(500),
+                model: z.string().trim().min(2).max(160),
+                enabled: z.boolean().default(true),
+              })
+            ).min(1).max(10),
           })
         )
         .mutation(async ({ ctx, input }) => {
-          await saveStoredLlmProvider(input, ctx.user.id);
+          await saveStoredLlmProviders(input.providers, ctx.user.id);
           return {
             saved: true as const,
             settings: await getPublicLlmSettings(),
