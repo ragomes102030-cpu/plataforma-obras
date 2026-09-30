@@ -1467,6 +1467,161 @@ export const appRouter = router({
           return { ...created, semeadura };
         });
       }),
+    createDemoGantt: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+
+        const plannedStart = new Date("2026-07-01T12:00:00Z");
+        const plannedFinish = new Date("2027-01-31T12:00:00Z");
+        const code = `DEMO-${Date.now().toString(36).slice(-6).toUpperCase()}`;
+
+        return db.transaction(async tx => {
+          const [projectId] = await tx.insert(projects).values({
+            ownerUserId: ctx.user.id,
+            code,
+            name: "Edifício Solar — Demonstração Gantt + Linha de Balanço",
+            location: "Juazeiro do Norte, CE",
+            descricao: "Obra demonstrativa para visualizar planejamento, Gantt, linha de balanço e fluxo por pavimento. Todos os dados desta obra são ilustrativos.",
+            status: "Em execução",
+            progress: 32,
+            plannedStart,
+            plannedFinish,
+            baseReferencia: "SEINFRA",
+            baseReferenciaRef: "028.1 — demonstração",
+          }).$returningIds();
+
+          let sortOrder = 0;
+          const nodes = new Map<string, number>();
+          const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: "grupo" | "pacote" | "entrega") => {
+            const [id] = await tx.insert(wbsNodes).values({
+              projectId,
+              parentId,
+              code,
+              name,
+              level,
+              nodeType,
+              sortOrder: sortOrder++,
+            }).$returningIds();
+            nodes.set(code, id);
+            return id;
+          };
+
+          const root = await addNode(null, "1", "Edifício Solar — 14 pavimentos", 1, "grupo");
+          const fases = [
+            ["1.1", "Serviços preliminares e fundação"],
+            ["1.2", "Estrutura de concreto"],
+            ["1.3", "Alvenaria e vedação"],
+            ["1.4", "Instalações e acabamentos"],
+          ] as const;
+
+          for (const [code, name] of fases) await addNode(root, code, name, 2, "pacote");
+
+          const atividades: Array<{
+            wbsNodeId: number;
+            wbsCode: string;
+            name: string;
+            phase: string;
+            pavimento: string | null;
+            startOffset: number;
+            durationDays: number;
+            plannedQuantity: string;
+            unit: string;
+            progress: number;
+            critical: number;
+            sortOrder: number;
+          }> = [];
+
+          const addActivity = async (
+            phaseCode: string,
+            floor: number,
+            name: string,
+            phase: string,
+            startOffset: number,
+            durationDays: number,
+            quantity: number,
+            unit: string,
+            progress: number,
+            critical = 0,
+          ) => {
+            const floorCode = `${phaseCode}.${String(floor).padStart(2, "0")}`;
+            const parent = nodes.get(phaseCode);
+            if (!parent) throw badRequest(`Fase de demonstração ausente: ${phaseCode}`);
+            const nodeId = await addNode(parent, floorCode, `${name} — Pavimento ${floor}`, 3, "entrega");
+            atividades.push({
+              wbsNodeId: nodeId,
+              wbsCode: floorCode,
+              name: `${name} — P${String(floor).padStart(2, "0")}`,
+              phase,
+              pavimento: `P${String(floor).padStart(2, "0")}`,
+              startOffset,
+              durationDays,
+              plannedQuantity: quantity.toFixed(3),
+              unit,
+              progress,
+              critical,
+              sortOrder: atividades.length,
+            });
+          };
+
+          await addActivity("1.1", 1, "Fundação e contenção", "Fundação", 0, 32, 1, "lote", 100, 1);
+          await addActivity("1.1", 2, "Impermeabilização do subsolo", "Fundação", 25, 18, 850, "m²", 100, 0);
+
+          for (let floor = 1; floor <= 14; floor++) {
+            const ciclo = 38 + (floor - 1) * 9;
+            const progress = floor <= 3 ? 100 : floor === 4 ? 62 : 0;
+            await addActivity("1.2", floor, "Estrutura de concreto", "Estrutura", ciclo, 9, 145, "m³", progress, 1);
+            await addActivity("1.3", floor, "Alvenaria de vedação", "Vedação", ciclo + 7, 8, 780, "m²", floor <= 2 ? 100 : floor === 3 ? 45 : 0);
+            await addActivity("1.4", floor, "Instalações + acabamento", "Acabamentos", ciclo + 13, 12, 1, "pav", floor <= 1 ? 100 : 0);
+          }
+
+          const inserted = await tx.insert(scheduleActivities).values(
+            atividades.map(a => ({
+              projectId,
+              wbsNodeId: a.wbsNodeId,
+              externalId: `DEMO-${a.wbsCode}`,
+              eapRef: a.wbsCode,
+              wbsCode: a.wbsCode,
+              name: a.name,
+              phase: a.phase,
+              pavimento: a.pavimento,
+              startOffset: a.startOffset,
+              durationDays: a.durationDays,
+              plannedQuantity: a.plannedQuantity,
+              unit: a.unit,
+              progress: a.progress,
+              exemplo: 1,
+              status: a.progress >= 100 ? "Concluído" as const : a.progress > 0 ? "Em andamento" as const : "Não iniciado" as const,
+              critical: a.critical,
+              sortOrder: a.sortOrder,
+            }))
+          ).$returningIds();
+
+          const byKey = new Map<string, number>();
+          atividades.forEach((a, index) => byKey.set(a.wbsCode, inserted[index]!));
+          const deps: Array<{ projectId: number; predecessorId: number; successorId: number; type: "FS"; lag: number }> = [];
+          for (let floor = 1; floor <= 14; floor++) {
+            const s = byKey.get(`1.2.${String(floor).padStart(2, "0")}`);
+            const m = byKey.get(`1.3.${String(floor).padStart(2, "0")}`);
+            const a = byKey.get(`1.4.${String(floor).padStart(2, "0")}`);
+            if (s && m) deps.push({ projectId, predecessorId: s, successorId: m, type: "FS", lag: 0 });
+            if (m && a) deps.push({ projectId, predecessorId: m, successorId: a, type: "FS", lag: 0 });
+            if (floor > 1) {
+              const prev = byKey.get(`1.2.${String(floor - 1).padStart(2, "0")}`);
+              if (prev && s) deps.push({ projectId, predecessorId: prev, successorId: s, type: "FS", lag: 0 });
+            }
+          }
+          if (deps.length) await tx.insert(scheduleDependencies).values(deps);
+
+          return {
+            projectId,
+            code,
+            name: "Edifício Solar — Demonstração Gantt + Linha de Balanço",
+            atividades: atividades.length,
+            pavimentos: 14,
+          };
+        });
+      }),
     /**
      * Gera a EAP da obra a partir do catálogo importado.
      *
