@@ -1,4 +1,4 @@
-﻿import { eq, type ColumnsSelection } from "drizzle-orm";
+﻿import { and, eq, count, type ColumnsSelection } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgInsertBase, PgQueryResultHKT, PgTable } from "drizzle-orm/pg-core";
 import { InsertUser, users } from "../drizzle/schema";
@@ -174,6 +174,23 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
   }
+}
+
+export async function ensureFirstUserAdmin(openId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  const totals = await db.select({ total: count() }).from(users);
+  const totalUsers = Number(totals[0]?.total ?? 0);
+  if (totalUsers !== 1) return false;
+
+  const updated = await db
+    .update(users)
+    .set({ role: "admin" })
+    .where(and(eq(users.openId, openId), eq(users.role, "user")))
+    .returning({ id: users.id });
+
+  return updated.length > 0;
 }
 
 export async function getUserByOpenId(openId: string) {
