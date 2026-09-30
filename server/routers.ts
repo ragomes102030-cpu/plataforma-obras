@@ -67,6 +67,7 @@ import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import { GatewayArquimedesProvider } from "./agent/providers/gateway-provider";
+import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
@@ -5637,6 +5638,8 @@ export const appRouter = router({
         const mcpProjectIds: Partial<
           Record<"eap" | "cronograma" | "ganttLob", string>
         > = {};
+        const latestUserMessage = [...input.messages].reverse().find(message => message.role === "user");
+        const casualConversation = latestUserMessage ? isSimpleCasualMessage(latestUserMessage.content) : false;
         if (db) {
           const mappings = await db
             .select({
@@ -5663,7 +5666,7 @@ export const appRouter = router({
             .set({ activeSection: "portfolio", activeSubtab: null })
             .where(eq(agentProjectStates.projectId, input.projectId));
         }
-        const evidence = db
+        const evidence = db && !casualConversation
           ? await (async () => {
               const evidenceSource = new EvidenceSourceRouter(
                 localDatabaseEvidenceSource,
