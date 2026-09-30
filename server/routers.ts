@@ -66,6 +66,8 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
+import { GatewayArquimedesProvider } from "./agent/providers/gateway-provider";
+import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -1210,6 +1212,71 @@ export const appRouter = router({
           .from(wbsNodes)
           .where(eq(wbsNodes.projectId, input.projectId))
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+      }),
+    analisarEapComArquimedes: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [project] = await db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        if (!project) throw notFound("Obra não encontrada.");
+
+        const nodes = await db
+          .select()
+          .from(wbsNodes)
+          .where(eq(wbsNodes.projectId, input.projectId))
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        const [state] = await db
+          .select({ stage: agentProjectStates.stage })
+          .from(agentProjectStates)
+          .where(eq(agentProjectStates.projectId, input.projectId))
+          .limit(1);
+
+        const context = {
+          projectId: project.id,
+          name: project.name,
+          description: project.descricao,
+          stage: state?.stage ?? "EAP_PROPOSTA",
+          wbs: nodes.map(node => ({
+            id: node.id,
+            code: node.code,
+            name: node.name,
+            parentId: node.parentId,
+            level: node.level,
+            nodeType: node.nodeType,
+            unit: node.unit,
+            plannedQuantity: node.plannedQuantity,
+            location: node.location,
+            responsible: node.responsible,
+            description: node.description,
+            inclusions: node.inclusions,
+            exclusions: node.exclusions,
+            acceptanceCriteria: node.acceptanceCriteria,
+          })),
+        };
+
+        const { raw } = await proposeEapWithArquimedes(
+          context,
+          new GatewayArquimedesProvider()
+        );
+        const proposal = parseEapProposal(raw);
+        const currentValidation = validateEapScope(
+          context.wbs,
+          { requireDictionaryForLeaves: true }
+        );
+
+        return {
+          provider: "configured-gateway",
+          proposal,
+          currentValidation,
+          guardrail: "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
+        };
       }),
     validateWbsStructure: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
