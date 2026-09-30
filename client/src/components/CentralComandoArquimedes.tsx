@@ -692,7 +692,7 @@ function SecurityTab({
   permissions,
   policy,
 }: {
-  permissions: any[];
+  permissions: readonly any[];
   policy?: { readOnlyTools: number; confirmationTools: number; destructiveTools: number };
 }) {
   return (
