@@ -313,6 +313,11 @@ class SDKServer {
       lastSignedIn: signedInAt,
     });
 
+    if (ENV.autoAdminFirstUser && !ENV.ownerOpenId) {
+      const promoted = await db.ensureFirstUserAdmin(user.openId);
+      if (promoted) user = await db.getUserByOpenId(user.openId) ?? user;
+    }
+
     return user;
   }
 }
