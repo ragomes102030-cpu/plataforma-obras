@@ -68,7 +68,11 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
   useEffect(() => {
     const abrir = () => setAberta(true);
     window.addEventListener("abrir-agente-eap", abrir);
-    return () => window.removeEventListener("abrir-agente-eap", abrir);
+    window.addEventListener("abrir-arquimedes", abrir);
+    return () => {
+      window.removeEventListener("abrir-agente-eap", abrir);
+      window.removeEventListener("abrir-arquimedes", abrir);
+    };
   }, []);
 
   const utils = trpc.useUtils();
@@ -172,7 +176,16 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
               {expandida ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
             </button>
             <Sparkles size={14} />
-            <strong>Agente</strong>
+            <strong>Arquimedes</strong>
+            <button
+              type="button"
+              className="janela-agente-config"
+              onClick={() => window.dispatchEvent(new CustomEvent("abrir-configuracao-llm"))}
+              title="Configurar LLM do Arquimedes"
+              aria-label="Configurar LLM do Arquimedes"
+            >
+              <Settings size={14} />
+            </button>
             <span className="janela-agente-obra">
               {obra} · {abaAtual}
             </span>
@@ -272,7 +285,7 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
           title="Abrir o agente"
         >
           <Sparkles size={14} />
-          Agente
+          Arquimedes
         </button>
       )}
     </>
