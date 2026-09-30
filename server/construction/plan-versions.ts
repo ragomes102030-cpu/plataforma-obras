@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   projectPlanVersions,
   scheduleActivities,
@@ -114,6 +114,21 @@ export async function associateOrphanPlanNodes(
  * Garante uma versão gravável (draft/proposed) para o estado de trabalho do
  * projeto, criando-a conforme a regra de reabertura quando necessário.
  * Sempre associa os nós órfãos à versão retornada.
+ *
+ * A ADOÇÃO ESTÁ FORA DOS DOIS RAMOS, E ISSO É O PONTO.
+ *
+ * A primeira versão deste código era um `if (reuse) return {...}` seguido de
+ * `associateOrphanPlanNodes`. O `return` vinha antes, e a adoção nunca rodava
+ * quando a versão já existia — que é o caso de toda obra depois da primeira
+ * edição. Os nós que nascem sem `versionId` (é assim que os três seeders
+ * gravam: nenhum deles conhece versão, porque na criação da obra ela ainda não
+ * existe) ficavam órfãos para sempre, e o painel reportava zero numa obra com
+ * 117 nós.
+ *
+ * A adoção é idempotente — `WHERE "versionId" IS NULL` — e por isso roda nos
+ * dois caminhos sem custo quando não há o que adotar. O que não pode é voltar
+ * para dentro do `if`, porque a diferença entre os dois ramos é a versão
+ * escolhida, não a necessidade de reconciliar.
  */
 export async function ensureWritablePlanVersion(
   projectId: number,
@@ -123,6 +138,7 @@ export async function ensureWritablePlanVersion(
   const versions = await listPlanVersions(projectId);
   const decision = resolveWritablePlanVersion(versions);
   if (decision.kind === "reuse") {
+    await associateOrphanPlanNodes(projectId, decision.version.id);
     return {
       id: decision.version.id,
       versionNumber: decision.version.versionNumber,
@@ -174,7 +190,46 @@ export type PlanVersionDetail = PlanVersionSummary & {
   eapNodeCount: number;
   activityCount: number;
   dependencyCount: number;
+  /**
+   * Nós da obra — EAP, atividades e dependências — que NÃO pertencem a
+   * nenhuma versão. Somados nas três tabelas, porque o gate só precisa saber
+   * se existe trabalho fora de qualquer geração.
+   *
+   * ESTE CAMPO EXISTE PORQUE A AUSÊNCIA É O DEFEITO.
+   *
+   * Com `WHERE "versionId" IN (1, 2)`, uma linha com `versionId` nulo não é
+   * filtrada: ela é INVISÍVEL. O `IN` devolve `UNKNOWN` para nulo, o `GROUP BY`
+   * nunca produz o bucket `null`, e a contagem sai zero sem que nenhuma linha de
+   * código precise mentir. O painel lia "EAP 0 nós" numa obra com 117, e o gate
+   * tratava esse zero como obra vazia.
+   *
+   * Por isso a consulta AGORA PEDE os órfãos, com `isNull` ao lado do `IN`, e o
+   * bucket `null` é contado em vez de descartado. Um zero explícito neste campo
+   * troca a mentira pela lacuna, e lacuna é o que um gate consegue usar.
+   */
+  unversionedNodeCount: number;
 };
+
+/** Quantas linhas caem em cada versão, e quantas não caem em nenhuma. */
+type ContagemPorVersao = {
+  porVersao: Map<number, number>;
+  semVersao: number;
+};
+
+function contarPorVersao(
+  rows: { versionId: number | null; total: number }[]
+): ContagemPorVersao {
+  const porVersao = new Map<number, number>();
+  let semVersao = 0;
+  for (const row of rows) {
+    if (row.versionId === null) {
+      semVersao += Number(row.total);
+      continue;
+    }
+    porVersao.set(row.versionId, Number(row.total));
+  }
+  return { porVersao, semVersao };
+}
 
 /**
  * Lista as versões do plano com a contagem de nós de cada uma — alimenta o
@@ -187,6 +242,9 @@ export async function listPlanVersionDetails(
   if (versions.length === 0) return [];
   const ids = versions.map(version => version.id);
   const db = requireDatabase(await getDb());
+  // `or(isNull(...), inArray(...))`, e não só `inArray(...)`: o `or` é o que traz
+  // os órfãos de volta. Sem ele nenhuma linha sem versão entra na contagem, e
+  // uma obra inteira chega como zero — não como "não sei".
   const [eapRows, activityRows, dependencyRows] = await Promise.all([
     db
       .select({
@@ -197,7 +255,7 @@ export async function listPlanVersionDetails(
       .where(
         and(
           eq(wbsNodes.projectId, projectId),
-          inArray(wbsNodes.versionId, ids)
+          or(isNull(wbsNodes.versionId), inArray(wbsNodes.versionId, ids))
         )
       )
       .groupBy(wbsNodes.versionId),
@@ -210,7 +268,10 @@ export async function listPlanVersionDetails(
       .where(
         and(
           eq(scheduleActivities.projectId, projectId),
-          inArray(scheduleActivities.versionId, ids)
+          or(
+            isNull(scheduleActivities.versionId),
+            inArray(scheduleActivities.versionId, ids)
+          )
         )
       )
       .groupBy(scheduleActivities.versionId),
@@ -223,27 +284,24 @@ export async function listPlanVersionDetails(
       .where(
         and(
           eq(scheduleDependencies.projectId, projectId),
-          inArray(scheduleDependencies.versionId, ids)
+          or(
+            isNull(scheduleDependencies.versionId),
+            inArray(scheduleDependencies.versionId, ids)
+          )
         )
       )
       .groupBy(scheduleDependencies.versionId),
   ]);
-  const countBy = (
-    rows: { versionId: number | null; total: number }[]
-  ): Map<number, number> => {
-    const map = new Map<number, number>();
-    for (const row of rows) {
-      if (row.versionId !== null) map.set(row.versionId, Number(row.total));
-    }
-    return map;
-  };
-  const eapCount = countBy(eapRows);
-  const activityCount = countBy(activityRows);
-  const dependencyCount = countBy(dependencyRows);
+  const eap = contarPorVersao(eapRows);
+  const atividade = contarPorVersao(activityRows);
+  const dependencia = contarPorVersao(dependencyRows);
+  const unversionedNodeCount =
+    eap.semVersao + atividade.semVersao + dependencia.semVersao;
   return versions.map(version => ({
     ...version,
-    eapNodeCount: eapCount.get(version.id) ?? 0,
-    activityCount: activityCount.get(version.id) ?? 0,
-    dependencyCount: dependencyCount.get(version.id) ?? 0,
+    eapNodeCount: eap.porVersao.get(version.id) ?? 0,
+    activityCount: atividade.porVersao.get(version.id) ?? 0,
+    dependencyCount: dependencia.porVersao.get(version.id) ?? 0,
+    unversionedNodeCount,
   }));
 }

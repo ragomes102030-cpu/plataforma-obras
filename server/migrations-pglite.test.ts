@@ -1,7 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { aplicarMigrations, migrationsEmDisco } from "./test-helpers/pglite";
 
 /**
  * As migrations aplicadas num PostgreSQL DE VERDADE.
@@ -27,46 +26,18 @@ import { join } from "node:path";
  * e que o DDL e aceito e produz o schema que o codigo espera.
  */
 
-const PASTA = "drizzle";
-const JOURNAL = join(PASTA, "meta", "_journal.json");
-
-type Journal = {
-  dialect: string;
-  entries: { idx: number; tag: string; when: number }[];
-};
-
-function migrations(): string[] {
-  const journal = JSON.parse(readFileSync(JOURNAL, "utf-8")) as Journal;
-  expect(journal.dialect).toBe("postgresql");
-  return journal.entries
-    .slice()
-    .sort((a, b) => a.idx - b.idx)
-    .map(e => {
-      const caminho = join(PASTA, `${e.tag}.sql`);
-      expect(readdirSync(PASTA).includes(`${e.tag}.sql`), `${e.tag}.sql ausente`).toBe(true);
-      return readFileSync(caminho, "utf-8");
-    });
-}
-
-/** Aplica um arquivo inteiro, respeitando o separador do drizzle. */
-async function aplicar(pg: PGlite, sql: string) {
-  for (const bruto of sql.split("--> statement-breakpoint")) {
-    const stmt = bruto
-      .split("\n")
-      .filter(linha => !linha.trim().startsWith("--"))
-      .join("\n")
-      .trim();
-    if (!stmt) continue;
-    await pg.exec(stmt);
-  }
-}
+// `migrations()` e `aplicar()` vivem em `test-helpers/pglite`. Enquanto eram
+// duas copias deste codigo, uma delas ia parar de casar com o journal e nenhuma
+// suite diria: o teste continuaria verde sobre um schema que nao e mais o do
+// repo. O helper e a unica versao, e a ordem vem do journal — a mesma que o
+// migrador de producao respeita.
 
 describe("as migrations constroem um schema utilizavel", () => {
   it("aplica do zero, sem erro de SQL", async () => {
     const pg = await PGlite.create();
     try {
-      for (const [i, sql] of migrations().entries()) {
-        await aplicar(pg, sql);
+      for (const [i, sql] of migrationsEmDisco().entries()) {
+        await aplicarMigrations(pg, sql);
         // Se a enésima migration falhar, o nome dela e o unico lugar onde o
         // erro faz sentido. Sem esta anotação, a falha sai como "erro de
         // sintaxe" sem dizer de onde.
@@ -80,7 +51,7 @@ describe("as migrations constroem um schema utilizavel", () => {
   it("cria as 33 tabelas e os 32 tipos de enum", async () => {
     const pg = await PGlite.create();
     try {
-      for (const sql of migrations()) await aplicar(pg, sql);
+      for (const sql of migrationsEmDisco()) await aplicarMigrations(pg, sql);
 
       const tabelas = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
@@ -109,7 +80,7 @@ describe("as migrations constroem um schema utilizavel", () => {
     // parada para sempre, e nada no banco denunciaria.
     const pg = await PGlite.create();
     try {
-      for (const sql of migrations()) await aplicar(pg, sql);
+      for (const sql of migrationsEmDisco()) await aplicarMigrations(pg, sql);
 
       const triggers = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers" +
@@ -146,7 +117,7 @@ describe("as migrations constroem um schema utilizavel", () => {
     // INSERT passar, o contrato de dado enfraqueceu e ninguem avisa.
     const pg = await PGlite.create();
     try {
-      for (const sql of migrations()) await aplicar(pg, sql);
+      for (const sql of migrationsEmDisco()) await aplicarMigrations(pg, sql);
 
       await expect(
         pg.exec(

@@ -4886,6 +4886,10 @@ export const appRouter = router({
         eapNodeCount: version.eapNodeCount,
         activityCount: version.activityCount,
         dependencyCount: version.dependencyCount,
+        // Sem este campo, um painel que só olha as três contagens acima continua
+        // cego: quando os nós estão sem versão, elas vêm zero e o zero parece uma
+        // obra vazia. Este número é a lacuna, dita explicitamente.
+        unversionedNodeCount: version.unversionedNodeCount,
       }));
     }),
   recordFinding: protectedProcedure
