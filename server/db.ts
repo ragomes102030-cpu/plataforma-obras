@@ -1,4 +1,4 @@
-﻿import { and, eq, count, type ColumnsSelection } from "drizzle-orm";
+﻿import { and, eq, type ColumnsSelection } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgInsertBase, PgQueryResultHKT, PgTable } from "drizzle-orm/pg-core";
 import { InsertUser, users } from "../drizzle/schema";
@@ -180,9 +180,12 @@ export async function ensureFirstUserAdmin(openId: string): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
 
-  const totals = await db.select({ total: count() }).from(users);
-  const totalUsers = Number(totals[0]?.total ?? 0);
-  if (totalUsers !== 1) return false;
+  const admins = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.role, "admin"))
+    .limit(1);
+  if (admins.length > 0) return false;
 
   const updated = await db
     .update(users)
