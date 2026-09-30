@@ -92,6 +92,77 @@
 .xl-titlebar-obras::-webkit-scrollbar-track { background: transparent; }
 .xl-titlebar-obras::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 999px; }
 
+.xl-titlebar-collapse {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 4px;
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.9);
+  cursor: pointer;
+}
+
+.xl-titlebar-collapse:hover { background: rgba(255,255,255,.18); }
+
+.xl-obra-chip-wrap {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 3px;
+  background: rgba(255,255,255,.08);
+  overflow: hidden;
+}
+
+.xl-obra-chip-wrap.ativa {
+  background: #fff;
+  border-color: #fff;
+}
+
+.xl-obra-chip-wrap.ativa .xl-obra-chip { color: #1f6f8b; font-weight: 600; }
+.xl-obra-chip-wrap .xl-obra-chip { border: 0; background: transparent; }
+
+.xl-obra-chip-fechar {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-left: 1px solid rgba(255,255,255,.16);
+  background: transparent;
+  color: rgba(255,255,255,.58);
+  cursor: pointer;
+}
+
+.xl-obra-chip-wrap.ativa .xl-obra-chip-fechar {
+  color: #6d7d85;
+  border-left-color: #e1e7ea;
+}
+
+.xl-obra-chip-fechar:hover { background: rgba(255,255,255,.16); color: #fff; }
+.xl-obra-chip-wrap.ativa .xl-obra-chip-fechar:hover { background: #edf3f5; color: #1f6f8b; }
+
+.xl-obra-reabrir {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px dashed rgba(255,255,255,.35);
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255,255,255,.8);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.xl-obra-reabrir:hover { background: rgba(255,255,255,.12); color: #fff; }
+
 .xl-obra-chip {
   appearance: none;
   border: 1px solid rgba(255, 255, 255, 0.22);
