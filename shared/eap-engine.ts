@@ -526,7 +526,7 @@ export type NoEapGerada = {
   /** Código do nó na EAP ("1", "1.1", "1.1.1"). */
   code: string;
   name: string;
-  level: 1 | 2 | 3;
+  level: number;
   nodeType: "grupo" | "pacote" | "entrega";
   /** Código oficial do serviço na folha. `null` nos níveis acima. */
   externalId: string | null;
@@ -554,90 +554,52 @@ export function gerarEap(
   servicos: ServicoDoCatalogo[],
   opcoes: { tipoDeObra?: string; maximoPorGrupo?: number } = {}
 ): ResultadoDoMotor {
-  const MAXIMO_PADRAO = 12;
-  const maximo = opcoes.maximoPorGrupo ?? MAXIMO_PADRAO;
-
-  // `Array.isArray` e nao `?? []`: um `null` chega do chamador em teste e de
-  // qualquer consulta malformada, e `null.filter` estoura.
+  /** Preserva a hierarquia da trilha do catálogo em vez de reduzir cada grupo a 12 exemplos. */
+  const limite = opcoes.maximoPorGrupo;
   const entrada = Array.isArray(servicos) ? servicos : [];
-  const soServicos = entrada.filter(
-    (s): s is ServicoDoCatalogo =>
-      !!s && typeof s.code === "string" && ehCodigoDeServico(s.code)
-  );
-
+  const soServicos = entrada.filter((s): s is ServicoDoCatalogo => !!s && typeof s.code === "string" && ehCodigoDeServico(s.code));
   const gruposPedidos = resolverGrupos(opcoes.tipoDeObra);
   const gruposVazios: CategoriaDeObra[] = [];
   const porCategoria = new Map<CategoriaDeObra, ServicoDoCatalogo[]>();
   let semGrupo = 0;
-
   for (const servico of soServicos) {
     const categoria = classificarServico(servico.description, servico.trilha);
-    if (!categoria) {
-      semGrupo += 1;
-      continue;
-    }
+    if (!categoria) { semGrupo += 1; continue; }
     if (!gruposPedidos.has(categoria)) continue;
-    const lista = porCategoria.get(categoria) ?? [];
-    lista.push(servico);
-    porCategoria.set(categoria, lista);
+    const lista = porCategoria.get(categoria) ?? []; lista.push(servico); porCategoria.set(categoria, lista);
   }
-
-  const nos: NoEapGerada[] = [];
-  let order = 0;
-  let raiz = 0;
-
-  // A ordem dos nós segue a ordem de GRUPOS, não a do catálogo: a EAP precisa
-  // ler na ordem de execução da obra (preliminares → acabamento).
+  const nos: NoEapGerada[] = []; let order = 0; let raiz = 0;
   for (const grupo of GRUPOS) {
     if (!gruposPedidos.has(grupo.categoria)) continue;
-    const candidatos = porCategoria.get(grupo.categoria) ?? [];
-    if (!candidatos.length) {
-      gruposVazios.push(grupo.categoria);
+    let candidatos = porCategoria.get(grupo.categoria) ?? [];
+    if (!candidatos.length) { gruposVazios.push(grupo.categoria); continue; }
+    if (limite && limite > 0 && candidatos.length > limite) candidatos = escolherRepresentantes(candidatos, limite);
+    raiz += 1;
+    nos.push({ code: String(raiz), name: grupo.nome, level: 1, nodeType: "grupo", externalId: null, unit: null, unitPrice: null, categoria: grupo.categoria, sortOrder: order++ });
+    const comTrilha = candidatos.filter(s => s.trilha && s.trilha.length);
+    if (!comTrilha.length) {
+      candidatos.forEach((servico, indice) => nos.push({ code: String(raiz) + ".1." + String(indice + 1), name: servico.description.slice(0,220), level: 3, nodeType: "entrega", externalId: servico.code, unit: servico.unit, unitPrice: Number(servico.unitPrice), categoria: grupo.categoria, sortOrder: order++ }));
       continue;
     }
-    const escolhidos = escolherRepresentantes(candidatos, maximo);
-    raiz += 1;
-    nos.push({
-      code: String(raiz),
-      name: grupo.nome,
-      level: 1,
-      nodeType: "grupo",
-      externalId: null,
-      unit: null,
-      unitPrice: null,
-      categoria: grupo.categoria,
-      sortOrder: order++,
-    });
-    escolhidos.forEach((servico, indice) => {
-      nos.push({
-        code: `${raiz}.${indice + 1}`,
-        name: servico.description.slice(0, 220),
-        level: 2,
-        nodeType: "entrega",
-        externalId: servico.code,
-        unit: servico.unit,
-        unitPrice: Number(servico.unitPrice),
-        categoria: grupo.categoria,
-        sortOrder: order++,
-      });
-    });
+    const porTrilha = new Map<string, { labels: string[]; servicos: ServicoDoCatalogo[] }>();
+    for (const servico of candidatos) {
+      const labels = (servico.trilha ?? []).map(v => v.trim()).filter(Boolean);
+      const caminho = labels.slice(1).length ? labels.slice(1) : [grupo.nome];
+      const chave = caminho.map(normalizar).join(" > ");
+      const atual = porTrilha.get(chave);
+      if (atual) atual.servicos.push(servico); else porTrilha.set(chave, { labels: caminho, servicos: [servico] });
+    }
+    let subgrupoIndex = 0;
+    for (const { labels, servicos: folhas } of porTrilha.values()) {
+      subgrupoIndex += 1;
+      const subCode = String(raiz) + "." + String(subgrupoIndex);
+      nos.push({ code: subCode, name: labels[labels.length - 1]!.slice(0,220), level: 2, nodeType: "pacote", externalId: null, unit: null, unitPrice: null, categoria: grupo.categoria, sortOrder: order++ });
+      folhas.forEach((servico, indice) => nos.push({ code: subCode + "." + String(indice + 1), name: servico.description.slice(0,220), level: 3, nodeType: "entrega", externalId: servico.code, unit: servico.unit, unitPrice: Number(servico.unitPrice), categoria: grupo.categoria, sortOrder: order++ }));
+    }
   }
-
-  const aviso = nos.length
-    ? null
-    : soServicos.length
-      ? "Nenhum serviço do catálogo casou com os grupos deste tipo de obra."
-      : "O catálogo não tem serviços (códigos C...) para gerar a EAP.";
-
-  return {
-    nos,
-    servicosUsados: nos.filter(n => n.externalId !== null).length,
-    servicosSemGrupo: semGrupo,
-    gruposVazios,
-    aviso,
-  };
+  const aviso = nos.length ? null : soServicos.length ? "Nenhum serviço do catálogo casou com os grupos deste tipo de obra." : "O catálogo não tem serviços (códigos C...) para gerar a EAP.";
+  return { nos, servicosUsados: nos.filter(n => n.externalId !== null).length, servicosSemGrupo: semGrupo, gruposVazios, aviso };
 }
-
 function resolverGrupos(tipoDeObra?: string): Set<CategoriaDeObra> {
   if (!tipoDeObra) return new Set(GRUPOS.map(g => g.categoria));
   const tipo = TIPOS_DE_OBRA.find(t => t.value === tipoDeObra);
