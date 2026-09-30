@@ -850,3 +850,20 @@
 .eap-grid-head .eap-grid-canto {
   border-right: 1px solid #d9e0e4;
 }
+
+
+/* Intake documental do Arquimedes */
+.eap-documentos{margin:0 16px 12px;border:1px solid #d9dee7;background:#fff;border-radius:6px;overflow:hidden}
+.eap-documentos-cabecalho{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #e7eaf0}
+.eap-documentos-cabecalho>div:first-child{flex:1;min-width:0}
+.eap-documentos-titulo{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#202733}
+.eap-documentos-subtitulo{margin-top:3px;font-size:11px;color:#687386}
+.eap-documentos-lista{display:flex;flex-direction:column}
+.eap-documento{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #eef0f4}
+.eap-documento:last-child{border-bottom:0}
+.eap-documento-info{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.eap-documento-info strong{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eap-documento-info span{font-size:10px;color:#7b8493}
+.eap-documento-remover{border:0;background:transparent;color:#8993a3;cursor:pointer;padding:5px;border-radius:4px}
+.eap-documento-remover:hover{background:#f3f4f7;color:#b42318}
+.eap-documentos-vazio{padding:11px 14px;font-size:11px;color:#7b8493}
