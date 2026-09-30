@@ -448,17 +448,7 @@ export async function runProjectOrchestrator(
       : rawContent.trim();
 
   await emit({ type: "response_parsed" });
-  const successfulDomains = Array.from(
-    new Set(audit.filter(event => event.status === "success").map(event => event.domain))
-  );
-  const failedDomains = Array.from(
-    new Set(
-      audit
-        .filter(event => event.status === "error")
-        .map(event => event.domain)
-        .concat(catalogErrorDomains as ToolDomain[])
-    )
-  );
+  await emit({ type: "response_parsed" });
 
   return {
     taskId,
