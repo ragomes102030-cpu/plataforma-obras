@@ -484,7 +484,17 @@ export async function runProjectOrchestrator(
       provider: response.provider,
     });
     if (!assistant.tool_calls?.length) {
-      const content = normalizeReadonlyResponse(parseContent(response), context);
+      const rawContent = parseContent(response);
+      const responseIntent = lastUserMessage
+        ? classifyArquimedesIntent(lastUserMessage.content)
+        : "consulta";
+      // Consulta e conversa são respostas de chat: preservamos a linguagem do
+      // modelo e só acrescentamos a origem dos dados. Análise técnica mantém
+      // o contrato estruturado para rastreabilidade.
+      const content =
+        responseIntent === "analise" || responseIntent === "operacao"
+          ? normalizeReadonlyResponse(rawContent, context)
+          : rawContent.trim();
       await emit({ type: "response_parsed" });
       const successfulDomains = Array.from(
         new Set(
