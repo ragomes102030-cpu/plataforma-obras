@@ -13,6 +13,7 @@ import {
   type LlmResponse,
   type LlmTool,
 } from "./llm-provider-gateway";
+import { classifyArquimedesIntent, casualResponse } from "./agent/runtime/intent-router";
 
 const MAX_ITERATIONS = 4;
 const MAX_TOOL_RESULT_CHARS = 12_000;
@@ -405,6 +406,24 @@ export async function runProjectOrchestrator(
   validateMessages(messages);
   const taskId = options.taskId ?? createTaskId();
   const deps = options.deps ?? {};
+
+  // Conversa casual não precisa de catálogo MCP, contexto técnico ou JSON.
+  const lastUserMessage = [...messages].reverse().find(message => message.role === "user");
+  const intent = lastUserMessage
+    ? classifyArquimedesIntent(lastUserMessage.content)
+    : "consulta";
+  if (intent === "casual" && lastUserMessage) {
+    await emit({ type: "response_parsed" });
+    return {
+      taskId,
+      content: casualResponse(lastUserMessage.content),
+      model: "local-conversation",
+      iterations: 0,
+      audit: [],
+      readOnly: true,
+      status: "respondido",
+    };
+  }
   const mcpProjectIds: Partial<Record<ToolDomain, string>> = {
     ...(options.mcpProjectId
       ? {
