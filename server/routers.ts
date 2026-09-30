@@ -4807,8 +4807,8 @@ export const appRouter = router({
           }
           const parent = node.parentId != null ? byId.get(node.parentId) : undefined;
           const durationDays =
-            node.plannedQuantity && node.plannedQuantity > 0
-              ? Math.max(1, node.plannedQuantity)
+            node.plannedQuantity && Number(node.plannedQuantity) > 0
+              ? Math.max(1, Number(node.plannedQuantity))
               : 1;
           const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
           await db.insert(scheduleActivities).values({
