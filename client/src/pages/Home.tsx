@@ -94,6 +94,12 @@ export default function Home() {
     return () => window.removeEventListener("abrir-nova-obra", open);
   }, []);
 
+  useEffect(() => {
+    const openConfig = () => setDestino("config");
+    window.addEventListener("abrir-configuracao-llm", openConfig);
+    return () => window.removeEventListener("abrir-configuracao-llm", openConfig);
+  }, []);
+
   return (
     <div className="xl-app">
       <header className="xl-titlebar">
@@ -190,6 +196,14 @@ export default function Home() {
             onClick={() => setDestino("catalogo")}
           >
             Catálogo
+          </button>
+          <button
+            type="button"
+            className="xl-tb-btn xl-tb-arquimedes"
+            onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}
+            title="Abrir o Arquimedes"
+          >
+            <Sparkles size={13} /> Arquimedes
           </button>
           {user?.role === "admin" && (
             <button
