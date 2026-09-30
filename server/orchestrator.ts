@@ -14,6 +14,7 @@ import {
   type LlmTool,
 } from "./llm-provider-gateway";
 import { classifyArquimedesIntent, casualResponse } from "./agent/runtime/intent-router";
+import { runReActAgent } from "./agent/runtime/react-runtime";
 
 const MAX_ITERATIONS = 4;
 const MAX_TOOL_RESULT_CHARS = 12_000;
@@ -348,7 +349,7 @@ function buildSystem(
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}. Modo: ${context.workspace.contextMode}.`
     : "Aba ativa não informada. Use o contexto geral da obra.";
   return [
-    "Você é o Agent Orchestrator da Plataforma Obras, especialista em planejamento e controle de obras no Brasil.",
+    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras. O runtime técnico/orquestrador é apenas a camada de execução; sua identidade funcional é Arquimedes.",
     responseIntent === "consulta" ? "Para consultas comuns, responda como um chat profissional: linguagem natural, direta e concisa. Não use o contrato de MARCO, não faça diagnóstico extenso e não repita contexto que não foi solicitado." : responseIntent === "analise" || responseIntent === "operacao" ? "Para análise ou operação, mantenha rastreabilidade, evidências e o contrato técnico de marco." : "Para conversa casual, responda brevemente e em linguagem natural.",
     "Responda em português do Brasil, com objetividade e linguagem operacional.",
     "Use EAP, PERT/CPM, dependências, caminho crítico, baseline, curva S, produtividade e Linha de Balanço.",
@@ -384,7 +385,7 @@ function buildSystem(
   ].join("\n\n");
 }
 
-function validateMessages(messages: AgentMessage[]) {
+function runtimeResultIterationHint(audit: AuditEvent[]) {\n  const last = audit.at(-1);\n  return last ? last.iteration : 1;\n}\n\nfunction validateMessages(messages: AgentMessage[]) {
   if (messages.length < 1 || messages.length > MAX_MESSAGES)
     throw new Error(`A conversa deve ter entre 1 e ${MAX_MESSAGES} mensagens.`);
   if (
@@ -471,169 +472,107 @@ export async function runProjectOrchestrator(
     Number.isFinite(options.maxIterations) && options.maxIterations! > 0
       ? Math.min(Math.floor(options.maxIterations!), MAX_ITERATIONS)
       : MAX_ITERATIONS;
-  for (let iteration = 1; iteration <= maxIterations; iteration++) {
-    await emit({ type: "llm_started", iteration });
-    const response = await (deps.callLlm ?? invokeLlmGateway)({
-      messages: conversation,
-      tools,
-    });
-    const assistant = response.choices?.[0]?.message;
-    if (!assistant) throw new Error("LLM não retornou uma mensagem válida.");
-    await emit({
-      type: "llm_response",
-      iteration,
-      toolCallCount: assistant.tool_calls?.length ?? 0,
-      provider: response.provider,
-    });
-    if (!assistant.tool_calls?.length) {
-      const rawContent = parseContent(response);
-      const responseIntent = lastUserMessage
-        ? classifyArquimedesIntent(lastUserMessage.content)
-        : "consulta";
-      // Consulta e conversa são respostas de chat: preservamos a linguagem do
-      // modelo e só acrescentamos a origem dos dados. Análise técnica mantém
-      // o contrato estruturado para rastreabilidade.
-      const content =
-        responseIntent === "analise" || responseIntent === "operacao"
-          ? normalizeReadonlyResponse(rawContent, context)
-          : rawContent.trim();
-      await emit({ type: "response_parsed" });
-      const successfulDomains = Array.from(
-        new Set(
-          audit
-            .filter(event => event.status === "success")
-            .map(event => event.domain)
-        )
-      );
-      const failedDomains = Array.from(
-        new Set(
-          audit
-            .filter(event => event.status === "error")
-            .map(event => event.domain)
-            .concat(catalogErrorDomains as ToolDomain[])
-        )
-      );
-      return {
-        taskId,
-        content: `${content}\n\nFontes: dados locais da obra${successfulDomains.length ? `; MCPs consultados (${successfulDomains.join(", ")})` : "; nenhum MCP consultado nesta resposta"}${failedDomains.length ? `. MCPs com falha controlada: ${failedDomains.join(", ")}; valide os dados antes de decidir.` : "."}`,
-        model: response.model || ENV.aiModel || "gpt-5-mini",
-        provider: response.provider,
-        iterations: iteration,
-        audit,
-        readOnly: true,
-        status: "respondido",
-      };
-    }
-
-    conversation.push({
-      role: "assistant",
-      content: assistant.content ?? null,
-      tool_calls: assistant.tool_calls,
-    });
-    for (const toolCall of assistant.tool_calls) {
-      const toolName = toolCall.function.name;
+  const runtimeResult = await runReActAgent({
+    messages: conversation,
+    tools,
+    maxIterations,
+    allowedTools: new Set(tools.map(tool => tool.function.name)),
+    maxToolResultChars: MAX_TOOL_RESULT_CHARS,
+    callModel: async input => {
+      return (deps.callLlm ?? invokeLlmGateway)({
+        messages: input.messages,
+        tools: input.tools,
+      });
+    },
+    executeTool: async (toolName, rawArgs) => {
       const domain = TOOL_DOMAINS[toolName as keyof typeof TOOL_DOMAINS];
       const startedAt = Date.now();
       if (!domain || !MCP_TOOL_POLICY.readOnly.has(toolName)) {
         throw new Error(`Ferramenta não permitida no Marco 2: ${toolName}`);
       }
+
+      const iteration = runtimeResultIterationHint(audit);
       await emit({ type: "tool_started", iteration, domain, toolName });
+
       const mcpProjectId = mcpProjectIds[domain];
       if (PROJECT_SCOPED_TOOLS.has(toolName) && !mcpProjectId) {
-        const message =
-          "A obra ainda não possui project_id externo autorizado para consulta MCP.";
-        conversation.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: message }),
-        });
+        const message = "A obra ainda não possui project_id externo autorizado para consulta MCP.";
         audit.push({
-          taskId,
-          iteration,
-          event: "tool_call",
-          domain,
-          toolName,
-          status: "error",
-          durationMs: Date.now() - startedAt,
-          error: message,
+          taskId, iteration, event: "tool_call", domain, toolName,
+          status: "error", durationMs: Date.now() - startedAt, error: message,
         });
-        await emit({
-          type: "tool_finished",
-          iteration,
-          domain,
-          toolName,
-          status: "error",
-        });
-        continue;
+        await emit({ type: "tool_finished", iteration, domain, toolName, status: "error" });
+        return { ok: false, error: message, content: "" };
       }
-      let args: Record<string, unknown>;
-      try {
-        args = JSON.parse(toolCall.function.arguments || "{}");
-      } catch {
-        throw new Error(`Argumentos inválidos para a ferramenta ${toolName}.`);
-      }
+
+      const args = { ...rawArgs };
       if (mcpProjectId) args.project_id = mcpProjectId;
+
       try {
-        const result = await (deps.callTool ?? callReadOnlyMcpTool)(
-          domain,
-          toolName,
-          args
-        );
-        const serialized = JSON.stringify(result).slice(
-          0,
-          MAX_TOOL_RESULT_CHARS
-        );
-        conversation.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: serialized,
-        });
+        const result = await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
+        const serialized = JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS);
         audit.push({
-          taskId,
-          iteration,
-          event: "tool_call",
-          domain,
-          toolName,
-          status: "success",
-          durationMs: Date.now() - startedAt,
+          taskId, iteration, event: "tool_call", domain, toolName,
+          status: "success", durationMs: Date.now() - startedAt,
         });
-        await emit({
-          type: "tool_finished",
-          iteration,
-          domain,
-          toolName,
-          status: "success",
-        });
+        await emit({ type: "tool_finished", iteration, domain, toolName, status: "success" });
+        return { ok: true, content: serialized };
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha desconhecida na ferramenta MCP";
-        conversation.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify({ error: message }),
-        });
+        const message = error instanceof Error ? error.message : "Falha desconhecida na ferramenta MCP";
         audit.push({
-          taskId,
-          iteration,
-          event: "tool_call",
-          domain,
-          toolName,
-          status: "error",
-          durationMs: Date.now() - startedAt,
-          error: message,
+          taskId, iteration, event: "tool_call", domain, toolName,
+          status: "error", durationMs: Date.now() - startedAt, error: message,
         });
+        await emit({ type: "tool_finished", iteration, domain, toolName, status: "error" });
+        return { ok: false, error: message, content: "" };
+      }
+    },
+    onEvent: async event => {
+      if (event.type === "model_started") {
+        await emit({ type: "llm_started", iteration: event.iteration });
+      } else if (event.type === "model_finished") {
         await emit({
-          type: "tool_finished",
-          iteration,
-          domain,
-          toolName,
-          status: "error",
+          type: "llm_response",
+          iteration: event.iteration,
+          toolCallCount: event.toolCallCount,
+          provider: event.provider,
         });
       }
-    }
-  }
+    },
+  });
+
+  const rawContent = runtimeResult.text;
+  const responseIntent = lastUserMessage
+    ? classifyArquimedesIntent(lastUserMessage.content)
+    : "consulta";
+  const content =
+    responseIntent === "analise" || responseIntent === "operacao"
+      ? normalizeReadonlyResponse(rawContent, context)
+      : rawContent.trim();
+
+  await emit({ type: "response_parsed" });
+  const successfulDomains = Array.from(
+    new Set(audit.filter(event => event.status === "success").map(event => event.domain))
+  );
+  const failedDomains = Array.from(
+    new Set(
+      audit
+        .filter(event => event.status === "error")
+        .map(event => event.domain)
+        .concat(catalogErrorDomains as ToolDomain[])
+    )
+  );
+
+  return {
+    taskId,
+    content: `${content}\n\nFontes: dados locais da obra${successfulDomains.length ? `; MCPs consultados (${successfulDomains.join(", ")})` : "; nenhum MCP consultado nesta resposta"}${failedDomains.length ? `. MCPs com falha controlada: ${failedDomains.join(", ")}; valide os dados antes de decidir.` : "."}`,
+    model: runtimeResult.response.model || ENV.aiModel || "gpt-5-mini",
+    provider: runtimeResult.response.provider,
+    iterations: runtimeResult.iterations,
+    audit,
+    readOnly: true,
+    status: "respondido",
+  };
 
   throw new Error(
     `O orquestrador atingiu o limite seguro de ${maxIterations} iterações.`
