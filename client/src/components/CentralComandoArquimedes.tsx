@@ -25,7 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { AdminLlmSettings } from "@/components/AdminLlmSettings";
+import { AdminLlmSettings as AdminLlmSettingsPanel } from "@/components/AdminLlmSettings";
 
 type TabId = "overview" | "capabilities" | "mcps" | "security" | "audit" | "models";
 
@@ -303,7 +303,7 @@ export function CentralComandoArquimedes() {
             <AuditTab events={snapshot.data?.events ?? []} />
           )}
 
-          {activeTab === "models" && <AdminLlmSettings />}
+          {activeTab === "models" && <ModelsTab />}
         </main>
       </div>
     </section>
@@ -775,24 +775,16 @@ function AuditTab({ events }: { events: any[] }) {
   );
 }
 
-function AdminLlmSettings() {
+function ModelsTab() {
   return (
     <div style={stack}>
       <SectionHeader
         title="Modelos e LLMs"
         description="Providers, modelos, chaves e prioridade de roteamento usados pelo Arquimedes."
       />
-      <AdminLlmSettingsContent />
+      <AdminLlmSettingsPanel />
     </div>
   );
-}
-
-function AdminLlmSettingsContent() {
-  return <AdminLlmSettingsOriginal />;
-}
-
-function AdminLlmSettingsOriginal() {
-  return <AdminLlmSettings />;
 }
 
 function SectionHeader({
@@ -1783,8 +1775,3 @@ const emptyState = {
   textAlign: "center" as const,
 };
 
-const operationListUnused = operationList;
-
-const inputStyleUnused = 0;
-void operationListUnused;
-void inputStyleUnused;
