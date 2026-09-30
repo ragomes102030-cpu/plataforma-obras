@@ -156,7 +156,6 @@ export default function Home() {
               + {obrasOcultas.length} fechada{obrasOcultas.length > 1 ? "s" : ""}
             </button>
           )}
-        </div>}
           <button
             type="button"
             className="xl-obra-chip xl-obra-nova"
@@ -175,7 +174,7 @@ export default function Home() {
           >
             {criarDemo.isPending ? "Montando…" : "Gantt demo"}
           </button>
-        </div>
+        </div>}
 
         <div className="xl-titlebar-fim">
           <button
