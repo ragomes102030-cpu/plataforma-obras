@@ -65,6 +65,12 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
   const [aguardando, setAguardando] = useState(false);
   const fim = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    const abrir = () => setAberta(true);
+    window.addEventListener("abrir-agente-eap", abrir);
+    return () => window.removeEventListener("abrir-agente-eap", abrir);
+  }, []);
+
   const utils = trpc.useUtils();
   const chat = trpc.agent.chat.useMutation({
     onSuccess: async r => {
