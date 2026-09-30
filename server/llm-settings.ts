@@ -33,7 +33,7 @@ function encryptConfig(config: StoredLlmProvider | StoredLlmProvider[]) {
   return [iv.toString("hex"), tag.toString("hex"), encrypted.toString("base64")].join(".");
 }
 
-function decryptConfig(payload: string): StoredLlmProvider | null {
+function decryptConfig(payload: string): StoredLlmProvider | StoredLlmProvider[] | null {
   try {
     const [ivHex, tagHex, encryptedBase64] = payload.split(".");
     if (!ivHex || !tagHex || !encryptedBase64) return null;
