@@ -41,4 +41,11 @@ export const ENV = {
   mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "https://mcp-cronograma-server.onrender.com",
   mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "https://mcp-gantt-lob-server.onrender.com",
   priceVariationThresholdPct: Number(process.env.PRICE_VARIATION_THRESHOLD_PCT ?? "30"),
+  arquimedesCodeRepository:
+    process.env.ARQUIMEDES_CODE_REPOSITORY?.trim() || "ragomes102030-cpu/plataforma-obras",
+  arquimedesCodeBranch:
+    process.env.ARQUIMEDES_CODE_BRANCH?.trim() || "develop",
+  arquimedesSelfEditEnabled:
+    process.env.ARQUIMEDES_SELF_EDIT_ENABLED === "true",
+  arquimedesGithubToken: process.env.ARQUIMEDES_GITHUB_TOKEN?.trim() ?? "",
 };
