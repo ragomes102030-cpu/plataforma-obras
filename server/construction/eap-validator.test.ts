@@ -3,7 +3,7 @@ import { validateEap, validateEapScope, validateWbsCostCoverage } from "./eap-va
 import type { EapEvidenceNode } from "./domain-types";
 
 function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
-  return {
+  const value = {
     id: 1,
     projectId: 1,
     externalId: null,
@@ -12,11 +12,15 @@ function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
     code: "1",
     name: "Raiz",
     level: 1,
-    nodeType: "grupo",
+    nodeType: "grupo" as const,
     unit: null,
     plannedQuantity: null,
     sortOrder: 1,
     ...overrides,
+  };
+  return {
+    ...value,
+    level: overrides.level ?? value.code.split(".").length,
   };
 }
 
