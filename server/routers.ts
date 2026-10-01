@@ -5091,10 +5091,6 @@ export const appRouter = router({
             continue;
           }
           const parent = node.parentId != null ? byId.get(node.parentId) : undefined;
-          const durationDays =
-            node.plannedQuantity && Number(node.plannedQuantity) > 0
-              ? Math.max(1, Number(node.plannedQuantity))
-              : 1;
           await db.insert(scheduleActivities).values({
             projectId: input.projectId,
             wbsNodeId: node.id,
@@ -5103,7 +5099,7 @@ export const appRouter = router({
             name: node.name,
             phase: parent?.name?.slice(0, 80) || "Execução",
             startOffset: 0,
-            durationDays,
+            durationDays: 0,
             plannedQuantity: node.plannedQuantity
               ? String(node.plannedQuantity)
               : null,
