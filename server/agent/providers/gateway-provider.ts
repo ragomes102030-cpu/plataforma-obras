@@ -184,10 +184,6 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       ])
     );
 
-    let lastResponse:
-      | Awaited<ReturnType<typeof generate>>
-      | null = null;
-
     for (let attempt = 0; attempt < recoveryBudgets.length; attempt++) {
       const maxTokens = recoveryBudgets[attempt];
       const messages =
@@ -208,17 +204,21 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
             ];
 
       const current = await generate(messages, maxTokens);
-      lastResponse = current;
+      const finishReason = current.response.choices?.[0]?.finish_reason;
+
+      if (!current.json) {
+        console.warn("[Arquimedes][JSON] recuperação estruturada", {
+          attempt: attempt + 1,
+          maxTokens,
+          provider: current.response.provider,
+          finishReason,
+          rawLength: current.raw.length,
+        });
+      }
 
       if (current.json) return current.json;
-
-      const finishReason = current.response.choices?.[0]?.finish_reason;
-      if (attempt === 0 && finishReason === "stop") {
-        continue;
-      }
     }
 
-    void lastResponse;
     throw new Error(
       "O Arquimedes recebeu uma proposta EAP incompleta ou inválida do provedor e não conseguiu recuperá-la com segurança. Nenhuma alteração foi aplicada à obra."
     );
