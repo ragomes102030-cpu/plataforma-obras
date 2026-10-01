@@ -406,7 +406,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       expect(conferencia.pendentes.map(p => p.folderMillis)).toEqual([
         migrations[1]!.folderMillis,
       ]);
-      expect(conferencia.pendentes[0]!.faltando).toHaveLength(23);
+      expect(conferencia.pendentes[0]!.faltando).toHaveLength(25);
 
       await aplicarMigracoes({
         conn: conn as never,
