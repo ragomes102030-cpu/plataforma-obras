@@ -56,6 +56,7 @@ export type GatewayRequest = {
   tools: LlmTool[];
   responseFormat?: { type: "text" | "json_object" };
   maxTokens?: number;
+  allowEmptyResponse?: boolean;
 };
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429]);
@@ -241,7 +242,12 @@ export async function invokeLlmGateway(
         (typeof message?.content === "string" && Boolean(message.content.trim())) ||
         (Array.isArray(message?.content) && message.content.some(part => typeof part?.text === "string" && part.text.trim()));
       const hasToolCalls = Boolean(message?.tool_calls?.length);
-      if (!hasContent && !hasToolCalls && request.tools.length === 0) {
+      if (
+        !hasContent &&
+        !hasToolCalls &&
+        request.tools.length === 0 &&
+        !request.allowEmptyResponse
+      ) {
         throw new Error(`Provedor ${provider.name} retornou resposta vazia.`);
       }
       return {
