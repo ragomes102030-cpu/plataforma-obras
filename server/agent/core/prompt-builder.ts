@@ -10,6 +10,22 @@ function skillsBlock(skills: ArquimedesSkill[]) {
     .join("\n\n");
 }
 
+function engineeringReasoningKernel() {
+  return [
+    "MÉTODO DE RACIOCÍNIO DO ARQUIMEDES:",
+    "1. Entenda o empreendimento antes de decompor. Identifique objeto, limites de escopo, condicionantes, localização, sistemas, etapas e entregáveis explicitamente descritos.",
+    "2. Separe fato de hipótese. Fato é o que o escopo sustenta; hipótese é uma interpretação necessária. Não trate hipótese como dado confirmado.",
+    "3. Identifique lacunas relevantes antes de fechar a estrutura. Registre somente informações cuja ausência possa alterar a EAP, seus limites ou a forma de controle.",
+    "4. Escolha o critério de decomposição que melhor represente o empreendimento. Use fase, sistema, localização, disciplina, componente ou outro critério coerente; não misture critérios sem necessidade.",
+    "5. Decomponha de forma hierárquica e rastreável. Cada nó deve ter um único lugar lógico na estrutura e o conjunto de filhos deve representar integralmente o escopo do pai.",
+    "6. Pare no ponto de controle. Um pacote deve ser detalhado o suficiente para ser planejado, orçado, medido e acompanhado, sem virar catálogo de serviços ou lista excessivamente granular.",
+    "7. Faça uma verificação final de coerência antes de responder: hierarquia, códigos, duplicidades, cobertura de escopo, nível de detalhe, nomenclatura e aderência às informações fornecidas.",
+    "8. Quando houver conflito ou ambiguidade real, sinalize-a em missingInformation ou assumptions em vez de fabricar uma decisão.",
+    "9. Use conhecimento de engenharia para organizar e questionar o escopo, não para inventar quantitativos, métodos executivos, normas específicas ou decisões de projeto ausentes.",
+    "10. Aplique o método internamente e devolva somente o contrato solicitado. Não exponha cadeia de pensamento detalhada, rascunhos ou raciocínio interno."
+  ].join("\n");
+}
+
 function structuredRules() {
   return [
     "A resposta desta chamada é um contrato de saída estruturada para uma proposta de EAP.",
@@ -29,6 +45,7 @@ export function buildEapRequest(
 ): ArquimedesLlmRequest {
   const system = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    engineeringReasoningKernel(),
     structuredRules(),
     "Ao revisar uma EAP existente, compare o estado atual com o escopo informado e proponha create, update, move ou remove com justificativa.",
     "Decomponha somente até o nível em que o escopo se torne controlável. Use localização, sistema, disciplina, fase ou componente quando isso melhorar o controle.",
@@ -62,6 +79,7 @@ export function buildEapMacroRequest(
 ): ArquimedesLlmRequest {
   const system = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    engineeringReasoningKernel(),
     structuredRules(),
     "Esta chamada é SOMENTE para mapear a macroestrutura da EAP.",
     "Retorne entre 3 e 8 nós-raiz.",
@@ -104,6 +122,7 @@ export function buildEapSubtreeRequest(
 ): ArquimedesLlmRequest {
   const system = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    engineeringReasoningKernel(),
     structuredRules(),
     "Esta chamada expande SOMENTE um ramo da EAP. O nó-raiz informado já existe e não deve ser repetido.",
     "Retorne somente descendentes desse ramo, todos operation=create.",
