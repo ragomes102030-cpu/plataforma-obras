@@ -67,38 +67,48 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       { role: "user", content: request.user },
     ];
 
-    const firstRequest: GatewayRequest = {
-      messages: baseMessages,
-      tools: [],
-      responseFormat: { type: "json_object" },
-      maxTokens: 16384,
+    const generate = async (messages: GatewayRequest["messages"], maxTokens: number) => {
+      const response = await invokeLlmGateway({
+        messages,
+        tools: [],
+        responseFormat: { type: "json_object" },
+        maxTokens,
+      });
+      const raw = extractText(response);
+      return {
+        response,
+        raw,
+        json: extractJsonObject(raw),
+      };
     };
 
-    const firstResponse = await invokeLlmGateway(firstRequest);
-    const firstRaw = extractText(firstResponse);
-    if (extractJsonObject(firstRaw)) return extractJsonObject(firstRaw)!;
+    const first = await generate(baseMessages, 16384);
+    if (first.json) return first.json;
 
-    const recoveryRequest: GatewayRequest = {
-      messages: [
-        ...baseMessages,
-        {
-          role: "user",
-          content:
-            "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta EAP como um único objeto JSON válido e compacto. Não use markdown, não inclua comentários, não inclua texto fora do JSON e reduza as justificativas a frases curtas.",
-        },
-      ],
-      tools: [],
-      responseFormat: { type: "json_object" },
-      maxTokens: 16384,
-    };
+    const finishReason = first.response.choices?.[0]?.message?.finish_reason;
+    const recoveryReason =
+      finishReason === "length"
+        ? "A resposta anterior foi interrompida antes de fechar o JSON. Gere novamente uma versão compacta e completa."
+        : "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta de forma compacta e completa.";
 
-    const recoveryResponse = await invokeLlmGateway(recoveryRequest);
-    const recoveryRaw = extractText(recoveryResponse);
-    const recoveryJson = extractJsonObject(recoveryRaw);
-    if (recoveryJson) return recoveryJson;
+    const recoveryMessages: GatewayRequest["messages"] = [
+      ...baseMessages,
+      {
+        role: "user",
+        content:
+          recoveryReason +
+          " Responda SOMENTE com um objeto JSON válido. Máximo de 120 nós. " +
+          "Mantenha apenas action, basis, assumptions, missingInformation e nodes. " +
+          "Em cada node, mantenha parentCode, code quando necessário, name, nodeType, operation e uma rationale curta. " +
+          "Não use markdown, comentários, explicações ou texto fora do JSON.",
+      },
+    ];
+
+    const second = await generate(recoveryMessages, 16384);
+    if (second.json) return second.json;
 
     throw new Error(
-      "O Arquimedes recebeu uma resposta do provedor, mas ela não pôde ser convertida em JSON válido para a proposta da EAP. Tente novamente."
+      "O Arquimedes recebeu uma proposta EAP incompleta ou inválida do provedor e não conseguiu recuperá-la com segurança. Nenhuma alteração foi aplicada à obra."
     );
   }
 }
