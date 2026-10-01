@@ -4253,6 +4253,23 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
 
+        const [requestedLeaf] = await db
+          .select({ code: wbsNodes.code })
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.id, input.wbsNodeId),
+              eq(wbsNodes.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!requestedLeaf) throw notFound("Folha não encontrada nesta obra.");
+
+        const writable = await ensureWritablePlanVersion(
+          input.projectId,
+          ctx.user.id
+        );
+
         const [folha] = await db
           .select({
             id: wbsNodes.id,
@@ -4266,12 +4283,13 @@ export const appRouter = router({
           .from(wbsNodes)
           .where(
             and(
-              eq(wbsNodes.id, input.wbsNodeId),
-              eq(wbsNodes.projectId, input.projectId)
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id),
+              eq(wbsNodes.code, requestedLeaf.code)
             )
           )
           .limit(1);
-        if (!folha) throw notFound("Folha não encontrada nesta obra.");
+        if (!folha) throw notFound("Folha não encontrada na versão de trabalho.");
 
         // A mesma folha não pode virar duas atividades: o índice único é por
         // (projectId, externalId), e `externalId` aqui é o código da folha.
@@ -4281,6 +4299,7 @@ export const appRouter = router({
           .where(
             and(
               eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id),
               eq(scheduleActivities.eapRef, folha.code)
             )
           )
@@ -4301,7 +4320,12 @@ export const appRouter = router({
         const [ultima] = await db
           .select({ n: scheduleActivities.sortOrder })
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId))
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id)
+            )
+          )
           .orderBy(desc(scheduleActivities.sortOrder))
           .limit(1);
 
@@ -4335,6 +4359,7 @@ export const appRouter = router({
             status: "Não iniciado",
             critical: 0,
             sortOrder: (ultima?.n ?? 0) + 1,
+            versionId: writable.id,
           })
           .$returningIds();
 
@@ -4982,7 +5007,12 @@ export const appRouter = router({
         const existing = await db
           .select({ wbsCode: scheduleActivities.wbsCode })
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId));
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id)
+            )
+          );
         const existingCodes = new Set(existing.map(row => row.wbsCode));
         const byId = new Map(nodes.map(node => [node.id, node]));
         let created = 0;
@@ -5065,6 +5095,10 @@ export const appRouter = router({
           if (dependency.predecessorId === dependency.successorId)
             throw badRequest("Uma atividade não pode depender dela mesma.");
         }
+        const writable = await ensureWritablePlanVersion(
+          input.projectId,
+          ctx.user.id
+        );
         const ids = Array.from(
           new Set(input.dependencies.flatMap(item => [item.predecessorId, item.successorId]))
         );
@@ -5074,12 +5108,12 @@ export const appRouter = router({
           .where(
             and(
               eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id),
               inArray(scheduleActivities.id, ids)
             )
           );
         if (found.length !== ids.length)
-          throw forbidden("Uma ou mais atividades não pertencem à obra.");
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+          throw forbidden("Uma ou mais atividades não pertencem à versão de trabalho da obra.");
         await db.insert(scheduleDependencies).values(
           input.dependencies.map(item => ({
             projectId: input.projectId,
@@ -5115,6 +5149,10 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(
+          input.projectId,
+          ctx.user.id
+        );
         const activityIds = input.updates.map(item => item.activityId);
         const found = await db
           .select({ id: scheduleActivities.id })
@@ -5122,6 +5160,7 @@ export const appRouter = router({
           .where(
             and(
               eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id),
               inArray(scheduleActivities.id, activityIds)
             )
           );
@@ -5136,6 +5175,7 @@ export const appRouter = router({
             SET ${sql.raw(field)} = CASE id ${caseSql} END,
                 cpmCalculatedAt = NULL
             WHERE projectId = ${input.projectId}
+              AND versionId = ${writable.id}
               AND id IN (${idsSql})
           `);
         };
