@@ -71,7 +71,7 @@ export default function Home() {
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
-  const criarDemo = trpc.projects.createDemoGantt.useMutation({
+  const obrasDeTeste = lista.filter(o => /^TESTE/i.test(o.name) || /DEMONSTRAÇÃO/i.test(o.name) || /^DEMO-/i.test(o.code));\n  const limparObrasTeste = trpc.projects.deleteTestProjects.useMutation({ onSuccess: async () => { await obras.refetch(); setObraId(null); setDestino("obra"); setAba("dashboard"); } });\n\n  const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
       await obras.refetch();
       setObraId(created.projectId);
@@ -187,6 +187,22 @@ export default function Home() {
           >
             <Plus size={12} />
           </button>
+          {obrasDeTeste.length > 0 && (
+            <button
+              type="button"
+              className="xl-obra-chip xl-limpar-testes"
+              disabled={limparObrasTeste.isPending}
+              title="Excluir permanentemente as obras marcadas como TESTE ou DEMO"
+              onClick={() => {
+                const nomes = obrasDeTeste.map(o => `• ${o.name} (${o.code})`).join("\n");
+                if (!window.confirm(`Excluir permanentemente estas obras de teste?\n\n${nomes}\n\nEAP, cronograma, orçamento, baseline e dados do Arquimedes dessas obras também serão removidos.`)) return;
+                limparObrasTeste.mutate();
+              }}
+            >
+              {limparObrasTeste.isPending ? "Limpando…" : "Limpar testes"}
+            </button>
+          )}
+
           <button
             type="button"
             className="xl-obra-chip xl-demo-obra"
