@@ -74,14 +74,23 @@ export class DrizzleLocalDatabaseReader implements LocalDatabaseReader {
     ref: string
   ): Promise<EapEvidenceNode | null> {
     const db = requireDatabase(await getDb());
+    const currentVersionId = await getCurrentPlanVersionId(db, projectId);
     const rows = await db
       .select()
       .from(wbsNodes)
       .where(
-        or(
-          eq(wbsNodes.externalId, ref),
-          eq(wbsNodes.externalUid, ref),
-          eq(wbsNodes.code, ref)
+        and(
+          currentVersionId == null
+            ? eq(wbsNodes.projectId, projectId)
+            : and(
+                eq(wbsNodes.projectId, projectId),
+                eq(wbsNodes.versionId, currentVersionId)
+              ),
+          or(
+            eq(wbsNodes.externalId, ref),
+            eq(wbsNodes.externalUid, ref),
+            eq(wbsNodes.code, ref)
+          )
         )
       )
       .limit(20);
