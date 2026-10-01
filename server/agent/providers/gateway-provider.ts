@@ -166,6 +166,65 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       { role: "user", content: request.user },
     ];
 
+    let messages: GatewayRequest["messages"] = baseMessages;
+
+    // Consulta única ao banco antes do LLM: evita o ciclo lento LLM -> tool -> LLM.
+    if (request.databaseContext) {
+      const context = request.databaseContext;
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const [project] = await db.select({
+        id: projects.id,
+        code: projects.code,
+        name: projects.name,
+        location: projects.location,
+        status: projects.status,
+        descricao: projects.descricao,
+        tipoDeObra: projects.tipoDeObra,
+        plannedStart: projects.plannedStart,
+        plannedFinish: projects.plannedFinish,
+        baseReferencia: projects.baseReferencia,
+        baseReferenciaRef: projects.baseReferenciaRef,
+      }).from(projects).where(eq(projects.id, context.projectId)).limit(1);
+      if (!project) throw new Error("Obra não encontrada.");
+
+      const eap = await db.select({
+        id: wbsNodes.id,
+        code: wbsNodes.code,
+        name: wbsNodes.name,
+        parentId: wbsNodes.parentId,
+        level: wbsNodes.level,
+        nodeType: wbsNodes.nodeType,
+        unit: wbsNodes.unit,
+        plannedQuantity: wbsNodes.plannedQuantity,
+        location: wbsNodes.location,
+        responsible: wbsNodes.responsible,
+        description: wbsNodes.description,
+        inclusions: wbsNodes.inclusions,
+        exclusions: wbsNodes.exclusions,
+        acceptanceCriteria: wbsNodes.acceptanceCriteria,
+        decompositionBasis: wbsNodes.decompositionBasis,
+        scopeStatus: wbsNodes.scopeStatus,
+      }).from(wbsNodes)
+        .where(eq(wbsNodes.projectId, context.projectId))
+        .orderBy(wbsNodes.level, wbsNodes.sortOrder, wbsNodes.id);
+
+      const snapshot = {
+        source: "banco_de_dados_read_only",
+        project,
+        eap: eap.slice(0, 180),
+        eapTruncated: eap.length > 180,
+        totalEapNodes: eap.length,
+      };
+      messages = [
+        ...messages,
+        {
+          role: "user",
+          content: "CONTEXTO ATUAL CONSULTADO DIRETAMENTE NO BANCO (somente leitura). Use estes dados como fonte primária da revisão. Não invente dados ausentes.\n" + JSON.stringify(snapshot),
+        },
+      ];
+    }
+
     const databaseTools: LlmTool[] = request.databaseContext
       ? [
           {
@@ -301,17 +360,16 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         tools,
         responseFormat: tools.length ? undefined : { type: "json_object" },
         maxTokens,
-        timeoutMs: request.databaseContext ? 180_000 : undefined,
+        timeoutMs: request.databaseContext ? 90_000 : undefined,
         allowEmptyResponse: true,
       });
     };
 
     const outputBudget = request.maxTokens ?? 4096;
-    const maxToolIterations = request.databaseContext ? 3 : 0;
-    let messages = baseMessages;
+    const maxToolIterations = 0;
 
     for (let iteration = 0; iteration <= maxToolIterations; iteration++) {
-      const response = await generate(messages, outputBudget, databaseTools);
+      const response = await generate(messages, outputBudget, []);
       const message = response.choices?.[0]?.message;
       const toolCalls = message?.tool_calls ?? [];
 
