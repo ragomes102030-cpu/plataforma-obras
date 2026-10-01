@@ -1474,18 +1474,6 @@ export const appRouter = router({
           const createdIds: number[] = [];
           const updatedIds: number[] = [];
 
-          const nextCode = (parentId: number | null) => {
-            const siblings = [...byCode.values()].filter(
-              node => node.parentId === parentId
-            );
-            const max = siblings.reduce(
-              (value, node) =>
-                Math.max(value, Number(node.code.split(".").at(-1)) || 0),
-              0
-            );
-            return parentId === null ? String(max + 1) : "";
-          };
-
           const creates = input.proposal.nodes
             .filter(node => node.operation === "create")
             .sort(
