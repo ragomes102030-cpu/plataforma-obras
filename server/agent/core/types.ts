@@ -9,6 +9,7 @@ export interface ArquimedesProjectContext {
   projectId: number;
   name: string;
   description?: string | null;
+  tipoDeObra?: string | null;
   stage: ArquimedesStage;
   wbs: Array<{
     id: number; code: string; name: string; parentId: number | null; level: number;
