@@ -206,27 +206,6 @@ export default function Home() {
           >
             <Plus size={12} />
           </button>
-          {obrasDeTeste.length > 0 && (
-            <button
-              type="button"
-              className="xl-obra-chip xl-limpar-testes"
-              disabled={limparObrasTeste.isPending}
-              title="Excluir permanentemente as obras marcadas como TESTE ou DEMO"
-              onClick={() => {
-                const nomes = obrasDeTeste.map(o => `• ${o.name} (${o.code})`).join("
-");
-                if (!window.confirm(`Excluir permanentemente estas obras de teste?
-
-${nomes}
-
-EAP, cronograma, orçamento, baseline e dados do Arquimedes dessas obras também serão removidos.`)) return;
-                limparObrasTeste.mutate();
-              }}
-            >
-              {limparObrasTeste.isPending ? "Limpando…" : "Limpar testes"}
-            </button>
-          )}
-
           <button
             type="button"
             className="xl-obra-chip xl-demo-obra"
