@@ -1947,3 +1947,20 @@ tr:hover .xl-codigo {
   border-color: #d99a9a !important;
 }
 .xl-limpar-testes:disabled { opacity: .6; cursor: wait; }
+
+.xl-lixeira-btn{display:inline-flex;align-items:center;gap:6px;margin:6px 10px;padding:6px 10px;border:1px solid #d7dee7;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:650;cursor:pointer}
+.xl-obra-chip-lixeira{display:flex;align-items:center;justify-content:center;width:22px;border:0;background:transparent;color:#94a3b8;cursor:pointer}
+.xl-obra-chip-lixeira:hover{color:#b42318;background:#fff1f0}
+.xl-modal-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.32);display:flex;align-items:center;justify-content:center;padding:24px}
+.xl-modal{width:min(680px,calc(100vw - 48px));background:#fff;border:1px solid #dbe2ea;border-radius:12px;box-shadow:0 24px 70px rgba(15,23,42,.2);padding:18px}
+.xl-modal-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+.xl-modal-head strong{display:block;font-size:16px;color:#172033}.xl-modal-head span{display:block;margin-top:5px;color:#64748b;font-size:12px;line-height:1.45}
+.xl-modal-head button{border:0;background:transparent;color:#64748b;cursor:pointer}
+.xl-lixeira-lista{display:grid;gap:8px}.xl-lixeira-item{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:11px 12px;border:1px solid #e2e8f0;border-radius:8px}
+.xl-lixeira-item strong{display:block;color:#1e293b;font-size:13px}.xl-lixeira-item small{display:block;color:#64748b;margin-top:3px}
+.xl-lixeira-item button{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:7px 11px;cursor:pointer;font-weight:600;color:#334155}
+.xl-lixeira-vazia{padding:28px;text-align:center;color:#64748b}
+.xl-confirm-exclusao{width:min(560px,calc(100vw - 48px))}
+.xl-exclusao-nome{padding:11px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;color:#9a3412;font-weight:700;word-break:break-word}
+.xl-confirm-exclusao input{width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid #cbd5e1;border-radius:7px;margin:8px 0 12px}
+.xl-btn-perigo{width:100%;padding:10px;border:0;border-radius:7px;background:#b42318;color:#fff;font-weight:700;cursor:pointer}.xl-btn-perigo:disabled{opacity:.45;cursor:not-allowed}
