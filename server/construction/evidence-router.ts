@@ -11,16 +11,10 @@ function hasData<T>(result: EvidenceResult<T>) {
   return result.data !== null && result.errors.length === 0;
 }
 
-function withFallbackWarning<T>(
-  result: EvidenceResult<T>,
-  warning: EvidenceWarning
-): EvidenceResult<T> {
-  return {
-    ...result,
-    warnings: [...result.warnings, warning],
-  };
-}
-
+/**
+ * Local platform data is authoritative. MCP evidence is opt-in and must not
+ * become an implicit runtime dependency of the core platform.
+ */
 export class EvidenceSourceRouter implements EvidenceSource {
   constructor(
     private readonly local: EvidenceSource,
@@ -37,7 +31,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
     if (hasData(local) && Array.isArray(local.data) && local.data.length > 0) {
       return local;
     }
-    if (!this.fallback) return local;
+    if (!this.allowFallback || !this.fallback) return local;
 
     const fallback = await fallbackResult();
     if (!hasData(fallback)) {
@@ -49,11 +43,17 @@ export class EvidenceSourceRouter implements EvidenceSource {
       };
     }
 
-    return withFallbackWarning(fallback, {
-      code: fallbackCode,
-      message:
-        "A fonte local não possuía dados suficientes; foi usada a fonte de fallback.",
-    });
+    return {
+      ...fallback,
+      warnings: [
+        ...fallback.warnings,
+        {
+          code: fallbackCode,
+          message:
+            "A fonte local não possuía dados suficientes; foi usada explicitamente a fonte de fallback MCP.",
+        },
+      ],
+    };
   }
 
   getEapTree(projectId: number): Promise<EvidenceResult<EapEvidenceNode[]>> {
