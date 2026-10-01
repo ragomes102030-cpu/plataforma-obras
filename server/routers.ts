@@ -1754,6 +1754,70 @@ export const appRouter = router({
                 )
           );
       }),
+    deleteTestProjects: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados não configurado.");
+      const candidates = await db
+        .select({ id: projects.id, name: projects.name, code: projects.code })
+        .from(projects)
+        .where(
+          and(
+            eq(projects.ownerUserId, ctx.user.id),
+            or(
+              sql`UPPER(${projects.name}) LIKE 'TESTE%'`,
+              sql`UPPER(${projects.name}) LIKE '%DEMONSTRAÇÃO%'`,
+              sql`UPPER(${projects.code}) LIKE 'DEMO-%'`
+            )
+          )
+        );
+
+      if (!candidates.length) return { deleted: 0, projects: [] as Array<{ id: number; name: string; code: string }> };
+
+      const ids = candidates.map(item => item.id);
+      const idsSql = sql.join(ids.map(id => sql`${id}`), sql`, `);
+      return db.transaction(async tx => {
+        const inProjects = sql`IN (${idsSql})`;
+
+        // Dependências de segundo nível primeiro.
+        await tx.execute(sql`DELETE FROM "calendar_exceptions" WHERE "calendarId" IN (SELECT "id" FROM "work_calendars" WHERE "projectId" ${inProjects})`);
+        await tx.execute(sql`DELETE FROM "activity_resource_allocations" WHERE "activityId" IN (SELECT "id" FROM "schedule_activities" WHERE "projectId" ${inProjects})`);
+        await tx.execute(sql`DELETE FROM "schedule_baseline_items" WHERE "baselineId" IN (SELECT "id" FROM "schedule_baselines" WHERE "projectId" ${inProjects}) OR "activityId" IN (SELECT "id" FROM "schedule_activities" WHERE "projectId" ${inProjects})`);
+        await tx.execute(sql`DELETE FROM "budget_items" WHERE "budgetVersionId" IN (SELECT "id" FROM "budget_versions" WHERE "projectId" ${inProjects})`);
+
+        // Produção, cronograma e recursos.
+        await tx.execute(sql`DELETE FROM "production_entries" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "schedule_dependencies" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "schedule_activities" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "wbs_nodes" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "schedule_baselines" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "planning_resources" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "budget_versions" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "production_teams" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "production_units" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "production_fronts" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "work_calendars" WHERE "projectId" ${inProjects}`);
+
+        // Execuções e decisões do Arquimedes.
+        await tx.execute(sql`DELETE FROM "agent_run_events" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "agent_runs" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`UPDATE "project_plan_versions" SET "baseVersionId" = NULL WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "project_plan_versions" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "agent_decisions" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "agent_findings" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "agent_memories" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "agent_project_states" WHERE "projectId" ${inProjects}`);
+
+        // Integrações, documentos e auditoria.
+        await tx.execute(sql`DELETE FROM "mcp_mutation_operations" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "mcp_homologation_runs" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "project_mcp_integrations" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "project_audit_events" WHERE "projectId" ${inProjects}`);
+        await tx.execute(sql`DELETE FROM "project_documents" WHERE "projectId" ${inProjects}`);
+
+        await tx.execute(sql`DELETE FROM "projects" WHERE "id" ${inProjects}`);
+        return { deleted: candidates.length, projects: candidates };
+      });
+    }),
     create: protectedProcedure
       .input(
         z

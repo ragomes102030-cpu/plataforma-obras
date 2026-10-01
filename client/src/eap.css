@@ -1223,3 +1223,105 @@
   .eap-controle-grid { grid-template-columns: 1fr; }
   .eap-baseline { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* EAP 2.1 — densidade/zoom de planilha */
+.eap {
+  --eap-row-h: 30px;
+  --eap-head-h: 30px;
+  --eap-font: 11.5px;
+}
+.eap-densidade-compacta { --eap-row-h: 25px; --eap-head-h: 27px; --eap-font: 10.5px; }
+.eap-densidade-confortavel { --eap-row-h: 36px; --eap-head-h: 34px; --eap-font: 12px; }
+
+.eap-densidade-compacta .eap-grid-head,
+.eap-densidade-normal .eap-grid-head,
+.eap-densidade-confortavel .eap-grid-head { min-height: var(--eap-head-h); }
+
+.eap-densidade-compacta .eap-grid-col,
+.eap-densidade-normal .eap-grid-col,
+.eap-densidade-confortavel .eap-grid-col { height: var(--eap-head-h); }
+
+.eap-densidade-compacta .eap-linha,
+.eap-densidade-normal .eap-linha,
+.eap-densidade-confortavel .eap-linha { min-height: var(--eap-row-h); font-size: var(--eap-font); }
+
+.eap-densidade-compacta .eap-indent,
+.eap-densidade-normal .eap-indent,
+.eap-densidade-confortavel .eap-indent { min-height: var(--eap-row-h); }
+
+.eap-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #d3dde1;
+  border-radius: 5px;
+  background: #f7f9fa;
+}
+.eap-zoom span {
+  padding: 0 5px 0 6px;
+  color: #718087;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.eap-zoom button {
+  min-width: 39px;
+  height: 24px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #65757d;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.eap-zoom button:hover { background: #eaf2f5; color: #285b6a; }
+.eap-zoom button.ativo { background: #2f6f7f; color: #fff; }
+
+.eap-arvore { width: 100%; }
+.eap-grid-head,
+.eap-linha {
+  grid-template-columns: 38px 30px 58px minmax(260px, 1fr) 112px 88px 88px 52px 138px;
+}
+
+@media (max-width: 1100px) {
+  .eap-toolbar { flex-wrap: wrap; }
+  .eap-toolbar-acoes { width: 100%; flex-wrap: wrap; }
+  .eap-grid-head,
+  .eap-linha {
+    grid-template-columns: 34px 28px 52px minmax(220px, 1fr) 98px 80px 80px 48px 126px;
+  }
+}
+@media (max-width: 900px) { .eap-zoom span { display: none; } }
+
+
+/* EAP 2.2 — grade de planilha profissional */
+.eap-densidade-compacta { --eap-row-h: 28px; --eap-head-h: 28px; --eap-font: 11px; }
+.eap-densidade-normal { --eap-row-h: 32px; --eap-head-h: 30px; --eap-font: 11.5px; }
+.eap-densidade-confortavel { --eap-row-h: 38px; --eap-head-h: 34px; --eap-font: 12px; }
+.eap-grid-head, .eap-linha { grid-template-columns: 42px 34px 58px minmax(300px, 1fr) 104px 86px 86px 58px 150px !important; }
+.eap-grid-head { min-height: var(--eap-head-h); }
+.eap-grid-col { height: var(--eap-head-h); }
+.eap-linha { min-height: var(--eap-row-h); height: var(--eap-row-h); font-size: var(--eap-font); }
+.eap-indent { min-height: var(--eap-row-h); }
+.eap-seta { width: 18px; height: 18px; }
+.eap-rownum { padding: 0 6px; }
+.eap-densidade { display:inline-flex; align-items:center; gap:2px; height:28px; padding:2px; border:1px solid #d3dde1; border-radius:5px; background:#f7f9fa; }
+.eap-densidade > span { padding:0 5px; color:#718087; font-size:9px; font-weight:700; text-transform:uppercase; }
+.eap-densidade button { height:22px; min-width:38px; border:0; border-radius:3px; background:transparent; color:#65757d; font-size:9px; font-weight:700; cursor:pointer; }
+.eap-densidade button:hover { background:#eaf2f5; color:#285b6a; }
+.eap-densidade button.ativo { background:#2f6f7f; color:#fff; }
+.eap-validacao-compacta { margin:0 0 8px; }
+.eap-validacao-compacta .eap-validacao-cabecalho { min-height:38px; padding:7px 10px; }
+.eap-validacao-titulo { display:flex; align-items:center; gap:7px; min-width:0; }
+.eap-validacao-titulo strong { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.eap-validacao-titulo span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.eap-validacao-acoes { display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; }
+.eap-validacao-detalhes { border:1px solid #d5dfe3; border-radius:4px; padding:4px 7px; background:#fff; color:#52646c; font-size:10px; cursor:pointer; }
+.eap-validacao-detalhes:hover { background:#f1f6f8; color:#285b6a; }
+.eap-validacao-compacta .eap-validacao-lista { max-height:180px; overflow:auto; }
+@media (max-width:900px) { .eap-validacao-acoes { flex-wrap:wrap; } .eap-grid-head,.eap-linha { grid-template-columns:38px 30px 54px minmax(240px,1fr) 96px 78px 78px 52px 130px !important; } }
