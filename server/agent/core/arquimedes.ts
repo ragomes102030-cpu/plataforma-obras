@@ -246,11 +246,21 @@ export async function proposeEapWithArquimedes(
   return { raw, request };
 }
 
+const stringListSchema = (max: number) =>
+  z.preprocess(
+    value => {
+      if (value == null) return [];
+      if (typeof value === "string") return [value];
+      return value;
+    },
+    z.array(z.string().trim().min(1).max(600)).max(max)
+  );
+
 const eapProposalSchema = z.object({
   action: z.enum(["propose_eap", "mapear_eap_macro", "expandir_subarvore_eap"]),
-  basis: z.array(z.string()).max(20),
-  assumptions: z.array(z.string()).max(30),
-  missingInformation: z.array(z.string()).max(30),
+  basis: stringListSchema(20),
+  assumptions: stringListSchema(30),
+  missingInformation: stringListSchema(30),
   nodes: z.array(
     z.object({
       operation: z.enum(["create", "update", "move", "remove"]),

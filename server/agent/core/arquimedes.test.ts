@@ -189,3 +189,29 @@ describe("parseEapProposal por etapa", () => {
     ).toThrow(/action/i);
   });
 });
+
+
+describe("parseEapProposal — metadados", () => {
+  it("normaliza basis, assumptions e missingInformation quando o provedor retorna string", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        action: "propose_eap",
+        basis: "escopo informado pelo cliente",
+        assumptions: "prazo inicial estimado em 18 meses",
+        missingInformation: "sondagem geotécnica ainda não confirmada",
+        nodes: [{
+          operation: "create",
+          parentCode: null,
+          code: "1",
+          name: "Implantação",
+          nodeType: "grupo",
+          rationale: "Organiza a implantação",
+        }],
+      })
+    );
+
+    expect(result.basis).toEqual(["escopo informado pelo cliente"]);
+    expect(result.assumptions).toEqual(["prazo inicial estimado em 18 meses"]);
+    expect(result.missingInformation).toEqual(["sondagem geotécnica ainda não confirmada"]);
+  });
+});
