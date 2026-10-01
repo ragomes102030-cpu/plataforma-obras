@@ -5055,7 +5055,7 @@ export const appRouter = router({
             and(
               eq(wbsNodes.projectId, input.projectId),
               eq(wbsNodes.versionId, writable.id),
-              eq(wbsNodes.nodeType, "entrega")
+              inArray(wbsNodes.nodeType, ["entrega", "pacote"])
             )
           )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
@@ -5063,7 +5063,7 @@ export const appRouter = router({
           return {
             created: 0,
             skipped: 0,
-            message: "A EAP desta obra não possui entregas (nós tipo entrega).",
+            message: "A EAP desta obra não possui pacotes/entregas terminais para gerar atividades.",
           };
         }
         const existing = await db
