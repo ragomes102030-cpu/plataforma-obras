@@ -418,7 +418,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const depois = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
       );
-      expect(depois.rows[0]!.n).toBe(23);
+      expect(depois.rows[0]!.n).toBe(25);
 
       // E o que o Render derrubou duas vezes: ao reaplicar a 0000 inteira, o
       // `CREATE TYPE "users_role"` que JA EXISTIA rodava de novo e o banco
