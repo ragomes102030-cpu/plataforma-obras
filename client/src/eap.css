@@ -1325,3 +1325,223 @@
 .eap-validacao-detalhes:hover { background:#f1f6f8; color:#285b6a; }
 .eap-validacao-compacta .eap-validacao-lista { max-height:180px; overflow:auto; }
 @media (max-width:900px) { .eap-validacao-acoes { flex-wrap:wrap; } .eap-grid-head,.eap-linha { grid-template-columns:38px 30px 54px minmax(240px,1fr) 96px 78px 78px 52px 130px !important; } }
+
+
+/* EAP 2.3 — revisao visivel e contraste operacional */
+.eap {
+  background: #eef2f6;
+  color: #172b43;
+}
+.eap-toolbar,
+.eap-topo,
+.eap-controle,
+.eap-validacao,
+.eap-arvore {
+  border-color: #aebdcc;
+  box-shadow: 0 2px 8px rgba(23,43,67,.08);
+}
+.eap-toolbar {
+  background: #ffffff;
+}
+.eap-toolbar-titulo,
+.eap-topo h2,
+.eap-controle-cabecalho strong,
+.eap-validacao-titulo strong {
+  color: #0b1f33;
+}
+.eap-toolbar-subtitulo,
+.eap-controle-cabecalho span,
+.eap-baseline span,
+.eap-parada span {
+  color: #40566d;
+}
+.eap-validacao {
+  background: #ffffff;
+  border-width: 1px;
+}
+.eap-validacao-cabecalho {
+  border-bottom-color: #b9c6d3;
+}
+.eap-validacao-erro {
+  background: #fff0f0;
+  border: 1px solid #d99a9a;
+  color: #8b1e1e;
+  font-weight: 800;
+}
+.eap-validacao-ok {
+  background: #edf8f0;
+  border: 1px solid #a8cdb2;
+  color: #1d6335;
+  font-weight: 800;
+}
+.eap-revisao-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 2px solid #0d4f8b;
+  border-radius: 5px;
+  background: #0d5ea8;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(13,79,139,.25);
+}
+.eap-revisao-btn:hover {
+  background: #0a4b86;
+  border-color: #073b6b;
+}
+.eap-revisao-btn.ativo {
+  background: #174a2a;
+  border-color: #123c21;
+}
+.eap-validacao-detalhes {
+  border-color: #8ea2b6;
+  color: #173b60;
+  font-weight: 700;
+}
+.eap-validacao-lista {
+  border-top-color: #b9c6d3;
+}
+.eap-validacao-item {
+  border-bottom-color: #d6dfe7;
+}
+.eap-validacao-item p,
+.eap-validacao-item small {
+  color: #263e56;
+}
+.eap-arvore {
+  background: #fff;
+}
+.eap-grid-head {
+  background: #dce5ee;
+  border-bottom-color: #9eafc1;
+  color: #183550;
+  font-weight: 800;
+}
+.eap-grid-col {
+  border-left-color: #c0ccd8;
+}
+.eap-linha {
+  border-bottom-color: #cbd6e0;
+  color: #172b43;
+}
+.eap-linha:hover {
+  background: #edf5ff;
+}
+.eap-linha.eap-nivel-1,
+.eap-linha.eap-nivel-2 {
+  background: #f4f7fa;
+}
+.eap-linha.eap-nivel-1 {
+  border-top: 1px solid #aebdcc;
+  background: #e7eef6;
+}
+.eap-linha.eap-nivel-1 .eap-nome {
+  color: #0a2946;
+  font-weight: 800;
+}
+.eap-nome {
+  color: #172b43;
+  font-weight: 650;
+}
+.eap-codigo {
+  color: #0d4f8b;
+  font-weight: 800;
+}
+.eap-tipo,
+.eap-base,
+.eap-oficial,
+.eap-unidade,
+.eap-status-cell {
+  color: #334e68;
+  font-weight: 600;
+}
+.eap-grupo-label {
+  color: #334e68;
+  font-weight: 700;
+}
+.eap-seta {
+  color: #123f67;
+  border: 1px solid #b1c0cf;
+  background: #edf3f8;
+  border-radius: 4px;
+}
+.eap-seta:hover,
+.eap-seta.aberta {
+  background: #d9e8f6;
+  color: #073b6b;
+}
+.eap-acoes-revisao {
+  opacity: 1 !important;
+  display: inline-flex !important;
+  gap: 5px;
+  padding-left: 7px;
+  border-left: 1px solid #aebdcc;
+}
+.eap-acao-revisao {
+  width: auto;
+  min-width: 72px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #7e97ae;
+  background: #eaf2fb;
+  color: #0d4f8b;
+  font-weight: 800;
+}
+.eap-acao-revisao:hover {
+  background: #d6e8fa;
+  border-color: #0d4f8b;
+}
+.eap-acao-revisao span {
+  display: inline;
+  font-size: 9px;
+  font-weight: 800;
+}
+.eap-revisao-modo {
+  margin: 0 0 8px;
+}
+.eap-controle {
+  background: #ffffff;
+}
+.eap-controle-card {
+  border-color: #b9c6d3;
+}
+.eap-controle-card span,
+.eap-controle-card small {
+  color: #40566d;
+}
+.eap-controle-card strong {
+  color: #0b1f33;
+}
+.eap-baseline {
+  background: #edf2f7;
+  border-top-color: #b9c6d3;
+}
+.eap-baseline .eap-btn {
+  border: 2px solid #8a3b12;
+  background: #c95b1a;
+  color: #fff;
+  font-weight: 800;
+}
+.eap-baseline .eap-btn:not(:disabled):hover {
+  background: #a9470e;
+}
+.eap-baseline .eap-btn:disabled {
+  background: #d8dde3;
+  border-color: #aeb8c3;
+  color: #596978;
+  opacity: 1;
+}
+.eap-busca-wrap {
+  border-color: #8ea2b6;
+  color: #334e68;
+}
+.eap-busca {
+  color: #172b43;
+}
