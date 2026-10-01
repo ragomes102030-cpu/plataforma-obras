@@ -199,7 +199,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   const total = nos.length;
   const grupos = nos.filter(n => n.nodeType === "grupo").length;
-  const folhas = nos.filter(n => n.nodeType === "entrega").length;
+  const folhas = folhasEap.length;
 
   return (
     <div className={`eap eap-densidade-${densidade}`}>
