@@ -183,7 +183,7 @@ async function proposeEapIncrementally(
 ) {
   const macroRequest = buildEapMacroRequest(context, skills);
   const macroRaw = await provider.complete(macroRequest);
-  const macro = parseEapProposal(macroRaw);
+  const macro = parseEapProposal(macroRaw, "mapear_eap_macro");
 
   const perRootBudget = Math.min(
     MAX_SUBTREE_NODES,
@@ -219,7 +219,7 @@ async function proposeEapIncrementally(
         perRootBudget
       );
       const raw = await provider.complete(request);
-      return parseEapProposal(raw);
+      return parseEapProposal(raw, "expandir_subarvore_eap");
     }
   );
 
@@ -247,7 +247,7 @@ export async function proposeEapWithArquimedes(
 }
 
 const eapProposalSchema = z.object({
-  action: z.literal("propose_eap"),
+  action: z.enum(["propose_eap", "mapear_eap_macro", "expandir_subarvore_eap"]),
   basis: z.array(z.string()).max(20),
   assumptions: z.array(z.string()).max(30),
   missingInformation: z.array(z.string()).max(30),
@@ -267,7 +267,10 @@ const eapProposalSchema = z.object({
   ).max(MAX_INCREMENTAL_NODES),
 });
 
-export function parseEapProposal(raw: string): ArquimedesEapProposal {
+export function parseEapProposal(
+  raw: string,
+  expectedAction: "propose_eap" | "mapear_eap_macro" | "expandir_subarvore_eap" = "propose_eap"
+): ArquimedesEapProposal {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -292,5 +295,18 @@ export function parseEapProposal(raw: string): ArquimedesEapProposal {
     );
   }
 
-  return result.data;
+  if (result.data.action !== expectedAction) {
+    throw new Error(
+      "A proposta EAP do Arquimedes não atende ao contrato estruturado: action — esperado "" +
+        expectedAction +
+        "", recebido "" +
+        result.data.action +
+        ""."
+    );
+  }
+
+  return {
+    ...result.data,
+    action: "propose_eap",
+  };
 }
