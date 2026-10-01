@@ -186,6 +186,15 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const expandirTudo = () => setAberto(new Set(nos.filter(n => n.nodeType !== "entrega").map(n => n.id)));
   const recolherTudo = () => setAberto(new Set());
   const analisarComArquimedes = trpc.projects.analisarEapComArquimedes.useMutation();
+  const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
+    onSuccess: async () => {
+      await recarregar();
+      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await coordenador.refetch();
+      await versoes.refetch();
+      analisarComArquimedes.reset();
+    },
+  });
   const abrirAgente = () => window.dispatchEvent(new CustomEvent("abrir-agente-eap"));
 
 
@@ -262,6 +271,26 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           ))}
           {analisarComArquimedes.data.proposal.missingInformation.length > 0 && (
             <small>Faltam dados: {analisarComArquimedes.data.proposal.missingInformation.join(" · ")}</small>
+          )}
+          {analisarComArquimedes.data.proposal.nodes.every(item => item.operation === "create" || item.operation === "update") && (
+            <button
+              type="button"
+              className="eap-btn"
+              disabled={aplicarPropostaEap.isPending}
+              onClick={() => {
+                if (!window.confirm("Aplicar a proposta do Arquimedes como rascunho?\n\nA EAP continuará editável e não será aprovada nem congelada.")) return;
+                aplicarPropostaEap.mutate({
+                  projectId: projetoId,
+                  confirm: true,
+                  proposal: analisarComArquimedes.data!.proposal,
+                });
+              }}
+            >
+              {aplicarPropostaEap.isPending ? "Aplicando rascunho…" : "Aplicar proposta como rascunho"}
+            </button>
+          )}
+          {aplicarPropostaEap.error && (
+            <small className="eap-erro">Aplicação da proposta: {aplicarPropostaEap.error.message}</small>
           )}
         </div>
       )}
@@ -729,6 +758,9 @@ function EditorEapPanel({
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
   const analisar = trpc.projects.analisarEapComArquimedes.useMutation();
+  const aplicarProposta = trpc.projects.aplicarPropostaEap.useMutation({
+    onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
+  });
   const criarRaiz = trpc.projects.createWbsNode.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
@@ -847,6 +879,26 @@ function EapVazia({ projetoId }: { projetoId: number }) {
             A proposta é somente leitura nesta etapa. O engenheiro deve revisar a estrutura,
             ajustar o que for necessário e pedir nova análise ao Arquimedes antes da aprovação.
           </small>
+          {analisar.data.proposal.nodes.every(item => item.operation === "create" || item.operation === "update") && (
+            <button
+              type="button"
+              className="eap-btn"
+              disabled={aplicarProposta.isPending}
+              onClick={() => {
+                if (!window.confirm("Aplicar a proposta do Arquimedes como rascunho?\n\nA EAP continuará editável e não será aprovada nem congelada.")) return;
+                aplicarProposta.mutate({
+                  projectId: projetoId,
+                  confirm: true,
+                  proposal: analisar.data!.proposal,
+                });
+              }}
+            >
+              {aplicarProposta.isPending ? "Aplicando rascunho…" : "Aplicar proposta como rascunho"}
+            </button>
+          )}
+          {aplicarProposta.error && (
+            <small className="eap-erro">Aplicação da proposta: {aplicarProposta.error.message}</small>
+          )}
         </div>
       )}
 
