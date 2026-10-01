@@ -242,6 +242,28 @@ export async function proposeEapWithArquimedes(
   }
 
   const request = buildEapRequest(context, skills);
+
+  // Contrato de fronteira: a revisão existente sempre precisa chegar ao provider
+  // como uma requisição completa. Falhar aqui identifica a origem do problema
+  // antes de qualquer chamada ao LLM.
+  if (
+    !request ||
+    typeof request.system !== "string" ||
+    typeof request.user !== "string" ||
+    !Array.isArray(request.skills)
+  ) {
+    console.error("[Arquimedes][EAP] requisição inválida antes do provider", {
+      hasRequest: Boolean(request),
+      hasSystem: typeof request?.system === "string",
+      hasUser: typeof request?.user === "string",
+      skillsIsArray: Array.isArray(request?.skills),
+      wbsNodes: context.wbs.length,
+    });
+    throw new Error(
+      "Falha interna ao montar a requisição estruturada da revisão da EAP. Nenhuma alteração foi aplicada à obra."
+    );
+  }
+
   const raw = await provider.complete(request);
   return { raw, request };
 }
