@@ -1284,12 +1284,16 @@
 
 .eap-arvore { width: 100%; }
 .eap-grid-head,
-.eap-linha { grid-template-columns: 42px 34px 62px minmax(220px, 1fr) 82px 74px 145px; }
+.eap-linha {
+  grid-template-columns: 38px 30px 58px minmax(260px, 1fr) 112px 88px 88px 52px 138px;
+}
 
 @media (max-width: 1100px) {
   .eap-toolbar { flex-wrap: wrap; }
   .eap-toolbar-acoes { width: 100%; flex-wrap: wrap; }
   .eap-grid-head,
-  .eap-linha { grid-template-columns: 36px 30px 54px minmax(210px, 1fr) 74px 66px 130px; }
+  .eap-linha {
+    grid-template-columns: 34px 28px 52px minmax(220px, 1fr) 98px 80px 80px 48px 126px;
+  }
 }
 @media (max-width: 900px) { .eap-zoom span { display: none; } }
