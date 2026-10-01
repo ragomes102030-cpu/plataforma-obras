@@ -18,7 +18,8 @@ function hasData<T>(result: EvidenceResult<T>) {
 export class EvidenceSourceRouter implements EvidenceSource {
   constructor(
     private readonly local: EvidenceSource,
-    private readonly fallback?: EvidenceSource
+    private readonly fallback?: EvidenceSource,
+    private readonly allowFallback = false
   ) {}
 
   private async choose<T>(
