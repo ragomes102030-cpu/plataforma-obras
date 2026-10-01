@@ -299,6 +299,7 @@ async function recomputeProjectProgress(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
 ): Promise<number> {
+  const currentVersionId = await getCurrentPlanVersionId(db, projectId);
   const rows = await db
     .select({
       progress: scheduleActivities.progress,
@@ -306,12 +307,12 @@ async function recomputeProjectProgress(
     })
     .from(scheduleActivities)
     .where(
-      and(
-        eq(scheduleActivities.projectId, projectId),
-        ...(await getCurrentPlanVersionId(db, projectId)) != null
-          ? [eq(scheduleActivities.versionId, await getCurrentPlanVersionId(db, projectId))]
-          : []
-      )
+      currentVersionId == null
+        ? eq(scheduleActivities.projectId, projectId)
+        : and(
+            eq(scheduleActivities.projectId, projectId),
+            eq(scheduleActivities.versionId, currentVersionId)
+          )
     );
   const progress = deriveProjectProgress(
     rows.map(row => ({
@@ -1200,10 +1201,18 @@ export const appRouter = router({
             ? demoActivities
             : [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
         const rows = await db
           .select()
           .from(scheduleActivities)
-          .where(and(eq(scheduleActivities.projectId, input.projectId), ...(await getCurrentPlanVersionId(db, input.projectId)) != null ? [eq(scheduleActivities.versionId, await getCurrentPlanVersionId(db, input.projectId))] : []))
+          .where(
+            currentVersionId == null
+              ? eq(scheduleActivities.projectId, input.projectId)
+              : and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, currentVersionId)
+                )
+          )
           .orderBy(scheduleActivities.sortOrder);
         return rows;
       }),
@@ -1274,10 +1283,18 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
         return db
           .select()
           .from(wbsNodes)
-          .where(and(eq(wbsNodes.projectId, input.projectId), ...(await getCurrentPlanVersionId(db, input.projectId)) != null ? [eq(wbsNodes.versionId, await getCurrentPlanVersionId(db, input.projectId))] : []))
+          .where(
+            currentVersionId == null
+              ? eq(wbsNodes.projectId, input.projectId)
+              : and(
+                  eq(wbsNodes.projectId, input.projectId),
+                  eq(wbsNodes.versionId, currentVersionId)
+                )
+          )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
     analisarEapComArquimedes: protectedProcedure
@@ -1294,10 +1311,18 @@ export const appRouter = router({
           .limit(1);
         if (!project) throw notFound("Obra não encontrada.");
 
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
         const nodes = await db
           .select()
           .from(wbsNodes)
-          .where(and(eq(wbsNodes.projectId, input.projectId), ...(await getCurrentPlanVersionId(db, input.projectId)) != null ? [eq(wbsNodes.versionId, await getCurrentPlanVersionId(db, input.projectId))] : []))
+          .where(
+            currentVersionId == null
+              ? eq(wbsNodes.projectId, input.projectId)
+              : and(
+                  eq(wbsNodes.projectId, input.projectId),
+                  eq(wbsNodes.versionId, currentVersionId)
+                )
+          )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
         const [state] = await db
           .select({ stage: agentProjectStates.stage })
@@ -1352,7 +1377,19 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { valid: true, issues: [], summary: { nodes: 0, leaves: 0, errors: 0, warnings: 0 } };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const nodes = await db.select().from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId)).orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const nodes = await db
+          .select()
+          .from(wbsNodes)
+          .where(
+            currentVersionId == null
+              ? eq(wbsNodes.projectId, input.projectId)
+              : and(
+                  eq(wbsNodes.projectId, input.projectId),
+                  eq(wbsNodes.versionId, currentVersionId)
+                )
+          )
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
         const evidenceNodes = nodes.map(node => ({
           id: node.id, projectId: node.projectId, externalId: node.externalId, externalUid: node.externalUid,
           parentId: node.parentId, code: node.code, name: node.name, level: node.level, nodeType: node.nodeType,
