@@ -1373,6 +1373,7 @@ export const appRouter = router({
           projectId: project.id,
           name: project.name,
           description: project.descricao,
+          tipoDeObra: project.tipoDeObra,
           stage: state?.stage ?? "EAP_PROPOSTA",
           wbs: nodes.map(node => ({
             id: node.id,
@@ -1857,6 +1858,7 @@ export const appRouter = router({
               name: input.name,
               location: input.location,
               descricao: input.descricao ?? null,
+              tipoDeObra: input.tipoDeObra,
               status: "Planejamento",
               progress: 0,
               plannedStart,
