@@ -1964,3 +1964,65 @@ tr:hover .xl-codigo {
 .xl-exclusao-nome{padding:11px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;color:#9a3412;font-weight:700;word-break:break-word}
 .xl-confirm-exclusao input{width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid #cbd5e1;border-radius:7px;margin:8px 0 12px}
 .xl-btn-perigo{width:100%;padding:10px;border:0;border-radius:7px;background:#b42318;color:#fff;font-weight:700;cursor:pointer}.xl-btn-perigo:disabled{opacity:.45;cursor:not-allowed}
+
+
+/* Cadastro de obra orientado pelo fluxo do Arquimedes */
+.nova-obra-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:28px;background:rgba(15,23,42,.58);backdrop-filter:blur(3px)}
+.nova-obra-dialog{width:min(820px,100%);max-height:calc(100vh - 56px);overflow:auto;background:#fff;border:1px solid #dbe3ea;border-radius:16px;box-shadow:0 30px 90px rgba(15,23,42,.28);color:#17212b}
+.nova-obra-header{display:flex;justify-content:space-between;gap:24px;padding:25px 28px 20px;border-bottom:1px solid #e7edf2}
+.nova-obra-kicker{display:flex;align-items:center;gap:7px;color:#176b87;font-size:11px;font-weight:800;letter-spacing:.12em}
+.nova-obra-header h2{margin:7px 0 5px;font-size:26px;letter-spacing:-.02em}
+.nova-obra-header p{margin:0;color:#64748b;font-size:13px;line-height:1.5}
+.nova-obra-fechar{border:0;background:transparent;color:#64748b;padding:5px;height:32px;cursor:pointer;border-radius:7px}
+.nova-obra-fechar:hover{background:#f1f5f9;color:#17212b}
+.nova-obra-fluxo{display:flex;align-items:center;padding:16px 28px;background:#f8fafc;border-bottom:1px solid #e7edf2}
+.nova-obra-fluxo-item{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.nova-obra-fluxo-item span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e2e8f0;color:#64748b;font-size:11px;font-weight:800}
+.nova-obra-fluxo-item.ativo span{background:#176b87;color:#fff}
+.nova-obra-fluxo-item strong{display:block;font-size:12px}
+.nova-obra-fluxo-item small{display:block;color:#94a3b8;font-size:10px;margin-top:2px}
+.nova-obra-fluxo-linha{height:1px;background:#d8e0e8;flex:1;margin:0 14px}
+.nova-obra-body{padding:4px 28px 12px}
+.nova-obra-section{padding:20px 0;border-bottom:1px solid #edf1f5}
+.nova-obra-section-title{display:flex;gap:11px;align-items:flex-start;margin-bottom:15px}
+.nova-obra-section-title>div{display:grid;gap:3px}
+.nova-obra-section-title strong{font-size:14px}
+.nova-obra-section-title small{font-size:11px;color:#7b8794}
+.nova-obra-numero{font-size:10px;font-weight:800;color:#176b87;padding-top:2px}
+.nova-obra-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.nova-obra-section label{display:grid;gap:6px}
+.nova-obra-section label>span{font-size:11px;font-weight:700;color:#334155}
+.nova-obra-section label b{color:#b42318}
+.nova-obra-section input,.nova-obra-section select,.nova-obra-section textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#17212b;padding:10px 11px;font:inherit;font-size:13px;outline:none}
+.nova-obra-section input,.nova-obra-section select{min-height:40px}
+.nova-obra-section textarea{resize:vertical;line-height:1.55;min-height:145px}
+.nova-obra-section input:focus,.nova-obra-section select:focus,.nova-obra-section textarea:focus{border-color:#176b87;box-shadow:0 0 0 3px rgba(23,107,135,.09)}
+.nova-obra-tipo{margin-top:12px;max-width:390px}
+.nova-obra-escopo{background:#fbfdfe;margin:0 -28px;padding-left:28px;padding-right:28px}
+.nova-obra-contador{text-align:right;color:#94a3b8;font-size:10px;margin-top:4px}
+.nova-obra-dica{display:flex;gap:10px;margin-top:12px;padding:11px 12px;border:1px solid #cfe4ea;background:#f3fafc;border-radius:9px;color:#35616d}
+.nova-obra-dica svg{flex:0 0 auto;margin-top:2px}
+.nova-obra-dica div{display:grid;gap:3px}
+.nova-obra-dica strong{font-size:11px}
+.nova-obra-dica span{font-size:11px;line-height:1.45}
+.nova-obra-erro{margin:12px 0 0;color:#b42318;font-size:12px}
+.nova-obra-alert{margin-top:16px;padding:11px 12px;border-radius:8px;background:#fef3f2;border:1px solid #fecdca;color:#b42318;font-size:12px}
+.nova-obra-footer{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:17px 28px;background:#f8fafc;border-top:1px solid #e7edf2;border-radius:0 0 16px 16px}
+.nova-obra-footer-info{display:flex;align-items:flex-start;gap:8px;color:#64748b;font-size:11px;line-height:1.4;max-width:440px}
+.nova-obra-footer-info svg{flex:0 0 auto;color:#176b87;margin-top:1px}
+.nova-obra-acoes{display:flex;gap:9px;flex:0 0 auto}
+.nova-obra-cancelar,.nova-obra-criar{border-radius:8px;padding:10px 15px;font-weight:700;font-size:12px;cursor:pointer}
+.nova-obra-cancelar{border:1px solid #cbd5e1;background:#fff;color:#334155}
+.nova-obra-criar{border:0;background:#176b87;color:#fff;box-shadow:0 2px 5px rgba(23,107,135,.18)}
+.nova-obra-cancelar:disabled,.nova-obra-criar:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:700px){
+  .nova-obra-backdrop{padding:10px}
+  .nova-obra-dialog{max-height:calc(100vh - 20px)}
+  .nova-obra-header,.nova-obra-body{padding-left:18px;padding-right:18px}
+  .nova-obra-fluxo{padding:13px 18px}
+  .nova-obra-escopo{margin-left:-18px;margin-right:-18px;padding-left:18px;padding-right:18px}
+  .nova-obra-grid{grid-template-columns:1fr}
+  .nova-obra-fluxo-item small{display:none}
+  .nova-obra-footer{align-items:stretch;flex-direction:column;padding:15px 18px}
+  .nova-obra-acoes{justify-content:flex-end}
+}
