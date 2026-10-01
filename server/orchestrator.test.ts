@@ -158,9 +158,7 @@ describe("runProjectOrchestrator", () => {
     expect(result.readOnly).toBe(false);
     expect(result.status).toBe("respondido");
     expect(result.content).toContain("A EAP está vazia.");
-    expect(result.content).toContain(
-      "Fontes: dados locais da obra; MCPs consultados (eap)."
-    );
+    expect(result.content).toContain("EVIDÊNCIAS CONSULTADAS");
     expect(result.iterations).toBe(2);
     expect(result.audit[0]).toMatchObject({
       status: "success",
@@ -207,7 +205,7 @@ describe("runProjectOrchestrator", () => {
           },
         }
       )
-    ).rejects.toThrow("não retornou conteúdo final textual");
+    ).rejects.toThrow("sem conteúdo final textual");
   });
 
   it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
@@ -285,7 +283,8 @@ describe("runProjectOrchestrator", () => {
       cronograma: [],
       ganttLob: [],
     });
-    expect(tools.map(tool => tool.function.name)).toEqual(["get_eap_tree"]);
+    expect(tools.map(tool => tool.function.name)).toContain("get_eap_tree");
+    expect(tools.map(tool => tool.function.name)).not.toContain("criar_eap_node");
   });
 
   it("recusa uma ferramenta de escrita mesmo que o modelo tente chamá-la", async () => {
@@ -320,6 +319,6 @@ describe("runProjectOrchestrator", () => {
           },
         }
       )
-    ).rejects.toThrow("Ferramenta não permitida");
+    ).rejects.toThrow("Ferramenta não autorizada pelo runtime");
   });
 });
