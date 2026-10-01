@@ -560,7 +560,6 @@ export function gerarEap(
   const soServicos = entrada.filter((s): s is ServicoDoCatalogo =>
     !!s &&
     typeof s.code === "string" &&
-    (s.itemType === "servico" || s.itemType === undefined) &&
     ehCodigoDeServico(s.code)
   );
   const gruposPedidos = resolverGrupos(opcoes.tipoDeObra);
