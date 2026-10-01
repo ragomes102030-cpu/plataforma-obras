@@ -49,6 +49,7 @@ export interface ArquimedesLlmRequest {
   user: string;
   skills: ArquimedesSkill[];
   maxTokens?: number;
+  databaseContext?: { projectId: number };
 }
 
 export interface ArquimedesLlmProvider {
