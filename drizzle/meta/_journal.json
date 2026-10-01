@@ -62,6 +62,13 @@
       "when": 1790820000000,
       "tag": "0008_updated_at_new_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790823600000,
+      "tag": "0009_project_tipo_obra",
+      "breakpoints": true
     }
   ],
   "version": "7",
