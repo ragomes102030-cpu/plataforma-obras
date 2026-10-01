@@ -2175,23 +2175,11 @@ export const appRouter = router({
         });
       }),
     /**
-     * Gera a EAP da obra a partir do catálogo importado.
+     * Gera a EAP canônica a partir do escopo/template da obra.
      *
-     * POR QUE ESTA MUTATION ABRE TRANSAÇÃO
-     *
-     * O seeder grava em cinco tabelas: nós da EAP, versão de orçamento, itens,
-     * atividades e dependências. Sem transação, cada `insert` faz autocommit: se
-     * o terceiro falhar, os dois primeiros ficam gravados, a guarda de
-     * idempotência passa a responder "a obra já tem estrutura" para sempre, e o
-     * único botão que geraria a EAP é justamente o que recusa. Não havia rota,
-     * botão nem script que tirasse a obra de lá.
-     *
-     * O outro chamador do seeder (`projects.create`) já passava `tx`; este
-     * passava o handle raiz, e o cast `tx as unknown as ...` apagava do
-     * typechecker a diferença entre os dois.
-     *
-     * `refazer` é a saída para quem já caiu nesse estado: apaga o que a
-     * semeadura anterior deixou e refaz, na mesma transação.
+     * O catálogo não participa desta etapa. A versão gravável é resolvida
+     * antes da transação; se a versão anterior estiver aprovada, a função de
+     * versionamento cria um fork e a nova EAP é construída nele.
      */
     generateEapFromCatalog: protectedProcedure
       .input(
@@ -2207,14 +2195,19 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const semeadura = await db.transaction(async tx => {
           return await semearEapDoCatalogo(
             tx as unknown as NonNullable<typeof db>,
             input.projectId,
-            { tipoDeObra: input.tipoDeObra, refazer: input.refazer }
+            {
+              tipoDeObra: input.tipoDeObra,
+              versionId: writable.id,
+              refazer: input.refazer,
+            }
           );
         });
-        return { semeadura };
+        return { semeadura, version: writable };
       }),
     initializePlan: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
