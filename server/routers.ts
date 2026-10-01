@@ -1541,7 +1541,7 @@ export const appRouter = router({
               })
               .$returningIds();
 
-            if (!created) throw new Error("Não foi possível criar o nó proposto.");
+            if (!created) throw conflict("Não foi possível criar o nó proposto.");
             const createdNode = {
               id: created,
               projectId: input.projectId,
