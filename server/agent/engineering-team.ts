@@ -1,6 +1,6 @@
 import type { AgentProjectContext } from "../agent";
 import type { LlmMessage, LlmResponse, LlmTool } from "../llm-provider-gateway";
-import { invokeLlmGateway } from "./llm-provider-gateway";
+import { invokeLlmGateway } from "../llm-provider-gateway";
 import {
   MCP_TOOL_POLICY,
   callReadOnlyMcpTool,
