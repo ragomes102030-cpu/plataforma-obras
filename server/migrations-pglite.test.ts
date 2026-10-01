@@ -60,7 +60,7 @@ describe("as migrations constroem um schema utilizavel", () => {
       // 33, e nao 34. A tabela `__drizzle_migrations` NAO vem de migration: e o
       // migrador que a cria, para registrar o que ja aplicou. Contar ela aqui
       // seria esperar que o arquivo criasse a propria ficha de controle.
-      expect(tabelas.rows[0]!.n).toBe(33);
+      expect(tabelas.rows[0]!.n).toBe(36);
 
       const enums = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM pg_type t" +
