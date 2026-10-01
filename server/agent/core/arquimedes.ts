@@ -297,11 +297,11 @@ export function parseEapProposal(
 
   if (result.data.action !== expectedAction) {
     throw new Error(
-      "A proposta EAP do Arquimedes não atende ao contrato estruturado: action — esperado "" +
+      "A proposta EAP do Arquimedes não atende ao contrato estruturado: action — esperado \"" +
         expectedAction +
-        "", recebido "" +
+        "\", recebido \"" +
         result.data.action +
-        ""."
+        "\"."
     );
   }
 
