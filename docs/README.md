@@ -190,9 +190,9 @@ COMPASIO_API_KEY=<configure-no-ambiente>
 
 - `DATABASE_URL` ✅
 - `PUBLIC_APP_URL` = https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app
-- `MCP_EAP_URL` = https://mcp-eap-server-rafael-5864.vercel.app
-- `MCP_CRONOGRAMA_URL` = https://mcp-cronograma-server-rafael-5864.vercel.app
-- `MCP_GANTT_LOB_URL` = https://mcp-gantt-lob-server-rafael-5864.vercel.app
+- `MCP_EAP_URL` = https://mcp-eap-server.onrender.com
+- `MCP_CRONOGRAMA_URL` = https://mcp-cronograma-server.onrender.com
+- `MCP_GANTT_LOB_URL` = https://mcp-gantt-lob-server.onrender.com
 - `VITE_FRONTEND_FORGE_API_URL`
 - `VITE_ANALYTICS_ENDPOINT`
 
@@ -279,7 +279,7 @@ COMPASIO_API_KEY=<configure-no-ambiente>
 
 ### Adição de MCPs
 - +4 MCPs novos: autodesk-bim, linear, clickup, composio
-- Composio com token real configurado
+- Composio configurado por variável de ambiente; nenhum token é armazenado no repositório
 
 ### Gateway
 - Hermes gateway reiniciado (PID 31264)
@@ -328,7 +328,7 @@ Composio: configure `COMPOSIO_API_KEY` somente no ambiente de execução.
 | lean-planning MCP aponta pro Desktop local | ⚠️ Depende máquina local ligada |
 | `client/package.json` não existe (build usa root package.json) | ℹ️ Funcional mas confuso |
 | gateway warning após update | ℹ️ Fazer `hermes gateway restart` após update |
-| mcp-server dist/index.js com URLs antigas | ✅ Corrigido em set/2026 |
+| mcp-server usa URLs e tokens somente por variáveis de ambiente | ✅ Corrigido |
 
 ---
 
