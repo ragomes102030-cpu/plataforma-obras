@@ -72,7 +72,9 @@ export function buildEapRequest(
     2
   );
 
-  // A revisão trabalha com uma EAP já existente. 8K é suficiente para o contrato\n  // estruturado e reduz o risco de timeout em provedores rápidos porém limitados.\n  return { system, user, skills, maxTokens: 8192 };
+  // A revisão trabalha com uma EAP já existente. 8K é suficiente para o contrato
+  // estruturado e reduz o risco de timeout em provedores rápidos porém limitados.
+  return { system, user, skills, maxTokens: 8192 };
 }
 
 export function buildEapMacroRequest(
