@@ -201,11 +201,19 @@ let toolCatalogCache: {
   value: ConstructionMcpToolCatalog;
 } | null = null;
 let toolCatalogInFlight: Promise<ConstructionMcpToolCatalog> | null = null;
+const MCP_STATUS_CACHE_TTL_MS = 30_000;
+let mcpStatusCache: {
+  expiresAt: number;
+  value: ConstructionMcpStatus;
+} | null = null;
+let mcpStatusInFlight: Promise<ConstructionMcpStatus> | null = null;
 
 export function resetMcpResilienceState() {
   circuitBreakers.clear();
   toolCatalogCache = null;
   toolCatalogInFlight = null;
+  mcpStatusCache = null;
+  mcpStatusInFlight = null;
 }
 
 function circuitState(domain: ConstructionMcpDomain) {
@@ -417,77 +425,110 @@ export async function runConstructionMcpHomologation(
 
 export async function getConstructionMcpStatus(
   requestId: string,
-  clients: ConstructionMcpReadClients = createConstructionMcpClients()
+  clients?: ConstructionMcpReadClients
 ): Promise<ConstructionMcpStatus> {
-  const startedAt = Date.now();
-  const entries = await Promise.all(
-    (
-      Object.entries(clients) as Array<
-        [ConstructionMcpDomain, ConstructionMcpClients[ConstructionMcpDomain]]
-      >
-    ).map(async ([domain, client]) => {
-      const serverStartedAt = Date.now();
-      try {
-        const toolsResult = await runReadOnlyWithResilience(domain, () =>
-          client.listTools()
-        );
-        const tools = toolsResult.value;
-        return [
-          domain,
-          {
-            status: "online" as const,
-            latencyMs: Date.now() - serverStartedAt,
-            attempts: toolsResult.attempts,
-            toolCount: tools.length,
-            tools: tools.map(tool => tool.name),
-            lastError: null,
-          },
-        ] as const;
-      } catch (error) {
-        const message = errorMessage(error);
-        const latencyMs = Date.now() - serverStartedAt;
-        console.error(
-          JSON.stringify({
-            evento: "mcp_status_error",
-            requestId,
-            servidor: domain,
-            latencia_ms: latencyMs,
-            erro: message,
-          })
-        );
-        return [
-          domain,
-          {
-            status: "offline" as const,
-            latencyMs,
-            attempts: attemptCount(error),
-            toolCount: 0,
-            tools: [],
-            lastError: message,
-          },
-        ] as const;
-      }
-    })
-  );
+  const useSharedCache = clients === undefined;
 
-  const servers = Object.fromEntries(entries) as Record<
-    ConstructionMcpDomain,
-    ConstructionMcpServerStatus
-  >;
-  const serverStatuses = Object.values(servers).map(server => server.status);
-  const status = serverStatuses.every(value => value === "online")
-    ? "online"
-    : serverStatuses.some(value => value === "online")
-      ? "degraded"
-      : "offline";
+  if (
+    useSharedCache &&
+    mcpStatusCache &&
+    mcpStatusCache.expiresAt > Date.now()
+  ) {
+    return { ...mcpStatusCache.value, requestId };
+  }
 
-  return {
-    status,
-    requestId,
-    checkedAt: new Date().toISOString(),
-    durationMs: Date.now() - startedAt,
-    servers,
+  if (useSharedCache && mcpStatusInFlight) {
+    const value = await mcpStatusInFlight;
+    return { ...value, requestId };
+  }
+
+  const runStatusCheck = async (): Promise<ConstructionMcpStatus> => {
+    const effectiveClients = clients ?? createConstructionMcpClients();
+    const startedAt = Date.now();
+    const entries = await Promise.all(
+      (
+        Object.entries(effectiveClients) as Array<
+          [ConstructionMcpDomain, ConstructionMcpReadClients[ConstructionMcpDomain]]
+        >
+      ).map(async ([domain, client]) => {
+        const serverStartedAt = Date.now();
+        try {
+          const toolsResult = await runReadOnlyWithResilience(domain, () =>
+            client.listTools()
+          );
+          const tools = toolsResult.value;
+          return [
+            domain,
+            {
+              status: "online" as const,
+              latencyMs: Date.now() - serverStartedAt,
+              attempts: toolsResult.attempts,
+              toolCount: tools.length,
+              tools: tools.map(tool => tool.name),
+              lastError: null,
+            },
+          ] as const;
+        } catch (error) {
+          const message = errorMessage(error);
+          const latencyMs = Date.now() - serverStartedAt;
+          console.error(
+            JSON.stringify({
+              evento: "mcp_status_error",
+              requestId,
+              servidor: domain,
+              latencia_ms: latencyMs,
+              erro: message,
+            })
+          );
+          return [
+            domain,
+            {
+              status: "offline" as const,
+              latencyMs,
+              attempts: attemptCount(error),
+              toolCount: 0,
+              tools: [],
+              lastError: message,
+            },
+          ] as const;
+        }
+      })
+    );
+
+    const servers = Object.fromEntries(entries) as Record<
+      ConstructionMcpDomain,
+      ConstructionMcpServerStatus
+    >;
+    const serverStatuses = Object.values(servers).map(server => server.status);
+    const status = serverStatuses.every(value => value === "online")
+      ? "online"
+      : serverStatuses.some(value => value === "online")
+        ? "degraded"
+        : "offline";
+
+    return {
+      status,
+      requestId,
+      checkedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      servers,
+    };
   };
+
+  if (!useSharedCache) return runStatusCheck();
+
+  const promise = runStatusCheck();
+  mcpStatusInFlight = promise;
+  try {
+    const value = await promise;
+    mcpStatusCache = {
+      value,
+      expiresAt: Date.now() + MCP_STATUS_CACHE_TTL_MS,
+    };
+    return value;
+  } finally {
+    mcpStatusInFlight = null;
+  }
 }
 
 export async function listConstructionMcpTools(): Promise<ConstructionMcpToolCatalog> {
