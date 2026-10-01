@@ -4895,6 +4895,14 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const currentVersionStatus = currentVersionId == null
+          ? null
+          : (await db
+              .select({ status: projectPlanVersions.status })
+              .from(projectPlanVersions)
+              .where(eq(projectPlanVersions.id, currentVersionId))
+              .limit(1))[0]?.status ?? null;
+        const canPersistCpm = currentVersionStatus !== "approved";
         const activities = await db
           .select()
           .from(scheduleActivities)
