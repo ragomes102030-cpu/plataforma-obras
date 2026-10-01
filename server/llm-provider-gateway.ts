@@ -56,6 +56,7 @@ export type GatewayRequest = {
   tools: LlmTool[];
   responseFormat?: { type: "text" | "json_object" };
   maxTokens?: number;
+  timeoutMs?: number;
   allowEmptyResponse?: boolean;
 };
 
@@ -178,9 +179,11 @@ async function callProvider(
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    Number.isFinite(ENV.llmTimeoutMs) && ENV.llmTimeoutMs > 0
-      ? ENV.llmTimeoutMs
-      : 45_000
+    Number.isFinite(request.timeoutMs) && request.timeoutMs > 0
+      ? request.timeoutMs
+      : Number.isFinite(ENV.llmTimeoutMs) && ENV.llmTimeoutMs > 0
+        ? ENV.llmTimeoutMs
+        : 60_000
   );
   try {
     const response = await fetch(provider.baseUrl, {
