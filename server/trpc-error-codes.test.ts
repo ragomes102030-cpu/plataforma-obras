@@ -35,6 +35,8 @@ describe("routers.ts nao treats erro de dominio como 500", () => {
     "Banco de dados não configurado.", // banco ausente: falha do servidor
     "Não foi possível inicializar o estado do coordenador.", // estado interno
     "Não foi possível registrar a prévia.", // escrita interna
+    "Não foi possível criar a versão inicial do plano.", // estado interno
+    "Não foi possível baixar a base oficial da SEINFRA (HTTP ${response.status}).", // falha externa
   ];
 
   it("o guard de acesso usa forbidden, nao Error cru", () => {
