@@ -71,7 +71,19 @@ export default function Home() {
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
-  const obrasDeTeste = lista.filter(o => /^TESTE/i.test(o.name) || /DEMONSTRAÇÃO/i.test(o.name) || /^DEMO-/i.test(o.code));\n  const limparObrasTeste = trpc.projects.deleteTestProjects.useMutation({ onSuccess: async () => { await obras.refetch(); setObraId(null); setDestino("obra"); setAba("dashboard"); } });\n\n  const criarDemo = trpc.projects.createDemoGantt.useMutation({
+  const obrasDeTeste = lista.filter(
+    o => /^TESTE/i.test(o.name) || /DEMONSTRAÇÃO/i.test(o.name) || /^DEMO-/i.test(o.code)
+  );
+  const limparObrasTeste = trpc.projects.deleteTestProjects.useMutation({
+    onSuccess: async () => {
+      await obras.refetch();
+      setObraId(null);
+      setDestino("obra");
+      setAba("dashboard");
+    },
+  });
+
+  const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
       await obras.refetch();
       setObraId(created.projectId);
