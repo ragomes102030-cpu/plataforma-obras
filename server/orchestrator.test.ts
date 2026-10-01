@@ -261,6 +261,24 @@ describe("runProjectOrchestrator", () => {
     expect(systemMessage).toContain("A rede possui ciclo.");
   });
 
+  it("expõe a equipe de engenharia como ferramenta de análise", () => {
+    const tools = toOpenAiTools({
+      eap: [],
+      cronograma: [],
+      ganttLob: [],
+    });
+    const teamTool = tools.find(tool => tool.function.name === "engineering_team_analysis");
+    expect(teamTool).toBeDefined();
+    expect(teamTool?.function.parameters).toMatchObject({
+      type: "object",
+      properties: {
+        focus: {
+          enum: ["geral", "eap", "cronograma", "producao", "lob"],
+        },
+      },
+    });
+  });
+
   it("não expõe ferramentas de escrita ao modelo", () => {
     const tools = toOpenAiTools({
       eap: [{ name: "criar_eap_node" }, { name: "get_eap_tree" }],
