@@ -200,7 +200,7 @@ export async function semearEapDoCatalogo(
       notes: priceItems.notes,
     })
     .from(priceItems)
-    .where(eq(priceItems.catalogId, catalogo.id));
+    .where(and(eq(priceItems.catalogId, catalogo.id), eq(priceItems.itemType, "servico")));
 
   const gerado = gerarEap(
     servicos.map(s => ({
