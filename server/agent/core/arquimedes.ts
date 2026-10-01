@@ -345,10 +345,7 @@ export async function proposeEapWithArquimedes(
     return proposeEapIncrementally(context, skills, provider);
   }
 
-  const audit = auditExistingEap(context);
-  console.info("[Arquimedes][EAP] auditoria dirigida", audit.summary);
-
-  const request = buildEapRequest(context, skills, audit);
+  const request = buildEapRequest(context, skills);
 
   // Contrato de fronteira: a revisão existente sempre precisa chegar ao provider
   // como uma requisição completa. Falhar aqui identifica a origem do problema
