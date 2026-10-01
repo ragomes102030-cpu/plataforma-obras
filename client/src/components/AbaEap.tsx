@@ -757,7 +757,15 @@ function EditorEapPanel({
 /** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
-  const analisar = trpc.projects.analisarEapComArquimedes.useMutation();
+  const ultimaProposta = trpc.projects.ultimaPropostaEap.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const analisar = trpc.projects.analisarEapComArquimedes.useMutation({
+    onSuccess: async () => {
+      await ultimaProposta.refetch();
+    },
+  });
   const aplicarProposta = trpc.projects.aplicarPropostaEap.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
@@ -770,7 +778,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
   const [tipo, setTipo] = useState<"edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos">("edificio");
   const [pendenciasAbertas, setPendenciasAbertas] = useState(true);
 
-  const proposal = analisar.data?.proposal;
+  const proposal = ultimaProposta.data?.proposal ?? analisar.data?.proposal;
   const proposalStats = useMemo(() => {
     if (!proposal) {
       return { creates: 0, updates: 0, moves: 0, removes: 0, roots: 0 };
