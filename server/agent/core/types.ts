@@ -45,7 +45,10 @@ export interface ArquimedesEapProposal {
 }
 
 export interface ArquimedesLlmRequest {
-  system: string; user: string; skills: ArquimedesSkill[];
+  system: string;
+  user: string;
+  skills: ArquimedesSkill[];
+  maxTokens?: number;
 }
 
 export interface ArquimedesLlmProvider {
