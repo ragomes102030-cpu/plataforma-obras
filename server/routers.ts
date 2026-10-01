@@ -4980,18 +4980,18 @@ export const appRouter = router({
 
           await db.transaction(async tx => {
             await tx.execute(sql`
-              UPDATE schedule_activities
-              SET critical = CASE id ${critCase} END,
-                  earlyStart = CASE id ${esCase} END,
-                  earlyFinish = CASE id ${efCase} END,
-                  lateStart = CASE id ${lsCase} END,
-                  lateFinish = CASE id ${lfCase} END,
-                  totalFloat = CASE id ${tfCase} END,
-                  freeFloat = CASE id ${ffCase} END,
-
-                  cpmCalculatedAt = ${calculatedAt}
-              WHERE projectId = ${input.projectId}
-                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+              UPDATE "schedule_activities"
+              SET "critical" = CASE "id" ${critCase} END,
+                  "earlyStart" = CASE "id" ${esCase} END,
+                  "earlyFinish" = CASE "id" ${efCase} END,
+                  "lateStart" = CASE "id" ${lsCase} END,
+                  "lateFinish" = CASE "id" ${lfCase} END,
+                  "totalFloat" = CASE "id" ${tfCase} END,
+                  "freeFloat" = CASE "id" ${ffCase} END,
+                  "cpmCalculatedAt" = ${calculatedAt}
+              WHERE "projectId" = ${input.projectId}
+                AND "versionId" = ${currentVersionId}
+                AND "id" IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
             `);
           });
         }
