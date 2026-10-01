@@ -1,4 +1,7 @@
-import { invokeLlmGateway, type GatewayRequest } from "../../llm-provider-gateway";
+import { and, eq } from "drizzle-orm";
+import { invokeLlmGateway, type GatewayRequest, type LlmTool } from "../../llm-provider-gateway";
+import { getDb } from "../../db";
+import { projects, wbsNodes } from "../../../drizzle/schema";
 import type { ArquimedesLlmProvider, ArquimedesLlmRequest } from "../core/types";
 
 function tryParseJsonObject(candidate: string) {
@@ -152,14 +155,10 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>): st
 export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
   async complete(request: ArquimedesLlmRequest): Promise<string> {
     if (!request || typeof request !== "object") {
-      throw new Error(
-        "O Arquimedes não recebeu a requisição estruturada da revisão da EAP. Nenhuma alteração foi aplicada à obra."
-      );
+      throw new Error("O Arquimedes não recebeu a requisição estruturada da revisão da EAP. Nenhuma alteração foi aplicada à obra.");
     }
     if (typeof request.system !== "string" || typeof request.user !== "string") {
-      throw new Error(
-        "A requisição da revisão da EAP está incompleta (system/user ausentes). Nenhuma alteração foi aplicada à obra."
-      );
+      throw new Error("A requisição da revisão da EAP está incompleta (system/user ausentes). Nenhuma alteração foi aplicada à obra.");
     }
 
     const baseMessages: GatewayRequest["messages"] = [
@@ -167,71 +166,185 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       { role: "user", content: request.user },
     ];
 
-    const generate = async (
-      messages: GatewayRequest["messages"],
-      maxTokens: number
-    ) => {
-      const response = await invokeLlmGateway({
+    const databaseTools: LlmTool[] = request.databaseContext
+      ? [
+          {
+            type: "function",
+            function: {
+              name: "consultar_projeto",
+              description: "Consulta somente leitura os dados atuais da obra em análise.",
+              parameters: { type: "object", properties: {}, additionalProperties: false },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "consultar_eap",
+              description: "Consulta somente leitura a árvore atual da EAP da obra. Retorna mapa compacto com código, nome, pai, nível e tipo.",
+              parameters: { type: "object", properties: {}, additionalProperties: false },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "consultar_no_eap",
+              description: "Consulta somente leitura os detalhes atuais de um nó da EAP pelo código.",
+              parameters: {
+                type: "object",
+                properties: { code: { type: "string", minLength: 1, maxLength: 32 } },
+                required: ["code"],
+                additionalProperties: false,
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "consultar_filhos_eap",
+              description: "Consulta somente leitura os filhos imediatos de um nó da EAP pelo código.",
+              parameters: {
+                type: "object",
+                properties: { code: { type: "string", minLength: 1, maxLength: 32 } },
+                required: ["code"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ]
+      : [];
+
+    const executeDatabaseTool = async (name: string, rawArgs: string) => {
+      const context = request.databaseContext;
+      if (!context) throw new Error("Ferramentas de banco não habilitadas nesta requisição.");
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      let args: Record<string, unknown> = {};
+      try { args = rawArgs ? JSON.parse(rawArgs) : {}; } catch { throw new Error("Argumentos inválidos para ferramenta de banco."); }
+
+      if (name === "consultar_projeto") {
+        const [row] = await db.select({
+          id: projects.id,
+          code: projects.code,
+          name: projects.name,
+          location: projects.location,
+          status: projects.status,
+          descricao: projects.descricao,
+          tipoDeObra: projects.tipoDeObra,
+          plannedStart: projects.plannedStart,
+          plannedFinish: projects.plannedFinish,
+          baseReferencia: projects.baseReferencia,
+          baseReferenciaRef: projects.baseReferenciaRef,
+        }).from(projects).where(eq(projects.id, context.projectId)).limit(1);
+        if (!row) throw new Error("Obra não encontrada.");
+        return row;
+      }
+
+      if (name === "consultar_eap") {
+        const rows = await db.select({
+          id: wbsNodes.id,
+          code: wbsNodes.code,
+          name: wbsNodes.name,
+          parentId: wbsNodes.parentId,
+          level: wbsNodes.level,
+          nodeType: wbsNodes.nodeType,
+          unit: wbsNodes.unit,
+          plannedQuantity: wbsNodes.plannedQuantity,
+          location: wbsNodes.location,
+        }).from(wbsNodes)
+          .where(eq(wbsNodes.projectId, context.projectId))
+          .orderBy(wbsNodes.level, wbsNodes.sortOrder, wbsNodes.id);
+        return rows;
+      }
+
+      const code = String(args.code ?? "").trim();
+      if (!code) throw new Error("Código da EAP é obrigatório.");
+      const [node] = await db.select({
+        id: wbsNodes.id,
+        code: wbsNodes.code,
+        name: wbsNodes.name,
+        parentId: wbsNodes.parentId,
+        level: wbsNodes.level,
+        nodeType: wbsNodes.nodeType,
+        unit: wbsNodes.unit,
+        plannedQuantity: wbsNodes.plannedQuantity,
+        location: wbsNodes.location,
+        responsible: wbsNodes.responsible,
+        description: wbsNodes.description,
+        inclusions: wbsNodes.inclusions,
+        exclusions: wbsNodes.exclusions,
+        acceptanceCriteria: wbsNodes.acceptanceCriteria,
+        decompositionBasis: wbsNodes.decompositionBasis,
+        scopeStatus: wbsNodes.scopeStatus,
+      }).from(wbsNodes).where(and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.code, code))).limit(1);
+      if (!node) throw new Error(`Nó EAP ${code} não encontrado.`);
+
+      if (name === "consultar_no_eap") return node;
+      return await db.select({
+        id: wbsNodes.id,
+        code: wbsNodes.code,
+        name: wbsNodes.name,
+        parentId: wbsNodes.parentId,
+        level: wbsNodes.level,
+        nodeType: wbsNodes.nodeType,
+        unit: wbsNodes.unit,
+        plannedQuantity: wbsNodes.plannedQuantity,
+        location: wbsNodes.location,
+        scopeStatus: wbsNodes.scopeStatus,
+      }).from(wbsNodes)
+        .where(and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.parentId, node.id)))
+        .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+    };
+
+    const generate = async (messages: GatewayRequest["messages"], maxTokens: number, tools: LlmTool[]) => {
+      return invokeLlmGateway({
         messages,
-        tools: [],
-        responseFormat: { type: "json_object" },
+        tools,
+        responseFormat: tools.length ? undefined : { type: "json_object" },
         maxTokens,
         allowEmptyResponse: true,
       });
-      const raw = extractText(response);
-      return {
-        response,
-        raw: raw ?? "",
-        json: raw ? normalizeStructuredJson(raw) : null,
-      };
     };
 
-    const outputBudget = request.maxTokens ?? 16384;
-    const recoveryBudgets = Array.from(
-      new Set([
-        outputBudget,
-        Math.min(Math.max(outputBudget * 2, 8192), 32768),
-        Math.min(Math.max(outputBudget * 4, 12288), 32768),
-      ])
-    );
+    const outputBudget = request.maxTokens ?? 4096;
+    const maxToolIterations = request.databaseContext ? 6 : 0;
+    let messages = baseMessages;
 
-    for (let attempt = 0; attempt < recoveryBudgets.length; attempt++) {
-      const maxTokens = recoveryBudgets[attempt];
-      const messages =
-        attempt === 0
-          ? baseMessages
-          : [
-              ...baseMessages,
-              {
-                role: "user" as const,
-                content:
-                  "A saída anterior não pôde ser usada com segurança. Gere novamente a mesma proposta de forma compacta e completa. " +
-                  "Responda SOMENTE com JSON válido. " +
-                  "Use exatamente esta forma mínima: " +
-                  '{"basis":[],"assumptions":[],"missingInformation":[],"nodes":[]}.' +
-                  " Não inclua markdown, comentários ou texto fora do JSON. " +
-                  "Mantenha rationale curta em cada node e não invente dados.",
-              },
-            ];
+    for (let iteration = 0; iteration <= maxToolIterations; iteration++) {
+      const response = await generate(messages, outputBudget, databaseTools);
+      const message = response.choices?.[0]?.message;
+      const toolCalls = message?.tool_calls ?? [];
 
-      const current = await generate(messages, maxTokens);
-      const finishReason = current.response.choices?.[0]?.finish_reason;
-
-      if (!current.json) {
-        console.warn("[Arquimedes][JSON] recuperação estruturada", {
-          attempt: attempt + 1,
-          maxTokens,
-          provider: current.response.provider,
-          finishReason,
-          rawLength: current.raw.length,
-        });
+      if (!toolCalls.length) {
+        const raw = extractText(response);
+        const json = raw ? normalizeStructuredJson(raw) : null;
+        if (json) return json;
+        break;
       }
 
-      if (current.json) return current.json;
+      if (iteration === maxToolIterations) {
+        break;
+      }
+
+      messages = [
+        ...messages,
+        {
+          role: "assistant",
+          content: message?.content ?? null,
+          tool_calls: toolCalls,
+        },
+      ];
+
+      const results = await Promise.all(toolCalls.map(async call => {
+        try {
+          const value = await executeDatabaseTool(call.function.name, call.function.arguments);
+          return { role: "tool" as const, tool_call_id: call.id, content: JSON.stringify(value).slice(0, 20000) };
+        } catch (error) {
+          return { role: "tool" as const, tool_call_id: call.id, content: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) };
+        }
+      }));
+      messages = [...messages, ...results];
     }
 
-    throw new Error(
-      "O Arquimedes recebeu uma proposta EAP incompleta ou inválida do provedor e não conseguiu recuperá-la com segurança. Nenhuma alteração foi aplicada à obra."
-    );
+    throw new Error("O Arquimedes não conseguiu concluir a revisão EAP após consultar os dados atuais da obra.");
   }
 }
