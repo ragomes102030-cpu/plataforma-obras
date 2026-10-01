@@ -86,7 +86,7 @@ describe("as migrations constroem um schema utilizavel", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers" +
           " WHERE trigger_schema = 'public'"
       );
-      expect(triggers.rows[0]!.n).toBe(23);
+      expect(triggers.rows[0]!.n).toBe(25);
 
       // Insere, altera, e confere que o updatedAt andou. Uma trigger que nao
       // dispara e uma trigger que nao existe, com a desvantagem de existir.
