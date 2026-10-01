@@ -1411,6 +1411,265 @@ export const appRouter = router({
           guardrail: "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
         };
       }),
+    aplicarPropostaEap: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          confirm: z.literal(true),
+          proposal: z.object({
+            action: z.literal("propose_eap"),
+            basis: z.array(z.string()).default([]),
+            assumptions: z.array(z.string()).default([]),
+            missingInformation: z.array(z.string()).default([]),
+            nodes: z.array(
+              z.object({
+                operation: z.enum(["create", "update", "move", "remove"]),
+                nodeId: z.number().int().positive().optional(),
+                parentCode: z.string().trim().min(1).nullable(),
+                code: z.string().trim().min(1).max(32).optional(),
+                name: z.string().trim().min(2).max(220),
+                nodeType: z.enum(["grupo", "pacote", "entrega"]),
+                location: z.string().trim().max(180).nullable().optional(),
+                unit: z.string().trim().max(32).nullable().optional(),
+                plannedQuantity: z.number().min(0).nullable().optional(),
+                rationale: z.string().trim().min(1).max(2000),
+              })
+            ),
+          }),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const writable = await ensureWritablePlanVersion(
+          input.projectId,
+          ctx.user.id
+        );
+
+        const unsupported = input.proposal.nodes
+          .filter(node => node.operation === "move" || node.operation === "remove")
+          .map(node => node.operation);
+        if (unsupported.length) {
+          throw badRequest(
+            "Esta proposta contém movimentações ou exclusões. Revise esses itens manualmente na EAP antes de aplicar a proposta como rascunho."
+          );
+        }
+
+        return db.transaction(async tx => {
+          const current = await tx
+            .select()
+            .from(wbsNodes)
+            .where(
+              and(
+                eq(wbsNodes.projectId, input.projectId),
+                eq(wbsNodes.versionId, writable.id)
+              )
+            )
+            .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+
+          const byId = new Map(current.map(node => [node.id, node]));
+          const byCode = new Map(current.map(node => [node.code, node]));
+          const createdIds: number[] = [];
+          const updatedIds: number[] = [];
+
+          const nextCode = (parentId: number | null) => {
+            const siblings = [...byCode.values()].filter(
+              node => node.parentId === parentId
+            );
+            const max = siblings.reduce(
+              (value, node) =>
+                Math.max(value, Number(node.code.split(".").at(-1)) || 0),
+              0
+            );
+            return parentId === null ? String(max + 1) : "";
+          };
+
+          const creates = input.proposal.nodes
+            .filter(node => node.operation === "create")
+            .sort(
+              (left, right) =>
+                (left.parentCode?.split(".").length ?? 0) -
+                (right.parentCode?.split(".").length ?? 0)
+            );
+
+          for (const proposalNode of creates) {
+            const parent = proposalNode.parentCode
+              ? byCode.get(proposalNode.parentCode)
+              : null;
+
+            if (proposalNode.parentCode && !parent) {
+              throw badRequest(
+                `A proposta referencia o pai ${proposalNode.parentCode}, mas esse nó ainda não existe na EAP. Aplique a proposta em ordem hierárquica ou revise o pai.`
+              );
+            }
+
+            let code = proposalNode.code?.trim() || "";
+            if (!code) {
+              const siblings = [...byCode.values()].filter(
+                node => node.parentId === (parent?.id ?? null)
+              );
+              const next = siblings.reduce(
+                (value, node) =>
+                  Math.max(value, Number(node.code.split(".").at(-1)) || 0),
+                0
+              ) + 1;
+              code = parent ? `${parent.code}.${next}` : String(next);
+            }
+
+            if (byCode.has(code)) {
+              throw conflict(`O código EAP ${code} já existe nesta versão.`);
+            }
+
+            const expectedLevel = code.split(".").length;
+            if (parent && !code.startsWith(`${parent.code}.`)) {
+              throw badRequest(
+                `O código ${code} não pertence ao pai ${parent.code} informado pela proposta.`
+              );
+            }
+
+            const siblings = [...byCode.values()].filter(
+              node => node.parentId === (parent?.id ?? null)
+            );
+            const [created] = await tx
+              .insert(wbsNodes)
+              .values({
+                projectId: input.projectId,
+                versionId: writable.id,
+                parentId: parent?.id ?? null,
+                code,
+                name: proposalNode.name,
+                level: expectedLevel,
+                nodeType: proposalNode.nodeType,
+                unit: proposalNode.unit ?? null,
+                plannedQuantity:
+                  proposalNode.plannedQuantity == null
+                    ? null
+                    : String(proposalNode.plannedQuantity),
+                location: proposalNode.location ?? null,
+                scopeStatus: "rascunho",
+                sortOrder: siblings.length,
+              })
+              .$returningIds();
+
+            if (!created) throw new Error("Não foi possível criar o nó proposto.");
+            const createdNode = {
+              id: created,
+              projectId: input.projectId,
+              versionId: writable.id,
+              parentId: parent?.id ?? null,
+              code,
+              name: proposalNode.name,
+              level: expectedLevel,
+              nodeType: proposalNode.nodeType,
+              unit: proposalNode.unit ?? null,
+              plannedQuantity:
+                proposalNode.plannedQuantity == null
+                  ? null
+                  : String(proposalNode.plannedQuantity),
+              location: proposalNode.location ?? null,
+            };
+            byId.set(created, createdNode as typeof current[number]);
+            byCode.set(code, createdNode as typeof current[number]);
+            createdIds.push(created);
+          }
+
+          for (const proposalNode of input.proposal.nodes.filter(
+            node => node.operation === "update"
+          )) {
+            if (!proposalNode.nodeId) {
+              throw badRequest(
+                `A proposta de atualização para "${proposalNode.name}" não informa nodeId.`
+              );
+            }
+            const currentNode = byId.get(proposalNode.nodeId);
+            if (!currentNode) {
+              throw notFound(
+                `O nó ${proposalNode.nodeId} indicado pela proposta não existe nesta versão.`
+              );
+            }
+
+            await tx
+              .update(wbsNodes)
+              .set({
+                name: proposalNode.name,
+                nodeType: proposalNode.nodeType,
+                unit: proposalNode.unit ?? currentNode.unit ?? null,
+                plannedQuantity:
+                  proposalNode.plannedQuantity == null
+                    ? currentNode.plannedQuantity ?? null
+                    : String(proposalNode.plannedQuantity),
+                location: proposalNode.location ?? currentNode.location ?? null,
+                scopeStatus: "rascunho",
+              })
+              .where(eq(wbsNodes.id, proposalNode.nodeId));
+
+            updatedIds.push(proposalNode.nodeId);
+          }
+
+          const after = await tx
+            .select()
+            .from(wbsNodes)
+            .where(
+              and(
+                eq(wbsNodes.projectId, input.projectId),
+                eq(wbsNodes.versionId, writable.id)
+              )
+            )
+            .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+
+          const validation = validateEap(
+            after.map(node => ({
+              id: node.id,
+              projectId: node.projectId,
+              externalId: node.externalId,
+              externalUid: node.externalUid,
+              parentId: node.parentId,
+              code: node.code,
+              name: node.name,
+              level: node.level,
+              nodeType: node.nodeType,
+              unit: node.unit,
+              plannedQuantity: node.plannedQuantity,
+              sortOrder: node.sortOrder,
+            }))
+          );
+
+          if (!validation.valid) {
+            throw conflict(
+              `A proposta não pode ser aplicada porque a EAP resultante ficou inválida: ${validation.issues
+                .map(issue => issue.message)
+                .slice(0, 3)
+                .join(" ")}`
+            );
+          }
+
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "eap_proposal_applied_as_draft",
+            payload: JSON.stringify({
+              basis: input.proposal.basis,
+              assumptions: input.proposal.assumptions,
+              missingInformation: input.proposal.missingInformation,
+              createdIds,
+              updatedIds,
+              nodeCount: after.length,
+            }),
+          });
+
+          return {
+            applied: true as const,
+            mode: "draft" as const,
+            createdIds,
+            updatedIds,
+            nodeCount: after.length,
+            validation,
+            requiresReview: true as const,
+          };
+        });
+      }),
     validateWbsStructure: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
