@@ -4868,18 +4868,19 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const [wbsNode] = await db
           .select({ id: wbsNodes.id })
           .from(wbsNodes)
           .where(
             and(
               eq(wbsNodes.projectId, input.projectId),
-              eq(wbsNodes.code, input.wbsCode)
+              eq(wbsNodes.code, input.wbsCode),
+              eq(wbsNodes.versionId, writable.id)
             )
           )
           .limit(1);
-        if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP desta obra.");
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP da versão de trabalho.");
         const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
         const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).$returningIds();
         return { id: createdId };
@@ -4957,9 +4958,18 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         if (input.predecessorId === input.successorId) throw badRequest("Uma atividade não pode depender dela mesma.");
-        const rows = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, [input.predecessorId, input.successorId])));
-        if (rows.length !== 2) throw forbidden("As duas atividades precisam pertencer à obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const rows = await db
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id),
+              inArray(scheduleActivities.id, [input.predecessorId, input.successorId])
+            )
+          );
+        if (rows.length !== 2) throw forbidden("As duas atividades precisam pertencer à versão de trabalho da obra.");
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).$returningIds();
         return { id: createdId };
       }),
