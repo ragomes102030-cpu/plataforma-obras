@@ -34,8 +34,8 @@ export type LlmResponse = {
       reasoning?: string;
       reasoning_content?: string;
       tool_calls?: LlmMessage["tool_calls"];
-      finish_reason?: string | null;
     };
+    finish_reason?: string | null;
   }>;
 };
 
