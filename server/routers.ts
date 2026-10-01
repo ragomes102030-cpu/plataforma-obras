@@ -18,6 +18,7 @@ import {
   agentDecisions,
   agentFindings,
   agentMemories,
+  projectPlanVersions,
   scheduleActivities,
   scheduleDependencies,
   wbsNodes,
@@ -134,6 +135,20 @@ function cacheClearPrefix(prefix: string): void {
   for (const key of queryCache.keys()) {
     if (key.startsWith(prefix)) queryCache.delete(key);
   }
+}
+
+async function assertPlanVersionWritable(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  versionId: number | null | undefined,
+  message = "Esta versão do plano está aprovada e não pode mais ser alterada."
+): Promise<void> {
+  if (!versionId) return;
+  const [version] = await db
+    .select({ status: projectPlanVersions.status })
+    .from(projectPlanVersions)
+    .where(eq(projectPlanVersions.id, versionId))
+    .limit(1);
+  if (version?.status === "approved") throw conflict(message);
 }
 
 const demoProjects = [
@@ -1203,6 +1218,12 @@ export const appRouter = router({
           )
           .limit(1);
         if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        const [activityVersion] = await db
+          .select({ versionId: scheduleActivities.versionId })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.id, input.activityId))
+          .limit(1);
+        await assertPlanVersionWritable(db, activityVersion?.versionId);
         await db
           .update(scheduleActivities)
           .set({
@@ -1373,6 +1394,7 @@ export const appRouter = router({
             id: wbsNodes.id,
             decompositionBasis: wbsNodes.decompositionBasis,
             parentId: wbsNodes.parentId,
+            versionId: wbsNodes.versionId,
           })
           .from(wbsNodes)
           .where(
@@ -1383,6 +1405,7 @@ export const appRouter = router({
           )
           .limit(1);
         if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
+        await assertPlanVersionWritable(db, node.versionId);
         await assertAvailableWbsCode(
           db,
           input.projectId,
@@ -1497,6 +1520,7 @@ export const appRouter = router({
             .from(wbsNodes)
             .where(eq(wbsNodes.projectId, input.projectId));
           const node = all.find(item => item.id === input.nodeId);
+          if (node) await assertPlanVersionWritable(tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>, node.versionId);
           const parent = input.targetParentId === null
             ? null
             : all.find(item => item.id === input.targetParentId) ?? null;
@@ -1615,6 +1639,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
         if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
+        await assertPlanVersionWritable(db, node.versionId);
         const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
         const linkedActivities = ids.length
