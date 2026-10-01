@@ -92,6 +92,7 @@ export default function Home() {
       await obras.refetch();
       setObraId(created.id);
       setDestino("obra");
+      setAba("eap");
       setNovaObraAberta(false);
     },
   });
@@ -537,140 +538,170 @@ function NovaObraDialog({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!name.trim() || !location.trim()) return;
+    if (!name.trim() || !location.trim() || !descricao.trim()) return;
     onSubmit({
       name: name.trim(),
       location: location.trim(),
       plannedStart: plannedStart ? new Date(`${plannedStart}T12:00:00`) : undefined,
       plannedFinish: plannedFinish ? new Date(`${plannedFinish}T12:00:00`) : undefined,
       tipoDeObra,
-      descricao: descricao.trim() || undefined,
+      descricao: descricao.trim(),
     });
   }
 
   return (
     <div
+      className="nova-obra-backdrop"
       role="presentation"
       onMouseDown={event => {
         if (event.target === event.currentTarget && !busy) onClose();
       }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        display: "grid",
-        placeItems: "center",
-        padding: 24,
-        background: "rgba(15, 23, 42, 0.42)",
-      }}
     >
       <form
+        className="nova-obra-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="nova-obra-titulo"
         onSubmit={submit}
         onMouseDown={event => event.stopPropagation()}
-        style={{
-          width: "min(620px, 100%)",
-          maxHeight: "calc(100vh - 48px)",
-          overflowY: "auto",
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
-          padding: 24,
-        }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+        <header className="nova-obra-header">
           <div>
-            <h2 id="nova-obra-titulo" style={{ margin: 0, fontSize: 22 }}>Nova obra</h2>
-            <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-              Cadastre a obra para começar o planejamento.
-            </p>
+            <div className="nova-obra-kicker"><Sparkles size={14} /> ARQUIMEDES · PLANEJAMENTO</div>
+            <h2 id="nova-obra-titulo">Nova obra</h2>
+            <p>Descreva o empreendimento. O Arquimedes usa esse contexto para propor a primeira EAP.</p>
           </div>
-          <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar"
-            style={{ border: 0, background: "transparent", fontSize: 24, cursor: busy ? "not-allowed" : "pointer", color: "#64748b" }}>
-            ×
-          </button>
-        </div>
-
-        <div style={{ display: "grid", gap: 16, marginTop: 22 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Nome da obra *</span>
-            <input required minLength={2} maxLength={180} value={name}
-              onChange={event => setName(event.target.value)}
-              placeholder="Ex.: Residencial Solar" autoFocus style={inputStyle} />
-          </label>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Localização *</span>
-            <input required minLength={2} maxLength={180} value={location}
-              onChange={event => setLocation(event.target.value)}
-              placeholder="Cidade, endereço ou região" style={inputStyle} />
-          </label>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Início previsto</span>
-              <input type="date" value={plannedStart}
-                onChange={event => setPlannedStart(event.target.value)} style={inputStyle} />
-            </label>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Término previsto</span>
-              <input type="date" value={plannedFinish}
-                onChange={event => setPlannedFinish(event.target.value)} style={inputStyle} />
-            </label>
-          </div>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Tipo de obra</span>
-            <select value={tipoDeObra}
-              onChange={event => setTipoDeObra(event.target.value as NovaObraValues["tipoDeObra"])}
-              style={inputStyle}>
-              <option value="edificio">Edificação</option>
-              <option value="reforma">Reforma</option>
-              <option value="pavimentacao">Pavimentação</option>
-              <option value="saneamento">Saneamento</option>
-              <option value="todos">Todos os serviços</option>
-            </select>
-          </label>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Descrição</span>
-            <textarea maxLength={4000} rows={4} value={descricao}
-              onChange={event => setDescricao(event.target.value)}
-              placeholder="Informações úteis para o planejamento e para o agente."
-              style={{ ...inputStyle, resize: "vertical" }} />
-          </label>
-
-          {plannedStart && plannedFinish && plannedFinish <= plannedStart && (
-            <p style={{ margin: 0, color: "#b42318", fontSize: 14 }}>
-              O término deve ser posterior ao início.
-            </p>
-          )}
-
-          {error && (
-            <div role="alert" style={{ padding: 12, borderRadius: 8, background: "#fef3f2", color: "#b42318", fontSize: 14 }}>
-              Não foi possível criar a obra: {error}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
-          <button type="button" onClick={onClose} disabled={busy} style={secondaryButtonStyle}>
-            Cancelar
-          </button>
           <button
-            type="submit"
-            disabled={busy || !name.trim() || !location.trim() || (!!plannedStart && !!plannedFinish && plannedFinish <= plannedStart)}
-            style={{ ...primaryButtonStyle, opacity: busy ? 0.7 : 1 }}
+            type="button"
+            className="nova-obra-fechar"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Fechar"
           >
-            {busy ? "Criando obra…" : "Criar obra"}
+            <X size={18} />
           </button>
+        </header>
+
+        <div className="nova-obra-fluxo">
+          <div className="nova-obra-fluxo-item ativo"><span>1</span><div><strong>Descrever</strong><small>escopo da obra</small></div></div>
+          <div className="nova-obra-fluxo-linha" />
+          <div className="nova-obra-fluxo-item"><span>2</span><div><strong>Propor</strong><small>Arquimedes monta a EAP</small></div></div>
+          <div className="nova-obra-fluxo-linha" />
+          <div className="nova-obra-fluxo-item"><span>3</span><div><strong>Revisar</strong><small>engenheiro valida</small></div></div>
         </div>
+
+        <div className="nova-obra-body">
+          <section className="nova-obra-section">
+            <div className="nova-obra-section-title">
+              <span className="nova-obra-numero">01</span>
+              <div><strong>Identificação</strong><small>Dados básicos para localizar a obra.</small></div>
+            </div>
+
+            <div className="nova-obra-grid">
+              <label>
+                <span>Nome da obra <b>*</b></span>
+                <input required minLength={2} maxLength={180} value={name}
+                  onChange={event => setName(event.target.value)}
+                  placeholder="Ex.: Reservatório Elevado – Unidade Norte" autoFocus />
+              </label>
+              <label>
+                <span>Localização <b>*</b></span>
+                <input required minLength={2} maxLength={180} value={location}
+                  onChange={event => setLocation(event.target.value)}
+                  placeholder="Cidade, endereço ou região" />
+              </label>
+            </div>
+
+            <label className="nova-obra-tipo">
+              <span>Natureza da obra</span>
+              <select value={tipoDeObra}
+                onChange={event => setTipoDeObra(event.target.value as NovaObraValues["tipoDeObra"])}>
+                <option value="edificio">Edificação / construção nova</option>
+                <option value="reforma">Reforma</option>
+                <option value="pavimentacao">Pavimentação</option>
+                <option value="saneamento">Saneamento / infraestrutura</option>
+                <option value="todos">Múltiplas frentes</option>
+              </select>
+            </label>
+          </section>
+
+          <section className="nova-obra-section nova-obra-escopo">
+            <div className="nova-obra-section-title">
+              <span className="nova-obra-numero">02</span>
+              <div><strong>Escopo da obra</strong><small>É daqui que o Arquimedes vai partir para propor a EAP.</small></div>
+            </div>
+
+            <label>
+              <span>O que será construído? <b>*</b></span>
+              <textarea
+                required
+                minLength={20}
+                maxLength={8000}
+                rows={7}
+                value={descricao}
+                onChange={event => setDescricao(event.target.value)}
+                placeholder={"Descreva o empreendimento com suas próprias palavras.\n\nEx.: Construção de um reservatório elevado de concreto armado, incluindo fundações, estrutura, instalações hidráulicas e elétricas, urbanização e testes. A adutora terá aproximadamente 2 km e ligará o reservatório à rede existente."}
+              />
+              <div className="nova-obra-contador">{descricao.length}/8000</div>
+            </label>
+
+            <div className="nova-obra-dica">
+              <Sparkles size={15} />
+              <div>
+                <strong>Não precisa montar a EAP agora.</strong>
+                <span>Informe o que você sabe: sistemas, locais, trechos, unidades, quantidades, limites do contrato e entregas esperadas. O Arquimedes identifica lacunas e propõe a decomposição.</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="nova-obra-section">
+            <div className="nova-obra-section-title">
+              <span className="nova-obra-numero">03</span>
+              <div><strong>Prazo inicial</strong><small>Pode ser preenchido agora ou definido durante o planejamento.</small></div>
+            </div>
+
+            <div className="nova-obra-grid">
+              <label>
+                <span>Início previsto</span>
+                <input type="date" value={plannedStart}
+                  onChange={event => setPlannedStart(event.target.value)} />
+              </label>
+              <label>
+                <span>Término previsto</span>
+                <input type="date" value={plannedFinish}
+                  onChange={event => setPlannedFinish(event.target.value)} />
+              </label>
+            </div>
+
+            {plannedStart && plannedFinish && plannedFinish <= plannedStart && (
+              <p className="nova-obra-erro">O término deve ser posterior ao início.</p>
+            )}
+          </section>
+
+          {error && <div className="nova-obra-alert" role="alert">{error}</div>}
+        </div>
+
+        <footer className="nova-obra-footer">
+          <div className="nova-obra-footer-info">
+            <Sparkles size={15} />
+            <span>Ao criar, a obra entra em <strong>EAP proposta</strong>. Nada será aprovado ou congelado automaticamente.</span>
+          </div>
+          <div className="nova-obra-acoes">
+            <button type="button" onClick={onClose} disabled={busy} className="nova-obra-cancelar">Cancelar</button>
+            <button
+              type="submit"
+              disabled={busy || !name.trim() || !location.trim() || descricao.trim().length < 20 || (!!plannedStart && !!plannedFinish && plannedFinish <= plannedStart)}
+              className="nova-obra-criar"
+            >
+              {busy ? "Criando obra…" : "Criar e abrir EAP"}
+            </button>
+          </div>
+        </footer>
       </form>
     </div>
   );
 }
+
 
 const inputStyle = {
   width: "100%",
