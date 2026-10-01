@@ -260,7 +260,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           </div>
           {analisarComArquimedes.data.proposal.basis.length > 0 && (
             <div className="eap-validacao-lista">
-              <div className="eap-validacao-item eap-validacao-warning"><span>BASE</span><p>{analisarComArquimedes.data.proposal.basis.join(" · ")}</p></div>
+              <div className="eap-validacao-item eap-validacao-warning"><span>FUNDAMENTAÇÃO</span><p>{analisarComArquimedes.data.proposal.basis.join(" · ")}</p></div>
             </div>
           )}
           {analisarComArquimedes.data.proposal.nodes.slice(0, 8).map((item, index) => (
@@ -841,7 +841,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
             <div>
               <strong><Bot size={14} /> Arquimedes · proposta inicial da EAP</strong>
               <span>
-                {analisar.data.proposal.nodes.length} alteração(ões) proposta(s) ·{" "}
+                {analisar.data.proposal.nodes.length} nós propostos ·{" "}
                 {analisar.data.proposal.missingInformation.length} informação(ões) pendente(s)
               </span>
             </div>
