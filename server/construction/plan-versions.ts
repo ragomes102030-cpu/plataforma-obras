@@ -161,10 +161,36 @@ export async function ensureWritablePlanVersion(
       throw new Error("Não foi possível criar uma versão do plano.");
     }
 
-    // A versão nova também absorve qualquer nó que tenha sido criado fora do
-    // versionamento desde a última aprovação. Isso precisa acontecer ANTES do
-    // fork: caso contrário, uma atividade ainda ligada à versão base pode
-    // encontrar seu nó EAP fora dela e abortar a criação da nova versão.
+    // Antes do fork, reconciliamos órfãos com a versão que realmente os
+    // referencia. Uma atividade ainda pertencente à versão base não pode ficar
+    // apontando para um WBS sem versão, porque o mapa de IDs do fork depende
+    // dessa relação.
+    if (decision.baseVersionId) {
+      const atividadesDaBase = await tx
+        .select({ wbsNodeId: scheduleActivities.wbsNodeId })
+        .from(scheduleActivities)
+        .where(
+          and(
+            eq(scheduleActivities.projectId, projectId),
+            eq(scheduleActivities.versionId, decision.baseVersionId)
+          )
+        );
+      const wbsReferenciados = [...new Set(atividadesDaBase.map(row => row.wbsNodeId))];
+      if (wbsReferenciados.length > 0) {
+        await tx
+          .update(wbsNodes)
+          .set({ versionId: decision.baseVersionId })
+          .where(
+            and(
+              eq(wbsNodes.projectId, projectId),
+              isNull(wbsNodes.versionId),
+              inArray(wbsNodes.id, wbsReferenciados)
+            )
+          );
+      }
+    }
+
+    // O restante dos órfãos pertence ao novo estado de trabalho.
     await tx
       .update(wbsNodes)
       .set({ versionId: created })
