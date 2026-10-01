@@ -74,18 +74,6 @@ export default function Home() {
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
-  const obrasDeTeste = lista.filter(
-    o => /^TESTE/i.test(o.name) || /DEMONSTRAÇÃO/i.test(o.name) || /^DEMO-/i.test(o.code)
-  );
-  const limparObrasTeste = trpc.projects.deleteTestProjects.useMutation({
-    onSuccess: async () => {
-      await obras.refetch();
-      setObraId(null);
-      setDestino("obra");
-      setAba("dashboard");
-    },
-  });
-
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setConfirmacaoExclusao(""); setObraId(null); setDestino("obra"); } });
   const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });
@@ -172,7 +160,18 @@ export default function Home() {
               </button>
               <button
                 type="button"
-              <button type="button" className="xl-obra-chip-lixeira" onClick={() => { setObraParaExcluir({ id: o.id, name: o.name }); setConfirmacaoExclusao(""); }} title="Enviar obra para a lixeira" aria-label={"Enviar " + o.name + " para a lixeira"}><Trash2 size={11} /></button>
+                className="xl-obra-chip-lixeira"
+                onClick={() => {
+                  setObraParaExcluir({ id: o.id, name: o.name });
+                  setConfirmacaoExclusao("");
+                }}
+                title="Enviar obra para a lixeira"
+                aria-label={`Enviar ${o.name} para a lixeira`}
+              >
+                <Trash2 size={11} />
+              </button>
+              <button
+                type="button"
                 className="xl-obra-chip-fechar"
                 onClick={() => {
                   setObrasOcultas(ocultas => [...ocultas, o.id]);
