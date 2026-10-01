@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseEapProposal } from "./arquimedes";
+import { parseEapProposal, proposeEapWithArquimedes } from "./arquimedes";
+import type { ArquimedesProjectContext } from "./types";
 
 describe("parseEapProposal", () => {
   it("transforma JSON truncado em erro controlado", () => {
@@ -46,5 +47,106 @@ describe("parseEapProposal", () => {
         })
       )
     ).toThrow(/contrato estruturado/i);
+  });
+});
+
+
+describe("proposeEapWithArquimedes", () => {
+  const context: ArquimedesProjectContext = {
+    projectId: 10,
+    name: "Edifício teste",
+    description: "Edifício residencial de oito pavimentos com áreas comuns.",
+    tipoDeObra: "edificio",
+    stage: "EAP_PROPOSTA",
+    wbs: [],
+  };
+
+  it("constrói a EAP vazia em macroestrutura e subárvores", async () => {
+    const calls: Array<{ task: string; maxTokens?: number }> = [];
+
+    const provider = {
+      async complete(request: { user: string; maxTokens?: number }) {
+        const payload = JSON.parse(request.user) as {
+          task: string;
+          root?: { code?: string };
+        };
+        calls.push({ task: payload.task, maxTokens: request.maxTokens });
+
+        if (payload.task === "mapear_eap_macro") {
+          return JSON.stringify({
+            action: "propose_eap",
+            basis: ["escopo informado"],
+            assumptions: [],
+            missingInformation: [],
+            nodes: [
+              {
+                operation: "create",
+                parentCode: null,
+                code: "1",
+                name: "Implantação",
+                nodeType: "grupo",
+                rationale: "Organiza a implantação",
+              },
+              {
+                operation: "create",
+                parentCode: null,
+                code: "2",
+                name: "Estrutura",
+                nodeType: "grupo",
+                rationale: "Organiza a estrutura",
+              },
+              {
+                operation: "create",
+                parentCode: null,
+                code: "3",
+                name: "Instalações",
+                nodeType: "grupo",
+                rationale: "Organiza as instalações",
+              },
+            ],
+          });
+        }
+
+        const code = payload.root?.code ?? "1";
+        return JSON.stringify({
+          action: "propose_eap",
+          basis: [],
+          assumptions: [],
+          missingInformation: [],
+          nodes: [
+            {
+              operation: "create",
+              parentCode: code,
+              code: code + ".1",
+              name: "Pacote do ramo",
+              nodeType: "pacote",
+              rationale: "Primeiro pacote controlável",
+            },
+          ],
+        });
+      },
+    };
+
+    const result = await proposeEapWithArquimedes(context, provider);
+    const proposal = JSON.parse(result.raw) as {
+      nodes: Array<{ code?: string; parentCode?: string | null }>;
+    };
+
+    expect(calls.map(call => call.task)).toEqual([
+      "mapear_eap_macro",
+      "expandir_subarvore_eap",
+      "expandir_subarvore_eap",
+      "expandir_subarvore_eap",
+    ]);
+    expect(calls[0]?.maxTokens).toBe(4096);
+    expect(calls.slice(1).every(call => call.maxTokens === 8192)).toBe(true);
+    expect(proposal.nodes.map(node => node.code)).toEqual([
+      "1",
+      "1.1",
+      "2",
+      "2.1",
+      "3",
+      "3.1",
+    ]);
   });
 });
