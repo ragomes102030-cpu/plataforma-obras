@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -53,7 +53,7 @@ export default function Home() {
   const [novaObraAberta, setNovaObraAberta] = useState(false);
   const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);
   const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
-  const [faixaObrasFechada, setFaixaObrasFechada] = useState(false);
+  const [faixaObrasFechada, setFaixaObrasFechada] = useState(false);\n  const [lixeiraAberta, setLixeiraAberta] = useState(false);\n  const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);\n  const [confirmacaoExclusao, setConfirmacaoExclusao] = useState("");
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -83,7 +83,7 @@ export default function Home() {
     },
   });
 
-  const criarDemo = trpc.projects.createDemoGantt.useMutation({
+  const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });\n  const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setConfirmacaoExclusao(""); setObraId(null); setDestino("obra"); } });\n  const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });\n\n  const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
       await obras.refetch();
       setObraId(created.projectId);
@@ -165,6 +165,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
+              <button type="button" className="xl-obra-chip-lixeira" onClick={() => { setObraParaExcluir({ id: o.id, name: o.name }); setConfirmacaoExclusao(""); }} title="Enviar obra para a lixeira" aria-label={"Enviar " + o.name + " para a lixeira"}><Trash2 size={11} /></button>
                 className="xl-obra-chip-fechar"
                 onClick={() => {
                   setObrasOcultas(ocultas => [...ocultas, o.id]);
@@ -299,7 +300,7 @@ export default function Home() {
         </div>
       </header>
 
-      {novaObraAberta && (
+      <button type="button" className="xl-lixeira-btn" onClick={() => setLixeiraAberta(true)} title="Abrir lixeira de obras"><Trash2 size={13} /> Lixeira{lixeira.data?.length ? ` (${lixeira.data.length})` : ""}</button>\n\n      {novaObraAberta && (
         <NovaObraDialog
           busy={criarObra.isPending}
           error={criarObra.error?.message ?? null}
@@ -311,6 +312,25 @@ export default function Home() {
           }}
           onSubmit={values => criarObra.mutate(values)}
         />
+      )}
+
+      {lixeiraAberta && (
+        <div className="xl-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="xl-modal xl-lixeira">
+            <div className="xl-modal-head"><div><strong>Lixeira de obras</strong><span>As obras permanecem preservadas até serem restauradas.</span></div><button type="button" onClick={() => setLixeiraAberta(false)}><X size={16}/></button></div>
+            {(lixeira.data ?? []).length === 0 ? <div className="xl-lixeira-vazia">A lixeira está vazia.</div> : <div className="xl-lixeira-lista">{(lixeira.data ?? []).map(o => <div className="xl-lixeira-item" key={o.id}><div><strong>{o.name}</strong><small>{o.code} · {o.deletedAt ? new Date(o.deletedAt).toLocaleString("pt-BR") : "—"}</small></div><button type="button" disabled={restaurarObra.isPending} onClick={() => restaurarObra.mutate({ projectId: o.id })}>Restaurar</button></div>)}</div>}
+          </div>
+        </div>
+      )}
+      {obraParaExcluir && (
+        <div className="xl-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="xl-modal xl-confirm-exclusao">
+            <div className="xl-modal-head"><div><strong>Enviar obra para a lixeira</strong><span>Nenhum dado será apagado. Digite exatamente o nome da obra para confirmar.</span></div><button type="button" onClick={() => { setObraParaExcluir(null); setConfirmacaoExclusao(""); }}><X size={16}/></button></div>
+            <p className="xl-exclusao-nome">{obraParaExcluir.name}</p>
+            <input autoFocus value={confirmacaoExclusao} onChange={e => setConfirmacaoExclusao(e.target.value)} placeholder="Digite o nome exato da obra" />
+            <button type="button" className="xl-btn-perigo" disabled={confirmacaoExclusao !== obraParaExcluir.name || moverParaLixeira.isPending} onClick={() => moverParaLixeira.mutate({ projectId: obraParaExcluir.id, confirmationName: confirmacaoExclusao })}>{moverParaLixeira.isPending ? "Enviando…" : "Enviar para a lixeira"}</button>
+          </div>
+        </div>
       )}
 
       {destino === "config" ? (
