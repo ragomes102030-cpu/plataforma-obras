@@ -74,7 +74,7 @@ describe("proposeEapWithArquimedes", () => {
 
         if (payload.task === "mapear_eap_macro") {
           return JSON.stringify({
-            action: "propose_eap",
+            action: "mapear_eap_macro",
             basis: ["escopo informado"],
             assumptions: [],
             missingInformation: [],
@@ -109,7 +109,7 @@ describe("proposeEapWithArquimedes", () => {
 
         const code = payload.root?.code ?? "1";
         return JSON.stringify({
-          action: "propose_eap",
+          action: "expandir_subarvore_eap",
           basis: [],
           assumptions: [],
           missingInformation: [],
@@ -148,5 +148,44 @@ describe("proposeEapWithArquimedes", () => {
       "3",
       "3.1",
     ]);
+  });
+});
+
+
+describe("parseEapProposal por etapa", () => {
+  it("aceita a ação própria da macroestrutura e normaliza internamente", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        action: "mapear_eap_macro",
+        basis: [],
+        assumptions: [],
+        missingInformation: [],
+        nodes: [{
+          operation: "create",
+          parentCode: null,
+          code: "1",
+          name: "Implantação",
+          nodeType: "grupo",
+          rationale: "Raiz da obra",
+        }],
+      }),
+      "mapear_eap_macro"
+    );
+    expect(result.action).toBe("propose_eap");
+  });
+
+  it("rejeita ação de outra etapa", () => {
+    expect(() =>
+      parseEapProposal(
+        JSON.stringify({
+          action: "mapear_eap_macro",
+          basis: [],
+          assumptions: [],
+          missingInformation: [],
+          nodes: [],
+        }),
+        "expandir_subarvore_eap"
+      )
+    ).toThrow(/action/i);
   });
 });
