@@ -82,7 +82,8 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       };
     };
 
-    const first = await generate(baseMessages, 16384);
+    const outputBudget = request.maxTokens ?? 16384;
+    const first = await generate(baseMessages, outputBudget);
     if (first.json) return first.json;
 
     const finishReason = first.response.choices?.[0]?.finish_reason;
@@ -97,14 +98,14 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         role: "user",
         content:
           recoveryReason +
-          " Responda SOMENTE com um objeto JSON válido. Máximo de 120 nós. " +
+          " Responda SOMENTE com um objeto JSON válido. Mantenha a resposta dentro do orçamento solicitado. " +
           "Mantenha apenas action, basis, assumptions, missingInformation e nodes. " +
           "Em cada node, mantenha parentCode, code quando necessário, name, nodeType, operation e uma rationale curta. " +
           "Não use markdown, comentários, explicações ou texto fora do JSON.",
       },
     ];
 
-    const second = await generate(recoveryMessages, 16384);
+    const second = await generate(recoveryMessages, outputBudget);
     if (second.json) return second.json;
 
     throw new Error(
