@@ -1712,7 +1712,17 @@ export const appRouter = router({
         const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
         if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
         await assertPlanVersionWritable(db, node.versionId);
-        const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
+        const all = await db
+          .select({ id: wbsNodes.id, code: wbsNodes.code })
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.projectId, input.projectId),
+              node.versionId == null
+                ? isNull(wbsNodes.versionId)
+                : eq(wbsNodes.versionId, node.versionId)
+            )
+          );
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
         const linkedActivities = ids.length
           ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.wbsNodeId, ids)))
@@ -1731,10 +1741,18 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
         return db
           .select()
           .from(scheduleDependencies)
-          .where(eq(scheduleDependencies.projectId, input.projectId));
+          .where(
+            currentVersionId == null
+              ? eq(scheduleDependencies.projectId, input.projectId)
+              : and(
+                  eq(scheduleDependencies.projectId, input.projectId),
+                  eq(scheduleDependencies.versionId, currentVersionId)
+                )
+          );
       }),
     create: protectedProcedure
       .input(
