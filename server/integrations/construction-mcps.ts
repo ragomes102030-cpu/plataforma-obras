@@ -119,6 +119,9 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
   "comparar_baseline",
   "curva_s",
   "calcular_linha_balanco",
+  "balancear_ritmos_lob",
+  "dimensionar_equipes_lob",
+  "listar_temas",
 ]);
 
 export function createConstructionMcpClients() {
@@ -264,6 +267,9 @@ function probeArguments(toolName: string, externalProjectId: string) {
     "comparar_baseline",
     "curva_s",
     "calcular_linha_balanco",
+    "listar_temas",
+    "balancear_ritmos_lob",
+    "dimensionar_equipes_lob",
   ].includes(toolName)
     ? { project_id: externalProjectId }
     : {};
@@ -518,6 +524,15 @@ export async function callReadOnlyMcpTool(
     throw new Error(
       `Ferramenta MCP não permitida em modo somente leitura: ${toolName}`
     );
+  }
+  if (PROJECT_SCOPED_READ_ONLY_TOOLS.has(toolName)) {
+    const projectId =
+      typeof args.project_id === "string" ? args.project_id.trim() : "";
+    if (!projectId || projectId === "default") {
+      throw new Error(
+        `A ferramenta ${toolName} exige um project_id externo explícito; o valor default é bloqueado.`
+      );
+    }
   }
   const clients = createConstructionMcpClients();
   return (
