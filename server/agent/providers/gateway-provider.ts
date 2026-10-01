@@ -29,7 +29,7 @@ function extractJsonObject(text: string) {
   return null;
 }
 
-function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>) {
+function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>): string | null {
   const message = response.choices?.[0]?.message;
   const content = message?.content;
 
@@ -54,10 +54,11 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>) {
     if (json) return json;
   }
 
-  const toolCalls = message?.tool_calls?.length ?? 0;
-  throw new Error(
-    `O provedor ${response.provider} não retornou conteúdo final textual. A resposta ficou vazia, somente com reasoning ou somente com tool call. tool_calls=${toolCalls}, model=${response.model ?? "desconhecido"}.`
-  );
+  if (message?.tool_calls?.length) {
+    return null;
+  }
+
+  return null;
 }
 
 export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
@@ -73,12 +74,13 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         tools: [],
         responseFormat: { type: "json_object" },
         maxTokens,
+        allowEmptyResponse: true,
       });
       const raw = extractText(response);
       return {
         response,
-        raw,
-        json: extractJsonObject(raw),
+        raw: raw ?? "",
+        json: raw ? extractJsonObject(raw) : null,
       };
     };
 
@@ -90,7 +92,9 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
     const recoveryReason =
       finishReason === "length"
         ? "A resposta anterior foi interrompida antes de fechar o JSON. Gere novamente uma versão compacta e completa."
-        : "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta de forma compacta e completa.";
+        : !first.raw
+          ? "A resposta anterior veio vazia. Gere novamente a mesma proposta de forma compacta e completa."
+          : "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta de forma compacta e completa.";
 
     const recoveryMessages: GatewayRequest["messages"] = [
       ...baseMessages,
