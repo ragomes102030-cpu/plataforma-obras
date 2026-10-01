@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 35, type: 32, trigger: 23 });
+    expect(conta).toEqual({ table: 36, type: 32, trigger: 25 });
   });
 });
 
@@ -298,7 +298,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const registradas = await pg.query<{ n: number }>(
         'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
       );
-      expect(registradas.rows[0]!.n).toBe(2);
+      expect(registradas.rows[0]!.n).toBe(migrations.length);
 
       const tabelas = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
