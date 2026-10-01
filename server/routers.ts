@@ -1404,11 +1404,70 @@ export const appRouter = router({
           { requireDictionaryForLeaves: true }
         );
 
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "eap_proposal_generated",
+          payload: JSON.stringify({
+            provider: "configured-gateway",
+            proposal,
+            currentValidation,
+          }),
+        });
+
         return {
           provider: "configured-gateway",
           proposal,
           currentValidation,
           guardrail: "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
+        };
+      }),
+    ultimaPropostaEap: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [event] = await db
+          .select({
+            id: projectAuditEvents.id,
+            createdAt: projectAuditEvents.createdAt,
+            payload: projectAuditEvents.payload,
+          })
+          .from(projectAuditEvents)
+          .where(
+            and(
+              eq(projectAuditEvents.projectId, input.projectId),
+              eq(projectAuditEvents.action, "eap_proposal_generated")
+            )
+          )
+          .orderBy(desc(projectAuditEvents.id))
+          .limit(1);
+
+        if (!event) return null;
+
+        const payload =
+          typeof event.payload === "string"
+            ? JSON.parse(event.payload) as {
+                provider?: string;
+                proposal?: unknown;
+                currentValidation?: unknown;
+              }
+            : event.payload as {
+                provider?: string;
+                proposal?: unknown;
+                currentValidation?: unknown;
+              };
+
+        if (!payload.proposal) return null;
+
+        return {
+          id: event.id,
+          createdAt: event.createdAt,
+          provider: payload.provider ?? "configured-gateway",
+          proposal: payload.proposal,
+          currentValidation: payload.currentValidation ?? null,
         };
       }),
     aplicarPropostaEap: protectedProcedure
