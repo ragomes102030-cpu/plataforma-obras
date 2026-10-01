@@ -2,6 +2,9 @@ import { ENV } from "./_core/env";
 import type { AgentMessage, AgentProjectContext } from "./agent";
 import {
   MCP_TOOL_POLICY,
+  MUTATING_TOOLS,
+  PROJECT_SCOPED_MUTATION_TOOLS,
+  callMutationMcpTool,
   callReadOnlyMcpTool,
   listConstructionMcpTools,
   type ConstructionMcpToolCatalog,
@@ -14,6 +17,7 @@ import {
   type LlmTool,
 } from "./llm-provider-gateway";
 import { classifyArquimedesIntent } from "./agent/runtime/intent-router";
+import { runEngineeringTeam } from "./agent/engineering-team";
 import { runReActAgent } from "./agent/runtime/react-runtime";
 import {
   listRepositoryDirectory,
@@ -137,7 +141,7 @@ export type OrchestratorResult = {
   provider?: string;
   iterations: number;
   audit: AuditEvent[];
-  readOnly: true;
+  readOnly: false;
   status: "respondido";
 };
 
@@ -251,6 +255,39 @@ function formatContext(context: AgentProjectContext) {
     "Estado e memória do coordenador:\n" + coordinatorLines,
   ].join("\n");
 }
+
+const ENGINEERING_TEAM_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "engineering_team_analysis",
+    description: "Convoca a equipe interna de especialistas do Arquimedes para analisar a obra. O coordenador deve usar o resultado para consolidar achados. Especialistas são somente leitura e não alteram a obra.",
+    parameters: {
+      type: "object",
+      properties: { focus: { type: "string", enum: ["geral", "eap", "cronograma", "producao", "lob"] } },
+      additionalProperties: false,
+    },
+  },
+};
+
+const ENGINEERING_GAP_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "engineering_gap_analysis",
+    description:
+      "Faz uma varredura técnica da obra antes de concluir uma análise. Consulta validações estruturais, pacotes sem dono, atividades, dependências, CPM e linha de base quando essas ferramentas estiverem disponíveis. Use quando o usuário pedir uma análise da obra, dos problemas, das lacunas ou quando você precisar descobrir algo que ele talvez não esteja vendo.",
+    parameters: {
+      type: "object",
+      properties: {
+        focus: {
+          type: "string",
+          enum: ["geral", "eap", "cronograma", "producao", "lob"],
+          description: "Área principal da varredura."
+        }
+      },
+      additionalProperties: false
+    }
+  }
+};
 
 const RUNTIME_TOOLS: LlmTool[] = [
   {
@@ -416,25 +453,41 @@ function currentDateTimeFortaleza() {
   };
 }
 
-function toOpenAiTools(catalog: ConstructionMcpToolCatalog): LlmTool[] {
+function toOpenAiTools(
+  catalog: ConstructionMcpToolCatalog,
+  allowMutations = false
+): LlmTool[] {
   const tools: LlmTool[] = [];
   for (const entries of [catalog.eap, catalog.cronograma, catalog.ganttLob]) {
     if (!Array.isArray(entries)) continue;
     for (const tool of entries) {
-      if (!MCP_TOOL_POLICY.readOnly.has(tool.name)) continue;
+      const isReadOnly = MCP_TOOL_POLICY.readOnly.has(tool.name as never);
+      const isMutation = MUTATING_TOOLS.has(tool.name);
+      if (!isReadOnly && !(allowMutations && isMutation)) continue;
       const domain = TOOL_DOMAINS[tool.name as keyof typeof TOOL_DOMAINS];
       if (!domain) continue;
+      const description = isReadOnly
+        ? `${tool.description ?? "Consulta MCP"} Domínio: ${domain}. Somente leitura.`
+        : `${tool.description ?? "Operação MCP"} Domínio: ${domain}. ALTERA DADOS. Só execute após confirmação explícita do usuário nesta conversa.`;
       tools.push({
         type: "function",
         function: {
           name: tool.name,
-          description: `${tool.description ?? "Consulta MCP"} Domínio: ${domain}. Somente leitura.`,
+          description,
           parameters: tool.inputSchema ?? { type: "object", properties: {} },
         },
       });
     }
   }
-  return [...tools, ...RUNTIME_TOOLS];
+  return [...tools, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, ...RUNTIME_TOOLS];
+}
+
+function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
+  const lastUser = [...messages].reverse().find(message => message.role === "user");
+  if (!lastUser) return false;
+  return /(?:^|\b)(confirmo|confirmado|pode aplicar|pode corrigir|aplique|pode executar|sim,?\s*(?:pode|aplique|corrija))(?:\b|$)/i.test(
+    lastUser.content.trim()
+  );
 }
 
 function buildSystem(
@@ -457,9 +510,12 @@ function buildSystem(
     "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
-    "As ferramentas de obra disponíveis nesta fase são somente leitura. Nunca execute uma alteração, criação, exclusão, baseline ou medição.",
+    "As ferramentas de obra incluem consultas e operações de escrita controlada. Nunca altere dados na primeira análise: primeiro leia, diagnostique, apresente a alteração proposta e peça confirmação explícita ao engenheiro. Só depois de uma confirmação explícita nesta conversa execute a mutação. Após qualquer mutação, reconsulte a obra e valide o resultado. Exclusões são destrutivas e exigem confirmação explícita ainda mais clara.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
+    responseIntent === "analise"
+      ? "Quando a intenção for análise da obra, convoque primeiro engineering_team_analysis. A equipe deve analisar em paralelo por especialidade; depois consolide os achados e, se necessário, use consultas adicionais para confirmar detalhes."
+      : "Em consultas pontuais, não faça uma varredura completa sem necessidade.",
     "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora.",
     "Quando o usuário perguntar sobre o próprio código, arquitetura, bugs ou funcionamento interno da Plataforma Obras, use as ferramentas de repositório disponíveis para investigar. Não diga que não possui acesso ao código se a ferramenta puder fornecê-lo.",
     "Antes de modificar código, leia os arquivos envolvidos e confirme a causa do problema. Depois aplique somente a mudança necessária. Não invente que testou algo: use evidências reais.",
@@ -533,7 +589,8 @@ export async function runProjectOrchestrator(
   };
   await emit({ type: "catalog_started" });
   const catalog = await (deps.listTools ?? listConstructionMcpTools)();
-  const tools = toOpenAiTools(catalog);
+  const allowMutations = intent === "operacao" && hasExplicitMutationConfirmation(messages);
+  const tools = toOpenAiTools(catalog, allowMutations);
   await emit({
     type: "catalog_loaded",
     toolCount: tools.length,
@@ -716,6 +773,128 @@ export async function runProjectOrchestrator(
         }
       }
 
+      if (toolName === "engineering_team_analysis") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        const focus = typeof rawArgs.focus === "string" ? rawArgs.focus : "geral";
+        try {
+          const value = await runEngineeringTeam(
+            context,
+            catalog,
+            {
+              eap: mcpProjectIds.eap,
+              cronograma: mcpProjectIds.cronograma,
+              ganttLob: mcpProjectIds.ganttLob,
+            },
+            focus,
+            {
+              callLlm: deps.callLlm ?? invokeLlmGateway,
+              onSpecialistEvent: async event => {
+                const specialistToolName = `specialist:${event.specialist}`;
+                if (event.type === "started") {
+                  await emit({ type: "tool_started", iteration, domain: "runtime", toolName: specialistToolName });
+                } else {
+                  await emit({
+                    type: "tool_finished",
+                    iteration,
+                    domain: "runtime",
+                    toolName: specialistToolName,
+                    status: event.status === "erro" ? "error" : "success",
+                  });
+                }
+              },
+            }
+          );
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "success", durationMs: Date.now() - startedAt,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "error", durationMs: Date.now() - startedAt, error: message,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "engineering_gap_analysis") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        const focus = typeof rawArgs.focus === "string" ? rawArgs.focus : "geral";
+        const checksByFocus: Record<string, string[]> = {
+          geral: [
+            "validar_estrutura",
+            "pacotes_sem_dono",
+            "listar_atividades",
+            "listar_dependencias",
+            "validar_dependencias",
+            "calcular_caminho_critico",
+            "listar_baselines",
+            "calcular_linha_balanco",
+          ],
+          eap: ["get_eap_tree", "validar_estrutura", "pacotes_sem_dono", "resumo_quantitativos"],
+          cronograma: ["listar_atividades", "listar_dependencias", "validar_dependencias", "calcular_caminho_critico", "listar_baselines", "comparar_baseline"],
+          producao: ["pacotes_sem_dono", "resumo_quantitativos", "listar_atividades"],
+          lob: ["listar_temas", "calcular_linha_balanco", "balancear_ritmos_lob", "dimensionar_equipes_lob"],
+        };
+        const available = new Set(
+          [...catalog.eap, ...catalog.cronograma, ...catalog.ganttLob]
+            .filter(tool => MCP_TOOL_POLICY.readOnly.has(tool.name))
+            .map(tool => tool.name)
+        );
+        const requested = checksByFocus[focus] ?? checksByFocus.geral;
+        const findings: Array<Record<string, unknown>> = [];
+        for (const check of requested) {
+          if (!available.has(check)) {
+            findings.push({ check, status: "indisponivel" });
+            continue;
+          }
+          const domain = TOOL_DOMAINS[check as keyof typeof TOOL_DOMAINS];
+          const projectId = mcpProjectIds[domain];
+          if (!domain || !projectId) {
+            findings.push({ check, status: "sem_projeto_mcp" });
+            continue;
+          }
+          try {
+            const result = await (deps.callTool ?? callReadOnlyMcpTool)(
+              domain,
+              check,
+              { project_id: projectId }
+            );
+            findings.push({ check, status: "ok", result });
+          } catch (error) {
+            findings.push({
+              check,
+              status: "erro",
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        const value = {
+          obra: context.project.code,
+          foco: focus,
+          verificacoes: findings,
+          instrucao:
+            "Interprete os resultados como evidência. Separe achados confirmados de hipóteses e indisponibilidades. Não altere a obra nesta ferramenta.",
+        };
+        audit.push({
+          taskId,
+          iteration,
+          event: "tool_call",
+          domain: "runtime",
+          toolName,
+          status: "success",
+          durationMs: Date.now() - startedAt,
+        });
+        await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+        return { ok: true, content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS) };
+      }
+
       if (toolName === "get_current_datetime") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
@@ -735,15 +914,25 @@ export async function runProjectOrchestrator(
 
       const domain = TOOL_DOMAINS[toolName as keyof typeof TOOL_DOMAINS];
       const startedAt = Date.now();
-      if (!domain || !MCP_TOOL_POLICY.readOnly.has(toolName)) {
+      const isReadOnly = MCP_TOOL_POLICY.readOnly.has(toolName);
+      const isMutation = MUTATING_TOOLS.has(toolName);
+      if (!domain || (!isReadOnly && !isMutation)) {
         throw new Error(`Ferramenta não permitida pelo runtime: ${toolName}`);
+      }
+      if (isMutation && !allowMutations) {
+        const message = "A alteração ainda não foi autorizada. Apresente a proposta e peça confirmação explícita antes de executar.";
+        audit.push({
+          taskId, iteration, event: "tool_call", domain, toolName,
+          status: "error", durationMs: Date.now() - startedAt, error: message,
+        });
+        return { ok: false, error: message, content: "" };
       }
 
       await emit({ type: "tool_started", iteration, domain, toolName });
 
       const mcpProjectId = mcpProjectIds[domain];
-      if (PROJECT_SCOPED_TOOLS.has(toolName) && !mcpProjectId) {
-        const message = "A obra ainda não possui project_id externo autorizado para consulta MCP.";
+      if ((PROJECT_SCOPED_TOOLS.has(toolName) || PROJECT_SCOPED_MUTATION_TOOLS.has(toolName)) && !mcpProjectId) {
+        const message = "A obra ainda não possui project_id externo autorizado para esta operação MCP.";
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,
           status: "error", durationMs: Date.now() - startedAt, error: message,
@@ -756,7 +945,9 @@ export async function runProjectOrchestrator(
       if (mcpProjectId) args.project_id = mcpProjectId;
 
       try {
-        const result = await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
+        const result = isMutation
+          ? await callMutationMcpTool(domain as any, toolName, args)
+          : await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
         const serialized = JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS);
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,
@@ -799,7 +990,7 @@ export async function runProjectOrchestrator(
     provider: runtimeResult.response.provider,
     iterations: runtimeResult.iterations,
     audit,
-    readOnly: true,
+    readOnly: false,
     status: "respondido",
   };
 
