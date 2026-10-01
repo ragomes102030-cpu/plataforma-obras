@@ -199,6 +199,9 @@ async function callProvider(
         temperature: 0.2,
         max_tokens: request.maxTokens ?? Number(process.env.LLM_MAX_TOKENS ?? "8192"),
         messages: request.messages,
+        ...(provider.name.toLowerCase().includes("deepseek")
+          ? { thinking: { type: "disabled" }, reasoning_effort: "none" }
+          : {}),
         ...(request.tools.length
           ? { tools: request.tools, tool_choice: "auto" }
           : {}),
