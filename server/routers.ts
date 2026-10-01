@@ -4891,12 +4891,14 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const nodes = await db
           .select()
           .from(wbsNodes)
           .where(
             and(
               eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id),
               eq(wbsNodes.nodeType, "entrega")
             )
           )
@@ -4926,7 +4928,6 @@ export const appRouter = router({
             node.plannedQuantity && Number(node.plannedQuantity) > 0
               ? Math.max(1, Number(node.plannedQuantity))
               : 1;
-          const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
           await db.insert(scheduleActivities).values({
             projectId: input.projectId,
             wbsNodeId: node.id,
