@@ -41,16 +41,42 @@ function structuredRules() {
   ].join("\n");
 }
 
+export interface EapReviewAudit {
+  summary: {
+    totalNodes: number;
+    leafNodes: number;
+    structuralIssues: number;
+    candidateNodes: number;
+  };
+  issues: Array<{
+    code: string;
+    type: "duplicate_code" | "missing_parent" | "invalid_level";
+    detail: string;
+  }>;
+  candidateNodes: ArquimedesProjectContext["wbs"];
+  compactTree: Array<{
+    id: number;
+    code: string;
+    name: string;
+    parentCode: string | null;
+    level: number;
+    nodeType: "grupo" | "pacote" | "entrega";
+  }>;
+}
+
 export function buildEapRequest(
   context: ArquimedesProjectContext,
-  skills: ArquimedesSkill[]
+  skills: ArquimedesSkill[],
+  audit?: EapReviewAudit
 ): ArquimedesLlmRequest {
   const system = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
     engineeringReasoningKernel(),
     structuredRules(),
-    "Ao revisar uma EAP existente, compare o estado atual com o escopo informado e proponha create, update, move ou remove com justificativa.",
-    "Decomponha somente até o nível em que o escopo se torne controlável. Use localização, sistema, disciplina, fase ou componente quando isso melhorar o controle.",
+    "Ao revisar uma EAP existente, faça primeiro uma revisão dirigida pelos achados da auditoria automática. Analise somente o que exigir julgamento de engenharia e proponha create, update, move ou remove com justificativa.",
+    "Não repita uma auditoria estrutural que já foi feita pelo sistema. Concentre-se em cobertura de escopo, nível de decomposição, duplicidades semânticas, nomenclatura, coerência pai/filho e lacunas que possam alterar a EAP.",
+    "O resumo da árvore é apenas um mapa de contexto. Os detalhes completos são fornecidos somente para os nós candidatos identificados pela auditoria.",
+    "Se os achados não justificarem mudança, retorne nodes vazio e registre isso em basis. Não invente correções.",
     "Não execute alterações diretamente. Propostas de planejamento continuam sujeitas à validação e aprovação.",
     "Conhecimento profissional:",
     skillsBlock(skills),
@@ -66,15 +92,15 @@ export function buildEapRequest(
         tipoDeObra: context.tipoDeObra,
         stage: context.stage,
       },
-      wbs: context.wbs,
+      audit: audit ?? null,
     },
     null,
     2
   );
 
-  // A revisão trabalha com uma EAP já existente. 8K é suficiente para o contrato
-  // estruturado e reduz o risco de timeout em provedores rápidos porém limitados.
-  return { system, user, skills, maxTokens: 8192 };
+  // A revisão dirigida usa o mapa compacto da EAP e somente os nós candidatos.
+  // O orçamento menor reduz latência e evita uma requisição monolítica.
+  return { system, user, skills, maxTokens: 4096 };
 }
 
 export function buildEapMacroRequest(
