@@ -1223,3 +1223,73 @@
   .eap-controle-grid { grid-template-columns: 1fr; }
   .eap-baseline { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* EAP 2.1 — densidade/zoom de planilha */
+.eap {
+  --eap-row-h: 30px;
+  --eap-head-h: 30px;
+  --eap-font: 11.5px;
+}
+.eap-densidade-compacta { --eap-row-h: 25px; --eap-head-h: 27px; --eap-font: 10.5px; }
+.eap-densidade-confortavel { --eap-row-h: 36px; --eap-head-h: 34px; --eap-font: 12px; }
+
+.eap-densidade-compacta .eap-grid-head,
+.eap-densidade-normal .eap-grid-head,
+.eap-densidade-confortavel .eap-grid-head { min-height: var(--eap-head-h); }
+
+.eap-densidade-compacta .eap-grid-col,
+.eap-densidade-normal .eap-grid-col,
+.eap-densidade-confortavel .eap-grid-col { height: var(--eap-head-h); }
+
+.eap-densidade-compacta .eap-linha,
+.eap-densidade-normal .eap-linha,
+.eap-densidade-confortavel .eap-linha { min-height: var(--eap-row-h); font-size: var(--eap-font); }
+
+.eap-densidade-compacta .eap-indent,
+.eap-densidade-normal .eap-indent,
+.eap-densidade-confortavel .eap-indent { min-height: var(--eap-row-h); }
+
+.eap-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #d3dde1;
+  border-radius: 5px;
+  background: #f7f9fa;
+}
+.eap-zoom span {
+  padding: 0 5px 0 6px;
+  color: #718087;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.eap-zoom button {
+  min-width: 39px;
+  height: 24px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #65757d;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.eap-zoom button:hover { background: #eaf2f5; color: #285b6a; }
+.eap-zoom button.ativo { background: #2f6f7f; color: #fff; }
+
+.eap-arvore { width: 100%; }
+.eap-grid-head,
+.eap-linha { grid-template-columns: 42px 34px 62px minmax(220px, 1fr) 82px 74px 145px; }
+
+@media (max-width: 1100px) {
+  .eap-toolbar { flex-wrap: wrap; }
+  .eap-toolbar-acoes { width: 100%; flex-wrap: wrap; }
+  .eap-grid-head,
+  .eap-linha { grid-template-columns: 36px 30px 54px minmax(210px, 1fr) 74px 66px 130px; }
+}
+@media (max-width: 900px) { .eap-zoom span { display: none; } }
