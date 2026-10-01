@@ -108,7 +108,8 @@ describe("EvidenceSourceRouter", () => {
           warnings: [],
           errors: [],
         }),
-      })
+      }),
+      true
     );
 
     const result = await router.getEapTree(1);
@@ -161,7 +162,8 @@ describe("EvidenceSourceRouter", () => {
             },
           ],
         }),
-      })
+      }),
+      true
     );
 
     const result = await router.getEapTree(1);
