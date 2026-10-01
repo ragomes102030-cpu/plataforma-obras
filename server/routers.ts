@@ -1373,6 +1373,7 @@ export const appRouter = router({
           projectId: project.id,
           name: project.name,
           description: project.descricao,
+          tipoDeObra: project.tipoDeObra,
           stage: state?.stage ?? "EAP_PROPOSTA",
           wbs: nodes.map(node => ({
             id: node.id,
@@ -1857,6 +1858,7 @@ export const appRouter = router({
               name: input.name,
               location: input.location,
               descricao: input.descricao ?? null,
+              tipoDeObra: input.tipoDeObra,
               status: "Planejamento",
               progress: 0,
               plannedStart,
@@ -1880,16 +1882,9 @@ export const appRouter = router({
             throw new Error("Não foi possível criar a versão inicial do plano.");
           }
 
-          const semeadura = await semearEapDoCatalogo(
-            tx as unknown as NonNullable<typeof db>,
-            createdId,
-            {
-              tipoDeObra: input.tipoDeObra,
-              versionId: version,
-              refazer: false,
-            }
-          );
-
+          // A obra nasce sem EAP genérica. O escopo informado pelo cliente
+          // alimenta o Arquimedes, que propõe a EAP antes de qualquer
+          // estrutura ser considerada aprovada.
           const [created] = await tx
             .select()
             .from(projects)
@@ -1898,7 +1893,7 @@ export const appRouter = router({
 
           return {
             ...created,
-            semeadura,
+            eapStatus: "EAP_PROPOSTA" as const,
             version: {
               id: version,
               versionNumber: 1,

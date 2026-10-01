@@ -3,15 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Trava a decisão de projeto: uma obra sem base de preços precisa nascer
- * VISÍVELMENTE sem EAP, nunca com uma estrutura de demonstração que parece
- * pronta.
- *
- * O `seedStarterPlan` montava a mesma árvore de 12 nós com códigos que não
- * existem na SEINFRA. Em dev (`allowDemoData`) ele ainda segurava o lugar da
- * EAP real, e o painel mostrava "EAP: Concluído" — o usuário via estrutura
- * pronta, sem preço e sem ligação com o catálogo, e não tinha como saber que
- * a causa era falta de base importada.
+ * Contrato de criação de obra:
+ * a obra nasce com a descrição do cliente e uma versão de plano em rascunho,
+ * mas SEM uma EAP genérica pré-preenchida. A primeira estrutura deve ser
+ * proposta pelo Arquimedes e revisada pelo engenheiro.
  */
 const router = readFileSync(join("server", "routers.ts"), "utf-8");
 const home = readFileSync(join("client", "src", "pages", "Home.tsx"), "utf-8");
@@ -21,27 +16,44 @@ const catalogView = readFileSync(
   "utf-8"
 );
 
-/** Trecho do `projects.create` entre a criação e o fim da mutation. */
 function corpoDoCreate(): string {
-  const inicio = router.indexOf("const semeadura = await semearEapDoCatalogo");
-  expect(inicio, "projects.create não chama o seeder").toBeGreaterThan(-1);
-  const fim = router.indexOf("generateEapFromCatalog", inicio);
-  return router.slice(inicio, fim === -1 ? inicio + 5000 : fim);
+  const inicio = router.indexOf("\n    create: protectedProcedure");
+  expect(inicio, "projects.create não existe").toBeGreaterThan(-1);
+  const fim = router.indexOf("\n    createDemoGantt:", inicio);
+  return router.slice(inicio, fim === -1 ? inicio + 9000 : fim);
 }
 
-describe("obra sem base de preço não recebe EAP de demonstração", () => {
-  it("projects.create não cai no seedStarterPlan quando a semeadura é vazia", () => {
+describe("nova obra começa sem EAP genérica", () => {
+  it("projects.create não chama o seeder da EAP", () => {
+    expect(corpoDoCreate()).not.toMatch(/semearEapDoCatalogo\s*\(/);
     expect(corpoDoCreate()).not.toMatch(/seedStarterPlan\s*\(/);
   });
 
-  it("projects.create não condiciona a EAP a ENV.allowDemoData", () => {
-    // A estrutura real é independente de flag de demonstração: a base oficial
-    // é o que decide, e ela existe em qualquer ambiente.
-    expect(corpoDoCreate()).not.toMatch(/allowDemoData/);
+  it("projects.create mantém a descrição do cliente para o planejamento", () => {
+    expect(corpoDoCreate()).toMatch(/descricao:\s*input\.descricao/);
   });
 
-  it("a semeadura volta na resposta, para a UI poder avisar", () => {
-    expect(corpoDoCreate()).toMatch(/semeadura,\s*version:/);
+  it("projects.create cria a versão inicial do plano em rascunho", () => {
+    expect(corpoDoCreate()).toMatch(/status:\s*"draft"/);
+    expect(corpoDoCreate()).toMatch(/EAP_PROPOSTA/);
+  });
+});
+
+describe("a EAP vazia prioriza Arquimedes", () => {
+  it("oferece proposta do Arquimedes antes do template genérico", () => {
+    expect(abaEap).toMatch(/analisarEapComArquimedes/);
+    expect(abaEap).toMatch(/Pedir proposta ao Arquimedes/);
+    expect(abaEap).toMatch(/Usar estrutura-base/);
+  });
+
+  it("não aplica a proposta automaticamente", () => {
+    expect(abaEap).toMatch(/Não aplicada/);
+    expect(abaEap).toMatch(/proposta.*somente leitura/i);
+  });
+
+  it("mantém o caminho manual para o engenheiro", () => {
+    expect(abaEap).toMatch(/Começar manualmente/);
+    expect(abaEap).toMatch(/createWbsNode/);
   });
 });
 

@@ -205,6 +205,7 @@ export const projects = pgTable("projects", {
   // Descrição livre da obra. É o insumo para a IA conversar sobre o que está
   // sendo construído; a EAP em si vem do catálogo de preços, não daqui.
   descricao: text("descricao"),
+  tipoDeObra: varchar("tipoDeObra", { length: 32 }),
   plannedStart: timestamp("plannedStart", { withTimezone: true }).notNull(),
   plannedFinish: timestamp("plannedFinish", { withTimezone: true }).notNull(),
   baseReferencia: enumProjectsBaseReferencia("baseReferencia"),
