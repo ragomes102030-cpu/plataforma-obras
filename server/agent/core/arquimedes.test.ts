@@ -50,7 +50,6 @@ describe("parseEapProposal", () => {
   });
 });
 
-
 describe("proposeEapWithArquimedes", () => {
   const context: ArquimedesProjectContext = {
     projectId: 10,
@@ -138,8 +137,8 @@ describe("proposeEapWithArquimedes", () => {
       "expandir_subarvore_eap",
       "expandir_subarvore_eap",
     ]);
-    expect(calls[0]?.maxTokens).toBe(4096);
-    expect(calls.slice(1).every(call => call.maxTokens === 8192)).toBe(true);
+    expect(calls[0]?.maxTokens).toBe(8192);
+    expect(calls.slice(1).every(call => call.maxTokens === 12288)).toBe(true);
     expect(proposal.nodes.map(node => node.code)).toEqual([
       "1",
       "1.1",
@@ -150,8 +149,6 @@ describe("proposeEapWithArquimedes", () => {
     ]);
   });
 });
-
-
 
 describe("parseEapProposal — contrato flexível", () => {
   it("aceita action omitida", () => {
@@ -195,7 +192,6 @@ describe("parseEapProposal — contrato flexível", () => {
     expect(result.action).toBe("propose_eap");
   });
 });
-
 
 describe("parseEapProposal — etapas flexíveis", () => {
   it("normaliza uma macroestrutura mesmo sem operation, parentCode ou action", () => {

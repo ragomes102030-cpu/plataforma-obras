@@ -1,32 +1,124 @@
 import { invokeLlmGateway, type GatewayRequest } from "../../llm-provider-gateway";
 import type { ArquimedesLlmProvider, ArquimedesLlmRequest } from "../core/types";
 
-function extractJsonObject(text: string) {
-  const trimmed = text.trim();
+function tryParseJsonObject(candidate: string) {
   try {
-    JSON.parse(trimmed);
-    return trimmed;
-  } catch {}
+    const parsed = JSON.parse(candidate);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? candidate
+      : null;
+  } catch {
+    return null;
+  }
+}
 
-  const fenced = trimmed.match(/\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`/i);
-  if (fenced) {
-    try {
-      JSON.parse(fenced[1].trim());
-      return fenced[1].trim();
-    } catch {}
+export function extractJsonObject(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const direct = tryParseJsonObject(trimmed);
+  if (direct) return direct;
+
+  const fencedMatches = Array.from(
+    trimmed.matchAll(/\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`/gi)
+  );
+  for (const match of fencedMatches) {
+    const candidate = match[1]?.trim();
+    if (candidate) {
+      const parsed = tryParseJsonObject(candidate);
+      if (parsed) return parsed;
+    }
   }
 
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    const candidate = trimmed.slice(start, end + 1);
-    try {
-      JSON.parse(candidate);
-      return candidate;
-    } catch {}
+  for (let start = 0; start < trimmed.length; start++) {
+    if (trimmed[start] !== "{") continue;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start; index < trimmed.length; index++) {
+      const char = trimmed[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          const candidate = trimmed.slice(start, index + 1);
+          const parsed = tryParseJsonObject(candidate);
+          if (parsed) return parsed;
+          break;
+        }
+      }
+    }
   }
 
   return null;
+}
+
+function unwrapStructuredJson(json: string) {
+  let current = json;
+
+  for (let depth = 0; depth < 3; depth++) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(current);
+    } catch {
+      return null;
+    }
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const record = parsed as Record<string, unknown>;
+    if (
+      "nodes" in record ||
+      "basis" in record ||
+      "assumptions" in record ||
+      "missingInformation" in record
+    ) {
+      return JSON.stringify(record);
+    }
+
+    const wrapperKeys = ["proposal", "result", "data", "output", "response"];
+    const next = wrapperKeys
+      .map(key => record[key])
+      .find(
+        value =>
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value)
+      );
+
+    if (!next) return null;
+    current = JSON.stringify(next);
+  }
+
+  return null;
+}
+
+function normalizeStructuredJson(text: string) {
+  const candidate = extractJsonObject(text);
+  if (!candidate) return null;
+  return unwrapStructuredJson(candidate) ?? candidate;
 }
 
 function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>): string | null {
@@ -45,13 +137,9 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>): st
     if (text.trim()) return text;
   }
 
-  // Alguns modelos de raciocínio devolvem o raciocínio em vez de preencher
-  // message.content. Como o Arquimedes exige JSON, aceitamos somente se o
-  // próprio raciocínio contiver um objeto JSON válido.
   const reasoning = message?.reasoning ?? message?.reasoning_content;
   if (typeof reasoning === "string" && reasoning.trim()) {
-    const json = extractJsonObject(reasoning);
-    if (json) return json;
+    return reasoning;
   }
 
   if (message?.tool_calls?.length) {
@@ -68,7 +156,10 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       { role: "user", content: request.user },
     ];
 
-    const generate = async (messages: GatewayRequest["messages"], maxTokens: number) => {
+    const generate = async (
+      messages: GatewayRequest["messages"],
+      maxTokens: number
+    ) => {
       const response = await invokeLlmGateway({
         messages,
         tools: [],
@@ -80,37 +171,53 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       return {
         response,
         raw: raw ?? "",
-        json: raw ? extractJsonObject(raw) : null,
+        json: raw ? normalizeStructuredJson(raw) : null,
       };
     };
 
     const outputBudget = request.maxTokens ?? 16384;
-    const first = await generate(baseMessages, outputBudget);
-    if (first.json) return first.json;
+    const recoveryBudgets = Array.from(
+      new Set([
+        outputBudget,
+        Math.min(Math.max(outputBudget * 2, 8192), 32768),
+        Math.min(Math.max(outputBudget * 4, 12288), 32768),
+      ])
+    );
 
-    const finishReason = first.response.choices?.[0]?.finish_reason;
-    const recoveryReason =
-      finishReason === "length"
-        ? "A resposta anterior foi interrompida antes de fechar o JSON. Gere novamente uma versão compacta e completa."
-        : !first.raw
-          ? "A resposta anterior veio vazia. Gere novamente a mesma proposta de forma compacta e completa."
-          : "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta de forma compacta e completa.";
+    for (let attempt = 0; attempt < recoveryBudgets.length; attempt++) {
+      const maxTokens = recoveryBudgets[attempt];
+      const messages =
+        attempt === 0
+          ? baseMessages
+          : [
+              ...baseMessages,
+              {
+                role: "user" as const,
+                content:
+                  "A saída anterior não pôde ser usada com segurança. Gere novamente a mesma proposta de forma compacta e completa. " +
+                  "Responda SOMENTE com JSON válido. " +
+                  "Use exatamente esta forma mínima: " +
+                  '{"basis":[],"assumptions":[],"missingInformation":[],"nodes":[]}.' +
+                  " Não inclua markdown, comentários ou texto fora do JSON. " +
+                  "Mantenha rationale curta em cada node e não invente dados.",
+              },
+            ];
 
-    const recoveryMessages: GatewayRequest["messages"] = [
-      ...baseMessages,
-      {
-        role: "user",
-        content:
-          recoveryReason +
-          " Responda SOMENTE com um objeto JSON válido. Mantenha a resposta dentro do orçamento solicitado. " +
-          "Mantenha apenas action, basis, assumptions, missingInformation e nodes. " +
-          "Em cada node, mantenha parentCode, code quando necessário, name, nodeType, operation e uma rationale curta. " +
-          "Não use markdown, comentários, explicações ou texto fora do JSON.",
-      },
-    ];
+      const current = await generate(messages, maxTokens);
+      const finishReason = current.response.choices?.[0]?.finish_reason;
 
-    const second = await generate(recoveryMessages, outputBudget);
-    if (second.json) return second.json;
+      if (!current.json) {
+        console.warn("[Arquimedes][JSON] recuperação estruturada", {
+          attempt: attempt + 1,
+          maxTokens,
+          provider: current.response.provider,
+          finishReason,
+          rawLength: current.raw.length,
+        });
+      }
+
+      if (current.json) return current.json;
+    }
 
     throw new Error(
       "O Arquimedes recebeu uma proposta EAP incompleta ou inválida do provedor e não conseguiu recuperá-la com segurança. Nenhuma alteração foi aplicada à obra."
