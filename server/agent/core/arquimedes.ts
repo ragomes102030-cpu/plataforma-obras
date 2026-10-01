@@ -246,14 +246,14 @@ export async function proposeEapWithArquimedes(
   return { raw, request };
 }
 
-const stringListSchema = (max: number) =>
+const stringListSchema = (max: number, itemMax = 3000) =>
   z.preprocess(
     value => {
       if (value == null) return [];
       if (typeof value === "string") return [value];
       return value;
     },
-    z.array(z.string().trim().min(1).max(600)).max(max)
+    z.array(z.string().trim().min(1).max(itemMax)).max(max)
   );
 
 const eapReviewNodeSchema = z.object({
@@ -270,9 +270,9 @@ const eapReviewNodeSchema = z.object({
 });
 
 const eapReviewSchema = z.object({
-  basis: stringListSchema(20),
-  assumptions: stringListSchema(30),
-  missingInformation: stringListSchema(30),
+  basis: stringListSchema(20, 3000),
+  assumptions: stringListSchema(30, 2000),
+  missingInformation: stringListSchema(30, 1200),
   nodes: z.array(eapReviewNodeSchema).max(MAX_INCREMENTAL_NODES),
 });
 
@@ -284,9 +284,9 @@ const macroNodeSchema = z.object({
 });
 
 const macroResponseSchema = z.object({
-  basis: stringListSchema(20),
-  assumptions: stringListSchema(30),
-  missingInformation: stringListSchema(30),
+  basis: stringListSchema(20, 3000),
+  assumptions: stringListSchema(30, 2000),
+  missingInformation: stringListSchema(30, 1200),
   nodes: z.array(macroNodeSchema).min(1).max(MAX_MACRO_ROOTS),
 });
 
@@ -302,9 +302,9 @@ const subtreeNodeSchema = z.object({
 });
 
 const subtreeResponseSchema = z.object({
-  basis: stringListSchema(20),
-  assumptions: stringListSchema(30),
-  missingInformation: stringListSchema(30),
+  basis: stringListSchema(20, 3000),
+  assumptions: stringListSchema(30, 2000),
+  missingInformation: stringListSchema(30, 1200),
   nodes: z.array(subtreeNodeSchema).max(MAX_SUBTREE_NODES),
 });
 
