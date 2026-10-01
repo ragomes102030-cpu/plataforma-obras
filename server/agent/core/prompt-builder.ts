@@ -73,9 +73,9 @@ export function buildEapRequest(
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
     engineeringReasoningKernel(),
     structuredRules(),
-    "Ao revisar uma EAP existente, faça primeiro uma revisão dirigida pelos achados da auditoria automática. Analise somente o que exigir julgamento de engenharia e proponha create, update, move ou remove com justificativa.",
-    "Não repita uma auditoria estrutural que já foi feita pelo sistema. Concentre-se em cobertura de escopo, nível de decomposição, duplicidades semânticas, nomenclatura, coerência pai/filho e lacunas que possam alterar a EAP.",
-    "O resumo da árvore é apenas um mapa de contexto. Os detalhes completos são fornecidos somente para os nós candidatos identificados pela auditoria.",
+    "Ao revisar uma EAP existente, consulte o banco por meio das ferramentas de leitura disponíveis quando precisar de dados adicionais. Você pode navegar pela obra e pela EAP sob demanda; não assuma que o resumo inicial contém tudo.",
+    "Concentre-se em cobertura de escopo, nível de decomposição, duplicidades semânticas, nomenclatura, coerência pai/filho e lacunas que possam alterar a EAP. Use consultas somente quando elas reduzirem incerteza real.",
+    "O contexto inicial é apenas uma referência. Quando precisar, consulte diretamente os registros atuais da obra antes de propor qualquer alteração.",
     "Se os achados não justificarem mudança, retorne nodes vazio e registre isso em basis. Não invente correções.",
     "Não execute alterações diretamente. Propostas de planejamento continuam sujeitas à validação e aprovação.",
     "Conhecimento profissional:",
@@ -100,7 +100,7 @@ export function buildEapRequest(
 
   // A revisão dirigida usa o mapa compacto da EAP e somente os nós candidatos.
   // O orçamento menor reduz latência e evita uma requisição monolítica.
-  return { system, user, skills, maxTokens: 4096 };
+  return { system, user, skills, maxTokens: 4096, databaseContext: { projectId: context.projectId } };
 }
 
 export function buildEapMacroRequest(
