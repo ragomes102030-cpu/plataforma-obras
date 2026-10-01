@@ -42,17 +42,17 @@ describe("nova obra começa sem EAP genérica", () => {
 describe("a EAP vazia prioriza Arquimedes", () => {
   it("oferece proposta do Arquimedes antes do template genérico", () => {
     expect(abaEap).toMatch(/analisarEapComArquimedes/);
-    expect(abaEap).toMatch(/Pedir proposta ao Arquimedes/);
+    expect(abaEap).toMatch(/Gerar proposta com Arquimedes/);
     expect(abaEap).toMatch(/Usar estrutura-base/);
   });
 
   it("não aplica a proposta automaticamente", () => {
-    expect(abaEap).toMatch(/Não aplicada/);
-    expect(abaEap).toMatch(/proposta.*somente leitura/i);
+    expect(abaEap).toMatch(/NÃO APLICADA/i);
+    expect(abaEap).toMatch(/proposta é somente uma recomendação técnica/i);
   });
 
   it("mantém o caminho manual para o engenheiro", () => {
-    expect(abaEap).toMatch(/Começar manualmente/);
+    expect(abaEap).toMatch(/Montar manualmente/);
     expect(abaEap).toMatch(/createWbsNode/);
   });
 });
