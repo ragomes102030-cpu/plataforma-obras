@@ -1520,11 +1520,16 @@ export const appRouter = router({
             .from(wbsNodes)
             .where(eq(wbsNodes.projectId, input.projectId));
           const node = all.find(item => item.id === input.nodeId);
-          if (node) await assertPlanVersionWritable(tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>, node.versionId);
+          if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
+          const [version] = node.versionId
+            ? await tx.select({ status: projectPlanVersions.status }).from(projectPlanVersions).where(eq(projectPlanVersions.id, node.versionId)).limit(1)
+            : [];
+          if (version?.status === "approved") {
+            throw conflict("Esta versão do plano está aprovada e não pode mais ser alterada.");
+          }
           const parent = input.targetParentId === null
             ? null
             : all.find(item => item.id === input.targetParentId) ?? null;
-          if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
           if (input.targetParentId !== null && !parent) throw badRequest("Destino inválido.");
 
           const byId = new Map(all.map(item => [item.id, item]));
@@ -1618,6 +1623,7 @@ export const appRouter = router({
           ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
           : `${nextNumber}`;
         await assertAvailableWbsCode(db, input.projectId, code);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType,
           unit: source.unit,
           plannedQuantity: source.plannedQuantity == null ? null : String(source.plannedQuantity),
@@ -1628,7 +1634,9 @@ export const appRouter = router({
           responsible: source.responsible,
           acceptanceCriteria: source.acceptanceCriteria,
           scopeStatus: "rascunho",
-          sortOrder: siblings.length }).$returningIds();
+          sortOrder: siblings.length,
+          versionId: writable.id,
+        }).$returningIds();
         return created;
       }),
     deleteWbsNode: protectedProcedure
