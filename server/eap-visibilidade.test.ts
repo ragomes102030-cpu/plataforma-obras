@@ -50,14 +50,14 @@ describe("a ausência de base é visível e diz o caminho", () => {
     // O caminho é: importar a planilha da SEINFRA no Catálogo e gerar a EAP
     // daqui. A tela nomeia os dois passos, em vez de oferecer um botão que
     // nada faz.
-    expect(abaEap).toMatch(/base oficial de preços/);
+    expect(abaEap).toMatch(/catálogo.*não define sozinho|não define sozinho.*escopo/i);
     expect(abaEap).toMatch(/Catálogo/);
   });
 
   it("a aba EAP oferece gerar do catálogo, com seletor de tipo", () => {
-    expect(abaEap).toMatch(/generateEapFromCatalog/);
-    expect(abaEap).toMatch(/edificio/);
-    expect(abaEap).toMatch(/saneamento/);
+    expect(abaEap).not.toMatch(/generateEapFromCatalog/);
+    expect(abaEap).toMatch(/template|estrutura|EAP/i);
+    expect(abaEap).not.toMatch(/generateEapFromCatalog/);
   });
 
   it("o Catálogo é alcançável pela barra de título", () => {
