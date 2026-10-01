@@ -161,6 +161,23 @@ export async function ensureWritablePlanVersion(
       throw new Error("Não foi possível criar uma versão do plano.");
     }
 
+    // A versão nova também absorve qualquer nó que tenha sido criado fora do
+    // versionamento desde a última aprovação. Isso precisa acontecer ANTES do
+    // fork: caso contrário, uma atividade ainda ligada à versão base pode
+    // encontrar seu nó EAP fora dela e abortar a criação da nova versão.
+    await tx
+      .update(wbsNodes)
+      .set({ versionId: created })
+      .where(and(eq(wbsNodes.projectId, projectId), isNull(wbsNodes.versionId)));
+    await tx
+      .update(scheduleActivities)
+      .set({ versionId: created })
+      .where(and(eq(scheduleActivities.projectId, projectId), isNull(scheduleActivities.versionId)));
+    await tx
+      .update(scheduleDependencies)
+      .set({ versionId: created })
+      .where(and(eq(scheduleDependencies.projectId, projectId), isNull(scheduleDependencies.versionId)));
+
     // Uma reabertura é um FORK real: a versão aprovada continua intacta e a
     // nova versão recebe cópias próprias da EAP, atividades e dependências.
     // IDs mudam; os mapas abaixo preservam as referências entre os três níveis.
