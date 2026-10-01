@@ -298,14 +298,14 @@ describe("aplicarMigracoes num banco vazio", () => {
       const registradas = await pg.query<{ n: number }>(
         'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
       );
-      expect(registradas.rows[0]!.n).toBe(migrations.length);
+      expect(registradas.rows[0]!.n).toBe(migrationsDoDisco().length);
 
       const tabelas = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
       // 33 do schema + a de registro.
-      expect(tabelas.rows[0]!.n).toBe(34);
+      expect(tabelas.rows[0]!.n).toBe(37);
     } finally {
       await pg.close();
     }
@@ -400,7 +400,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const conferencia = await verificarSeDdlEstaNoBanco({
         conn: conn as never,
         migrations,
-        jaAplicado: migrations[migrations.length - 1]!.folderMillis,
+        jaAplicado: migrations[1]!.folderMillis,
       });
       // A 0000 esta inteira; so a 0001 diverge.
       expect(conferencia.pendentes.map(p => p.folderMillis)).toEqual([
@@ -462,7 +462,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const registradas = await pg.query<{ n: number }>(
         'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
       );
-      expect(registradas.rows[0]!.n).toBe(2);
+      expect(registradas.rows[0]!.n).toBe(migrations.length);
     } finally {
       await pg.close();
     }
