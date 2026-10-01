@@ -181,9 +181,9 @@ Usa Drizzle ORM para migrations e schema. Scripts na raiz:
 DATABASE_URL=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
-GITHUB_TOKEN=ghp_...
-VERCEL_OIDC_TOKEN=...
-COMPASIO_API_KEY=ak_SQrThA3oqjqvMWAhVcoh
+GITHUB_TOKEN=<configure-no-ambiente>
+VERCEL_OIDC_TOKEN=<configure-no-ambiente>
+COMPASIO_API_KEY=<configure-no-ambiente>
 ```
 
 ### Vercel env vars (via Vercel dashboard)
@@ -229,7 +229,7 @@ COMPASIO_API_KEY=ak_SQrThA3oqjqvMWAhVcoh
 ## GitHub
 
 **User:** ragomes102030-cpu
-**Token:** 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 (scopes: admin:org, repo, workflow, write:packages, read:org)
+**Token:** <token-redacted> (scopes: admin:org, repo, workflow, write:packages, read:org)
 
 **Repositórios (7):**
 - plataforma-obras (principal)
@@ -316,7 +316,7 @@ LINEAR_TOKEN=...      # para linear
 CLICKUP_TOKEN=...     # para clickup
 ```
 
-Composio já tem token configurado: `ak_SQrThA3oqjqvMWAhVcoh`
+Composio: configure `COMPOSIO_API_KEY` somente no ambiente de execução.
 
 ---
 
