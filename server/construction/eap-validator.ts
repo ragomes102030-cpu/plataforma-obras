@@ -154,8 +154,9 @@ export function validateEapScope(
 
     if (isLeaf) {
       const missing: string[] = [];
-      if (!node.unit) missing.push("unidade");
-      if (node.plannedQuantity === null || node.plannedQuantity === undefined) missing.push("quantidade");
+      // Unidade e quantidade pertencem ao levantamento quantitativo.
+      // A validação estrutural da EAP não deve exigir dado de medição
+      // antes de o escopo ser aprovado.
       if (options.requireDictionaryForLeaves) {
         if (!node.description?.trim()) missing.push("descrição/escopo");
         if (!node.inclusions?.trim()) missing.push("inclusões");
