@@ -35,6 +35,7 @@ export type LlmResponse = {
       reasoning_content?: string;
       tool_calls?: LlmMessage["tool_calls"];
     };
+    finish_reason?: string | null;
   }>;
 };
 

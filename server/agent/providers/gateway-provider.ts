@@ -8,7 +8,7 @@ function extractJsonObject(text: string) {
     return trimmed;
   } catch {}
 
-  const fenced = trimmed.match(/\`\`\`(?:json)?\\s*([\\s\\S]*?)\`\`\`/i);
+  const fenced = trimmed.match(/\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`/i);
   if (fenced) {
     try {
       JSON.parse(fenced[1].trim());
@@ -62,16 +62,54 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>) {
 
 export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
   async complete(request: ArquimedesLlmRequest): Promise<string> {
-    const gatewayRequest: GatewayRequest = {
-      messages: [
-        { role: "system", content: request.system },
-        { role: "user", content: request.user },
-      ],
-      tools: [],
-      responseFormat: { type: "json_object" },
-      maxTokens: 8192,
+    const baseMessages: GatewayRequest["messages"] = [
+      { role: "system", content: request.system },
+      { role: "user", content: request.user },
+    ];
+
+    const generate = async (messages: GatewayRequest["messages"], maxTokens: number) => {
+      const response = await invokeLlmGateway({
+        messages,
+        tools: [],
+        responseFormat: { type: "json_object" },
+        maxTokens,
+      });
+      const raw = extractText(response);
+      return {
+        response,
+        raw,
+        json: extractJsonObject(raw),
+      };
     };
-    const response = await invokeLlmGateway(gatewayRequest);
-    return extractText(response);
+
+    const outputBudget = request.maxTokens ?? 16384;
+    const first = await generate(baseMessages, outputBudget);
+    if (first.json) return first.json;
+
+    const finishReason = first.response.choices?.[0]?.finish_reason;
+    const recoveryReason =
+      finishReason === "length"
+        ? "A resposta anterior foi interrompida antes de fechar o JSON. Gere novamente uma versão compacta e completa."
+        : "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta de forma compacta e completa.";
+
+    const recoveryMessages: GatewayRequest["messages"] = [
+      ...baseMessages,
+      {
+        role: "user",
+        content:
+          recoveryReason +
+          " Responda SOMENTE com um objeto JSON válido. Mantenha a resposta dentro do orçamento solicitado. " +
+          "Mantenha apenas action, basis, assumptions, missingInformation e nodes. " +
+          "Em cada node, mantenha parentCode, code quando necessário, name, nodeType, operation e uma rationale curta. " +
+          "Não use markdown, comentários, explicações ou texto fora do JSON.",
+      },
+    ];
+
+    const second = await generate(recoveryMessages, outputBudget);
+    if (second.json) return second.json;
+
+    throw new Error(
+      "O Arquimedes recebeu uma proposta EAP incompleta ou inválida do provedor e não conseguiu recuperá-la com segurança. Nenhuma alteração foi aplicada à obra."
+    );
   }
 }
