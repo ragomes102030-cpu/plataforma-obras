@@ -86,7 +86,11 @@ export default function Home() {
     },
   });
 
-  const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });\n  const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setConfirmacaoExclusao(""); setObraId(null); setDestino("obra"); } });\n  const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });\n\n  const criarDemo = trpc.projects.createDemoGantt.useMutation({
+  const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
+  const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setConfirmacaoExclusao(""); setObraId(null); setDestino("obra"); } });
+  const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });
+
+  const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
       await obras.refetch();
       setObraId(created.projectId);
@@ -210,8 +214,13 @@ export default function Home() {
               disabled={limparObrasTeste.isPending}
               title="Excluir permanentemente as obras marcadas como TESTE ou DEMO"
               onClick={() => {
-                const nomes = obrasDeTeste.map(o => `• ${o.name} (${o.code})`).join("\n");
-                if (!window.confirm(`Excluir permanentemente estas obras de teste?\n\n${nomes}\n\nEAP, cronograma, orçamento, baseline e dados do Arquimedes dessas obras também serão removidos.`)) return;
+                const nomes = obrasDeTeste.map(o => `• ${o.name} (${o.code})`).join("
+");
+                if (!window.confirm(`Excluir permanentemente estas obras de teste?
+
+${nomes}
+
+EAP, cronograma, orçamento, baseline e dados do Arquimedes dessas obras também serão removidos.`)) return;
                 limparObrasTeste.mutate();
               }}
             >
@@ -303,7 +312,9 @@ export default function Home() {
         </div>
       </header>
 
-      <button type="button" className="xl-lixeira-btn" onClick={() => setLixeiraAberta(true)} title="Abrir lixeira de obras"><Trash2 size={13} /> Lixeira{lixeira.data?.length ? ` (${lixeira.data.length})` : ""}</button>\n\n      {novaObraAberta && (
+      <button type="button" className="xl-lixeira-btn" onClick={() => setLixeiraAberta(true)} title="Abrir lixeira de obras"><Trash2 size={13} /> Lixeira{lixeira.data?.length ? ` (${lixeira.data.length})` : ""}</button>
+
+      {novaObraAberta && (
         <NovaObraDialog
           busy={criarObra.isPending}
           error={criarObra.error?.message ?? null}
