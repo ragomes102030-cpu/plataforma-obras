@@ -3,6 +3,7 @@ import {
   buildEapMacroRequest,
   buildEapRequest,
   buildEapSubtreeRequest,
+  type EapReviewAudit,
 } from "./prompt-builder";
 import { loadEapSkills } from "./skill-loader";
 import type {
@@ -16,6 +17,109 @@ const MAX_INCREMENTAL_NODES = 120;
 const MAX_MACRO_ROOTS = 8;
 const MAX_SUBTREE_NODES = 20;
 const SUBTREE_CONCURRENCY = 2;
+
+function auditExistingEap(context: ArquimedesProjectContext): EapReviewAudit {
+  const nodes = context.wbs;
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const childrenByParent = new Map<number, typeof nodes>();
+
+  for (const node of nodes) {
+    if (node.parentId != null) {
+      const children = childrenByParent.get(node.parentId) ?? [];
+      children.push(node);
+      childrenByParent.set(node.parentId, children);
+    }
+  }
+
+  const codeCounts = new Map<string, number>();
+  for (const node of nodes) {
+    codeCounts.set(node.code, (codeCounts.get(node.code) ?? 0) + 1);
+  }
+
+  const issues: EapReviewAudit["issues"] = [];
+
+  for (const node of nodes) {
+    if ((codeCounts.get(node.code) ?? 0) > 1) {
+      issues.push({
+        code: node.code,
+        type: "duplicate_code",
+        detail: "Código repetido na EAP.",
+      });
+    }
+
+    if (node.parentId != null && !byId.has(node.parentId)) {
+      issues.push({
+        code: node.code,
+        type: "missing_parent",
+        detail: "O pai informado não existe na EAP carregada.",
+      });
+    }
+
+    const parent = node.parentId == null ? null : byId.get(node.parentId);
+    if (parent && node.level !== parent.level + 1) {
+      issues.push({
+        code: node.code,
+        type: "invalid_level",
+        detail: "O nível do nó não corresponde ao nível do pai.",
+      });
+    }
+  }
+
+  const leaves = nodes.filter(node => !childrenByParent.has(node.id));
+  const candidateIds = new Set<number>();
+
+  // Folhas e seus pais são os principais candidatos para julgamento de
+  // granularidade e cobertura de escopo. Achados estruturais também entram.
+  for (const leaf of leaves) {
+    candidateIds.add(leaf.id);
+    if (leaf.parentId != null) candidateIds.add(leaf.parentId);
+  }
+
+  for (const issue of issues) {
+    const node = nodes.find(item => item.code === issue.code);
+    if (node) {
+      candidateIds.add(node.id);
+      if (node.parentId != null) candidateIds.add(node.parentId);
+    }
+  }
+
+  const candidateNodes = nodes
+    .filter(node => candidateIds.has(node.id))
+    .sort((left, right) => left.id - right.id)
+    .slice(0, 48)
+    .map(node => ({
+      ...node,
+      description: node.description?.slice(0, 800),
+      inclusions: node.inclusions?.slice(0, 800),
+      exclusions: node.exclusions?.slice(0, 800),
+      acceptanceCriteria: node.acceptanceCriteria?.slice(0, 800),
+    }));
+
+  const compactTree = nodes
+    .map(node => ({
+      id: node.id,
+      code: node.code,
+      name: node.name,
+      parentCode: node.parentId == null ? null : byId.get(node.parentId)?.code ?? null,
+      level: node.level,
+      nodeType: node.nodeType,
+    }))
+    .sort((left, right) => compareEapCodes(left.code, right.code));
+
+  return {
+    summary: {
+      totalNodes: nodes.length,
+      leafNodes: leaves.length,
+      structuralIssues: issues.length,
+      candidateNodes: candidateNodes.length,
+    },
+    issues: Array.from(
+      new Map(issues.map(issue => [issue.code + ":" + issue.type, issue])).values()
+    ).slice(0, 40),
+    candidateNodes,
+    compactTree,
+  };
+}
 
 function compareEapCodes(left: string, right: string) {
   const a = left.split(".").map(Number);
@@ -241,7 +345,10 @@ export async function proposeEapWithArquimedes(
     return proposeEapIncrementally(context, skills, provider);
   }
 
-  const request = buildEapRequest(context, skills);
+  const audit = auditExistingEap(context);
+  console.info("[Arquimedes][EAP] auditoria dirigida", audit.summary);
+
+  const request = buildEapRequest(context, skills, audit);
 
   // Contrato de fronteira: a revisão existente sempre precisa chegar ao provider
   // como uma requisição completa. Falhar aqui identifica a origem do problema
