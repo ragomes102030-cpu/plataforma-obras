@@ -557,7 +557,7 @@ export function gerarEap(
   /** Preserva a hierarquia da trilha do catálogo em vez de reduzir cada grupo a 12 exemplos. */
   const limite = opcoes.maximoPorGrupo;
   const entrada = Array.isArray(servicos) ? servicos : [];
-  const soServicos = entrada.filter((s): s is ServicoDoCatalogo => !!s && typeof s.code === "string" && ehCodigoDeServico(s.code));
+  const soServicos = entrada.filter((s): s is ServicoDoCatalogo =>\n    !!s &&\n    typeof s.code === "string" &&\n    (s.itemType === "servico" || s.itemType === undefined) &&\n    ehCodigoDeServico(s.code)\n  );
   const gruposPedidos = resolverGrupos(opcoes.tipoDeObra);
   const gruposVazios: CategoriaDeObra[] = [];
   const porCategoria = new Map<CategoriaDeObra, ServicoDoCatalogo[]>();
