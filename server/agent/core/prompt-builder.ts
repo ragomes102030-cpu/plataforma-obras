@@ -99,7 +99,8 @@ export function buildEapSubtreeRequest(
     name: string;
     rationale: string;
   },
-  macroNodes: Array<{ code: string; name: string }>
+  macroNodes: Array<{ code: string; name: string }>,
+  maxNodesInSubtree = 20
 ): ArquimedesLlmRequest {
   const system = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
@@ -120,7 +121,7 @@ export function buildEapSubtreeRequest(
     {
       task: "expandir_subarvore_eap",
       budget: {
-        maxNodesInThisSubtree: 20,
+        maxNodesInThisSubtree: maxNodesInSubtree,
       },
       project: {
         id: context.projectId,
