@@ -8,7 +8,7 @@ function extractJsonObject(text: string) {
     return trimmed;
   } catch {}
 
-  const fenced = trimmed.match(/\`\`\`(?:json)?\\s*([\\s\\S]*?)\`\`\`/i);
+  const fenced = trimmed.match(/\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`/i);
   if (fenced) {
     try {
       JSON.parse(fenced[1].trim());
@@ -62,16 +62,43 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>) {
 
 export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
   async complete(request: ArquimedesLlmRequest): Promise<string> {
-    const gatewayRequest: GatewayRequest = {
+    const baseMessages: GatewayRequest["messages"] = [
+      { role: "system", content: request.system },
+      { role: "user", content: request.user },
+    ];
+
+    const firstRequest: GatewayRequest = {
+      messages: baseMessages,
+      tools: [],
+      responseFormat: { type: "json_object" },
+      maxTokens: 16384,
+    };
+
+    const firstResponse = await invokeLlmGateway(firstRequest);
+    const firstRaw = extractText(firstResponse);
+    if (extractJsonObject(firstRaw)) return extractJsonObject(firstRaw)!;
+
+    const recoveryRequest: GatewayRequest = {
       messages: [
-        { role: "system", content: request.system },
-        { role: "user", content: request.user },
+        ...baseMessages,
+        {
+          role: "user",
+          content:
+            "A resposta anterior não pôde ser interpretada como JSON válido. Gere novamente a mesma proposta EAP como um único objeto JSON válido e compacto. Não use markdown, não inclua comentários, não inclua texto fora do JSON e reduza as justificativas a frases curtas.",
+        },
       ],
       tools: [],
       responseFormat: { type: "json_object" },
-      maxTokens: 8192,
+      maxTokens: 16384,
     };
-    const response = await invokeLlmGateway(gatewayRequest);
-    return extractText(response);
+
+    const recoveryResponse = await invokeLlmGateway(recoveryRequest);
+    const recoveryRaw = extractText(recoveryResponse);
+    const recoveryJson = extractJsonObject(recoveryRaw);
+    if (recoveryJson) return recoveryJson;
+
+    throw new Error(
+      "O Arquimedes recebeu uma resposta do provedor, mas ela não pôde ser convertida em JSON válido para a proposta da EAP. Tente novamente."
+    );
   }
 }
