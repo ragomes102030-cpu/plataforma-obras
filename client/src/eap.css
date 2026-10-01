@@ -1545,3 +1545,64 @@
 .eap-busca {
   color: #172b43;
 }
+
+
+/* EAP 2.5 — rolagem estrutural e estado de aprovacao explicito */
+/* O módulo inteiro pode rolar; a árvore mantém sua própria rolagem. */
+.eap {
+  min-height: 0;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scrollbar-width: auto;
+  scrollbar-color: #607b95 #e7edf3;
+}
+.eap::-webkit-scrollbar {
+  width: 14px;
+}
+.eap::-webkit-scrollbar-track {
+  background: #e7edf3;
+}
+.eap::-webkit-scrollbar-thumb {
+  background: #607b95;
+  border: 3px solid #e7edf3;
+  border-radius: 8px;
+}
+.eap::-webkit-scrollbar-thumb:hover {
+  background: #3f5e79;
+}
+.eap-arvore {
+  max-height: 56vh;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  scrollbar-width: auto;
+  scrollbar-color: #607b95 #e7edf3;
+}
+.eap-arvore::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+.eap-arvore::-webkit-scrollbar-track {
+  background: #e7edf3;
+}
+.eap-arvore::-webkit-scrollbar-thumb {
+  background: #607b95;
+  border: 3px solid #e7edf3;
+  border-radius: 8px;
+}
+.eap-arvore::-webkit-scrollbar-thumb:hover {
+  background: #3f5e79;
+}
+.eap-baseline .eap-btn:disabled {
+  opacity: 1 !important;
+  cursor: not-allowed;
+  color: #5a6773;
+  background: #d8dee5;
+  border: 2px solid #aeb8c2;
+}
+.eap-baseline-bloqueada {
+  margin-left: 10px;
+  color: #7a4a12;
+  font-size: 9px;
+  font-weight: 800;
+}
