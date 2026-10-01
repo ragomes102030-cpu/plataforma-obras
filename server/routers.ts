@@ -3940,8 +3940,30 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { activities: [], dependencies: [], resources: [], baselines: [] };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(
+            currentVersionId == null
+              ? eq(scheduleActivities.projectId, input.projectId)
+              : and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, currentVersionId)
+                )
+          )
+          .orderBy(scheduleActivities.sortOrder);
+        const dependencies = await db
+          .select()
+          .from(scheduleDependencies)
+          .where(
+            currentVersionId == null
+              ? eq(scheduleDependencies.projectId, input.projectId)
+              : and(
+                  eq(scheduleDependencies.projectId, input.projectId),
+                  eq(scheduleDependencies.versionId, currentVersionId)
+                )
+          );
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
         return { activities, dependencies, resources, baselines };
@@ -3982,6 +4004,7 @@ export const appRouter = router({
           };
         }
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
 
         const [project] = await db
           .select({ plannedStart: projects.plannedStart })
@@ -3992,7 +4015,14 @@ export const appRouter = router({
         const activities = await db
           .select()
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId))
+          .where(
+            currentVersionId == null
+              ? eq(scheduleActivities.projectId, input.projectId)
+              : and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, currentVersionId)
+                )
+          )
           .orderBy(scheduleActivities.sortOrder);
 
         const entries = await db
@@ -4835,7 +4865,18 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(
+            currentVersionId == null
+              ? eq(scheduleActivities.projectId, input.projectId)
+              : and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, currentVersionId)
+                )
+          );
         if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).$returningIds();
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
@@ -4847,8 +4888,29 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(
+            currentVersionId == null
+              ? eq(scheduleActivities.projectId, input.projectId)
+              : and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, currentVersionId)
+                )
+          );
+        const dependencies = await db
+          .select()
+          .from(scheduleDependencies)
+          .where(
+            currentVersionId == null
+              ? eq(scheduleDependencies.projectId, input.projectId)
+              : and(
+                  eq(scheduleDependencies.projectId, input.projectId),
+                  eq(scheduleDependencies.versionId, currentVersionId)
+                )
+          );
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
 
         const ano = project?.plannedStart
@@ -5892,10 +5954,18 @@ export const appRouter = router({
           if (!row)
             throw forbidden("Obra não encontrada ou sem permissão de acesso.");
           project = row;
+          const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
           activities = await db
             .select()
             .from(scheduleActivities)
-            .where(eq(scheduleActivities.projectId, input.projectId))
+            .where(
+              currentVersionId == null
+                ? eq(scheduleActivities.projectId, input.projectId)
+                : and(
+                    eq(scheduleActivities.projectId, input.projectId),
+                    eq(scheduleActivities.versionId, currentVersionId)
+                  )
+            )
             .orderBy(scheduleActivities.sortOrder);
         } else {
           if (!ENV.allowDemoData)
@@ -6078,10 +6148,18 @@ export const appRouter = router({
           if (!row)
             throw forbidden("Obra não encontrada ou sem permissão de acesso.");
           project = row;
+          const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
           activities = await db
             .select()
             .from(scheduleActivities)
-            .where(eq(scheduleActivities.projectId, input.projectId))
+            .where(
+              currentVersionId == null
+                ? eq(scheduleActivities.projectId, input.projectId)
+                : and(
+                    eq(scheduleActivities.projectId, input.projectId),
+                    eq(scheduleActivities.versionId, currentVersionId)
+                  )
+            )
             .orderBy(scheduleActivities.sortOrder);
         } else {
           if (!ENV.allowDemoData)
