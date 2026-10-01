@@ -317,7 +317,7 @@ describe("o SQL das migracoes e valido para o PostgreSQL", () => {
 
     // Sanidade: lista vazia faria o teste passar por vacuo e dizer que nao falta
     // trigger quando nao existe trigger nenhuma.
-    expect(comUpdatedAt.length).toBe(23);
+    expect(comUpdatedAt.length).toBe(25);
 
     const sql = journal.entries.map(e => sqlSemComentarios(e.tag)).join("\n");
     const semTrigger = comUpdatedAt.filter(
