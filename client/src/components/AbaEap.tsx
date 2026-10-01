@@ -55,6 +55,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [controleAberto, setControleAberto] = useState(true);
   const [densidade, setDensidade] = useState<"compacta" | "normal" | "confortavel">("compacta");
   const [validacaoAberta, setValidacaoAberta] = useState(false);
+  const [modoRevisao, setModoRevisao] = useState(false);
 
   const utils = trpc.useUtils();
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
@@ -379,6 +380,14 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           </div>
           <div className="eap-validacao-acoes">
             {validacao.data?.valid ? <span className="eap-validacao-ok"><CheckCircle2 size={13} /> Sem bloqueios</span> : validacao.data ? <span className="eap-validacao-erro"><AlertTriangle size={13} /> Revisão necessária</span> : null}
+            <button
+              type="button"
+              className={`eap-revisao-btn ${modoRevisao ? "ativo" : ""}`}
+              onClick={() => setModoRevisao(v => !v)}
+              aria-pressed={modoRevisao}
+            >
+              <Pencil size={13} /> {modoRevisao ? "Concluir revisão" : "Revisar EAP"}
+            </button>
             {!!validacao.data?.issues.length && <button type="button" className="eap-validacao-detalhes" onClick={() => setValidacaoAberta(v => !v)}>{validacaoAberta ? "Ocultar detalhes" : `Ver ${validacao.data.issues.length} apontamentos`}</button>}
           </div>
         </div>
@@ -440,6 +449,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             aoTrazer={id => trazer.mutate({ projectId: projetoId, wbsNodeId: id })}
             aoAdicionar={id => setEditor({ mode: "create", parentId: id })}
             aoEditar={id => setEditor({ mode: "edit", nodeId: id })}
+            modoRevisao={modoRevisao}
             jaNoCronograma={jaNoCronograma}
             profundidade={0}
           />
@@ -539,6 +549,7 @@ function NoDaArvore({
   aoTrazer,
   aoAdicionar,
   aoEditar,
+  modoRevisao,
   jaNoCronograma,
   profundidade,
 }: {
@@ -548,6 +559,7 @@ function NoDaArvore({
   aoTrazer: (id: number) => void;
   aoAdicionar: (id: number) => void;
   aoEditar: (id: number) => void;
+  modoRevisao: boolean;
   jaNoCronograma: (codigo: string) => boolean;
   profundidade: number;
 }) {
@@ -603,16 +615,18 @@ function NoDaArvore({
           ) : (
             <span className="eap-grupo-label">{temFilhos ? `${filhos.length} itens` : "Grupo"}</span>
           )}
-          <span className="eap-acoes-linha">
-            {no.nodeType !== "entrega" && (
-              <button type="button" className="eap-acao-linha" onClick={() => aoAdicionar(no.id)} title="Adicionar filho">
-                <Plus size={12} />
+          {modoRevisao && (
+            <span className="eap-acoes-linha eap-acoes-revisao">
+              {no.nodeType !== "entrega" && (
+                <button type="button" className="eap-acao-linha eap-acao-revisao" onClick={() => aoAdicionar(no.id)} title="Adicionar item filho">
+                  <Plus size={12} /> <span>Adicionar</span>
+                </button>
+              )}
+              <button type="button" className="eap-acao-linha eap-acao-revisao" onClick={() => aoEditar(no.id)} title="Editar item">
+                <Pencil size={12} /> <span>Editar</span>
               </button>
-            )}
-            <button type="button" className="eap-acao-linha" onClick={() => aoEditar(no.id)} title="Editar item">
-              <Pencil size={12} />
-            </button>
-          </span>
+            </span>
+          )}
         </span>
       </div>
 
@@ -627,6 +641,7 @@ function NoDaArvore({
               aoTrazer={aoTrazer}
               aoAdicionar={aoAdicionar}
               aoEditar={aoEditar}
+              modoRevisao={modoRevisao}
               jaNoCronograma={jaNoCronograma}
               profundidade={profundidade + 1}
             />
