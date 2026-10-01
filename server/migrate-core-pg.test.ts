@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 33, type: 32, trigger: 23 });
+    expect(conta).toEqual({ table: 35, type: 32, trigger: 23 });
   });
 });
 
@@ -382,7 +382,7 @@ describe("aplicarMigracoes num banco vazio", () => {
         `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (` +
           `id serial primary key, hash text not null, created_at bigint)`
       );
-      for (const mm of migrations) {
+      for (const mm of migrations.slice(0, 2)) {
         await pg.query(
           `INSERT INTO "__drizzle_migrations" ("hash","created_at") VALUES ($1, $2)`,
           [mm.hash, mm.folderMillis]
