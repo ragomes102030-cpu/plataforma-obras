@@ -301,12 +301,13 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         tools,
         responseFormat: tools.length ? undefined : { type: "json_object" },
         maxTokens,
+        timeoutMs: request.databaseContext ? 180_000 : undefined,
         allowEmptyResponse: true,
       });
     };
 
     const outputBudget = request.maxTokens ?? 4096;
-    const maxToolIterations = request.databaseContext ? 6 : 0;
+    const maxToolIterations = request.databaseContext ? 3 : 0;
     let messages = baseMessages;
 
     for (let iteration = 0; iteration <= maxToolIterations; iteration++) {
