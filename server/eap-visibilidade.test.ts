@@ -55,9 +55,9 @@ describe("a ausência de base é visível e diz o caminho", () => {
   });
 
   it("a aba EAP oferece gerar do catálogo, com seletor de tipo", () => {
-    expect(abaEap).not.toMatch(/generateEapFromCatalog/);
-    expect(abaEap).toMatch(/template|estrutura|EAP/i);
-    expect(abaEap).not.toMatch(/generateEapFromCatalog/);
+    expect(abaEap).toMatch(/generateEapFromCatalog/);
+    expect(abaEap).toMatch(/Refazer|Gerar/i);
+    expect(abaEap).toMatch(/generateEapFromCatalog/);
   });
 
   it("o Catálogo é alcançável pela barra de título", () => {
