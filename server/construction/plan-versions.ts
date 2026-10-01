@@ -145,26 +145,177 @@ export async function ensureWritablePlanVersion(
       status: decision.version.status,
     };
   }
-  const [created] = await db
-    .insert(projectPlanVersions)
-    .values({
-      projectId,
+  return db.transaction(async tx => {
+    const [created] = await tx
+      .insert(projectPlanVersions)
+      .values({
+        projectId,
+        versionNumber: decision.nextNumber,
+        status: "draft",
+        baseVersionId: decision.baseVersionId,
+        createdBy: userId,
+        notes: null,
+      })
+      .$returningIds();
+    if (!created) {
+      throw new Error("Não foi possível criar uma versão do plano.");
+    }
+
+    // Uma reabertura é um FORK real: a versão aprovada continua intacta e a
+    // nova versão recebe cópias próprias da EAP, atividades e dependências.
+    // IDs mudam; os mapas abaixo preservam as referências entre os três níveis.
+    if (decision.baseVersionId) {
+      const baseNodes = await tx
+        .select()
+        .from(wbsNodes)
+        .where(
+          and(
+            eq(wbsNodes.projectId, projectId),
+            eq(wbsNodes.versionId, decision.baseVersionId)
+          )
+        )
+        .orderBy(wbsNodes.level, wbsNodes.sortOrder, wbsNodes.id);
+
+      const wbsIdMap = new Map<number, number>();
+      for (const node of baseNodes) {
+        const [inserted] = await tx
+          .insert(wbsNodes)
+          .values({
+            projectId: node.projectId,
+            externalId: node.externalId,
+            externalUid: node.externalUid,
+            parentId: node.parentId == null ? null : (wbsIdMap.get(node.parentId) ?? null),
+            code: node.code,
+            name: node.name,
+            description: node.description,
+            inclusions: node.inclusions,
+            exclusions: node.exclusions,
+            location: node.location,
+            responsible: node.responsible,
+            acceptanceCriteria: node.acceptanceCriteria,
+            decompositionBasis: node.decompositionBasis,
+            scopeStatus: node.scopeStatus,
+            level: node.level,
+            nodeType: node.nodeType,
+            unit: node.unit,
+            plannedQuantity: node.plannedQuantity,
+            versionId: created,
+            sortOrder: node.sortOrder,
+          })
+          .$returningIds();
+        if (!inserted) throw new Error(`Falha ao clonar o nó EAP ${node.code}.`);
+        wbsIdMap.set(node.id, inserted);
+      }
+
+      const baseActivities = await tx
+        .select()
+        .from(scheduleActivities)
+        .where(
+          and(
+            eq(scheduleActivities.projectId, projectId),
+            eq(scheduleActivities.versionId, decision.baseVersionId)
+          )
+        )
+        .orderBy(scheduleActivities.sortOrder, scheduleActivities.id);
+
+      const activityIdMap = new Map<number, number>();
+      for (const activity of baseActivities) {
+        const newWbsId = wbsIdMap.get(activity.wbsNodeId);
+        if (!newWbsId) {
+          throw new Error(`Atividade ${activity.name} sem nó EAP correspondente na versão base.`);
+        }
+        const [inserted] = await tx
+          .insert(scheduleActivities)
+          .values({
+            projectId: activity.projectId,
+            wbsNodeId: newWbsId,
+            externalId: activity.externalId,
+            eapRef: activity.eapRef,
+            wbsCode: activity.wbsCode,
+            name: activity.name,
+            phase: activity.phase,
+            pavimento: activity.pavimento,
+            startOffset: activity.startOffset,
+            durationDays: activity.durationDays,
+            plannedQuantity: activity.plannedQuantity,
+            unit: activity.unit,
+            productivity: activity.productivity,
+            budgetItemId: activity.budgetItemId,
+            progress: activity.progress,
+            exemplo: activity.exemplo,
+            status: activity.status,
+            critical: activity.critical,
+            earlyStart: activity.earlyStart,
+            earlyFinish: activity.earlyFinish,
+            lateStart: activity.lateStart,
+            lateFinish: activity.lateFinish,
+            totalFloat: activity.totalFloat,
+            freeFloat: activity.freeFloat,
+            mustStartOn: activity.mustStartOn,
+            finishNoLaterThan: activity.finishNoLaterThan,
+            cpmCalculatedAt: activity.cpmCalculatedAt,
+            versionId: created,
+            sortOrder: activity.sortOrder,
+          })
+          .$returningIds();
+        if (!inserted) throw new Error(`Falha ao clonar a atividade ${activity.name}.`);
+        activityIdMap.set(activity.id, inserted);
+      }
+
+      const baseDependencies = await tx
+        .select()
+        .from(scheduleDependencies)
+        .where(
+          and(
+            eq(scheduleDependencies.projectId, projectId),
+            eq(scheduleDependencies.versionId, decision.baseVersionId)
+          )
+        );
+      for (const dependency of baseDependencies) {
+        const predecessorId = activityIdMap.get(dependency.predecessorId);
+        const successorId = activityIdMap.get(dependency.successorId);
+        if (!predecessorId || !successorId) {
+          throw new Error("Dependência da versão base aponta para atividade ausente no fork.");
+        }
+        await tx.insert(scheduleDependencies).values({
+          projectId: dependency.projectId,
+          externalId: dependency.externalId,
+          predecessorId,
+          successorId,
+          type: dependency.type,
+          lag: dependency.lag,
+          versionId: created,
+        });
+      }
+    }
+
+    // Compatibilidade com dados antigos: qualquer nó ainda órfão do projeto
+    // entra na versão de trabalho. O fork acima nunca depende desse caminho.
+    await tx
+      .update(wbsNodes)
+      .set({ versionId: created })
+      .where(
+        and(eq(wbsNodes.projectId, projectId), isNull(wbsNodes.versionId))
+      );
+    await tx
+      .update(scheduleActivities)
+      .set({ versionId: created })
+      .where(
+        and(eq(scheduleActivities.projectId, projectId), isNull(scheduleActivities.versionId))
+      );
+    await tx
+      .update(scheduleDependencies)
+      .set({ versionId: created })
+      .where(
+        and(eq(scheduleDependencies.projectId, projectId), isNull(scheduleDependencies.versionId))
+      );
+
+    return {
+      id: created,
       versionNumber: decision.nextNumber,
-      status: "draft",
-      baseVersionId: decision.baseVersionId,
-      createdBy: userId,
-      notes: null,
-    })
-    .$returningIds();
-  if (!created) {
-    throw new Error("Não foi possível criar uma versão do plano.");
-  }
-  await associateOrphanPlanNodes(projectId, created);
-  return {
-    id: created,
-    versionNumber: decision.nextNumber,
-    status: "draft",
-  };
+      status: "draft" as const,
+    };
+  });
 }
 
 /**
