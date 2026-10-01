@@ -87,6 +87,16 @@ describe("gerarEap", () => {
     expect(codigos).not.toContain("I10201");
   });
 
+  it("ignora qualquer item explicitamente marcado como material, mesmo se o código começar com C", () => {
+    const r2 = gerarEap([
+      { code: "C99901", description: "Cimento CP II", unit: "sc", unitPrice: 38.9, itemType: "material" },
+      { code: "C99902", description: "Execução de concretagem", unit: "m3", unitPrice: 420, itemType: "servico" },
+    ], { tipoDeObra: "edificio" });
+    const codigos = r2.nos.map(n => n.externalId).filter(Boolean);
+    expect(codigos).toContain("C99902");
+    expect(codigos).not.toContain("C99901");
+  });
+
   // ESTA E A PROPRIEDADE QUE FAZ O ORCAMENTO CASAR COM A EAP
   it("toda folha carrega o codigo oficial do catalogo", () => {
     const catalogo = new Set(CATALOGO.map(s => s.code));
