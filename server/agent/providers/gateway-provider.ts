@@ -85,7 +85,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
     const first = await generate(baseMessages, 16384);
     if (first.json) return first.json;
 
-    const finishReason = first.response.choices?.[0]?.message?.finish_reason;
+    const finishReason = first.response.choices?.[0]?.finish_reason;
     const recoveryReason =
       finishReason === "length"
         ? "A resposta anterior foi interrompida antes de fechar o JSON. Gere novamente uma versão compacta e completa."
