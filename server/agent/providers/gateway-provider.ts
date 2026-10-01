@@ -151,6 +151,17 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>): st
 
 export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
   async complete(request: ArquimedesLlmRequest): Promise<string> {
+    if (!request || typeof request !== "object") {
+      throw new Error(
+        "O Arquimedes não recebeu a requisição estruturada da revisão da EAP. Nenhuma alteração foi aplicada à obra."
+      );
+    }
+    if (typeof request.system !== "string" || typeof request.user !== "string") {
+      throw new Error(
+        "A requisição da revisão da EAP está incompleta (system/user ausentes). Nenhuma alteração foi aplicada à obra."
+      );
+    }
+
     const baseMessages: GatewayRequest["messages"] = [
       { role: "system", content: request.system },
       { role: "user", content: request.user },
