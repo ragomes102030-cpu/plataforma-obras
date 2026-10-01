@@ -41,6 +41,13 @@
       "when": 1790782200001,
       "tag": "0005_eap_decomposition_basis",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790812800000,
+      "tag": "0006_plan_version_snapshots",
+      "breakpoints": true
     }
   ],
   "version": "7",
