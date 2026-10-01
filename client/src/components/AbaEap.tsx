@@ -385,7 +385,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <span className="eap-grid-canto" />
           <span className="eap-grid-col" />
           <span className="eap-grid-col">EAP</span>
-          <span className="eap-grid-col">SERVIÇO / DESCRIÇÃO</span>
+          <span className="eap-grid-col">ESCOPO / ENTREGÁVEL</span>
           <span className="eap-grid-col">TIPO</span>
           <span className="eap-grid-col">BASE</span>
           <span className="eap-grid-col">SEINFRA</span>
@@ -550,7 +550,7 @@ function NoDaArvore({
         </span>
         <span className="eap-tipo">{no.nodeType === "grupo" ? "FASE / GRUPO" : no.nodeType === "pacote" ? "SISTEMA / PACOTE" : "ENTREGA"}</span>
         <span className="eap-base">{no.decompositionBasis || "—"}</span>
-        <span className="eap-oficial" title={no.externalId ? "Código oficial do serviço na base de preços" : "Sem vínculo direto com código SEINFRA"}>
+        <span className="eap-oficial" title={no.externalId ? "Código oficial de referência do catálogo vinculado ao pacote" : "Sem vínculo direto com catálogo"}>
           {no.externalId || "—"}
         </span>
         <span className="eap-unidade">{no.unit || "—"}</span>
