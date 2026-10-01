@@ -1462,11 +1462,13 @@ export const appRouter = router({
 
         if (!payload.proposal) return null;
 
+        const proposal = parseEapProposal(JSON.stringify(payload.proposal));
+
         return {
           id: event.id,
           createdAt: event.createdAt,
           provider: payload.provider ?? "configured-gateway",
-          proposal: payload.proposal,
+          proposal,
           currentValidation: payload.currentValidation ?? null,
         };
       }),
