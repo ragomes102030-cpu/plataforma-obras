@@ -530,7 +530,11 @@ async function seedInitialBudget(
 }
 
 const accessibleProjectCondition = (projectId: number, userId: number) =>
-  and(eq(projects.id, projectId), eq(projects.ownerUserId, userId));
+  and(
+    eq(projects.id, projectId),
+    eq(projects.ownerUserId, userId),
+    isNull(projects.deletedAt)
+  );
 
 const mcpProviderSchema = z.enum(["eap", "cronograma", "ganttLob"]);
 const mcpProviders = ["eap", "cronograma", "ganttLob"] as const;
@@ -1789,70 +1793,6 @@ export const appRouter = router({
                 )
           );
       }),
-    deleteTestProjects: protectedProcedure.mutation(async ({ ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Banco de dados não configurado.");
-      const candidates = await db
-        .select({ id: projects.id, name: projects.name, code: projects.code })
-        .from(projects)
-        .where(
-          and(
-            eq(projects.ownerUserId, ctx.user.id),
-            or(
-              sql`UPPER(${projects.name}) LIKE 'TESTE%'`,
-              sql`UPPER(${projects.name}) LIKE '%DEMONSTRAÇÃO%'`,
-              sql`UPPER(${projects.code}) LIKE 'DEMO-%'`
-            )
-          )
-        );
-
-      if (!candidates.length) return { deleted: 0, projects: [] as Array<{ id: number; name: string; code: string }> };
-
-      const ids = candidates.map(item => item.id);
-      const idsSql = sql.join(ids.map(id => sql`${id}`), sql`, `);
-      return db.transaction(async tx => {
-        const inProjects = sql`IN (${idsSql})`;
-
-        // Dependências de segundo nível primeiro.
-        await tx.execute(sql`DELETE FROM "calendar_exceptions" WHERE "calendarId" IN (SELECT "id" FROM "work_calendars" WHERE "projectId" ${inProjects})`);
-        await tx.execute(sql`DELETE FROM "activity_resource_allocations" WHERE "activityId" IN (SELECT "id" FROM "schedule_activities" WHERE "projectId" ${inProjects})`);
-        await tx.execute(sql`DELETE FROM "schedule_baseline_items" WHERE "baselineId" IN (SELECT "id" FROM "schedule_baselines" WHERE "projectId" ${inProjects}) OR "activityId" IN (SELECT "id" FROM "schedule_activities" WHERE "projectId" ${inProjects})`);
-        await tx.execute(sql`DELETE FROM "budget_items" WHERE "budgetVersionId" IN (SELECT "id" FROM "budget_versions" WHERE "projectId" ${inProjects})`);
-
-        // Produção, cronograma e recursos.
-        await tx.execute(sql`DELETE FROM "production_entries" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "schedule_dependencies" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "schedule_activities" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "wbs_nodes" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "schedule_baselines" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "planning_resources" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "budget_versions" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "production_teams" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "production_units" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "production_fronts" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "work_calendars" WHERE "projectId" ${inProjects}`);
-
-        // Execuções e decisões do Arquimedes.
-        await tx.execute(sql`DELETE FROM "agent_run_events" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "agent_runs" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`UPDATE "project_plan_versions" SET "baseVersionId" = NULL WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "project_plan_versions" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "agent_decisions" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "agent_findings" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "agent_memories" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "agent_project_states" WHERE "projectId" ${inProjects}`);
-
-        // Integrações, documentos e auditoria.
-        await tx.execute(sql`DELETE FROM "mcp_mutation_operations" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "mcp_homologation_runs" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "project_mcp_integrations" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "project_audit_events" WHERE "projectId" ${inProjects}`);
-        await tx.execute(sql`DELETE FROM "project_documents" WHERE "projectId" ${inProjects}`);
-
-        await tx.execute(sql`DELETE FROM "projects" WHERE "id" ${inProjects}`);
-        return { deleted: candidates.length, projects: candidates };
-      });
-    }),
     create: protectedProcedure
       .input(
         z
@@ -1861,14 +1801,9 @@ export const appRouter = router({
             location: z.string().trim().min(2).max(180).default("A cadastrar"),
             plannedStart: z.coerce.date().optional(),
             plannedFinish: z.coerce.date().optional(),
-            // Escolhe quais grupos do catálogo entram na EAP. O default
-            // mantém o comportamento útil para quem só dá nome e local.
             tipoDeObra: z
               .enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"])
               .default("edificio"),
-            // Texto livre sobre a obra. NÃO é a fonte da EAP: a EAP nasce dos
-            // serviços do catálogo, para que o orçamento case por código. Este
-            // campo é o insumo para a IA conversar sobre a obra.
             descricao: z.string().trim().max(4000).optional(),
           })
           .refine(
@@ -1884,15 +1819,18 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db)
+        if (!db) {
           throw new Error(
             "Banco de dados não configurado; a obra não foi persistida."
           );
+        }
+
         const plannedStart = input.plannedStart ?? new Date();
         const plannedFinish =
           input.plannedFinish ??
           new Date(plannedStart.getTime() + 180 * 86400000);
         const code = `OB-${Date.now().toString(36).slice(-6).toUpperCase()}`;
+
         return db.transaction(async tx => {
           const [createdId] = await tx
             .insert(projects)
@@ -1908,32 +1846,48 @@ export const appRouter = router({
               plannedFinish,
             })
             .$returningIds();
-          const seedDb = tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>;
-          // A EAP nasce dos SERVIÇOS (C...) do catálogo de preços oficial, não de
-          // um modelo fixo de pacotes. Cada folha guarda o código oficial em
-          // `externalId`, e é isso que amarra o orçamento à estrutura: o
-          // matching vira acerto por código em vez de aposta por similaridade
-          // de texto.
-          //
-          // Sem catálogo carregado a obra nasce sem EAP, e a semeadura devolve
-          // um aviso para a UI orientar o upload. É preferível à estrutura
-          // inventada de antes: aquela não casava com preço nenhum e ainda
-          // aparecia como "Concluído" no painel, escondendo o que faltava.
-          const semeadura = await semearEapDoCatalogo(seedDb, createdId, {
-            tipoDeObra: input.tipoDeObra,
-          });
-          // Sem fallback de demonstração aqui de propósito. O `seedStarterPlan`
-          // montava uma EAP de 12 nós com códigos que não existem na SEINFRA, e
-          // ainda assim o painel mostrava "EAP: Concluído" — o usuário via uma
-          // estrutura pronta, sem preço e sem ligação com o catálogo, e não
-          // tinha como saber que o motivo era falta de base importada.
-          // Sem catálogo, a obra nasce sem EAP e o aviso aponta o caminho.
+
+          const [version] = await tx
+            .insert(projectPlanVersions)
+            .values({
+              projectId: createdId,
+              versionNumber: 1,
+              status: "draft",
+              baseVersionId: null,
+              createdBy: ctx.user.id,
+              notes: "Versão inicial criada junto com a obra.",
+            })
+            .$returningIds();
+
+          if (!version) {
+            throw new Error("Não foi possível criar a versão inicial do plano.");
+          }
+
+          const semeadura = await semearEapDoCatalogo(
+            tx as unknown as NonNullable<typeof db>,
+            createdId,
+            {
+              tipoDeObra: input.tipoDeObra,
+              versionId: version,
+              refazer: false,
+            }
+          );
+
           const [created] = await tx
             .select()
             .from(projects)
             .where(eq(projects.id, createdId))
             .limit(1);
-          return { ...created, semeadura };
+
+          return {
+            ...created,
+            semeadura,
+            version: {
+              id: version,
+              versionNumber: 1,
+              status: "draft" as const,
+            },
+          };
         });
       }),
     createDemoGantt: protectedProcedure
@@ -2214,18 +2168,23 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
-        const [project] = await db
-          .select()
-          .from(projects)
-          .where(accessibleProjectCondition(input.projectId, ctx.user.id))
-          .limit(1);
-        if (!project)
-          throw forbidden("Obra não encontrada ou sem permissão de acesso.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const writable = await ensureWritablePlanVersion(
+          input.projectId,
+          ctx.user.id
+        );
         const existing = await db
           .select({ id: wbsNodes.id })
           .from(wbsNodes)
-          .where(eq(wbsNodes.projectId, input.projectId))
+          .where(
+            and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id)
+            )
+          )
           .limit(1);
+
         if (existing.length) {
           const fronts = await db
             .select({ id: productionFronts.id })
@@ -2233,10 +2192,28 @@ export const appRouter = router({
             .where(eq(productionFronts.projectId, input.projectId))
             .limit(1);
           if (!fronts.length) await seedProductionCatalog(db, input.projectId);
-          return { initialized: false as const };
+          return {
+            initialized: false as const,
+            version: writable,
+          };
         }
-        await seedStarterPlan(db, input.projectId);
-        return { initialized: true as const };
+
+        const semeadura = await db.transaction(async tx =>
+          semearEapDoCatalogo(
+            tx as unknown as NonNullable<typeof db>,
+            input.projectId,
+            {
+              versionId: writable.id,
+              refazer: false,
+            }
+          )
+        );
+
+        return {
+          initialized: true as const,
+          semeadura,
+          version: writable,
+        };
       }),
     setBaseReferencia: protectedProcedure
       .input(
