@@ -448,6 +448,7 @@ export const scheduleActivities = pgTable(
   table => [
     uniqueIndex("schedule_activities_project_external_idx").on(
       table.projectId,
+      table.versionId,
       table.externalId
     ),
     index("schedule_activities_project_idx").on(table.projectId),
@@ -492,10 +493,12 @@ export const wbsNodes = pgTable(
   table => [
     uniqueIndex("wbs_nodes_project_external_idx").on(
       table.projectId,
+      table.versionId,
       table.externalId
     ),
     uniqueIndex("wbs_nodes_project_code_unique_idx").on(
       table.projectId,
+      table.versionId,
       table.code
     ),
     index("wbs_nodes_project_idx").on(table.projectId),
@@ -525,6 +528,7 @@ export const scheduleDependencies = pgTable(
   table => [
     uniqueIndex("schedule_dependencies_project_external_idx").on(
       table.projectId,
+      table.versionId,
       table.externalId
     ),
     index("schedule_dependencies_plan_version_idx").on(table.versionId),
