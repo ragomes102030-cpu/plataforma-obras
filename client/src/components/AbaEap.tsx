@@ -52,7 +52,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [aberto, setAberto] = useState<Set<number>>(new Set());
   const [busca, setBusca] = useState("");
   const [editor, setEditor] = useState<EditorEap | null>(null);
-  const [controleAberto, setControleAberto] = useState(true);
+  const [controleAberto, setControleAberto] = useState(true);\n  const [densidade, setDensidade] = useState<"compacta" | "normal" | "confortavel">("normal");
 
   const utils = trpc.useUtils();
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
@@ -197,7 +197,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const folhas = nos.filter(n => n.nodeType === "entrega").length;
 
   return (
-    <div className="eap">
+    <div className={`eap eap-densidade-${densidade}`}>
       <div className="eap-toolbar">
         <div className="eap-toolbar-identidade">
           <div className="eap-toolbar-icon"><FileText size={16} /></div>
@@ -206,7 +206,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             <div className="eap-toolbar-subtitulo">Estrutura analítica · formato de planilha para conferência</div>
           </div>
         </div>
-        <div className="eap-toolbar-acoes">
+        <div className="eap-toolbar-acoes">\n          <div className="eap-zoom" role="group" aria-label="Densidade da EAP">\n            <span>Densidade</span>\n            <button type="button" className={densidade === "compacta" ? "ativo" : ""} onClick={() => setDensidade("compacta")} title="Mais linhas visíveis">80%</button>\n            <button type="button" className={densidade === "normal" ? "ativo" : ""} onClick={() => setDensidade("normal")} title="Densidade padrão">100%</button>\n            <button type="button" className={densidade === "confortavel" ? "ativo" : ""} onClick={() => setDensidade("confortavel")} title="Linhas mais espaçosas">115%</button>\n          </div>
           <button type="button" className="eap-tool-btn" onClick={recolherTudo}><Minimize2 size={14} /> Recolher</button>
           <button type="button" className="eap-tool-btn" onClick={expandirTudo}><Maximize2 size={14} /> Expandir</button>
           <button type="button" className="eap-tool-btn" onClick={() => setEditor({ mode: "create", parentId: null })}><Plus size={14} /> Novo nível</button>
