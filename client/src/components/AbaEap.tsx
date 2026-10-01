@@ -728,6 +728,7 @@ function EditorEapPanel({
 /** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
+  const analisar = trpc.projects.analisarEapComArquimedes.useMutation();
   const criarRaiz = trpc.projects.createWbsNode.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
@@ -740,14 +741,25 @@ function EapVazia({ projetoId }: { projetoId: number }) {
     <div className="xl-vazia-folha">
       <h3>Esta obra ainda não tem EAP</h3>
       <p className="xl-vazia-falta">
-        Comece pelo escopo. A EAP canônica nasce da entrega que a obra precisa
-        produzir e é refinada em sistemas, componentes e pacotes de trabalho.
-        O catálogo entra depois, no orçamento, composição e precificação.
+        O escopo informado na criação da obra ainda não foi transformado em estrutura.
+        O primeiro passo recomendado é pedir ao Arquimedes uma proposta de EAP para
+        o engenheiro revisar antes de qualquer aprovação.
       </p>
+
       <div className="eap-acoes">
         <button
           type="button"
-          className="eap-btn"
+          className="eap-btn eap-tool-agent"
+          disabled={analisar.isPending}
+          onClick={() => analisar.mutate({ projectId: projetoId })}
+        >
+          <Bot size={14} />
+          {analisar.isPending ? "Arquimedes analisando o escopo…" : "Pedir proposta ao Arquimedes"}
+        </button>
+
+        <button
+          type="button"
+          className="eap-btn-secundario"
           disabled={criarRaiz.isPending}
           onClick={() =>
             criarRaiz.mutate({
@@ -761,13 +773,14 @@ function EapVazia({ projetoId }: { projetoId: number }) {
             })
           }
         >
-          {criarRaiz.isPending ? "Criando raiz…" : "Começar pelo escopo"}
+          {criarRaiz.isPending ? "Criando raiz…" : "Começar manualmente"}
         </button>
 
         <select
           className="eap-select"
           value={tipo}
           onChange={e => setTipo(e.target.value as typeof tipo)}
+          aria-label="Tipo de estrutura-base"
         >
           <option value="edificio">Edifício / construção nova</option>
           <option value="reforma">Reforma</option>
@@ -780,12 +793,63 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           className="eap-btn-secundario"
           disabled={gerar.isPending}
           onClick={() => gerar.mutate({ projectId: projetoId, tipoDeObra: tipo })}
+          title="Usar somente como estrutura-base genérica. O Arquimedes deve ser preferido quando houver descrição da obra."
         >
-          {gerar.isPending ? "Montando estrutura…" : "Gerar estrutura-base"}
+          {gerar.isPending ? "Montando estrutura…" : "Usar estrutura-base"}
         </button>
       </div>
+
+      {analisar.error && <p className="eap-erro">Arquimedes: {analisar.error.message}</p>}
       {criarRaiz.isError && <p className="eap-erro">{criarRaiz.error.message}</p>}
       {gerar.isError && <p className="eap-erro">{gerar.error.message}</p>}
+
+      {analisar.data && (
+        <div className="eap-validacao" role="status" aria-live="polite">
+          <div className="eap-validacao-cabecalho">
+            <div>
+              <strong><Bot size={14} /> Arquimedes · proposta inicial da EAP</strong>
+              <span>
+                {analisar.data.proposal.nodes.length} alteração(ões) proposta(s) ·{" "}
+                {analisar.data.proposal.missingInformation.length} informação(ões) pendente(s)
+              </span>
+            </div>
+            <span className="eap-validacao-ok">Não aplicada</span>
+          </div>
+
+          {analisar.data.proposal.basis.length > 0 && (
+            <div className="eap-validacao-lista">
+              <div className="eap-validacao-item eap-validacao-warning">
+                <span>BASE</span>
+                <p>{analisar.data.proposal.basis.join(" · ")}</p>
+              </div>
+            </div>
+          )}
+
+          {analisar.data.proposal.nodes.slice(0, 12).map((item, index) => (
+            <div key={index} className="eap-validacao-item eap-validacao-warning">
+              <span>{item.operation.toUpperCase()}</span>
+              <p>
+                <strong>{item.parentCode ? item.parentCode + " · " : ""}{item.name}</strong>
+                {" — "}{item.rationale}
+              </p>
+            </div>
+          ))}
+
+          {analisar.data.proposal.nodes.length > 12 && (
+            <small>+ {analisar.data.proposal.nodes.length - 12} proposta(s) adicionais.</small>
+          )}
+
+          {analisar.data.proposal.missingInformation.length > 0 && (
+            <small>Antes de fechar a EAP, ainda faltam: {analisar.data.proposal.missingInformation.join(" · ")}</small>
+          )}
+
+          <small>
+            A proposta é somente leitura nesta etapa. O engenheiro deve revisar a estrutura,
+            ajustar o que for necessário e pedir nova análise ao Arquimedes antes da aprovação.
+          </small>
+        </div>
+      )}
+
       {gerar.isSuccess && (
         <p className="eap-ok">
           {gerar.data.semeadura.nosCriados} nós criados a partir do template de escopo.
