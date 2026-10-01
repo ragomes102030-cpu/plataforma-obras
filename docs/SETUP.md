@@ -76,9 +76,9 @@ DATABASE_URL=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 PUBLIC_APP_URL=https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app
-MCP_EAP_URL=https://mcp-eap-server-rafael-5864.vercel.app
-MCP_CRONOGRAMA_URL=https://mcp-cronograma-server-rafael-5864.vercel.app
-MCP_GANTT_LOB_URL=https://mcp-gantt-lob-server-rafael-5864.vercel.app
+MCP_EAP_URL=https://mcp-eap-server.onrender.com
+MCP_CRONOGRAMA_URL=https://mcp-cronograma-server.onrender.com
+MCP_GANTT_LOB_URL=https://mcp-gantt-lob-server.onrender.com
 ```
 
 ### Rodar localmente
@@ -156,7 +156,7 @@ Ver `docs/README.md` → seção "MCPs configurados (30 habilitados)"
 | clickup | CLICKUP_TOKEN | https://clickup.com → Settings → Apps |
 | composio | COMPOSIO_API_KEY | https://composio.dev → API Keys |
 
-Composio já configurado: `ak_SQrThA3oqjqvMWAhVcoh`
+Composio: configure `COMPOSIO_API_KEY` somente no ambiente de execução.
 
 ---
 
