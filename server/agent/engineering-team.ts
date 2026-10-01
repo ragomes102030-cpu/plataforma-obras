@@ -1,13 +1,13 @@
-import type { AgentProjectContext } from "./agent";
-import type { LlmMessage, LlmResponse, LlmTool } from "./llm-provider-gateway";
+import type { AgentProjectContext } from "../agent";
+import type { LlmMessage, LlmResponse, LlmTool } from "../llm-provider-gateway";
 import { invokeLlmGateway } from "./llm-provider-gateway";
 import {
   MCP_TOOL_POLICY,
   callReadOnlyMcpTool,
   type ConstructionMcpToolCatalog,
-} from "./integrations/construction-mcps";
-import { runReActAgent } from "./agent/runtime/react-runtime";
-import type { McpCallResult } from "./integrations/mcp-client";
+} from "../integrations/construction-mcps";
+import { runReActAgent } from "./runtime/react-runtime";
+import type { McpCallResult } from "../integrations/mcp-client";
 
 export type SpecialistId =
   | "eap"
@@ -158,7 +158,7 @@ async function runSpecialist(
     tools,
     maxIterations,
     allowedTools: new Set(tools.map(tool => tool.function.name)),
-    callModel,
+    callModel: callLlm,
     executeTool: async (toolName, args) => {
       try {
         const domain = domainForTool(toolName);
