@@ -183,7 +183,7 @@ async function proposeEapIncrementally(
 ) {
   const macroRequest = buildEapMacroRequest(context, skills);
   const macroRaw = await provider.complete(macroRequest);
-  const macro = parseEapProposal(macroRaw);
+  const macro = parseEapProposal(macroRaw, "macro");
 
   const perRootBudget = Math.min(
     MAX_SUBTREE_NODES,
@@ -219,7 +219,7 @@ async function proposeEapIncrementally(
         perRootBudget
       );
       const raw = await provider.complete(request);
-      return parseEapProposal(raw);
+      return parseEapProposal(raw, "subtree", root.code);
     }
   );
 
@@ -256,27 +256,70 @@ const stringListSchema = (max: number) =>
     z.array(z.string().trim().min(1).max(600)).max(max)
   );
 
-const eapProposalSchema = z.object({
+const eapReviewNodeSchema = z.object({
+  operation: z.enum(["create", "update", "move", "remove"]),
+  nodeId: z.number().int().positive().optional(),
+  parentCode: z.string().trim().min(1).max(32).nullable(),
+  code: z.string().trim().min(1).max(32).optional(),
+  name: z.string().trim().min(2).max(220),
+  nodeType: z.enum(["grupo", "pacote", "entrega"]),
+  location: z.string().trim().max(180).nullable().optional(),
+  unit: z.string().trim().max(32).nullable().optional(),
+  plannedQuantity: z.number().min(0).nullable().optional(),
+  rationale: z.string().trim().min(1).max(320),
+});
+
+const eapReviewSchema = z.object({
   basis: stringListSchema(20),
   assumptions: stringListSchema(30),
   missingInformation: stringListSchema(30),
-  nodes: z.array(
-    z.object({
-      operation: z.enum(["create", "update", "move", "remove"]),
-      nodeId: z.number().int().positive().optional(),
-      parentCode: z.string().trim().min(1).max(32).nullable(),
-      code: z.string().trim().min(1).max(32).optional(),
-      name: z.string().trim().min(2).max(220),
-      nodeType: z.enum(["grupo", "pacote", "entrega"]),
-      location: z.string().trim().max(180).nullable().optional(),
-      unit: z.string().trim().max(32).nullable().optional(),
-      plannedQuantity: z.number().min(0).nullable().optional(),
-      rationale: z.string().trim().min(1).max(320),
-    })
-  ).max(MAX_INCREMENTAL_NODES),
+  nodes: z.array(eapReviewNodeSchema).max(MAX_INCREMENTAL_NODES),
 });
 
-export function parseEapProposal(raw: string): ArquimedesEapProposal {
+const macroNodeSchema = z.object({
+  code: z.string().trim().regex(/^\d+$/).optional(),
+  name: z.string().trim().min(2).max(220),
+  nodeType: z.enum(["grupo", "pacote", "entrega"]).optional(),
+  rationale: z.string().trim().max(320).optional(),
+});
+
+const macroResponseSchema = z.object({
+  basis: stringListSchema(20),
+  assumptions: stringListSchema(30),
+  missingInformation: stringListSchema(30),
+  nodes: z.array(macroNodeSchema).min(1).max(MAX_MACRO_ROOTS),
+});
+
+const subtreeNodeSchema = z.object({
+  code: z.string().trim().regex(/^\d+(?:\.\d+)+$/),
+  parentCode: z.string().trim().min(1).max(32).optional(),
+  name: z.string().trim().min(2).max(220),
+  nodeType: z.enum(["grupo", "pacote", "entrega"]).optional(),
+  location: z.string().trim().max(180).nullable().optional(),
+  unit: z.string().trim().max(32).nullable().optional(),
+  plannedQuantity: z.number().min(0).nullable().optional(),
+  rationale: z.string().trim().max(320).optional(),
+});
+
+const subtreeResponseSchema = z.object({
+  basis: stringListSchema(20),
+  assumptions: stringListSchema(30),
+  missingInformation: stringListSchema(30),
+  nodes: z.array(subtreeNodeSchema).max(MAX_SUBTREE_NODES),
+});
+
+type EapParseStage = "review" | "macro" | "subtree";
+
+function immediateParentCode(code: string) {
+  const parts = code.split(".");
+  return parts.length > 1 ? parts.slice(0, -1).join(".") : null;
+}
+
+export function parseEapProposal(
+  raw: string,
+  stage: EapParseStage = "review",
+  rootCode?: string
+): ArquimedesEapProposal {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -289,7 +332,69 @@ export function parseEapProposal(raw: string): ArquimedesEapProposal {
     );
   }
 
-  const result = eapProposalSchema.safeParse(parsed);
+  if (stage === "macro") {
+    const result = macroResponseSchema.safeParse(parsed);
+    if (!result.success) {
+      const issue = result.error.issues[0];
+      throw new Error(
+        "A macroestrutura EAP do Arquimedes não atende ao contrato flexível: " +
+          (issue?.path.join(".") || "raiz") +
+          " — " +
+          (issue?.message || "estrutura inválida") +
+          "."
+      );
+    }
+
+    return {
+      action: "propose_eap",
+      basis: result.data.basis,
+      assumptions: result.data.assumptions,
+      missingInformation: result.data.missingInformation,
+      nodes: result.data.nodes.map((node, index) => ({
+        operation: "create" as const,
+        parentCode: null,
+        code: node.code ?? String(index + 1),
+        name: node.name,
+        nodeType: node.nodeType ?? "grupo",
+        rationale: node.rationale || "Raiz macro da EAP.",
+      })),
+    };
+  }
+
+  if (stage === "subtree") {
+    if (!rootCode) throw new Error("Raiz da subárvore é obrigatória.");
+    const result = subtreeResponseSchema.safeParse(parsed);
+    if (!result.success) {
+      const issue = result.error.issues[0];
+      throw new Error(
+        "A subárvore EAP do Arquimedes não atende ao contrato flexível: " +
+          (issue?.path.join(".") || "raiz") +
+          " — " +
+          (issue?.message || "estrutura inválida") +
+          "."
+      );
+    }
+
+    return {
+      action: "propose_eap",
+      basis: result.data.basis,
+      assumptions: result.data.assumptions,
+      missingInformation: result.data.missingInformation,
+      nodes: result.data.nodes.map(node => ({
+        operation: "create" as const,
+        parentCode: node.parentCode ?? immediateParentCode(node.code),
+        code: node.code,
+        name: node.name,
+        nodeType: node.nodeType ?? "pacote",
+        location: node.location,
+        unit: node.unit,
+        plannedQuantity: node.plannedQuantity,
+        rationale: node.rationale || "Pacote gerado a partir do escopo informado.",
+      })),
+    };
+  }
+
+  const result = eapReviewSchema.safeParse(parsed);
   if (!result.success) {
     const issue = result.error.issues[0];
     throw new Error(
