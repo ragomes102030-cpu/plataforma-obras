@@ -98,10 +98,47 @@ export const CONTROLLED_MUTATION_POLICY: Record<
   ConstructionMcpDomain,
   Set<string>
 > = {
-  eap: new Set(["criar_eap_node"]),
+  eap: new Set([
+    "criar_eap_node",
+    "atualizar_eap_node",
+    "move_eap_node",
+    "deletar_eap_node",
+    "registrar_retrabalho",
+  ]),
   cronograma: new Set(),
   ganttLob: new Set(),
 };
+
+export const MUTATING_TOOLS = new Set([
+  "criar_projeto",
+  "criar_eap_node",
+  "atualizar_eap_node",
+  "move_eap_node",
+  "deletar_eap_node",
+  "registrar_retrabalho",
+  "criar_atividade",
+  "atualizar_atividade",
+  "criar_dependencia",
+  "deletar_atividade",
+  "deletar_dependencia",
+  "salvar_baseline",
+  "gerar_gantt",
+]);
+
+export const PROJECT_SCOPED_MUTATION_TOOLS = new Set([
+  "criar_eap_node",
+  "atualizar_eap_node",
+  "move_eap_node",
+  "deletar_eap_node",
+  "registrar_retrabalho",
+  "criar_atividade",
+  "atualizar_atividade",
+  "criar_dependencia",
+  "deletar_atividade",
+  "deletar_dependencia",
+  "salvar_baseline",
+  "gerar_gantt",
+]);
 
 export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
   "get_eap_tree",
@@ -538,6 +575,24 @@ export async function callControlledMcpTool(
     );
   }
   if (JSON.stringify(args).toLowerCase().includes('"project_id":"default"')) {
+    throw new Error("O project_id default é bloqueado para mutações reais.");
+  }
+  const clients = createConstructionMcpClients();
+  return clients[domain].callTool(toolName, args);
+}
+
+export async function callMutationMcpTool(
+  domain: ConstructionMcpDomain,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<McpCallResult> {
+  if (!MUTATING_TOOLS.has(toolName)) {
+    throw new Error(`Ferramenta não é uma mutação conhecida: ${domain}.${toolName}`);
+  }
+  if (PROJECT_SCOPED_MUTATION_TOOLS.has(toolName) && !String(args.project_id ?? "").trim()) {
+    throw new Error(`A mutação ${domain}.${toolName} exige project_id explícito.`);
+  }
+  if (String(args.project_id ?? "").trim() === "default") {
     throw new Error("O project_id default é bloqueado para mutações reais.");
   }
   const clients = createConstructionMcpClients();
