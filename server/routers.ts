@@ -305,7 +305,14 @@ async function recomputeProjectProgress(
       durationDays: scheduleActivities.durationDays,
     })
     .from(scheduleActivities)
-    .where(eq(scheduleActivities.projectId, projectId));
+    .where(
+      and(
+        eq(scheduleActivities.projectId, projectId),
+        ...(await getCurrentPlanVersionId(db, projectId)) != null
+          ? [eq(scheduleActivities.versionId, await getCurrentPlanVersionId(db, projectId))]
+          : []
+      )
+    );
   const progress = deriveProjectProgress(
     rows.map(row => ({
       progress: Number(row.progress ?? 0),
@@ -565,13 +572,31 @@ async function assertAccessibleProject(
     throw forbidden("Obra não encontrada ou sem permissão de acesso.");
 }
 
+async function getCurrentPlanVersionId(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+): Promise<number | null> {
+  const [version] = await db
+    .select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(eq(projectPlanVersions.projectId, projectId))
+    .orderBy(desc(projectPlanVersions.versionNumber))
+    .limit(1);
+  return version?.id ?? null;
+}
+
 async function assertAvailableWbsCode(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
   code: string,
-  exceptNodeId?: number
+  exceptNodeId?: number,
+  versionId?: number | null
 ) {
-  const conditions = [eq(wbsNodes.projectId, projectId), eq(wbsNodes.code, code)];
+  const conditions = [
+    eq(wbsNodes.projectId, projectId),
+    eq(wbsNodes.code, code),
+    ...(versionId == null ? [] : [eq(wbsNodes.versionId, versionId)]),
+  ];
   if (exceptNodeId) conditions.push(ne(wbsNodes.id, exceptNodeId));
   const [existingCode] = await db
     .select({ id: wbsNodes.id })
@@ -729,6 +754,7 @@ async function loadStageGateEvidence(
   userId: number
 ) {
   await assertAccessibleProject(db, projectId, userId);
+  const currentVersionId = await getCurrentPlanVersionId(db, projectId);
   const [project, eapNodes, activities, dependencies, blockerCount, activeBudgetVersion] =
     await Promise.all([
       db
@@ -736,15 +762,15 @@ async function loadStageGateEvidence(
         .from(projects)
         .where(accessibleProjectCondition(projectId, userId))
         .limit(1),
-      db.select().from(wbsNodes).where(eq(wbsNodes.projectId, projectId)),
+      db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId, projectId), ...(currentVersionId != null ? [eq(wbsNodes.versionId, currentVersionId)] : []))),
       db
         .select()
         .from(scheduleActivities)
-        .where(eq(scheduleActivities.projectId, projectId)),
+        .where(and(eq(scheduleActivities.projectId, projectId), ...(currentVersionId != null ? [eq(scheduleActivities.versionId, currentVersionId)] : []))),
       db
         .select()
         .from(scheduleDependencies)
-        .where(eq(scheduleDependencies.projectId, projectId)),
+        .where(and(eq(scheduleDependencies.projectId, projectId), ...(currentVersionId != null ? [eq(scheduleDependencies.versionId, currentVersionId)] : []))),
       countOpenBlockers(db, projectId),
       db
         .select({ id: budgetVersions.id })
@@ -1177,7 +1203,7 @@ export const appRouter = router({
         const rows = await db
           .select()
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId))
+          .where(and(eq(scheduleActivities.projectId, input.projectId), ...(await getCurrentPlanVersionId(db, input.projectId)) != null ? [eq(scheduleActivities.versionId, await getCurrentPlanVersionId(db, input.projectId))] : []))
           .orderBy(scheduleActivities.sortOrder);
         return rows;
       }),
@@ -1251,7 +1277,7 @@ export const appRouter = router({
         return db
           .select()
           .from(wbsNodes)
-          .where(eq(wbsNodes.projectId, input.projectId))
+          .where(and(eq(wbsNodes.projectId, input.projectId), ...(await getCurrentPlanVersionId(db, input.projectId)) != null ? [eq(wbsNodes.versionId, await getCurrentPlanVersionId(db, input.projectId))] : []))
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
     analisarEapComArquimedes: protectedProcedure
@@ -1271,7 +1297,7 @@ export const appRouter = router({
         const nodes = await db
           .select()
           .from(wbsNodes)
-          .where(eq(wbsNodes.projectId, input.projectId))
+          .where(and(eq(wbsNodes.projectId, input.projectId), ...(await getCurrentPlanVersionId(db, input.projectId)) != null ? [eq(wbsNodes.versionId, await getCurrentPlanVersionId(db, input.projectId))] : []))
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
         const [state] = await db
           .select({ stage: agentProjectStates.stage })
@@ -1410,7 +1436,8 @@ export const appRouter = router({
           db,
           input.projectId,
           input.code,
-          input.nodeId
+          input.nodeId,
+          node.versionId
         );
         return db.transaction(async tx => {
           await tx
@@ -1475,15 +1502,15 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const parent = input.parentId
-          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId))).limit(1))[0]
+          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1))[0]
           : undefined;
         if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence a esta obra.");
-        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
+        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
-        await assertAvailableWbsCode(db, input.projectId, code);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
         const [created] = await db.insert(wbsNodes).values({
           projectId: input.projectId,
           parentId: parent?.id ?? null,
@@ -1518,7 +1545,7 @@ export const appRouter = router({
           const all = await tx
             .select()
             .from(wbsNodes)
-            .where(eq(wbsNodes.projectId, input.projectId));
+            .where(and(eq(wbsNodes.projectId, input.projectId), ...(await getCurrentPlanVersionId(tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>, input.projectId)) != null ? [eq(wbsNodes.versionId, await getCurrentPlanVersionId(tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>, input.projectId))] : []));
           const node = all.find(item => item.id === input.nodeId);
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
           const [version] = node.versionId
@@ -1615,15 +1642,15 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
-        if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
-        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
+        if (!source) throw notFound("Item da EAP não encontrado na versão de trabalho desta obra.");
+        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = source.parentId
           ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
           : `${nextNumber}`;
-        await assertAvailableWbsCode(db, input.projectId, code);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
         const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType,
           unit: source.unit,
           plannedQuantity: source.plannedQuantity == null ? null : String(source.plannedQuantity),
