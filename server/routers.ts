@@ -4968,7 +4968,7 @@ export const appRouter = router({
         const calculatedAt = new Date();
         const schedule = result.schedule;
         const items = schedule.activities;
-        if (items.length) {
+        if (items.length && canPersistCpm) {
           const ids = items.map(item => Number(item.id));
           const critCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`), sql` `);
           const esCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`), sql` `);
@@ -4990,7 +4990,7 @@ export const appRouter = router({
                   "freeFloat" = CASE "id" ${ffCase} END,
                   "cpmCalculatedAt" = ${calculatedAt}
               WHERE "projectId" = ${input.projectId}
-                AND "versionId" = ${currentVersionId}
+                AND (${currentVersionId} IS NULL OR "versionId" = ${currentVersionId})
                 AND "id" IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
             `);
           });
