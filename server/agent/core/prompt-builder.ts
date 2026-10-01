@@ -25,6 +25,7 @@ export function buildEapRequest(
       id: context.projectId,
       name: context.name,
       description: context.description,
+      tipoDeObra: context.tipoDeObra,
       stage: context.stage,
     },
     wbs: context.wbs,
