@@ -4750,3 +4750,153 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 
 .gantt-panel.gantt-fullscreen { position: fixed; inset: 0; z-index: 1000; overflow: auto; margin: 0; border-radius: 0; background: var(--background, #fff); padding: 16px; }
 .gantt-panel.gantt-fullscreen .lob-chart-scroll { max-height: calc(100vh - 220px); overflow: auto; }
+
+
+/* EAP — contraste reforçado para leitura operacional */
+.eap-card,
+.eap-node-detail {
+  border-color: #b9c7d6;
+  box-shadow: 0 1px 3px rgba(10, 22, 40, .08);
+}
+
+.eap-heading {
+  border-bottom: 1px solid #b9c7d6;
+  background: #f7f9fc;
+}
+
+.eap-heading h3,
+.eap-detail-heading strong {
+  color: #0a1628;
+}
+
+.eap-heading p,
+.eap-detail-heading p {
+  color: #44566a;
+}
+
+.eap-structure-legend {
+  border-bottom-color: #c7d2df;
+  background: #eef3f8;
+}
+
+.eap-structure-legend span {
+  color: #44566a;
+  font-size: 9px;
+}
+
+.eap-structure-legend b {
+  color: #0d2b6b;
+  font-size: 9px;
+}
+
+.eap-node-row {
+  border-bottom-color: #cbd5e1;
+  color: #172b43;
+  min-height: 42px;
+}
+
+.eap-node-row::before {
+  border-left-color: #aebdcd;
+}
+
+.eap-node-row:hover,
+.eap-node-row:focus-visible {
+  background: #edf4ff;
+  box-shadow: inset 4px 0 0 #1a5ec8;
+}
+
+.eap-node-row.selected {
+  background: #e4efff;
+  box-shadow: inset 4px 0 0 #0d2b6b;
+}
+
+.eap-node-row.level-1 {
+  background: #e9eff7;
+  color: #0a1628;
+}
+
+.eap-node-row.level-2 {
+  background: #f5f8fb;
+}
+
+.eap-node-code {
+  color: #0d2b6b;
+  font-weight: 700;
+}
+
+.eap-node-type {
+  color: #44566a;
+  font-weight: 700;
+}
+
+.eap-node-edit-hint {
+  color: #0d2b6b;
+  background: #dce9fb;
+  border: 1px solid #b6cce9;
+  border-radius: 5px;
+  padding: 4px 7px;
+}
+
+.eap-branch-toggle {
+  color: #0d2b6b;
+  background: #e4ebf4;
+  border: 1px solid #b7c5d5;
+  border-radius: 5px;
+}
+
+.eap-tree-actions .outline-button,
+.eap-detail-actions .outline-button,
+.eap-detail-actions .icon-button {
+  border-color: #9fb0c3;
+  color: #17385f;
+  background: #fff;
+  font-weight: 700;
+}
+
+.eap-tree-actions .outline-button:hover,
+.eap-detail-actions .outline-button:hover,
+.eap-detail-actions .icon-button:hover {
+  background: #eaf2ff;
+  border-color: #5e83b5;
+  color: #0d2b6b;
+}
+
+.eap-detail-actions .primary-button,
+.eap-card .primary-button {
+  background: #0d2b6b;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(13, 43, 107, .22);
+}
+
+.eap-detail-actions .primary-button:hover,
+.eap-card .primary-button:hover {
+  background: #17418f;
+}
+
+.eap-operation-error {
+  border-color: #d49b9b;
+  background: #fff1f1;
+  color: #7a1d1d;
+}
+
+.eap-empty-state,
+.eap-quick-create,
+.eap-edit-panel {
+  border-color: #c7d2df;
+}
+
+.eap-edit-grid label {
+  color: #334e68;
+}
+
+.eap-edit-grid input,
+.eap-edit-grid select {
+  border-color: #9fb0c3;
+  color: #172b43;
+}
+
+.eap-edit-grid input:focus,
+.eap-edit-grid select:focus {
+  border-color: #1a5ec8;
+  box-shadow: 0 0 0 3px rgba(26, 94, 200, .14);
+}
