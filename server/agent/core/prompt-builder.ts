@@ -31,8 +31,10 @@ function structuredRules() {
     "A resposta desta chamada é um contrato de saída estruturada para uma proposta de EAP.",
     "A resposta final DEVE ser um único objeto JSON válido, sem markdown, sem texto antes ou depois e sem comentários.",
     "Formato esperado: {basis,assumptions,missingInformation,nodes}. O campo action é opcional e, quando presente, é ignorado pelo sistema.",
+    "Exemplo mínimo: {"basis":["escopo informado"],"assumptions":[],"missingInformation":[],"nodes":[{"operation":"create","parentCode":null,"code":"1","name":"Implantação","nodeType":"grupo","rationale":"Raiz da obra"}]}",
     "Cada node deve conter operation,parentCode,code quando aplicável,name,nodeType e uma rationale curta; location/unit/plannedQuantity entram somente quando conhecidos.",
     "Não gere explicações longas por nó. Mantenha rationale em uma frase curta, preferencialmente abaixo de 120 caracteres.",
+    "Mantenha basis, assumptions e missingInformation objetivos. Registre fatos e lacunas relevantes, não textos narrativos extensos.",
     "Use somente os fatos fornecidos como evidência. Não invente dados, decisões, validações ou registros.",
     "A EAP representa escopo. Não transforme a proposta em catálogo de serviços nem em cronograma.",
     "Use o tipo de obra como contexto, mas não substitua o escopo descrito por um template genérico.",
@@ -70,7 +72,7 @@ export function buildEapRequest(
     2
   );
 
-  return { system, user, skills, maxTokens: 12288 };
+  return { system, user, skills, maxTokens: 16384 };
 }
 
 export function buildEapMacroRequest(
@@ -106,7 +108,7 @@ export function buildEapMacroRequest(
     2
   );
 
-  return { system, user, skills, maxTokens: 4096 };
+  return { system, user, skills, maxTokens: 8192 };
 }
 
 export function buildEapSubtreeRequest(
@@ -156,5 +158,5 @@ export function buildEapSubtreeRequest(
     2
   );
 
-  return { system, user, skills, maxTokens: 8192 };
+  return { system, user, skills, maxTokens: 12288 };
 }
