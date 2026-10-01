@@ -123,8 +123,11 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     !n.location?.trim() || !n.responsible?.trim() || !n.acceptanceCriteria?.trim()
   );
   const folhasSemQuantidade = folhasEap.filter(n => !n.unit || n.plannedQuantity == null);
+  // Quantitativos não bloqueiam a baseline da EAP. Eles pertencem à etapa
+  // seguinte: levantamento quantitativo. A EAP só precisa ter estrutura e
+  // dicionário de escopo suficientemente definidos para aprovação.
   const eapProntaParaAprovacao = Boolean(validacao.data?.valid) &&
-    folhasSemDicionario.length === 0 && folhasSemQuantidade.length === 0 &&
+    folhasSemDicionario.length === 0 &&
     (coordenador.data?.blockerCount ?? 0) === 0;
   const podeAprovarEap = coordenador.data?.stage === "EAP_REVISAO" && eapProntaParaAprovacao && !aprovarEap.isPending;
 
@@ -279,7 +282,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         {controleAberto && <>
           <div className="eap-controle-grid">
             <div className={`eap-controle-card ${folhasSemDicionario.length ? "atencao" : "ok"}`}><span>Dicionário</span><strong>{folhasEap.length - folhasSemDicionario.length}/{folhasEap.length}</strong><small>{folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) incompleta(s)` : "Todas as folhas documentadas"}</small></div>
-            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "ok"}`}><span>Controle quantitativo</span><strong>{folhasEap.length - folhasSemQuantidade.length}/{folhasEap.length}</strong><small>{folhasSemQuantidade.length ? `${folhasSemQuantidade.length} sem unidade/quantidade` : "Unidade e quantidade informadas"}</small></div>
+            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "ok"}`}><span>Quantitativos</span><strong>{folhasSemQuantidade.length ? "PENDENTE" : "PRONTO"}</strong><small>{folhasSemQuantidade.length ? `${folhasSemQuantidade.length} pacote(s) aguardando unidade/quantidade` : "Levantamento quantitativo preenchido"}</small></div>
             <div className={`eap-controle-card ${pacotesTrabalho.length ? "ok" : "atencao"}`}><span>Pacotes de trabalho</span><strong>{pacotesTrabalho.length}</strong><small>Folhas terminais controláveis</small></div>
             <div className={`eap-controle-card ${validacao.data?.valid ? "ok" : "atencao"}`}><span>Critérios de parada</span><strong>{validacao.data?.valid ? "OK" : "REVISAR"}</strong><small>Sem bloqueios estruturais</small></div>
           </div>
@@ -312,13 +315,13 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             type="button"
             className="eap-btn-secundario"
             disabled={refazer.isPending}
-            title="Apaga a estrutura gerada e refaz a partir do catálogo. Atividades e versão de orçamento criadas à mão são preservadas."
+            title="Reconstrói a EAP pela estrutura-base da obra. Catálogos entram depois, no orçamento."
             onClick={() => {
               const ok = window.confirm(
                 "Refazer a EAP?\n\n" +
-                  "A estrutura gerada pelo catálogo é apagada e refeita. " +
-                  "As atividades do cronograma e a versão de orçamento são apagadas junto, " +
-                  "porque nasceram dela. Uma versão de orçamento criada à mão é preservada."
+                  "A estrutura da EAP da versão de trabalho será reconstruída pelo template da obra. " +
+                  "O catálogo não será usado para criar nós, materiais ou serviços na EAP. " +
+                  "Quantitativos, orçamento e cronograma serão tratados nas etapas próprias."
               );
               if (!ok) return;
               refazer.mutate({ projectId: projetoId, tipoDeObra: "edificio", refazer: true });
@@ -388,7 +391,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <span className="eap-grid-col">ESCOPO / ENTREGÁVEL</span>
           <span className="eap-grid-col">TIPO</span>
           <span className="eap-grid-col">BASE</span>
-          <span className="eap-grid-col">SEINFRA</span>
+          <span className="eap-grid-col">REFERÊNCIA</span>
           <span className="eap-grid-col">UN.</span>
           <span className="eap-grid-col">STATUS</span>
         </div>
@@ -550,7 +553,7 @@ function NoDaArvore({
         </span>
         <span className="eap-tipo">{no.nodeType === "grupo" ? "FASE / GRUPO" : no.nodeType === "pacote" ? "SISTEMA / PACOTE" : "ENTREGA"}</span>
         <span className="eap-base">{no.decompositionBasis || "—"}</span>
-        <span className="eap-oficial" title={no.externalId ? "Código oficial de referência do catálogo vinculado ao pacote" : "Sem vínculo direto com catálogo"}>
+        <span className="eap-oficial" title={no.externalId ? "Referência externa vinculada posteriormente" : "Sem vínculo com catálogo nesta etapa"}>
           {no.externalId || "—"}
         </span>
         <span className="eap-unidade">{no.unit || "—"}</span>
@@ -739,7 +742,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
       <p className="xl-vazia-falta">
         Comece pelo escopo. A EAP canônica nasce da entrega que a obra precisa
         produzir e é refinada em sistemas, componentes e pacotes de trabalho.
-        O catálogo fica como apoio para códigos, unidades e preços.
+        O catálogo entra depois, no orçamento, composição e precificação.
       </p>
       <div className="eap-acoes">
         <button
@@ -778,15 +781,14 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           disabled={gerar.isPending}
           onClick={() => gerar.mutate({ projectId: projetoId, tipoDeObra: tipo })}
         >
-          {gerar.isPending ? "Preparando sugestão…" : "Importar sugestão do catálogo"}
+          {gerar.isPending ? "Montando estrutura…" : "Gerar estrutura-base"}
         </button>
       </div>
       {criarRaiz.isError && <p className="eap-erro">{criarRaiz.error.message}</p>}
       {gerar.isError && <p className="eap-erro">{gerar.error.message}</p>}
       {gerar.isSuccess && (
         <p className="eap-ok">
-          {gerar.data.semeadura.nosCriados} nós criados como sugestão a partir de{" "}
-          {gerar.data.semeadura.servicosUsados} serviços do catálogo.
+          {gerar.data.semeadura.nosCriados} nós criados a partir do template de escopo.
         </p>
       )}
     </div>
