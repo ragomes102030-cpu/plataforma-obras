@@ -332,6 +332,15 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   }
 
   for (const node of nodes) {
+    const codeDepth = node.code.trim().split(".").length;
+    if (node.level !== codeDepth) {
+      issues.push({
+        code: "eap_level_code_mismatch",
+        severity: "error",
+        message: `O nó ${node.code} declara nível ${node.level}, mas o código representa ${codeDepth} nível(is).`,
+        entityRef: String(node.id),
+      });
+    }
     if (node.parentId === null) continue;
     const parentId = String(node.parentId);
     if (!byId.has(parentId)) {
@@ -357,6 +366,14 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
         code: "eap_parent_code_mismatch",
         severity: "error",
         message: `Nó EAP ${code} deveria ter como pai ${expectedParentCode}.`,
+        entityRef: String(node.id),
+      });
+    }
+    if (parent?.nodeType === "entrega") {
+      issues.push({
+        code: "eap_child_of_delivery",
+        severity: "error",
+        message: `O nó ${code} está abaixo da entrega ${parent.code}; uma entrega é terminal na EAP.`,
         entityRef: String(node.id),
       });
     }

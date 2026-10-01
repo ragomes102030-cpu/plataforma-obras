@@ -182,9 +182,9 @@ export function alvoDoStatement(stmt) {
   if (criarTipo) return { tipo: "type", nome: criarTipo[1] };
 
   const addColuna = stmt.match(
-    /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/i
+    /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/i
   );
-  if (addColuna) return { tipo: "coluna", tabela: addColuna[1], nome: addColuna[2] };
+  if (addColuna) return { tipo: "coluna", tabela: addColuna[1] ?? addColuna[2], nome: addColuna[3] };
 
   // `ALTER COLUMN` muda a definição de uma coluna que já existe, então o alvo é
   // a coluna e a conferência de existência NÃO serve: a coluna está lá antes e
@@ -192,9 +192,9 @@ export function alvoDoStatement(stmt) {
   // conferência em todo retry — que é exatamente o defeito que a versão MySQL
   // já tinha e que estes testes existem para não voltar.
   const alteraColuna = stmt.match(
-    /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ALTER\s+COLUMN\s+"([^"]+)"/i
+    /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s+ALTER\s+COLUMN\s+"([^"]+)"/i
   );
-  if (alteraColuna) return { tipo: "coluna", tabela: alteraColuna[1], nome: alteraColuna[2] };
+  if (alteraColuna) return { tipo: "coluna", tabela: alteraColuna[1] ?? alteraColuna[2], nome: alteraColuna[3] };
 
   const addConstraint = stmt.match(
     /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ADD\s+(?:CONSTRAINT\s+)?"([^"]+)"/i

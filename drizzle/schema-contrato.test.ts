@@ -59,16 +59,17 @@ const CONTRATO: Record<string, string[]> = {
   production_teams: ["active", "createdAt", "id", "memberCount", "name", "projectId", "trade", "updatedAt"],
   production_units: ["code", "createdAt", "id", "name", "projectId", "sortOrder", "unitType"],
   project_audit_events: ["action", "createdAt", "id", "payload", "projectId", "userId"],
+  project_documents: ["analysisStatus", "content", "createdAt", "extractedText", "fileName", "id", "mimeType", "ownerUserId", "projectId", "sizeBytes", "updatedAt"],
   project_mcp_integrations: ["createdAt", "endpointUrl", "externalProjectId", "id", "lastError", "lastSyncedAt", "projectId", "provider", "syncState", "updatedAt"],
   project_plan_versions: ["approvedAt", "baseVersionId", "createdAt", "createdBy", "decisionId", "id", "notes", "projectId", "status", "updatedAt", "versionNumber"],
-  projects: ["baseReferencia", "baseReferenciaRef", "code", "createdAt", "descricao", "id", "location", "name", "ownerUserId", "plannedFinish", "plannedStart", "progress", "status", "updatedAt"],
+  projects: ["baseReferencia", "baseReferenciaRef", "code", "createdAt", "deletedAt", "deletedAtBy", "descricao", "id", "location", "name", "ownerUserId", "plannedFinish", "plannedStart", "progress", "status", "updatedAt"],
   schedule_activities: ["budgetItemId", "cpmCalculatedAt", "createdAt", "critical", "durationDays", "eapRef", "earlyFinish", "earlyStart", "exemplo", "externalId", "finishNoLaterThan", "freeFloat", "id", "lateFinish", "lateStart", "mustStartOn", "name", "pavimento", "phase", "plannedQuantity", "productivity", "progress", "projectId", "sortOrder", "startOffset", "status", "totalFloat", "unit", "updatedAt", "versionId", "wbsCode", "wbsNodeId"],
   schedule_baseline_items: ["activityId", "baselineId", "durationDays", "earlyFinish", "earlyStart", "id", "startOffset"],
   schedule_baselines: ["createdAt", "createdBy", "id", "name", "projectId", "status"],
   schedule_dependencies: ["createdAt", "externalId", "id", "lag", "predecessorId", "projectId", "successorId", "type", "versionId"],
   service_compositions: ["code", "createdAt", "createdBy", "description", "id", "referencePeriod", "sourceCatalogId", "status", "unit", "updatedAt"],
   users: ["createdAt", "email", "id", "lastSignedIn", "loginMethod", "name", "openId", "role", "updatedAt"],
-  wbs_nodes: ["code", "createdAt", "externalId", "externalUid", "id", "level", "name", "nodeType", "parentId", "plannedQuantity", "projectId", "sortOrder", "unit", "updatedAt", "versionId"],
+  wbs_nodes: ["acceptanceCriteria", "code", "createdAt", "decompositionBasis", "description", "exclusions", "externalId", "externalUid", "id", "inclusions", "level", "location", "name", "nodeType", "parentId", "plannedQuantity", "projectId", "responsible", "scopeStatus", "sortOrder", "unit", "updatedAt", "versionId"],
   work_calendars: ["createdAt", "id", "name", "projectId", "updatedAt", "weekPattern"],
 };
 
@@ -100,7 +101,7 @@ function superficie(): Record<string, string[]> {
 }
 
 describe("contrato do schema", () => {
-  it("tem as 35 tabelas do contrato", () => {
+  it("tem as 36 tabelas do contrato", () => {
     const nomes = Object.keys(superficie()).sort();
     expect(nomes).toEqual(Object.keys(CONTRATO).sort());
   });
@@ -128,10 +129,10 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 361", () => {
+  it("o total de colunas continua 404", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(382);
+    expect(total).toBe(404);
   });
 });

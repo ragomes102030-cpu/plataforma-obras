@@ -36,7 +36,8 @@ describe("isolamento entre contas", () => {
       const name = match[1];
       if (!body.includes("projectId")) return;
       if (DELEGATED_GUARD_ALLOWLIST.has(name)) return;
-      if (!GUARDS.some(guard => body.includes(guard))) unguarded.push(name);
+      const ownerScoped = body.includes("ownerUserId") && body.includes("ctx.user.id");
+      if (!ownerScoped && !GUARDS.some(guard => body.includes(guard))) unguarded.push(name);
     });
     expect(unguarded).toEqual([]);
   });

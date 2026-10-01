@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 33, type: 32, trigger: 23 });
+    expect(conta).toEqual({ table: 36, type: 32, trigger: 25 });
   });
 });
 
@@ -298,14 +298,14 @@ describe("aplicarMigracoes num banco vazio", () => {
       const registradas = await pg.query<{ n: number }>(
         'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
       );
-      expect(registradas.rows[0]!.n).toBe(2);
+      expect(registradas.rows[0]!.n).toBe(migrationsDoDisco().length);
 
       const tabelas = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
       // 33 do schema + a de registro.
-      expect(tabelas.rows[0]!.n).toBe(34);
+      expect(tabelas.rows[0]!.n).toBe(37);
     } finally {
       await pg.close();
     }
@@ -382,7 +382,7 @@ describe("aplicarMigracoes num banco vazio", () => {
         `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (` +
           `id serial primary key, hash text not null, created_at bigint)`
       );
-      for (const mm of migrations) {
+      for (const mm of migrations.slice(0, 2)) {
         await pg.query(
           `INSERT INTO "__drizzle_migrations" ("hash","created_at") VALUES ($1, $2)`,
           [mm.hash, mm.folderMillis]
@@ -400,7 +400,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const conferencia = await verificarSeDdlEstaNoBanco({
         conn: conn as never,
         migrations,
-        jaAplicado: migrations[migrations.length - 1]!.folderMillis,
+        jaAplicado: migrations[1]!.folderMillis,
       });
       // A 0000 esta inteira; so a 0001 diverge.
       expect(conferencia.pendentes.map(p => p.folderMillis)).toEqual([
@@ -418,7 +418,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const depois = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
       );
-      expect(depois.rows[0]!.n).toBe(23);
+      expect(depois.rows[0]!.n).toBe(25);
 
       // E o que o Render derrubou duas vezes: ao reaplicar a 0000 inteira, o
       // `CREATE TYPE "users_role"` que JA EXISTIA rodava de novo e o banco
@@ -462,7 +462,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const registradas = await pg.query<{ n: number }>(
         'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'
       );
-      expect(registradas.rows[0]!.n).toBe(2);
+      expect(registradas.rows[0]!.n).toBe(migrations.length);
     } finally {
       await pg.close();
     }

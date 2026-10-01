@@ -161,6 +161,49 @@ export async function ensureWritablePlanVersion(
       throw new Error("Não foi possível criar uma versão do plano.");
     }
 
+    // Antes do fork, reconciliamos órfãos com a versão que realmente os
+    // referencia. Uma atividade ainda pertencente à versão base não pode ficar
+    // apontando para um WBS sem versão, porque o mapa de IDs do fork depende
+    // dessa relação.
+    if (decision.baseVersionId) {
+      const atividadesDaBase = await tx
+        .select({ wbsNodeId: scheduleActivities.wbsNodeId })
+        .from(scheduleActivities)
+        .where(
+          and(
+            eq(scheduleActivities.projectId, projectId),
+            eq(scheduleActivities.versionId, decision.baseVersionId)
+          )
+        );
+      const wbsReferenciados = [...new Set(atividadesDaBase.map(row => row.wbsNodeId))];
+      if (wbsReferenciados.length > 0) {
+        await tx
+          .update(wbsNodes)
+          .set({ versionId: decision.baseVersionId })
+          .where(
+            and(
+              eq(wbsNodes.projectId, projectId),
+              isNull(wbsNodes.versionId),
+              inArray(wbsNodes.id, wbsReferenciados)
+            )
+          );
+      }
+    }
+
+    // O restante dos órfãos pertence ao novo estado de trabalho.
+    await tx
+      .update(wbsNodes)
+      .set({ versionId: created })
+      .where(and(eq(wbsNodes.projectId, projectId), isNull(wbsNodes.versionId)));
+    await tx
+      .update(scheduleActivities)
+      .set({ versionId: created })
+      .where(and(eq(scheduleActivities.projectId, projectId), isNull(scheduleActivities.versionId)));
+    await tx
+      .update(scheduleDependencies)
+      .set({ versionId: created })
+      .where(and(eq(scheduleDependencies.projectId, projectId), isNull(scheduleDependencies.versionId)));
+
     // Uma reabertura é um FORK real: a versão aprovada continua intacta e a
     // nova versão recebe cópias próprias da EAP, atividades e dependências.
     // IDs mudam; os mapas abaixo preservam as referências entre os três níveis.

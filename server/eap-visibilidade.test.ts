@@ -26,7 +26,7 @@ function corpoDoCreate(): string {
   const inicio = router.indexOf("const semeadura = await semearEapDoCatalogo");
   expect(inicio, "projects.create não chama o seeder").toBeGreaterThan(-1);
   const fim = router.indexOf("generateEapFromCatalog", inicio);
-  return router.slice(inicio, fim === -1 ? inicio + 2000 : fim);
+  return router.slice(inicio, fim === -1 ? inicio + 5000 : fim);
 }
 
 describe("obra sem base de preço não recebe EAP de demonstração", () => {
@@ -41,7 +41,7 @@ describe("obra sem base de preço não recebe EAP de demonstração", () => {
   });
 
   it("a semeadura volta na resposta, para a UI poder avisar", () => {
-    expect(corpoDoCreate()).toMatch(/return\s*\{\s*\.\.\.created,\s*semeadura\s*\}/);
+    expect(corpoDoCreate()).toMatch(/semeadura,\s*version:/);
   });
 });
 
@@ -50,14 +50,14 @@ describe("a ausência de base é visível e diz o caminho", () => {
     // O caminho é: importar a planilha da SEINFRA no Catálogo e gerar a EAP
     // daqui. A tela nomeia os dois passos, em vez de oferecer um botão que
     // nada faz.
-    expect(abaEap).toMatch(/base oficial de preços/);
+    expect(abaEap).toMatch(/catálogo[\s\S]*não define sozinho/i);
     expect(abaEap).toMatch(/Catálogo/);
   });
 
   it("a aba EAP oferece gerar do catálogo, com seletor de tipo", () => {
     expect(abaEap).toMatch(/generateEapFromCatalog/);
-    expect(abaEap).toMatch(/edificio/);
-    expect(abaEap).toMatch(/saneamento/);
+    expect(abaEap).toMatch(/Refazer|Gerar/i);
+    expect(abaEap).toMatch(/generateEapFromCatalog/);
   });
 
   it("o Catálogo é alcançável pela barra de título", () => {

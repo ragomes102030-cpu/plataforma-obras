@@ -1618,10 +1618,21 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         return db.transaction(async tx => {
+          const currentVersionId = await getCurrentPlanVersionId(
+            tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>,
+            input.projectId
+          );
           const all = await tx
             .select()
             .from(wbsNodes)
-            .where(and(eq(wbsNodes.projectId, input.projectId), ...(await getCurrentPlanVersionId(tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>, input.projectId)) != null ? [eq(wbsNodes.versionId, await getCurrentPlanVersionId(tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>, input.projectId))] : []));
+            .where(
+              currentVersionId == null
+                ? eq(wbsNodes.projectId, input.projectId)
+                : and(
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, currentVersionId)
+                  )
+            );
           const node = all.find(item => item.id === input.nodeId);
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
           const [version] = node.versionId

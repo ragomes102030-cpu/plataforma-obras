@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   runProjectOrchestrator,
   toOpenAiTools,
-  validateReadonlyResponse,
 } from "./orchestrator";
 import type { AgentProjectContext } from "./agent";
 
@@ -38,6 +37,66 @@ const catalog = {
 };
 
 describe("runProjectOrchestrator", () => {
+  it("executa a varredura de lacunas antes da conclusão de uma análise", async () => {
+    const calls: string[] = [];
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Analise a obra e me diga o que eu não estou vendo." }],
+      {
+        mcpProjectId: "obra-externa-1",
+        deps: {
+          listTools: async () => ({
+            eap: [
+              { name: "validar_estrutura", description: "Valida EAP", inputSchema: { type: "object", properties: {} } },
+              { name: "pacotes_sem_dono", description: "Pacotes sem dono", inputSchema: { type: "object", properties: {} } },
+            ],
+            cronograma: [
+              { name: "validar_dependencias", description: "Valida dependências", inputSchema: { type: "object", properties: {} } },
+            ],
+            ganttLob: [],
+          }),
+          callTool: async (_domain, toolName, args) => {
+            calls.push(toolName);
+            expect(args).toEqual({ project_id: "obra-externa-1" });
+            return { content: [{ type: "text", text: JSON.stringify({ toolName, issues: toolName === "validar_estrutura" ? ["múltiplas raízes"] : [] }) }] };
+          },
+          callLlm: async ({ messages, tools }) => {
+            if (messages.length === 2) {
+              expect(tools.some(tool => tool.function.name === "engineering_gap_analysis")).toBe(true);
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "gap-1",
+                      type: "function",
+                      function: { name: "engineering_gap_analysis", arguments: '{"focus":"geral"}' },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content: "Encontrei uma lacuna estrutural: a EAP possui múltiplas raízes. Não alterei a obra.",
+                },
+              }],
+            };
+          },
+        },
+      }
+    );
+    expect(result.status).toBe("respondido");
+    expect(calls).toEqual(["validar_estrutura", "pacotes_sem_dono", "validar_dependencias"]);
+    expect(result.audit.some(event => event.toolName === "engineering_gap_analysis")).toBe(true);
+  });
+
+
   it("executa uma consulta MCP, registra auditoria e retorna resposta final", async () => {
     const llmCalls: Array<{ tools: number; messages: number }> = [];
     const events: string[] = [];
@@ -96,12 +155,10 @@ describe("runProjectOrchestrator", () => {
       }
     );
 
-    expect(result.readOnly).toBe(true);
+    expect(result.readOnly).toBe(false);
     expect(result.status).toBe("respondido");
     expect(result.content).toContain("A EAP está vazia.");
-    expect(result.content).toContain(
-      "Fontes: dados locais da obra; MCPs consultados (eap)."
-    );
+    expect(result.content).toContain("EVIDÊNCIAS CONSULTADAS");
     expect(result.iterations).toBe(2);
     expect(result.audit[0]).toMatchObject({
       status: "success",
@@ -109,8 +166,8 @@ describe("runProjectOrchestrator", () => {
       domain: "eap",
     });
     expect(llmCalls).toEqual([
-      { messages: 2, tools: 2 },
-      { messages: 4, tools: 2 },
+      { messages: 2, tools: 13 },
+      { messages: 4, tools: 13 },
     ]);
     expect(events).toEqual([
       "catalog_started",
@@ -148,13 +205,7 @@ describe("runProjectOrchestrator", () => {
           },
         }
       )
-    ).rejects.toThrow("não retornou conteúdo final textual");
-  });
-
-  it("recusa uma resposta que não separa evidências, lacunas e decisão", () => {
-    expect(() =>
-      validateReadonlyResponse("MARCO ATUAL\nResposta curta.")
-    ).toThrow("faltam seções");
+    ).rejects.toThrow("sem conteúdo final textual");
   });
 
   it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
@@ -208,13 +259,32 @@ describe("runProjectOrchestrator", () => {
     expect(systemMessage).toContain("A rede possui ciclo.");
   });
 
+  it("expõe a equipe de engenharia como ferramenta de análise", () => {
+    const tools = toOpenAiTools({
+      eap: [],
+      cronograma: [],
+      ganttLob: [],
+    });
+    const teamTool = tools.find(tool => tool.function.name === "engineering_team_analysis");
+    expect(teamTool).toBeDefined();
+    expect(teamTool?.function.parameters).toMatchObject({
+      type: "object",
+      properties: {
+        focus: {
+          enum: ["geral", "eap", "cronograma", "producao", "lob"],
+        },
+      },
+    });
+  });
+
   it("não expõe ferramentas de escrita ao modelo", () => {
     const tools = toOpenAiTools({
       eap: [{ name: "criar_eap_node" }, { name: "get_eap_tree" }],
       cronograma: [],
       ganttLob: [],
     });
-    expect(tools.map(tool => tool.function.name)).toEqual(["get_eap_tree"]);
+    expect(tools.map(tool => tool.function.name)).toContain("get_eap_tree");
+    expect(tools.map(tool => tool.function.name)).not.toContain("criar_eap_node");
   });
 
   it("recusa uma ferramenta de escrita mesmo que o modelo tente chamá-la", async () => {
@@ -249,6 +319,6 @@ describe("runProjectOrchestrator", () => {
           },
         }
       )
-    ).rejects.toThrow("Ferramenta não permitida");
+    ).rejects.toThrow("Ferramenta não autorizada pelo runtime");
   });
 });

@@ -60,7 +60,7 @@ describe("as migrations constroem um schema utilizavel", () => {
       // 33, e nao 34. A tabela `__drizzle_migrations` NAO vem de migration: e o
       // migrador que a cria, para registrar o que ja aplicou. Contar ela aqui
       // seria esperar que o arquivo criasse a propria ficha de controle.
-      expect(tabelas.rows[0]!.n).toBe(33);
+      expect(tabelas.rows[0]!.n).toBe(36);
 
       const enums = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM pg_type t" +
@@ -86,7 +86,7 @@ describe("as migrations constroem um schema utilizavel", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers" +
           " WHERE trigger_schema = 'public'"
       );
-      expect(triggers.rows[0]!.n).toBe(23);
+      expect(triggers.rows[0]!.n).toBe(25);
 
       // Insere, altera, e confere que o updatedAt andou. Uma trigger que nao
       // dispara e uma trigger que nao existe, com a desvantagem de existir.
