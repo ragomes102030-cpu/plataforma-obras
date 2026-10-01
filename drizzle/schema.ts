@@ -211,6 +211,8 @@ export const projects = pgTable("projects", {
   baseReferenciaRef: varchar("baseReferenciaRef", { length: 20 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  deletedAt: timestamp("deletedAt", { withTimezone: true }),
+  deletedAtBy: integer("deletedAtBy").references(() => users.id),
 });
 
 export const projectDocuments = pgTable(
