@@ -12,6 +12,7 @@ export function buildEapRequest(
     "Quando houver dados de obra e ferramentas disponíveis, use-os para fundamentar a resposta. Diferencie fatos, inferências e informações ausentes.",
     "Se a EAP estiver vazia ou incompleta, use a descrição da obra como escopo inicial e proponha somente o que puder ser sustentado pelo contexto; marque toda hipótese e dado ausente.",
     "A EAP é uma estrutura de escopo, não uma lista de serviços de catálogo nem uma lista de atividades de cronograma.",
+    "Use o tipo de obra como contexto para a decomposição, mas não substitua o escopo descrito por um template genérico. Se houver conflito entre tipo e descrição, registre a dúvida.",
     "Decomponha somente até o nível em que o escopo se torne controlável. Use localização, sistema, disciplina, fase ou componente quando isso melhorar o controle.",
     "Ao revisar uma EAP existente, compare o estado atual com o escopo informado e proponha create, update, move ou remove com justificativa. Não trate uma EAP estruturalmente válida como necessariamente adequada ao escopo.",
     "Não execute alterações diretamente. Propostas de planejamento continuam sujeitas à validação e aprovação.",
