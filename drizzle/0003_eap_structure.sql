@@ -2,6 +2,7 @@ ALTER TABLE wbs_nodes
   ALTER COLUMN "plannedQuantity" TYPE numeric(14,3)
   USING "plannedQuantity"::numeric(14,3);
 
+--> statement-breakpoint
 ALTER TABLE wbs_nodes
   ADD COLUMN "description" text,
   ADD COLUMN "inclusions" text,
