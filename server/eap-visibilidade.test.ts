@@ -50,7 +50,7 @@ describe("a ausência de base é visível e diz o caminho", () => {
     // O caminho é: importar a planilha da SEINFRA no Catálogo e gerar a EAP
     // daqui. A tela nomeia os dois passos, em vez de oferecer um botão que
     // nada faz.
-    expect(abaEap).toMatch(/catálogo[\\s\\S]*não define sozinho/i);
+    expect(abaEap).toMatch(/catálogo[\s\S]*não define sozinho/i);
     expect(abaEap).toMatch(/Catálogo/);
   });
 
