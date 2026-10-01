@@ -5997,3 +5997,42 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
   border-color: #1a5ec8;
   box-shadow: 0 0 0 3px rgba(26, 94, 200, .14);
 }
+
+
+/* EAP 2.4 — rolagem sempre visivel */
+/* A árvore precisa rolar independentemente do restante da página. */
+.eap-card {
+  overflow: visible !important;
+}
+.eap-arvore {
+  display: block;
+  width: 100%;
+  max-height: 58vh;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-width: auto;
+  scrollbar-color: #6f879f #e8eef4;
+}
+.eap-arvore::-webkit-scrollbar {
+  width: 13px;
+  height: 13px;
+}
+.eap-arvore::-webkit-scrollbar-track {
+  background: #e8eef4;
+}
+.eap-arvore::-webkit-scrollbar-thumb {
+  background: #6f879f;
+  border: 3px solid #e8eef4;
+  border-radius: 8px;
+}
+.eap-arvore::-webkit-scrollbar-thumb:hover {
+  background: #45657f;
+}
+
+/* A lista de apontamentos também precisa mostrar sua própria rolagem. */
+.eap-validacao-compacta .eap-validacao-lista {
+  max-height: 220px;
+  overflow-y: auto !important;
+  scrollbar-width: auto;
+  scrollbar-color: #6f879f #e8eef4;
+}
