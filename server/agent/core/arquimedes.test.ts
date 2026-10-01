@@ -177,7 +177,7 @@ describe("parseEapProposal — contrato flexível", () => {
   it("ignora uma action arbitrária enviada pelo provedor", () => {
     const result = parseEapProposal(
       JSON.stringify({
-        action: "mapear_eap_macro_v2",
+        action: "qualquer_coisa",
         basis: ["escopo informado"],
         assumptions: [],
         missingInformation: [],
@@ -193,5 +193,54 @@ describe("parseEapProposal — contrato flexível", () => {
     );
 
     expect(result.action).toBe("propose_eap");
+  });
+});
+
+
+describe("parseEapProposal — etapas flexíveis", () => {
+  it("normaliza uma macroestrutura mesmo sem operation, parentCode ou action", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: "escopo informado",
+        assumptions: [],
+        missingInformation: [],
+        nodes: [{
+          code: "1",
+          name: "Implantação",
+        }],
+      }),
+      "macro"
+    );
+
+    expect(result.nodes[0]).toMatchObject({
+      operation: "create",
+      parentCode: null,
+      code: "1",
+      name: "Implantação",
+      nodeType: "grupo",
+    });
+  });
+
+  it("infere parentCode e operation na subárvore", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: ["escopo"],
+        assumptions: [],
+        missingInformation: [],
+        nodes: [{
+          code: "2.3.1",
+          name: "Concreto estrutural",
+        }],
+      }),
+      "subtree",
+      "2"
+    );
+
+    expect(result.nodes[0]).toMatchObject({
+      operation: "create",
+      code: "2.3.1",
+      parentCode: "2.3",
+      nodeType: "pacote",
+    });
   });
 });
