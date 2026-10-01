@@ -184,7 +184,7 @@ export function alvoDoStatement(stmt) {
   const addColuna = stmt.match(
     /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/i
   );
-  if (addColuna) return { tipo: "coluna", tabela: addColuna[1], nome: addColuna[2] };
+  if (addColuna) return { tipo: "coluna", tabela: addColuna[1] ?? addColuna[2], nome: addColuna[3] ?? addColuna[4] };
 
   // `ALTER COLUMN` muda a definição de uma coluna que já existe, então o alvo é
   // a coluna e a conferência de existência NÃO serve: a coluna está lá antes e
@@ -194,7 +194,7 @@ export function alvoDoStatement(stmt) {
   const alteraColuna = stmt.match(
     /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ALTER\s+COLUMN\s+"([^"]+)"/i
   );
-  if (alteraColuna) return { tipo: "coluna", tabela: alteraColuna[1], nome: alteraColuna[2] };
+  if (alteraColuna) return { tipo: "coluna", tabela: alteraColuna[1] ?? alteraColuna[2], nome: alteraColuna[3] ?? alteraColuna[4] };
 
   const addConstraint = stmt.match(
     /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ADD\s+(?:CONSTRAINT\s+)?"([^"]+)"/i
