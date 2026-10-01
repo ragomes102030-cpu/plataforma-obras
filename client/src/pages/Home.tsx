@@ -53,7 +53,10 @@ export default function Home() {
   const [novaObraAberta, setNovaObraAberta] = useState(false);
   const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);
   const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
-  const [faixaObrasFechada, setFaixaObrasFechada] = useState(false);\n  const [lixeiraAberta, setLixeiraAberta] = useState(false);\n  const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);\n  const [confirmacaoExclusao, setConfirmacaoExclusao] = useState("");
+  const [faixaObrasFechada, setFaixaObrasFechada] = useState(false);
+  const [lixeiraAberta, setLixeiraAberta] = useState(false);
+  const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);
+  const [confirmacaoExclusao, setConfirmacaoExclusao] = useState("");
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
