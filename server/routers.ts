@@ -1126,10 +1126,45 @@ export const appRouter = router({
       const rows = await db
         .select()
         .from(projects)
-        .where(eq(projects.ownerUserId, ctx.user.id))
+        .where(and(eq(projects.ownerUserId, ctx.user.id), isNull(projects.deletedAt)))
         .orderBy(desc(projects.updatedAt));
       return rows;
     }),
+    trash: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select({ id: projects.id, name: projects.name, code: projects.code, deletedAt: projects.deletedAt })
+        .from(projects)
+        .where(and(eq(projects.ownerUserId, ctx.user.id), sql`"deletedAt" IS NOT NULL`))
+        .orderBy(desc(projects.deletedAt));
+    }),
+    moveToTrash: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), confirmationName: z.string().trim().min(1).max(180) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [project] = await db.select({ id: projects.id, name: projects.name })
+          .from(projects)
+          .where(and(eq(projects.id, input.projectId), eq(projects.ownerUserId, ctx.user.id), isNull(projects.deletedAt)))
+          .limit(1);
+        if (!project) throw notFound("Obra não encontrada ou já está na lixeira.");
+        if (input.confirmationName !== project.name) throw badRequest("Digite exatamente o nome da obra para enviá-la à lixeira.");
+        await db.update(projects).set({ deletedAt: new Date(), deletedAtBy: ctx.user.id, updatedAt: new Date() }).where(eq(projects.id, project.id));
+        return { movedToTrash: true as const };
+      }),
+    restoreFromTrash: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [project] = await db.select({ id: projects.id })
+          .from(projects)
+          .where(and(eq(projects.id, input.projectId), eq(projects.ownerUserId, ctx.user.id), sql`"deletedAt" IS NOT NULL`))
+          .limit(1);
+        if (!project) throw notFound("Obra não encontrada na lixeira.");
+        await db.update(projects).set({ deletedAt: null, deletedAtBy: null, updatedAt: new Date() }).where(eq(projects.id, project.id));
+        return { restored: true as const };
+      }),
     documents: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
