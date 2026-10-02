@@ -48,4 +48,7 @@ export const ENV = {
   arquimedesSelfEditEnabled:
     process.env.ARQUIMEDES_SELF_EDIT_ENABLED === "true",
   arquimedesGithubToken: process.env.ARQUIMEDES_GITHUB_TOKEN?.trim() ?? "",
+  webResearchBaseUrl: process.env.WEB_RESEARCH_BASE_URL?.trim() || "https://s.jina.ai",
+  webResearchApiKey: process.env.WEB_RESEARCH_API_KEY?.trim() ?? "",
+  webResearchTimeoutMs: Number(process.env.WEB_RESEARCH_TIMEOUT_MS ?? "30000"),
 };
