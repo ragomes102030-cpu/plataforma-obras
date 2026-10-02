@@ -422,6 +422,362 @@ export type BudgetItemCostRef = {
   wbsNodeId: number | string | null;
 };
 
+
+import type { ArquimedesEapProposal } from "../agent/core/types";
+
+export type EapProposalValidationIssue = {
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+  entityRef?: string;
+};
+
+function normalizeProposalName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Valida a proposta contra a EAP real e calcula os códigos de criação
+ * exclusivamente no servidor. O Arquimedes informa o pai e o escopo; o
+ * sistema mantém a autoridade sobre a numeração e a hierarquia aplicável.
+ */
+export function validateAndNormalizeEapProposal(
+  currentNodes: EapScopeNode[],
+  proposal: ArquimedesEapProposal
+): ArquimedesEapProposal {
+  const issues: EapProposalValidationIssue[] = [];
+  const byId = new Map<string, EapScopeNode>();
+  const byCode = new Map<string, EapScopeNode>();
+  const currentChildrenByParent = new Map<string, EapScopeNode[]>();
+
+  for (const node of currentNodes) {
+    byId.set(String(node.id), node);
+    byCode.set(node.code.trim(), node);
+    if (node.parentId !== null) {
+      const key = String(node.parentId);
+      currentChildrenByParent.set(key, [
+        ...(currentChildrenByParent.get(key) ?? []),
+        node,
+      ]);
+    }
+  }
+
+  const roots = currentNodes.filter(node => node.parentId === null);
+  const workingNodes = new Map(byCode);
+  const usedCodes = new Set(byCode.keys());
+
+  const nextSiblingCode = (parentCode: string | null): string => {
+    const prefix = parentCode ? parentCode + "." : "";
+    let max = 0;
+    for (const code of workingNodes.keys()) {
+      if (!code.startsWith(prefix)) continue;
+      const suffix = code.slice(prefix.length);
+      if (!/^\d+$/.test(suffix)) continue;
+      max = Math.max(max, Number(suffix));
+    }
+    return prefix + String(max + 1);
+  };
+
+  const normalizedNodes: ArquimedesEapProposal["nodes"] = [];
+  const seenNodeIds = new Set<number>();
+  const newlyCreatedCodes = new Set<string>();
+
+  for (let index = 0; index < proposal.nodes.length; index += 1) {
+    const item = proposal.nodes[index];
+    const ref = item.nodeId ? String(item.nodeId) : "proposal:" + String(index + 1);
+
+    if (item.operation === "create") {
+      if (roots.length > 0 && item.parentCode === null) {
+        issues.push({
+          code: "proposal_second_root",
+          severity: "error",
+          message:
+            'A criação "' + item.name +
+            '" tenta criar uma nova raiz, mas a EAP atual já possui uma raiz. ' +
+            "O Arquimedes deve propor esse trabalho dentro da raiz existente.",
+          entityRef: ref,
+        });
+        normalizedNodes.push({ ...item });
+        continue;
+      }
+
+      const parent = item.parentCode ? workingNodes.get(item.parentCode) : undefined;
+      if (item.parentCode && !parent) {
+        issues.push({
+          code: "proposal_parent_not_found",
+          severity: "error",
+          message:
+            "O pai " + item.parentCode + ' informado para "' + item.name +
+            '" não existe na EAP atual nem entre os nós criados anteriormente na proposta.',
+          entityRef: ref,
+        });
+        normalizedNodes.push({ ...item });
+        continue;
+      }
+
+      if (parent?.nodeType === "entrega") {
+        issues.push({
+          code: "proposal_child_of_delivery",
+          severity: "error",
+          message:
+            'A proposta tenta criar "' + item.name + '" abaixo da entrega ' +
+            parent.code + ". Entrega é terminal.",
+          entityRef: ref,
+        });
+        normalizedNodes.push({ ...item });
+        continue;
+      }
+
+      const code = nextSiblingCode(item.parentCode);
+      if (item.code && item.code !== code) {
+        issues.push({
+          code: "proposal_code_reassigned",
+          severity: "warning",
+          message:
+            "O código " + item.code + " sugerido pelo Arquimedes foi desconsiderado. " +
+            "O sistema atribuiu " + code + " de forma determinística.",
+          entityRef: ref,
+        });
+      }
+
+      if (usedCodes.has(code) || newlyCreatedCodes.has(code)) {
+        issues.push({
+          code: "proposal_code_collision",
+          severity: "error",
+          message:
+            "O código calculado " + code +
+            " já está ocupado na proposta/EAP. A proposta foi bloqueada para evitar colisão.",
+          entityRef: ref,
+        });
+        normalizedNodes.push({ ...item, code });
+        continue;
+      }
+
+      const normalized = {
+        ...item,
+        code,
+        parentCode: item.parentCode,
+      };
+      normalizedNodes.push(normalized);
+      newlyCreatedCodes.add(code);
+      workingNodes.set(code, {
+        id: -(index + 1),
+        projectId: currentNodes[0]?.projectId ?? 0,
+        parentId: parent?.id ?? null,
+        code,
+        name: item.name,
+        level: code.split(".").length,
+        nodeType: item.nodeType,
+        unit: item.unit ?? null,
+        plannedQuantity: item.plannedQuantity ?? null,
+        externalId: null,
+        externalUid: null,
+        sortOrder: currentNodes.length + index,
+      });
+      continue;
+    }
+
+    if (item.operation === "update") {
+      if (!item.nodeId) {
+        issues.push({
+          code: "proposal_update_without_node",
+          severity: "error",
+          message: 'A atualização "' + item.name + '" não informa o nodeId do item existente.',
+          entityRef: ref,
+        });
+        normalizedNodes.push({ ...item });
+        continue;
+      }
+
+      if (seenNodeIds.has(item.nodeId)) {
+        issues.push({
+          code: "proposal_duplicate_node_operation",
+          severity: "error",
+          message: "O nó " + item.nodeId + " aparece mais de uma vez na proposta.",
+          entityRef: String(item.nodeId),
+        });
+        normalizedNodes.push({ ...item });
+        continue;
+      }
+      seenNodeIds.add(item.nodeId);
+
+      const current = byId.get(String(item.nodeId));
+      if (!current) {
+        issues.push({
+          code: "proposal_node_not_found",
+          severity: "error",
+          message:
+            "A proposta tenta atualizar o nó " + item.nodeId +
+            ", mas ele não existe na EAP atual.",
+          entityRef: String(item.nodeId),
+        });
+        normalizedNodes.push({ ...item });
+        continue;
+      }
+
+      const currentParentCode =
+        current.parentId === null
+          ? null
+          : currentNodes.find(candidate => candidate.id === current.parentId)?.code ?? null;
+
+      if (item.parentCode !== currentParentCode) {
+        issues.push({
+          code: "proposal_update_parent_mismatch",
+          severity: "error",
+          message:
+            "A atualização de " + current.code +
+            " informa um pai diferente do pai atual. Mudança de hierarquia deve ser tratada manualmente na EAP.",
+          entityRef: String(item.nodeId),
+        });
+      }
+
+      if (item.code && item.code !== current.code) {
+        issues.push({
+          code: "proposal_update_code_change",
+          severity: "warning",
+          message:
+            "O código " + item.code + " não foi aceito para " + current.code +
+            "; a numeração da EAP é controlada pelo sistema.",
+          entityRef: String(item.nodeId),
+        });
+      }
+
+      normalizedNodes.push({
+        ...item,
+        code: current.code,
+        parentCode: currentParentCode,
+      });
+      continue;
+    }
+
+    issues.push({
+      code: "proposal_manual_hierarchy_change",
+      severity: "error",
+      message:
+        'A operação "' + item.operation +
+        '" não é aplicada automaticamente. Movimentações e exclusões devem ser feitas manualmente pelo engenheiro na EAP.',
+      entityRef: ref,
+    });
+    normalizedNodes.push({ ...item });
+  }
+
+  const siblingNames = new Map<string, Set<string>>();
+  for (const item of normalizedNodes.filter(node =>
+    node.operation === "create" || node.operation === "update"
+  )) {
+    const current =
+      item.operation === "update" && item.nodeId
+        ? byId.get(String(item.nodeId))
+        : null;
+    const parentCode =
+      item.parentCode ??
+      (current?.parentId == null
+        ? null
+        : currentNodes.find(candidate => candidate.id === current.parentId)?.code ?? null);
+    const key = parentCode ?? "__ROOT__";
+    const names = siblingNames.get(key) ?? new Set<string>();
+    const normalizedName = normalizeProposalName(item.name);
+    if (normalizedName && names.has(normalizedName)) {
+      issues.push({
+        code: "proposal_duplicate_sibling_name",
+        severity: "error",
+        message:
+          'A proposta repete o escopo "' + item.name +
+          '" no mesmo pai (' + (key === "__ROOT__" ? "raiz" : key) + ").",
+        entityRef: item.nodeId ? String(item.nodeId) : item.code,
+      });
+    } else if (normalizedName) {
+      names.add(normalizedName);
+      siblingNames.set(key, names);
+    }
+  }
+
+  const structuralNodes = currentNodes.map(node => ({
+    id: Number(node.id),
+    projectId: node.projectId,
+    externalId: node.externalId ?? null,
+    externalUid: node.externalUid ?? null,
+    parentId: node.parentId == null ? null : Number(node.parentId),
+    code: node.code,
+    name: node.name,
+    level: node.level,
+    nodeType: node.nodeType,
+    unit: node.unit ?? null,
+    plannedQuantity: node.plannedQuantity ?? null,
+    sortOrder: node.sortOrder,
+  }));
+
+  const tempIdByCode = new Map<string, number>();
+  for (const item of normalizedNodes.filter(node =>
+    node.operation === "create" && node.code
+  )) {
+    const id = -(tempIdByCode.size + 1);
+    tempIdByCode.set(item.code!, id);
+    const parentId =
+      item.parentCode === null
+        ? null
+        : structuralNodes.find(node => node.code === item.parentCode)?.id ??
+          tempIdByCode.get(item.parentCode!) ??
+          null;
+    structuralNodes.push({
+      id,
+      projectId: currentNodes[0]?.projectId ?? 0,
+      externalId: null,
+      externalUid: null,
+      parentId,
+      code: item.code!,
+      name: item.name,
+      level: item.code!.split(".").length,
+      nodeType: item.nodeType,
+      unit: item.unit ?? null,
+      plannedQuantity: item.plannedQuantity ?? null,
+      sortOrder: currentNodes.length + structuralNodes.length,
+    });
+  }
+
+  for (const item of normalizedNodes.filter(node => node.operation === "update")) {
+    if (!item.nodeId) continue;
+    const target = structuralNodes.find(node => node.id === item.nodeId);
+    if (!target) continue;
+    target.name = item.name;
+    target.nodeType = item.nodeType;
+    target.level = target.code.split(".").length;
+  }
+
+  const structural = validateEap(structuralNodes);
+  for (const issue of structural.issues) {
+    issues.push({
+      code: "proposal_result_" + issue.code,
+      severity: issue.severity,
+      message: issue.message,
+      entityRef: issue.entityRef,
+    });
+  }
+
+  const dedupedIssues = Array.from(
+    new Map(
+      issues.map(issue => [
+        issue.code + ":" + issue.entityRef + ":" + issue.message,
+        issue,
+      ])
+    ).values()
+  ).slice(0, 80);
+
+  return {
+    ...proposal,
+    nodes: normalizedNodes,
+    validation: {
+      valid: !dedupedIssues.some(issue => issue.severity === "error"),
+      issues: dedupedIssues,
+    },
+  };
+}
+
 export function validateWbsCostCoverage(
   nodes: EapEvidenceNode[],
   budgetItems: BudgetItemCostRef[]
