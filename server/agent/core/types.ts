@@ -78,6 +78,7 @@ export interface ArquimedesLlmRequest {
     exclusions?: string | null;
     description?: string | null;
   }>;
+  researchEvidence?: ArquimedesResearchEvidence[];
 }
 
 export interface ArquimedesLlmProvider {
