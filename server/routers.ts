@@ -7141,6 +7141,10 @@ export const appRouter = router({
                   leavesWithoutDictionary: eapLeaves.length - leavesWithDictionary,
                   leavesWithQuantity,
                   leavesWithoutQuantity: eapLeaves.length - leavesWithQuantity,
+                  structureValidation: {
+                    status: eapValidation.valid ? "valid" : "invalid",
+                    issueCount: eapValidation.issues.length,
+                  },
                 },
                 localBudget,
                 warnings: results.flatMap(result =>
