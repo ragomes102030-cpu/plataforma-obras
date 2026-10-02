@@ -1288,6 +1288,25 @@ tr:hover .xl-codigo {
 .eap-arquimedes-revisao-status{display:flex;align-items:flex-start;gap:7px;padding:8px 12px;border-top:1px solid #e1eaee;background:#fff;color:#55737f}
 .eap-arquimedes-revisao-status svg{flex:0 0 auto;margin-top:1px}
 .eap-arquimedes-revisao-status span{font-size:10px;line-height:1.4}
+.eap-arquimedes-revisao-agente{display:block!important;margin-bottom:3px;font-size:9.5px!important;font-weight:700;color:#345766!important;letter-spacing:.01em}
+.eap-proposta-correcao{margin:10px 0;border:1px solid #bfdbe5;border-radius:6px;background:#f7fbfc}
+.eap-proposta-correcao-head{display:flex;align-items:flex-start;gap:8px;padding:10px 11px;border-bottom:1px solid #dbe9ee;color:#245466}
+.eap-proposta-correcao-head>div{flex:1;min-width:0}
+.eap-proposta-correcao-head strong,.eap-proposta-correcao-head span{display:block}
+.eap-proposta-correcao-head strong{font-size:11px}
+.eap-proposta-correcao-head span{margin-top:3px;font-size:10px;line-height:1.45;color:#5d7480}
+.eap-proposta-correcao-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-bottom:1px solid #dbe9ee}
+.eap-proposta-correcao-grid>div{padding:9px 11px}
+.eap-proposta-correcao-grid>div+div{border-left:1px solid #dbe9ee}
+.eap-proposta-correcao-grid span,.eap-proposta-correcao-grid strong,.eap-proposta-correcao-grid small{display:block}
+.eap-proposta-correcao-grid span{font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#6c7f87}
+.eap-proposta-correcao-grid strong{margin-top:2px;font-size:17px;color:#245466}
+.eap-proposta-correcao-grid small{margin-top:1px;font-size:9.5px;color:#6a7d84}
+.eap-proposta-correcao-resumo{display:flex;flex-direction:column}
+.eap-proposta-correcao-resumo>strong{padding:9px 11px 6px;font-size:10.5px;color:#344e58}
+.eap-proposta-correcao-resumo>div{display:grid;grid-template-columns:30px 1fr;gap:7px;padding:7px 11px;border-top:1px solid #e5eef2}
+.eap-proposta-correcao-resumo>div>span{font-size:8.5px;font-weight:700;color:#557581}
+.eap-proposta-correcao-resumo>div>p{margin:0;font-size:10.5px;line-height:1.4;color:#4d626b}
 
 .eap-revisao-modo>div,.eap-revisao-etapa>div{flex:1;min-width:0}
 .eap-revisao-modo strong,.eap-revisao-etapa strong,.eap-revisao-modo span,.eap-revisao-etapa span{display:block}
