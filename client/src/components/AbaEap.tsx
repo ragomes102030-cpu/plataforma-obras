@@ -225,6 +225,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     };
     appliedAt?: string;
   } | null;
+  const cicloRevisaoAplicado = Boolean(cicloRevisao?.appliedAt);
+  const bloqueiosAposCorrecao = cicloRevisao?.counts?.afterErrors ?? cicloRevisao?.after?.summary?.errors ?? validacao.data?.summary.errors ?? 0;
 
   const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
     onSuccess: async () => {
@@ -327,7 +329,9 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                 <Bot size={15} />
                 <div>
                   <strong>Relatório da correção proposta por Euclides</strong>
-                  <span>Euclides recebeu os bloqueios atuais e montou uma proposta para tratá-los. A EAP vermelha abaixo continua sendo a estrutura atual porque nada foi aplicado automaticamente.</span>
+                  <span>{cicloRevisaoAplicado
+  ? "Esta proposta já foi aplicada como rascunho. O bloco de resultado abaixo mostra o que aconteceu na revalidação."
+  : "Euclides recebeu os bloqueios atuais e montou uma proposta para tratá-los. A EAP vermelha abaixo continua sendo a estrutura atual porque nada foi aplicado automaticamente."}</span>
                 </div>
               </div>
 
@@ -466,7 +470,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               <strong>Escopo informado suficiente para esta rodada.</strong>
             </div>
           )}
-          {propostaArquimedes.validation?.valid !== false && propostaArquimedes.nodes.every(item => item.operation === "create" || item.operation === "update") && (
+          {!cicloRevisaoAplicado && propostaArquimedes.validation?.valid !== false && propostaArquimedes.nodes.every(item => item.operation === "create" || item.operation === "update") && (
             <button
               type="button"
               className="eap-btn"
@@ -522,7 +526,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               if (!podeAprovarEap) return;
               if (!window.confirm("Aprovar a EAP e criar a baseline?\\n\\nA versão atual será congelada para rastrear a estrutura aprovada. Alterações posteriores deverão ocorrer em uma nova versão.")) return;
               aprovarEap.mutate({ projectId: projetoId, stage: "EAP_REVISAO", decision: "approved", nextStage: "ATIVIDADES_PROPOSTA", scope: { kind: "eap", nodeCount: nos.length, leafCount: folhasEap.length, workPackageCount: pacotesTrabalho.length }, summary: `EAP aprovada: ${nos.length} nós, ${folhasEap.length} folhas e ${pacotesTrabalho.length} pacotes de trabalho.` });
-            }}><PackageCheck size={14} />{aprovarEap.isPending ? "Aprovando…" : "Aprovar EAP / Baseline"}</button>
+            }}><PackageCheck size={14} />{aprovarEap.isPending ? "Concluindo…" : "Concluir revisão e aprovar EAP / Baseline"}</button>
           </div>
           {aprovarEap.error && <div className="xl-aviso-erro" role="alert">Aprovação da EAP: {aprovarEap.error.message}</div>}
         </>}
@@ -599,18 +603,18 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               aria-pressed={modoRevisao}
               title={
                 modoRevisao
-                  ? "Encerrar o modo de edição da EAP."
-                  : "Abrir a revisão e pedir ao Arquimedes para analisar ou corrigir os bloqueios encontrados."
+                  ? "Sair do modo de edição. Isso não conclui a revisão técnica nem avança a obra."
+                  : "Abrir a revisão e pedir ao Euclides, sob coordenação do Arquimedes, para analisar ou propor correções."
               }
             >
               <Pencil size={13} />
               {analisarComArquimedes.isPending
                 ? "Arquimedes revisando…"
                 : modoRevisao
-                  ? "Concluir revisão"
+                  ? "Encerrar edição"
                   : (validacao.data?.summary.errors ?? 0) > 0
-                    ? "Corrigir com Arquimedes"
-                    : "Revisar com Arquimedes"}
+                    ? "Revisar / corrigir com Euclides"
+                    : "Revisar com Euclides"}
             </button>
             {!!validacao.data?.issues.length && <button type="button" className="eap-validacao-detalhes" onClick={() => setValidacaoAberta(v => !v)}>{validacaoAberta ? "Ocultar detalhes" : `Ver ${validacao.data.issues.length} apontamentos`}</button>}
           </div>
@@ -698,7 +702,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             <CheckCircle2 size={15} />
             <div>
               <strong>EAP em revisão técnica</strong>
-              <span>Primeiro o engenheiro revisa e edita. Depois o Arquimedes faz uma revisão técnica da EAP atual.</span>
+              <span>O engenheiro edita primeiro. Depois o Euclides revisa a EAP sob coordenação do Arquimedes. A revisão só termina quando a validação passa e a aprovação é confirmada.</span>
             </div>
             <button type="button" className="eap-btn-secundario" onClick={() => {
               setModoRevisao(true);
@@ -735,11 +739,15 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                   <CheckCircle2 size={13} />
                   <span>
                     Última revisão: {ultimaRevisaoArquimedes ? new Date(ultimaRevisaoArquimedes).toLocaleString("pt-BR") : "agora"} ·
-                    {propostaArquimedes.validation?.valid === false
-                      ? " há bloqueios estruturais para tratar."
-                      : modoUltimaRevisaoArquimedes === "resolver_bloqueios"
-                        ? " proposta de correção gerada."
-                        : " análise concluída; proposta aguardando sua decisão."}
+                    {cicloRevisaoAplicado
+                      ? bloqueiosAposCorrecao > 0
+                        ? ` correção aplicada como rascunho; ainda restam ${bloqueiosAposCorrecao} bloqueio(s).`
+                        : " correção aplicada como rascunho; EAP revalidada sem bloqueios."
+                      : propostaArquimedes.validation?.valid === false
+                        ? " há bloqueios estruturais para tratar."
+                        : modoUltimaRevisaoArquimedes === "resolver_bloqueios"
+                          ? " proposta de correção gerada."
+                          : " análise concluída; proposta aguardando sua decisão."}
                   </span>
                 </>
               ) : (
@@ -750,6 +758,36 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               )}
             </div>
           </div>
+
+          {cicloRevisaoAplicado && (
+            <div className={bloqueiosAposCorrecao > 0 ? "eap-revisao-proximo atencao" : "eap-revisao-proximo ok"}>
+              {bloqueiosAposCorrecao > 0 ? (
+                <>
+                  <AlertTriangle size={14} />
+                  <div>
+                    <strong>A correção foi aplicada, mas a revisão ainda não terminou.</strong>
+                    <span>{bloqueiosAposCorrecao} bloqueio(s) continuam na EAP. O próximo passo é pedir uma nova revisão ao Euclides depois de ajustar o que ainda estiver pendente.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="eap-btn"
+                    disabled={analisarComArquimedes.isPending}
+                    onClick={() => analisarComArquimedes.mutate({ projectId: projetoId, mode: "analisar" })}
+                  >
+                    <Bot size={13} /> {analisarComArquimedes.isPending ? "Revisando…" : "Nova revisão com Euclides"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={14} />
+                  <div>
+                    <strong>Revisão técnica concluída pela validação.</strong>
+                    <span>Nenhum bloqueio estrutural permanece. Agora a única ação de conclusão é <b>Aprovar EAP / Baseline</b>.</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </>
       )}
       {enviarEapParaRevisao.error && (
