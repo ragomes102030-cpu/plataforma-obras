@@ -10,6 +10,7 @@ import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
 import { AbaProducao } from "@/components/AbaProducao";
 import { GradeCronograma } from "@/components/GradeCronograma";
+import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
@@ -407,6 +408,7 @@ function Obra({
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
+          <PainelPlanejamento projetoId={projetoId} />
           <GradeCronograma
             obra={obra}
             projetoId={projetoId}
