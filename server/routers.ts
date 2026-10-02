@@ -1550,10 +1550,49 @@ export const appRouter = router({
           .limit(1);
         if (!review?.resultJson) return null;
         try {
+          const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+          const currentNodes = await db
+            .select()
+            .from(wbsNodes)
+            .where(
+              currentVersionId == null
+                ? eq(wbsNodes.projectId, input.projectId)
+                : and(
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, currentVersionId)
+                  )
+            )
+            .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+          const parsed = parseEapProposal(review.resultJson);
+          const proposal = validateAndNormalizeEapProposal(
+            currentNodes.map(node => ({
+              id: node.id,
+              projectId: node.projectId,
+              externalId: node.externalId,
+              externalUid: node.externalUid,
+              parentId: node.parentId,
+              code: node.code,
+              name: node.name,
+              level: node.level,
+              nodeType: node.nodeType,
+              unit: node.unit,
+              plannedQuantity: node.plannedQuantity,
+              sortOrder: node.sortOrder,
+              description: node.description,
+              inclusions: node.inclusions,
+              exclusions: node.exclusions,
+              location: node.location,
+              responsible: node.responsible,
+              acceptanceCriteria: node.acceptanceCriteria,
+              decompositionBasis: node.decompositionBasis,
+              scopeStatus: node.scopeStatus,
+            })),
+            parsed
+          );
           return {
             requestId: review.requestId,
             createdAt: review.createdAt,
-            proposal: parseEapProposal(review.resultJson),
+            proposal,
           };
         } catch {
           return null;
