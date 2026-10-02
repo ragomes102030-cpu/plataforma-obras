@@ -25,6 +25,8 @@ export type AgentRuntimeResponse = {
     message?: {
       role?: "assistant";
       content?: string | null | Array<{ type?: string; text?: string }>;
+      reasoning?: string;
+      reasoning_content?: string;
       tool_calls?: AgentRuntimeMessage["tool_calls"];
     };
   }>;
