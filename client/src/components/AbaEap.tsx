@@ -197,6 +197,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const analisarComArquimedes = trpc.projects.analisarEapComArquimedes.useMutation({
     onSuccess: async () => {
       await revisaoArquimedes.refetch();
+      await validacao.refetch();
     },
   });
   const propostaArquimedes = analisarComArquimedes.data?.proposal ?? revisaoArquimedes.data?.proposal;
@@ -269,9 +270,13 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <div className="eap-validacao-cabecalho">
             <div>
               <strong>Arquimedes · revisão da EAP</strong>
-              <span>{propostaArquimedes.nodes.length} proposta(s) · {propostaArquimedes.missingInformation.length} informação(ões) pendente(s)</span>
+              <span>{propostaArquimedes.nodes.length} proposta(s) · {propostaArquimedes.missingInformation.length} pendência(s) de escopo</span>
             </div>
-            <span className="eap-validacao-ok"><Bot size={14} /> Proposta não aplicada</span>
+            {propostaArquimedes.validation?.valid === false ? (
+              <span className="eap-validacao-erro"><AlertTriangle size={14} /> Proposta bloqueada por estrutura</span>
+            ) : (
+              <span className="eap-validacao-ok"><Bot size={14} /> Proposta não aplicada</span>
+            )}
           </div>
           {propostaArquimedes.basis.length > 0 && (
             <div className="eap-validacao-lista">
@@ -284,10 +289,37 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               <p><strong>{item.parentCode ? item.parentCode + " · " : ""}{item.name}</strong> — {item.rationale}</p>
             </div>
           ))}
-          {propostaArquimedes.missingInformation.length > 0 && (
-            <small>Faltam dados: {propostaArquimedes.missingInformation.join(" · ")}</small>
+          {propostaArquimedes.validation && !propostaArquimedes.validation.valid && (
+            <div className="eap-proposta-erros">
+              <div className="eap-proposta-erros-head">
+                <AlertTriangle size={15} />
+                <div>
+                  <strong>Erros encontrados pelo validador</strong>
+                  <span>Corrija estes pontos antes de aplicar a proposta ou aprovar a EAP.</span>
+                </div>
+                <strong>{propostaArquimedes.validation.issues.filter(item => item.severity === "error").length}</strong>
+              </div>
+              <div className="eap-proposta-erros-lista">
+                {propostaArquimedes.validation.issues.filter(item => item.severity === "error").slice(0, 10).map((item, index) => (
+                  <div key={index}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <p>{item.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-          {propostaArquimedes.nodes.every(item => item.operation === "create" || item.operation === "update") && (
+          {propostaArquimedes.missingInformation.length > 0 ? (
+            <div className="eap-proposta-pendencias-inline">
+              <strong>Informações que dependem do engenheiro</strong>
+              <span>{propostaArquimedes.missingInformation.join(" · ")}</span>
+            </div>
+          ) : (
+            <div className="eap-proposta-pendencias-inline ok">
+              <strong>Escopo informado suficiente para esta rodada.</strong>
+            </div>
+          )}
+          {propostaArquimedes.validation?.valid !== false && propostaArquimedes.nodes.every(item => item.operation === "create" || item.operation === "update") && (
             <button
               type="button"
               className="eap-btn"
@@ -311,6 +343,9 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       )}
       {analisarComArquimedes.error && (
         <div className="xl-aviso-erro" role="alert">Arquimedes: {analisarComArquimedes.error.message}</div>
+      )}
+      {revisaoArquimedes.isError && (
+        <div className="xl-aviso-erro" role="alert">Revisão da EAP: {revisaoArquimedes.error.message}</div>
       )}
 
       <div className="eap-controle">
@@ -397,22 +432,61 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             <button
               type="button"
               className={`eap-revisao-btn ${modoRevisao ? "ativo" : ""}`}
-              onClick={() => setModoRevisao(v => !v)}
+              onClick={() => {
+                const next = !modoRevisao;
+                setModoRevisao(next);
+                if (next) {
+                  setValidacaoAberta(true);
+                  expandirTudo();
+                }
+              }}
               aria-pressed={modoRevisao}
+              title={modoRevisao ? "Encerrar o modo de edição da EAP." : "Ativar edição, abrir a árvore e mostrar os bloqueios da validação."}
             >
               <Pencil size={13} /> {modoRevisao ? "Concluir revisão" : "Revisar EAP"}
             </button>
             {!!validacao.data?.issues.length && <button type="button" className="eap-validacao-detalhes" onClick={() => setValidacaoAberta(v => !v)}>{validacaoAberta ? "Ocultar detalhes" : `Ver ${validacao.data.issues.length} apontamentos`}</button>}
           </div>
         </div>
+        {validacao.data && !validacao.data.valid && (
+          <div className="eap-validacao-bloqueios">
+            <div className="eap-validacao-bloqueios-head">
+              <AlertTriangle size={15} />
+              <div>
+                <strong>Bloqueios atuais da EAP</strong>
+                <span>{validacao.data.summary.errors} erro(s) estrutural(is) impedem a aprovação.</span>
+              </div>
+            </div>
+            <div className="eap-validacao-bloqueios-lista">
+              {validacao.data.issues.filter(issue => issue.severity === "error").slice(0, 8).map((issue, index) => (
+                <div key={`${issue.code}-${issue.entityRef ?? "obra"}-${index}`}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <p>{issue.message}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {validacaoAberta && !!validacao.data?.issues.length && (
           <div className="eap-validacao-lista">
-            {validacao.data.issues.slice(0, 8).map((issue, index) => (
+            {validacao.data.issues.slice(0, 12).map((issue, index) => (
               <div key={`${issue.code}-${issue.entityRef ?? "obra"}-${index}`} className={`eap-validacao-item eap-validacao-${issue.severity}`}>
                 <span>{issue.severity === "error" ? "BLOQUEIO" : "ATENÇÃO"}</span><p>{issue.message}</p>
               </div>
             ))}
-            {validacao.data.issues.length > 8 && <small>+ {validacao.data.issues.length - 8} apontamentos adicionais.</small>}
+            {validacao.data.issues.length > 12 && <small>+ {validacao.data.issues.length - 12} apontamentos adicionais.</small>}
+          </div>
+        )}
+        {modoRevisao && (
+          <div className="eap-revisao-modo" role="status">
+            <Pencil size={14} />
+            <div>
+              <strong>Modo revisão ativo</strong>
+              <span>A árvore foi expandida. Use <b>Editar</b> e <b>Adicionar</b> nas linhas para corrigir a EAP.</span>
+            </div>
+            <button type="button" className="eap-btn-secundario" onClick={expandirTudo}>
+              Expandir árvore
+            </button>
           </div>
         )}
       </div>
@@ -423,9 +497,12 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <div>
             <strong>Próxima etapa: revisão técnica</strong>
             <span>
-              A EAP será enviada para revisão do engenheiro sem criar baseline. 
+              A EAP será enviada para revisão do engenheiro sem criar baseline.
               Depois da revisão, o Arquimedes pode ser executado novamente antes da aprovação final.
             </span>
+            {!coordenador.data?.canAdvance && coordenador.data?.gateMessage && (
+              <small className="eap-gate-motivo">{coordenador.data.gateMessage}</small>
+            )}
           </div>
           <button
             type="button"
@@ -445,6 +522,22 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             }
           >
             {enviarEapParaRevisao.isPending ? "Enviando…" : "Enviar para revisão"}
+          </button>
+        </div>
+      )}
+      {coordenador.data?.stage === "EAP_REVISAO" && (
+        <div className="eap-revisao-etapa">
+          <CheckCircle2 size={15} />
+          <div>
+            <strong>EAP em revisão técnica</strong>
+            <span>Revise, edite e peça nova análise do Arquimedes antes de aprovar a baseline.</span>
+          </div>
+          <button type="button" className="eap-btn-secundario" onClick={() => {
+            setModoRevisao(true);
+            setValidacaoAberta(true);
+            expandirTudo();
+          }}>
+            <Pencil size={13} /> Abrir revisão
           </button>
         </div>
       )}
