@@ -36,7 +36,8 @@ import { localDatabaseEvidenceSource } from "./construction/local-database-sourc
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 12_000;
 const MAX_MESSAGES = 20;
-const MAX_MESSAGE_CHARS = 6_000;
+const MAX_USER_MESSAGE_CHARS = 6_000;
+const MAX_ASSISTANT_MESSAGE_CHARS = 12_000;
 
 const TOOL_DOMAINS = {
   get_eap_tree: "eap",
@@ -667,11 +668,14 @@ function validateMessages(messages: AgentMessage[]) {
     messages.some(
       message =>
         message.content.trim().length === 0 ||
-        message.content.length > MAX_MESSAGE_CHARS
+        message.content.length >
+          (message.role === "user"
+            ? MAX_USER_MESSAGE_CHARS
+            : MAX_ASSISTANT_MESSAGE_CHARS)
     )
   ) {
     throw new Error(
-      `Cada mensagem deve ter entre 1 e ${MAX_MESSAGE_CHARS} caracteres.`
+      `Cada mensagem de usuário deve ter até ${MAX_USER_MESSAGE_CHARS} caracteres e cada resposta histórica do assistente pode ter até ${MAX_ASSISTANT_MESSAGE_CHARS} caracteres.`
     );
   }
 }
