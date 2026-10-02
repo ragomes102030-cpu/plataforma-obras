@@ -61,6 +61,40 @@ describe("parseEapProposal", () => {
     });
   });
 
+  it("aceita campos de dicionario usados para corrigir escopo", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: [],
+        assumptions: [],
+        missingInformation: [],
+        resolutionSummary: ["Separar responsabilidades duplicadas nos pacotes afetados."],
+        nodes: [{
+          operation: "update",
+          nodeId: 12,
+          parentCode: "1.1",
+          code: "1.1.2",
+          name: "Impermeabilização",
+          nodeType: "entrega",
+          inclusions: "Impermeabilização da cobertura principal.",
+          exclusions: "Áreas externas fora da cobertura.",
+          description: "Escopo revisado para eliminar sobreposição com o irmão.",
+          responsible: "Engenharia de execução",
+          acceptanceCriteria: "Superfície concluída e aprovada.",
+          rationale: "Ajusta o dicionário para eliminar a sobreposição textual.",
+        }],
+      })
+    );
+
+    expect(result.nodes[0]).toMatchObject({
+      operation: "update",
+      nodeId: 12,
+      inclusions: "Impermeabilização da cobertura principal.",
+      exclusions: "Áreas externas fora da cobertura.",
+      acceptanceCriteria: "Superfície concluída e aprovada.",
+    });
+    expect(result.resolutionSummary).toHaveLength(1);
+  });
+
   it("rejeita proposta estruturalmente incorreta", () => {
     expect(() =>
       parseEapProposal(
