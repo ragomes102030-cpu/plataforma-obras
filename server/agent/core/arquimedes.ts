@@ -402,6 +402,21 @@ const eapReviewNodeSchema = z.object({
   location: z.string().trim().max(180).nullable().optional(),
   unit: z.string().trim().max(32).nullable().optional(),
   plannedQuantity: z.number().min(0).nullable().optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  inclusions: z.string().trim().max(5000).nullable().optional(),
+  exclusions: z.string().trim().max(5000).nullable().optional(),
+  responsible: z.string().trim().max(180).nullable().optional(),
+  acceptanceCriteria: z.string().trim().max(5000).nullable().optional(),
+  decompositionBasis: z.enum([
+    "project",
+    "deliverable",
+    "system",
+    "discipline",
+    "location",
+    "phase",
+    "component",
+    "other",
+  ]).optional(),
   rationale: z.string().trim().min(1).max(320),
 });
 
