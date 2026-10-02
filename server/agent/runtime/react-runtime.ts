@@ -2,6 +2,8 @@ export type AgentRuntimeMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null | Array<{ type?: string; text?: string; [key: string]: unknown }>;
   tool_call_id?: string;
+  reasoning?: string;
+  reasoning_content?: string;
   tool_calls?: Array<{
     id: string;
     type: "function";
@@ -107,6 +109,8 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
     conversation.push({
       role: "assistant",
       content: assistant.content ?? null,
+      ...(assistant.reasoning ? { reasoning: assistant.reasoning } : {}),
+      ...(assistant.reasoning_content ? { reasoning_content: assistant.reasoning_content } : {}),
       tool_calls: toolCalls,
     });
 
