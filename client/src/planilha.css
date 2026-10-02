@@ -1291,6 +1291,8 @@ tr:hover .xl-codigo {
 .eap-proposta-erros-lista>div{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:7px 10px;border-top:1px solid #f3dede}
 .eap-proposta-erros-lista>div>span{font-size:9px;font-weight:700;color:#a33b32}
 .eap-proposta-erros-lista>div>p{margin:0;font-size:10.5px;color:#6b3036}
+.eap-proposta-erros-acoes{display:flex;align-items:center;gap:8px;padding:9px 10px;border-top:1px solid #f3dede}
+.eap-proposta-erros-acoes small{font-size:9.5px;color:#8d5b61}
 .eap-proposta-pendencias-inline{display:flex;flex-direction:column;gap:3px;margin:8px 0;padding:8px 10px;border:1px solid #e5e7eb;border-radius:4px;background:#fafafa}
 .eap-proposta-pendencias-inline strong{font-size:10.5px;color:#4b5563}
 .eap-proposta-pendencias-inline span{font-size:10.5px;line-height:1.4;color:#667085}
