@@ -82,6 +82,8 @@ describe("eap-resolution-engine", () => {
 
     expect(plan[0]?.kind).toBe("missing_dictionary");
     expect(plan[0]?.unresolvedDecisions).toHaveLength(1);
+  });
+
   it("consolida folhas sem responsável por pai", () => {
     const plan = buildEapResolutionPlan(nodes, [
       {
