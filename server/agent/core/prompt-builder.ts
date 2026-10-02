@@ -13,7 +13,7 @@ function skillsBlock(skills: ArquimedesSkill[]) {
 
 function engineeringReasoningKernel() {
   return [
-    "MÉTODO DE RACIOCÍNIO DO ARQUIMEDES:",
+    "MÉTODO DE ENGENHARIA DA EQUIPE ARQUIMEDES:",
     "1. Entenda o empreendimento antes de decompor. Identifique objeto, limites de escopo, condicionantes, localização, sistemas, etapas e entregáveis explicitamente descritos.",
     "2. Separe fato de hipótese. Fato é o que o escopo sustenta; hipótese é uma interpretação necessária. Não trate hipótese como dado confirmado.",
     "3. Identifique lacunas relevantes antes de fechar a estrutura. Registre somente informações cuja ausência possa alterar a EAP, seus limites ou a forma de controle.",
@@ -133,8 +133,11 @@ export function buildEapMacroRequest(
   context: ArquimedesProjectContext,
   skills: ArquimedesSkill[]
 ): ArquimedesLlmRequest {
+  const specialist = getArquimedesAgent("euclides");
   const system = [
-    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    `Você é ${specialist.name}, ${specialist.title}, especialista do Arquimedes.`,
+    "Arquimedes é o orquestrador-chefe; você responde somente pela EAP.",
+    specialist.mission,
     engineeringReasoningKernel(),
     structuredRules(),
     "Esta chamada é SOMENTE para mapear a macroestrutura da EAP.",
@@ -176,8 +179,11 @@ export function buildEapSubtreeRequest(
   macroNodes: Array<{ code: string; name: string }>,
   maxNodesInSubtree = 20
 ): ArquimedesLlmRequest {
+  const specialist = getArquimedesAgent("euclides");
   const system = [
-    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    `Você é ${specialist.name}, ${specialist.title}, especialista do Arquimedes.`,
+    "Arquimedes é o orquestrador-chefe; você responde somente pela EAP.",
+    specialist.mission,
     engineeringReasoningKernel(),
     structuredRules(),
     "Esta chamada expande SOMENTE um ramo da EAP. O nó-raiz informado já existe e não deve ser repetido.",
