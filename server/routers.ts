@@ -76,6 +76,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateEapScope, validateWbsCostCoverage } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
+import { validateDependencies } from "./construction/dependency-validator";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
 import {
   allowedSourcesFor,
@@ -5456,20 +5457,80 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        if (input.predecessorId === input.successorId) throw badRequest("Uma atividade não pode depender dela mesma.");
+        if (input.predecessorId === input.successorId) {
+          throw badRequest("Uma atividade não pode depender dela mesma.");
+        }
+
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const rows = await db
-          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
+        const activities = await db
+          .select({
+            id: scheduleActivities.id,
+            projectId: scheduleActivities.projectId,
+            durationDays: scheduleActivities.durationDays,
+          })
           .from(scheduleActivities)
           .where(
             and(
               eq(scheduleActivities.projectId, input.projectId),
-              eq(scheduleActivities.versionId, writable.id),
-              inArray(scheduleActivities.id, [input.predecessorId, input.successorId])
+              eq(scheduleActivities.versionId, writable.id)
             )
           );
-        if (rows.length !== 2) throw forbidden("As duas atividades precisam pertencer à versão de trabalho da obra.");
-        const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).$returningIds();
+        const activityIds = new Set(activities.map(activity => activity.id));
+        if (!activityIds.has(input.predecessorId) || !activityIds.has(input.successorId)) {
+          throw forbidden("As duas atividades precisam pertencer à versão de trabalho da obra.");
+        }
+
+        const existing = await db
+          .select({
+            id: scheduleDependencies.id,
+            predecessorId: scheduleDependencies.predecessorId,
+            successorId: scheduleDependencies.successorId,
+            type: scheduleDependencies.type,
+            lag: scheduleDependencies.lag,
+            projectId: scheduleDependencies.projectId,
+          })
+          .from(scheduleDependencies)
+          .where(
+            and(
+              eq(scheduleDependencies.projectId, input.projectId),
+              eq(scheduleDependencies.versionId, writable.id)
+            )
+          );
+
+        const duplicate = existing.some(item =>
+          item.predecessorId === input.predecessorId &&
+          item.successorId === input.successorId &&
+          item.type === input.type &&
+          Number(item.lag) === input.lag
+        );
+        if (duplicate) {
+          throw conflict("Essa dependência já existe na versão de trabalho.");
+        }
+
+        const candidate = {
+          projectId: input.projectId,
+          predecessorId: input.predecessorId,
+          successorId: input.successorId,
+          type: input.type,
+          lag: input.lag,
+        };
+        const validation = validateDependencies(activities, [...existing, candidate]);
+        if (!validation.valid) {
+          const issue = validation.issues.find(item => item.severity === "error");
+          throw badRequest(
+            "Dependência inválida: " +
+              (issue?.message ?? "a rede geraria uma estrutura inconsistente.")
+          );
+        }
+
+        const [createdId] = await db.insert(scheduleDependencies).values({
+          projectId: input.projectId,
+          predecessorId: input.predecessorId,
+          successorId: input.successorId,
+          type: input.type,
+          lag: input.lag,
+          versionId: writable.id,
+        }).$returningIds();
         return { id: createdId };
       }),
     createDependencies: protectedProcedure
@@ -5491,28 +5552,84 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         for (const dependency of input.dependencies) {
-          if (dependency.predecessorId === dependency.successorId)
+          if (dependency.predecessorId === dependency.successorId) {
             throw badRequest("Uma atividade não pode depender dela mesma.");
+          }
         }
+
         const writable = await ensureWritablePlanVersion(
           input.projectId,
           ctx.user.id
         );
-        const ids = Array.from(
-          new Set(input.dependencies.flatMap(item => [item.predecessorId, item.successorId]))
-        );
-        const found = await db
-          .select({ id: scheduleActivities.id })
+        const activities = await db
+          .select({
+            id: scheduleActivities.id,
+            projectId: scheduleActivities.projectId,
+            durationDays: scheduleActivities.durationDays,
+          })
           .from(scheduleActivities)
           .where(
             and(
               eq(scheduleActivities.projectId, input.projectId),
-              eq(scheduleActivities.versionId, writable.id),
-              inArray(scheduleActivities.id, ids)
+              eq(scheduleActivities.versionId, writable.id)
             )
           );
-        if (found.length !== ids.length)
+        const ids = Array.from(
+          new Set(input.dependencies.flatMap(item => [item.predecessorId, item.successorId]))
+        );
+        const foundIds = new Set(activities.map(activity => activity.id));
+        if (ids.some(id => !foundIds.has(id))) {
           throw forbidden("Uma ou mais atividades não pertencem à versão de trabalho da obra.");
+        }
+
+        const existing = await db
+          .select({
+            id: scheduleDependencies.id,
+            predecessorId: scheduleDependencies.predecessorId,
+            successorId: scheduleDependencies.successorId,
+            type: scheduleDependencies.type,
+            lag: scheduleDependencies.lag,
+            projectId: scheduleDependencies.projectId,
+          })
+          .from(scheduleDependencies)
+          .where(
+            and(
+              eq(scheduleDependencies.projectId, input.projectId),
+              eq(scheduleDependencies.versionId, writable.id)
+            )
+          );
+
+        const seen = new Set(
+          existing.map(item =>
+            [item.predecessorId, item.successorId, item.type, Number(item.lag)].join("|")
+          )
+        );
+        const duplicates = input.dependencies.find(item => {
+          const key = [item.predecessorId, item.successorId, item.type, item.lag].join("|");
+          if (seen.has(key)) return true;
+          seen.add(key);
+          return false;
+        });
+        if (duplicates) {
+          throw conflict("A operação contém uma dependência que já existe ou está duplicada.");
+        }
+
+        const candidates = input.dependencies.map(item => ({
+          projectId: input.projectId,
+          predecessorId: item.predecessorId,
+          successorId: item.successorId,
+          type: item.type,
+          lag: item.lag,
+        }));
+        const validation = validateDependencies(activities, [...existing, ...candidates]);
+        if (!validation.valid) {
+          const issue = validation.issues.find(item => item.severity === "error");
+          throw badRequest(
+            "Dependências inválidas: " +
+              (issue?.message ?? "a rede geraria uma estrutura inconsistente.")
+          );
+        }
+
         await db.insert(scheduleDependencies).values(
           input.dependencies.map(item => ({
             projectId: input.projectId,
