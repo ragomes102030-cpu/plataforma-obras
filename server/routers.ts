@@ -1586,6 +1586,9 @@ export const appRouter = router({
           }
         );
         const parsedProposal = parseEapProposal(raw);
+        if (input.mode === "resolver_bloqueios") {
+          parsedProposal.researchEvidence = researchEvidence;
+        }
         const proposal = validateAndNormalizeEapProposal(
           nodes.map(node => ({
             id: node.id,
@@ -1648,9 +1651,17 @@ export const appRouter = router({
           proposal,
           currentValidation,
           mode: input.mode,
+          research: {
+            enabled: Boolean(ENV.webResearchApiKey),
+            queries: researchQueries,
+            sources: researchEvidence,
+            note: ENV.webResearchApiKey
+              ? "Pesquisa externa executada antes da proposta."
+              : "Pesquisa externa não está habilitada no ambiente; configure WEB_RESEARCH_API_KEY para ativá-la.",
+          },
           guardrail:
             input.mode === "resolver_bloqueios"
-              ? "O Arquimedes recebeu os bloqueios atuais e propôs correções. Nenhuma alteração foi persistida; o engenheiro deve revisar e aplicar como rascunho."
+              ? "O Arquimedes coordenou o Euclides, que analisou os bloqueios atuais e propôs correções em lote. Nenhuma alteração foi persistida; o engenheiro deve revisar e aplicar como rascunho."
               : "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
         };
       }),
