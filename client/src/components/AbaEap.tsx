@@ -277,7 +277,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               <p><strong>{item.parentCode ? item.parentCode + " · " : ""}{item.name}</strong> — {item.rationale}</p>
             </div>
           ))}
-          {analisarComArquimedes.data.proposal.missingInformation.length > 0 && (
+          {propostaArquimedes.missingInformation.length > 0 && (
             <small>Faltam dados: {propostaArquimedes.missingInformation.join(" · ")}</small>
           )}
           {propostaArquimedes.nodes.every(item => item.operation === "create" || item.operation === "update") && (
