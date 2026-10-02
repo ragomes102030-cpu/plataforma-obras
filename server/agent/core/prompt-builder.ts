@@ -31,9 +31,10 @@ function structuredRules() {
   return [
     "A resposta desta chamada é um contrato de saída estruturada para uma proposta de EAP.",
     "A resposta final DEVE ser um único objeto JSON válido, sem markdown, sem texto antes ou depois e sem comentários.",
-    "Formato esperado: {basis,assumptions,missingInformation,nodes}. O campo action é opcional e, quando presente, é ignorado pelo sistema.",
+    "Formato esperado: {basis,assumptions,missingInformation,resolutionSummary,nodes}. O campo action é opcional e, quando presente, é ignorado pelo sistema.",
+    "Em resolver_bloqueios, resolutionSummary deve conter um resumo curto e objetivo das correções propostas, sem afirmar que foram aplicadas.",
     'Exemplo mínimo: {"basis":["escopo informado"],"assumptions":[],"missingInformation":[],"nodes":[{"operation":"create","parentCode":null,"code":"1","name":"Implantação","nodeType":"grupo","rationale":"Raiz da obra"}]}',
-    "Cada node deve conter operation,parentCode,code quando aplicável,name,nodeType e uma rationale curta; location/unit/plannedQuantity entram somente quando conhecidos.",
+    "Cada node deve conter operation,parentCode,code quando aplicável,name,nodeType e uma rationale curta. Em atualizações de escopo, também pode corrigir description,inclusions,exclusions,responsible e acceptanceCriteria quando esses campos forem a causa do bloqueio.",
     "Não gere explicações longas por nó. Mantenha rationale em uma frase curta, preferencialmente abaixo de 120 caracteres.",
     "Mantenha basis, assumptions e missingInformation objetivos. Registre fatos e lacunas relevantes, não textos narrativos extensos.",
     "Use somente os fatos fornecidos como evidência. Não invente dados, decisões, validações ou registros.",
@@ -87,8 +88,10 @@ export function buildEapRequest(
           "MODO RESOLVER BLOQUEIOS: existem erros estruturais já detectados pelo sistema.",
           "Sua missão nesta rodada é propor correções concretas para esses bloqueios, usando a EAP atual do banco como fonte primária.",
           "Priorize os erros listados em resolutionIssues. Cada correção deve apontar para um nó existente quando atualizar e deve respeitar a hierarquia atual.",
+          "Para erros de sobreposição textual entre irmãos, revise principalmente inclusions e exclusions dos nós afetados; não tente resolver o problema apenas renomeando o nó se o conflito estiver no dicionário de escopo.",
           "Não invente novos dados de escopo para preencher lacunas. Quando um erro não puder ser resolvido sem decisão do engenheiro, mantenha nodes vazio para esse ponto e registre a pendência em missingInformation.",
           "Não altere códigos de nós existentes. Para criações, informe apenas o parentCode; o sistema fará a numeração.",
+          "Quando alterar um campo do dicionário, preserve os demais dados atuais conhecidos e explique na rationale o que foi ajustado."
           "Não proponha move ou remove automaticamente nesta rodada. Alterações de hierarquia ou exclusões ficam para revisão manual.",
           "Ao final, gere resolutionSummary com 1 item curto por correção proposta. Explique o problema tratado, a ação proposta e por que ela resolve o bloqueio. Não diga que a alteração foi aplicada: ela ainda depende da revisão do engenheiro.",
         ].join("\n")
