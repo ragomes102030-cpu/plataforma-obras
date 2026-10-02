@@ -7039,7 +7039,68 @@ export const appRouter = router({
                   evidenceSource.listDependencies(input.projectId),
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
-              const eapValidation = validateEap(eapResult.data ?? []);
+              const eapNodes = eapResult.data ?? [];
+              const eapChildren = new Set(
+                eapNodes
+                  .filter(node => node.parentId !== null)
+                  .map(node => String(node.parentId))
+              );
+              const eapLeaves = eapNodes.filter(
+                node => !eapChildren.has(String(node.id))
+              );
+              const hasDictionary = (node: typeof eapLeaves[number]) =>
+                [
+                  node.description,
+                  node.inclusions,
+                  node.exclusions,
+                  node.responsible,
+                  node.acceptanceCriteria,
+                ].every(value => Boolean(value?.trim()));
+              const leavesWithDictionary = eapLeaves.filter(hasDictionary).length;
+              const leavesWithQuantity = eapLeaves.filter(
+                node =>
+                  Boolean(node.unit?.trim()) &&
+                  node.plannedQuantity !== null &&
+                  node.plannedQuantity !== undefined &&
+                  Number.isFinite(Number(node.plannedQuantity))
+              ).length;
+
+              const [latestBudgetVersion] = await db
+                .select({
+                  id: budgetVersions.id,
+                  status: budgetVersions.status,
+                })
+                .from(budgetVersions)
+                .where(eq(budgetVersions.projectId, input.projectId))
+                .orderBy(desc(budgetVersions.versionNumber))
+                .limit(1);
+              let localBudget: AgentProjectContext["evidence"]["localBudget"] = {
+                versionId: latestBudgetVersion?.id ?? null,
+                versionStatus: latestBudgetVersion?.status ?? null,
+                itemCount: null,
+                mappedItemCount: null,
+                unmappedItemCount: null,
+              };
+              if (latestBudgetVersion) {
+                const budgetRows = await db
+                  .select({
+                    wbsNodeId: budgetItems.wbsNodeId,
+                  })
+                  .from(budgetItems)
+                  .where(eq(budgetItems.budgetVersionId, latestBudgetVersion.id));
+                const mappedItemCount = budgetRows.filter(
+                  item => item.wbsNodeId !== null
+                ).length;
+                localBudget = {
+                  versionId: latestBudgetVersion.id,
+                  versionStatus: latestBudgetVersion.status,
+                  itemCount: budgetRows.length,
+                  mappedItemCount,
+                  unmappedItemCount: budgetRows.length - mappedItemCount,
+                };
+              }
+
+              const eapValidation = validateEap(eapNodes);
               const cpmResult = calculateDeterministicCpm(
                 activityResult.data ?? [],
                 dependencyResult.data ?? []
@@ -7073,6 +7134,15 @@ export const appRouter = router({
                 eapNodeCount: eapResult.data?.length ?? null,
                 activityCount: activityResult.data?.length ?? null,
                 dependencyCount: dependencyResult.data?.length ?? null,
+                localEap: {
+                  nodeCount: eapNodes.length,
+                  leafCount: eapLeaves.length,
+                  leavesWithDictionary,
+                  leavesWithoutDictionary: eapLeaves.length - leavesWithDictionary,
+                  leavesWithQuantity,
+                  leavesWithoutQuantity: eapLeaves.length - leavesWithQuantity,
+                },
+                localBudget,
                 warnings: results.flatMap(result =>
                   result.warnings.map(warning => warning.message)
                 ),
