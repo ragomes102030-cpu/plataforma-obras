@@ -7,6 +7,7 @@ import {
   type ConstructionMcpToolCatalog,
 } from "../integrations/construction-mcps";
 import { runReActAgent } from "./runtime/react-runtime";
+import { getArquimedesAgent, type ArquimedesAgentId } from "./agent-registry";
 import type { McpCallResult } from "../integrations/mcp-client";
 
 export type SpecialistId =
@@ -17,6 +18,7 @@ export type SpecialistId =
 
 type SpecialistDefinition = {
   id: SpecialistId;
+  agentId: Exclude<ArquimedesAgentId, "arquimedes">;
   name: string;
   mission: string;
   tools: string[];
@@ -25,30 +27,30 @@ type SpecialistDefinition = {
 const SPECIALISTS: SpecialistDefinition[] = [
   {
     id: "eap",
-    name: "Especialista EAP",
-    mission:
-      "Avaliar a estrutura da EAP, hierarquia, pacotes, frentes, responsáveis, quantitativos e coerência entre níveis. Identifique lacunas que o engenheiro talvez não esteja vendo.",
+    agentId: "euclides",
+    name: getArquimedesAgent("euclides").name + " — " + getArquimedesAgent("euclides").title,
+    mission: getArquimedesAgent("euclides").mission,
     tools: ["get_eap_tree", "get_eap_node", "validar_estrutura", "pacotes_sem_dono", "resumo_quantitativos", "listar_por_tipo_frente", "buscar_eap_node"],
   },
   {
     id: "cronograma",
-    name: "Especialista de Cronograma",
-    mission:
-      "Avaliar atividades, predecessoras, sucessoras, dependências, caminho crítico, folgas, baseline e consistência temporal. Diferencie problemas calculados de hipóteses.",
+    agentId: "newton",
+    name: getArquimedesAgent("newton").name + " — " + getArquimedesAgent("newton").title,
+    mission: getArquimedesAgent("newton").mission,
     tools: ["listar_atividades", "listar_dependencias", "validar_dependencias", "calcular_caminho_critico", "listar_baselines", "comparar_baseline", "curva_s"],
   },
   {
     id: "producao",
-    name: "Especialista de Produção e LOB",
-    mission:
-      "Avaliar produção, pacotes sem dono, quantitativos, frentes, temas, ritmos, linha de balanço e dimensionamento de equipes quando disponíveis.",
+    agentId: "fibonacci",
+    name: getArquimedesAgent("fibonacci").name + " — " + getArquimedesAgent("fibonacci").title,
+    mission: getArquimedesAgent("fibonacci").mission,
     tools: ["pacotes_sem_dono", "resumo_quantitativos", "listar_atividades", "listar_temas", "calcular_linha_balanco", "balancear_ritmos_lob", "dimensionar_equipes_lob"],
   },
   {
     id: "auditor",
-    name: "Auditor Técnico",
-    mission:
-      "Fazer uma revisão independente dos achados. Procure conflitos entre EAP, cronograma e produção, falsos positivos, impactos cruzados e dados faltantes. Não execute alterações.",
+    agentId: "hipatia",
+    name: getArquimedesAgent("hipatia").name + " — " + getArquimedesAgent("hipatia").title,
+    mission: getArquimedesAgent("hipatia").mission,
     tools: [
       "validar_estrutura",
       "pacotes_sem_dono",
@@ -134,7 +136,7 @@ async function runSpecialist(
   }
 
   const system = [
-    `Você é o ${definition.name} da equipe do Arquimedes.`,
+    `Você é o ${definition.name}. Arquimedes é o orquestrador-chefe e recebe seu relatório.`,
     definition.mission,
     "Você trabalha como especialista interno. Não conversa diretamente com o usuário.",
     "Use somente as ferramentas de consulta disponibilizadas. Nunca invente dados e nunca altere a obra.",
@@ -181,6 +183,7 @@ async function runSpecialist(
 
   return {
     specialist: definition.id,
+    agentId: definition.agentId,
     name: definition.name,
     status: "concluido",
     report: result.text,
@@ -254,6 +257,11 @@ export async function runEngineeringTeam(
   );
 
   return {
+    orquestrador: {
+      id: "arquimedes",
+      name: getArquimedesAgent("arquimedes").name,
+      title: getArquimedesAgent("arquimedes").title,
+    },
     obra: context.project.code,
     foco: focus,
     equipe: results,
