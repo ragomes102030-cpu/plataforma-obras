@@ -380,7 +380,37 @@ export async function proposeEapWithArquimedes(
     );
   }
 
-  const raw = await provider.complete(request);
+  let raw = await provider.complete(request);
+
+  // Uma única tentativa de reparo do contrato, somente para revisão/resolução.
+  // Nenhuma alteração é aplicada nesta etapa; o reparo apenas transforma uma
+  // resposta fora do schema em JSON canônico antes da validação do servidor.
+  if (options.mode === "resolver_bloqueios") {
+    try {
+      parseEapProposal(raw);
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "resposta fora do contrato";
+      const repairRequest: ArquimedesLlmRequest = {
+        ...request,
+        system:
+          request.system +
+          "\n\nREPARO DE CONTRATO: a resposta anterior não atendeu ao schema. " +
+          "Retorne SOMENTE um objeto JSON com basis, assumptions, missingInformation, " +
+          "resolutionSummary e nodes (array). Para cada update, use o nodeId exato de resolutionTargets. " +
+          "Não acrescente explicações fora do JSON.",
+        user:
+          request.user +
+          "\n\nA RESPOSTA ANTERIOR FALHOU NO CONTRATO: " +
+          reason +
+          "\nConverta a resposta anterior para o contrato canônico. RESPOSTA ANTERIOR:\n" +
+          raw.slice(0, 12000),
+        maxTokens: Math.max(request.maxTokens ?? 4096, 8192),
+      };
+      raw = await provider.complete(repairRequest);
+    }
+  }
+
   return { raw, request };
 }
 
