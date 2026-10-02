@@ -121,7 +121,6 @@ export function buildEapRequest(
       },
       resolutionIssues: mode === "resolver_bloqueios" ? resolutionIssues : [],
       resolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
-      researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
       audit: audit ?? null,
       researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
     },
