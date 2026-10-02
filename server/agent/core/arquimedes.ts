@@ -416,6 +416,7 @@ const eapReviewSchema = z.object({
   basis: stringListSchema(20, 3000),
   assumptions: stringListSchema(30, 2000),
   missingInformation: stringListSchema(30, 1200),
+  resolutionSummary: stringListSchema(20, 600).optional(),
   validation: z.object({
     valid: z.boolean(),
     issues: z.array(eapReviewValidationIssueSchema).max(80),
@@ -558,6 +559,7 @@ export function parseEapProposal(
     basis: result.data.basis,
     assumptions: result.data.assumptions,
     missingInformation: result.data.missingInformation,
+    ...(result.data.resolutionSummary ? { resolutionSummary: result.data.resolutionSummary } : {}),
     ...(result.data.validation ? { validation: result.data.validation } : {}),
     nodes: result.data.nodes,
   };
