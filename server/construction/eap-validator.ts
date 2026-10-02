@@ -458,13 +458,6 @@ export function validateAndNormalizeEapProposal(
   for (const node of currentNodes) {
     byId.set(String(node.id), node);
     byCode.set(node.code.trim(), node);
-    if (node.parentId !== null) {
-      const key = String(node.parentId);
-      currentChildrenByParent.set(key, [
-        ...(currentChildrenByParent.get(key) ?? []),
-        node,
-      ]);
-    }
   }
 
   const roots = currentNodes.filter(node => node.parentId === null);
