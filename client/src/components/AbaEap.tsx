@@ -186,13 +186,20 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   const expandirTudo = () => setAberto(new Set(nos.filter(n => n.nodeType !== "entrega").map(n => n.id)));
   const recolherTudo = () => setAberto(new Set());
-  const analisarComArquimedes = trpc.projects.analisarEapComArquimedes.useMutation();
+  const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const analisarComArquimedes = trpc.projects.analisarEapComArquimedes.useMutation({
+    onSuccess: async () => {
+      await revisaoArquimedes.refetch();
+    },
+  });
+  const propostaArquimedes = analisarComArquimedes.data?.proposal ?? revisaoArquimedes.data?.proposal;
   const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
     onSuccess: async () => {
       await recarregar();
       await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
       await coordenador.refetch();
       await versoes.refetch();
+      await revisaoArquimedes.refetch();
       analisarComArquimedes.reset();
     },
   });
@@ -250,30 +257,30 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         </div>
       )}
 
-      {analisarComArquimedes.data && (
+      {propostaArquimedes && (
         <div className="eap-validacao" role="status" aria-live="polite">
           <div className="eap-validacao-cabecalho">
             <div>
               <strong>Arquimedes · revisão da EAP</strong>
-              <span>{analisarComArquimedes.data.proposal.nodes.length} proposta(s) · {analisarComArquimedes.data.proposal.missingInformation.length} informação(ões) pendente(s)</span>
+              <span>{propostaArquimedes.nodes.length} proposta(s) · {propostaArquimedes.missingInformation.length} informação(ões) pendente(s)</span>
             </div>
             <span className="eap-validacao-ok"><Bot size={14} /> Proposta não aplicada</span>
           </div>
-          {analisarComArquimedes.data.proposal.basis.length > 0 && (
+          {propostaArquimedes.basis.length > 0 && (
             <div className="eap-validacao-lista">
-              <div className="eap-validacao-item eap-validacao-warning"><span>FUNDAMENTAÇÃO</span><p>{analisarComArquimedes.data.proposal.basis.join(" · ")}</p></div>
+              <div className="eap-validacao-item eap-validacao-warning"><span>FUNDAMENTAÇÃO</span><p>{propostaArquimedes.basis.join(" · ")}</p></div>
             </div>
           )}
-          {analisarComArquimedes.data.proposal.nodes.slice(0, 8).map((item, index) => (
+          {propostaArquimedes.nodes.slice(0, 8).map((item, index) => (
             <div key={index} className="eap-validacao-item eap-validacao-warning">
               <span>{item.operation.toUpperCase()}</span>
               <p><strong>{item.parentCode ? item.parentCode + " · " : ""}{item.name}</strong> — {item.rationale}</p>
             </div>
           ))}
           {analisarComArquimedes.data.proposal.missingInformation.length > 0 && (
-            <small>Faltam dados: {analisarComArquimedes.data.proposal.missingInformation.join(" · ")}</small>
+            <small>Faltam dados: {propostaArquimedes.missingInformation.join(" · ")}</small>
           )}
-          {analisarComArquimedes.data.proposal.nodes.every(item => item.operation === "create" || item.operation === "update") && (
+          {propostaArquimedes.nodes.every(item => item.operation === "create" || item.operation === "update") && (
             <button
               type="button"
               className="eap-btn"
@@ -283,7 +290,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                 aplicarPropostaEap.mutate({
                   projectId: projetoId,
                   confirm: true,
-                  proposal: analisarComArquimedes.data!.proposal,
+                  proposal: propostaArquimedes,
                 });
               }}
             >
@@ -772,7 +779,12 @@ function EditorEapPanel({
 /** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
-  const analisar = trpc.projects.analisarEapComArquimedes.useMutation();
+  const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const analisar = trpc.projects.analisarEapComArquimedes.useMutation({
+    onSuccess: async () => {
+      await revisaoArquimedes.refetch();
+    },
+  });
   const aplicarProposta = trpc.projects.aplicarPropostaEap.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
@@ -785,7 +797,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
   const [tipo, setTipo] = useState<"edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos">("edificio");
   const [pendenciasAbertas, setPendenciasAbertas] = useState(true);
 
-  const proposal = analisar.data?.proposal;
+  const proposal = analisar.data?.proposal ?? revisaoArquimedes.data?.proposal;
   const proposalStats = useMemo(() => {
     if (!proposal) {
       return { creates: 0, updates: 0, moves: 0, removes: 0, roots: 0 };
