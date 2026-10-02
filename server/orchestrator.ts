@@ -31,6 +31,7 @@ import {
   installArquimedesCapability,
   setArquimedesCapabilityEnabled,
 } from "./agent/capability-manager";
+import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 12_000;
@@ -161,6 +162,7 @@ export type OrchestratorDeps = {
 export type OrchestratorOptions = {
   mcpProjectId?: string;
   mcpProjectIds?: Partial<Record<ToolDomain, string>>;
+  localProjectId?: number;
   taskId?: string;
   userId?: number;
   maxIterations?: number;
@@ -318,6 +320,49 @@ const ENGINEERING_GAP_TOOL: LlmTool = {
           type: "string",
           enum: ["geral", "eap", "cronograma", "producao", "lob"],
           description: "Compatibilidade com solicitações legadas; use somente quando checks não estiver presente."
+        }
+      },
+      additionalProperties: false
+    }
+  }
+};
+
+const LOCAL_EAP_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "consultar_eap_local",
+    description:
+      "Consulta diretamente a EAP local da obra, sem depender de serviço externo. Use quando houver contagens da EAP mas faltar leitura semântica da árvore, dos pacotes ou das folhas. Faça consultas direcionadas por códigos, termo, pai ou folhas; não altere dados.",
+    parameters: {
+      type: "object",
+      properties: {
+        refs: {
+          type: "array",
+          minItems: 1,
+          maxItems: 20,
+          items: { type: "string" },
+          description: "Códigos ou identificadores exatos de nós que precisam ser inspecionados."
+        },
+        search: {
+          type: "string",
+          minLength: 1,
+          maxLength: 120,
+          description: "Termo para procurar em código, nome e campos textuais da EAP."
+        },
+        parentCode: {
+          type: "string",
+          maxLength: 80,
+          description: "Retorna os nós filhos diretos deste código."
+        },
+        leafOnly: {
+          type: "boolean",
+          description: "Quando verdadeiro, retorna somente nós terminais."
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 30,
+          description: "Máximo de nós retornados."
         }
       },
       additionalProperties: false
@@ -518,7 +563,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, ENGINEERING_GAP_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -547,6 +592,7 @@ function buildSystem(
     "Responda diretamente ao que foi perguntado. Não despeje o contexto da obra, métricas ou diagnósticos que o usuário não pediu.",
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
     "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
+    "Quando houver contagens locais da EAP, mas faltar leitura dos nomes, agrupamentos ou folhas, use consultar_eap_local antes de declarar o escopo ou a decomposição semântica como não verificáveis. Prefira consultas direcionadas e amostragem representativa; só peça muitos nós quando isso for realmente necessário para concluir a análise.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
     "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente.",
     "Ao usar engineering_gap_analysis, escolha consultas específicas com base nas lacunas observadas naquele momento. Não faça uma varredura fixa por EAP, cronograma, produção ou LOB. Não repita uma consulta cujo resultado já seja suficiente. Cada nova rodada deve ter uma justificativa factual na evidência anterior e pode selecionar de uma a poucas ferramentas diretamente relacionadas ao que falta confirmar.",
@@ -680,6 +726,128 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (toolName === "consultar_eap_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.localProjectId) {
+            throw new Error("Identificador local da obra indisponível para consulta da EAP.");
+          }
+          const result = await localDatabaseEvidenceSource.getEapTree(options.localProjectId);
+          if (!result.data) {
+            const message = result.errors.map(error => error.message).join(" | ") || "EAP local indisponível.";
+            audit.push({
+              taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+              status: "error", durationMs: Date.now() - startedAt, error: message,
+            });
+            await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+            return { ok: true, content: JSON.stringify({ status: "indisponivel", fonte: "local_db", mensagem: message }) };
+          }
+
+          const nodes = result.data;
+          const childrenByParent = new Map<string, number>();
+          const byRef = new Map<string, (typeof nodes)[number]>();
+          for (const node of nodes) {
+            byRef.set(node.code.toLowerCase(), node);
+            if (node.externalId) byRef.set(node.externalId.toLowerCase(), node);
+            if (node.externalUid) byRef.set(node.externalUid.toLowerCase(), node);
+            if (node.parentId !== null && node.parentId !== undefined) {
+              const key = String(node.parentId);
+              childrenByParent.set(key, (childrenByParent.get(key) ?? 0) + 1);
+            }
+          }
+
+          const refs = Array.isArray(rawArgs.refs)
+            ? rawArgs.refs.filter((value): value is string => typeof value === "string" && value.trim()).slice(0, 20)
+            : [];
+          const search = typeof rawArgs.search === "string" ? rawArgs.search.trim().toLowerCase() : "";
+          const parentCode = typeof rawArgs.parentCode === "string" ? rawArgs.parentCode.trim().toLowerCase() : "";
+          const leafOnly = rawArgs.leafOnly === true;
+          const limit = Math.min(Math.max(Number(rawArgs.limit ?? 20), 1), 30);
+          const parentNode = parentCode ? byRef.get(parentCode) : null;
+
+          const selected = nodes
+            .filter(node => {
+              if (refs.length > 0 && !refs.some(ref => byRef.get(ref.trim().toLowerCase())?.id === node.id)) return false;
+              if (parentCode && (!parentNode || String(node.parentId) !== String(parentNode.id))) return false;
+              if (leafOnly && (childrenByParent.get(String(node.id)) ?? 0) > 0) return false;
+              if (search) {
+                const haystack = [
+                  node.code, node.name, node.description, node.inclusions, node.exclusions,
+                  node.location, node.responsible, node.acceptanceCriteria, node.scopeStatus,
+                  node.decompositionBasis,
+                ].filter(Boolean).join(" ").toLowerCase();
+                if (!haystack.includes(search)) return false;
+              }
+              return true;
+            })
+            .sort((a, b) => a.sortOrder - b.sortOrder || String(a.code).localeCompare(String(b.code)))
+            .slice(0, limit);
+
+          const parentById = new Map(nodes.map(node => [String(node.id), node]));
+          const pathFor = (node: (typeof nodes)[number]) => {
+            const path: string[] = [];
+            const seen = new Set<string>();
+            let current: (typeof nodes)[number] | undefined = node;
+            while (current) {
+              const key = String(current.id);
+              if (seen.has(key)) break;
+              seen.add(key);
+              path.unshift(current.code);
+              if (current.parentId === null || current.parentId === undefined) break;
+              current = parentById.get(String(current.parentId));
+            }
+            return path;
+          };
+
+          const payload = {
+            status: "ok",
+            fonte: "local_db",
+            totalNodes: nodes.length,
+            totalLeaves: nodes.filter(node => (childrenByParent.get(String(node.id)) ?? 0) === 0).length,
+            filtros: { refs, search: search || null, parentCode: parentCode || null, leafOnly, limit },
+            encontrados: selected.length,
+            nos: selected.map(node => ({
+              code: node.code,
+              name: node.name,
+              path: pathFor(node),
+              parentCode: node.parentId === null || node.parentId === undefined
+                ? null
+                : parentById.get(String(node.parentId))?.code ?? null,
+              level: node.level,
+              nodeType: node.nodeType,
+              description: node.description ?? null,
+              inclusions: node.inclusions ?? null,
+              exclusions: node.exclusions ?? null,
+              location: node.location ?? null,
+              responsible: node.responsible ?? null,
+              acceptanceCriteria: node.acceptanceCriteria ?? null,
+              scopeStatus: node.scopeStatus ?? null,
+              decompositionBasis: node.decompositionBasis ?? null,
+              unit: node.unit ?? null,
+              plannedQuantity: node.plannedQuantity ?? null,
+              hasChildren: (childrenByParent.get(String(node.id)) ?? 0) > 0,
+            })),
+            avisos: result.warnings,
+          };
+
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "success", durationMs: Date.now() - startedAt,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify(payload).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "error", durationMs: Date.now() - startedAt, error: message,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
       if (
         toolName === "repository_info" ||
         toolName === "repository_list_directory" ||

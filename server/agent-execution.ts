@@ -154,7 +154,9 @@ function eventStep(event: OrchestratorEvent) {
         ? `Provider solicitou ${event.toolCallCount} consulta(s) MCP`
         : "Resposta do provider recebida; validando conteúdo final";
     case "tool_started":
-      return `Consultando MCP ${event.domain} · ${event.toolName}`;
+      return event.toolName === "consultar_eap_local"
+        ? "Consultando EAP local da obra"
+        : `Consultando MCP ${event.domain} · ${event.toolName}`;
     case "tool_finished":
       return event.status === "success"
         ? `Resposta recebida do MCP ${event.domain}`
@@ -316,6 +318,7 @@ async function executeAgentRun(
       input.messages,
       {
         mcpProjectIds: input.mcpProjectIds,
+        localProjectId: input.projectId,
         userId: input.userId,
         taskId: requestId,
         maxIterations: ENV.agentMaxIterations,
