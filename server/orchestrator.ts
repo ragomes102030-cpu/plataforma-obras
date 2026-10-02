@@ -904,10 +904,6 @@ export async function runProjectOrchestrator(
             "dimensionar_equipes_lob",
           ]),
         };
-        const discovered = new Map(
-          [...catalog.eap, ...catalog.cronograma, ...catalog.ganttLob]
-            .map(tool => [tool.name, tool] as const)
-        );
         const requested = checksByFocus[focus] ?? checksByFocus.geral;
         const findings: Array<Record<string, unknown>> = [];
         for (const check of requested) {
@@ -916,7 +912,6 @@ export async function runProjectOrchestrator(
             findings.push({ check, status: "indisponivel" });
             continue;
           }
-          const discoveredTool = discovered.get(check);
           const projectId = mcpProjectIds[domain];
           if (!domain || !projectId) {
             findings.push({ check, status: "sem_projeto_mcp" });
