@@ -46,6 +46,10 @@ export type AgentProjectContext = {
       leavesWithoutDictionary: number;
       leavesWithQuantity: number;
       leavesWithoutQuantity: number;
+      structureValidation: {
+        status: "valid" | "invalid" | "not_checked";
+        issueCount: number;
+      };
     };
     localBudget?: {
       versionId: number | null;

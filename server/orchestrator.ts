@@ -221,7 +221,7 @@ function formatContext(context: AgentProjectContext) {
           : "Problemas determinísticos: nenhum.",
         context.evidence.localEap
           ? [
-              `EAP local: folhas=${context.evidence.localEap.leafCount}; folhas com dicionário completo=${context.evidence.localEap.leavesWithDictionary}; folhas sem dicionário completo=${context.evidence.localEap.leavesWithoutDictionary}; folhas com unidade+quantidade=${context.evidence.localEap.leavesWithQuantity}; folhas sem unidade+quantidade=${context.evidence.localEap.leavesWithoutQuantity}`,
+              `EAP local: folhas=${context.evidence.localEap.leafCount}; folhas com dicionário completo=${context.evidence.localEap.leavesWithDictionary}; folhas sem dicionário completo=${context.evidence.localEap.leavesWithoutDictionary}; folhas com unidade+quantidade=${context.evidence.localEap.leavesWithQuantity}; folhas sem unidade+quantidade=${context.evidence.localEap.leavesWithoutQuantity}; validação estrutural local=${context.evidence.localEap.structureValidation.status} (${context.evidence.localEap.structureValidation.issueCount} apontamento(s))`,
             ].join("\n")
           : "Resumo detalhado da EAP local: indisponível.",
         context.evidence.localBudget
@@ -525,6 +525,7 @@ function buildSystem(
     "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente. Você pode fazer várias rodadas de ferramentas antes da resposta final.",
     "Na EAP, nunca tente colocar diagnóstico, justificativas extensas ou todo o raciocínio em um único campo textual. Use os campos estruturados dos nós para registrar evidências e correções; o resumo deve sintetizar a conclusão.",
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
+    "A validação estrutural determinística local da EAP faz parte das evidências confirmadas da obra e não depende do MCP. Quando ela estiver disponível no contexto, use seu resultado para relatar estrutura, órfãos, níveis, duplicidades e ciclos. A indisponibilidade do MCP só torna indisponíveis as verificações que realmente dependem dele.",
     "As ferramentas de obra incluem consultas e operações de escrita controlada. Nunca altere dados na primeira análise: primeiro leia, diagnostique, apresente a alteração proposta e peça confirmação explícita ao engenheiro. Só depois de uma confirmação explícita nesta conversa execute a mutação. Após qualquer mutação, reconsulte a obra e valide o resultado. Exclusões são destrutivas e exigem confirmação explícita ainda mais clara.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
