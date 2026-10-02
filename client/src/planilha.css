@@ -1307,6 +1307,33 @@ tr:hover .xl-codigo {
 .eap-proposta-correcao-resumo>div{display:grid;grid-template-columns:30px 1fr;gap:7px;padding:7px 11px;border-top:1px solid #e5eef2}
 .eap-proposta-correcao-resumo>div>span{font-size:8.5px;font-weight:700;color:#557581}
 .eap-proposta-correcao-resumo>div>p{margin:0;font-size:10.5px;line-height:1.4;color:#4d626b}
+.eap-ciclo-revisao{margin:10px 0;border:1px solid #c7d8df;border-radius:6px;background:#fff;overflow:hidden}
+.eap-ciclo-revisao-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 11px;background:#f7fafb;border-bottom:1px solid #dfe9ed}
+.eap-ciclo-revisao-head>div{min-width:0}
+.eap-ciclo-revisao-head strong,.eap-ciclo-revisao-head span{display:block}
+.eap-ciclo-revisao-head strong{font-size:11px;color:#294f5d}
+.eap-ciclo-revisao-head span{margin-top:2px;font-size:10px;line-height:1.4;color:#637781}
+.eap-ciclo-revisao-head small{font-size:9px;color:#71838a;white-space:nowrap}
+.eap-ciclo-revisao-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid #dfe9ed}
+.eap-ciclo-revisao-kpis>div{padding:9px 10px}
+.eap-ciclo-revisao-kpis>div+div{border-left:1px solid #e3ebee}
+.eap-ciclo-revisao-kpis span,.eap-ciclo-revisao-kpis strong{display:block}
+.eap-ciclo-revisao-kpis span{font-size:8px;font-weight:700;letter-spacing:.05em;color:#708088}
+.eap-ciclo-revisao-kpis strong{margin-top:2px;font-size:17px;color:#294f5d}
+.eap-ciclo-revisao-kpis .ok strong{color:#287a4d}
+.eap-ciclo-revisao-kpis .attention strong{color:#946200}
+.eap-ciclo-revisao-lista{display:flex;flex-direction:column}
+.eap-ciclo-revisao-lista>strong{padding:9px 11px 6px;font-size:10.5px;color:#40555e}
+.eap-ciclo-revisao-lista>div{display:grid;grid-template-columns:30px 1fr;gap:7px;padding:7px 11px;border-top:1px solid #e7eef1}
+.eap-ciclo-revisao-lista>div>span{font-size:8.5px;font-weight:700;color:#637984}
+.eap-ciclo-revisao-lista>div>p{margin:0;font-size:10.5px;line-height:1.4;color:#50636b}
+.eap-ciclo-revisao-lista.resolvidos{background:#f7fbf8}
+.eap-ciclo-revisao-lista.resolvidos>strong{color:#287a4d}
+.eap-ciclo-revisao-lista.restantes{background:#fffaf2}
+.eap-ciclo-revisao-lista.restantes>strong{color:#946200}
+.eap-ciclo-revisao-lista.novos{background:#fff7f7}
+.eap-ciclo-revisao-lista.novos>strong{color:#a33b32}
+.eap-ciclo-revisao-sucesso{display:flex;align-items:center;gap:7px;padding:10px 11px;background:#f5faf7;color:#287a4d;font-size:10.5px;font-weight:600}
 
 .eap-revisao-modo>div,.eap-revisao-etapa>div{flex:1;min-width:0}
 .eap-revisao-modo strong,.eap-revisao-etapa strong,.eap-revisao-modo span,.eap-revisao-etapa span{display:block}
