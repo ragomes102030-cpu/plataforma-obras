@@ -94,6 +94,17 @@ export const ARQUIMEDES_SKILLS: ArquimedesSkillCapability[] = [
     removable: false,
   },
   {
+    id: "pesquisa-web-evidencias",
+    name: "Pesquisa web baseada em evidências",
+    version: "1.0.0",
+    domain: "inteligencia.pesquisa",
+    status: "installed",
+    description: "Pesquisa fontes externas antes de propor soluções, separando prática documentada de fatos específicos da obra.",
+    dependencies: ["eap-validacao", "eap-dicionario"],
+    defaultEnabled: true,
+    removable: false,
+  },
+  {
     id: "eap-dicionario",
     name: "Dicionário da EAP",
     version: "1.0.0",
@@ -129,6 +140,17 @@ export const ARQUIMEDES_SKILLS: ArquimedesSkillCapability[] = [
 ];
 
 export const ARQUIMEDES_ABILITIES: ArquimedesAbility[] = [
+  {
+    id: "pesquisar-evidencias",
+    name: "Pesquisar evidências para resolver",
+    status: "active",
+    description: "Agrupa os bloqueios, pesquisa referências externas e entrega ao especialista evidências para propor uma solução em lote.",
+    skills: ["eap-validacao", "eap-dicionario", "pesquisa-web-evidencias"],
+    mcps: ["Pesquisa Web", "EAP"],
+    dependencies: ["pesquisa-web-evidencias"],
+    defaultEnabled: true,
+    removable: false,
+  },
   {
     id: "analisar-obra",
     name: "Analisar obra",
