@@ -73,7 +73,10 @@ import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import { buildEapResearchQueries, searchWebEvidence } from "./web-research";
-import { buildEapResolutionPlan } from "./construction/eap-resolution-engine";
+import {
+  buildEapResolutionPlan,
+  findUncoveredEapResolutionGroups,
+} from "./construction/eap-resolution-engine";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -1618,7 +1621,7 @@ export const appRouter = router({
           parsedProposal.researchEvidence = researchEvidence;
           parsedProposal.resolutionPlan = resolutionPlan;
         }
-        const proposal = validateAndNormalizeEapProposal(
+        const normalizedProposal = validateAndNormalizeEapProposal(
           nodes.map(node => ({
             id: node.id,
             projectId: node.projectId,
@@ -1643,6 +1646,31 @@ export const appRouter = router({
           })),
           parsedProposal
         );
+
+        if (input.mode === "resolver_bloqueios") {
+          const uncoveredGroups = findUncoveredEapResolutionGroups(
+            resolutionPlan,
+            normalizedProposal.nodes
+          );
+          const concreteIssues = uncoveredGroups.map(group => ({
+            code: "resolution_group_without_concrete_action",
+            severity: "error" as const,
+            message:
+              `O grupo ${group.id} (${group.parentCode ?? "estrutura"}) foi analisado, mas a proposta não trouxe uma correção concreta para os nós ${group.affectedCodes.join(", ")}.`,
+            entityRef: group.parentCode ?? undefined,
+          }));
+          normalizedProposal.validation = {
+            valid:
+              normalizedProposal.validation?.valid !== false &&
+              concreteIssues.length === 0,
+            issues: [
+              ...(normalizedProposal.validation?.issues ?? []),
+              ...concreteIssues,
+            ],
+          };
+        }
+
+        const proposal = normalizedProposal;
         await db
           .update(agentRuns)
           .set({ currentStep: "EAP_REVISAO_SUPERADA", updatedAt: new Date() })
