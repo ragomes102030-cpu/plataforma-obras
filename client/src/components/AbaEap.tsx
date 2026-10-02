@@ -908,7 +908,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
             <div><span>NÓS PROPOSTOS</span><strong>{proposal.nodes.length}</strong><small>estrutura inicial</small></div>
             <div><span>RAÍZES</span><strong>{proposalStats.roots}</strong><small>blocos principais</small></div>
             <div><span>CRIAÇÕES</span><strong>{proposalStats.creates}</strong><small>novos nós</small></div>
-            <div className={proposal.missingInformation.length ? "attention" : "ok"}><span>PENDÊNCIAS</span><strong>{proposal.missingInformation.length}</strong><small>informações a confirmar</small></div>
+            <div className={proposal.validation?.valid === false ? "attention" : "ok"}><span>ESTRUTURA</span><strong>{proposal.validation?.valid === false ? "BLOQUEADA" : "OK"}</strong><small>{proposal.validation?.valid === false ? (proposal.validation.issues.filter(item => item.severity === "error").length + " erro(s) estrutural(is)") : "Proposta validada pelo sistema"}</small></div>
           </div>
 
           <div className="eap-proposta-grid">
@@ -964,6 +964,17 @@ function EapVazia({ projetoId }: { projetoId: number }) {
                 {pendenciasAbertas && (
                   <div className="eap-proposta-pendencias-lista">
                     {proposal.missingInformation.length ? proposal.missingInformation.map((item, i) => <div key={i}><span>{String(i + 1).padStart(2, "0")}</span><p>{item}</p></div>) : <p className="muted">Não há pendências registradas.</p>}
+              {proposal.validation && !proposal.validation.valid && (
+                <div className="eap-inicial-error">
+                  <AlertTriangle size={15} />
+                  <div>
+                    <strong>Erro estrutural da proposta</strong>
+                    {proposal.validation.issues.filter(item => item.severity === "error").slice(0, 6).map((item, i) => (
+                      <span key={i}>{item.message}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
                   </div>
                 )}
               </section>
@@ -987,7 +998,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
               >
                 <Bot size={13} /> Nova análise
               </button>
-              {proposal.nodes.every(item => item.operation === "create" || item.operation === "update") && (
+              {proposal.validation?.valid !== false && proposal.nodes.every(item => item.operation === "create" || item.operation === "update") && (
                 <button
                   type="button"
                   className="eap-btn"
