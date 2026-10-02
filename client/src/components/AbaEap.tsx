@@ -274,7 +274,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           "wbs_group_without_any_cost",
         ]),
       },
-    ] as const;
+    ] as Array<{ label: string; codes: Set<string> }>;
 
     const conhecidos = new Set(grupos.flatMap(grupo => Array.from(grupo.codes)));
     const resultado = grupos
