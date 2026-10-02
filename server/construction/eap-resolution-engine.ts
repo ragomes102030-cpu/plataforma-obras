@@ -45,6 +45,53 @@ function leafMissingFields(node: EapResolutionNode): string[] {
   return missing;
 }
 
+export function findUncoveredEapResolutionGroups(
+  plan: EapResolutionGroup[],
+  proposedNodes: Array<{
+    operation: "create" | "update" | "move" | "remove";
+    nodeId?: number;
+    description?: string | null;
+    inclusions?: string | null;
+    exclusions?: string | null;
+    responsible?: string | null;
+    acceptanceCriteria?: string | null;
+    decompositionBasis?: string;
+  }>
+): EapResolutionGroup[] {
+  const updates = proposedNodes.filter(node => node.operation === "update");
+
+  return plan.filter(group => {
+    const touchesGroup = (node: (typeof updates)[number]) =>
+      node.nodeId != null && group.affectedNodeIds.includes(node.nodeId);
+
+    if (group.kind === "scope_overlap") {
+      return !updates.some(
+        node =>
+          touchesGroup(node) &&
+          Boolean(
+            node.inclusions?.trim() ||
+            node.exclusions?.trim() ||
+            node.description?.trim()
+          )
+      );
+    }
+
+    if (group.kind === "missing_dictionary") {
+      const evidence = group.evidence.join(" ");
+      const requiresConcreteUpdate =
+        /descrição|inclusões|exclusões|critério de aceitação|base de decomposição/i.test(
+          evidence
+        );
+      return (
+        requiresConcreteUpdate &&
+        !updates.some(node => touchesGroup(node))
+      );
+    }
+
+    return false;
+  });
+}
+
 export function buildEapResolutionPlan(
   nodes: EapResolutionNode[],
   issues: EapResolutionIssue[]
