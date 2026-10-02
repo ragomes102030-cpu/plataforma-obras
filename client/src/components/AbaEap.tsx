@@ -201,10 +201,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     },
   });
   const propostaArquimedes = analisarComArquimedes.data?.proposal ?? revisaoArquimedes.data?.proposal;
-  const ultimaRevisaoArquimedes =
-    analisarComArquimedes.data?.createdAt ??
-    revisaoArquimedes.data?.createdAt ??
-    null;
+  const ultimaRevisaoArquimedes = revisaoArquimedes.data?.createdAt ?? null;
   const modoUltimaRevisaoArquimedes =
     analisarComArquimedes.data?.mode ??
     revisaoArquimedes.data?.mode ??
