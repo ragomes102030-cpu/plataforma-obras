@@ -395,10 +395,21 @@ const eapReviewNodeSchema = z.object({
   rationale: z.string().trim().min(1).max(320),
 });
 
+const eapReviewValidationIssueSchema = z.object({
+  code: z.string(),
+  severity: z.enum(["error", "warning"]),
+  message: z.string(),
+  entityRef: z.string().optional(),
+});
+
 const eapReviewSchema = z.object({
   basis: stringListSchema(20, 3000),
   assumptions: stringListSchema(30, 2000),
   missingInformation: stringListSchema(30, 1200),
+  validation: z.object({
+    valid: z.boolean(),
+    issues: z.array(eapReviewValidationIssueSchema).max(80),
+  }).optional(),
   nodes: z.array(eapReviewNodeSchema).max(MAX_INCREMENTAL_NODES),
 });
 
@@ -537,6 +548,7 @@ export function parseEapProposal(
     basis: result.data.basis,
     assumptions: result.data.assumptions,
     missingInformation: result.data.missingInformation,
+    ...(result.data.validation ? { validation: result.data.validation } : {}),
     nodes: result.data.nodes,
   };
 }
