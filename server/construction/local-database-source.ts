@@ -65,6 +65,14 @@ export class DrizzleLocalDatabaseReader implements LocalDatabaseReader {
       nodeType: row.nodeType,
       unit: row.unit,
       plannedQuantity: row.plannedQuantity,
+      description: row.description,
+      inclusions: row.inclusions,
+      exclusions: row.exclusions,
+      location: row.location,
+      responsible: row.responsible,
+      acceptanceCriteria: row.acceptanceCriteria,
+      scopeStatus: row.scopeStatus,
+      decompositionBasis: row.decompositionBasis,
       sortOrder: row.sortOrder,
     }));
   }
@@ -110,6 +118,14 @@ export class DrizzleLocalDatabaseReader implements LocalDatabaseReader {
       nodeType: row.nodeType,
       unit: row.unit,
       plannedQuantity: row.plannedQuantity,
+      description: row.description,
+      inclusions: row.inclusions,
+      exclusions: row.exclusions,
+      location: row.location,
+      responsible: row.responsible,
+      acceptanceCriteria: row.acceptanceCriteria,
+      scopeStatus: row.scopeStatus,
+      decompositionBasis: row.decompositionBasis,
       sortOrder: row.sortOrder,
     };
   }

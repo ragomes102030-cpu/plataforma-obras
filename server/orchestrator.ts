@@ -219,6 +219,16 @@ function formatContext(context: AgentProjectContext) {
         context.evidence.validation?.issues.length
           ? `Problemas determinísticos: ${context.evidence.validation.issues.join(" | ")}`
           : "Problemas determinísticos: nenhum.",
+        context.evidence.localEap
+          ? [
+              `EAP local: folhas=${context.evidence.localEap.leafCount}; folhas com dicionário completo=${context.evidence.localEap.leavesWithDictionary}; folhas sem dicionário completo=${context.evidence.localEap.leavesWithoutDictionary}; folhas com unidade+quantidade=${context.evidence.localEap.leavesWithQuantity}; folhas sem unidade+quantidade=${context.evidence.localEap.leavesWithoutQuantity}`,
+            ].join("\n")
+          : "Resumo detalhado da EAP local: indisponível.",
+        context.evidence.localBudget
+          ? context.evidence.localBudget.versionId
+            ? `Orçamento local: versão=${context.evidence.localBudget.versionId}; status=${context.evidence.localBudget.versionStatus ?? "não informado"}; itens=${context.evidence.localBudget.itemCount ?? "não informado"}; itens vinculados à EAP=${context.evidence.localBudget.mappedItemCount ?? "não informado"}; itens sem vínculo=${context.evidence.localBudget.unmappedItemCount ?? "não informado"}`
+            : "Orçamento local: nenhuma versão de orçamento registrada para esta obra."
+          : "Resumo do orçamento local: indisponível.",
       ].join("\n")
     : "Resumo de evidências locais ainda não carregado.";
   const coordinatorLines = coordinator
@@ -523,6 +533,9 @@ function buildSystem(
       : "Em consultas pontuais, não faça uma varredura completa sem necessidade.",
     "Os MCPs de EAP, cronograma e Gantt/Linha de Balanço são capacidades opcionais. Nunca trate a indisponibilidade, queda, timeout, erro ou ausência de vínculo de um MCP como morte, bloqueio ou encerramento do Arquimedes. Continue usando o contexto e as evidências locais da obra e informe objetivamente quais evidências externas não puderam ser confirmadas.",
     "Quando uma consulta MCP somente leitura falhar, tente outra fonte somente se houver uma alternativa útil. Se o MCP continuar indisponível, prossiga com as fontes locais disponíveis; não conclua que a obra não pode ser analisada apenas por causa do MCP.",
+    "Ao classificar apontamentos por categoria, conte apenas problemas efetivamente evidenciados. Não use '1 problema por grupo' como preenchimento. Quando uma categoria não puder ser auditada com as evidências disponíveis, escreva 'não verificável nesta rodada' e não invente uma quantidade.",
+    "Não infira ausência de quantitativos ou orçamento apenas porque não existem atividades ou dependências. Quantitativos e orçamento têm evidências próprias no contexto local; use-as quando fornecidas. Ausência de uma fonte não autoriza concluir ausência do dado.",
+    "Não transforme uma inferência em fato. Para EAP, diferencie 'nós existem' de 'estrutura validada', e 'não há atividades cadastradas' de 'a EAP não possui folhas'. Só use a segunda formulação quando a hierarquia local permitir essa conclusão.",
     "Quando o usuário perguntar sobre o próprio código, arquitetura, bugs ou funcionamento interno da Plataforma Obras, use as ferramentas de repositório disponíveis para investigar. Não diga que não possui acesso ao código se a ferramenta puder fornecê-lo.",
     "Antes de modificar código, leia os arquivos envolvidos e confirme a causa do problema. Depois aplique somente a mudança necessária. Não invente que testou algo: use evidências reais.",
     "A ferramenta de atualização do repositório trabalha apenas na branch de trabalho configurada pelo runtime e aplica validações de caminho e concorrência. Nunca trate uma alteração como implantada até existir evidência do deploy.",
@@ -941,6 +954,8 @@ export async function runProjectOrchestrator(
             nosEap: context.evidence?.eapNodeCount ?? null,
             atividades: context.evidence?.activityCount ?? null,
             dependencias: context.evidence?.dependencyCount ?? null,
+            eapLocal: context.evidence?.localEap ?? null,
+            orcamentoLocal: context.evidence?.localBudget ?? null,
             avisos: context.evidence?.warnings ?? [],
             erros: context.evidence?.errors ?? [],
             validacao: context.evidence?.validation
