@@ -71,7 +71,8 @@ export function buildEapRequest(
   skills: ArquimedesSkill[],
   audit?: EapReviewAudit,
   mode: "analisar" | "resolver_bloqueios" = "analisar",
-  resolutionIssues: Array<{ code: string; message: string; entityRef?: string }> = []
+  resolutionIssues: Array<{ code: string; message: string; entityRef?: string }> = [],
+  resolutionTargets: ArquimedesLlmRequest["eapResolutionTargets"] = []
 ): ArquimedesLlmRequest {
   const specialist = getArquimedesAgent("euclides");
   const system = [
@@ -88,6 +89,7 @@ export function buildEapRequest(
           "MODO RESOLVER BLOQUEIOS: existem erros estruturais já detectados pelo sistema.",
           "Sua missão nesta rodada é propor correções concretas para esses bloqueios, usando a EAP atual do banco como fonte primária.",
           "Priorize os erros listados em resolutionIssues. Cada correção deve apontar para um nó existente quando atualizar e deve respeitar a hierarquia atual.",
+          "Para operation=update, o nodeId é obrigatório. Use exatamente o nodeId informado em resolutionTargets; nunca invente ou omita esse identificador.",
           "Para erros de sobreposição textual entre irmãos, revise principalmente inclusions e exclusions dos nós afetados; não tente resolver o problema apenas renomeando o nó se o conflito estiver no dicionário de escopo.",
           "Não invente novos dados de escopo para preencher lacunas. Quando um erro não puder ser resolvido sem decisão do engenheiro, mantenha nodes vazio para esse ponto e registre a pendência em missingInformation.",
           "Não altere códigos de nós existentes. Para criações, informe apenas o parentCode; o sistema fará a numeração.",
@@ -114,6 +116,7 @@ export function buildEapRequest(
         stage: context.stage,
       },
       resolutionIssues: mode === "resolver_bloqueios" ? resolutionIssues : [],
+      resolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
       audit: audit ?? null,
     },
     null,
@@ -129,6 +132,7 @@ export function buildEapRequest(
     eapReviewMode: mode,
     agentId: specialist.id,
     orchestratorId: "arquimedes",
+    eapResolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
   };
 }
 
