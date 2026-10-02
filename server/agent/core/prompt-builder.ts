@@ -123,6 +123,7 @@ export function buildEapRequest(
       resolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
       researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
       audit: audit ?? null,
+      researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
     },
     null,
     2
@@ -132,7 +133,7 @@ export function buildEapRequest(
     system,
     user,
     skills,
-    maxTokens: mode === "resolver_bloqueios" ? 8192 : 4096,
+    maxTokens: mode === "resolver_bloqueios" ? 16384 : 4096,
     databaseContext: { projectId: context.projectId },
     eapReviewMode: mode,
     agentId: specialist.id,
