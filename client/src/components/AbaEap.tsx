@@ -455,18 +455,38 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             <button
               type="button"
               className={`eap-revisao-btn ${modoRevisao ? "ativo" : ""}`}
+              disabled={analisarComArquimedes.isPending}
               onClick={() => {
-                const next = !modoRevisao;
-                setModoRevisao(next);
-                if (next) {
-                  setValidacaoAberta(true);
-                  expandirTudo();
+                if (modoRevisao) {
+                  setModoRevisao(false);
+                  return;
                 }
+                setModoRevisao(true);
+                setValidacaoAberta(true);
+                expandirTudo();
+
+                const temBloqueios = (validacao.data?.issues ?? [])
+                  .some(issue => issue.severity === "error");
+                analisarComArquimedes.mutate({
+                  projectId: projetoId,
+                  mode: temBloqueios ? "resolver_bloqueios" : "analisar",
+                });
               }}
               aria-pressed={modoRevisao}
-              title={modoRevisao ? "Encerrar o modo de edição da EAP." : "Ativar edição, abrir a árvore e mostrar os bloqueios da validação."}
+              title={
+                modoRevisao
+                  ? "Encerrar o modo de edição da EAP."
+                  : "Abrir a revisão e pedir ao Arquimedes para analisar ou corrigir os bloqueios encontrados."
+              }
             >
-              <Pencil size={13} /> {modoRevisao ? "Concluir revisão" : "Revisar EAP"}
+              <Pencil size={13} />
+              {analisarComArquimedes.isPending
+                ? "Arquimedes revisando…"
+                : modoRevisao
+                  ? "Concluir revisão"
+                  : (validacao.data?.summary.errors ?? 0) > 0
+                    ? "Corrigir com Arquimedes"
+                    : "Revisar com Arquimedes"}
             </button>
             {!!validacao.data?.issues.length && <button type="button" className="eap-validacao-detalhes" onClick={() => setValidacaoAberta(v => !v)}>{validacaoAberta ? "Ocultar detalhes" : `Ver ${validacao.data.issues.length} apontamentos`}</button>}
           </div>
