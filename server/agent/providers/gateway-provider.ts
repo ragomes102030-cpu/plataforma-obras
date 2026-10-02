@@ -209,12 +209,33 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         .where(eq(wbsNodes.projectId, context.projectId))
         .orderBy(wbsNodes.level, wbsNodes.sortOrder, wbsNodes.id);
 
+      const resolutionIds = new Set(
+        (request.eapResolutionTargets ?? []).map(target => target.nodeId)
+      );
+      const resolutionParentIds = new Set(
+        (request.eapResolutionTargets ?? [])
+          .map(target => {
+            const node = eap.find(item => item.id === target.nodeId);
+            return node?.parentId ?? null;
+          })
+          .filter((id): id is number => id != null)
+      );
+      const scopedEap =
+        request.eapReviewMode === "resolver_bloqueios" && resolutionIds.size
+          ? eap.filter(
+              node =>
+                resolutionIds.has(node.id) ||
+                resolutionParentIds.has(node.id)
+            )
+          : eap.slice(0, 180);
+
       const snapshot = {
         source: "banco_de_dados_read_only",
         project,
-        eap: eap.slice(0, 180),
-        eapTruncated: eap.length > 180,
+        eap: scopedEap.slice(0, 180),
+        eapTruncated: scopedEap.length > 180,
         totalEapNodes: eap.length,
+        resolutionTargetIds: Array.from(resolutionIds),
       };
       messages = [
         ...messages,
