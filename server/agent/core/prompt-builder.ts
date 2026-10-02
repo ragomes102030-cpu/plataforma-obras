@@ -73,6 +73,7 @@ export function buildEapRequest(
   mode: "analisar" | "resolver_bloqueios" = "analisar",
   resolutionIssues: Array<{ code: string; message: string; entityRef?: string }> = [],
   resolutionTargets: ArquimedesLlmRequest["eapResolutionTargets"] = [],
+  resolutionPlan: ArquimedesLlmRequest["eapResolutionPlan"] = [],
   researchEvidence: ArquimedesLlmRequest["researchEvidence"] = []
 ): ArquimedesLlmRequest {
   const specialist = getArquimedesAgent("euclides");
@@ -88,6 +89,7 @@ export function buildEapRequest(
     mode === "resolver_bloqueios"
       ? [
           "MODO RESOLVER BLOQUEIOS: existem erros estruturais já detectados pelo sistema.",
+          "Receba também um resolutionPlan agrupado. Trate cada grupo como um problema de engenharia e busque uma solução para o conjunto, evitando uma alteração repetitiva para cada par de irmãos.",
           "Sua missão nesta rodada é propor correções concretas para esses bloqueios, usando a EAP atual do banco como fonte primária.",
           "Priorize os erros listados em resolutionIssues. Cada correção deve apontar para um nó existente quando atualizar e deve respeitar a hierarquia atual.",
           "Para operation=update, o nodeId é obrigatório. Use exatamente o nodeId informado em resolutionTargets; nunca invente ou omita esse identificador.",
@@ -121,6 +123,7 @@ export function buildEapRequest(
       },
       resolutionIssues: mode === "resolver_bloqueios" ? resolutionIssues : [],
       resolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
+      resolutionPlan: mode === "resolver_bloqueios" ? resolutionPlan : [],
       audit: audit ?? null,
       researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
     },
@@ -138,6 +141,7 @@ export function buildEapRequest(
     agentId: specialist.id,
     orchestratorId: "arquimedes",
     eapResolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
+    eapResolutionPlan: mode === "resolver_bloqueios" ? resolutionPlan : [],
     researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
   };
 }
