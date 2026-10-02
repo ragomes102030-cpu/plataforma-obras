@@ -280,7 +280,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             onClick={() => analisarComArquimedes.mutate({ projectId: projetoId, mode: "analisar" })}
           >
             <Bot size={14} /> {analisarComArquimedes.isPending
-              ? "Arquimedes revisando…"
+              ? "Euclides revisando…"
               : coordenador.data?.stage === "EAP_REVISAO"
                 ? "Revisar com Euclides"
                 : "Analisar com Euclides"}
@@ -609,7 +609,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             >
               <Pencil size={13} />
               {analisarComArquimedes.isPending
-                ? "Arquimedes revisando…"
+                ? "Euclides revisando…"
                 : modoRevisao
                   ? "Encerrar edição"
                   : (validacao.data?.summary.errors ?? 0) > 0
