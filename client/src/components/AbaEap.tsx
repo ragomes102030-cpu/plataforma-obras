@@ -106,6 +106,13 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
     },
   });
+  const enviarEapParaRevisao = trpc.projects.enviarEapParaRevisao.useMutation({
+    onSuccess: async () => {
+      await coordenador.refetch();
+      await versoes.refetch();
+      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+    },
+  });
   const validacao = trpc.projects.validateWbsStructure.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -409,6 +416,43 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           </div>
         )}
       </div>
+
+      {coordenador.data?.stage === "EAP_PROPOSTA" && (
+        <div className="eap-inicial-note">
+          <Info size={14} />
+          <div>
+            <strong>Próxima etapa: revisão técnica</strong>
+            <span>
+              A EAP será enviada para revisão do engenheiro sem criar baseline. 
+              Depois da revisão, o Arquimedes pode ser executado novamente antes da aprovação final.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="eap-btn"
+            disabled={
+              !coordenador.data?.canAdvance ||
+              enviarEapParaRevisao.isPending
+            }
+            onClick={() => {
+              if (!coordenador.data?.canAdvance) return;
+              enviarEapParaRevisao.mutate({ projectId: projetoId });
+            }}
+            title={
+              coordenador.data?.canAdvance
+                ? "Enviar a EAP atual para revisão técnica."
+                : coordenador.data?.gateMessage || "A EAP ainda não atende ao gate da revisão."
+            }
+          >
+            {enviarEapParaRevisao.isPending ? "Enviando…" : "Enviar para revisão"}
+          </button>
+        </div>
+      )}
+      {enviarEapParaRevisao.error && (
+        <div className="xl-aviso-erro" role="alert">
+          Envio para revisão: {enviarEapParaRevisao.error.message}
+        </div>
+      )}
 
       {editor && (
         <EditorEapPanel
