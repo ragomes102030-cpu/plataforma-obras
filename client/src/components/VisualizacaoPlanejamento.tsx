@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { trpc } from "@/lib/trpc";
 import { GitBranch, GanttChartSquare } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
@@ -7,6 +8,7 @@ type Props = {
   linhas: EntradaDaLinha[];
   inicioObra: IsoDate | null;
   hoje: IsoDate;
+  projetoId: number;
 };
 
 type View = "gantt" | "lob";
@@ -32,8 +34,20 @@ export function VisualizacaoPlanejamento({
   linhas,
   inicioObra,
   hoje,
+  projetoId,
   view = "gantt",
 }: Props & { view?: PlanejamentoView }) {
+  const planejamento = trpc.planning.list.useQuery(
+    { projectId: Number(projetoId) },
+    { enabled: view === "gantt" && Number(projetoId) > 0 }
+  );
+  const atividades = planejamento.data?.activities ?? [];
+  const atividadePorCodigo = useMemo(
+    () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
+    [atividades]
+  );
+  const cpmCalculado = atividades.length > 0 && atividades.some(activity => activity.cpmCalculatedAt);
+
   const dados = useMemo(() => {
     if (!linhas.length) return null;
     const min = linhas.reduce((v, l) => Math.min(v, dateMs(l.inicio)), dateMs(linhas[0]!.inicio));
@@ -66,11 +80,21 @@ export function VisualizacaoPlanejamento({
       <header className="pl-visual-header">
         <div>
           <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
-          <span>{view === "gantt" ? "Sequência, duração e avanço das atividades" : "Tempo na vertical · localização/frentes na horizontal"}</span>
+          <span>{view === "gantt" ? "Sequência, duração, avanço e caminho crítico" : "Tempo na vertical · localização/frentes na horizontal"}</span>
         </div>
       </header>
+      {view === "gantt" && !cpmCalculado && atividades.length > 0 && (
+        <div className="pl-gantt-cpm-aviso">
+          O Gantt está usando o início/duração informados. Calcule o CPM para destacar o caminho crítico do plano.
+        </div>
+      )}
+      {view === "gantt" && planejamento.isError && (
+        <div className="pl-gantt-cpm-aviso erro">
+          Não foi possível carregar o estado do CPM: {planejamento.error.message}
+        </div>
+      )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} dados={dados} hoje={hoje} inicioObra={inicioObra} />
+        <Gantt linhas={linhas} atividades={atividadePorCodigo} dados={dados} hoje={hoje} inicioObra={inicioObra} />
       ) : (
         <LinhaDeBalanco linhas={linhas} dados={dados} />
       )}
@@ -80,11 +104,13 @@ export function VisualizacaoPlanejamento({
 
 function Gantt({
   linhas,
+  atividades,
   dados,
   hoje,
   inicioObra,
 }: {
   linhas: EntradaDaLinha[];
+  atividades: Map<string, { critical: number; totalFloat: number | null; cpmCalculatedAt: Date | string | null }>;
   dados: { start: string; end: string; total: number };
   hoje: IsoDate;
   inicioObra: IsoDate | null;
@@ -108,6 +134,9 @@ function Gantt({
         <rect x="0" y="0" width={left} height={height} className="pl-gantt-left" />
         <text x="14" y="22" className="pl-gantt-title">ATIVIDADE / LOCALIZAÇÃO</text>
         <text x={left + 10} y="22" className="pl-gantt-title">LINHA DO TEMPO</text>
+        <text x={width - 12} y="22" textAnchor="end" className="pl-gantt-critical-note">
+          {Array.from(atividades.values()).filter(item => item.critical === 1).length} críticas
+        </text>
         {ticks.map(t => {
           const xx = x(t);
           return (
@@ -126,17 +155,25 @@ function Gantt({
           const start = x(l.inicio);
           const end = x(addDays(l.inicio, Math.max(1, l.duracao) - 1));
           const w = Math.max(8, end - start);
+          const progresso = l.executado && l.quantidade ? (l.executado / l.quantidade) * 100 : 0;
+          const atividade = atividades.get(l.codigo);
+          const critica = atividade?.critical === 1;
+          const classeBarra = critica ? "pl-gantt-bar critical" : "pl-gantt-bar";
           const progressW =
-            w * Math.max(0, Math.min(100, l.executado && l.quantidade ? (l.executado / l.quantidade) * 100 : 0)) / 100;
+            w * Math.max(0, Math.min(100, progresso)) / 100;
           return (
             <g key={`${l.codigo}-${i}`}>
               <rect x="0" y={y - 1} width={width} height={rowH} className={i % 2 ? "pl-gantt-row alt" : "pl-gantt-row"} />
               <text x="14" y={y + 20} className="pl-gantt-code">{l.codigo}</text>
               <text x="70" y={y + 20} className="pl-gantt-name">{l.atividade.slice(0, 46)}</text>
               <text x={left - 8} y={y + 20} textAnchor="end" className="pl-gantt-front">{l.pavimento || l.frente}</text>
-              <rect x={start} y={y + 8} width={w} height="18" rx="3" className="pl-gantt-bar" />
+              <rect x={start} y={y + 8} width={w} height="18" rx="3" className={classeBarra} />
               {progressW > 0 && <rect x={start} y={y + 8} width={progressW} height="18" rx="3" className="pl-gantt-progress" />}
-              {l.duracao > 0 && <text x={start + w + 5} y={y + 21} className="pl-gantt-duration">{l.duracao}d</text>}
+              {l.duracao > 0 && (
+                <text x={start + w + 5} y={y + 21} className={critica ? "pl-gantt-duration critical" : "pl-gantt-duration"}>
+                  {l.duracao}d{critica ? " · CRÍTICA" : ""}
+                </text>
+              )}
             </g>
           );
         })}
