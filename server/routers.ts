@@ -560,6 +560,41 @@ function mcpEndpoint(provider: McpProvider) {
   return normalized.endsWith("/mcp") ? normalized : `${normalized}/mcp`;
 }
 
+async function ensureProjectMcpMappings(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  projectCode: string,
+): Promise<void> {
+  const rows = await db
+    .select({
+      provider: projectMcpIntegrations.provider,
+      externalProjectId: projectMcpIntegrations.externalProjectId,
+    })
+    .from(projectMcpIntegrations)
+    .where(eq(projectMcpIntegrations.projectId, projectId));
+
+  const existingProviders = new Set(rows.map(row => row.provider));
+  const missingProviders = mcpProviders.filter(
+    provider => !existingProviders.has(provider),
+  );
+
+  if (!missingProviders.length) return;
+
+  await db
+    .insert(projectMcpIntegrations)
+    .values(
+      missingProviders.map(provider => ({
+        projectId,
+        provider,
+        externalProjectId: projectCode,
+        endpointUrl: mcpEndpoint(provider),
+        syncState: "pending" as const,
+        lastError: null,
+      })),
+    )
+    .onConflictDoNothing();
+}
+
 function requestIdFrom(ctx: {
   req: { headers: Record<string, string | string[] | undefined> };
 }) {
@@ -2717,6 +2752,22 @@ export const appRouter = router({
           if (!version) {
             throw new Error("Não foi possível criar a versão inicial do plano.");
           }
+
+          // O código da obra é a identidade externa compartilhada entre os
+          // MCPs. Criamos os vínculos desde o cadastro para que o Arquimedes
+          // não dependa de uma configuração manual antes da primeira leitura.
+          await tx
+            .insert(projectMcpIntegrations)
+            .values(
+              mcpProviders.map(provider => ({
+                projectId: createdId,
+                provider,
+                externalProjectId: code,
+                endpointUrl: mcpEndpoint(provider),
+                syncState: "pending" as const,
+                lastError: null,
+              })),
+            );
 
           // A obra nasce sem EAP genérica. O escopo informado pelo cliente
           // alimenta o Arquimedes, que propõe a EAP antes de qualquer
@@ -6949,6 +7000,7 @@ export const appRouter = router({
         const latestUserMessage = [...input.messages].reverse().find(message => message.role === "user");
         const casualConversation = latestUserMessage ? isSimpleCasualMessage(latestUserMessage.content) : false;
         if (db) {
+          await ensureProjectMcpMappings(db, input.projectId, project.code);
           const mappings = await db
             .select({
               provider: projectMcpIntegrations.provider,
