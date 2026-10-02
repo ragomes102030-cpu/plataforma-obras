@@ -324,8 +324,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                 </div>
                 <div>
                   <span>BLOQUEIOS RECEBIDOS</span>
-                  <strong>{propostaArquimedes.validation?.issues.filter(item => item.severity === "error").length ?? 0}</strong>
-                  <small>erros estruturais após a proposta</small>
+                  <strong>{validacao.data?.summary.errors ?? 0}</strong>
+                  <small>bloqueios ainda presentes na EAP atual</small>
                 </div>
               </div>
 
