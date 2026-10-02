@@ -422,9 +422,9 @@ function Obra({
             />
           </>
         ) : aba === "gantt" ? (
-          <VisualizacaoPlanejamento linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
         ) : aba === "linha-balanco" ? (
-          <VisualizacaoPlanejamento linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : (
