@@ -39,6 +39,21 @@ export type AgentProjectContext = {
       projectDuration: number | null;
       criticalPath: string[];
     };
+    localEap?: {
+      nodeCount: number;
+      leafCount: number;
+      leavesWithDictionary: number;
+      leavesWithoutDictionary: number;
+      leavesWithQuantity: number;
+      leavesWithoutQuantity: number;
+    };
+    localBudget?: {
+      versionId: number | null;
+      versionStatus: string | null;
+      itemCount: number | null;
+      mappedItemCount: number | null;
+      unmappedItemCount: number | null;
+    };
   };
   workspace?: {
     activeSection: string;
