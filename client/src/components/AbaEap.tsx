@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BookOpen, Bot, Check, CheckCircle2, ClipboardCheck, FileCheck2, FileText, Info, Layers3, LockKeyhole, Maximize2, Minimize2, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Bot, Check, CheckCircle2, ClipboardCheck, DollarSign, FileCheck2, FileText, Info, Layers3, LockKeyhole, Maximize2, Minimize2, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -636,7 +636,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         <div className="eap-validacao-cabecalho">
           <div className="eap-validacao-titulo">
             <strong><CheckCircle2 size={14} /> Validação da EAP</strong>
-            <span>{validacao.isPending ? "Analisando estrutura…" : validacao.data ? `${validacao.data.summary.nodes} nós · ${validacao.data.summary.leaves} folhas · ${validacao.data.summary.errors} bloqueios · ${validacao.data.summary.warnings} alertas` : "Validação indisponível"}</span>
+            <span>{validacao.isPending ? "Analisando estrutura…" : validacao.data ? `${validacao.data.summary.nodes} nós · ${validacao.data.summary.leaves} folhas · ${validacao.data.summary.errors} bloqueios · ${validacao.data.summary.warnings} alertas${(validacao.data.summary.costErrors ?? 0) > 0 ? ` · ${validacao.data.summary.costErrors} pendências de orçamento` : ""}` : "Validação indisponível"}</span>
           </div>
           <div className="eap-validacao-acoes">
             {validacao.data?.valid ? <span className="eap-validacao-ok"><CheckCircle2 size={13} /> Sem bloqueios</span> : validacao.data ? <span className="eap-validacao-erro"><AlertTriangle size={13} /> Revisão necessária</span> : null}
@@ -675,6 +675,34 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                   <p>{issue.message}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        {validacao.data && (validacao.data.summary.costErrors ?? 0) > 0 && (
+          <div className="eap-validacao-financeiro">
+            <div className="eap-validacao-financeiro-head">
+              <DollarSign size={15} />
+              <div>
+                <strong>Cobertura do orçamento</strong>
+                <span>
+                  {validacao.data.summary.costErrors} entrega(s) ainda sem vínculo de custo.
+                  Isso não bloqueia a estrutura da EAP nesta etapa, mas será obrigatório antes da baseline.
+                </span>
+              </div>
+            </div>
+            <div className="eap-validacao-financeiro-lista">
+              {validacao.data.issues
+                .filter(issue => issue.code === "wbs_leaf_without_cost")
+                .slice(0, 6)
+                .map((issue, index) => (
+                  <div key={`${issue.code}-${issue.entityRef ?? "obra"}-${index}`}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <p>{issue.message}</p>
+                  </div>
+                ))}
+              {(validacao.data.summary.costErrors ?? 0) > 6 && (
+                <small>+ {(validacao.data.summary.costErrors ?? 0) - 6} pendências de orçamento adicionais.</small>
+              )}
             </div>
           </div>
         )}
