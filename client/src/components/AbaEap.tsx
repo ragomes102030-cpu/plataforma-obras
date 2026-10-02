@@ -403,7 +403,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                 </div>
               )}
             </div>
-          </>
+            </>
+          )}
 
           {cicloRevisao && (
             <div className="eap-ciclo-revisao">
