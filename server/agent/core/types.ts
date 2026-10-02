@@ -69,6 +69,15 @@ export interface ArquimedesLlmRequest {
   eapReviewMode?: "analisar" | "resolver_bloqueios";
   agentId?: "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia";
   orchestratorId?: "arquimedes";
+  eapResolutionTargets?: Array<{
+    code: string;
+    nodeId: number;
+    name: string;
+    parentCode: string | null;
+    inclusions?: string | null;
+    exclusions?: string | null;
+    description?: string | null;
+  }>;
 }
 
 export interface ArquimedesLlmProvider {
