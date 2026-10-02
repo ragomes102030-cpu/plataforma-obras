@@ -212,6 +212,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     "euclides";
   const resumoCorrecao = propostaArquimedes?.resolutionSummary ?? [];
   const evidenciasPesquisa = propostaArquimedes?.researchEvidence ?? [];
+  const planoResolucao = propostaArquimedes?.resolutionPlan ?? [];
   const cicloRevisao = revisaoArquimedes.data?.resolutionCycle as {
     before?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
     after?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
@@ -365,6 +366,32 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   : "Euclides recebeu os bloqueios atuais e montou uma proposta para tratá-los. A EAP vermelha abaixo continua sendo a estrutura atual porque nada foi aplicado automaticamente."}</span>
                 </div>
               </div>
+
+              {!!planoResolucao.length && (
+                <div className="eap-plano-resolucao">
+                  <div className="eap-plano-resolucao-head">
+                    <strong>Plano de solução do Euclides</strong>
+                    <span>{planoResolucao.length} grupo(s) de problemas tratados nesta rodada.</span>
+                  </div>
+                  {planoResolucao.slice(0, 12).map((group) => (
+                    <div className="eap-plano-resolucao-item" key={group.id}>
+                      <span>{group.id}</span>
+                      <div>
+                        <strong>
+                          {group.parentCode ? `Nível ${group.parentCode}` : "Estrutura geral"}
+                          {" · "}
+                          {group.affectedCodes.join(", ")}
+                        </strong>
+                        <p>{group.problem}</p>
+                        <small>{group.requiredAction}</small>
+                        {!!group.unresolvedDecisions.length && (
+                          <em>Decisão pendente: {group.unresolvedDecisions.join(" ")}</em>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="eap-proposta-correcao-grid">
                 <div>
