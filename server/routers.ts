@@ -1318,6 +1318,73 @@ export const appRouter = router({
         await recomputeProjectProgress(db, input.projectId);
         return { updated: true as const };
       }),
+    enviarEapParaRevisao: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [state] = await db
+          .select()
+          .from(agentProjectStates)
+          .where(eq(agentProjectStates.projectId, input.projectId))
+          .limit(1);
+        if (!state) {
+          throw conflict("O estado da obra ainda não foi inicializado.");
+        }
+        if (state.stage !== "EAP_PROPOSTA") {
+          throw conflict(
+            `A EAP só pode ser enviada para revisão a partir da etapa EAP_PROPOSTA. Etapa atual: ${state.stage}.`
+          );
+        }
+
+        const evidence = await loadStageGateEvidence(
+          db,
+          input.projectId,
+          ctx.user.id
+        );
+        const transition = evaluateStageTransition({
+          currentStage: state.stage,
+          targetStage: "EAP_REVISAO",
+          decision: "approved",
+          evidence,
+        });
+        if (!transition.allowed) {
+          throw conflict(
+            `Transição bloqueada: ${transition.errors.join(" ")}`
+          );
+        }
+
+        await db.transaction(async tx => {
+          await tx.insert(agentDecisions).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            stage: "EAP_PROPOSTA",
+            decision: "approved",
+            scopeJson: JSON.stringify({
+              kind: "eap_proposta",
+              eapNodeCount: evidence.eapNodeCount,
+            }),
+            reason: "EAP enviada para revisão técnica do engenheiro.",
+            impactJson: null,
+          });
+          await tx
+            .update(agentProjectStates)
+            .set({
+              stage: "EAP_REVISAO",
+              lastSummary: `EAP enviada para revisão: ${evidence.eapNodeCount} nós.`,
+              version: state.version + 1,
+            })
+            .where(eq(agentProjectStates.projectId, input.projectId));
+        });
+
+        return loadAgentCoordinatorSnapshot(
+          db,
+          input.projectId,
+          ctx.user.id
+        );
+      }),
     wbs: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
