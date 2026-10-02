@@ -576,30 +576,37 @@ export function validateAndNormalizeEapProposal(
     }
 
     if (item.operation === "update") {
-      if (!item.nodeId) {
+      const resolvedNodeId =
+        item.nodeId ??
+        (item.code ? byCode.get(item.code.trim())?.id : undefined);
+
+      if (!resolvedNodeId) {
         issues.push({
           code: "proposal_update_without_node",
           severity: "error",
-          message: 'A atualização "' + item.name + '" não informa o nodeId do item existente.',
+          message:
+            'A atualização "' +
+            item.name +
+            '" não informa nodeId nem referencia um código EAP existente para resolução segura.',
           entityRef: ref,
         });
         normalizedNodes.push({ ...item });
         continue;
       }
 
-      if (seenNodeIds.has(item.nodeId)) {
+      if (seenNodeIds.has(resolvedNodeId)) {
         issues.push({
           code: "proposal_duplicate_node_operation",
           severity: "error",
           message: "O nó " + item.nodeId + " aparece mais de uma vez na proposta.",
-          entityRef: String(item.nodeId),
+          entityRef: String(resolvedNodeId),
         });
         normalizedNodes.push({ ...item });
         continue;
       }
-      seenNodeIds.add(item.nodeId);
+      seenNodeIds.add(resolvedNodeId);
 
-      const current = byId.get(String(item.nodeId));
+      const current = byId.get(String(resolvedNodeId));
       if (!current) {
         issues.push({
           code: "proposal_node_not_found",
@@ -642,6 +649,7 @@ export function validateAndNormalizeEapProposal(
 
       normalizedNodes.push({
         ...item,
+        nodeId: resolvedNodeId,
         code: current.code,
         parentCode: currentParentCode,
       });
