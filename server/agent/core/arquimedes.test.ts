@@ -9,6 +9,32 @@ describe("parseEapProposal", () => {
     ).toThrow(/proposta EAP incompleta ou inválida/i);
   });
 
+  it("preserva o resumo das correções propostas pelo especialista", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: [],
+        assumptions: [],
+        missingInformation: [],
+        resolutionSummary: [
+          "Atualizar o escopo do pacote 1.1 para separar as responsabilidades duplicadas.",
+        ],
+        nodes: [{
+          operation: "update",
+          nodeId: 11,
+          parentCode: "1",
+          code: "1.1",
+          name: "Serviço revisado",
+          nodeType: "pacote",
+          rationale: "Elimina a sobreposição identificada.",
+        }],
+      })
+    );
+
+    expect(result.resolutionSummary).toEqual([
+      "Atualizar o escopo do pacote 1.1 para separar as responsabilidades duplicadas.",
+    ]);
+  });
+
   it("valida a estrutura mínima da proposta", () => {
     expect(
       parseEapProposal(
