@@ -67,7 +67,9 @@ export interface EapReviewAudit {
 export function buildEapRequest(
   context: ArquimedesProjectContext,
   skills: ArquimedesSkill[],
-  audit?: EapReviewAudit
+  audit?: EapReviewAudit,
+  mode: "analisar" | "resolver_bloqueios" = "analisar",
+  resolutionIssues: Array<{ code: string; message: string; entityRef?: string }> = []
 ): ArquimedesLlmRequest {
   const system = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
@@ -76,7 +78,16 @@ export function buildEapRequest(
     "Ao revisar uma EAP existente, consulte o banco por meio das ferramentas de leitura disponíveis quando precisar de dados adicionais. Você pode navegar pela obra e pela EAP sob demanda; não assuma que o resumo inicial contém tudo.",
     "Concentre-se em cobertura de escopo, nível de decomposição, duplicidades semânticas, nomenclatura, coerência pai/filho e lacunas que possam alterar a EAP. Use consultas somente quando elas reduzirem incerteza real.",
     "O contexto inicial é apenas uma referência. Quando precisar, consulte diretamente os registros atuais da obra antes de propor qualquer alteração.",
-    "Se os achados não justificarem mudança, retorne nodes vazio e registre isso em basis. Não invente correções.",
+    mode === "resolver_bloqueios"
+      ? [
+          "MODO RESOLVER BLOQUEIOS: existem erros estruturais já detectados pelo sistema.",
+          "Sua missão nesta rodada é propor correções concretas para esses bloqueios, usando a EAP atual do banco como fonte primária.",
+          "Priorize os erros listados em resolutionIssues. Cada correção deve apontar para um nó existente quando atualizar e deve respeitar a hierarquia atual.",
+          "Não invente novos dados de escopo para preencher lacunas. Quando um erro não puder ser resolvido sem decisão do engenheiro, mantenha nodes vazio para esse ponto e registre a pendência em missingInformation.",
+          "Não altere códigos de nós existentes. Para criações, informe apenas o parentCode; o sistema fará a numeração.",
+          "Não proponha move ou remove automaticamente nesta rodada. Alterações de hierarquia ou exclusões ficam para revisão manual.",
+        ].join("\n")
+      : "Faça uma auditoria dirigida. Se os achados não justificarem mudança, retorne nodes vazio e registre isso em basis. Não invente correções.",
     "Não execute alterações diretamente. Propostas de planejamento continuam sujeitas à validação e aprovação.",
     "Conhecimento profissional:",
     skillsBlock(skills),
@@ -84,7 +95,7 @@ export function buildEapRequest(
 
   const user = JSON.stringify(
     {
-      task: "analisar_eap",
+      task: mode === "resolver_bloqueios" ? "resolver_bloqueios_eap" : "analisar_eap",
       project: {
         id: context.projectId,
         name: context.name,
@@ -92,15 +103,21 @@ export function buildEapRequest(
         tipoDeObra: context.tipoDeObra,
         stage: context.stage,
       },
+      resolutionIssues: mode === "resolver_bloqueios" ? resolutionIssues : [],
       audit: audit ?? null,
     },
     null,
     2
   );
 
-  // A revisão dirigida usa o mapa compacto da EAP e somente os nós candidatos.
-  // O orçamento menor reduz latência e evita uma requisição monolítica.
-  return { system, user, skills, maxTokens: 4096, databaseContext: { projectId: context.projectId } };
+  return {
+    system,
+    user,
+    skills,
+    maxTokens: 4096,
+    databaseContext: { projectId: context.projectId },
+    eapReviewMode: mode,
+  };
 }
 
 export function buildEapMacroRequest(
