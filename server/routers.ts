@@ -1504,7 +1504,12 @@ export const appRouter = router({
         );
         const beforeValidationSnapshot = buildEapReviewSnapshot(currentValidation);
         const resolutionIssues = currentValidation.issues
-          .filter(issue => issue.severity === "error")
+          .filter(
+            issue =>
+              issue.severity === "error" ||
+              issue.code === "eap_leaf_not_ready" ||
+              issue.code === "eap_decomposition_basis_missing"
+          )
           .slice(0, 120)
           .map(issue => ({
             code: issue.code,
