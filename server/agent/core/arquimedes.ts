@@ -514,6 +514,29 @@ function immediateParentCode(code: string) {
   return parts.length > 1 ? parts.slice(0, -1).join(".") : null;
 }
 
+function compactResolutionSummary(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+
+  return value.slice(0, 40).map(item => {
+    const text = typeof item === "string" ? item.trim() : String(item ?? "").trim();
+    if (text.length <= 600) return text;
+
+    const sentences = text
+      .split(/(?<=[.!?])\s+/)
+      .map(sentence => sentence.trim())
+      .filter(Boolean);
+
+    let compact = "";
+    for (const sentence of sentences) {
+      if ((compact ? compact.length + 1 : 0) + sentence.length > 580) break;
+      compact += (compact ? " " : "") + sentence;
+    }
+
+    if (!compact) compact = text.slice(0, 580).trim();
+    return compact + (compact.length < text.length ? "…" : "");
+  });
+}
+
 export function parseEapProposal(
   raw: string,
   stage: EapParseStage = "review",
@@ -599,11 +622,18 @@ export function parseEapProposal(
     !Array.isArray(parsed)
       ? (() => {
           const record = parsed as Record<string, unknown>;
-          if (Array.isArray(record.nodes)) return record;
+          const normalizedSummary = compactResolutionSummary(record.resolutionSummary);
+          const withSummary = {
+            ...record,
+            ...(Array.isArray(normalizedSummary)
+              ? { resolutionSummary: normalizedSummary }
+              : {}),
+          };
+          if (Array.isArray(record.nodes)) return withSummary;
           const alternative = record.updates ?? record.corrections ?? record.actions;
           return Array.isArray(alternative)
-            ? { ...record, nodes: alternative }
-            : record;
+            ? { ...withSummary, nodes: alternative }
+            : withSummary;
         })()
       : parsed;
 
