@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { validateEap, validateEapScope, validateWbsCostCoverage } from "./eap-validator";
+import {
+  validateEap,
+  validateEapScope,
+  validateWbsCostCoverage,
+  validateAndNormalizeEapProposal,
+} from "./eap-validator";
 import type { EapEvidenceNode } from "./domain-types";
 
 function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
@@ -23,6 +28,34 @@ function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
     level: overrides.level ?? value.code.split(".").length,
   };
 }
+
+describe("validateAndNormalizeEapProposal", () => {
+  it("resolve nodeId pelo código existente em uma atualização", () => {
+    const current = [
+      node(),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Canteiro", nodeType: "entrega" }),
+    ];
+
+    const result = validateAndNormalizeEapProposal(current, {
+      action: "propose_eap",
+      basis: [],
+      assumptions: [],
+      missingInformation: [],
+      nodes: [{
+        operation: "update",
+        parentCode: "1",
+        code: "1.1",
+        name: "Canteiro revisado",
+        nodeType: "entrega",
+        rationale: "Corrige o escopo.",
+      }],
+    });
+
+    expect(result.validation?.valid).toBe(true);
+    expect(result.nodes[0]?.nodeId).toBe(2);
+    expect(result.nodes[0]?.code).toBe("1.1");
+  });
+});
 
 describe("validateEap", () => {
   it("aceita uma árvore com pai e filho válidos", () => {
