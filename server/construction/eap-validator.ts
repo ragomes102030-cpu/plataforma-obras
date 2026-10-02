@@ -193,7 +193,7 @@ export function validateEapScope(
           decompositionBasis: "base de decomposição",
         };
         for (const field of requiredFields) {
-          const value = node[field];
+          const value = (node as unknown as Record<string, unknown>)[field];
           if (value === null || value === undefined || String(value).trim() === "") {
             missing.push(labels[field]);
           }
