@@ -218,6 +218,82 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const cicloRevisaoAplicado = Boolean(cicloRevisao?.appliedAt);
   const bloqueiosAposCorrecao = cicloRevisao?.counts?.afterErrors ?? cicloRevisao?.after?.summary?.errors ?? validacao.data?.summary.errors ?? 0;
 
+  const resumoApontamentos = useMemo(() => {
+    const issues = validacao.data?.issues ?? [];
+    const grupos = [
+      {
+        label: "Estrutura",
+        codes: new Set([
+          "eap_root_count_invalid",
+          "eap_level_code_mismatch",
+          "eap_child_of_delivery",
+          "eap_delivery_has_children",
+          "eap_work_package_has_children",
+          "duplicate_eap_id",
+          "duplicate_eap_code",
+          "empty_eap_name",
+          "orphan_eap_node",
+          "eap_parent_code_mismatch",
+          "eap_cycle",
+        ]),
+      },
+      {
+        label: "Dicionário",
+        codes: new Set(["eap_leaf_not_ready"]),
+      },
+      {
+        label: "Decomposição",
+        codes: new Set([
+          "eap_decomposition_basis_missing",
+          "eap_group_without_decomposition",
+          "eap_mixed_decomposition_basis",
+        ]),
+      },
+      {
+        label: "Escopo",
+        codes: new Set([
+          "possible_scope_overlap",
+          "eap_scope_overlap_evidence",
+          "eap_child_outside_parent_scope",
+          "eap_scope_coverage_not_evidenced",
+          "eap_child_scope_not_evidenced",
+        ]),
+      },
+      {
+        label: "Quantitativos",
+        codes: new Set([
+          "negative_eap_quantity",
+          "eap_quantity_rollup_mismatch",
+        ]),
+      },
+      {
+        label: "Orçamento",
+        codes: new Set([
+          "wbs_leaf_without_cost",
+          "wbs_double_counted_cost",
+          "wbs_group_without_any_cost",
+        ]),
+      },
+    ] as Array<{ label: string; codes: Set<string> }>;
+
+    const conhecidos = new Set(grupos.flatMap(grupo => Array.from(grupo.codes)));
+    const resultado = grupos
+      .map(grupo => ({
+        label: grupo.label,
+        count: issues.filter(issue => grupo.codes.has(issue.code)).length,
+      }))
+      .filter(grupo => grupo.count > 0);
+
+    const outros = issues.filter(issue => !conhecidos.has(issue.code)).length;
+    if (outros > 0) resultado.push({ label: "Outros", count: outros });
+    return resultado;
+  }, [validacao.data?.issues]);
+
+  const totalApontamentos = validacao.data?.summary.warnings ?? 0;
+  const pendenciasOrcamento = (validacao.data?.summary.costErrors ?? 0) + (validacao.data?.summary.costWarnings ?? 0);
+  const alertasEap = Math.max(0, totalApontamentos - pendenciasOrcamento);
+
+
   const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
     onSuccess: async () => {
       await recarregar();
@@ -368,7 +444,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                   <strong>Relatório da correção proposta</strong>
                   <span>{cicloRevisaoAplicado
   ? "Esta proposta já foi aplicada como rascunho. O bloco de resultado abaixo mostra o que aconteceu na revalidação."
-  : "A revisão técnica recebeu os bloqueios atuais e montou uma proposta para tratá-los. A EAP abaixo continua sendo a estrutura atual porque nada foi aplicado automaticamente."}</span>
+  : "A revisão técnica recebeu os apontamentos selecionados e montou uma proposta para tratá-los. A EAP abaixo continua sendo a estrutura atual porque nada foi aplicado automaticamente."}</span>
                 </div>
               </div>
 
@@ -405,11 +481,39 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                   <small>alterações para o engenheiro revisar</small>
                 </div>
                 <div>
-                  <span>BLOQUEIOS RECEBIDOS</span>
+                  <span>BLOQUEIOS ESTRUTURAIS</span>
                   <strong>{validacao.data?.summary.errors ?? 0}</strong>
-                  <small>bloqueios ainda presentes na EAP atual</small>
+                  <small>erros que ainda impedem a aprovação estrutural</small>
+                </div>
+                <div>
+                  <span>APONTAMENTOS ANALISADOS</span>
+                  <strong>{alertasEap}</strong>
+                  <small>avisos e pendências de engenharia nesta validação</small>
+                </div>
+                <div>
+                  <span>DECISÕES PENDENTES</span>
+                  <strong>{propostaArquimedes.missingInformation.length}</strong>
+                  <small>pontos que dependem de definição do engenheiro</small>
                 </div>
               </div>
+
+              {!!resumoApontamentos.length && (
+                <div className="eap-validacao-lista">
+                  <div className="eap-validacao-item eap-validacao-warning">
+                    <span>LEITURA DOS APONTAMENTOS</span>
+                    <p>
+                      A análise agrupou os apontamentos por natureza para separar diagnóstico técnico de decisão do engenheiro.
+                      {pendenciasOrcamento > 0 ? " A cobertura do orçamento permanece em uma frente financeira própria." : ""}
+                    </p>
+                  </div>
+                  {resumoApontamentos.map((grupo) => (
+                    <div key={grupo.label} className="eap-validacao-item eap-validacao-warning">
+                      <span>{grupo.label.toUpperCase()}</span>
+                      <p>{grupo.count} apontamento(s) identificado(s) nesta categoria.</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {!!resumoCorrecao.length && (
                 <div className="eap-proposta-correcao-resumo">
@@ -636,7 +740,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         <div className="eap-validacao-cabecalho">
           <div className="eap-validacao-titulo">
             <strong><CheckCircle2 size={14} /> Validação da EAP</strong>
-            <span>{validacao.isPending ? "Analisando estrutura…" : validacao.data ? `${validacao.data.summary.nodes} nós · ${validacao.data.summary.leaves} folhas · ${validacao.data.summary.errors} bloqueios · ${validacao.data.summary.warnings} alertas${(validacao.data.summary.costErrors ?? 0) > 0 ? ` · ${validacao.data.summary.costErrors} pendências de orçamento` : ""}` : "Validação indisponível"}</span>
+            <span>{validacao.isPending ? "Analisando estrutura…" : validacao.data ? `${validacao.data.summary.nodes} nós · ${validacao.data.summary.leaves} folhas · ${validacao.data.summary.errors} bloqueios estruturais · ${alertasEap} apontamentos de EAP${pendenciasOrcamento > 0 ? ` · ${pendenciasOrcamento} pendências de orçamento` : ""}` : "Validação indisponível"}</span>
           </div>
           <div className="eap-validacao-acoes">
             {validacao.data?.valid ? <span className="eap-validacao-ok"><CheckCircle2 size={13} /> Sem bloqueios</span> : validacao.data ? <span className="eap-validacao-erro"><AlertTriangle size={13} /> Revisão necessária</span> : null}
