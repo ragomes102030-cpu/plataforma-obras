@@ -30,6 +30,7 @@ export interface ArquimedesEapProposal {
   basis: string[];
   assumptions: string[];
   missingInformation: string[];
+  resolutionSummary?: string[];
   validation?: {
     valid: boolean;
     issues: Array<{
@@ -60,6 +61,8 @@ export interface ArquimedesLlmRequest {
   maxTokens?: number;
   databaseContext?: { projectId: number };
   eapReviewMode?: "analisar" | "resolver_bloqueios";
+  agentId?: "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia";
+  orchestratorId?: "arquimedes";
 }
 
 export interface ArquimedesLlmProvider {
