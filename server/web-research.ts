@@ -19,7 +19,7 @@ function classifySource(url: string): WebResearchEvidence["sourceType"] {
   return "other";
 }
 
-function parseSearchResponse(raw: string, query: string): WebResearchEvidence[] {
+export function parseSearchResponse(raw: string, query: string): WebResearchEvidence[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
