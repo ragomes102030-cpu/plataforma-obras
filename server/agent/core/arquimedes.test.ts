@@ -95,6 +95,28 @@ describe("parseEapProposal", () => {
     expect(result.resolutionSummary).toHaveLength(1);
   });
 
+  it("preserva evidências externas de pesquisa no resultado da revisão", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: [],
+        assumptions: [],
+        missingInformation: [],
+        resolutionSummary: ["Separar responsabilidades duplicadas."],
+        researchEvidence: [{
+          query: "WBS dictionary scope responsibility construction",
+          title: "Practice Standard for Work Breakdown Structures",
+          url: "https://www.pmi.org/standards/work-breakdown-structures-third-edition",
+          snippet: "A WBS organiza o escopo total do projeto.",
+          sourceType: "standard",
+        }],
+        nodes: [],
+      })
+    );
+
+    expect(result.researchEvidence).toHaveLength(1);
+    expect(result.researchEvidence?.[0]?.sourceType).toBe("standard");
+  });
+
   it("normaliza uma resposta de correção com updates no lugar de nodes", () => {
     const result = parseEapProposal(
       JSON.stringify({
