@@ -341,6 +341,7 @@ export async function proposeEapWithArquimedes(
   options: {
     mode?: "analisar" | "resolver_bloqueios";
     resolutionIssues?: Array<{ code: string; message: string; entityRef?: string }>;
+    resolutionTargets?: ArquimedesLlmRequest["eapResolutionTargets"];
   } = {},
 ): Promise<{ raw: string; request: ArquimedesLlmRequest }> {
   const skills = await loadEapSkills();
@@ -354,7 +355,8 @@ export async function proposeEapWithArquimedes(
     skills,
     undefined,
     options.mode ?? "analisar",
-    options.resolutionIssues ?? []
+    options.resolutionIssues ?? [],
+    options.resolutionTargets ?? []
   );
 
   // Contrato de fronteira: a revisão existente sempre precisa chegar ao provider
@@ -557,7 +559,21 @@ export function parseEapProposal(
     };
   }
 
-  const result = eapReviewSchema.safeParse(parsed);
+  const normalizedReview =
+    parsed &&
+    typeof parsed === "object" &&
+    !Array.isArray(parsed)
+      ? (() => {
+          const record = parsed as Record<string, unknown>;
+          if (Array.isArray(record.nodes)) return record;
+          const alternative = record.updates ?? record.corrections ?? record.actions;
+          return Array.isArray(alternative)
+            ? { ...record, nodes: alternative }
+            : record;
+        })()
+      : parsed;
+
+  const result = eapReviewSchema.safeParse(normalizedReview);
   if (!result.success) {
     const issue = result.error.issues[0];
     throw new Error(
