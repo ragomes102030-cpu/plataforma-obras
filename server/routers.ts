@@ -18,6 +18,7 @@ import {
   agentDecisions,
   agentFindings,
   agentMemories,
+  agentRuns,
   projectPlanVersions,
   scheduleActivities,
   scheduleDependencies,
@@ -1404,12 +1405,66 @@ export const appRouter = router({
           { requireDictionaryForLeaves: true }
         );
 
+        await db
+          .update(agentRuns)
+          .set({ currentStep: "EAP_REVISAO_SUPERADA", updatedAt: new Date() })
+          .where(
+            and(
+              eq(agentRuns.projectId, input.projectId),
+              eq(agentRuns.currentStep, "EAP_REVISAO"),
+              eq(agentRuns.status, "respondido")
+            )
+          );
+        const reviewRequestId = randomUUID();
+        await db.insert(agentRuns).values({
+          requestId: reviewRequestId,
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          status: "respondido",
+          currentStep: "EAP_REVISAO",
+          provider: "configured-gateway",
+          contextJson: JSON.stringify({ kind: "eap_review", projectId: input.projectId }),
+          resultJson: JSON.stringify(proposal),
+          iterations: 1,
+          finishedAt: new Date(),
+        });
+
         return {
           provider: "configured-gateway",
+          reviewRequestId,
           proposal,
           currentValidation,
           guardrail: "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
         };
+      }),
+    eapArquimedesReview: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [review] = await db
+          .select({ requestId: agentRuns.requestId, resultJson: agentRuns.resultJson, createdAt: agentRuns.createdAt })
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.projectId, input.projectId),
+              eq(agentRuns.currentStep, "EAP_REVISAO"),
+              eq(agentRuns.status, "respondido")
+            )
+          )
+          .orderBy(desc(agentRuns.createdAt))
+          .limit(1);
+        if (!review?.resultJson) return null;
+        try {
+          return {
+            requestId: review.requestId,
+            createdAt: review.createdAt,
+            proposal: parseEapProposal(review.resultJson),
+          };
+        } catch {
+          return null;
+        }
       }),
     aplicarPropostaEap: protectedProcedure
       .input(
@@ -1447,6 +1502,18 @@ export const appRouter = router({
           input.projectId,
           ctx.user.id
         );
+        const activeReview = await db
+          .select({ id: agentRuns.id })
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.projectId, input.projectId),
+              eq(agentRuns.currentStep, "EAP_REVISAO"),
+              eq(agentRuns.status, "respondido")
+            )
+          )
+          .orderBy(desc(agentRuns.createdAt))
+          .limit(1);
 
         const unsupported = input.proposal.nodes
           .filter(node => node.operation === "move" || node.operation === "remove")
@@ -1457,7 +1524,7 @@ export const appRouter = router({
           );
         }
 
-        return db.transaction(async tx => {
+        const result = await db.transaction(async tx => {
           const current = await tx
             .select()
             .from(wbsNodes)
@@ -1657,6 +1724,13 @@ export const appRouter = router({
             requiresReview: true as const,
           };
         });
+        if (activeReview[0]) {
+          await db
+            .update(agentRuns)
+            .set({ currentStep: "EAP_REVISAO_APLICADA", updatedAt: new Date() })
+            .where(eq(agentRuns.id, activeReview[0].id));
+        }
+        return result;
       }),
     validateWbsStructure: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
