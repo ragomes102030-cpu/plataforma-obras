@@ -95,6 +95,32 @@ describe("parseEapProposal", () => {
     expect(result.resolutionSummary).toHaveLength(1);
   });
 
+  it("normaliza uma resposta de correção com updates no lugar de nodes", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: [],
+        assumptions: [],
+        missingInformation: [],
+        resolutionSummary: ["Ajustar inclusões dos nós afetados."],
+        updates: [{
+          operation: "update",
+          code: "1.1.2",
+          name: "Execução revisada",
+          nodeType: "entrega",
+          parentCode: "1.1",
+          rationale: "Remove sobreposição de escopo.",
+        }],
+      })
+    );
+
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]).toMatchObject({
+      operation: "update",
+      code: "1.1.2",
+      parentCode: "1.1",
+    });
+  });
+
   it("rejeita proposta estruturalmente incorreta", () => {
     expect(() =>
       parseEapProposal(
