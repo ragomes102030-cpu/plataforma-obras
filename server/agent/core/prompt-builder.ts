@@ -127,7 +127,7 @@ export function buildEapRequest(
     system,
     user,
     skills,
-    maxTokens: 4096,
+    maxTokens: mode === "resolver_bloqueios" ? 8192 : 4096,
     databaseContext: { projectId: context.projectId },
     eapReviewMode: mode,
     agentId: specialist.id,
