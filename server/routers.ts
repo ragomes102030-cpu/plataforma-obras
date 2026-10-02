@@ -828,6 +828,19 @@ async function loadStageGateEvidence(
         .limit(1),
     ]);
   const eapValidation = validateEap(eapNodes);
+  const dictionaryStandard = await loadEapDictionaryStandard(db, projectId);
+  const dictionaryValidation =
+    dictionaryStandard.status === "approved"
+      ? validateEapScope(eapNodes, {
+          requireDictionaryForLeaves: true,
+          requiredDictionaryFields:
+            dictionaryStandard.requiredFields as import("./construction/eap-validator").EapDictionaryField[],
+        })
+      : null;
+  const dictionaryStandardApproved = dictionaryStandard.status === "approved";
+  const dictionaryCompliant =
+    dictionaryStandardApproved &&
+    (dictionaryValidation?.issues ?? []).every(issue => issue.code !== "eap_leaf_not_ready");
   const cpm = calculateDeterministicCpm(activities, dependencies);
   const budgetItemRefs = activeBudgetVersion[0]
     ? await db
@@ -845,6 +858,8 @@ async function loadStageGateEvidence(
     hasDescription: Boolean(project[0]?.name?.trim() && project[0]?.location?.trim()),
     eapNodeCount: eapNodes.length,
     eapValid: eapValidation.valid,
+    eapDictionaryStandardApproved: dictionaryStandardApproved,
+    eapDictionaryCompliant: dictionaryCompliant,
     activityCount: activities.length,
     /**
      * Atividades com PRAZO, e não apenas existentes.
