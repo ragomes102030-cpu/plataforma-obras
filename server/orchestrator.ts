@@ -274,7 +274,7 @@ const ENGINEERING_GAP_TOOL: LlmTool = {
   function: {
     name: "engineering_gap_analysis",
     description:
-      "Faz uma varredura técnica da obra antes de concluir uma análise. Consulta validações estruturais, pacotes sem dono, atividades, dependências, CPM e linha de base quando essas ferramentas estiverem disponíveis. Use quando o usuário pedir uma análise da obra, dos problemas, das lacunas ou quando você precisar descobrir algo que ele talvez não esteja vendo.",
+      "Faz uma varredura técnica da obra antes de concluir uma análise. Escolha um único foco geral ou, no máximo, dois focos complementares. Não repita o mesmo foco e não percorra todas as especialidades só porque elas existem. Consulta validações estruturais, pacotes sem dono, atividades, dependências, CPM e linha de base quando essas ferramentas estiverem disponíveis. Use quando o usuário pedir uma análise da obra, dos problemas, das lacunas ou quando você precisar descobrir algo que ele talvez não esteja vendo.",
     parameters: {
       type: "object",
       properties: {
@@ -602,6 +602,8 @@ export async function runProjectOrchestrator(
     errors: catalog.errors,
   });
   const audit: AuditEvent[] = [];
+  const gapAnalysisFoci = new Set<string>();
+  const MAX_GAP_ANALYSES = 2;
   const conversation: LlmMessage[] = [
     { role: "system", content: buildSystem(context, mcpProjectIds, intent) },
     ...messages.map(message => ({
@@ -847,19 +849,74 @@ export async function runProjectOrchestrator(
           producao: ["pacotes_sem_dono", "resumo_quantitativos", "listar_atividades"],
           lob: ["listar_temas", "calcular_linha_balanco", "balancear_ritmos_lob", "dimensionar_equipes_lob"],
         };
-        const available = new Set(
+        if (gapAnalysisFoci.has(focus)) {
+          const value = {
+            obra: context.project.code,
+            foco: focus,
+            status: "ja_executado",
+            instrucao:
+              "Esta varredura já foi executada nesta análise. Use o resultado anterior e consolide a resposta; não repita a mesma consulta.",
+          };
+          return { ok: true, content: JSON.stringify(value) };
+        }
+
+        if (
+          gapAnalysisFoci.has("geral") ||
+          (focus === "geral" && gapAnalysisFoci.size > 0) ||
+          gapAnalysisFoci.size >= MAX_GAP_ANALYSES
+        ) {
+          const value = {
+            obra: context.project.code,
+            foco: focus,
+            status: "limite_atingido",
+            instrucao:
+              "O orçamento de varreduras desta análise já foi usado. Não solicite outra varredura; consolide as evidências já coletadas e conclua.",
+          };
+          return { ok: true, content: JSON.stringify(value) };
+        }
+
+        gapAnalysisFoci.add(focus);
+
+        // As ferramentas oficiais dos MCPs são um contrato conhecido do
+        // orquestrador. Mesmo que a descoberta dinâmica (listTools) esteja
+        // temporariamente indisponível/limitada (ex.: HTTP 429), podemos tentar
+        // as consultas somente-leitura diretamente e registrar o erro real se
+        // a execução também estiver indisponível.
+        const knownByDomain: Record<string, Set<string>> = {
+          eap: new Set([
+            "get_eap_tree",
+            "validar_estrutura",
+            "pacotes_sem_dono",
+            "resumo_quantitativos",
+          ]),
+          cronograma: new Set([
+            "listar_atividades",
+            "listar_dependencias",
+            "validar_dependencias",
+            "calcular_caminho_critico",
+            "listar_baselines",
+            "comparar_baseline",
+          ]),
+          ganttLob: new Set([
+            "listar_temas",
+            "calcular_linha_balanco",
+            "balancear_ritmos_lob",
+            "dimensionar_equipes_lob",
+          ]),
+        };
+        const discovered = new Map(
           [...catalog.eap, ...catalog.cronograma, ...catalog.ganttLob]
-            .filter(tool => MCP_TOOL_POLICY.readOnly.has(tool.name))
-            .map(tool => tool.name)
+            .map(tool => [tool.name, tool] as const)
         );
         const requested = checksByFocus[focus] ?? checksByFocus.geral;
         const findings: Array<Record<string, unknown>> = [];
         for (const check of requested) {
-          if (!available.has(check)) {
+          const domain = TOOL_DOMAINS[check as keyof typeof TOOL_DOMAINS];
+          if (!domain || !knownByDomain[domain]?.has(check)) {
             findings.push({ check, status: "indisponivel" });
             continue;
           }
-          const domain = TOOL_DOMAINS[check as keyof typeof TOOL_DOMAINS];
+          const discoveredTool = discovered.get(check);
           const projectId = mcpProjectIds[domain];
           if (!domain || !projectId) {
             findings.push({ check, status: "sem_projeto_mcp" });
