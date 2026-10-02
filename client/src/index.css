@@ -6036,3 +6036,157 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
   scrollbar-width: auto;
   scrollbar-color: #6f879f #e8eef4;
 }
+
+
+/* EAP — orquestração da análise pelo Arquimedes */
+.eap-analise-orquestrador {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr);
+  gap: 14px;
+  align-items: stretch;
+  margin: 0 0 10px;
+  padding: 13px 14px;
+  border: 1px solid #cfdde2;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f8fbfc 0%, #eef5f7 100%);
+  box-shadow: 0 2px 10px rgba(23, 48, 58, .04);
+}
+
+.eap-analise-orquestrador-identidade {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.eap-analise-orquestrador-icone {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  border: 1px solid #b9d0d7;
+  border-radius: 8px;
+  background: #e4f0f3;
+  color: #3d6e7c;
+}
+
+.eap-analise-orquestrador-identidade > div:last-child {
+  min-width: 0;
+}
+
+.eap-analise-orquestrador-identidade > div:last-child > span {
+  display: block;
+  color: #83979e;
+  font: 750 7px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .1em;
+}
+
+.eap-analise-orquestrador-identidade strong {
+  display: block;
+  margin-top: 4px;
+  color: #315564;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.eap-analise-orquestrador-identidade p {
+  max-width: 760px;
+  margin: 4px 0 0;
+  color: #6f828a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.eap-analise-orquestrador-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #d4e1e4;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.eap-analise-orquestrador-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #74a088;
+}
+
+.eap-analise-orquestrador-status strong,
+.eap-analise-orquestrador-status small {
+  display: block;
+}
+
+.eap-analise-orquestrador-status strong {
+  color: #4c6872;
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.eap-analise-orquestrador-status small {
+  margin-top: 4px;
+  color: #8a9a9f;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.eap-orquestrador-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 5px 8px;
+  border: 1px solid #cddfe3;
+  border-radius: 5px;
+  background: #f5f9fa;
+  color: #58747d;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.eap-revisao-orientacao {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 7px;
+  padding: 8px 9px;
+  border: 1px solid #d9e5e8;
+  border-radius: 6px;
+  background: #f7fafb;
+  color: #5d7780;
+}
+
+.eap-revisao-orientacao svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #628793;
+}
+
+.eap-revisao-orientacao strong,
+.eap-revisao-orientacao small {
+  display: block;
+}
+
+.eap-revisao-orientacao strong {
+  color: #476772;
+  font-size: 9px;
+}
+
+.eap-revisao-orientacao small {
+  margin-top: 3px;
+  color: #819197;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .eap-analise-orquestrador {
+    grid-template-columns: 1fr;
+  }
+}
