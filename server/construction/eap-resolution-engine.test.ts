@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildEapResolutionPlan } from "./eap-resolution-engine";
+import {
+  buildEapResolutionPlan,
+  findUncoveredEapResolutionGroups,
+} from "./eap-resolution-engine";
 
 describe("eap-resolution-engine", () => {
   const nodes = [
@@ -82,6 +85,36 @@ describe("eap-resolution-engine", () => {
 
     expect(plan[0]?.kind).toBe("missing_dictionary");
     expect(plan[0]?.unresolvedDecisions).toHaveLength(1);
+  });
+
+  it("detecta grupo de sobreposição sem atualização concreta", () => {
+    const plan = buildEapResolutionPlan(nodes, [{
+      code: "eap_scope_overlap_evidence",
+      message: "Há evidência textual de sobreposição entre os irmãos 1.1.1 e 1.1.2 de 1.1. Revise inclusões.",
+      entityRef: "10",
+    }]);
+
+    const uncovered = findUncoveredEapResolutionGroups(plan, []);
+
+    expect(uncovered).toHaveLength(1);
+    expect(uncovered[0]?.id).toBe(plan[0]?.id);
+  });
+
+  it("considera coberto quando há atualização de escopo", () => {
+    const plan = buildEapResolutionPlan(nodes, [{
+      code: "eap_scope_overlap_evidence",
+      message: "Há evidência textual de sobreposição entre os irmãos 1.1.1 e 1.1.2 de 1.1. Revise inclusões.",
+      entityRef: "10",
+    }]);
+
+    const uncovered = findUncoveredEapResolutionGroups(plan, [{
+      operation: "update",
+      nodeId: 11,
+      inclusions: "Mobilização inicial e organização do canteiro, sem administração permanente.",
+      exclusions: "Administração permanente do canteiro.",
+    }]);
+
+    expect(uncovered).toHaveLength(0);
   });
 
   it("consolida folhas sem responsável por pai", () => {
