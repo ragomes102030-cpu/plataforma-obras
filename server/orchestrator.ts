@@ -32,7 +32,7 @@ import {
   setArquimedesCapabilityEnabled,
 } from "./agent/capability-manager";
 
-const MAX_ITERATIONS = 4;
+const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 12_000;
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 6_000;
@@ -509,6 +509,8 @@ function buildSystem(
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
     "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
+    "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente. Você pode fazer várias rodadas de ferramentas antes da resposta final.",
+    "Na EAP, nunca tente colocar diagnóstico, justificativas extensas ou todo o raciocínio em um único campo textual. Use os campos estruturados dos nós para registrar evidências e correções; o resumo deve sintetizar a conclusão.",
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
     "As ferramentas de obra incluem consultas e operações de escrita controlada. Nunca altere dados na primeira análise: primeiro leia, diagnostique, apresente a alteração proposta e peça confirmação explícita ao engenheiro. Só depois de uma confirmação explícita nesta conversa execute a mutação. Após qualquer mutação, reconsulte a obra e valide o resultado. Exclusões são destrutivas e exigem confirmação explícita ainda mais clara.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
