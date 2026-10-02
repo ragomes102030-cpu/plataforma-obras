@@ -210,7 +210,22 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     analisarComArquimedes.data?.agentId ??
     revisaoArquimedes.data?.agentId ??
     "euclides";
-  const resumoCorrecao = propostaArquimedes?.resolutionSummary ?? [];
+  const resumoCorrecao = propostaArquimedes?.resolutionSummary ?? [];  const cicloRevisao = revisaoArquimedes.data?.resolutionCycle as {
+    before?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
+    after?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
+    resolved?: Array<{ code: string; message: string; entityRef?: string }>;
+    remaining?: Array<{ code: string; message: string; entityRef?: string }>;
+    newlyDetected?: Array<{ code: string; message: string; entityRef?: string }>;
+    counts?: {
+      beforeErrors?: number;
+      afterErrors?: number;
+      resolved?: number;
+      remaining?: number;
+      newlyDetected?: number;
+    };
+    appliedAt?: string;
+  } | null;
+
   const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
     onSuccess: async () => {
       await recarregar();
@@ -349,6 +364,61 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                       <span>{item.operation.toUpperCase()}</span>
                       <p><b>{item.code ?? item.nodeId ?? "novo"}</b> · {item.name} — {item.rationale}</p>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {cicloRevisao && (
+            <div className="eap-ciclo-revisao">
+              <div className="eap-ciclo-revisao-head">
+                <div>
+                  <strong>Resultado da correção</strong>
+                  <span>Comparação objetiva da EAP antes e depois da aplicação da proposta do Euclides.</span>
+                </div>
+                {cicloRevisao.appliedAt && (
+                  <small>{new Date(cicloRevisao.appliedAt).toLocaleString("pt-BR")}</small>
+                )}
+              </div>
+
+              <div className="eap-ciclo-revisao-kpis">
+                <div><span>BLOQUEIOS ANTES</span><strong>{cicloRevisao.counts?.beforeErrors ?? cicloRevisao.before?.summary?.errors ?? 0}</strong></div>
+                <div className="ok"><span>RESOLVIDOS</span><strong>{cicloRevisao.counts?.resolved ?? cicloRevisao.resolved?.length ?? 0}</strong></div>
+                <div className="attention"><span>RESTANTES</span><strong>{cicloRevisao.counts?.remaining ?? cicloRevisao.remaining?.length ?? 0}</strong></div>
+                <div><span>NOVOS</span><strong>{cicloRevisao.counts?.newlyDetected ?? cicloRevisao.newlyDetected?.length ?? 0}</strong></div>
+              </div>
+
+              {!!cicloRevisao.resolved?.length && (
+                <div className="eap-ciclo-revisao-lista resolvidos">
+                  <strong>Bloqueios resolvidos</strong>
+                  {cicloRevisao.resolved.slice(0, 12).map((issue, index) => (
+                    <div key={index}><span>{String(index + 1).padStart(2, "0")}</span><p>{issue.message}</p></div>
+                  ))}
+                </div>
+              )}
+
+              {!!cicloRevisao.remaining?.length && (
+                <div className="eap-ciclo-revisao-lista restantes">
+                  <strong>Bloqueios que continuam na EAP</strong>
+                  {cicloRevisao.remaining.slice(0, 12).map((issue, index) => (
+                    <div key={index}><span>{String(index + 1).padStart(2, "0")}</span><p>{issue.message}</p></div>
+                  ))}
+                </div>
+              )}
+
+              {!cicloRevisao.remaining?.length && !cicloRevisao.newlyDetected?.length && (
+                <div className="eap-ciclo-revisao-sucesso">
+                  <CheckCircle2 size={15} />
+                  <span>A validação posterior à aplicação não encontrou bloqueios estruturais remanescentes.</span>
+                </div>
+              )}
+
+              {!!cicloRevisao.newlyDetected?.length && (
+                <div className="eap-ciclo-revisao-lista novos">
+                  <strong>Novos bloqueios detectados após a aplicação</strong>
+                  {cicloRevisao.newlyDetected.slice(0, 12).map((issue, index) => (
+                    <div key={index}><span>{String(index + 1).padStart(2, "0")}</span><p>{issue.message}</p></div>
                   ))}
                 </div>
               )}
