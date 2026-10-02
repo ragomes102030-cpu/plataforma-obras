@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
+import { ENV } from "../_core/env";
 import { getConstructionMcpStatus, MCP_TOOL_POLICY } from "../integrations/construction-mcps";
 import {
   getArquimedesCapabilitySnapshot,
@@ -35,6 +36,11 @@ export const arquimedesCapabilitiesRouter = router({
     return {
       ...capabilities,
       agents: Object.values(ARQUIMEDES_AGENT_REGISTRY),
+      webResearch: {
+        provider: ENV.webResearchBaseUrl,
+        configured: Boolean(ENV.webResearchApiKey),
+        status: ENV.webResearchApiKey ? "configured" : "not_configured",
+      },
       generatedAt: mcpStatus.checkedAt,
       overallMcpStatus: mcpStatus.status,
       mcpDomains,
