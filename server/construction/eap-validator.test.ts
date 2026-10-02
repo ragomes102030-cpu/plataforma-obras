@@ -206,6 +206,35 @@ describe("validateEapScope", () => {
     expect(result.issues.map(issue => issue.code)).toContain("eap_leaf_not_ready");
   });
 
+  it("classifica sobreposição textual entre irmãos como alerta de escopo, não bloqueio", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", description: "Fundação." }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.1",
+        name: "Fundação A",
+        nodeType: "entrega",
+        description: "Formas, armaduras, concretagem e cura.",
+        inclusions: "Formas, armaduras, concretagem e cura.",
+        exclusions: null,
+      }),
+      node({
+        id: 3,
+        parentId: 1,
+        code: "1.2",
+        name: "Fundação B",
+        nodeType: "entrega",
+        description: "Formas, armaduras, concretagem e cura.",
+        inclusions: "Formas, armaduras, concretagem e cura.",
+        exclusions: null,
+      }),
+    ]);
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "eap_scope_overlap_evidence", severity: "warning" }),
+    ]));
+  });
   it("confere o fechamento quantitativo quando pai e filhos usam a mesma unidade", () => {
     const result = validateEapScope([
       node({ id: 1, code: "1", name: "Fundação", nodeType: "grupo", unit: "m3", plannedQuantity: 100 }),
