@@ -71,6 +71,7 @@ import { buildAgentProjectContext } from "./agent/context-builder";
 import { GatewayArquimedesProvider } from "./agent/providers/gateway-provider";
 import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
+import type { ArquimedesEapProposal } from "./agent/core/types";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -1070,6 +1071,33 @@ function dayKeyAt(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+type EapReviewIssueSnapshot = {
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+  entityRef?: string;
+};
+
+function eapReviewIssueKey(issue: EapReviewIssueSnapshot) {
+  return `${issue.code}|${issue.entityRef ?? ""}`;
+}
+
+function buildEapReviewSnapshot(validation: {
+  valid: boolean;
+  issues: EapReviewIssueSnapshot[];
+}) {
+  const errors = validation.issues.filter(issue => issue.severity === "error");
+  const warnings = validation.issues.filter(issue => issue.severity === "warning");
+  return {
+    valid: validation.valid,
+    summary: {
+      errors: errors.length,
+      warnings: warnings.length,
+    },
+    issues: validation.issues.slice(0, 120),
+  };
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -1472,9 +1500,10 @@ export const appRouter = router({
           nodes,
           { requireDictionaryForLeaves: true }
         );
+        const beforeValidationSnapshot = buildEapReviewSnapshot(currentValidation);
         const resolutionIssues = currentValidation.issues
           .filter(issue => issue.severity === "error")
-          .slice(0, 20)
+          .slice(0, 60)
           .map(issue => ({
             code: issue.code,
             message: issue.message,
@@ -1525,7 +1554,7 @@ export const appRouter = router({
           .where(
             and(
               eq(agentRuns.projectId, input.projectId),
-              eq(agentRuns.currentStep, "EAP_REVISAO"),
+              inArray(agentRuns.currentStep, ["EAP_REVISAO", "EAP_REVISAO_APLICADA"]),
               eq(agentRuns.status, "respondido")
             )
           );
@@ -1543,6 +1572,7 @@ export const appRouter = router({
             mode: input.mode,
             orchestratorId: "arquimedes",
             agentId: "euclides",
+            beforeValidation: beforeValidationSnapshot,
           }),
           resultJson: JSON.stringify(proposal),
           iterations: 1,
@@ -1623,6 +1653,7 @@ export const appRouter = router({
           let mode: "analisar" | "resolver_bloqueios" = "analisar";
           let agentId: "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia" = "euclides";
           let orchestratorId: "arquimedes" = "arquimedes";
+          let resolutionCycle: unknown = null;
           try {
             const contextMeta = review.contextJson ? JSON.parse(review.contextJson) : null;
             if (contextMeta?.mode === "resolver_bloqueios") mode = "resolver_bloqueios";
@@ -1635,6 +1666,7 @@ export const appRouter = router({
             ) {
               agentId = contextMeta.agentId;
             }
+            resolutionCycle = contextMeta?.resolutionCycle ?? null;
           } catch {
             // Compatibilidade com revisões antigas sem metadados de agente.
           }
@@ -1645,6 +1677,7 @@ export const appRouter = router({
             mode,
             agentId,
             orchestratorId,
+            resolutionCycle,
           };
         } catch {
           return null;
@@ -1660,6 +1693,7 @@ export const appRouter = router({
             basis: z.array(z.string()).default([]),
             assumptions: z.array(z.string()).default([]),
             missingInformation: z.array(z.string()).default([]),
+            resolutionSummary: z.array(z.string().trim().min(1).max(600)).max(20).optional(),
             nodes: z.array(
               z.object({
                 operation: z.enum(["create", "update", "move", "remove"]),
@@ -1671,6 +1705,21 @@ export const appRouter = router({
                 location: z.string().trim().max(180).nullable().optional(),
                 unit: z.string().trim().max(32).nullable().optional(),
                 plannedQuantity: z.number().min(0).nullable().optional(),
+                description: z.string().trim().max(5000).nullable().optional(),
+                inclusions: z.string().trim().max(5000).nullable().optional(),
+                exclusions: z.string().trim().max(5000).nullable().optional(),
+                responsible: z.string().trim().max(180).nullable().optional(),
+                acceptanceCriteria: z.string().trim().max(5000).nullable().optional(),
+                decompositionBasis: z.enum([
+                  "project",
+                  "deliverable",
+                  "system",
+                  "discipline",
+                  "location",
+                  "phase",
+                  "component",
+                  "other",
+                ]).optional(),
                 rationale: z.string().trim().min(1).max(2000),
               })
             ),
@@ -1687,7 +1736,7 @@ export const appRouter = router({
           ctx.user.id
         );
         const activeReview = await db
-          .select({ id: agentRuns.id })
+          .select({ id: agentRuns.id, contextJson: agentRuns.contextJson, resultJson: agentRuns.resultJson })
           .from(agentRuns)
           .where(
             and(
@@ -1720,12 +1769,50 @@ export const appRouter = router({
             )
             .orderBy(wbsNodes.sortOrder, wbsNodes.id);
 
+          const currentEvidence = current.map(node => ({
+            id: node.id,
+            projectId: node.projectId,
+            externalId: node.externalId,
+            externalUid: node.externalUid,
+            parentId: node.parentId,
+            code: node.code,
+            name: node.name,
+            level: node.level,
+            nodeType: node.nodeType,
+            unit: node.unit,
+            plannedQuantity: node.plannedQuantity,
+            sortOrder: node.sortOrder,
+            description: node.description,
+            inclusions: node.inclusions,
+            exclusions: node.exclusions,
+            location: node.location,
+            responsible: node.responsible,
+            acceptanceCriteria: node.acceptanceCriteria,
+            decompositionBasis: node.decompositionBasis,
+            scopeStatus: node.scopeStatus,
+          }));
+          const normalizedProposal = validateAndNormalizeEapProposal(
+            currentEvidence,
+            input.proposal as ArquimedesEapProposal
+          );
+          const proposalErrors = normalizedProposal.validation?.issues.filter(
+            issue => issue.severity === "error"
+          ) ?? [];
+          if (proposalErrors.length) {
+            throw conflict(
+              `A proposta do revisor ficou inválida ao ser revalidada no servidor: ${proposalErrors
+                .map(issue => issue.message)
+                .slice(0, 5)
+                .join(" ")}`
+            );
+          }
+
           const byId = new Map(current.map(node => [node.id, node]));
           const byCode = new Map(current.map(node => [node.code, node]));
           const createdIds: number[] = [];
           const updatedIds: number[] = [];
 
-          const creates = input.proposal.nodes
+          const creates = normalizedProposal.nodes
             .filter(node => node.operation === "create")
             .sort(
               (left, right) =>
@@ -1787,6 +1874,12 @@ export const appRouter = router({
                     ? null
                     : String(proposalNode.plannedQuantity),
                 location: proposalNode.location ?? null,
+                description: proposalNode.description ?? null,
+                inclusions: proposalNode.inclusions ?? null,
+                exclusions: proposalNode.exclusions ?? null,
+                responsible: proposalNode.responsible ?? null,
+                acceptanceCriteria: proposalNode.acceptanceCriteria ?? null,
+                decompositionBasis: proposalNode.decompositionBasis ?? "deliverable",
                 scopeStatus: "rascunho",
                 sortOrder: siblings.length,
               })
@@ -1814,7 +1907,7 @@ export const appRouter = router({
             createdIds.push(created);
           }
 
-          for (const proposalNode of input.proposal.nodes.filter(
+          for (const proposalNode of normalizedProposal.nodes.filter(
             node => node.operation === "update"
           )) {
             if (!proposalNode.nodeId) {
@@ -1839,7 +1932,34 @@ export const appRouter = router({
                   proposalNode.plannedQuantity == null
                     ? currentNode.plannedQuantity ?? null
                     : String(proposalNode.plannedQuantity),
-                location: proposalNode.location ?? currentNode.location ?? null,
+                location:
+                  proposalNode.location !== undefined
+                    ? proposalNode.location
+                    : currentNode.location ?? null,
+                description:
+                  proposalNode.description !== undefined
+                    ? proposalNode.description
+                    : currentNode.description ?? null,
+                inclusions:
+                  proposalNode.inclusions !== undefined
+                    ? proposalNode.inclusions
+                    : currentNode.inclusions ?? null,
+                exclusions:
+                  proposalNode.exclusions !== undefined
+                    ? proposalNode.exclusions
+                    : currentNode.exclusions ?? null,
+                responsible:
+                  proposalNode.responsible !== undefined
+                    ? proposalNode.responsible
+                    : currentNode.responsible ?? null,
+                acceptanceCriteria:
+                  proposalNode.acceptanceCriteria !== undefined
+                    ? proposalNode.acceptanceCriteria
+                    : currentNode.acceptanceCriteria ?? null,
+                decompositionBasis:
+                  proposalNode.decompositionBasis !== undefined
+                    ? proposalNode.decompositionBasis
+                    : currentNode.decompositionBasis ?? "deliverable",
                 scopeStatus: "rascunho",
               })
               .where(eq(wbsNodes.id, proposalNode.nodeId));
@@ -1889,9 +2009,10 @@ export const appRouter = router({
             userId: ctx.user.id,
             action: "eap_proposal_applied_as_draft",
             payload: JSON.stringify({
-              basis: input.proposal.basis,
-              assumptions: input.proposal.assumptions,
-              missingInformation: input.proposal.missingInformation,
+              basis: normalizedProposal.basis,
+              assumptions: normalizedProposal.assumptions,
+              missingInformation: normalizedProposal.missingInformation,
+              resolutionSummary: normalizedProposal.resolutionSummary,
               createdIds,
               updatedIds,
               nodeCount: after.length,
@@ -1909,10 +2030,77 @@ export const appRouter = router({
           };
         });
         if (activeReview[0]) {
+          const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+          const afterNodes = await db
+            .select()
+            .from(wbsNodes)
+            .where(
+              currentVersionId == null
+                ? eq(wbsNodes.projectId, input.projectId)
+                : and(
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, currentVersionId)
+                  )
+            )
+            .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+          const afterValidation = validateEapScope(
+            afterNodes,
+            { requireDictionaryForLeaves: true }
+          );
+          const afterSnapshot = buildEapReviewSnapshot(afterValidation);
+
+          let beforeSnapshot: ReturnType<typeof buildEapReviewSnapshot> | null = null;
+          let previousMeta: Record<string, unknown> = {};
+          try {
+            previousMeta = activeReview[0].contextJson
+              ? JSON.parse(activeReview[0].contextJson)
+              : {};
+            beforeSnapshot = previousMeta.beforeValidation ?? null;
+          } catch {
+            previousMeta = {};
+          }
+
+          const beforeIssues: EapReviewIssueSnapshot[] = beforeSnapshot?.issues ?? [];
+          const afterIssues: EapReviewIssueSnapshot[] = afterSnapshot.issues ?? [];
+          const beforeKeys = new Set(beforeIssues.map(eapReviewIssueKey));
+          const afterKeys = new Set(afterIssues.map(eapReviewIssueKey));
+          const resolved = beforeIssues.filter(issue => !afterKeys.has(eapReviewIssueKey(issue)));
+          const remaining = afterIssues.filter(issue => beforeKeys.has(eapReviewIssueKey(issue)));
+          const newlyDetected = afterIssues.filter(issue => !beforeKeys.has(eapReviewIssueKey(issue)));
+
+          const resolutionCycle = {
+            before: beforeSnapshot ?? {
+              valid: null,
+              summary: { errors: 0, warnings: 0 },
+              issues: [],
+            },
+            after: afterSnapshot,
+            resolved,
+            remaining,
+            newlyDetected,
+            counts: {
+              beforeErrors: beforeSnapshot?.summary.errors ?? 0,
+              afterErrors: afterSnapshot.summary.errors,
+              resolved: resolved.length,
+              remaining: remaining.length,
+              newlyDetected: newlyDetected.length,
+            },
+            appliedAt: new Date().toISOString(),
+          };
+
+          previousMeta.resolutionCycle = resolutionCycle;
+          previousMeta.lastAppliedAt = resolutionCycle.appliedAt;
+
           await db
             .update(agentRuns)
-            .set({ currentStep: "EAP_REVISAO_APLICADA", updatedAt: new Date() })
+            .set({
+              contextJson: JSON.stringify(previousMeta),
+              currentStep: "EAP_REVISAO_APLICADA",
+              updatedAt: new Date(),
+            })
             .where(eq(agentRuns.id, activeReview[0].id));
+
+          return { ...result, resolutionCycle };
         }
         return result;
       }),
