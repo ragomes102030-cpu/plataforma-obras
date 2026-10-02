@@ -2271,9 +2271,16 @@ export const appRouter = router({
           ? await db.select({ wbsNodeId: budgetItems.wbsNodeId }).from(budgetItems).where(inArray(budgetItems.budgetVersionId, versions.map(version => version.id)))
           : [];
         const cost = validateWbsCostCoverage(evidenceNodes, budget.map(item => ({ wbsNodeId: item.wbsNodeId })));
-        const issues = [...structural.issues, ...scope.issues, ...cost.issues];
+        // Cobertura de custo é um gate financeiro do plano, não um erro estrutural
+        // da EAP. Mantemos a regra como obrigatória para BASELINE/CONTROLE, mas
+        // não impedimos a validação/aprovação estrutural da EAP por falta de vínculo
+        // orçamentário nesta etapa.
+        const costIssues = cost.issues.map(issue => ({ ...issue, severity: "warning" as const }));
+        const issues = [...structural.issues, ...scope.issues, ...costIssues];
         const errors = issues.filter(issue => issue.severity === "error").length;
         const warnings = issues.filter(issue => issue.severity === "warning").length;
+        const costErrors = cost.issues.filter(issue => issue.severity === "error");
+        const costWarnings = cost.issues.filter(issue => issue.severity === "warning");
         const childrenIds = new Set(evidenceNodes.filter(node => node.parentId !== null).map(node => String(node.parentId)));
         return {
           valid: errors === 0,
@@ -2283,6 +2290,9 @@ export const appRouter = router({
             leaves: evidenceNodes.filter(node => !childrenIds.has(String(node.id))).length,
             errors,
             warnings,
+            costErrors: costErrors.length,
+            costWarnings: costWarnings.length,
+            costCoverageValid: cost.valid,
           },
         };
       }),
