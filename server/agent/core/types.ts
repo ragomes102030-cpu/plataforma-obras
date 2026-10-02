@@ -25,12 +25,35 @@ export interface ArquimedesSkill {
   id: string; version: string; domain: string; purpose: string; content: string;
 }
 
+export type ArquimedesResearchEvidence = {
+  query: string;
+  title: string;
+  url: string;
+  snippet: string;
+  sourceType: "official" | "standard" | "reference" | "other";
+};
+
+export type ArquimedesEapResolutionGroup = {
+  id: string;
+  kind: "scope_overlap" | "missing_dictionary" | "structure" | "other";
+  parentCode: string | null;
+  affectedCodes: string[];
+  affectedNodeIds: number[];
+  issueCount: number;
+  problem: string;
+  evidence: string[];
+  requiredAction: string;
+  unresolvedDecisions: string[];
+};
+
 export interface ArquimedesEapProposal {
   action: "propose_eap";
   basis: string[];
   assumptions: string[];
   missingInformation: string[];
   resolutionSummary?: string[];
+  resolutionPlan?: ArquimedesEapResolutionGroup[];
+  researchEvidence?: ArquimedesResearchEvidence[];
   validation?: {
     valid: boolean;
     issues: Array<{
@@ -78,6 +101,7 @@ export interface ArquimedesLlmRequest {
     exclusions?: string | null;
     description?: string | null;
   }>;
+  eapResolutionPlan?: ArquimedesEapResolutionGroup[];
   researchEvidence?: ArquimedesResearchEvidence[];
 }
 
