@@ -3,6 +3,7 @@ import type {
   ArquimedesSkill,
   ArquimedesLlmRequest,
 } from "./types";
+import { getArquimedesAgent } from "../agent-registry";
 
 function skillsBlock(skills: ArquimedesSkill[]) {
   return skills
@@ -71,8 +72,11 @@ export function buildEapRequest(
   mode: "analisar" | "resolver_bloqueios" = "analisar",
   resolutionIssues: Array<{ code: string; message: string; entityRef?: string }> = []
 ): ArquimedesLlmRequest {
+  const specialist = getArquimedesAgent("euclides");
   const system = [
-    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    `Você é ${specialist.name}, ${specialist.title}, especialista subordinado ao Arquimedes.`,
+    "Arquimedes é o orquestrador-chefe da equipe; sua função nesta chamada é exclusivamente revisão de EAP.",
+    specialist.mission,
     engineeringReasoningKernel(),
     structuredRules(),
     "Ao revisar uma EAP existente, consulte o banco por meio das ferramentas de leitura disponíveis quando precisar de dados adicionais. Você pode navegar pela obra e pela EAP sob demanda; não assuma que o resumo inicial contém tudo.",
@@ -86,6 +90,7 @@ export function buildEapRequest(
           "Não invente novos dados de escopo para preencher lacunas. Quando um erro não puder ser resolvido sem decisão do engenheiro, mantenha nodes vazio para esse ponto e registre a pendência em missingInformation.",
           "Não altere códigos de nós existentes. Para criações, informe apenas o parentCode; o sistema fará a numeração.",
           "Não proponha move ou remove automaticamente nesta rodada. Alterações de hierarquia ou exclusões ficam para revisão manual.",
+          "Ao final, gere resolutionSummary com 1 item curto por correção proposta. Explique o problema tratado, a ação proposta e por que ela resolve o bloqueio. Não diga que a alteração foi aplicada: ela ainda depende da revisão do engenheiro.",
         ].join("\n")
       : "Faça uma auditoria dirigida. Se os achados não justificarem mudança, retorne nodes vazio e registre isso em basis. Não invente correções.",
     "Não execute alterações diretamente. Propostas de planejamento continuam sujeitas à validação e aprovação.",
@@ -96,6 +101,8 @@ export function buildEapRequest(
   const user = JSON.stringify(
     {
       task: mode === "resolver_bloqueios" ? "resolver_bloqueios_eap" : "analisar_eap",
+      agent: { id: specialist.id, name: specialist.name, title: specialist.title },
+      orchestrator: { id: "arquimedes", name: "Arquimedes" },
       project: {
         id: context.projectId,
         name: context.name,
@@ -117,6 +124,8 @@ export function buildEapRequest(
     maxTokens: 4096,
     databaseContext: { projectId: context.projectId },
     eapReviewMode: mode,
+    agentId: specialist.id,
+    orchestratorId: "arquimedes",
   };
 }
 
