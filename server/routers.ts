@@ -1537,7 +1537,13 @@ export const appRouter = router({
           status: "respondido",
           currentStep: "EAP_REVISAO",
           provider: "configured-gateway",
-          contextJson: JSON.stringify({ kind: "eap_review", projectId: input.projectId, mode: input.mode }),
+          contextJson: JSON.stringify({
+            kind: "eap_review",
+            projectId: input.projectId,
+            mode: input.mode,
+            orchestratorId: "arquimedes",
+            agentId: "euclides",
+          }),
           resultJson: JSON.stringify(proposal),
           iterations: 1,
           finishedAt: new Date(),
@@ -1615,17 +1621,30 @@ export const appRouter = router({
             parsed
           );
           let mode: "analisar" | "resolver_bloqueios" = "analisar";
+          let agentId: "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia" = "euclides";
+          let orchestratorId: "arquimedes" = "arquimedes";
           try {
             const contextMeta = review.contextJson ? JSON.parse(review.contextJson) : null;
             if (contextMeta?.mode === "resolver_bloqueios") mode = "resolver_bloqueios";
+            if (
+              contextMeta?.agentId === "euclides" ||
+              contextMeta?.agentId === "newton" ||
+              contextMeta?.agentId === "fibonacci" ||
+              contextMeta?.agentId === "gauss" ||
+              contextMeta?.agentId === "hipatia"
+            ) {
+              agentId = contextMeta.agentId;
+            }
           } catch {
-            // Compatibilidade com revisões antigas sem metadados de modo.
+            // Compatibilidade com revisões antigas sem metadados de agente.
           }
           return {
             requestId: review.requestId,
             createdAt: review.createdAt,
             proposal,
             mode,
+            agentId,
+            orchestratorId,
           };
         } catch {
           return null;
