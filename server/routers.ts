@@ -73,6 +73,7 @@ import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import { buildEapResearchQueries, searchWebEvidence } from "./web-research";
+import { buildEapResolutionPlan } from "./construction/eap-resolution-engine";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -1566,6 +1567,27 @@ export const appRouter = router({
           throw conflict("Não há bloqueios estruturais na EAP para o Euclides resolver. Faça uma nova análise para revisar escopo.");
         }
 
+        const resolutionPlan =
+          input.mode === "resolver_bloqueios"
+            ? buildEapResolutionPlan(
+                nodes.map(node => ({
+                  code: node.code,
+                  nodeId: node.id,
+                  name: node.name,
+                  parentCode:
+                    node.parentId == null
+                      ? null
+                      : nodes.find(parent => parent.id === node.parentId)?.code ?? null,
+                  description: node.description,
+                  inclusions: node.inclusions,
+                  exclusions: node.exclusions,
+                  responsible: node.responsible,
+                  acceptanceCriteria: node.acceptanceCriteria,
+                })),
+                resolutionIssues
+              )
+            : [];
+
         const researchQueries =
           input.mode === "resolver_bloqueios"
             ? buildEapResearchQueries(resolutionIssues)
@@ -1582,12 +1604,14 @@ export const appRouter = router({
             mode: input.mode,
             resolutionIssues,
             resolutionTargets,
+            resolutionPlan,
             researchEvidence,
           }
         );
         const parsedProposal = parseEapProposal(raw);
         if (input.mode === "resolver_bloqueios") {
           parsedProposal.researchEvidence = researchEvidence;
+          parsedProposal.resolutionPlan = resolutionPlan;
         }
         const proposal = validateAndNormalizeEapProposal(
           nodes.map(node => ({
