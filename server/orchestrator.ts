@@ -284,14 +284,40 @@ const ENGINEERING_GAP_TOOL: LlmTool = {
   function: {
     name: "engineering_gap_analysis",
     description:
-      "Faz uma varredura técnica da obra antes de concluir uma análise. Escolha um único foco geral ou, no máximo, dois focos complementares. Não repita o mesmo foco e não percorra todas as especialidades só porque elas existem. Consulta validações estruturais, pacotes sem dono, atividades, dependências, CPM e linha de base quando essas ferramentas estiverem disponíveis. Use quando o usuário pedir uma análise da obra, dos problemas, das lacunas ou quando você precisar descobrir algo que ele talvez não esteja vendo.",
+      "Consulta evidências técnicas adicionais de forma direcionada. Não faça uma varredura fixa por categoria. Escolha apenas as consultas read-only necessárias para reduzir uma lacuna identificada nas evidências já disponíveis. Você pode solicitar de 1 a 6 consultas complementares por rodada. Não repita consultas já suficientes e não consulte uma ferramenta apenas porque ela pertence a uma categoria existente.",
     parameters: {
       type: "object",
       properties: {
+        checks: {
+          type: "array",
+          minItems: 1,
+          maxItems: 6,
+          uniqueItems: true,
+          items: {
+            type: "string",
+            enum: [
+              "get_eap_tree",
+              "validar_estrutura",
+              "pacotes_sem_dono",
+              "resumo_quantitativos",
+              "listar_atividades",
+              "listar_dependencias",
+              "validar_dependencias",
+              "calcular_caminho_critico",
+              "listar_baselines",
+              "comparar_baseline",
+              "listar_temas",
+              "calcular_linha_balanco",
+              "balancear_ritmos_lob",
+              "dimensionar_equipes_lob"
+            ]
+          },
+          description: "Consultas read-only que respondem diretamente às lacunas observadas. Escolha somente as necessárias."
+        },
         focus: {
           type: "string",
           enum: ["geral", "eap", "cronograma", "producao", "lob"],
-          description: "Área principal da varredura."
+          description: "Compatibilidade com solicitações legadas; use somente quando checks não estiver presente."
         }
       },
       additionalProperties: false
@@ -522,7 +548,9 @@ function buildSystem(
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
     "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
-    "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente. Você pode fazer várias rodadas de ferramentas antes da resposta final.",
+    "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente.",
+    "Ao usar engineering_gap_analysis, escolha consultas específicas com base nas lacunas observadas naquele momento. Não faça uma varredura fixa por EAP, cronograma, produção ou LOB. Não repita uma consulta cujo resultado já seja suficiente. Cada nova rodada deve ter uma justificativa factual na evidência anterior e pode selecionar de uma a poucas ferramentas diretamente relacionadas ao que falta confirmar.",
+    "Você pode fazer várias rodadas de ferramentas antes da resposta final, mas cada rodada deve reduzir uma incerteza real; quando a evidência já for suficiente, pare de consultar e consolide.",
     "Na EAP, nunca tente colocar diagnóstico, justificativas extensas ou todo o raciocínio em um único campo textual. Use os campos estruturados dos nós para registrar evidências e correções; o resumo deve sintetizar a conclusão.",
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
     "A validação estrutural determinística local da EAP faz parte das evidências confirmadas da obra e não depende do MCP. Quando ela estiver disponível no contexto, use seu resultado para relatar estrutura, órfãos, níveis, duplicidades e ciclos. A indisponibilidade do MCP só torna indisponíveis as verificações que realmente dependem dele.",
@@ -617,7 +645,8 @@ export async function runProjectOrchestrator(
     errors: catalog.errors,
   });
   const audit: AuditEvent[] = [];
-  const gapAnalysisFoci = new Set<string>();
+  const gapChecksExecuted = new Set<string>();
+  let gapAnalysisCalls = 0;
   const MAX_GAP_ANALYSES = 2;
   const conversation: LlmMessage[] = [
     { role: "system", content: buildSystem(context, mcpProjectIds, intent) },
@@ -847,8 +876,13 @@ export async function runProjectOrchestrator(
       if (toolName === "engineering_gap_analysis") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
-        const focus = typeof rawArgs.focus === "string" ? rawArgs.focus : "geral";
-        const checksByFocus: Record<string, string[]> = {
+
+        const requestedChecks = Array.isArray(rawArgs.checks)
+          ? rawArgs.checks.filter((value): value is string => typeof value === "string")
+          : [];
+        const focus = typeof rawArgs.focus === "string" ? rawArgs.focus : null;
+
+        const legacyChecksByFocus: Record<string, string[]> = {
           geral: [
             "validar_estrutura",
             "pacotes_sem_dono",
@@ -864,39 +898,30 @@ export async function runProjectOrchestrator(
           producao: ["pacotes_sem_dono", "resumo_quantitativos", "listar_atividades"],
           lob: ["listar_temas", "calcular_linha_balanco", "balancear_ritmos_lob", "dimensionar_equipes_lob"],
         };
-        if (gapAnalysisFoci.has(focus)) {
-          const value = {
-            obra: context.project.code,
-            foco: focus,
-            status: "ja_executado",
-            instrucao:
-              "Esta varredura já foi executada nesta análise. Use o resultado anterior e consolide a resposta; não repita a mesma consulta.",
-          };
-          return { ok: true, content: JSON.stringify(value) };
-        }
 
-        if (
-          gapAnalysisFoci.has("geral") ||
-          (focus === "geral" && gapAnalysisFoci.size > 0) ||
-          gapAnalysisFoci.size >= MAX_GAP_ANALYSES
-        ) {
+        const selectedChecks = (requestedChecks.length
+          ? requestedChecks
+          : legacyChecksByFocus[focus ?? "geral"] ?? legacyChecksByFocus.geral
+        ).slice(0, 6);
+
+        if (gapAnalysisCalls >= MAX_GAP_ANALYSES) {
           const value = {
             obra: context.project.code,
-            foco: focus,
             status: "limite_atingido",
+            consultasJaExecutadas: [...gapChecksExecuted],
             instrucao:
-              "O orçamento de varreduras desta análise já foi usado. Não solicite outra varredura; consolide as evidências já coletadas e conclua.",
+              "O orçamento de rodadas adicionais desta análise já foi usado. Não solicite outra varredura; consolide as evidências já coletadas e conclua.",
           };
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "success", durationMs: Date.now() - startedAt,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: JSON.stringify(value) };
         }
 
-        gapAnalysisFoci.add(focus);
+        gapAnalysisCalls += 1;
 
-        // As ferramentas oficiais dos MCPs são um contrato conhecido do
-        // orquestrador. Mesmo que a descoberta dinâmica (listTools) esteja
-        // temporariamente indisponível/limitada (ex.: HTTP 429), podemos tentar
-        // as consultas somente-leitura diretamente e registrar o erro real se
-        // a execução também estiver indisponível.
         const knownByDomain: Record<string, Set<string>> = {
           eap: new Set([
             "get_eap_tree",
@@ -919,19 +944,31 @@ export async function runProjectOrchestrator(
             "dimensionar_equipes_lob",
           ]),
         };
-        const requested = checksByFocus[focus] ?? checksByFocus.geral;
+
         const findings: Array<Record<string, unknown>> = [];
-        for (const check of requested) {
+        for (const check of selectedChecks) {
+          if (gapChecksExecuted.has(check)) {
+            findings.push({
+              check,
+              status: "ja_consultado",
+              instrucao: "Não repita esta consulta; use o resultado já retornado nesta análise.",
+            });
+            continue;
+          }
+
           const domain = TOOL_DOMAINS[check as keyof typeof TOOL_DOMAINS];
           if (!domain || !knownByDomain[domain]?.has(check)) {
             findings.push({ check, status: "indisponivel" });
             continue;
           }
+
           const projectId = mcpProjectIds[domain];
-          if (!domain || !projectId) {
+          if (!projectId) {
             findings.push({ check, status: "sem_projeto_mcp" });
+            gapChecksExecuted.add(check);
             continue;
           }
+
           try {
             const result = await (deps.callTool ?? callReadOnlyMcpTool)(
               domain,
@@ -939,17 +976,23 @@ export async function runProjectOrchestrator(
               { project_id: projectId }
             );
             findings.push({ check, status: "ok", result });
+            gapChecksExecuted.add(check);
           } catch (error) {
             findings.push({
               check,
               status: "erro",
               error: error instanceof Error ? error.message : String(error),
             });
+            // Consider the attempted check consumed so a failing MCP does not
+            // trigger an infinite retry loop in the next reasoning round.
+            gapChecksExecuted.add(check);
           }
         }
+
         const value = {
           obra: context.project.code,
-          foco: focus,
+          consultasSolicitadas: selectedChecks,
+          consultasJaExecutadas: [...gapChecksExecuted],
           verificacoes: findings,
           evidenciasLocais: {
             nosEap: context.evidence?.eapNodeCount ?? null,
@@ -970,8 +1013,9 @@ export async function runProjectOrchestrator(
               : null,
           },
           instrucao:
-            "Interprete os resultados como evidência. Separe achados confirmados de hipóteses e indisponibilidades. Se um MCP estiver indisponível, use as evidências locais acima como fallback e continue a análise. Não altere a obra nesta ferramenta.",
+            "Interprete cada resultado como evidência. Separe fatos confirmados, inferências e indisponibilidades. Use a rodada seguinte somente se ainda existir uma lacuna relevante que possa ser reduzida por outra consulta específica. Se um MCP estiver indisponível, use as evidências locais como fallback. Não altere a obra nesta ferramenta.",
         };
+
         audit.push({
           taskId,
           iteration,
