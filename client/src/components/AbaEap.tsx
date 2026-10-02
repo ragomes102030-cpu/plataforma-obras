@@ -210,7 +210,9 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     analisarComArquimedes.data?.agentId ??
     revisaoArquimedes.data?.agentId ??
     "euclides";
-  const resumoCorrecao = propostaArquimedes?.resolutionSummary ?? [];  const cicloRevisao = revisaoArquimedes.data?.resolutionCycle as {
+  const resumoCorrecao = propostaArquimedes?.resolutionSummary ?? [];
+  const evidenciasPesquisa = propostaArquimedes?.researchEvidence ?? [];
+  const cicloRevisao = revisaoArquimedes.data?.resolutionCycle as {
     before?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
     after?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
     resolved?: Array<{ code: string; message: string; entityRef?: string }>;
@@ -324,7 +326,36 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             </div>
           ))}
           {modoUltimaRevisaoArquimedes === "resolver_bloqueios" && (
-            <div className="eap-proposta-correcao">
+            <>
+              <div className="eap-pesquisa-evidencias">
+                <div className="eap-pesquisa-evidencias-head">
+                  <div>
+                    <strong>Pesquisa de evidências usada pelo Euclides</strong>
+                    <span>
+                      {evidenciasPesquisa.length
+                        ? `${evidenciasPesquisa.length} fonte(s) externa(s) consideradas na proposta.`
+                        : "Nenhuma fonte externa foi registrada nesta rodada; a solução está baseada somente nos dados da obra."}
+                    </span>
+                  </div>
+                  <span className={evidenciasPesquisa.length ? "ativo" : "indisponivel"}>
+                    {evidenciasPesquisa.length ? "PESQUISA ATIVA" : "SEM PESQUISA"}
+                  </span>
+                </div>
+                {!!evidenciasPesquisa.length && (
+                  <div className="eap-pesquisa-evidencias-lista">
+                    {evidenciasPesquisa.slice(0, 8).map((source, index) => (
+                      <a key={source.url + index} href={source.url} target="_blank" rel="noreferrer">
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <div>
+                          <strong>{source.title}</strong>
+                          <small>{source.sourceType} · {source.snippet}</small>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="eap-proposta-correcao">
               <div className="eap-proposta-correcao-head">
                 <Bot size={15} />
                 <div>
@@ -372,7 +403,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                 </div>
               )}
             </div>
-          )}
+          </>
 
           {cicloRevisao && (
             <div className="eap-ciclo-revisao">
