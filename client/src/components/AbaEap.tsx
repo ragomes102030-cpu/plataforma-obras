@@ -58,6 +58,15 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [modoRevisao, setModoRevisao] = useState(false);
 
   const utils = trpc.useUtils();
+  const dicionarioPadrao = trpc.projects.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const decidirDicionario = trpc.projects.decideEapDictionaryStandard.useMutation({
+    onSuccess: async () => {
+      await dicionarioPadrao.refetch();
+      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await revisaoArquimedes.refetch();
+    },
+  });
+  const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
 
   const criarNo = trpc.projects.createWbsNode.useMutation({
@@ -199,15 +208,6 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   const expandirTudo = () => setAberto(new Set(nos.filter(n => n.nodeType !== "entrega").map(n => n.id)));
   const recolherTudo = () => setAberto(new Set());
-  const dicionarioPadrao = trpc.projects.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
-  const decidirDicionario = trpc.projects.decideEapDictionaryStandard.useMutation({
-    onSuccess: async () => {
-      await dicionarioPadrao.refetch();
-      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
-      await revisaoArquimedes.refetch();
-    },
-  });
-  const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
   const propostaArquimedes = revisaoArquimedes.data?.proposal;
   const ultimaRevisaoArquimedes = revisaoArquimedes.data?.createdAt ?? null;
   const modoUltimaRevisaoArquimedes = revisaoArquimedes.data?.mode ?? "analisar";
@@ -231,6 +231,11 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   } | null;
   const cicloRevisaoAplicado = Boolean(cicloRevisao?.appliedAt);
   const bloqueiosAposCorrecao = cicloRevisao?.counts?.afterErrors ?? cicloRevisao?.after?.summary?.errors ?? validacao.data?.summary.errors ?? 0;
+
+  const issuesUnicos = useMemo(() => {
+    const issues = validacao.data?.issues ?? [];
+    return Array.from(new Map(issues.map(issue => [issue.code + "|" + (issue.entityRef ?? "") + "|" + issue.message.trim(), issue])).values());
+  }, [validacao.data?.issues]);
 
   const resumoApontamentos = useMemo(() => {
     const issues = issuesUnicos;
@@ -303,10 +308,6 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     return resultado;
   }, [issuesUnicos]);
 
-  const issuesUnicos = useMemo(() => {
-    const issues = validacao.data?.issues ?? [];
-    return Array.from(new Map(issues.map(issue => [issue.code + "|" + (issue.entityRef ?? "") + "|" + issue.message.trim(), issue])).values());
-  }, [validacao.data?.issues]);
   const totalApontamentos = issuesUnicos.filter(issue => issue.severity === "warning").length;
   const pendenciasOrcamento = issuesUnicos.filter(issue => issue.code === "wbs_leaf_without_cost" || issue.code === "wbs_double_counted_cost" || issue.code === "wbs_group_without_any_cost").length;
   const alertasEap = issuesUnicos.filter(issue => issue.severity === "warning" && !issue.code.startsWith("wbs_")).length;
