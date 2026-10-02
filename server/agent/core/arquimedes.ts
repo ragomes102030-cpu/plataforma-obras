@@ -342,6 +342,7 @@ export async function proposeEapWithArquimedes(
     mode?: "analisar" | "resolver_bloqueios";
     resolutionIssues?: Array<{ code: string; message: string; entityRef?: string }>;
     resolutionTargets?: ArquimedesLlmRequest["eapResolutionTargets"];
+    resolutionPlan?: ArquimedesLlmRequest["eapResolutionPlan"];
     researchEvidence?: ArquimedesLlmRequest["researchEvidence"];
   } = {},
 ): Promise<{ raw: string; request: ArquimedesLlmRequest }> {
@@ -358,6 +359,7 @@ export async function proposeEapWithArquimedes(
     options.mode ?? "analisar",
     options.resolutionIssues ?? [],
     options.resolutionTargets ?? [],
+    options.resolutionPlan ?? [],
     options.researchEvidence ?? []
   );
 
