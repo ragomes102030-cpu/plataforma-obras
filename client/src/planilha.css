@@ -2335,3 +2335,23 @@ tr:hover .xl-codigo {
   .pl-dependencia-item{grid-template-columns:1fr}
   .pl-dependencia-item strong{order:2}
 }
+
+
+.pl-gantt-bar.critical{stroke-width:2.5;stroke:#9d2d2d}
+.pl-gantt-duration.critical{font-weight:800;fill:#8f2727}
+.pl-gantt-critical-note{font-size:9px;font-weight:800;fill:#8f2727}
+.pl-gantt-cpm-aviso{
+  margin:0 10px 10px;
+  padding:7px 10px;
+  border:1px solid #e6d4aa;
+  border-radius:6px;
+  background:#fffbf2;
+  color:#795f28;
+  font-size:10px;
+  line-height:1.4;
+}
+.pl-gantt-cpm-aviso.erro{
+  border-color:#f2c7c3;
+  background:#fff7f6;
+  color:#a33a32;
+}
