@@ -9,6 +9,20 @@ describe("parseEapProposal", () => {
     ).toThrow(/proposta EAP incompleta ou inválida/i);
   });
 
+  it("compacta resumo longo sem rejeitar a proposta", () => {
+    const result = parseEapProposal(
+      JSON.stringify({
+        basis: [],
+        assumptions: [],
+        missingInformation: [],
+        resolutionSummary: ["x".repeat(2400)],
+        nodes: [],
+      })
+    );
+
+    expect(result.resolutionSummary?.[0]?.length).toBeLessThanOrEqual(600);
+  });
+
   it("preserva o resumo das correções propostas pelo especialista", () => {
     const result = parseEapProposal(
       JSON.stringify({
