@@ -363,6 +363,31 @@ const LOCAL_EAP_TOOL: LlmTool = {
           minimum: 1,
           maximum: 30,
           description: "Máximo de nós retornados."
+        },
+        field: {
+          type: "string",
+          enum: [
+            "description",
+            "inclusions",
+            "exclusions",
+            "location",
+            "responsible",
+            "acceptanceCriteria",
+            "scopeStatus",
+            "decompositionBasis",
+            "unit",
+            "plannedQuantity"
+          ],
+          description: "Campo específico para filtrar nós preenchidos ou não preenchidos."
+        },
+        fieldState: {
+          type: "string",
+          enum: ["filled", "missing"],
+          description: "Quando field for informado, filtra pelo estado desse campo."
+        },
+        includeCoverage: {
+          type: "boolean",
+          description: "Retorna cobertura agregada dos principais campos em todos os nós e em todas as folhas."
         }
       },
       additionalProperties: false
@@ -764,13 +789,31 @@ export async function runProjectOrchestrator(
           const parentCode = typeof rawArgs.parentCode === "string" ? rawArgs.parentCode.trim().toLowerCase() : "";
           const leafOnly = rawArgs.leafOnly === true;
           const limit = Math.min(Math.max(Number(rawArgs.limit ?? 20), 1), 30);
+          const field = typeof rawArgs.field === "string" ? rawArgs.field : null;
+          const fieldState = rawArgs.fieldState === "filled" || rawArgs.fieldState === "missing"
+            ? rawArgs.fieldState
+            : null;
+          const includeCoverage = rawArgs.includeCoverage === true;
           const parentNode = parentCode ? byRef.get(parentCode) : null;
+
+          const fieldValue = (node: (typeof nodes)[number], key: string) => {
+            const value = (node as Record<string, unknown>)[key];
+            if (value === null || value === undefined) return null;
+            if (typeof value === "string") return value.trim() || null;
+            return value;
+          };
+          const isFieldFilled = (node: (typeof nodes)[number], key: string) => fieldValue(node, key) !== null;
 
           const selected = nodes
             .filter(node => {
               if (refs.length > 0 && !refs.some(ref => byRef.get(ref.trim().toLowerCase())?.id === node.id)) return false;
               if (parentCode && (!parentNode || String(node.parentId) !== String(parentNode.id))) return false;
               if (leafOnly && (childrenByParent.get(String(node.id)) ?? 0) > 0) return false;
+              if (field && fieldState) {
+                const filled = isFieldFilled(node, field);
+                if (fieldState === "filled" && !filled) return false;
+                if (fieldState === "missing" && filled) return false;
+              }
               if (search) {
                 const haystack = [
                   node.code, node.name, node.description, node.inclusions, node.exclusions,
@@ -805,8 +848,63 @@ export async function runProjectOrchestrator(
             fonte: "local_db",
             totalNodes: nodes.length,
             totalLeaves: nodes.filter(node => (childrenByParent.get(String(node.id)) ?? 0) === 0).length,
-            filtros: { refs, search: search || null, parentCode: parentCode || null, leafOnly, limit },
+            filtros: {
+              refs,
+              search: search || null,
+              parentCode: parentCode || null,
+              leafOnly,
+              limit,
+              field,
+              fieldState,
+            },
             encontrados: selected.length,
+            coverage: includeCoverage
+              ? (() => {
+                  const leaves = nodes.filter(node => (childrenByParent.get(String(node.id)) ?? 0) === 0);
+                  const fields = [
+                    "description",
+                    "inclusions",
+                    "exclusions",
+                    "location",
+                    "responsible",
+                    "acceptanceCriteria",
+                    "scopeStatus",
+                    "decompositionBasis",
+                    "unit",
+                    "plannedQuantity",
+                  ] as const;
+                  const makeCoverage = (population: typeof nodes) =>
+                    Object.fromEntries(
+                      fields.map(key => {
+                        const filled = population.filter(node => isFieldFilled(node, key)).length;
+                        return [key, {
+                          total: population.length,
+                          filled,
+                          missing: population.length - filled,
+                          coveragePct: population.length ? Math.round((filled / population.length) * 10000) / 100 : 0,
+                        }];
+                      })
+                    );
+                  return {
+                    allNodes: makeCoverage(nodes),
+                    leaves: makeCoverage(leaves),
+                    currentDictionaryRule: {
+                      fields: ["description", "inclusions", "exclusions", "responsible", "acceptanceCriteria"],
+                      totalLeaves: leaves.length,
+                      completeLeaves: leaves.filter(node =>
+                        ["description", "inclusions", "exclusions", "responsible", "acceptanceCriteria"]
+                          .every(key => isFieldFilled(node, key))
+                      ).length,
+                    },
+                    scopeStatusValues: Array.from(
+                      new Set(nodes.map(node => String(node.scopeStatus ?? "null")))
+                    ).map(value => ({
+                      value,
+                      count: nodes.filter(node => String(node.scopeStatus ?? "null") === value).length,
+                    })),
+                  };
+                })()
+              : null,
             nos: selected.map(node => ({
               code: node.code,
               name: node.name,
