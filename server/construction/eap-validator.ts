@@ -32,8 +32,21 @@ export type EapScopeNode = EapEvidenceNode & {
   scopeStatus?: string | null;
 };
 
+export type EapDictionaryField =
+  | "description"
+  | "inclusions"
+  | "exclusions"
+  | "acceptanceCriteria"
+  | "responsible"
+  | "location"
+  | "unit"
+  | "plannedQuantity"
+  | "scopeStatus"
+  | "decompositionBasis";
+
 export type EapScopeValidationOptions = {
   requireDictionaryForLeaves?: boolean;
+  requiredDictionaryFields?: EapDictionaryField[];
 };
 
 export function validateEapScope(
@@ -158,11 +171,33 @@ export function validateEapScope(
       // A validação estrutural da EAP não deve exigir dado de medição
       // antes de o escopo ser aprovado.
       if (options.requireDictionaryForLeaves) {
-        if (!node.description?.trim()) missing.push("descrição/escopo");
-        if (!node.inclusions?.trim()) missing.push("inclusões");
-        if (!node.exclusions?.trim()) missing.push("exclusões");
-        if (!node.responsible?.trim()) missing.push("responsável");
-        if (!node.acceptanceCriteria?.trim()) missing.push("critério de aceitação");
+        const requiredFields = options.requiredDictionaryFields?.length
+          ? options.requiredDictionaryFields
+          : [
+              "description",
+              "inclusions",
+              "exclusions",
+              "responsible",
+              "acceptanceCriteria",
+            ] as EapDictionaryField[];
+        const labels: Record<EapDictionaryField, string> = {
+          description: "descrição/escopo",
+          inclusions: "inclusões",
+          exclusions: "exclusões",
+          acceptanceCriteria: "critério de aceitação",
+          responsible: "responsável",
+          location: "localização",
+          unit: "unidade",
+          plannedQuantity: "quantidade planejada",
+          scopeStatus: "status do escopo",
+          decompositionBasis: "base de decomposição",
+        };
+        for (const field of requiredFields) {
+          const value = (node as unknown as Record<string, unknown>)[field];
+          if (value === null || value === undefined || String(value).trim() === "") {
+            missing.push(labels[field]);
+          }
+        }
       }
       if (missing.length) {
         issues.push({

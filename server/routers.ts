@@ -1119,23 +1119,60 @@ type EapReviewIssueSnapshot = {
 };
 
 function eapReviewIssueKey(issue: EapReviewIssueSnapshot) {
-  return `${issue.code}|${issue.entityRef ?? ""}`;
+  return `${issue.code}|${issue.entityRef ?? ""}|${issue.message.trim()}`;
+}
+
+function dedupeEapReviewIssues(issues: EapReviewIssueSnapshot[]) {
+  return Array.from(new Map(issues.map(issue => [eapReviewIssueKey(issue), issue])).values());
 }
 
 function buildEapReviewSnapshot(validation: {
   valid: boolean;
   issues: EapReviewIssueSnapshot[];
 }) {
-  const errors = validation.issues.filter(issue => issue.severity === "error");
-  const warnings = validation.issues.filter(issue => issue.severity === "warning");
+  const issues = dedupeEapReviewIssues(validation.issues);
+  const errors = issues.filter(issue => issue.severity === "error");
+  const warnings = issues.filter(issue => issue.severity === "warning");
   return {
     valid: validation.valid,
-    summary: {
-      errors: errors.length,
-      warnings: warnings.length,
-    },
-    issues: validation.issues.slice(0, 120),
+    summary: { errors: errors.length, warnings: warnings.length },
+    issues: issues.slice(0, 120),
   };
+}
+
+type EapDictionaryStandard = {
+  version: 1;
+  status: "proposed" | "approved" | "rejected";
+  requiredFields: string[];
+  conditionalFields: string[];
+  approvedAt?: string;
+  decidedBy?: number;
+  summary?: string;
+};
+
+const DEFAULT_EAP_DICTIONARY_STANDARD: EapDictionaryStandard = {
+  version: 1,
+  status: "proposed",
+  requiredFields: [
+    "description", "inclusions", "exclusions", "acceptanceCriteria",
+    "responsible", "scopeStatus", "decompositionBasis",
+  ],
+  conditionalFields: ["location", "unit", "plannedQuantity"],
+};
+
+async function loadEapDictionaryStandard(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, projectId: number) {
+  const rows = await db
+    .select({ payload: projectAuditEvents.payload, createdAt: projectAuditEvents.createdAt })
+    .from(projectAuditEvents)
+    .where(and(eq(projectAuditEvents.projectId, projectId), eq(projectAuditEvents.action, "eap_dictionary_standard_decision")))
+    .orderBy(desc(projectAuditEvents.createdAt))
+    .limit(1);
+  if (!rows[0]?.payload) return DEFAULT_EAP_DICTIONARY_STANDARD;
+  try {
+    return { ...DEFAULT_EAP_DICTIONARY_STANDARD, ...(JSON.parse(rows[0].payload) as Partial<EapDictionaryStandard>) };
+  } catch {
+    return DEFAULT_EAP_DICTIONARY_STANDARD;
+  }
 }
 
 export const appRouter = router({
@@ -1483,6 +1520,44 @@ export const appRouter = router({
           )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
+    eapDictionaryStandard: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return DEFAULT_EAP_DICTIONARY_STANDARD;
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return loadEapDictionaryStandard(db, input.projectId);
+      }),
+    decideEapDictionaryStandard: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        decision: z.enum(["approved", "partially_approved", "rejected"]),
+        requiredFields: z.array(z.string()).max(10),
+        conditionalFields: z.array(z.string()).max(10),
+        summary: z.string().trim().max(3000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const payload = {
+          version: 1 as const,
+          status: input.decision === "rejected" ? "rejected" as const : "approved" as const,
+          decision: input.decision,
+          requiredFields: [...new Set(input.requiredFields)],
+          conditionalFields: [...new Set(input.conditionalFields)],
+          approvedAt: new Date().toISOString(),
+          decidedBy: ctx.user.id,
+          summary: input.summary,
+        };
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "eap_dictionary_standard_decision",
+          payload: JSON.stringify(payload),
+        });
+        return payload;
+      }),
     analisarEapComArquimedes: protectedProcedure
       .input(
         z.object({
@@ -1546,12 +1621,16 @@ export const appRouter = router({
           })),
         };
 
-        const currentValidation = validateEapScope(
-          nodes,
-          { requireDictionaryForLeaves: true }
-        );
+        const dictionaryStandard = await loadEapDictionaryStandard(db, input.projectId);
+        const currentValidation = validateEapScope(nodes, {
+          requireDictionaryForLeaves: dictionaryStandard.status === "approved",
+          requiredDictionaryFields:
+            dictionaryStandard.status === "approved"
+              ? dictionaryStandard.requiredFields as import("./construction/eap-validator").EapDictionaryField[]
+              : undefined,
+        });
         const beforeValidationSnapshot = buildEapReviewSnapshot(currentValidation);
-        const resolutionIssues = currentValidation.issues
+        const resolutionIssues = dedupeEapReviewIssues(currentValidation.issues)
           .filter(
             issue =>
               issue.severity === "error" ||
@@ -1752,6 +1831,7 @@ export const appRouter = router({
           reviewRequestId,
           proposal,
           currentValidation,
+          dictionaryStandard,
           mode: input.mode,
           research: {
             enabled: Boolean(ENV.webResearchApiKey),
@@ -2219,10 +2299,14 @@ export const appRouter = router({
                   )
             )
             .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-          const afterValidation = validateEapScope(
-            afterNodes,
-            { requireDictionaryForLeaves: true }
-          );
+          const afterDictionaryStandard = await loadEapDictionaryStandard(db, input.projectId);
+          const afterValidation = validateEapScope(afterNodes, {
+            requireDictionaryForLeaves: afterDictionaryStandard.status === "approved",
+            requiredDictionaryFields:
+              afterDictionaryStandard.status === "approved"
+                ? afterDictionaryStandard.requiredFields as import("./construction/eap-validator").EapDictionaryField[]
+                : undefined,
+          });
           const afterSnapshot = buildEapReviewSnapshot(afterValidation);
 
           let beforeSnapshot: ReturnType<typeof buildEapReviewSnapshot> | null = null;
@@ -2310,7 +2394,14 @@ export const appRouter = router({
           scopeStatus: node.scopeStatus,
         }));
         const structural = validateEap(evidenceNodes);
-        const scope = validateEapScope(evidenceNodes, { requireDictionaryForLeaves: true });
+        const dictionaryStandard = await loadEapDictionaryStandard(db, input.projectId);
+        const scope = validateEapScope(evidenceNodes, {
+          requireDictionaryForLeaves: dictionaryStandard.status === "approved",
+          requiredDictionaryFields:
+            dictionaryStandard.status === "approved"
+              ? dictionaryStandard.requiredFields as import("./construction/eap-validator").EapDictionaryField[]
+              : undefined,
+        });
         const versions = await db.select({ id: budgetVersions.id }).from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId));
         const budget = versions.length
           ? await db.select({ wbsNodeId: budgetItems.wbsNodeId }).from(budgetItems).where(inArray(budgetItems.budgetVersionId, versions.map(version => version.id)))
@@ -2321,7 +2412,7 @@ export const appRouter = router({
         // não impedimos a validação/aprovação estrutural da EAP por falta de vínculo
         // orçamentário nesta etapa.
         const costIssues = cost.issues.map(issue => ({ ...issue, severity: "warning" as const }));
-        const issues = [...structural.issues, ...scope.issues, ...costIssues];
+        const issues = dedupeEapReviewIssues([...structural.issues, ...scope.issues, ...costIssues]);
         const errors = issues.filter(issue => issue.severity === "error").length;
         const warnings = issues.filter(issue => issue.severity === "warning").length;
         const costErrors = cost.issues.filter(issue => issue.severity === "error");
