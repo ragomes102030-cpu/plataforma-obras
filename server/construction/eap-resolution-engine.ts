@@ -63,11 +63,22 @@ export function buildEapResolutionPlan(
       /sobreposição|responsabilidades duplicadas/i.test(issue.message);
 
     if (overlap && issueNodes.length >= 2) {
+      const lastCode = codes.at(-1);
+      const lastNode = lastCode ? byCode.get(lastCode) : undefined;
+      const siblingNodes =
+        lastNode &&
+        issueNodes.length >= 3 &&
+        issueNodes.slice(0, -1).every(node => node.parentId === lastNode.nodeId)
+          ? issueNodes.slice(0, -1)
+          : issueNodes;
+
       const parentCode =
-        issueNodes.find(node => node.parentCode)?.parentCode ??
-        (codes.length >= 3 ? codes[codes.length - 1]!.split(".").slice(0, -1).join(".") : null);
-      const affectedCodes = issueNodes.map(node => node.code).sort();
-      const key = `scope_overlap:${parentCode ?? "root"}:${affectedCodes.join(",")}`;
+        lastNode && siblingNodes.every(node => node.parentId === lastNode.nodeId)
+          ? lastNode.code
+          : siblingNodes[0]?.parentCode ?? null;
+
+      const affectedCodes = siblingNodes.map(node => node.code).sort();
+      const key = `scope_overlap:${parentCode ?? "root"}`;
 
       let group = groups.get(key);
       if (!group) {
@@ -76,13 +87,13 @@ export function buildEapResolutionPlan(
           kind: "scope_overlap",
           parentCode: parentCode ?? null,
           affectedCodes,
-          affectedNodeIds: issueNodes.map(node => node.nodeId),
+          affectedNodeIds: siblingNodes.map(node => node.nodeId),
           issueCount: 0,
           problem:
-            "Os irmãos possuem evidências de sobreposição textual e precisam ter fronteiras de escopo mutuamente exclusivas.",
+            `Os irmãos de ${parentCode ?? "estrutura"} possuem evidências de sobreposição textual e precisam ter fronteiras de escopo mutuamente exclusivas.`,
           evidence: [],
           requiredAction:
-            "Revisar inclusões e exclusões do conjunto, preservando cobertura do pai e separando responsabilidades duplicadas sem inventar escopo.",
+            "Revisar inclusões e exclusões de todos os irmãos envolvidos, preservando a cobertura do pai e separando responsabilidades duplicadas.",
           unresolvedDecisions: [],
         };
         groups.set(key, group);
@@ -90,7 +101,7 @@ export function buildEapResolutionPlan(
 
       group.issueCount += 1;
       group.evidence.push(issue.message);
-      for (const node of issueNodes) {
+      for (const node of siblingNodes) {
         if (!group.affectedCodes.includes(node.code)) group.affectedCodes.push(node.code);
         if (!group.affectedNodeIds.includes(node.nodeId)) group.affectedNodeIds.push(node.nodeId);
       }
@@ -101,25 +112,48 @@ export function buildEapResolutionPlan(
       (issue.entityRef ? nodes.find(node => String(node.nodeId) === String(issue.entityRef)) : undefined) ??
       issueNodes[0];
 
-    if (issue.code === "eap_leaf_not_ready" && issueNode) {
-      const missing = leafMissingFields(issueNode);
-      const key = `missing_dictionary:${issueNode.nodeId}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
+    if (
+      (issue.code === "eap_leaf_not_ready" ||
+        issue.code === "eap_decomposition_basis_missing") &&
+      issueNode
+    ) {
+      const parentCode = issueNode.parentCode ?? issueNode.code;
+      const key = `missing_dictionary:${parentCode}`;
+      let group = groups.get(key);
+
+      if (!group) {
+        group = {
           id: `GRP-${groups.size + 1}`,
           kind: "missing_dictionary",
           parentCode: issueNode.parentCode,
           affectedCodes: [issueNode.code],
           affectedNodeIds: [issueNode.nodeId],
-          issueCount: 1,
-          problem: `${issueNode.code} ainda não possui todos os campos necessários do dicionário da EAP.`,
-          evidence: [issue.message],
+          issueCount: 0,
+          problem:
+            `Há folhas ou nós sob ${parentCode} com campos do dicionário ainda incompletos.`,
+          evidence: [],
           requiredAction:
-            "Preencher os campos de escopo que podem ser determinados pelos dados da obra e separar explicitamente as decisões que dependem do engenheiro.",
-          unresolvedDecisions: missing.includes("responsável")
-            ? ["Definir responsável do pacote com base em uma pessoa/equipe real da obra."]
-            : [],
-        });
+            "Preencher em conjunto os campos de escopo que podem ser determinados pelos dados da obra e separar as decisões que dependem do engenheiro.",
+          unresolvedDecisions: [],
+        };
+        groups.set(key, group);
+      }
+
+      group.issueCount += 1;
+      group.evidence.push(issue.message);
+      if (!group.affectedCodes.includes(issueNode.code)) group.affectedCodes.push(issueNode.code);
+      if (!group.affectedNodeIds.includes(issueNode.nodeId)) group.affectedNodeIds.push(issueNode.nodeId);
+
+      const missing = leafMissingFields(issueNode);
+      if (
+        missing.includes("responsável") &&
+        !group.unresolvedDecisions.includes(
+          "Definir responsáveis reais dos pacotes de trabalho deste conjunto."
+        )
+      ) {
+        group.unresolvedDecisions.push(
+          "Definir responsáveis reais dos pacotes de trabalho deste conjunto."
+        );
       }
       continue;
     }
