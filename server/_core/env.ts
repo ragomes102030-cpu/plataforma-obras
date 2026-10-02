@@ -32,7 +32,7 @@ export const ENV = {
   llmTimeoutMs: Number(process.env.LLM_REQUEST_TIMEOUT_MS ?? "60000"),
   mcpTimeoutMs: Number(process.env.MCP_REQUEST_TIMEOUT_MS ?? "25000"),
   agentTotalTimeoutMs: Number(process.env.AGENT_TOTAL_TIMEOUT_MS ?? "120000"),
-  agentMaxIterations: Number(process.env.AGENT_MAX_ITERATIONS ?? "4"),
+  agentMaxIterations: Number(process.env.AGENT_MAX_ITERATIONS ?? "8"),
   mcpCatalogTtlMs: Number(process.env.MCP_CATALOG_TTL_MS ?? "300000"),
   // Hosts conferidos contra a config MCP real. Ja foram *.vercel.app e
   // estavam errados: os MCP servers nunca_publicaram na Vercel. Nao reverter.
