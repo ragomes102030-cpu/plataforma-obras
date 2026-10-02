@@ -72,6 +72,7 @@ import { GatewayArquimedesProvider } from "./agent/providers/gateway-provider";
 import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import type { ArquimedesEapProposal } from "./agent/core/types";
+import { buildEapResearchQueries, searchWebEvidence } from "./web-research";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -1503,7 +1504,7 @@ export const appRouter = router({
         const beforeValidationSnapshot = buildEapReviewSnapshot(currentValidation);
         const resolutionIssues = currentValidation.issues
           .filter(issue => issue.severity === "error")
-          .slice(0, 20)
+          .slice(0, 120)
           .map(issue => ({
             code: issue.code,
             message: issue.message,
@@ -1524,9 +1525,29 @@ export const appRouter = router({
               }
             }
           }
+
+          // Inclui todos os nós folhas incompletos e seus pais. Isso permite ao
+          // Euclides tratar, em uma única rodada, os bloqueios de dicionário e
+          // sobreposição sem depender de vários cliques do engenheiro.
+          for (const node of nodes) {
+            const hasChildren = nodes.some(candidate => candidate.parentId === node.id);
+            if (!hasChildren && node.nodeType !== "grupo") {
+              const missingResponsible = !node.responsible?.trim();
+              const missingDictionary =
+                !node.description?.trim() ||
+                !node.inclusions?.trim() ||
+                !node.exclusions?.trim() ||
+                !node.acceptanceCriteria?.trim();
+              if (missingResponsible || missingDictionary) {
+                targetIds.add(node.id);
+                if (node.parentId != null) targetIds.add(node.parentId);
+              }
+            }
+          }
+
           return nodes
             .filter(node => targetIds.has(node.id))
-            .slice(0, 60)
+            .slice(0, 140)
             .map(node => ({
               code: node.code,
               nodeId: node.id,
@@ -1542,8 +1563,17 @@ export const appRouter = router({
         })();
 
         if (input.mode === "resolver_bloqueios" && resolutionIssues.length === 0) {
-          throw conflict("Não há bloqueios estruturais na EAP para o Arquimedes resolver. Faça uma nova análise para revisar escopo.");
+          throw conflict("Não há bloqueios estruturais na EAP para o Euclides resolver. Faça uma nova análise para revisar escopo.");
         }
+
+        const researchQueries =
+          input.mode === "resolver_bloqueios"
+            ? buildEapResearchQueries(resolutionIssues)
+            : [];
+        const researchEvidence =
+          input.mode === "resolver_bloqueios"
+            ? await searchWebEvidence(researchQueries, 12)
+            : [];
 
         const { raw } = await proposeEapWithArquimedes(
           context,
@@ -1552,6 +1582,7 @@ export const appRouter = router({
             mode: input.mode,
             resolutionIssues,
             resolutionTargets,
+            researchEvidence,
           }
         );
         const parsedProposal = parseEapProposal(raw);
