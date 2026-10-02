@@ -1537,7 +1537,7 @@ export const appRouter = router({
           status: "respondido",
           currentStep: "EAP_REVISAO",
           provider: "configured-gateway",
-          contextJson: JSON.stringify({ kind: "eap_review", projectId: input.projectId }),
+          contextJson: JSON.stringify({ kind: "eap_review", projectId: input.projectId, mode: input.mode }),
           resultJson: JSON.stringify(proposal),
           iterations: 1,
           finishedAt: new Date(),
@@ -1562,7 +1562,7 @@ export const appRouter = router({
         if (!db) return null;
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [review] = await db
-          .select({ requestId: agentRuns.requestId, resultJson: agentRuns.resultJson, createdAt: agentRuns.createdAt })
+          .select({ requestId: agentRuns.requestId, resultJson: agentRuns.resultJson, createdAt: agentRuns.createdAt, contextJson: agentRuns.contextJson })
           .from(agentRuns)
           .where(
             and(
@@ -1614,10 +1614,18 @@ export const appRouter = router({
             })),
             parsed
           );
+          let mode: "analisar" | "resolver_bloqueios" = "analisar";
+          try {
+            const contextMeta = review.contextJson ? JSON.parse(review.contextJson) : null;
+            if (contextMeta?.mode === "resolver_bloqueios") mode = "resolver_bloqueios";
+          } catch {
+            // Compatibilidade com revisões antigas sem metadados de modo.
+          }
           return {
             requestId: review.requestId,
             createdAt: review.createdAt,
             proposal,
+            mode,
           };
         } catch {
           return null;
