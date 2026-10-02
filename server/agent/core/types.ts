@@ -50,6 +50,12 @@ export interface ArquimedesEapProposal {
     location?: string | null;
     unit?: string | null;
     plannedQuantity?: number | null;
+    description?: string | null;
+    inclusions?: string | null;
+    exclusions?: string | null;
+    responsible?: string | null;
+    acceptanceCriteria?: string | null;
+    decompositionBasis?: "project" | "deliverable" | "system" | "discipline" | "location" | "phase" | "component" | "other";
     rationale: string;
   }>;
 }
