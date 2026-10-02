@@ -1603,7 +1603,7 @@ export const appRouter = router({
           .where(
             and(
               eq(agentRuns.projectId, input.projectId),
-              eq(agentRuns.currentStep, "EAP_REVISAO"),
+              inArray(agentRuns.currentStep, ["EAP_REVISAO", "EAP_REVISAO_APLICADA"]),
               eq(agentRuns.status, "respondido")
             )
           )
@@ -2055,7 +2055,9 @@ export const appRouter = router({
             previousMeta = activeReview[0].contextJson
               ? JSON.parse(activeReview[0].contextJson)
               : {};
-            beforeSnapshot = previousMeta.beforeValidation ?? null;
+            beforeSnapshot =
+              (previousMeta.beforeValidation as ReturnType<typeof buildEapReviewSnapshot> | null | undefined) ??
+              null;
           } catch {
             previousMeta = {};
           }
