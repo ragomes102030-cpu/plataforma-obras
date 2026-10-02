@@ -2299,10 +2299,14 @@ export const appRouter = router({
                   )
             )
             .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-          const afterValidation = validateEapScope(
-            afterNodes,
-            { requireDictionaryForLeaves: true }
-          );
+          const afterDictionaryStandard = await loadEapDictionaryStandard(db, input.projectId);
+          const afterValidation = validateEapScope(afterNodes, {
+            requireDictionaryForLeaves: afterDictionaryStandard.status === "approved",
+            requiredDictionaryFields:
+              afterDictionaryStandard.status === "approved"
+                ? afterDictionaryStandard.requiredFields as import("./construction/eap-validator").EapDictionaryField[]
+                : undefined,
+          });
           const afterSnapshot = buildEapReviewSnapshot(afterValidation);
 
           let beforeSnapshot: ReturnType<typeof buildEapReviewSnapshot> | null = null;
@@ -2390,7 +2394,14 @@ export const appRouter = router({
           scopeStatus: node.scopeStatus,
         }));
         const structural = validateEap(evidenceNodes);
-        const scope = validateEapScope(evidenceNodes, { requireDictionaryForLeaves: true });
+        const dictionaryStandard = await loadEapDictionaryStandard(db, input.projectId);
+        const scope = validateEapScope(evidenceNodes, {
+          requireDictionaryForLeaves: dictionaryStandard.status === "approved",
+          requiredDictionaryFields:
+            dictionaryStandard.status === "approved"
+              ? dictionaryStandard.requiredFields as import("./construction/eap-validator").EapDictionaryField[]
+              : undefined,
+        });
         const versions = await db.select({ id: budgetVersions.id }).from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId));
         const budget = versions.length
           ? await db.select({ wbsNodeId: budgetItems.wbsNodeId }).from(budgetItems).where(inArray(budgetItems.budgetVersionId, versions.map(version => version.id)))
@@ -2401,7 +2412,7 @@ export const appRouter = router({
         // não impedimos a validação/aprovação estrutural da EAP por falta de vínculo
         // orçamentário nesta etapa.
         const costIssues = cost.issues.map(issue => ({ ...issue, severity: "warning" as const }));
-        const issues = [...structural.issues, ...scope.issues, ...costIssues];
+        const issues = dedupeEapReviewIssues([...structural.issues, ...scope.issues, ...costIssues]);
         const errors = issues.filter(issue => issue.severity === "error").length;
         const warnings = issues.filter(issue => issue.severity === "warning").length;
         const costErrors = cost.issues.filter(issue => issue.severity === "error");
