@@ -1299,6 +1299,21 @@ tr:hover .xl-codigo {
 .eap-revisao-proximo.ok{border-color:#b9d9c6;background:#f5faf7}
 .eap-revisao-proximo.ok svg{color:#287a4d;flex:0 0 auto;margin-top:1px}
 .eap-arquimedes-revisao-agente{display:block!important;margin-bottom:3px;font-size:9.5px!important;font-weight:700;color:#345766!important;letter-spacing:.01em}
+.eap-pesquisa-evidencias{margin:10px 0;border:1px solid #c8dbe2;border-radius:6px;background:#f8fbfc;overflow:hidden}
+.eap-pesquisa-evidencias-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 11px;border-bottom:1px solid #dfe9ed}
+.eap-pesquisa-evidencias-head>div{min-width:0}
+.eap-pesquisa-evidencias-head strong,.eap-pesquisa-evidencias-head span{display:block}
+.eap-pesquisa-evidencias-head strong{font-size:10.5px;color:#2d5260}
+.eap-pesquisa-evidencias-head span{margin-top:2px;font-size:9.5px;line-height:1.4;color:#647981}
+.eap-pesquisa-evidencias-head>span{font-size:8px;font-weight:700;letter-spacing:.04em;white-space:nowrap;padding:4px 6px;border-radius:4px;background:#eef3f5;color:#647981}
+.eap-pesquisa-evidencias-head>span.ativo{background:#e9f6ee;color:#287a4d}
+.eap-pesquisa-evidencias-head>span.indisponivel{background:#f4f0ea;color:#8a6b34}
+.eap-pesquisa-evidencias-lista{display:flex;flex-direction:column}
+.eap-pesquisa-evidencias-lista>a{display:grid;grid-template-columns:28px 1fr;gap:7px;padding:7px 11px;border-top:1px solid #e7eef1;text-decoration:none}
+.eap-pesquisa-evidencias-lista>a:hover{background:#f1f7f9}
+.eap-pesquisa-evidencias-lista>a>span{font-size:8.5px;font-weight:700;color:#627983}
+.eap-pesquisa-evidencias-lista>a strong{display:block;font-size:9.8px;color:#345764}
+.eap-pesquisa-evidencias-lista>a small{display:block;margin-top:2px;font-size:9px;line-height:1.35;color:#687a81}
 .eap-proposta-correcao{margin:10px 0;border:1px solid #bfdbe5;border-radius:6px;background:#f7fbfc}
 .eap-proposta-correcao-head{display:flex;align-items:flex-start;gap:8px;padding:10px 11px;border-bottom:1px solid #dbe9ee;color:#245466}
 .eap-proposta-correcao-head>div{flex:1;min-width:0}
