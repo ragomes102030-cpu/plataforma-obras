@@ -7074,12 +7074,12 @@ export const appRouter = router({
                 .where(eq(budgetVersions.projectId, input.projectId))
                 .orderBy(desc(budgetVersions.versionNumber))
                 .limit(1);
-              let localBudget: AgentProjectContext["evidence"]["localBudget"] = {
+              let localBudget = {
                 versionId: latestBudgetVersion?.id ?? null,
                 versionStatus: latestBudgetVersion?.status ?? null,
-                itemCount: null,
-                mappedItemCount: null,
-                unmappedItemCount: null,
+                itemCount: null as number | null,
+                mappedItemCount: null as number | null,
+                unmappedItemCount: null as number | null,
               };
               if (latestBudgetVersion) {
                 const budgetRows = await db
