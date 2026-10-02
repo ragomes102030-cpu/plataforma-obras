@@ -521,7 +521,8 @@ function buildSystem(
     responseIntent === "analise"
       ? "Quando a intenção for análise no chat, continue sendo o Arquimedes: use consultas MCP somente leitura e, quando a pergunta exigir uma varredura ampla, use engineering_gap_analysis. Não convoque Euclides nem outros revisores silenciosamente; a Análise/Revisão formal de EAP pertence ao fluxo próprio de revisão."
       : "Em consultas pontuais, não faça uma varredura completa sem necessidade.",
-    "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora.",
+    "Os MCPs de EAP, cronograma e Gantt/Linha de Balanço são capacidades opcionais. Nunca trate a indisponibilidade, queda, timeout, erro ou ausência de vínculo de um MCP como morte, bloqueio ou encerramento do Arquimedes. Continue usando o contexto e as evidências locais da obra e informe objetivamente quais evidências externas não puderam ser confirmadas.",
+    "Quando uma consulta MCP somente leitura falhar, tente outra fonte somente se houver uma alternativa útil. Se o MCP continuar indisponível, prossiga com as fontes locais disponíveis; não conclua que a obra não pode ser analisada apenas por causa do MCP.",
     "Quando o usuário perguntar sobre o próprio código, arquitetura, bugs ou funcionamento interno da Plataforma Obras, use as ferramentas de repositório disponíveis para investigar. Não diga que não possui acesso ao código se a ferramenta puder fornecê-lo.",
     "Antes de modificar código, leia os arquivos envolvidos e confirme a causa do problema. Depois aplique somente a mudança necessária. Não invente que testou algo: use evidências reais.",
     "A ferramenta de atualização do repositório trabalha apenas na branch de trabalho configurada pelo runtime e aplica validações de caminho e concorrência. Nunca trate uma alteração como implantada até existir evidência do deploy.",
@@ -936,8 +937,24 @@ export async function runProjectOrchestrator(
           obra: context.project.code,
           foco: focus,
           verificacoes: findings,
+          evidenciasLocais: {
+            nosEap: context.evidence?.eapNodeCount ?? null,
+            atividades: context.evidence?.activityCount ?? null,
+            dependencias: context.evidence?.dependencyCount ?? null,
+            avisos: context.evidence?.warnings ?? [],
+            erros: context.evidence?.errors ?? [],
+            validacao: context.evidence?.validation
+              ? {
+                  status: context.evidence.validation.status,
+                  bloqueadores: context.evidence.validation.blockerCount,
+                  duracao: context.evidence.validation.projectDuration ?? null,
+                  caminhoCritico: context.evidence.validation.criticalPath,
+                  problemas: context.evidence.validation.issues,
+                }
+              : null,
+          },
           instrucao:
-            "Interprete os resultados como evidência. Separe achados confirmados de hipóteses e indisponibilidades. Não altere a obra nesta ferramenta.",
+            "Interprete os resultados como evidência. Separe achados confirmados de hipóteses e indisponibilidades. Se um MCP estiver indisponível, use as evidências locais acima como fallback e continue a análise. Não altere a obra nesta ferramenta.",
         };
         audit.push({
           taskId,
@@ -988,14 +1005,32 @@ export async function runProjectOrchestrator(
       await emit({ type: "tool_started", iteration, domain, toolName });
 
       const mcpProjectId = mcpProjectIds[domain];
-      if ((PROJECT_SCOPED_TOOLS.has(toolName) || PROJECT_SCOPED_MUTATION_TOOLS.has(toolName)) && !mcpProjectId) {
-        const message = "A obra ainda não possui project_id externo autorizado para esta operação MCP.";
+      const isProjectScoped =
+        PROJECT_SCOPED_TOOLS.has(toolName) ||
+        PROJECT_SCOPED_MUTATION_TOOLS.has(toolName);
+
+      if (isProjectScoped && !mcpProjectId) {
+        const message =
+          "Esta consulta depende de um MCP de obra que não está vinculado no momento. O Arquimedes deve continuar com as evidências locais disponíveis e informar esta limitação.";
+        const content = JSON.stringify({
+          status: "indisponivel",
+          motivo: "mcp_sem_vinculo",
+          dominio: domain,
+          ferramenta: toolName,
+          obra: context.project.code,
+          mensagem: message,
+          fallbackLocal: {
+            nosEap: context.evidence?.eapNodeCount ?? null,
+            atividades: context.evidence?.activityCount ?? null,
+            dependencias: context.evidence?.dependencyCount ?? null,
+          },
+        });
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,
           status: "error", durationMs: Date.now() - startedAt, error: message,
         });
         await emit({ type: "tool_finished", iteration, domain, toolName, status: "error" });
-        return { ok: false, error: message, content: "" };
+        return { ok: true, content };
       }
 
       const args = { ...rawArgs };
@@ -1019,6 +1054,26 @@ export async function runProjectOrchestrator(
           status: "error", durationMs: Date.now() - startedAt, error: message,
         });
         await emit({ type: "tool_finished", iteration, domain, toolName, status: "error" });
+        if (isReadOnly) {
+          return {
+            ok: true,
+            content: JSON.stringify({
+              status: "indisponivel",
+              motivo: "mcp_falhou_na_consulta",
+              dominio: domain,
+              ferramenta: toolName,
+              obra: context.project.code,
+              mensagem:
+                "A consulta MCP falhou, mas isso não bloqueia o Arquimedes. Continue com as evidências locais e registre a limitação na resposta final.",
+              erro: message,
+              fallbackLocal: {
+                nosEap: context.evidence?.eapNodeCount ?? null,
+                atividades: context.evidence?.activityCount ?? null,
+                dependencias: context.evidence?.dependencyCount ?? null,
+              },
+            }),
+          };
+        }
         return { ok: false, error: message, content: "" };
       }
     },
