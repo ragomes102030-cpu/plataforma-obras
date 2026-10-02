@@ -59,6 +59,7 @@ export interface ArquimedesLlmRequest {
   skills: ArquimedesSkill[];
   maxTokens?: number;
   databaseContext?: { projectId: number };
+  eapReviewMode?: "analisar" | "resolver_bloqueios";
 }
 
 export interface ArquimedesLlmProvider {
