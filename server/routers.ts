@@ -1406,7 +1406,12 @@ export const appRouter = router({
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
     analisarEapComArquimedes: protectedProcedure
-      .input(z.object({ projectId: z.number().int().positive() }))
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          mode: z.enum(["analisar", "resolver_bloqueios"]).default("analisar"),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
@@ -1463,9 +1468,30 @@ export const appRouter = router({
           })),
         };
 
+        const currentValidation = validateEapScope(
+          nodes,
+          { requireDictionaryForLeaves: true }
+        );
+        const resolutionIssues = currentValidation.issues
+          .filter(issue => issue.severity === "error")
+          .slice(0, 20)
+          .map(issue => ({
+            code: issue.code,
+            message: issue.message,
+            entityRef: issue.entityRef,
+          }));
+
+        if (input.mode === "resolver_bloqueios" && resolutionIssues.length === 0) {
+          throw conflict("Não há bloqueios estruturais na EAP para o Arquimedes resolver. Faça uma nova análise para revisar escopo.");
+        }
+
         const { raw } = await proposeEapWithArquimedes(
           context,
-          new GatewayArquimedesProvider()
+          new GatewayArquimedesProvider(),
+          {
+            mode: input.mode,
+            resolutionIssues,
+          }
         );
         const parsedProposal = parseEapProposal(raw);
         const proposal = validateAndNormalizeEapProposal(
@@ -1493,11 +1519,6 @@ export const appRouter = router({
           })),
           parsedProposal
         );
-        const currentValidation = validateEapScope(
-          nodes,
-          { requireDictionaryForLeaves: true }
-        );
-
         await db
           .update(agentRuns)
           .set({ currentStep: "EAP_REVISAO_SUPERADA", updatedAt: new Date() })
@@ -1527,7 +1548,11 @@ export const appRouter = router({
           reviewRequestId,
           proposal,
           currentValidation,
-          guardrail: "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
+          mode: input.mode,
+          guardrail:
+            input.mode === "resolver_bloqueios"
+              ? "O Arquimedes recebeu os bloqueios atuais e propôs correções. Nenhuma alteração foi persistida; o engenheiro deve revisar e aplicar como rascunho."
+              : "Nenhuma alteração da EAP foi persistida. A proposta precisa ser revisada e aprovada.",
         };
       }),
     eapArquimedesReview: protectedProcedure
