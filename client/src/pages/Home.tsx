@@ -408,8 +408,9 @@ function Obra({
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
-          <PainelPlanejamento projetoId={projetoId} />
-          <GradeCronograma
+          <>
+            <PainelPlanejamento projetoId={projetoId} />
+            <GradeCronograma
             obra={obra}
             projetoId={projetoId}
             calendario={calendario}
@@ -418,7 +419,8 @@ function Obra({
             idPorCodigo={idPorCodigo}
             exemploPorCodigo={exemploPorCodigo}
             aoPedirEap={() => onAba("eap")}
-          />
+            />
+          </>
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
         ) : aba === "linha-balanco" ? (
