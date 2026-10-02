@@ -72,7 +72,8 @@ export function buildEapRequest(
   audit?: EapReviewAudit,
   mode: "analisar" | "resolver_bloqueios" = "analisar",
   resolutionIssues: Array<{ code: string; message: string; entityRef?: string }> = [],
-  resolutionTargets: ArquimedesLlmRequest["eapResolutionTargets"] = []
+  resolutionTargets: ArquimedesLlmRequest["eapResolutionTargets"] = [],
+  researchEvidence: ArquimedesLlmRequest["researchEvidence"] = []
 ): ArquimedesLlmRequest {
   const specialist = getArquimedesAgent("euclides");
   const system = [
@@ -95,7 +96,10 @@ export function buildEapRequest(
           "Não altere códigos de nós existentes. Para criações, informe apenas o parentCode; o sistema fará a numeração.",
           "Quando alterar um campo do dicionário, preserve os demais dados atuais conhecidos e explique na rationale o que foi ajustado.",
           "Não proponha move ou remove automaticamente nesta rodada. Alterações de hierarquia ou exclusões ficam para revisão manual.",
-          "Ao final, gere resolutionSummary com 1 item curto por correção proposta. Explique o problema tratado, a ação proposta e por que ela resolve o bloqueio. Não diga que a alteração foi aplicada: ela ainda depende da revisão do engenheiro.",
+          "Ao final, gere resolutionSummary com 1 item curto por grupo de correções. Uma correção pode resolver vários bloqueios relacionados; não replique uma atualização para cada par de irmãos quando uma edição do dicionário resolver o conjunto.",
+          "Explique o problema tratado, a ação proposta e por que ela resolve o bloqueio. Não diga que a alteração foi aplicada: ela ainda depende da revisão do engenheiro.",
+          "Use a pesquisa web como evidência externa, nunca como substituto dos fatos da obra. Se a fonte não determinar um valor específico da obra, não invente esse valor.",
+          "Para campos de responsabilidade que não possam ser determinados pelos dados da obra, não preencha como fato; registre a decisão necessária em missingInformation e proponha uma opção baseada na prática encontrada."
         ].join("\n")
       : "Faça uma auditoria dirigida. Se os achados não justificarem mudança, retorne nodes vazio e registre isso em basis. Não invente correções.",
     "Não execute alterações diretamente. Propostas de planejamento continuam sujeitas à validação e aprovação.",
@@ -117,6 +121,7 @@ export function buildEapRequest(
       },
       resolutionIssues: mode === "resolver_bloqueios" ? resolutionIssues : [],
       resolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
+      researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
       audit: audit ?? null,
     },
     null,
@@ -133,6 +138,7 @@ export function buildEapRequest(
     agentId: specialist.id,
     orchestratorId: "arquimedes",
     eapResolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
+    researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
   };
 }
 
