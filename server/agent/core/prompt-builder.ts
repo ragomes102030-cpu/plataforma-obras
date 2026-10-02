@@ -91,7 +91,7 @@ export function buildEapRequest(
           "Para erros de sobreposição textual entre irmãos, revise principalmente inclusions e exclusions dos nós afetados; não tente resolver o problema apenas renomeando o nó se o conflito estiver no dicionário de escopo.",
           "Não invente novos dados de escopo para preencher lacunas. Quando um erro não puder ser resolvido sem decisão do engenheiro, mantenha nodes vazio para esse ponto e registre a pendência em missingInformation.",
           "Não altere códigos de nós existentes. Para criações, informe apenas o parentCode; o sistema fará a numeração.",
-          "Quando alterar um campo do dicionário, preserve os demais dados atuais conhecidos e explique na rationale o que foi ajustado."
+          "Quando alterar um campo do dicionário, preserve os demais dados atuais conhecidos e explique na rationale o que foi ajustado.",
           "Não proponha move ou remove automaticamente nesta rodada. Alterações de hierarquia ou exclusões ficam para revisão manual.",
           "Ao final, gere resolutionSummary com 1 item curto por correção proposta. Explique o problema tratado, a ação proposta e por que ela resolve o bloqueio. Não diga que a alteração foi aplicada: ela ainda depende da revisão do engenheiro.",
         ].join("\n")
