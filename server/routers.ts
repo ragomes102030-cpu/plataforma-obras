@@ -74,7 +74,7 @@ import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquime
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateEapScope, validateWbsCostCoverage } from "./construction/eap-validator";
+import { validateEap, validateEapScope, validateWbsCostCoverage, validateAndNormalizeEapProposal } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
@@ -1400,7 +1400,32 @@ export const appRouter = router({
           context,
           new GatewayArquimedesProvider()
         );
-        const proposal = parseEapProposal(raw);
+        const parsedProposal = parseEapProposal(raw);
+        const proposal = validateAndNormalizeEapProposal(
+          nodes.map(node => ({
+            id: node.id,
+            projectId: node.projectId,
+            externalId: node.externalId,
+            externalUid: node.externalUid,
+            parentId: node.parentId,
+            code: node.code,
+            name: node.name,
+            level: node.level,
+            nodeType: node.nodeType,
+            unit: node.unit,
+            plannedQuantity: node.plannedQuantity,
+            sortOrder: node.sortOrder,
+            description: node.description,
+            inclusions: node.inclusions,
+            exclusions: node.exclusions,
+            location: node.location,
+            responsible: node.responsible,
+            acceptanceCriteria: node.acceptanceCriteria,
+            decompositionBasis: node.decompositionBasis,
+            scopeStatus: node.scopeStatus,
+          })),
+          parsedProposal
+        );
         const currentValidation = validateEapScope(
           nodes,
           { requireDictionaryForLeaves: true }
