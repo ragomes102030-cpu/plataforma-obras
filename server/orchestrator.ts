@@ -1012,25 +1012,32 @@ export async function runProjectOrchestrator(
       if (isProjectScoped && !mcpProjectId) {
         const message =
           "Esta consulta depende de um MCP de obra que não está vinculado no momento. O Arquimedes deve continuar com as evidências locais disponíveis e informar esta limitação.";
-        const content = JSON.stringify({
-          status: "indisponivel",
-          motivo: "mcp_sem_vinculo",
-          dominio: domain,
-          ferramenta: toolName,
-          obra: context.project.code,
-          mensagem: message,
-          fallbackLocal: {
-            nosEap: context.evidence?.eapNodeCount ?? null,
-            atividades: context.evidence?.activityCount ?? null,
-            dependencias: context.evidence?.dependencyCount ?? null,
-          },
-        });
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,
           status: "error", durationMs: Date.now() - startedAt, error: message,
         });
         await emit({ type: "tool_finished", iteration, domain, toolName, status: "error" });
-        return { ok: true, content };
+
+        if (isMutation) {
+          return { ok: false, error: message, content: "" };
+        }
+
+        return {
+          ok: true,
+          content: JSON.stringify({
+            status: "indisponivel",
+            motivo: "mcp_sem_vinculo",
+            dominio: domain,
+            ferramenta: toolName,
+            obra: context.project.code,
+            mensagem: message,
+            fallbackLocal: {
+              nosEap: context.evidence?.eapNodeCount ?? null,
+              atividades: context.evidence?.activityCount ?? null,
+              dependencias: context.evidence?.dependencyCount ?? null,
+            },
+          }),
+        };
       }
 
       const args = { ...rawArgs };
