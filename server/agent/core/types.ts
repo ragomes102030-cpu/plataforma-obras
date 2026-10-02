@@ -30,6 +30,15 @@ export interface ArquimedesEapProposal {
   basis: string[];
   assumptions: string[];
   missingInformation: string[];
+  validation?: {
+    valid: boolean;
+    issues: Array<{
+      code: string;
+      severity: "error" | "warning";
+      message: string;
+      entityRef?: string;
+    }>;
+  };
   nodes: Array<{
     operation: "create" | "update" | "move" | "remove";
     nodeId?: number;
