@@ -342,6 +342,7 @@ export async function proposeEapWithArquimedes(
     mode?: "analisar" | "resolver_bloqueios";
     resolutionIssues?: Array<{ code: string; message: string; entityRef?: string }>;
     resolutionTargets?: ArquimedesLlmRequest["eapResolutionTargets"];
+    researchEvidence?: ArquimedesLlmRequest["researchEvidence"];
   } = {},
 ): Promise<{ raw: string; request: ArquimedesLlmRequest }> {
   const skills = await loadEapSkills();
@@ -356,7 +357,8 @@ export async function proposeEapWithArquimedes(
     undefined,
     options.mode ?? "analisar",
     options.resolutionIssues ?? [],
-    options.resolutionTargets ?? []
+    options.resolutionTargets ?? [],
+    options.researchEvidence ?? []
   );
 
   // Contrato de fronteira: a revisão existente sempre precisa chegar ao provider
@@ -621,6 +623,7 @@ export function parseEapProposal(
     assumptions: result.data.assumptions,
     missingInformation: result.data.missingInformation,
     ...(result.data.resolutionSummary ? { resolutionSummary: result.data.resolutionSummary } : {}),
+    ...(result.data.researchEvidence ? { researchEvidence: result.data.researchEvidence } : {}),
     ...(result.data.validation ? { validation: result.data.validation } : {}),
     nodes: result.data.nodes,
   };
