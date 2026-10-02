@@ -50,7 +50,27 @@ describe("eap-resolution-engine", () => {
       kind: "scope_overlap",
       parentCode: "1.1",
       affectedCodes: ["1.1.1", "1.1.2"],
+      issueCount: 1,
     });
+  });
+
+  it("consolida vários conflitos de irmãos no mesmo grupo do pai", () => {
+    const plan = buildEapResolutionPlan(nodes, [
+      {
+        code: "eap_scope_overlap_evidence",
+        message: "Há evidência textual de sobreposição entre os irmãos 1.1.1 e 1.1.2 de 1.1. Revise inclusões.",
+        entityRef: "10",
+      },
+      {
+        code: "eap_scope_overlap_evidence",
+        message: "Há evidência textual de sobreposição entre os irmãos 1.1.1 e 1.1.3 de 1.1. Revise inclusões.",
+        entityRef: "10",
+      },
+    ]);
+
+    expect(plan).toHaveLength(1);
+    expect(plan[0]?.affectedCodes).toEqual(["1.1.1", "1.1.2", "1.1.3"]);
+    expect(plan[0]?.issueCount).toBe(2);
   });
 
   it("separa falta de responsável como decisão pendente", () => {
@@ -62,5 +82,26 @@ describe("eap-resolution-engine", () => {
 
     expect(plan[0]?.kind).toBe("missing_dictionary");
     expect(plan[0]?.unresolvedDecisions).toHaveLength(1);
+  it("consolida folhas sem responsável por pai", () => {
+    const plan = buildEapResolutionPlan(nodes, [
+      {
+        code: "eap_leaf_not_ready",
+        message: "Folha 1.1.1 (Mobilização) ainda não está pronta: falta(m) responsável.",
+        entityRef: "11",
+      },
+      {
+        code: "eap_leaf_not_ready",
+        message: "Folha 1.1.2 (Administração) ainda não está pronta: falta(m) responsável.",
+        entityRef: "12",
+      },
+    ]);
+
+    expect(plan).toHaveLength(1);
+    expect(plan[0]?.kind).toBe("missing_dictionary");
+    expect(plan[0]?.parentCode).toBe("1.1");
+    expect(plan[0]?.affectedCodes).toEqual(["1.1.1", "1.1.2"]);
+    expect(plan[0]?.issueCount).toBe(2);
+  });
+
   });
 });
