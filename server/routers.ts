@@ -1503,12 +1503,43 @@ export const appRouter = router({
         const beforeValidationSnapshot = buildEapReviewSnapshot(currentValidation);
         const resolutionIssues = currentValidation.issues
           .filter(issue => issue.severity === "error")
-          .slice(0, 60)
+          .slice(0, 20)
           .map(issue => ({
             code: issue.code,
             message: issue.message,
             entityRef: issue.entityRef,
           }));
+
+        const resolutionTargets = (() => {
+          if (input.mode !== "resolver_bloqueios") return [];
+          const byCode = new Map(nodes.map(node => [node.code, node]));
+          const targetIds = new Set<number>();
+          for (const issue of resolutionIssues) {
+            const codes = issue.message.match(/\b\d+(?:\.\d+)+\b/g) ?? [];
+            for (const code of codes) {
+              const node = byCode.get(code);
+              if (node) {
+                targetIds.add(node.id);
+                if (node.parentId != null) targetIds.add(node.parentId);
+              }
+            }
+          }
+          return nodes
+            .filter(node => targetIds.has(node.id))
+            .slice(0, 60)
+            .map(node => ({
+              code: node.code,
+              nodeId: node.id,
+              name: node.name,
+              parentCode:
+                node.parentId == null
+                  ? null
+                  : nodes.find(parent => parent.id === node.parentId)?.code ?? null,
+              inclusions: node.inclusions,
+              exclusions: node.exclusions,
+              description: node.description,
+            }));
+        })();
 
         if (input.mode === "resolver_bloqueios" && resolutionIssues.length === 0) {
           throw conflict("Não há bloqueios estruturais na EAP para o Arquimedes resolver. Faça uma nova análise para revisar escopo.");
@@ -1520,6 +1551,7 @@ export const appRouter = router({
           {
             mode: input.mode,
             resolutionIssues,
+            resolutionTargets,
           }
         );
         const parsedProposal = parseEapProposal(raw);
