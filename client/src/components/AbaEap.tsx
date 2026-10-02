@@ -250,7 +250,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
             type="button"
             className="eap-tool-btn eap-tool-agent"
             disabled={analisarComArquimedes.isPending}
-            onClick={() => analisarComArquimedes.mutate({ projectId: projetoId })}
+            onClick={() => analisarComArquimedes.mutate({ projectId: projetoId, mode: "analisar" })}
           >
             <Bot size={14} /> {analisarComArquimedes.isPending ? "Arquimedes analisando…" : "Analisar com Arquimedes"}
           </button>
@@ -306,6 +306,17 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
                     <p>{item.message}</p>
                   </div>
                 ))}
+              </div>
+              <div className="eap-proposta-erros-acoes">
+                <button
+                  type="button"
+                  className="eap-btn"
+                  disabled={analisarComArquimedes.isPending}
+                  onClick={() => analisarComArquimedes.mutate({ projectId: projetoId, mode: "resolver_bloqueios" })}
+                >
+                  <Bot size={13} /> {analisarComArquimedes.isPending ? "Arquimedes resolvendo…" : "Resolver bloqueios com Arquimedes"}
+                </button>
+                <small>O Arquimedes propõe a correção; nada é aplicado automaticamente.</small>
               </div>
             </div>
           )}
@@ -1131,7 +1142,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
                 type="button"
                 className="eap-btn-secundario"
                 disabled={analisar.isPending}
-                onClick={() => analisar.mutate({ projectId: projetoId })}
+                onClick={() => analisar.mutate({ projectId: projetoId, mode: "analisar" })}
               >
                 <Bot size={13} /> Nova análise
               </button>
