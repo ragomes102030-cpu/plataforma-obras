@@ -1260,6 +1260,44 @@ tr:hover .xl-codigo {
 
 /* Validação profissional da EAP: separa bloqueios de alertas sem transformar a árvore em formulário. */
 .eap-validacao{margin:12px 0;border:1px solid var(--pl-border,#dfe3e8);border-radius:8px;background:#fff}
+.eap-validacao-acoes{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.eap-revisao-btn{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 10px;border:1px solid #cfd6dd;border-radius:4px;background:#fff;color:#4f5e69;font:inherit;font-size:11px;cursor:pointer}
+.eap-revisao-btn:hover{background:#f1f4f6;color:#26343d}
+.eap-revisao-btn.ativo{border-color:#1f6f8b;background:#eef6f8;color:#1f6f8b}
+.eap-validacao-detalhes{min-height:28px;padding:0 9px;border:0;background:transparent;color:#667085;font:inherit;font-size:10.5px;cursor:pointer}
+.eap-validacao-bloqueios{margin:0 12px 10px;border:1px solid #efcaca;border-radius:5px;background:#fff7f7}
+.eap-validacao-bloqueios-head{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;color:#8a1f2c;border-bottom:1px solid #f3dede}
+.eap-validacao-bloqueios-head strong,.eap-validacao-bloqueios-head span{display:block}
+.eap-validacao-bloqueios-head strong{font-size:11px}
+.eap-validacao-bloqueios-head span{margin-top:2px;font-size:10px;color:#8d5b61}
+.eap-validacao-bloqueios-lista{display:flex;flex-direction:column}
+.eap-validacao-bloqueios-lista>div{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:7px 10px;border-top:1px solid #f3dede}
+.eap-validacao-bloqueios-lista>div:first-child{border-top:0}
+.eap-validacao-bloqueios-lista>div>span{font-size:9px;font-weight:700;color:#a33b32}
+.eap-validacao-bloqueios-lista>div>p{margin:0;font-size:10.5px;line-height:1.4;color:#6b3036}
+.eap-revisao-modo,.eap-revisao-etapa{display:flex;align-items:center;gap:9px;margin:0 12px 10px;padding:9px 10px;border:1px solid #c6dbe2;border-radius:5px;background:#f3fafc;color:#245466}
+.eap-revisao-modo>div,.eap-revisao-etapa>div{flex:1;min-width:0}
+.eap-revisao-modo strong,.eap-revisao-etapa strong,.eap-revisao-modo span,.eap-revisao-etapa span{display:block}
+.eap-revisao-modo strong,.eap-revisao-etapa strong{font-size:11px}
+.eap-revisao-modo span,.eap-revisao-etapa span{margin-top:2px;font-size:10px;color:#55737f}
+.eap-gate-motivo{display:block!important;margin-top:4px;color:#8a5b13!important;font-size:10px!important}
+.eap-proposta-erros{margin:10px 0;border:1px solid #efcaca;border-radius:5px;background:#fff7f7}
+.eap-proposta-erros-head{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;color:#8a1f2c;border-bottom:1px solid #f3dede}
+.eap-proposta-erros-head>div{flex:1;min-width:0}
+.eap-proposta-erros-head strong,.eap-proposta-erros-head span{display:block}
+.eap-proposta-erros-head strong{font-size:11px}
+.eap-proposta-erros-head span{margin-top:2px;font-size:10px;color:#8d5b61}
+.eap-proposta-erros-head>strong:last-child{font-size:16px}
+.eap-proposta-erros-lista>div{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:7px 10px;border-top:1px solid #f3dede}
+.eap-proposta-erros-lista>div>span{font-size:9px;font-weight:700;color:#a33b32}
+.eap-proposta-erros-lista>div>p{margin:0;font-size:10.5px;color:#6b3036}
+.eap-proposta-pendencias-inline{display:flex;flex-direction:column;gap:3px;margin:8px 0;padding:8px 10px;border:1px solid #e5e7eb;border-radius:4px;background:#fafafa}
+.eap-proposta-pendencias-inline strong{font-size:10.5px;color:#4b5563}
+.eap-proposta-pendencias-inline span{font-size:10.5px;line-height:1.4;color:#667085}
+.eap-proposta-pendencias-inline.ok{background:#f5faf7;border-color:#cfe6d8}
+.eap-status-cell{overflow:visible!important;flex-wrap:wrap}
+.eap-acoes-linha{flex-wrap:wrap;margin-left:auto}
+.eap-acao-linha{width:auto!important;min-width:28px;padding:0 6px!important;white-space:nowrap}
 .eap-validacao-cabecalho{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:10px 12px}
 .eap-validacao-cabecalho>div{display:flex;flex-direction:column;gap:2px}
 .eap-validacao-cabecalho strong{font-size:12px;text-transform:uppercase;letter-spacing:.04em}
