@@ -1215,6 +1215,16 @@ export const appRouter = router({
     moveToTrash: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), confirmationName: z.string().trim().min(1).max(180) }))
       .mutation(async ({ ctx, input }) => {
+        for (const message of input.messages) {
+          const limit = message.role === "user" ? 6000 : 12000;
+          if (message.content.length > limit) {
+            throw badRequest(
+              message.role === "user"
+                ? "A mensagem do usuário excede o limite de 6000 caracteres."
+                : "Uma resposta histórica do assistente excede o limite de 12000 caracteres."
+            );
+          }
+        }
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         const [project] = await db.select({ id: projects.id, name: projects.name })
@@ -6954,7 +6964,7 @@ export const appRouter = router({
             .array(
               z.object({
                 role: z.enum(["user", "assistant"]),
-                content: z.string().trim().min(1).max(6000),
+                content: z.string().trim().min(1).max(12000),
               })
             )
             .min(1)
@@ -6962,6 +6972,16 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        for (const message of input.messages) {
+          const limit = message.role === "user" ? 6000 : 12000;
+          if (message.content.length > limit) {
+            throw badRequest(
+              message.role === "user"
+                ? "A mensagem do usuário excede o limite de 6000 caracteres."
+                : "Uma resposta histórica do assistente excede o limite de 12000 caracteres."
+            );
+          }
+        }
         const db = await getDb();
         let project;
         let activities;
@@ -7223,7 +7243,7 @@ export const appRouter = router({
             .array(
               z.object({
                 role: z.enum(["user", "assistant"]),
-                content: z.string().trim().min(1).max(6000),
+                content: z.string().trim().min(1).max(12000),
               })
             )
             .min(1)
