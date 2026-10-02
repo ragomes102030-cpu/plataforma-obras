@@ -81,9 +81,27 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
   for (let iteration = 1; iteration <= options.maxIterations; iteration++) {
     await options.onEvent?.({ type: "model_started", iteration });
 
+    // Reserve a última rodada para síntese. Isso evita que uma sequência legítima
+    // de consultas termine em erro só porque a última resposta ainda trouxe
+    // tool_calls. As rodadas anteriores continuam livres para usar ferramentas.
+    const isFinalTurn = iteration === options.maxIterations;
+    const turnTools = isFinalTurn ? [] : options.tools;
+
+    if (isFinalTurn) {
+      conversation.push({
+        role: "user",
+        content:
+          "ENCERRAMENTO OBRIGATÓRIO: você já recebeu as evidências disponíveis nesta execução. " +
+          "Não faça novas consultas, não solicite ferramentas e não execute alterações. " +
+          "Consolide agora uma resposta final objetiva, separando fatos confirmados, " +
+          "inferências e próximos passos. Se houver uma proposta de alteração, apresente-a " +
+          "e aguarde confirmação explícita do engenheiro.",
+      });
+    }
+
     const response = await options.callModel({
       messages: conversation,
-      tools: options.tools,
+      tools: turnTools,
     });
     const assistant = response.choices?.[0]?.message;
     if (!assistant) throw new Error("O runtime do agente não recebeu uma mensagem válida do modelo.");
@@ -106,6 +124,15 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
         response,
         iterations: iteration,
       };
+    }
+
+    // Um provedor compatível não deveria devolver tool_calls quando tools=[].
+    // Se isso acontecer na rodada reservada para síntese, falhamos com uma
+    // mensagem específica em vez de executar uma ferramenta além do orçamento.
+    if (isFinalTurn) {
+      throw new Error(
+        "O provedor retornou novas chamadas de ferramenta durante a rodada final de síntese."
+      );
     }
 
     conversation.push({
@@ -164,6 +191,6 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
   }
 
   throw new Error(
-    `O runtime do agente atingiu o limite seguro de ${options.maxIterations} iterações.`
+    `O runtime do agente esgotou as rodadas disponíveis sem produzir texto final. O orçamento de ${options.maxIterations} rodadas já inclui a síntese final.`
   );
 }
