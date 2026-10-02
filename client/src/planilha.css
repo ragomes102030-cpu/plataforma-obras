@@ -1288,6 +1288,16 @@ tr:hover .xl-codigo {
 .eap-arquimedes-revisao-status{display:flex;align-items:flex-start;gap:7px;padding:8px 12px;border-top:1px solid #e1eaee;background:#fff;color:#55737f}
 .eap-arquimedes-revisao-status svg{flex:0 0 auto;margin-top:1px}
 .eap-arquimedes-revisao-status span{font-size:10px;line-height:1.4}
+
+.eap-revisao-proximo{display:flex;align-items:flex-start;gap:9px;margin:0 12px 12px;padding:10px 11px;border:1px solid #cbdde3;border-radius:6px;background:#f8fbfc}
+.eap-revisao-proximo>div{flex:1;min-width:0}
+.eap-revisao-proximo strong,.eap-revisao-proximo span{display:block}
+.eap-revisao-proximo strong{font-size:10.5px;color:#345460}
+.eap-revisao-proximo span{margin-top:3px;font-size:9.8px;line-height:1.4;color:#5f747c}
+.eap-revisao-proximo.atencao{border-color:#e4d3a7;background:#fffaf1}
+.eap-revisao-proximo.atencao svg{color:#946200;flex:0 0 auto;margin-top:1px}
+.eap-revisao-proximo.ok{border-color:#b9d9c6;background:#f5faf7}
+.eap-revisao-proximo.ok svg{color:#287a4d;flex:0 0 auto;margin-top:1px}
 .eap-arquimedes-revisao-agente{display:block!important;margin-bottom:3px;font-size:9.5px!important;font-weight:700;color:#345766!important;letter-spacing:.01em}
 .eap-proposta-correcao{margin:10px 0;border:1px solid #bfdbe5;border-radius:6px;background:#f7fbfc}
 .eap-proposta-correcao-head{display:flex;align-items:flex-start;gap:8px;padding:10px 11px;border-bottom:1px solid #dbe9ee;color:#245466}
