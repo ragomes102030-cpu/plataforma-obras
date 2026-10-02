@@ -479,7 +479,10 @@ function toOpenAiTools(
       });
     }
   }
-  return [...tools, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, ...RUNTIME_TOOLS];
+  // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
+  // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
+  // silenciosamente por uma mensagem de chat.
+  return [...tools, ENGINEERING_GAP_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -516,7 +519,7 @@ function buildSystem(
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
     responseIntent === "analise"
-      ? "Quando a intenção for análise da obra, convoque primeiro engineering_team_analysis. A equipe deve analisar em paralelo por especialidade; depois consolide os achados e, se necessário, use consultas adicionais para confirmar detalhes."
+      ? "Quando a intenção for análise no chat, continue sendo o Arquimedes: use consultas MCP somente leitura e, quando a pergunta exigir uma varredura ampla, use engineering_gap_analysis. Não convoque Euclides nem outros revisores silenciosamente; a Análise/Revisão formal de EAP pertence ao fluxo próprio de revisão."
       : "Em consultas pontuais, não faça uma varredura completa sem necessidade.",
     "Quando uma consulta de ferramenta falhar, tente outra fonte somente se houver uma alternativa útil. Se a informação continuar indisponível e for importante para a resposta, diga simplesmente que esse dado não está disponível agora.",
     "Quando o usuário perguntar sobre o próprio código, arquitetura, bugs ou funcionamento interno da Plataforma Obras, use as ferramentas de repositório disponíveis para investigar. Não diga que não possui acesso ao código se a ferramenta puder fornecê-lo.",
