@@ -8,6 +8,7 @@ import {
   uninstallArquimedesCapability,
 } from "./capability-manager";
 import { ARQUIMEDES_PERMISSION_MATRIX } from "./capability-registry";
+import { ARQUIMEDES_AGENT_REGISTRY } from "./agent-registry";
 
 export const arquimedesCapabilitiesRouter = router({
   snapshot: adminProcedure.query(async ({ ctx }) => {
@@ -33,6 +34,7 @@ export const arquimedesCapabilitiesRouter = router({
 
     return {
       ...capabilities,
+      agents: Object.values(ARQUIMEDES_AGENT_REGISTRY),
       generatedAt: mcpStatus.checkedAt,
       overallMcpStatus: mcpStatus.status,
       mcpDomains,
