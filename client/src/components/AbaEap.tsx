@@ -126,11 +126,16 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const idsComFilhos = new Set(nos.filter(n => n.parentId !== null).map(n => n.parentId as number));
   const folhasEap = nos.filter(n => !idsComFilhos.has(n.id));
   const pacotesTrabalho = nos.filter(n => n.nodeType === "pacote" && !idsComFilhos.has(n.id));
-  const folhasSemDicionario = folhasEap.filter(n =>
-    !n.description?.trim() || !n.inclusions?.trim() || !n.exclusions?.trim() ||
-    !n.location?.trim() || !n.responsible?.trim() || !n.acceptanceCriteria?.trim()
-  );
-  const folhasSemQuantidade = folhasEap.filter(n => !n.unit || n.plannedQuantity == null);
+  const requiredDictionaryFields = (dicionarioPadrao.data?.status === "approved" ? dicionarioPadrao.data.requiredFields : []) as string[];
+  const dictionaryValue = (node: No, field: string) => {
+    const value = node[field as keyof No];
+    return value !== null && value !== undefined && String(value).trim() !== "";
+  };
+  const folhasSemDicionario = requiredDictionaryFields.length
+    ? folhasEap.filter(n => requiredDictionaryFields.some(field => !dictionaryValue(n, field)))
+    : [];
+  const dicionarioPendenteDecisao = dicionarioPadrao.data?.status !== "approved";
+  const folhasSemQuantidade = dicionarioPendenteDecisao ? [] : folhasEap.filter(n => !n.unit || n.plannedQuantity == null);
   // Quantitativos não bloqueiam a baseline da EAP. Eles pertencem à etapa
   // seguinte: levantamento quantitativo. A EAP só precisa ter estrutura e
   // dicionário de escopo suficientemente definidos para aprovação.
@@ -193,6 +198,14 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
   const expandirTudo = () => setAberto(new Set(nos.filter(n => n.nodeType !== "entrega").map(n => n.id)));
   const recolherTudo = () => setAberto(new Set());
+  const dicionarioPadrao = trpc.projects.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const decidirDicionario = trpc.projects.decideEapDictionaryStandard.useMutation({
+    onSuccess: async () => {
+      await dicionarioPadrao.refetch();
+      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await revisaoArquimedes.refetch();
+    },
+  });
   const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
   const propostaArquimedes = revisaoArquimedes.data?.proposal;
   const ultimaRevisaoArquimedes = revisaoArquimedes.data?.createdAt ?? null;
@@ -219,7 +232,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const bloqueiosAposCorrecao = cicloRevisao?.counts?.afterErrors ?? cicloRevisao?.after?.summary?.errors ?? validacao.data?.summary.errors ?? 0;
 
   const resumoApontamentos = useMemo(() => {
-    const issues = validacao.data?.issues ?? [];
+    const issues = issuesUnicos;
     const grupos = [
       {
         label: "Estrutura",
@@ -287,11 +300,15 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     const outros = issues.filter(issue => !conhecidos.has(issue.code)).length;
     if (outros > 0) resultado.push({ label: "Outros", count: outros });
     return resultado;
-  }, [validacao.data?.issues]);
+  }, [issuesUnicos]);
 
-  const totalApontamentos = validacao.data?.summary.warnings ?? 0;
-  const pendenciasOrcamento = (validacao.data?.summary.costErrors ?? 0) + (validacao.data?.summary.costWarnings ?? 0);
-  const alertasEap = Math.max(0, totalApontamentos - pendenciasOrcamento);
+  const issuesUnicos = useMemo(() => {
+    const issues = validacao.data?.issues ?? [];
+    return Array.from(new Map(issues.map(issue => [issue.code + "|" + (issue.entityRef ?? "") + "|" + issue.message.trim(), issue])).values());
+  }, [validacao.data?.issues]);
+  const totalApontamentos = issuesUnicos.filter(issue => issue.severity === "warning").length;
+  const pendenciasOrcamento = issuesUnicos.filter(issue => issue.code === "wbs_leaf_without_cost" || issue.code === "wbs_double_counted_cost" || issue.code === "wbs_group_without_any_cost").length;
+  const alertasEap = issuesUnicos.filter(issue => issue.severity === "warning" && !issue.code.startsWith("wbs_")).length;
 
 
   const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
@@ -674,9 +691,28 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           </button>
         </div>
         {controleAberto && <>
+          <div className="eap-dicionario-padrao" role="region" aria-label="Padrão de dicionário da EAP">
+            <div>
+              <strong>Padrão do dicionário</strong>
+              <span>{dicionarioPadrao.data?.status === "approved"
+                ? "Regra aprovada pelo engenheiro e usada como régua de conformidade."
+                : "Proposta técnica aguardando decisão do engenheiro. Não altera a EAP nem cria regra automaticamente."}</span>
+            </div>
+            <div className="eap-dicionario-padrao-campos">
+              <small>Obrigatórios: descrição · inclusões · exclusões · critério de aceitação · responsável · status do escopo · base de decomposição</small>
+              <small>Condicionais: localização · unidade · quantidade</small>
+            </div>
+            {dicionarioPadrao.data?.status !== "approved" && (
+              <div className="eap-dicionario-padrao-acoes">
+                <button type="button" className="eap-btn" disabled={decidirDicionario.isPending} onClick={() => decidirDicionario.mutate({ projectId: projetoId, decision: "approved", requiredFields: ["description","inclusions","exclusions","acceptanceCriteria","responsible","scopeStatus","decompositionBasis"], conditionalFields: ["location","unit","plannedQuantity"], summary: "Padrão proposto pelo Arquimedes aprovado pelo engenheiro para esta obra." })}>Aprovar padrão</button>
+                <button type="button" className="eap-btn-secundario" disabled={decidirDicionario.isPending} onClick={() => decidirDicionario.mutate({ projectId: projetoId, decision: "partially_approved", requiredFields: ["description","inclusions","exclusions","acceptanceCriteria","responsible"], conditionalFields: ["location","unit","plannedQuantity","scopeStatus","decompositionBasis"], summary: "Padrão aprovado parcialmente; campos adicionais permanecem condicionais nesta etapa." })}>Aprovar parcialmente</button>
+              </div>
+            )}
+            {decidirDicionario.error && <small className="eap-erro">Padrão do dicionário: {decidirDicionario.error.message}</small>}
+          </div>
           <div className="eap-controle-grid">
-            <div className={`eap-controle-card ${folhasSemDicionario.length ? "atencao" : "ok"}`}><span>Dicionário</span><strong>{folhasEap.length - folhasSemDicionario.length}/{folhasEap.length}</strong><small>{folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) incompleta(s)` : "Todas as folhas documentadas"}</small></div>
-            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "ok"}`}><span>Quantitativos</span><strong>{folhasSemQuantidade.length ? "PENDENTE" : "PRONTO"}</strong><small>{folhasSemQuantidade.length ? `${folhasSemQuantidade.length} pacote(s) aguardando unidade/quantidade` : "Levantamento quantitativo preenchido"}</small></div>
+            <div className={`eap-controle-card ${dicionarioPendenteDecisao ? "atencao" : folhasSemDicionario.length ? "atencao" : "ok"}`}><span>Dicionário</span><strong>{dicionarioPendenteDecisao ? "AGUARDANDO" : `${folhasEap.length - folhasSemDicionario.length}/${folhasEap.length}`}</strong><small>{dicionarioPendenteDecisao ? "Padrão ainda não aprovado" : folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) fora do padrão` : "Todas as folhas conformes"}</small></div>
+            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "ok"}`}><span>Quantitativos</span><strong>{folhasSemQuantidade.length ? "PENDENTE" : "PRONTO"}</strong><small>{dicionarioPendenteDecisao ? "Aplicabilidade ainda não definida pelo padrão" : folhasSemQuantidade.length ? `${folhasSemQuantidade.length} pacote(s) aguardando unidade/quantidade` : "Levantamento quantitativo preenchido"}</small></div>
             <div className={`eap-controle-card ${pacotesTrabalho.length ? "ok" : "atencao"}`}><span>Pacotes de trabalho</span><strong>{pacotesTrabalho.length}</strong><small>Folhas terminais controláveis</small></div>
             <div className={`eap-controle-card ${validacao.data?.valid ? "ok" : "atencao"}`}><span>Critérios de parada</span><strong>{validacao.data?.valid ? "OK" : "REVISAR"}</strong><small>Sem bloqueios estruturais</small></div>
           </div>
