@@ -208,8 +208,11 @@ export function validateEapScope(
           if (overlaps(childScopeClauses[i]!, childScopeClauses[j]!)) {
             issues.push({
               code: "eap_scope_overlap_evidence",
-              severity: "error",
-              message: `Há evidência textual de sobreposição entre os irmãos ${childNodes[i]!.code} e ${childNodes[j]!.code} de ${node.code}. Revise inclusões e exclua responsabilidades duplicadas.`,
+              // Evidência textual pede julgamento de escopo, mas não prova
+              // sozinha uma quebra estrutural da EAP. Conflitos determinísticos
+              // continuam sendo os responsáveis por bloquear a aprovação.
+              severity: "warning",
+              message: `Há evidência textual de possível sobreposição entre os irmãos ${childNodes[i]!.code} e ${childNodes[j]!.code} de ${node.code}. Revise inclusões e exclusões para tornar as fronteiras de escopo mutuamente exclusivas.`,
               entityRef: String(node.id),
             });
           }
