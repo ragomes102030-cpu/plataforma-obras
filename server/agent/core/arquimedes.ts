@@ -338,6 +338,10 @@ async function proposeEapIncrementally(
 export async function proposeEapWithArquimedes(
   context: ArquimedesProjectContext,
   provider: ArquimedesLlmProvider,
+  options: {
+    mode?: "analisar" | "resolver_bloqueios";
+    resolutionIssues?: Array<{ code: string; message: string; entityRef?: string }>;
+  } = {},
 ): Promise<{ raw: string; request: ArquimedesLlmRequest }> {
   const skills = await loadEapSkills();
 
@@ -345,7 +349,13 @@ export async function proposeEapWithArquimedes(
     return proposeEapIncrementally(context, skills, provider);
   }
 
-  const request = buildEapRequest(context, skills);
+  const request = buildEapRequest(
+    context,
+    skills,
+    undefined,
+    options.mode ?? "analisar",
+    options.resolutionIssues ?? []
+  );
 
   // Contrato de fronteira: a revisão existente sempre precisa chegar ao provider
   // como uma requisição completa. Falhar aqui identifica a origem do problema
