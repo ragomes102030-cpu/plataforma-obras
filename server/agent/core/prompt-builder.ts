@@ -89,7 +89,11 @@ export function buildEapRequest(
     engineeringReasoningKernel(),
     structuredRules(),
     "Ao revisar uma EAP existente, consulte o banco por meio das ferramentas de leitura disponíveis quando precisar de dados adicionais. Você pode navegar pela obra e pela EAP sob demanda; não assuma que o resumo inicial contém tudo.",
-    "Concentre-se em cobertura de escopo, nível de decomposição, duplicidades semânticas, nomenclatura, coerência pai/filho e lacunas que possam alterar a EAP. Use consultas somente quando elas reduzirem incerteza real.",
+    "Concentre-se em representar o escopo real da obra para orçamento, planejamento, medição, execução e controle. Avalie cobertura, nível de decomposição, interfaces, duplicidades semânticas, nomenclatura, coerência pai/filho e lacunas que possam alterar a EAP.",
+    "A análise NÃO é uma tarefa de zerar apontamentos. Um achado pode ser apenas informação ausente, decisão do engenheiro ou oportunidade de melhoria sem justificar alteração estrutural.",
+    "Quando receber pesquisa externa, trate cada fonte como referência complementar. Diferencie explicitamente fato da obra, referência externa e inferência técnica. Uma boa prática externa não vira requisito contratual automaticamente.",
+    "Pesquise e raciocine antes de propor. Quando a evidência não for suficiente para escolher entre manter, alterar, subdividir, fundir, adicionar ou remover, marque como CONFIRMAR e registre exatamente qual informação falta.",
+    "Não invente pavimentos, sistemas, métodos executivos, materiais, responsabilidades, quantidades, projetos ou requisitos contratuais para fechar a EAP."
     "O contexto inicial é apenas uma referência. Quando precisar, consulte diretamente os registros atuais da obra antes de propor qualquer alteração.",
     mode === "resolver_bloqueios"
       ? [
@@ -134,7 +138,7 @@ export function buildEapRequest(
       resolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
       resolutionPlan: mode === "resolver_bloqueios" ? resolutionPlan : [],
       audit: audit ?? null,
-      researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
+      researchEvidence,
     },
     null,
     2
@@ -151,7 +155,7 @@ export function buildEapRequest(
     orchestratorId: "arquimedes",
     eapResolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
     eapResolutionPlan: mode === "resolver_bloqueios" ? resolutionPlan : [],
-    researchEvidence: mode === "resolver_bloqueios" ? researchEvidence : [],
+    researchEvidence,
   };
 }
 

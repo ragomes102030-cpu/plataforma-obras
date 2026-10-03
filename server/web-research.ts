@@ -143,9 +143,33 @@ export async function searchWebEvidence(
 }
 
 export function buildEapResearchQueries(
-  issues: Array<{ code: string; message: string }>
+  issues: Array<{ code: string; message: string }>,
+  project?: {
+    projectName?: string | null;
+    projectDescription?: string | null;
+    tipoDeObra?: string | null;
+  }
 ): string[] {
   const queries = new Set<string>();
+  const projectContext = [
+    project?.tipoDeObra,
+    project?.projectName,
+    project?.projectDescription,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .slice(0, 500);
+
+  queries.add(
+    `WBS work breakdown structure construction building work packages scope dictionary decomposition PMI ${projectContext}`
+  );
+  queries.add(
+    `construction project WBS decomposition by system location building floors work packages planning control ${projectContext}`
+  );
+  queries.add(
+    "WBS dictionary scope inclusions exclusions responsibility work package construction PMI"
+  );
 
   for (const issue of issues) {
     const message = issue.message.toLowerCase();
@@ -169,12 +193,6 @@ export function buildEapResearchQueries(
         "WBS decomposition level of detail 100 percent rule work package PMI"
       );
     }
-  }
-
-  if (!queries.size) {
-    queries.add(
-      "WBS work breakdown structure construction scope dictionary work package 100 percent rule PMI"
-    );
   }
 
   return Array.from(queries).slice(0, 4);
