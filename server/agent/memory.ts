@@ -1,5 +1,5 @@
 import { and, desc, eq, ilike, or, ne } from "drizzle-orm";
-import { agentMemories } from "../../drizzle/schema";
+import { agentMemories, agentRuns } from "../../drizzle/schema";
 import { getDb } from "../db";
 
 export type ArquimedesMemorySource =
@@ -157,6 +157,52 @@ export async function buildArquimedesMemoryContext(
   projectId: number | undefined
 ) {
   const memories = await recallArquimedes(ownerUserId, projectId, "", 12);
+
+  // Backfill de continuidade: antes da V1 do cérebro, análises já executadas
+  // ficaram persistidas em agent_runs. Se ainda não houver memória estruturada,
+  // recuperamos a última execução da mesma obra para não perder o trabalho
+  // anterior. Isso é contexto de leitura, nunca autorização de mutação.
+  if (!memories.length && projectId) {
+    const db = await getDb();
+    if (db) {
+      const runs = await db
+        .select({
+          requestId: agentRuns.requestId,
+          resultJson: agentRuns.resultJson,
+          status: agentRuns.status,
+          startedAt: agentRuns.startedAt,
+        })
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.projectId, projectId),
+            eq(agentRuns.userId, ownerUserId)
+          )
+        )
+        .orderBy(desc(agentRuns.startedAt))
+        .limit(3);
+
+      const persistedRuns = runs
+        .filter(run => Boolean(run.resultJson))
+        .map(run => ({
+          requestId: run.requestId,
+          status: run.status,
+          startedAt: run.startedAt,
+          result: parseJson(run.resultJson ?? ""),
+        }));
+
+      if (persistedRuns.length) {
+        return [
+          "Memória persistente do Arquimedes: ainda não há memórias estruturadas nesta obra.",
+          "Continuidade recuperada de execuções anteriores persistidas. Trate como contexto histórico, confirme contra os dados atuais e não use isso como autorização de mutação.",
+          ...persistedRuns.map(run =>
+            `[historico/${run.status}] request=${run.requestId} | iniciado=${run.startedAt.toISOString()} | resultado=${JSON.stringify(run.result)}`
+          ),
+        ].join("\n");
+      }
+    }
+  }
+
   if (!memories.length) return "Memória persistente do Arquimedes: nenhuma memória relevante registrada.";
 
   const lines = memories.map(memory => {
