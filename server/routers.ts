@@ -64,7 +64,7 @@ import {
   getAgentExecutionStatus,
   startAgentExecution,
 } from "./agent-execution";
-import { getPublicLlmSettings, saveStoredLlmProvider } from "./llm-settings";
+import { getPublicLlmSettings, saveStoredLlmProviders } from "./llm-settings";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -1008,7 +1008,7 @@ export const appRouter = router({
           })
         )
         .mutation(async ({ ctx, input }) => {
-          await saveStoredLlmProvider(input, ctx.user.id);
+          await saveStoredLlmProviders([input], ctx.user.id);
           return {
             saved: true as const,
             settings: await getPublicLlmSettings(),
