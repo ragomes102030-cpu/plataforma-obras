@@ -614,9 +614,30 @@ export function validateAndNormalizeEapProposal(
     }
 
     if (item.operation === "update") {
-      const resolvedNodeId =
+      // IDs são internos à versão e podem ficar obsoletos quando uma
+      // versão aprovada é clonada. O código EAP é a referência estável para
+      // reconciliar uma proposta antiga com a versão atual, desde que o ID
+      // recebido não exista mais. Se o ID ainda existe, ele continua sendo
+      // a autoridade e não permitimos uma troca silenciosa por código.
+      let resolvedNodeId =
         item.nodeId ??
         (item.code ? byCode.get(item.code.trim())?.id : undefined);
+
+      if (item.nodeId != null && !byId.has(String(item.nodeId)) && item.code) {
+        const rebound = byCode.get(item.code.trim());
+        if (rebound) {
+          resolvedNodeId = rebound.id;
+          issues.push({
+            code: "proposal_stale_node_id_rebound",
+            severity: "warning",
+            message:
+              "A proposta trouxe um nodeId de uma versão anterior; o nó foi reconciliado com segurança pelo código EAP " +
+              rebound.code +
+              " na versão atual.",
+            entityRef: String(item.nodeId),
+          });
+        }
+      }
 
       if (!resolvedNodeId) {
         issues.push({
