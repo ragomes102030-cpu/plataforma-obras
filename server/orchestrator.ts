@@ -1546,7 +1546,7 @@ export async function runProjectOrchestrator(
             eapNodeCount: context.evidence?.eapNodeCount ?? null,
             activityCount: context.evidence?.activityCount ?? null,
             dependencyCount: context.evidence?.dependencyCount ?? null,
-            budgetItemCount: context.evidence?.budgetItemCount ?? null,
+            budgetItemCount: context.evidence?.localBudget?.itemCount ?? null,
             eapStructureValidation: context.evidence?.localEap?.structureValidation ?? null,
           },
           response: content.slice(0, 9000),
