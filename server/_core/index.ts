@@ -214,22 +214,6 @@ async function startServer() {
   server.listen(preferredPort, () => {
     console.log(`Server running on http://localhost:${preferredPort}/`);
     console.log("[qa-boot] QA_RUNNER_ON_BOOT =", process.env.QA_RUNNER_ON_BOOT === "true" ? "true" : "false");
-    // TESTE CONTROLADO TEMPORÁRIO: executa somente o Brain + Skills QA nesta inicialização quando o runner EAP está desligado.
-    if (process.env.QA_RUNNER_ON_BOOT !== "true") {
-      setTimeout(async () => {
-        try {
-          const db = await getDb();
-          if (!db) throw new Error("Banco de dados não configurado.");
-          const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
-          if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
-          const [project] = await db.select().from(projects).where(eq(projects.code, "ARQUIMEDES-QA")).limit(1);
-          if (!project || project.deletedAt) throw new Error("Obra ARQUIMEDES-QA indisponível.");
-          console.log("[qa-boot] RESULTADO BRAIN + SKILLS QA TEMP:", JSON.stringify(await runBrainSkillsQaSuite({ ownerUserId: owner.id, projectId: project.id })));
-        } catch (error) {
-          console.error("[qa-boot] Brain + Skills QA temporário falhou:", error);
-        }
-      }, 3000);
-    }
     if (process.env.QA_RUNNER_ON_BOOT === "true") {
       setTimeout(async () => {
         try {
