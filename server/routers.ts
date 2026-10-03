@@ -1267,6 +1267,91 @@ export const appRouter = router({
             userId: ctx.user.id,
             mcpProjectIds: input.mcpProjectIds ?? {},
           });
+        }),,
+      ensureProject: adminProcedure
+        .mutation(async ({ ctx }) => {
+          const db = await getDb();
+          if (!db) throw new Error("Banco de dados não configurado.");
+
+          const existing = await db
+            .select()
+            .from(projects)
+            .where(eq(projects.code, "ARQUIMEDES-QA"))
+            .limit(1);
+
+          if (existing[0]) {
+            if (!existing[0].name.toUpperCase().includes("QA") || !existing[0].code.toUpperCase().includes("QA")) {
+              throw conflict("O código ARQUIMEDES-QA já está associado a uma obra que não é identificada como QA.");
+            }
+            if (existing[0].deletedAt) {
+              throw conflict("A obra ARQUIMEDES-QA existe na lixeira e precisa ser restaurada antes da execução de QA.");
+            }
+            return { created: false as const, project: existing[0] };
+          }
+
+          const plannedStart = new Date();
+          const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
+
+          return db.transaction(async tx => {
+            const [projectId] = await tx
+              .insert(projects)
+              .values({
+                ownerUserId: ctx.user.id,
+                code: "ARQUIMEDES-QA",
+                name: "ARQUIMEDES — Ambiente QA",
+                location: "Ambiente isolado de testes",
+                descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.",
+                tipoDeObra: "edificio",
+                status: "Planejamento",
+                progress: 0,
+                plannedStart,
+                plannedFinish,
+              })
+              .$returningIds();
+
+            if (!projectId) throw new Error("Não foi possível criar a obra QA.");
+
+            const [version] = await tx
+              .insert(projectPlanVersions)
+              .values({
+                projectId,
+                versionNumber: 1,
+                status: "draft",
+                baseVersionId: null,
+                createdBy: ctx.user.id,
+                notes: "Versão inicial exclusiva para testes automatizados do Arquimedes.",
+              })
+              .$returningIds();
+
+            if (!version) throw new Error("Não foi possível criar a versão inicial da obra QA.");
+
+            await tx.insert(projectMcpIntegrations).values(
+              mcpProviders.map(provider => ({
+                projectId,
+                provider,
+                externalProjectId: "ARQUIMEDES-QA",
+                endpointUrl: mcpEndpoint(provider),
+                syncState: "pending" as const,
+                lastError: null,
+              })),
+            );
+
+            const [created] = await tx
+              .select()
+              .from(projects)
+              .where(eq(projects.id, projectId))
+              .limit(1);
+
+            return {
+              created: true as const,
+              project: created,
+              version: {
+                id: version,
+                versionNumber: 1,
+                status: "draft" as const,
+              },
+            };
+          });
         }),
     }),
     llmSettings: router({
