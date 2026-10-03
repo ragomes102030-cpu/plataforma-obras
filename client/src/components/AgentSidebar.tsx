@@ -80,6 +80,10 @@ export function AgentSidebar({
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const historyQuery = trpc.agent.history.useQuery(
+    { projectId },
+    { staleTime: 0, refetchOnWindowFocus: false, refetchOnMount: true },
+  );
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const handledRequestRef = useRef<string | null>(null);
   const statusQuery = trpc.integrations.mcpStatus.useQuery(undefined, {
@@ -137,6 +141,11 @@ export function AgentSidebar({
       refetchOnWindowFocus: true,
     }
   );
+
+  useEffect(() => {
+    if (!historyQuery.data) return;
+    setMessages(historyQuery.data.messages);
+  }, [historyQuery.data]);
 
   useEffect(() => {
     const run = executionQuery.data;
