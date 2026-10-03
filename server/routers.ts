@@ -1204,6 +1204,50 @@ export const appRouter = router({
   }),
   admin: router({
     capabilities: arquimedesCapabilitiesRouter,
+    qa: router({
+      run: adminProcedure
+        .input(z.object({
+          projectId: z.number().int().positive(),
+          messages: z.array(z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string().trim().min(1).max(6000),
+          })).min(1).max(20),
+          mcpProjectIds: z.object({
+            eap: z.string().trim().min(1).max(120).optional(),
+            cronograma: z.string().trim().min(1).max(120).optional(),
+            ganttLob: z.string().trim().min(1).max(120).optional(),
+          }).partial().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const db = await getDb();
+          if (!db) throw new Error("Banco de dados não configurado.");
+          const [project] = await db.select().from(projects)
+            .where(and(eq(projects.id, input.projectId), isNull(projects.deletedAt))).limit(1);
+          if (!project) throw notFound("Obra não encontrada.");
+          const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+          const activities = await db.select().from(scheduleActivities)
+            .where(currentVersionId == null
+              ? eq(scheduleActivities.projectId, input.projectId)
+              : and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, currentVersionId)))
+            .orderBy(scheduleActivities.sortOrder);
+          const coordinator = await loadAgentCoordinatorSnapshot(db, input.projectId, ctx.user.id);
+          return startAgentExecution({
+            db, projectId: input.projectId, userId: ctx.user.id,
+            context: buildAgentProjectContext(project, activities,
+              { activeSection: "eap", contextMode: "focused" }, coordinator),
+            messages: input.messages,
+            mcpProjectIds: input.mcpProjectIds ?? {},
+            requestId: requestIdFrom(ctx),
+          });
+        }),
+      status: adminProcedure
+        .input(z.object({ requestId: z.string().trim().min(1).max(128) }))
+        .query(async ({ ctx, input }) => {
+          const status = await getAgentExecutionStatus(await getDb(), input.requestId, ctx.user.id);
+          if (!status) throw notFound("Execução de QA não encontrada.");
+          return status;
+        }),
+    }),
     llmSettings: router({
       get: adminProcedure.query(() => getPublicLlmSettings()),
       save: adminProcedure
