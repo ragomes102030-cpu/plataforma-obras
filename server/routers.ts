@@ -49,6 +49,7 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
+import { restoreAgentConversation } from "./agent-history";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -3991,32 +3992,11 @@ export const appRouter = router({
           .orderBy(desc(agentRuns.createdAt))
           .limit(1);
         if (!run) return { messages: [], requestId: null, status: null as string | null };
-        let messages: Array<{ role: "user" | "assistant"; content: string }> = [];
-        try {
-          const context = JSON.parse(run.contextJson) as { messages?: unknown };
-          if (Array.isArray(context.messages)) {
-            messages = context.messages.filter(
-              (message): message is { role: "user" | "assistant"; content: string } =>
-                Boolean(message) &&
-                typeof message === "object" &&
-                ((message as { role?: unknown }).role === "user" ||
-                  (message as { role?: unknown }).role === "assistant") &&
-                typeof (message as { content?: unknown }).content === "string"
-            );
-          }
-        } catch {
-          messages = [];
-        }
-        if (run.status !== "executando" && run.resultJson) {
-          try {
-            const result = JSON.parse(run.resultJson) as { content?: unknown };
-            if (typeof result.content === "string" && result.content.trim()) {
-              messages = [...messages, { role: "assistant", content: result.content }];
-            }
-          } catch {
-            // O histórico conversacional continua recuperável mesmo se o resultado não puder ser desserializado.
-          }
-        }
+        const messages = restoreAgentConversation(
+          run.contextJson,
+          run.resultJson,
+          run.status,
+        );
         return { messages, requestId: run.requestId, status: run.status };
       }),
     chat: protectedProcedure
