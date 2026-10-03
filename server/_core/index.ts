@@ -7,7 +7,6 @@ import { registerStorageProxy } from "./storageProxy";
 import { sql } from "drizzle-orm";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
-import { runAuroraActivitiesProposal } from "../qa/aurora-activities-proposal";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
@@ -219,8 +218,6 @@ async function startServer() {
       setTimeout(async () => {
         try {
           const db = await getDb();
-          const auroraActivitiesResult = await runAuroraActivitiesProposal();
-          console.log("[qa-boot] RESULTADO AURORA ATIVIDADES:", JSON.stringify(auroraActivitiesResult));
           if (!db) throw new Error("Banco de dados não configurado.");
           const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
           if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
