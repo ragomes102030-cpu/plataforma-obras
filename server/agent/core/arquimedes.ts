@@ -3,9 +3,12 @@ import {
   buildEapMacroRequest,
   buildEapRequest,
   buildEapSubtreeRequest,
+  buildEapSelfHealingRequest,
   type EapReviewAudit,
 } from "./prompt-builder";
 import { loadEapSkills } from "./skill-loader";
+import { validateAndNormalizeEapProposal } from "../../construction/eap-validator";
+import { validateEapForBaseline } from "../../construction/eap-approval-validator";
 import type {
   ArquimedesEapProposal,
   ArquimedesLlmProvider,
@@ -280,6 +283,129 @@ function validateIncrementalTree(
   };
 }
 
+function proposalToScopeNodes(proposal: ArquimedesEapProposal, projectId: number) {
+  const byCode = new Map<string, number>();
+  return proposal.nodes
+    .filter(node => node.operation === "create" && node.code)
+    .map((node, index) => {
+      const id = -(index + 1);
+      byCode.set(node.code!, id);
+      return { node, id };
+    })
+    .map(({ node, id }) => ({
+      id,
+      projectId,
+      externalId: null,
+      externalUid: null,
+      parentId: node.parentCode ? (byCode.get(node.parentCode) ?? null) : null,
+      code: node.code!,
+      name: node.name,
+      level: node.code!.split(".").length,
+      nodeType: node.nodeType,
+      unit: node.unit ?? null,
+      plannedQuantity: node.plannedQuantity ?? null,
+      sortOrder: Math.abs(id),
+      description: node.description ?? null,
+      inclusions: node.inclusions ?? null,
+      exclusions: node.exclusions ?? null,
+      location: node.location ?? null,
+      responsible: node.responsible ?? null,
+      acceptanceCriteria: node.acceptanceCriteria ?? null,
+      decompositionBasis: node.decompositionBasis ?? null,
+      scopeStatus: "rascunho",
+    }));
+}
+
+function validateGeneratedEap(proposal: ArquimedesEapProposal, projectId: number) {
+  const normalized = validateAndNormalizeEapProposal([], proposal);
+  const scopeNodes = proposalToScopeNodes(normalized, projectId);
+  const baseline = validateEapForBaseline(scopeNodes);
+  const issues = [
+    ...(normalized.validation?.issues ?? []),
+    ...baseline.issues,
+  ];
+  const deduped = Array.from(new Map(
+    issues.map(issue => [
+      issue.code + ":" + (issue.entityRef ?? "") + ":" + issue.message,
+      issue,
+    ])
+  ).values());
+  return {
+    proposal: normalized,
+    nodes: scopeNodes,
+    valid: !deduped.some(issue => issue.severity === "error") &&
+      baseline.readyForBaseline,
+    issues: deduped,
+  };
+}
+
+async function selfHealGeneratedEap(
+  context: ArquimedesProjectContext,
+  skills: Awaited<ReturnType<typeof loadEapSkills>>,
+  provider: ArquimedesLlmProvider,
+  initialProposal: ArquimedesEapProposal,
+) {
+  let proposal = initialProposal;
+  const history: Array<{
+    attempt: number;
+    issueCodes: string[];
+    corrected: boolean;
+  }> = [];
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const validation = validateGeneratedEap(proposal, context.projectId);
+    const issueCodes = Array.from(new Set(validation.issues.map(issue => issue.code)));
+    if (validation.valid) {
+      return {
+        proposal: validation.proposal,
+        history,
+        finalValidation: validation,
+        healed: history.length > 0,
+      };
+    }
+
+    if (attempt === 3) {
+      history.push({
+        attempt,
+        issueCodes,
+        corrected: false,
+      });
+      return {
+        proposal: validation.proposal,
+        history,
+        finalValidation: validation,
+        healed: history.some(item => item.corrected),
+      };
+    }
+
+    history.push({
+      attempt,
+      issueCodes,
+      corrected: false,
+    });
+
+    const repairRequest = buildEapSelfHealingRequest(
+      context,
+      skills,
+      validation.proposal,
+      validation.issues,
+      attempt
+    );
+    const repairedRaw = await provider.complete(repairRequest);
+    const repaired = parseEapProposal(repairedRaw);
+    const repairedValidation = validateGeneratedEap(repaired, context.projectId);
+    const repairedCodes = new Set(
+      repairedValidation.issues.map(issue => issue.code)
+    );
+    history[history.length - 1]!.corrected =
+      repairedValidation.issues.length < validation.issues.length ||
+      issueCodes.some(code => !repairedCodes.has(code));
+    proposal = repaired;
+  }
+
+  throw new Error("Autocorreção da EAP terminou em estado inesperado.");
+}
+
 async function proposeEapIncrementally(
   context: ArquimedesProjectContext,
   skills: Awaited<ReturnType<typeof loadEapSkills>>,
@@ -328,10 +454,12 @@ async function proposeEapIncrementally(
   );
 
   const proposal = validateIncrementalTree(macro, expansions);
+  const healed = await selfHealGeneratedEap(context, skills, provider, proposal);
   return {
-    proposal,
+    proposal: healed.proposal,
     request: macroRequest,
-    raw: JSON.stringify(proposal),
+    raw: JSON.stringify(healed.proposal),
+    healing: healed,
   };
 }
 
@@ -345,7 +473,15 @@ export async function proposeEapWithArquimedes(
     resolutionPlan?: ArquimedesLlmRequest["eapResolutionPlan"];
     researchEvidence?: ArquimedesLlmRequest["researchEvidence"];
   } = {},
-): Promise<{ raw: string; request: ArquimedesLlmRequest }> {
+): Promise<{
+  raw: string;
+  request: ArquimedesLlmRequest;
+  healing?: {
+    history: Array<{ attempt: number; issueCodes: string[]; corrected: boolean }>;
+    healed: boolean;
+    finalValidation: ReturnType<typeof validateGeneratedEap>;
+  };
+}> {
   const skills = await loadEapSkills();
 
   if (context.wbs.length === 0) {
