@@ -34,6 +34,7 @@ export function runCompleteEapQaSuite() {
     status: passed ? "passed" : "failed",
     project: COMPLETE_EAP_QA_FIXTURE.project,
     counts: { eapNodes: eap.length, packages: packages.length, activities: schedule.length },
+    baselineIssues: baseline.issues.map(i => ({ code: i.code, severity: i.severity, entityRef: i.entityRef })),
     checks,
     total: checks.length,
     passedCount: checks.filter(c => c.passed).length,
