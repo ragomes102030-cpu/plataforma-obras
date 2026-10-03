@@ -81,3 +81,21 @@ Total: 37 MCPs, 30 habilitados
 | Testes e2e configurados | Média | ⏳ |
 | Notion base de conhecimento via Composio | Média | ⏳ |
 | Procore doc manager skill | Baixa | ⏳ |
+
+## Out/2026 — Persistência do histórico conversacional do Arquimedes
+
+### Incidente encontrado
+- Ao fechar/reabrir o agente da obra, o histórico desaparecia porque AgentSidebar e AgentView mantinham as mensagens apenas em useState no navegador.
+- O backend já persistia cada execução em agent_runs.contextJson, mas não existia uma rota para reidratar esse histórico.
+- Isso fazia o Arquimedes voltar a consultar apenas o estado persistido da obra e, em uma obra sem EAP aplicada, concluir incorretamente que a proposta anterior não existia.
+
+### Correção
+- Criada agent.history, protegida por usuário e obra, para recuperar a última conversa persistida.
+- Criada server/agent-history.ts para reconstruir mensagens a partir de agent_runs.contextJson + resultJson.
+- AgentSidebar e AgentView passam a reidratar o chat ao abrir/reabrir a obra.
+- Respostas que aguardam confirmação também são recuperadas.
+- Limite de mensagem do agente ampliado de 6.000 para 12.000 caracteres para não truncar propostas EAP longas.
+- Criado teste de regressão para recuperação de conversa, contexto inválido e estado aguardando confirmação.
+
+### Regra preservada
+A persistência da conversa **não aplica EAP, cronograma ou qualquer mutação na obra**. Proposta conversacional continua sendo proposta até aprovação explícita.
