@@ -41,3 +41,26 @@ export function restoreAgentConversation(
 
   return messages;
 }
+
+
+export type PersistedAgentRun = {
+  requestId: string;
+  status: string;
+  contextJson: string;
+  resultJson: string | null;
+};
+
+export function mergeAgentConversations(
+  runs: PersistedAgentRun[],
+): PersistedAgentMessage[] {
+  const messages: PersistedAgentMessage[] = [];
+  for (const run of [...runs].reverse()) {
+    const restored = restoreAgentConversation(run.contextJson, run.resultJson, run.status);
+    for (const message of restored) {
+      const previous = messages[messages.length - 1];
+      if (previous?.role === message.role && previous.content === message.content) continue;
+      messages.push(message);
+    }
+  }
+  return messages;
+}
