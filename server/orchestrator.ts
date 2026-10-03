@@ -93,6 +93,8 @@ const PROJECT_SCOPED_TOOLS = new Set([
   "validar_estrutura",
   "pacotes_sem_dono",
   "resumo_quantitativos",
+  "listar_escopo",
+  "validar_regra_100_porcento",
   "listar_atividades",
   "listar_dependencias",
   "validar_dependencias",
@@ -101,6 +103,7 @@ const PROJECT_SCOPED_TOOLS = new Set([
   "comparar_baseline",
   "curva_s",
   "calcular_linha_balanco",
+  "dimensionar_equipes_lob",
 ]);
 
 export type ToolDomain =
