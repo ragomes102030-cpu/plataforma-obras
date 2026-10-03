@@ -73,6 +73,7 @@ import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import { buildEapResearchQueries, searchWebEvidence } from "./web-research";
+import { rememberArquimedes } from "./agent/memory";
 import {
   buildEapResolutionPlan,
   findUncoveredEapResolutionGroups,
@@ -1795,6 +1796,43 @@ export const appRouter = router({
         }
 
         const proposal = normalizedProposal;
+
+        // Guarda um snapshot compacto da análise para que uma nova conversa possa
+        // continuar o raciocínio sem depender de todo o histórico do chat.
+        await rememberArquimedes({
+          projectId: input.projectId,
+          ownerUserId: ctx.user.id,
+          scope: "project",
+          category: "eap_analysis",
+          memoryKey: "eap-analysis-current",
+          value: {
+            mode: input.mode,
+            reviewRequestId,
+            basis: proposal.basis?.slice(0, 12) ?? [],
+            assumptions: proposal.assumptions?.slice(0, 12) ?? [],
+            missingInformation: proposal.missingInformation?.slice(0, 12) ?? [],
+            validation: proposal.validation
+              ? {
+                  valid: proposal.validation.valid,
+                  issues: proposal.validation.issues?.slice(0, 12) ?? [],
+                }
+              : null,
+            proposals: (proposal.nodes ?? []).slice(0, 40).map(node => ({
+              operation: node.operation,
+              nodeId: node.nodeId ?? null,
+              parentCode: node.parentCode,
+              code: node.code ?? null,
+              name: node.name,
+              rationale: node.rationale,
+            })),
+            researchEvidenceCount: proposal.researchEvidence?.length ?? 0,
+            savedAt: new Date().toISOString(),
+          },
+          sourceType: "arquimedes",
+          sourceRef: reviewRequestId,
+          confidence: "medium",
+        });
+
         await db
           .update(agentRuns)
           .set({ currentStep: "EAP_REVISAO_SUPERADA", updatedAt: new Date() })
