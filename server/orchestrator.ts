@@ -103,7 +103,6 @@ const PROJECT_SCOPED_TOOLS = new Set([
   "comparar_baseline",
   "curva_s",
   "calcular_linha_balanco",
-  "dimensionar_equipes_lob",
 ]);
 
 export type ToolDomain =
