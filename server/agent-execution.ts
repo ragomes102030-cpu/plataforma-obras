@@ -378,6 +378,7 @@ async function executeAgentRun(
       finishedAt: new Date(),
     });
     if (db) {
+      await persistDiagnosticCheckpoint(db, input, requestId, result.status, result, null, null);
       await db
         .update(agentRuns)
         .set({
@@ -416,6 +417,7 @@ async function executeAgentRun(
       finishedAt: new Date(),
     });
     if (db) {
+      await persistDiagnosticCheckpoint(db, input, requestId, classified.status, null, classified.errorCode, classified.message);
       await db
         .update(agentRuns)
         .set({
