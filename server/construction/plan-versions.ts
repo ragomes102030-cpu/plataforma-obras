@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   projectPlanVersions,
   scheduleActivities,
@@ -373,9 +373,24 @@ export async function approveCurrentPlanVersion(
 ): Promise<{ id: number; versionNumber: number }> {
   const ensured = await ensureWritablePlanVersion(projectId, userId);
   const db = requireDatabase(await getDb());
+
+  // Uma obra pode ter somente uma versão vigente com status approved.
+  // Aprovar uma nova versão não apaga o histórico: versões aprovadas anteriores
+  // passam a superseded, preservando decisão, auditoria e rastreabilidade.
   await db
     .update(projectPlanVersions)
-    .set({ status: "approved", decisionId, approvedAt: new Date() })
+    .set({ status: "superseded", updatedAt: new Date() })
+    .where(
+      and(
+        eq(projectPlanVersions.projectId, projectId),
+        eq(projectPlanVersions.status, "approved"),
+        ne(projectPlanVersions.id, ensured.id)
+      )
+    );
+
+  await db
+    .update(projectPlanVersions)
+    .set({ status: "approved", decisionId, approvedAt: new Date(), updatedAt: new Date() })
     .where(eq(projectPlanVersions.id, ensured.id));
   return { id: ensured.id, versionNumber: ensured.versionNumber };
 }
