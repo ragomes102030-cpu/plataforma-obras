@@ -5,7 +5,11 @@ const validEvidence: StageGateEvidence = {
   hasDescription: true,
   eapNodeCount: 4,
   eapValid: true,
+  eapDictionaryStandardApproved: true,
+  eapDictionaryCompliant: true,
   activityCount: 6,
+  activitiesPlanned: 6,
+  activitiesWithoutQuantity: 0,
   dependenciesValid: true,
   cpmValid: true,
   blockerCount: 0,
@@ -24,6 +28,31 @@ describe("stage gates", () => {
     expect(result.allowed).toBe(true);
     expect(result.nextStage).toBe("EAP_REVISAO");
     expect(result.checks.every(check => check.valid)).toBe(true);
+  });
+
+
+  it("bloqueia avanço da EAP quando o padrão do dicionário ainda não foi aprovado", () => {
+    const result = evaluateStageTransition({
+      currentStage: "EAP_REVISAO",
+      targetStage: "ATIVIDADES_PROPOSTA",
+      decision: "approved",
+      evidence: { ...validEvidence, eapDictionaryStandardApproved: false },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.checks.some(check => check.code === "eap_dictionary_standard_approved" && !check.valid)).toBe(true);
+  });
+
+  it("bloqueia avanço da EAP quando folhas não cumprem o padrão aprovado", () => {
+    const result = evaluateStageTransition({
+      currentStage: "EAP_REVISAO",
+      targetStage: "ATIVIDADES_PROPOSTA",
+      decision: "approved",
+      evidence: { ...validEvidence, eapDictionaryCompliant: false },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.checks.some(check => check.code === "eap_dictionary_compliant" && !check.valid)).toBe(true);
   });
 
   it("impede saltar diretamente para uma etapa posterior", () => {

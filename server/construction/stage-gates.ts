@@ -9,6 +9,10 @@ export type StageGateEvidence = {
   hasDescription: boolean;
   eapNodeCount: number;
   eapValid: boolean;
+  /** O padrão do dicionário da EAP precisa ter sido decidido antes da aprovação. */
+  eapDictionaryStandardApproved: boolean;
+  /** A EAP deve cumprir os campos obrigatórios do padrão aprovado. */
+  eapDictionaryCompliant: boolean;
   /**
    * Atividades na grade. Diz que a folha foi puxada da EAP, e nada mais.
    */
@@ -117,6 +121,16 @@ function checksForTarget(
           code: "eap_valid",
           label: "A EAP está válida para receber atividades",
           valid: evidence.eapNodeCount > 0 && evidence.eapValid,
+        },
+        {
+          code: "eap_dictionary_standard_approved",
+          label: "O padrão do dicionário da EAP foi aprovado pelo engenheiro",
+          valid: evidence.eapDictionaryStandardApproved,
+        },
+        {
+          code: "eap_dictionary_compliant",
+          label: "As folhas da EAP cumprem os campos obrigatórios do padrão aprovado",
+          valid: evidence.eapDictionaryCompliant,
         },
       ];
     case "DEPENDENCIAS_PROPOSTA":
