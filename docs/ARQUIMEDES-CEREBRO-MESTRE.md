@@ -169,3 +169,29 @@ A auditoria registra o que realmente mudou.
 Nenhuma IA deve substituir essas quatro etapas por uma resposta textual.
 
 Histórico desta consolidação: evolução acumulada até 2026-10-03.
+
+## 25. Aprendizado Aurora — IDs de EAP entre versões
+Incidente real de teste na obra fictícia OB-PUPOCN — AURORA TESTE.
+
+Evidência:
+- A revisão do Arquimedes continha atualizações com nodeIds internos de uma versão anterior da EAP (ex.: 2561, 2562, 2563...).
+- Esses IDs não existiam na versão atual, gerando 31 erros do tipo "a proposta tenta atualizar um nó que não existe na EAP atual".
+- A EAP aprovada não foi considerada inválida por esse fato; o defeito estava na reconciliação da proposta/versionamento.
+
+Regra validada:
+- IDs internos de WBS/EAP são específicos da versão e não são referência estável entre versões.
+- Ao reconciliar proposta com a versão atual:
+  1. nodeId existente na versão atual tem prioridade;
+  2. nodeId inexistente pode ser reconciliado pelo código WBS/EAP estável, se houver correspondência única na versão atual;
+  3. se ID e código não puderem ser resolvidos com segurança, a proposta deve continuar bloqueada;
+  4. revisão pertencente a versão superseded deve ser descartada da apresentação como revisão atual.
+- Reconciliar não significa aplicar alteração.
+
+Proteção:
+- Validador em `server/construction/eap-validator.ts`.
+- Regressão em `server/construction/eap-validator.test.ts`.
+- Revisões de versão anterior são invalidadas por `baseVersionId`.
+
+Status: regra implementada e protegida por regressão; teste funcional Aurora após o novo deploy ainda deve ser confirmado.
+Escopo: global para propostas EAP versionadas.
+Origem: Aurora Teste / OB-PUPOCN.
