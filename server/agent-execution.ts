@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { AgentMessage, AgentProjectContext } from "./agent";
-import { agentRunEvents, agentRuns, type AgentRun } from "../drizzle/schema";
+import { agentRunEvents, agentRuns, agentProjectStates, projectAuditEvents, type AgentRun } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { getDb } from "./db";
 import {
@@ -70,6 +70,39 @@ function isTerminal(status: AgentRunStatus) {
 function compactError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/\s+/g, " ").trim().slice(0, 1000);
+}
+
+async function persistDiagnosticCheckpoint(
+  db: RunDb,
+  input: StartAgentExecutionInput,
+  requestId: string,
+  status: AgentRunStatus,
+  result: OrchestratorResult | null,
+  errorCode: string | null,
+  errorMessage: string | null
+) {
+  const [state] = await db
+    .select({ stage: agentProjectStates.stage, lastSummary: agentProjectStates.lastSummary })
+    .from(agentProjectStates)
+    .where(eq(agentProjectStates.projectId, input.projectId))
+    .limit(1);
+
+  const checkpoint = {
+    type: "diagnostic_completion", requestId, status,
+    stage: state?.stage ?? input.context.coordinator?.stage ?? "DESCRITIVO",
+    summary: state?.lastSummary ?? input.context.coordinator?.lastSummary ?? null,
+    blockerCount: input.context.coordinator?.blockerCount ?? null,
+    openFindings: input.context.coordinator?.openFindings?.length ?? 0,
+    approvedDecisions: input.context.coordinator?.approvedDecisions?.length ?? 0,
+    formalProposalRecorded: false, changesApplied: false,
+    readOnlyExecution: result?.readOnly === true,
+    iterations: result?.iterations ?? 0, errorCode, errorMessage,
+    recordedAt: new Date().toISOString(),
+  };
+  await db.insert(projectAuditEvents).values({
+    projectId: input.projectId, userId: input.userId,
+    action: "agent_diagnostic_checkpoint", payload: checkpoint,
+  });
 }
 
 function safeJson(value: unknown) {
