@@ -7,7 +7,7 @@ import { getArquimedesAgent } from "../agent-registry";
 
 function skillsBlock(skills: ArquimedesSkill[]) {
   return skills
-    .map(skill => "### " + skill.id + " v" + skill.version + "\n" + skill.content)
+    .map(skill => [\n      "### " + skill.id + " v" + skill.version,\n      "modo=" + (skill.mode ?? "hibrida"),\n      "MCPs=" + (skill.mcpDependencies?.join(",") || "nenhum"),\n      skill.content,\n    ].join("\n"))
     .join("\n\n");
 }
 
