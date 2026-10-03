@@ -209,6 +209,32 @@ async function startServer() {
 
   server.listen(preferredPort, () => {
     console.log(`Server running on http://localhost:${preferredPort}/`);
+    if (process.env.QA_RUNNER_ON_BOOT === "true") {
+      setTimeout(async () => {
+        try {
+          const db = await getDb();
+          if (!db) throw new Error("Banco de dados não configurado.");
+          const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
+          if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
+          let [project] = await db.select().from(projects).where(eq(projects.code, "ARQUIMEDES-QA")).limit(1);
+          if (!project) {
+            const plannedStart = new Date();
+            const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
+            const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish }).$returningIds();
+            if (!projectId) throw new Error("Não foi possível criar a obra QA.");
+            await db.insert(projectPlanVersions).values({ projectId, versionNumber: 1, status: "draft", baseVersionId: null, createdBy: owner.id, notes: "Versão inicial exclusiva para testes automatizados do Arquimedes." });
+            const mcpRows = ([["eap", process.env.MCP_EAP_URL], ["cronograma", process.env.MCP_CRONOGRAMA_URL], ["ganttLob", process.env.MCP_GANTT_LOB_URL]] as const).map(([provider, baseUrl]) => ({ projectId, provider, externalProjectId: "ARQUIMEDES-QA", endpointUrl: baseUrl ? String(baseUrl).replace(/\/$/, "") + (String(baseUrl).endsWith("/mcp") ? "" : "/mcp") : "", syncState: "pending" as const, lastError: null }));
+            await db.insert(projectMcpIntegrations).values(mcpRows);
+            [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+          }
+          if (!project || project.deletedAt) throw new Error("Obra ARQUIMEDES-QA indisponível.");
+          const result = await runEapQaSuite({ db, projectId: project.id, userId: owner.id, mcpProjectIds: { eap: "ARQUIMEDES-QA", cronograma: "ARQUIMEDES-QA", ganttLob: "ARQUIMEDES-QA" } });
+          console.log("[qa-boot] RESULTADO EAP QA:", JSON.stringify(result));
+        } catch (error) {
+          console.error("[qa-boot] execução EAP QA falhou:", error);
+        }
+      }, 3000);
+    }
   });
 }
 
