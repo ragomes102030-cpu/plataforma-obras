@@ -297,6 +297,48 @@ describe("runProjectOrchestrator", () => {
     expect(tools.map(tool => tool.function.name)).toContain("criar_eap_node");
   });
 
+  it("expõe o contrato completo da EAP publicado pelo MCP", () => {
+    const readOnly = toOpenAiTools({
+      eap: [
+        { name: "listar_projetos" },
+        { name: "listar_escopo" },
+        { name: "validar_regra_100_porcento" },
+        { name: "buscar_eap_node" },
+      ],
+      cronograma: [],
+      ganttLob: [],
+    });
+    const readNames = readOnly.map(tool => tool.function.name);
+    expect(readNames).toEqual(expect.arrayContaining([
+      "listar_projetos",
+      "listar_escopo",
+      "validar_regra_100_porcento",
+      "buscar_eap_node",
+    ]));
+
+    const mutations = toOpenAiTools({
+      eap: [
+        { name: "atualizar_projeto" },
+        { name: "definir_criterio" },
+        { name: "criar_item_escopo" },
+        { name: "vincular_escopo_eap" },
+        { name: "desvincular_escopo_eap" },
+        { name: "deletar_projeto" },
+      ],
+      cronograma: [],
+      ganttLob: [],
+    }, true);
+    const mutationNames = mutations.map(tool => tool.function.name);
+    expect(mutationNames).toEqual(expect.arrayContaining([
+      "atualizar_projeto",
+      "definir_criterio",
+      "criar_item_escopo",
+      "vincular_escopo_eap",
+      "desvincular_escopo_eap",
+      "deletar_projeto",
+    ]));
+  });
+
   it("recusa uma ferramenta de escrita mesmo que o modelo tente chamá-la", async () => {
     await expect(
       runProjectOrchestrator(
