@@ -13,6 +13,7 @@ import { serveStatic } from "./serve-static";
 import { eq } from "drizzle-orm";
 import { projects, projectPlanVersions, projectMcpIntegrations, users } from "../../drizzle/schema";
 import { runEapQaSuite } from "../qa/eap-qa-suite";
+import { runAuroraEapDiagnostic } from "../qa/aurora-eap-diagnostic";
 import { runEapValidatorQaSuite } from "../qa/eap-validator-qa-suite";
 import { runEapValidatorQaSuiteV2 } from "../qa/eap-validator-qa-suite-v2";
 import { runCompleteEapQaSuite } from "../qa/complete-eap-qa-suite";
@@ -235,6 +236,7 @@ async function startServer() {
           if (!project || project.deletedAt) throw new Error("Obra ARQUIMEDES-QA indisponível.");
           const result = await runEapQaSuite({ db, projectId: project.id, userId: owner.id, mcpProjectIds: { eap: "ARQUIMEDES-QA", cronograma: "ARQUIMEDES-QA", ganttLob: "ARQUIMEDES-QA" } });
           console.log("[qa-boot] RESULTADO EAP VALIDATOR QA:", JSON.stringify(runEapValidatorQaSuite()));
+          if (process.env.AURORA_EAP_DIAGNOSTIC_ON_BOOT === "true") console.log("[qa-boot] AURORA EAP DIAGNOSTIC:", JSON.stringify(await runAuroraEapDiagnostic()));
           console.log("[qa-boot] RESULTADO EAP VALIDATOR QA V2:", JSON.stringify(runEapValidatorQaSuiteV2()));
           console.log("[qa-boot] RESULTADO COMPLETE EAP QA:", JSON.stringify(runCompleteEapQaSuite()));
           console.log("[qa-boot] RESULTADO BRAIN + SKILLS QA:", JSON.stringify(await runBrainSkillsQaSuite({ ownerUserId: owner.id, projectId: project.id })));
