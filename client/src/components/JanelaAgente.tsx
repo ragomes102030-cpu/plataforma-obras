@@ -75,14 +75,17 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
   }, [historicoPersistido.data]);
 
   useEffect(() => {
-    const abrir = () => setAberta(true);
+    const abrir = () => {
+      setAberta(true);
+      void historicoPersistido.refetch();
+    };
     window.addEventListener("abrir-agente-eap", abrir);
     window.addEventListener("abrir-arquimedes", abrir);
     return () => {
       window.removeEventListener("abrir-agente-eap", abrir);
       window.removeEventListener("abrir-arquimedes", abrir);
     };
-  }, []);
+  }, [historicoPersistido]);
 
   const utils = trpc.useUtils();
   const chat = trpc.agent.chat.useMutation({
@@ -120,6 +123,7 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
 
       if (s && ESTADO_TERMINAL.has(s.status)) {
         setHistorico(antigo => [...antigo, { role: "assistant", content: textoDoRun(s) }]);
+        await historicoPersistido.refetch();
         setAguardando(false);
         return;
       }
