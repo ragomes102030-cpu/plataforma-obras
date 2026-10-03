@@ -52,10 +52,9 @@ export async function closeAuroraAsEngineer(): Promise<Record<string, unknown>> 
     .where(and(eq(projects.code, "OB-PUPOCN"), isNull(projects.deletedAt))).limit(1);
   if (!project) throw new Error("Aurora Teste OB-PUPOCN não encontrada.");
 
-  const [owner] = await db.select({ id: project.ownerUserId }).from(projects)
-    .where(eq(projects.id, project.id)).limit(1);
-  const userId = owner?.id;
-  if (!userId) throw new Error("Aurora Teste não possui ownerUserId.");
+  const [fallbackUser] = await db.select({ id: sql<number>`MIN(${sql.raw('"id"')})` }).from(sql.raw('"users"') as any);
+  const userId = project.ownerUserId ?? fallbackUser?.id;
+  if (!userId) throw new Error("Nenhum usuário disponível para registrar a decisão do engenheiro.");
 
   const [state] = await db.select().from(agentProjectStates)
     .where(eq(agentProjectStates.projectId, project.id)).limit(1);
