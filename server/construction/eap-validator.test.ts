@@ -54,6 +54,39 @@ describe("validateAndNormalizeEapProposal", () => {
     expect(result.validation?.valid).toBe(true);
     expect(result.nodes[0]?.nodeId).toBe(2);
     expect(result.nodes[0]?.code).toBe("1.1");
+
+  it("reconcilia nodeId obsoleto de versão anterior pelo código EAP", () => {
+    const current = [
+      node(),
+      node({ id: 202, parentId: 1, code: "1.1", name: "Canteiro", nodeType: "entrega" }),
+    ];
+
+    const result = validateAndNormalizeEapProposal(current, {
+      action: "propose_eap",
+      basis: [],
+      assumptions: [],
+      missingInformation: [],
+      nodes: [{
+        operation: "update",
+        nodeId: 2561,
+        parentCode: "1",
+        code: "1.1",
+        name: "Canteiro revisado",
+        nodeType: "entrega",
+        rationale: "Revisão gerada em versão anterior da EAP.",
+      }],
+    });
+
+    expect(result.validation?.valid).toBe(true);
+    expect(result.nodes[0]?.nodeId).toBe(202);
+    expect(result.nodes[0]?.code).toBe("1.1");
+    expect(result.validation?.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "proposal_stale_node_id_rebound",
+        severity: "warning",
+      }),
+    ]));
+  });
   });
 });
 
