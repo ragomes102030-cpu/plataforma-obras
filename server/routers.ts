@@ -3968,6 +3968,57 @@ export const appRouter = router({
           .where(eq(agentMemories.id, input.memoryId));
         return { approved: true as const };
       }),
+    history: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { messages: [], requestId: null, status: null as string | null };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [run] = await db
+          .select({
+            requestId: agentRuns.requestId,
+            status: agentRuns.status,
+            contextJson: agentRuns.contextJson,
+            resultJson: agentRuns.resultJson,
+          })
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.projectId, input.projectId),
+              eq(agentRuns.userId, ctx.user.id)
+            )
+          )
+          .orderBy(desc(agentRuns.createdAt))
+          .limit(1);
+        if (!run) return { messages: [], requestId: null, status: null as string | null };
+        let messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+        try {
+          const context = JSON.parse(run.contextJson) as { messages?: unknown };
+          if (Array.isArray(context.messages)) {
+            messages = context.messages.filter(
+              (message): message is { role: "user" | "assistant"; content: string } =>
+                Boolean(message) &&
+                typeof message === "object" &&
+                ((message as { role?: unknown }).role === "user" ||
+                  (message as { role?: unknown }).role === "assistant") &&
+                typeof (message as { content?: unknown }).content === "string"
+            );
+          }
+        } catch {
+          messages = [];
+        }
+        if (run.status === "respondido" && run.resultJson) {
+          try {
+            const result = JSON.parse(run.resultJson) as { content?: unknown };
+            if (typeof result.content === "string" && result.content.trim()) {
+              messages = [...messages, { role: "assistant", content: result.content }];
+            }
+          } catch {
+            // O histórico conversacional continua recuperável mesmo se o resultado não puder ser desserializado.
+          }
+        }
+        return { messages, requestId: run.requestId, status: run.status };
+      }),
     chat: protectedProcedure
       .input(
         z.object({
