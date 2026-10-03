@@ -310,10 +310,31 @@ export function describeStageGate(
     decision: "approved",
     evidence,
   });
+  const failedChecks = result.checks.filter(check => !check.valid);
+  const eapFailed = failedChecks.some(check =>
+    check.code === "eap_exists" || check.code === "eap_valid"
+  );
+  const blockerFailed = failedChecks.some(check => check.code === "no_open_blockers");
+  const firstSpecificFailure =
+    failedChecks.find(check => check.detail)?.detail ??
+    failedChecks.find(check => check.code !== "no_open_blockers")?.label ??
+    null;
+
+  let message = result.errors[0] ?? `Pronto para avançar para ${nextStage}.`;
+  if (eapFailed) {
+    message = "Proposta bloqueada por estrutura da EAP.";
+  } else if (blockerFailed) {
+    message = firstSpecificFailure
+      ? `Etapa bloqueada por pendência: ${firstSpecificFailure}`
+      : "Etapa bloqueada por pendência aberta.";
+  } else if (firstSpecificFailure) {
+    message = firstSpecificFailure;
+  }
+
   return {
     nextStage,
     checks: result.checks,
     canAdvance: result.allowed,
-    message: result.errors[0] ?? `Pronto para avançar para ${nextStage}.`,
+    message,
   };
 }
