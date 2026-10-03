@@ -72,3 +72,8 @@ O cérebro registra o que foi aprendido.
 A validação determina o que é confiável.
 A aprovação determina o que pode mudar.
 A auditoria registra o que realmente mudou.
+
+## Aprendizado crítico — versionamento de nós EAP
+IDs internos de nós não são referências estáveis entre versões da EAP.
+Se uma proposta trouxer nodeId inexistente na versão atual, o Arquimedes deve verificar o código WBS/EAP da própria proposta antes de concluir que a estrutura está inválida. Reconciliar pelo código somente é permitido quando a correspondência é única e segura. Se não houver correspondência segura, bloquear e registrar o erro.
+Revisões vinculadas a versões superseded não devem ser tratadas como revisão da EAP atual.
