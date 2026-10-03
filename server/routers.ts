@@ -1267,7 +1267,7 @@ export const appRouter = router({
             userId: ctx.user.id,
             mcpProjectIds: input.mcpProjectIds ?? {},
           });
-        }),,
+        }),
       ensureProject: adminProcedure
         .mutation(async ({ ctx }) => {
           const db = await getDb();
