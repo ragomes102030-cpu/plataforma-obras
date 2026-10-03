@@ -287,6 +287,16 @@ describe("runProjectOrchestrator", () => {
     expect(tools.map(tool => tool.function.name)).not.toContain("criar_eap_node");
   });
 
+  it("expõe ferramentas de escrita somente quando o modo de mutação está autorizado", () => {
+    const tools = toOpenAiTools({
+      eap: [{ name: "criar_eap_node" }, { name: "get_eap_tree" }],
+      cronograma: [],
+      ganttLob: [],
+    }, true);
+    expect(tools.map(tool => tool.function.name)).toContain("get_eap_tree");
+    expect(tools.map(tool => tool.function.name)).toContain("criar_eap_node");
+  });
+
   it("recusa uma ferramenta de escrita mesmo que o modelo tente chamá-la", async () => {
     await expect(
       runProjectOrchestrator(
