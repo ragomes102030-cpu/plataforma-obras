@@ -215,20 +215,12 @@ async function startServer() {
   server.listen(preferredPort, () => {
     console.log(`Server running on http://localhost:${preferredPort}/`);
     console.log("[qa-boot] QA_RUNNER_ON_BOOT =", process.env.QA_RUNNER_ON_BOOT === "true" ? "true" : "false");
-    if (process.env.AURORA_ACTIVITIES_PROPOSAL_ON_BOOT === "true") {
-      setTimeout(async () => {
-        try {
-          const result = await runAuroraActivitiesProposal();
-          console.log("[qa-boot] RESULTADO AURORA ATIVIDADES:", JSON.stringify(result));
-        } catch (error) {
-          console.error("[qa-boot] execução Aurora atividades falhou:", error);
-        }
-      }, 5000);
-    }
     if (process.env.QA_RUNNER_ON_BOOT === "true") {
       setTimeout(async () => {
         try {
           const db = await getDb();
+          const auroraActivitiesResult = await runAuroraActivitiesProposal();
+          console.log("[qa-boot] RESULTADO AURORA ATIVIDADES:", JSON.stringify(auroraActivitiesResult));
           if (!db) throw new Error("Banco de dados não configurado.");
           const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
           if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
