@@ -2726,7 +2726,7 @@ export const appRouter = router({
           unit: node.unit, plannedQuantity: node.plannedQuantity, sortOrder: node.sortOrder,
           description: node.description, inclusions: node.inclusions, exclusions: node.exclusions,
           location: node.location, responsible: node.responsible, acceptanceCriteria: node.acceptanceCriteria,
-          scopeStatus: node.scopeStatus,
+          decompositionBasis: node.decompositionBasis, scopeStatus: node.scopeStatus,
         }));
         const structural = validateEap(evidenceNodes);
         const dictionaryStandard = await loadEapDictionaryStandard(db, input.projectId);
