@@ -32,7 +32,8 @@ import {
   setArquimedesCapabilityEnabled,
 } from "./agent/capability-manager";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
-import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";\nimport { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
+import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";
+import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 12_000;
@@ -832,7 +833,32 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
-      if (toolName === "registrar_aprendizado") {\n        const startedAt = Date.now();\n        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });\n        try {\n          if (!options.userId) throw new Error("Sessão do usuário não identificada para a memória.");\n          const value = await rememberArquimedesLearning({\n            ownerUserId: options.userId,\n            projectId: options.localProjectId ?? null,\n            learningKey: String(rawArgs.learningKey ?? ""),\n            problem: String(rawArgs.problem ?? ""),\n            evidence: Array.isArray(rawArgs.evidence) ? rawArgs.evidence.map(String) : [],\n            rule: String(rawArgs.rule ?? ""),\n            regressionTest: rawArgs.regressionTest ? String(rawArgs.regressionTest) : null,\n            scope: rawArgs.scope === "library" ? "library" : "project",\n            confidence: rawArgs.confidence === "high" || rawArgs.confidence === "low" ? rawArgs.confidence : "medium",\n            sourceRef: rawArgs.sourceRef ? String(rawArgs.sourceRef) : null,\n          });\n          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });\n          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });\n          return { ok: true, content: JSON.stringify({ status: "candidate_recorded", memoryId: value?.id ?? null }) };\n        } catch (error) {\n          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });\n          throw error;\n        }\n      }\n      if (toolName === "consultar_memoria" || toolName === "registrar_memoria") {
+      if (toolName === "registrar_aprendizado") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.userId) throw new Error("Sessão do usuário não identificada para a memória.");
+          const value = await rememberArquimedesLearning({
+            ownerUserId: options.userId,
+            projectId: options.localProjectId ?? null,
+            learningKey: String(rawArgs.learningKey ?? ""),
+            problem: String(rawArgs.problem ?? ""),
+            evidence: Array.isArray(rawArgs.evidence) ? rawArgs.evidence.map(String) : [],
+            rule: String(rawArgs.rule ?? ""),
+            regressionTest: rawArgs.regressionTest ? String(rawArgs.regressionTest) : null,
+            scope: rawArgs.scope === "library" ? "library" : "project",
+            confidence: rawArgs.confidence === "high" || rawArgs.confidence === "low" ? rawArgs.confidence : "medium",
+            sourceRef: rawArgs.sourceRef ? String(rawArgs.sourceRef) : null,
+          });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify({ status: "candidate_recorded", memoryId: value?.id ?? null }) };
+        } catch (error) {
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          throw error;
+        }
+      }
+      if (toolName === "consultar_memoria" || toolName === "registrar_memoria") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
         try {
