@@ -62,8 +62,17 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
   const [expandida, setExpandida] = useState(true);
   const [texto, setTexto] = useState("");
   const [historico, setHistorico] = useState<Mensagem[]>([]);
+  const historicoPersistido = trpc.agent.history.useQuery(
+    { projectId: projetoId },
+    { staleTime: 0, refetchOnMount: true, refetchOnWindowFocus: false },
+  );
   const [aguardando, setAguardando] = useState(false);
   const fim = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!historicoPersistido.data) return;
+    setHistorico(historicoPersistido.data.messages);
+  }, [historicoPersistido.data]);
 
   useEffect(() => {
     const abrir = () => setAberta(true);
