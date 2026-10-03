@@ -139,3 +139,12 @@
 | Escolher ferramentas para autodesk/linear/clickup | Quando tokens disponíveis |
 | Configurar CI/CD automatizado com GitHub Actions | Próxima semana |
 | Integrar Notion via Composio para base de conhecimento | Quando necessário |
+
+## Decisão 11: Persistir e reidratar a conversa do Arquimedes sem aplicar propostas
+
+- **Decisão:** Usar o histórico persistido das execuções do agente como fonte de recuperação conversacional, separado do estado estrutural aprovado da obra.
+- **Quando:** Outubro de 2026
+- **Motivo:** O chat anterior existia apenas em memória do componente React; ao reabrir o agente, a conversa era perdida mesmo quando a execução já estava registrada no banco.
+- **Regra:** conversa/proposta, estado do coordenador e estrutura aplicada da obra são camadas distintas. Recuperar a conversa nunca significa aplicar sua proposta.
+- **Segurança:** agent.history valida acesso à obra e ao usuário antes de retornar mensagens.
+- **Regressão:** o comportamento de fechar/reabrir o agente deve preservar a conversa e continuar permitindo a revisão da proposta antes de qualquer mutação.
