@@ -73,7 +73,7 @@ import { isSimpleCasualMessage } from "./agent/runtime/intent-router";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import { buildEapResearchQueries, searchWebEvidence } from "./web-research";
-import { rememberArquimedes } from "./agent/memory";
+import { rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";
 import {
   buildEapResolutionPlan,
   findUncoveredEapResolutionGroups,
