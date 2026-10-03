@@ -1797,6 +1797,17 @@ export const appRouter = router({
 
         const proposal = normalizedProposal;
 
+        await db
+          .update(agentRuns)
+          .set({ currentStep: "EAP_REVISAO_SUPERADA", updatedAt: new Date() })
+          .where(
+            and(
+              eq(agentRuns.projectId, input.projectId),
+              inArray(agentRuns.currentStep, ["EAP_REVISAO", "EAP_REVISAO_APLICADA"]),
+              eq(agentRuns.status, "respondido")
+            )
+          );
+        const reviewRequestId = randomUUID();
         // Guarda um snapshot compacto da análise para que uma nova conversa possa
         // continuar o raciocínio sem depender de todo o histórico do chat.
         await rememberArquimedes({
@@ -1833,17 +1844,6 @@ export const appRouter = router({
           confidence: "medium",
         });
 
-        await db
-          .update(agentRuns)
-          .set({ currentStep: "EAP_REVISAO_SUPERADA", updatedAt: new Date() })
-          .where(
-            and(
-              eq(agentRuns.projectId, input.projectId),
-              inArray(agentRuns.currentStep, ["EAP_REVISAO", "EAP_REVISAO_APLICADA"]),
-              eq(agentRuns.status, "respondido")
-            )
-          );
-        const reviewRequestId = randomUUID();
         await db.insert(agentRuns).values({
           requestId: reviewRequestId,
           projectId: input.projectId,
