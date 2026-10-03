@@ -99,3 +99,22 @@ Total: 37 MCPs, 30 habilitados
 
 ### Regra preservada
 A persistência da conversa **não aplica EAP, cronograma ou qualquer mutação na obra**. Proposta conversacional continua sendo proposta até aprovação explícita.
+
+## Out/2026 — Reidratação do histórico ao reabrir a janela do Arquimedes
+
+### Novo incidente identificado
+- A persistência em `agent_runs` e a reconstrução por múltiplos runs já estavam implementadas, mas a janela `JanelaAgente` consultava o histórico apenas na montagem do componente.
+- Ao fechar e reabrir visualmente a janela dentro da mesma sessão, o componente podia permanecer montado; nesse caso nenhuma nova consulta era disparada e o usuário continuava vendo uma conversa vazia.
+- O comportamento observado no teste confirmou que o Arquimedes continuava recebendo o contexto da obra (`OB-SYAE5F`), mas não o texto conversacional anterior.
+
+### Correção
+- Ao receber o evento de abertura do Arquimedes, `JanelaAgente` agora executa `agent.history.refetch()`.
+- Ao finalizar uma execução, a janela também força a atualização do histórico persistido antes de liberar a próxima pergunta.
+- A API `agent.history` continua reconstruindo até 100 execuções da obra/usuário em ordem cronológica, sem aplicar qualquer mutação estrutural.
+
+### Validação
+- Commit: `60c487c060a20f841f29105d4a5ce9cc48ce59e4`.
+- Deploy Render: `dep-db0pajjtqb8s738m7dl0`.
+- Estado: `live`.
+- Teste de regressão existente cobre reconstrução de múltiplos runs; a validação E2E adicional é fechar/reabrir o Arquimedes e confirmar que uma mensagem anterior reaparece.
+
