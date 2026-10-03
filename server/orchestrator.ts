@@ -61,6 +61,19 @@ const TOOL_DOMAINS = {
   calcular_linha_balanco: "ganttLob",
   balancear_ritmos_lob: "ganttLob",
   dimensionar_equipes_lob: "ganttLob",
+  criar_projeto: "eap",
+  criar_eap_node: "eap",
+  atualizar_eap_node: "eap",
+  move_eap_node: "eap",
+  deletar_eap_node: "eap",
+  registrar_retrabalho: "eap",
+  criar_atividade: "cronograma",
+  atualizar_atividade: "cronograma",
+  criar_dependencia: "cronograma",
+  deletar_atividade: "cronograma",
+  deletar_dependencia: "cronograma",
+  salvar_baseline: "cronograma",
+  gerar_gantt: "ganttLob",
 } as const;
 
 const PROJECT_SCOPED_TOOLS = new Set([
