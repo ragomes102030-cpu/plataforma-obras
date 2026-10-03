@@ -49,7 +49,7 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
-import { restoreAgentConversation } from "./agent-history";
+import { mergeAgentConversations } from "./agent-history";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -3975,7 +3975,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { messages: [], requestId: null, status: null as string | null };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [run] = await db
+        const runs = await db
           .select({
             requestId: agentRuns.requestId,
             status: agentRuns.status,
@@ -3990,14 +3990,13 @@ export const appRouter = router({
             )
           )
           .orderBy(desc(agentRuns.createdAt))
-          .limit(1);
-        if (!run) return { messages: [], requestId: null, status: null as string | null };
-        const messages = restoreAgentConversation(
-          run.contextJson,
-          run.resultJson,
-          run.status,
-        );
-        return { messages, requestId: run.requestId, status: run.status };
+          .limit(100);
+        if (runs.length === 0) {
+          return { messages: [], requestId: null, status: null as string | null };
+        }
+        const messages = mergeAgentConversations(runs);
+        const latest = runs[0];
+        return { messages, requestId: latest.requestId, status: latest.status };
       }),
     chat: protectedProcedure
       .input(
