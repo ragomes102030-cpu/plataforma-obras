@@ -672,7 +672,8 @@ function buildSystem(
   context: AgentProjectContext,
   mcpProjectIds: Partial<Record<Extract<ToolDomain, "eap" | "cronograma" | "ganttLob">, string>>,
   responseIntent: "casual" | "consulta" | "analise" | "operacao",
-  memoryContext = "Memória persistente não carregada."
+  memoryContext = "Memória persistente não carregada.",
+  brainBootstrap = "Bootstrap do cérebro não carregado."
 ) {
   const workspaceContext = context.workspace
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}.`
@@ -680,7 +681,8 @@ function buildSystem(
   const now = currentDateTimeFortaleza();
 
   const base = [
-    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",\n    "BOOTSTRAP DO CÉREBRO MESTRE:\n" + brainBootstrap,
+    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    "BOOTSTRAP DO CÉREBRO MESTRE:\n" + brainBootstrap,
     `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,
     "Use essa referência quando o usuário perguntar sobre data, dia ou hora atuais. Não diga que não possui relógio.",
     "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta. Não existe formato obrigatório de resposta.",
@@ -804,8 +806,9 @@ export async function runProjectOrchestrator(
   const memoryContext = options.userId
     ? await buildArquimedesMemoryContext(options.userId, options.localProjectId)
     : "Memória persistente não carregada: usuário não identificado.";
+  const brainBootstrap = await loadArquimedesBrainBootstrap();
   const conversation: LlmMessage[] = [
-    { role: "system", content: buildSystem(context, mcpProjectIds, intent, memoryContext) },
+    { role: "system", content: buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap) },
     ...messages.map(message => ({
       role: message.role,
       content: message.content,
