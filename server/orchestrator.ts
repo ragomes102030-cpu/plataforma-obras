@@ -32,6 +32,7 @@ import {
   setArquimedesCapabilityEnabled,
 } from "./agent/capability-manager";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
+import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes } from "./agent/memory";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 12_000;
@@ -328,6 +329,49 @@ const ENGINEERING_GAP_TOOL: LlmTool = {
   }
 };
 
+const MEMORY_RECALL_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "consultar_memoria",
+    description:
+      "Consulta a memória persistente do Arquimedes para recuperar fatos, decisões, propostas, pendências e aprendizados anteriores. Use quando a continuidade da análise depender de algo que não está no contexto atual. Memória é evidência contextual, não autorização para alterar a obra.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", minLength: 1, maxLength: 180 },
+        limit: { type: "integer", minimum: 1, maximum: 20 },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+};
+
+const MEMORY_WRITE_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "registrar_memoria",
+    description:
+      "Registra uma memória durável e estruturada do Arquimedes. Use somente para fatos confirmados, decisões do engenheiro, propostas relevantes, pendências ou conclusões úteis para rodadas futuras. Nunca registre uma hipótese como fato. A memória não altera a EAP, cronograma, orçamento ou qualquer dado operacional.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: { type: "string", minLength: 1, maxLength: 80 },
+        memoryKey: { type: "string", minLength: 1, maxLength: 180 },
+        value: {},
+        sourceType: {
+          type: "string",
+          enum: ["engenheiro", "obra", "documento", "mcp", "pesquisa_externa", "arquimedes", "sistema"],
+        },
+        sourceRef: { type: "string", maxLength: 180 },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+      },
+      required: ["category", "memoryKey", "value", "sourceType"],
+      additionalProperties: false,
+    },
+  },
+};
+
 const LOCAL_EAP_TOOL: LlmTool = {
   type: "function",
   function: {
@@ -589,7 +633,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -603,7 +647,8 @@ function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
 function buildSystem(
   context: AgentProjectContext,
   mcpProjectIds: Partial<Record<Extract<ToolDomain, "eap" | "cronograma" | "ganttLob">, string>>,
-  responseIntent: "casual" | "consulta" | "analise" | "operacao"
+  responseIntent: "casual" | "consulta" | "analise" | "operacao",
+  memoryContext = "Memória persistente não carregada."
 ) {
   const workspaceContext = context.workspace
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}.`
@@ -625,6 +670,7 @@ function buildSystem(
     "Você pode fazer várias rodadas de ferramentas antes da resposta final, mas cada rodada deve reduzir uma incerteza real; quando a evidência já for suficiente, pare de consultar e consolide.",
     "Na EAP, nunca tente colocar diagnóstico, justificativas extensas ou todo o raciocínio em um único campo textual. Use os campos estruturados dos nós para registrar evidências e correções; o resumo deve sintetizar a conclusão.",
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
+    "Existe uma memória persistente do Arquimedes. Consulte-a quando a continuidade da análise exigir contexto anterior. Registre apenas memórias duráveis e úteis; memória não substitui evidência atual nem autoriza mutações.",
     "A validação estrutural determinística local da EAP faz parte das evidências confirmadas da obra e não depende do MCP. Quando ela estiver disponível no contexto, use seu resultado para relatar estrutura, órfãos, níveis, duplicidades e ciclos. A indisponibilidade do MCP só torna indisponíveis as verificações que realmente dependem dele.",
     "As ferramentas de obra incluem consultas e operações de escrita controlada. Nunca altere dados na primeira análise: primeiro leia, diagnostique, apresente a alteração proposta e peça confirmação explícita ao engenheiro. Só depois de uma confirmação explícita nesta conversa execute a mutação. Após qualquer mutação, reconsulte a obra e valide o resultado. Exclusões são destrutivas e exigem confirmação explícita ainda mais clara.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
@@ -654,7 +700,8 @@ function buildSystem(
   if (responseIntent !== "casual") {
     base.push(
       workspaceContext,
-      "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context)
+      "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context),
+      "Memória persistente disponível:\n" + memoryContext
     );
   }
 
@@ -730,8 +777,11 @@ export async function runProjectOrchestrator(
   const gapChecksExecuted = new Set<string>();
   let gapAnalysisCalls = 0;
   const MAX_GAP_ANALYSES = 2;
+  const memoryContext = options.userId
+    ? await buildArquimedesMemoryContext(options.userId, options.localProjectId)
+    : "Memória persistente não carregada: usuário não identificado.";
   const conversation: LlmMessage[] = [
-    { role: "system", content: buildSystem(context, mcpProjectIds, intent) },
+    { role: "system", content: buildSystem(context, mcpProjectIds, intent, memoryContext) },
     ...messages.map(message => ({
       role: message.role,
       content: message.content,
@@ -755,6 +805,45 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (toolName === "consultar_memoria" || toolName === "registrar_memoria") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.userId) throw new Error("Sessão do usuário não identificada para a memória.");
+          if (toolName === "consultar_memoria") {
+            const value = await recallArquimedes(
+              options.userId,
+              options.localProjectId,
+              String(rawArgs.query ?? ""),
+              Number(rawArgs.limit ?? 10)
+            );
+            audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+            await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+            return { ok: true, content: JSON.stringify({ status: "ok", memorias: value }).slice(0, MAX_TOOL_RESULT_CHARS) };
+          }
+
+          const value = await rememberArquimedes({
+            projectId: options.localProjectId ?? null,
+            ownerUserId: options.userId,
+            scope: options.localProjectId ? "project" : "library",
+            category: String(rawArgs.category ?? ""),
+            memoryKey: String(rawArgs.memoryKey ?? ""),
+            value: rawArgs.value,
+            sourceType: String(rawArgs.sourceType ?? "arquimedes"),
+            sourceRef: typeof rawArgs.sourceRef === "string" ? rawArgs.sourceRef : null,
+            confidence: rawArgs.confidence === "high" || rawArgs.confidence === "low" ? rawArgs.confidence : "medium",
+          });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify({ status: "registrada", memoria: value }).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
       if (toolName === "consultar_eap_local") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
