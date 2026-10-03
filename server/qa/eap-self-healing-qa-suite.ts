@@ -69,7 +69,7 @@ class MockSelfHealingProvider implements ArquimedesLlmProvider {
       });
     }
 
-    const root = request.user.match(/"code": "([123])"/)?.[1] ?? "1";
+    const root = request.user.match(/"root":\s*\{\s*"code":\s*"([123])"/)?.[1] ?? "1";
     return JSON.stringify({
       basis: ["escopo da obra QA"],
       assumptions: [],
