@@ -403,9 +403,9 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         <div className="eap-validacao" role="status" aria-live="polite">
           <div className="eap-validacao-cabecalho">
             <div>
-              <strong>Revisão técnica da EAP</strong>
+              <strong>Análise de engenharia da EAP</strong>
               <span>
-                Sob coordenação do Arquimedes · {modoUltimaRevisaoArquimedes === "resolver_bloqueios" ? "resolução de bloqueios" : "revisão técnica"}
+                Sob coordenação do Arquimedes · {modoUltimaRevisaoArquimedes === "resolver_bloqueios" ? "resolução de bloqueios" : "diagnóstico e reestruturação"}
                 {" · "}{propostaArquimedes.nodes.length} proposta(s) · {propostaArquimedes.missingInformation.length} pendência(s) de escopo
               </span>
             </div>
@@ -426,20 +426,19 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               <p><strong>{item.parentCode ? item.parentCode + " · " : ""}{item.name}</strong> — {item.rationale}</p>
             </div>
           ))}
-          {modoUltimaRevisaoArquimedes === "resolver_bloqueios" && (
-            <>
+          <>
               <div className="eap-pesquisa-evidencias">
                 <div className="eap-pesquisa-evidencias-head">
                   <div>
-                    <strong>Pesquisa de evidências usada na revisão</strong>
+                    <strong>Pesquisa externa usada na análise</strong>
                     <span>
                       {evidenciasPesquisa.length
-                        ? `${evidenciasPesquisa.length} fonte(s) externa(s) consideradas na proposta.`
-                        : "Nenhuma fonte externa foi registrada nesta rodada; a solução está baseada somente nos dados da obra."}
+                        ? `${evidenciasPesquisa.length} fonte(s) externa(s) consideradas como referência complementar.`
+                        : "Nenhuma fonte externa foi registrada nesta rodada; a análise está baseada somente nos dados da obra."}
                     </span>
                   </div>
                   <span className={evidenciasPesquisa.length ? "ativo" : "indisponivel"}>
-                    {evidenciasPesquisa.length ? "PESQUISA ATIVA" : "SEM PESQUISA"}
+                    {evidenciasPesquisa.length ? "PESQUISA REALIZADA" : "SEM PESQUISA"}
                   </span>
                 </div>
                 {!!evidenciasPesquisa.length && (
@@ -460,10 +459,12 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               <div className="eap-proposta-correcao-head">
                 <Bot size={15} />
                 <div>
-                  <strong>Relatório da correção proposta</strong>
+                  <strong>{modoUltimaRevisaoArquimedes === "resolver_bloqueios" ? "Proposta de correção" : "Proposta de reestruturação"}</strong>
                   <span>{cicloRevisaoAplicado
-  ? "Esta proposta já foi aplicada como rascunho. O bloco de resultado abaixo mostra o que aconteceu na revalidação."
-  : "A revisão técnica recebeu os apontamentos selecionados e montou uma proposta para tratá-los. A EAP abaixo continua sendo a estrutura atual porque nada foi aplicado automaticamente."}</span>
+  ? "Esta proposta já foi aplicada como rascunho. O resultado abaixo mostra a revalidação."
+  : modoUltimaRevisaoArquimedes === "resolver_bloqueios"
+    ? "Os apontamentos foram analisados e a proposta trata apenas o que pode ser sustentado pelos dados da obra."
+    : "A análise compara a obra, a EAP atual e referências externas para propor uma estrutura mais útil. Nada foi aplicado automaticamente."}</span>
                 </div>
               </div>
 
@@ -559,7 +560,6 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               )}
             </div>
             </>
-          )}
 
           {cicloRevisao && (
             <div className="eap-ciclo-revisao">
