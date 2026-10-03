@@ -1,4 +1,3 @@
-import type { db as DbType } from "../db";
 import { loadArquimedesBrainBootstrap } from "../agent/core/brain-context";
 import { loadEapSkills } from "../agent/core/skill-loader";
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedesLearning } from "../agent/memory";
