@@ -7,6 +7,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { sql } from "drizzle-orm";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
+import { runAuroraActivitiesProposal } from "../qa/aurora-activities-proposal";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
@@ -214,6 +215,16 @@ async function startServer() {
   server.listen(preferredPort, () => {
     console.log(`Server running on http://localhost:${preferredPort}/`);
     console.log("[qa-boot] QA_RUNNER_ON_BOOT =", process.env.QA_RUNNER_ON_BOOT === "true" ? "true" : "false");
+    if (process.env.AURORA_ACTIVITIES_PROPOSAL_ON_BOOT === "true") {
+      setTimeout(async () => {
+        try {
+          const result = await runAuroraActivitiesProposal();
+          console.log("[qa-boot] RESULTADO AURORA ATIVIDADES:", JSON.stringify(result));
+        } catch (error) {
+          console.error("[qa-boot] execução Aurora atividades falhou:", error);
+        }
+      }, 5000);
+    }
     if (process.env.QA_RUNNER_ON_BOOT === "true") {
       setTimeout(async () => {
         try {
