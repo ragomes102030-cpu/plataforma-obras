@@ -1526,6 +1526,55 @@ export async function runProjectOrchestrator(
 
   const content = runtimeResult.text.trim();
 
+  // Persiste automaticamente o ponto de parada de uma análise. O checkpoint
+  // é contexto de raciocínio para a próxima conversa; nunca autoriza mutação.
+  if (options.userId && options.localProjectId && intent === "analise" && content) {
+    try {
+      await rememberArquimedes({
+        projectId: options.localProjectId,
+        ownerUserId: options.userId,
+        scope: "project",
+        category: "analysis_checkpoint",
+        memoryKey: "eap-analysis-checkpoint-current",
+        value: {
+          status: "diagnostico_concluido",
+          etapa: "antes_da_proposta",
+          projectId: options.localProjectId,
+          projectCode: context.project.code,
+          projectName: context.project.name,
+          evidence: {
+            eapNodeCount: context.evidence?.eapNodeCount ?? null,
+            activityCount: context.evidence?.activityCount ?? null,
+            dependencyCount: context.evidence?.dependencyCount ?? null,
+            budgetItemCount: context.evidence?.localBudget?.itemCount ?? null,
+            eapStructureValidation: context.evidence?.localEap?.structureValidation ?? null,
+          },
+          response: content.slice(0, 9000),
+          toolsConsulted: audit
+            .filter(event => event.event === "tool_call" && event.status === "success")
+            .map(event => event.toolName)
+            .filter((name, index, all) => all.indexOf(name) === index)
+            .slice(0, 30),
+          iterations: runtimeResult.iterations,
+          changesApplied: false,
+          formalProposalCount: 0,
+          savedAt: new Date().toISOString(),
+        },
+        sourceType: "arquimedes",
+        sourceRef: taskId,
+        confidence: "medium",
+      });
+    } catch (error) {
+      // A falha de memória não deve derrubar a resposta de engenharia.
+      console.warn(JSON.stringify({
+        evento: "arquimedes_analysis_checkpoint_failed",
+        projectId: options.localProjectId,
+        taskId,
+        erro: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
   await emit({ type: "response_parsed" });
 
   return {
