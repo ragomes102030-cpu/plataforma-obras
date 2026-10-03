@@ -1720,14 +1720,17 @@ export const appRouter = router({
               )
             : [];
 
-        const researchQueries =
-          input.mode === "resolver_bloqueios"
-            ? buildEapResearchQueries(resolutionIssues)
-            : [];
-        const researchEvidence =
-          input.mode === "resolver_bloqueios"
-            ? await searchWebEvidence(researchQueries, 12)
-            : [];
+        // A revisão de engenharia pode pesquisar externamente tanto no modo diagnóstico
+        // quanto no modo de resolução. A pesquisa é complementar e nunca autoriza mutação.
+        const researchQueries = buildEapResearchQueries(
+          input.mode === "resolver_bloqueios" ? resolutionIssues : [],
+          {
+            projectName: project.name,
+            projectDescription: project.descricao,
+            tipoDeObra: project.tipoDeObra,
+          }
+        );
+        const researchEvidence = await searchWebEvidence(researchQueries, 12);
 
         const { raw } = await proposeEapWithArquimedes(
           context,
@@ -1741,8 +1744,10 @@ export const appRouter = router({
           }
         );
         const parsedProposal = parseEapProposal(raw);
+        // A evidência externa pertence ao diagnóstico da revisão, inclusive no modo
+        // "analisar". Ela é auditável na proposta e não autoriza nenhuma mutação.
+        parsedProposal.researchEvidence = researchEvidence;
         if (input.mode === "resolver_bloqueios") {
-          parsedProposal.researchEvidence = researchEvidence;
           parsedProposal.resolutionPlan = resolutionPlan;
         }
         const normalizedProposal = validateAndNormalizeEapProposal(
@@ -1820,6 +1825,8 @@ export const appRouter = router({
             orchestratorId: "arquimedes",
             agentId: "euclides",
             beforeValidation: beforeValidationSnapshot,
+            researchQueries,
+            researchEvidence,
           }),
           resultJson: JSON.stringify(proposal),
           iterations: 1,
