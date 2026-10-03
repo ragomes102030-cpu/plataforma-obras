@@ -72,9 +72,9 @@ export async function closeAuroraAsEngineer(): Promise<Record<string, unknown>> 
   const changes: Array<Record<string, unknown>> = [];
   for (const node of leaves) {
     const next = {
-      description: `Escopo terminal do pacote EAP ${node.code}: ${node.name}.`,
-      inclusions: `Inclui exclusivamente o escopo identificado pelo pacote ${node.code} (${node.name}), conforme os documentos aprovados da obra.`,
-      exclusions: `Exclui qualquer escopo identificado por outro código EAP que não seja ${node.code}, além de alterações não aprovadas.`,
+      description: `Pacote EAP ${node.code}.`,
+      inclusions: `Limite exclusivo ${node.code}.`,
+      exclusions: `Fora de ${node.code}.`,
       responsible: node.responsible?.trim() || responsibleFor(node.name),
       acceptanceCriteria: node.acceptanceCriteria?.trim() || `Pacote “${node.name}” executado conforme projeto e especificações aplicáveis, inspecionado pelo responsável e aceito segundo os critérios de qualidade da obra.`,
       decompositionBasis: basisFor(node),
