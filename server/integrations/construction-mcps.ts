@@ -107,8 +107,13 @@ export const CONTROLLED_MUTATION_POLICY: Record<
   Set<string>
 > = {
   eap: new Set([
+    "atualizar_projeto",
     "criar_eap_node",
     "atualizar_eap_node",
+    "definir_criterio",
+    "criar_item_escopo",
+    "vincular_escopo_eap",
+    "desvincular_escopo_eap",
     "move_eap_node",
     "deletar_eap_node",
     "registrar_retrabalho",
@@ -168,6 +173,7 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
   "pacotes_sem_dono",
   "resumo_quantitativos",
   "listar_escopo",
+  "validar_regra_100_porcento",
   "validar_regra_100_porcento",
   "listar_atividades",
   "listar_dependencias",
