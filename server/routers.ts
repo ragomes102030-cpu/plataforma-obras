@@ -4027,7 +4027,7 @@ export const appRouter = router({
             .array(
               z.object({
                 role: z.enum(["user", "assistant"]),
-                content: z.string().trim().min(1).max(6000),
+                content: z.string().trim().min(1).max(12000),
               })
             )
             .min(1)
@@ -4211,7 +4211,7 @@ export const appRouter = router({
             .array(
               z.object({
                 role: z.enum(["user", "assistant"]),
-                content: z.string().trim().min(1).max(6000),
+                content: z.string().trim().min(1).max(12000),
               })
             )
             .min(1)
