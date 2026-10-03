@@ -72,9 +72,9 @@ export async function closeAuroraAsEngineer(): Promise<Record<string, unknown>> 
   const changes: Array<Record<string, unknown>> = [];
   for (const node of leaves) {
     const next = {
-      description: node.description?.trim() || `Pacote terminal de escopo: ${node.name}. O detalhamento executivo deve seguir os documentos e requisitos aprovados da obra.`,
-      inclusions: node.inclusions?.trim() || `Execução dos serviços necessários para concluir o pacote “${node.name}”, conforme projeto, especificações e limites definidos para a obra.`,
-      exclusions: node.exclusions?.trim() || "Serviços fora do escopo deste pacote, alterações de projeto não aprovadas e atividades pertencentes a outros pacotes da EAP.",
+      description: `Escopo terminal do pacote EAP ${node.code}: ${node.name}.`,
+      inclusions: `Inclui exclusivamente o escopo identificado pelo pacote ${node.code} (${node.name}), conforme os documentos aprovados da obra.`,
+      exclusions: `Exclui qualquer escopo identificado por outro código EAP que não seja ${node.code}, além de alterações não aprovadas.`,
       responsible: node.responsible?.trim() || responsibleFor(node.name),
       acceptanceCriteria: node.acceptanceCriteria?.trim() || `Pacote “${node.name}” executado conforme projeto e especificações aplicáveis, inspecionado pelo responsável e aceito segundo os critérios de qualidade da obra.`,
       decompositionBasis: basisFor(node),
