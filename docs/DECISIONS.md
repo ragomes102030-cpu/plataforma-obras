@@ -144,3 +144,11 @@
 | Escolher ferramentas para autodesk/linear/clickup | Quando tokens disponíveis |
 | Configurar CI/CD automatizado com GitHub Actions | Próxima semana |
 | Integrar Notion via Composio para base de conhecimento | Quando necessário |
+
+
+## Decisão 10: Contrato único do MCP EAP para o Arquimedes
+- **Decisão:** O catálogo do Arquimedes deve refletir o contrato real publicado pelo MCP EAP, sem lista paralela incompleta.
+- **Regra:** toda ferramenta publicada deve ser classificada como somente leitura ou mutação; mutações seguem confirmação explícita antes da execução.
+- **Validação:** mudanças no contrato exigem comparação 1:1 com o servidor e teste de regressão no orquestrador.
+- **Escopo:** a EAP deve fechar o ciclo escopo → proposta → estrutura → dicionário → cobertura 100% → aprovação → aplicação → revalidação.
+- **Data:** 03/10/2026.
