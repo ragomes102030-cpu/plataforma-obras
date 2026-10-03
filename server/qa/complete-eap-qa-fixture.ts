@@ -82,7 +82,7 @@ export const COMPLETE_EAP_QA_FIXTURE: CompleteEapQaFixture = {
     node(7, "1.2", "Superestrutura", 1, "grupo", "phase", "Serviços da estrutura acima da fundação, incluindo elementos de concreto."),
     node(8, "1.2.1", "Estrutura de concreto", 7, "grupo", "deliverable", "Estrutura de concreto concluída e liberada para vedação."),
     node(9, "1.2.1.1", "Formas da estrutura", 8, "pacote", "component", "Montagem, escoramento, desforma e limpeza das formas estruturais.", "m2", 620),
-    node(10, "1.2.1.2", "Armadura da estrutura", 8, "pacote", "component", "Corte, dobra, montagem e posicionamento das armaduras estruturais.", "kg", 7200),
+    node(10, "1.2.1.2", "Armadura da estrutura", 8, "pacote", "component", "Corte, dobra, amarração e posicionamento das armaduras estruturais.", "kg", 7200),
     node(11, "1.2.1.3", "Concretagem da estrutura", 8, "pacote", "component", "Lançamento, adensamento, acabamento e cura do concreto estrutural.", "m3", 74),
     node(12, "1.3", "Vedações e acabamentos", 1, "grupo", "phase", "Vedações internas e externas e revestimentos finais da residência."),
     node(13, "1.3.1", "Vedações", 12, "grupo", "deliverable", "Paredes e fechamentos executados conforme projeto arquitetônico."),
