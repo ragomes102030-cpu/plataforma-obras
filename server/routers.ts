@@ -4007,7 +4007,7 @@ export const appRouter = router({
         } catch {
           messages = [];
         }
-        if (run.status === "respondido" && run.resultJson) {
+        if (run.status !== "executando" && run.resultJson) {
           try {
             const result = JSON.parse(run.resultJson) as { content?: unknown };
             if (typeof result.content === "string" && result.content.trim()) {
