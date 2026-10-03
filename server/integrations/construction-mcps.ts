@@ -124,6 +124,7 @@ export const CONTROLLED_MUTATION_POLICY: Record<
 
 export const MUTATING_TOOLS = new Set([
   "criar_projeto",
+  "deletar_projeto",
   "atualizar_projeto",
   "criar_eap_node",
   "atualizar_eap_node",
