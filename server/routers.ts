@@ -2154,6 +2154,8 @@ export const appRouter = router({
             mode: input.mode,
             orchestratorId: "arquimedes",
             agentId: "euclides",
+            // A proposta fica vinculada à versão da EAP que foi analisada.
+            baseVersionId: currentVersionId,
             beforeValidation: beforeValidationSnapshot,
           }),
           resultJson: JSON.stringify(proposal),
@@ -2202,7 +2204,16 @@ export const appRouter = router({
           .limit(1);
         if (!review?.resultJson) return null;
         try {
+          const contextMeta = review.contextJson ? JSON.parse(review.contextJson) : null;
           const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+          // Revisão de versão anterior não pode ser exibida como erro estrutural.
+          if (
+            contextMeta?.kind === "eap_review" &&
+            contextMeta?.baseVersionId != null &&
+            Number(contextMeta.baseVersionId) !== Number(currentVersionId)
+          ) {
+            return null;
+          }
           const currentNodes = await db
             .select()
             .from(wbsNodes)
