@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { restoreAgentConversation } from "./agent-history";
+import { mergeAgentConversations, restoreAgentConversation } from "./agent-history";
 
 describe("restoreAgentConversation", () => {
   it("recupera a conversa persistida e a resposta final sem alterar o estado da obra", () => {
