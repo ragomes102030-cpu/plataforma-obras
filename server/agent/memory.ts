@@ -101,6 +101,38 @@ export async function rememberArquimedes(input: ArquimedesMemoryInput) {
   return created;
 }
 
+export async function rememberArquimedesLearning(input: {
+  ownerUserId: number;
+  projectId?: number | null;
+  learningKey: string;
+  problem: string;
+  evidence: string[];
+  rule: string;
+  scope?: "project" | "library";
+  confidence?: "high" | "medium" | "low";
+  regressionTest?: string | null;
+  sourceRef?: string | null;
+}) {
+  return rememberArquimedes({
+    projectId: input.projectId ?? null,
+    ownerUserId: input.ownerUserId,
+    scope: input.scope ?? (input.projectId ? "project" : "library"),
+    category: "aprendizado",
+    memoryKey: input.learningKey,
+    value: {
+      lifecycle: "candidate",
+      problem: input.problem,
+      evidence: input.evidence.slice(0, 12),
+      rule: input.rule,
+      regressionTest: input.regressionTest ?? null,
+      recordedAt: new Date().toISOString(),
+    },
+    sourceType: "arquimedes",
+    sourceRef: input.sourceRef ?? null,
+    confidence: input.confidence ?? "medium",
+  });
+}
+
 export async function recallArquimedes(
   ownerUserId: number,
   projectId: number | undefined,
