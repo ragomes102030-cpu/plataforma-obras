@@ -98,3 +98,18 @@ A EAP da Aurora foi encerrada como **baseline aprovada** e o fluxo avançou para
 `ATIVIDADES_PROPOSTA`
 
 Nenhuma atividade, dependência, CPM ou cronograma foi criado durante o fechamento da EAP.
+
+
+## Falha de integração encontrada após o fechamento
+
+Depois da EAP aprovada, o painel do Aurora ainda apresentava bloqueio de estrutura. A investigação encontrou uma divergência entre o dado persistido e o dado entregue ao validador da tela: o procedimento `validateWbsStructure` reconstruía os nós para validação sem transportar o campo obrigatório `decompositionBasis`.
+
+Assim, a EAP armazenada estava completa, mas a validação da interface recebia uma EAP artificialmente incompleta e podia produzir `eap_leaf_not_ready`.
+
+**Correção aplicada:** `validateWbsStructure` passou a preservar `decompositionBasis` no objeto enviado ao `validateEapScope`.
+
+**Regra permanente:** toda camada que projeta ou copia nós da EAP para validação deve transportar todos os campos do dicionário exigidos pelo padrão aprovado. Não é permitido validar uma projeção parcial e chamar o resultado de estrutura da EAP.
+
+**Commit da correção:** `1f61215487e3124d8e24c0d56ad45125bcd6ffa8`.
+
+O deploy foi enviado ao Render e o build da correção foi concluído com sucesso. A confirmação visual da tela Aurora deve ser feita no ambiente de teste antes de liberar a próxima etapa.
