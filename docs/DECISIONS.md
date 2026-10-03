@@ -152,3 +152,13 @@
 - **Validação:** mudanças no contrato exigem comparação 1:1 com o servidor e teste de regressão no orquestrador.
 - **Escopo:** a EAP deve fechar o ciclo escopo → proposta → estrutura → dicionário → cobertura 100% → aprovação → aplicação → revalidação.
 - **Data:** 03/10/2026.
+
+
+## Decisão 11: Persistir e reidratar a conversa do Arquimedes sem aplicar propostas
+
+- **Decisão:** Recuperar a conversa do agente a partir das execuções persistidas, separada do estado estrutural aprovado da obra.
+- **Quando:** Outubro de 2026
+- **Motivo:** A janela do Arquimedes mantinha o histórico apenas em memória do navegador; ao reabrir, a conversa desaparecia.
+- **Regra:** recuperar conversa/proposta nunca aplica EAP, cronograma ou outra mutação. A proposta continua sujeita a revisão e confirmação explícita.
+- **Segurança:** a recuperação valida usuário e obra antes de retornar o histórico.
+- **Regressão:** fechar e reabrir o agente deve preservar o contexto necessário para continuar a revisão da proposta.
