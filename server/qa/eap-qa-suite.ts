@@ -7,7 +7,6 @@ import {
   isAgentRunTerminal,
   startAgentExecution,
 } from "../agent-execution";
-import { getCurrentPlanVersionId, loadAgentCoordinatorSnapshot } from "../routers";
 
 type RunDb = NonNullable<Awaited<ReturnType<typeof import("../db").getDb>>>;
 
@@ -79,13 +78,10 @@ export async function runEapQaSuite(args: {
     throw badRequest("A suíte EAP só pode executar em uma obra identificada como QA.");
   }
 
-  const currentVersionId = await getCurrentPlanVersionId(args.db, args.projectId);
   const activities = await args.db.select().from(scheduleActivities)
-    .where(currentVersionId == null
-      ? eq(scheduleActivities.projectId, args.projectId)
-      : and(eq(scheduleActivities.projectId, args.projectId), eq(scheduleActivities.versionId, currentVersionId)));
+    .where(eq(scheduleActivities.projectId, args.projectId));
 
-  const coordinator = await loadAgentCoordinatorSnapshot(args.db, args.projectId, args.userId);
+  const coordinator = null;
   const started = await startAgentExecution({
     db: args.db,
     projectId: args.projectId,
