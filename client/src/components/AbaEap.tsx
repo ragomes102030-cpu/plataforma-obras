@@ -410,7 +410,11 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
               </span>
             </div>
             {propostaArquimedes.validation?.valid === false ? (
-              <span className="eap-validacao-erro"><AlertTriangle size={14} /> Proposta bloqueada por estrutura</span>
+              validacao.data?.valid ? (
+                <span className="eap-validacao-ok"><CheckCircle2 size={14} /> EAP atual validada · revisão proposta bloqueada</span>
+              ) : (
+                <span className="eap-validacao-erro"><AlertTriangle size={14} /> Proposta de revisão bloqueada por estrutura</span>
+              )
             ) : (
               <span className="eap-validacao-ok"><Bot size={14} /> Proposta não aplicada</span>
             )}
