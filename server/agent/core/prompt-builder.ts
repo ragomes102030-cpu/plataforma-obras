@@ -246,3 +246,55 @@ export function buildEapSubtreeRequest(
 
   return { system, user, skills, maxTokens: 12288 };
 }
+
+
+export function buildEapSelfHealingRequest(
+  context: ArquimedesProjectContext,
+  skills: ArquimedesSkill[],
+  candidate: ArquimedesEapProposal,
+  issues: Array<{ code: string; severity: "error" | "warning"; message: string; entityRef?: string }>,
+  attempt: number
+): ArquimedesLlmRequest {
+  const specialist = getArquimedesAgent("euclides");
+  const system = [
+    `Você é ${specialist.name}, ${specialist.title}, especialista do Arquimedes.`,
+    "Arquimedes é o orquestrador-chefe. Esta rodada é de AUTOCORREÇÃO CONTROLADA da EAP antes da proposta ser apresentada ao engenheiro.",
+    engineeringReasoningKernel(),
+    structuredRules(),
+    "Receba uma EAP candidata e os achados determinísticos do validador. Corrija a própria EAP e devolva a EAP COMPLETA, não apenas um patch.",
+    "A saída deve conter somente nós operation=create. Não use update, move ou remove nesta fase porque a obra ainda não possui EAP aplicada.",
+    "Preserve o escopo sustentado pela descrição da obra. Não invente quantitativos, responsabilidades, normas, projetos ou decisões que não estejam evidenciados.",
+    "Corrija primeiro erros estruturais. Depois corrija bloqueios de baseline: dicionário incompleto, cobertura de escopo, sobreposição textual e mistura de critérios de decomposição.",
+    "Mantenha uma única raiz, hierarquia contínua, códigos coerentes e um único critério de decomposição por nível quando possível.",
+    "Uma folha deve ser pacote ou entrega terminal; grupo sem filhos não deve permanecer.",
+    "Para campos desconhecidos, use missingInformation em vez de fabricar um fato. Se o campo for obrigatório para baseline, tente preenchê-lo de forma genérica e fiel ao escopo apenas quando isso não introduzir informação falsa.",
+    "Não aplique a EAP ao banco. Esta chamada apenas devolve a proposta autocorrigida.",
+    `Esta é a tentativa de autocorreção ${attempt} de 3.`,
+    "Conhecimento profissional:",
+    skillsBlock(skills),
+  ].join("\n\n");
+
+  const user = JSON.stringify({
+    task: "autocorrigir_eap_gerada",
+    project: {
+      id: context.projectId,
+      name: context.name,
+      description: context.description,
+      tipoDeObra: context.tipoDeObra,
+      stage: context.stage,
+    },
+    validationIssues: issues.slice(0, 80),
+    candidate,
+  }, null, 2);
+
+  return {
+    system,
+    user,
+    skills,
+    maxTokens: 16384,
+    databaseContext: { projectId: context.projectId },
+    eapReviewMode: "resolver_bloqueios",
+    agentId: specialist.id,
+    orchestratorId: "arquimedes",
+  };
+}
