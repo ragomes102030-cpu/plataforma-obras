@@ -719,14 +719,15 @@ async function loadAgentCoordinatorSnapshot(
       .from(agentMemories)
       .where(
         and(
-          eq(agentMemories.status, "approved"),
           or(
             eq(agentMemories.projectId, projectId),
             and(
               isNull(agentMemories.projectId),
               eq(agentMemories.ownerUserId, userId)
             )
-          )
+          ),
+          ne(agentMemories.status, "obsolete"),
+          ne(agentMemories.status, "rejected")
         )
       )
       .orderBy(desc(agentMemories.updatedAt))
@@ -769,14 +770,29 @@ async function loadAgentCoordinatorSnapshot(
       confidence: finding.confidence,
       createdAt: finding.createdAt,
     })),
-    approvedMemories: memories.map(memory => ({
-      category: memory.category,
-      key: memory.memoryKey,
-      value: parseJsonValue(memory.valueJson),
-      sourceType: memory.sourceType,
-      sourceRef: memory.sourceRef,
-      confidence: memory.confidence,
-    })),
+    memoryCount: memories.length,
+    approvedMemories: memories
+      .filter(memory => memory.status === "approved")
+      .map(memory => ({
+        category: memory.category,
+        key: memory.memoryKey,
+        value: parseJsonValue(memory.valueJson),
+        sourceType: memory.sourceType,
+        sourceRef: memory.sourceRef,
+        confidence: memory.confidence,
+      })),
+    pendingMemories: memories
+      .filter(memory => memory.status === "proposed")
+      .map(memory => ({
+        category: memory.category,
+        key: memory.memoryKey,
+        value: parseJsonValue(memory.valueJson),
+        sourceType: memory.sourceType,
+        sourceRef: memory.sourceRef,
+        confidence: memory.confidence,
+        status: memory.status,
+        updatedAt: memory.updatedAt,
+      })),
   };
 }
 
