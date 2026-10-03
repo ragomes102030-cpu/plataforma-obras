@@ -162,3 +162,13 @@
 - **Regra:** recuperar conversa/proposta nunca aplica EAP, cronograma ou outra mutação. A proposta continua sujeita a revisão e confirmação explícita.
 - **Segurança:** a recuperação valida usuário e obra antes de retornar o histórico.
 - **Regressão:** fechar e reabrir o agente deve preservar o contexto necessário para continuar a revisão da proposta.
+
+## Decisão 12: Reconsultar o histórico ao reabrir o Arquimedes
+
+- **Decisão:** A UI do Arquimedes deve reconsultar `agent.history` sempre que a janela for aberta/reaberta e após uma execução terminar.
+- **Motivo:** Persistir a conversa no banco não é suficiente quando o componente permanece montado e apenas sua visibilidade muda.
+- **Regra:** fechar/reabrir a janela não pode iniciar uma nova conversa vazia; deve reidratar o contexto persistido da obra/usuário.
+- **Segurança:** a recuperação continua somente leitura e separada das mutações da obra.
+- **Regressão:** o fluxo obrigatório é enviar uma mensagem, receber a resposta, fechar a janela, reabrir e verificar a reapresentação da conversa.
+- **Data:** 03/10/2026.
+
