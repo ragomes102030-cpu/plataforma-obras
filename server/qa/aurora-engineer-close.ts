@@ -8,6 +8,7 @@ import {
   projectAuditEvents,
   projectPlanVersions,
   projects,
+  users,
   wbsNodes,
 } from "../../drizzle/schema";
 import { validateEapForBaseline } from "../construction/eap-approval-validator";
@@ -52,7 +53,7 @@ export async function closeAuroraAsEngineer(): Promise<Record<string, unknown>> 
     .where(and(eq(projects.code, "OB-PUPOCN"), isNull(projects.deletedAt))).limit(1);
   if (!project) throw new Error("Aurora Teste OB-PUPOCN não encontrada.");
 
-  const [fallbackUser] = await db.select({ id: sql<number>`MIN(${sql.raw('"id"')})` }).from(sql.raw('"users"') as any);
+  const [fallbackUser] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
   const userId = project.ownerUserId ?? fallbackUser?.id;
   if (!userId) throw new Error("Nenhum usuário disponível para registrar a decisão do engenheiro.");
 
