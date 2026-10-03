@@ -1725,6 +1725,122 @@ export const appRouter = router({
         });
         return payload;
       }),
+    gerarEapComArquimedes: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [project] = await db.select().from(projects)
+          .where(and(eq(projects.id, input.projectId), isNull(projects.deletedAt)))
+          .limit(1);
+        if (!project) throw notFound("Obra não encontrada.");
+
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const nodes = await db.select().from(wbsNodes)
+          .where(currentVersionId == null
+            ? eq(wbsNodes.projectId, input.projectId)
+            : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersionId)))
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        if (nodes.length) {
+          throw conflict("Esta obra já possui uma EAP. Use analisarEapComArquimedes para revisar.");
+        }
+
+        const [state] = await db.select({ stage: agentProjectStates.stage })
+          .from(agentProjectStates)
+          .where(eq(agentProjectStates.projectId, input.projectId))
+          .limit(1);
+
+        const context = {
+          projectId: project.id,
+          name: project.name,
+          description: project.descricao,
+          tipoDeObra: project.tipoDeObra,
+          stage: state?.stage ?? "EAP_PROPOSTA",
+          wbs: [],
+        };
+
+        const requestId = randomUUID();
+        const { raw, healing } = await proposeEapWithArquimedes(
+          context,
+          new GatewayArquimedesProvider(),
+        );
+        const proposal = parseEapProposal(raw);
+        const finalValid = healing?.finalValidation.valid ?? false;
+        const issues = healing?.finalValidation.issues ?? [];
+
+        await db.insert(agentRuns).values({
+          requestId,
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          status: "respondido",
+          currentStep: "EAP_PROPOSTA",
+          provider: "configured-gateway",
+          contextJson: JSON.stringify({
+            kind: "eap_generation",
+            mode: "auto_healing",
+            healed: healing?.healed ?? false,
+            history: healing?.history ?? [],
+            finalValid,
+            issueCount: issues.length,
+          }),
+          resultJson: JSON.stringify(proposal),
+          iterations: healing ? healing.history.length + 1 : 1,
+          finishedAt: new Date(),
+        });
+
+        await rememberArquimedes({
+          projectId: input.projectId,
+          ownerUserId: ctx.user.id,
+          scope: "project",
+          category: "eap_generation",
+          memoryKey: "eap-generation-current",
+          value: {
+            requestId,
+            nodeCount: proposal.nodes.length,
+            valid: finalValid,
+            healed: healing?.healed ?? false,
+            validationIssues: issues.slice(0, 20),
+            savedAt: new Date().toISOString(),
+          },
+          sourceType: "arquimedes",
+          sourceRef: requestId,
+          confidence: finalValid ? "high" : "medium",
+        });
+
+        if (healing?.healed) {
+          const codes = Array.from(new Set(healing.history.flatMap(item => item.issueCodes))).slice(0, 8);
+          await rememberArquimedesLearning({
+            ownerUserId: ctx.user.id,
+            projectId: input.projectId,
+            learningKey: `eap-self-healing-${codes.join("-") || "general"}`,
+            problem: "A geração inicial da EAP apresentou bloqueios detectados pela validação determinística.",
+            evidence: [
+              `códigos: ${codes.join(", ")}`,
+              `tentativas: ${healing.history.length}`,
+              `resultado final válido: ${String(finalValid)}`,
+            ],
+            rule: "Gerar, validar deterministicamente, autocorrigir e validar novamente antes de apresentar a EAP ao engenheiro.",
+            regressionTest: "Gerar uma obra QA sem EAP e exigir validação de baseline antes da proposta.",
+            scope: "library",
+            confidence: finalValid ? "high" : "medium",
+            sourceRef: requestId,
+          });
+        }
+
+        return {
+          provider: "configured-gateway",
+          requestId,
+          proposal,
+          autoHealing: healing
+            ? { healed: healing.healed, history: healing.history, finalValidation: healing.finalValidation }
+            : null,
+          guardrail: finalValid
+            ? "EAP gerada e autocorrigida. Nenhum nó foi aplicado; revisão e confirmação do engenheiro continuam obrigatórias."
+            : "A geração terminou com bloqueios não resolvidos. Nenhum nó foi aplicado à obra.",
+        };
+      }),
     analisarEapComArquimedes: protectedProcedure
       .input(
         z.object({
