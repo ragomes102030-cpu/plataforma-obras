@@ -1584,7 +1584,9 @@ export async function runProjectOrchestrator(
     provider: runtimeResult.response.provider,
     iterations: runtimeResult.iterations,
     audit,
-    readOnly: false,
+    // O modo somente leitura é derivado da política efetiva desta execução.
+    // Quando não há confirmação explícita, nenhuma mutação é permitida.
+    readOnly: !allowMutations,
     status: "respondido",
   };
 
