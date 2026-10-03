@@ -50,6 +50,9 @@ const TOOL_DOMAINS = {
   pacotes_sem_dono: "eap",
   resumo_quantitativos: "eap",
   listar_templates: "eap",
+  listar_projetos: "eap",
+  listar_escopo: "eap",
+  validar_regra_100_porcento: "eap",
   listar_atividades: "cronograma",
   listar_dependencias: "cronograma",
   validar_dependencias: "cronograma",
@@ -74,6 +77,12 @@ const TOOL_DOMAINS = {
   deletar_dependencia: "cronograma",
   salvar_baseline: "cronograma",
   gerar_gantt: "ganttLob",
+  atualizar_projeto: "eap",
+  definir_criterio: "eap",
+  deletar_projeto: "eap",
+  criar_item_escopo: "eap",
+  vincular_escopo_eap: "eap",
+  desvincular_escopo_eap: "eap",
 } as const;
 
 const PROJECT_SCOPED_TOOLS = new Set([
