@@ -32,7 +32,7 @@ import {
   setArquimedesCapabilityEnabled,
 } from "./agent/capability-manager";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
-import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes } from "./agent/memory";
+import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";\nimport { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 12_000;
@@ -347,6 +347,30 @@ const MEMORY_RECALL_TOOL: LlmTool = {
   },
 };
 
+const LEARNING_WRITE_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "registrar_aprendizado",
+    description:
+      "Registra um aprendizado candidato no cérebro do Arquimedes. Use quando uma falha, QA, revisão ou evidência produzir uma regra potencialmente reutilizável. O registro nasce como candidate/proposed e nunca altera silenciosamente regras globais.",
+    parameters: {
+      type: "object",
+      properties: {
+        learningKey: { type: "string", minLength: 1, maxLength: 180 },
+        problem: { type: "string", minLength: 1, maxLength: 1200 },
+        evidence: { type: "array", minItems: 1, maxItems: 12, items: { type: "string", maxLength: 1200 } },
+        rule: { type: "string", minLength: 1, maxLength: 1600 },
+        regressionTest: { type: "string", maxLength: 300 },
+        scope: { type: "string", enum: ["project", "library"] },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+        sourceRef: { type: "string", maxLength: 180 },
+      },
+      required: ["learningKey", "problem", "evidence", "rule"],
+      additionalProperties: false,
+    },
+  },
+};
+
 const MEMORY_WRITE_TOOL: LlmTool = {
   type: "function",
   function: {
@@ -633,7 +657,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -656,7 +680,7 @@ function buildSystem(
   const now = currentDateTimeFortaleza();
 
   const base = [
-    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",\n    "BOOTSTRAP DO CÉREBRO MESTRE:\n" + brainBootstrap,
     `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,
     "Use essa referência quando o usuário perguntar sobre data, dia ou hora atuais. Não diga que não possui relógio.",
     "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta. Não existe formato obrigatório de resposta.",
@@ -805,7 +829,7 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
-      if (toolName === "consultar_memoria" || toolName === "registrar_memoria") {
+      if (toolName === "registrar_aprendizado") {\n        const startedAt = Date.now();\n        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });\n        try {\n          if (!options.userId) throw new Error("Sessão do usuário não identificada para a memória.");\n          const value = await rememberArquimedesLearning({\n            ownerUserId: options.userId,\n            projectId: options.localProjectId ?? null,\n            learningKey: String(rawArgs.learningKey ?? ""),\n            problem: String(rawArgs.problem ?? ""),\n            evidence: Array.isArray(rawArgs.evidence) ? rawArgs.evidence.map(String) : [],\n            rule: String(rawArgs.rule ?? ""),\n            regressionTest: rawArgs.regressionTest ? String(rawArgs.regressionTest) : null,\n            scope: rawArgs.scope === "library" ? "library" : "project",\n            confidence: rawArgs.confidence === "high" || rawArgs.confidence === "low" ? rawArgs.confidence : "medium",\n            sourceRef: rawArgs.sourceRef ? String(rawArgs.sourceRef) : null,\n          });\n          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });\n          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });\n          return { ok: true, content: JSON.stringify({ status: "candidate_recorded", memoryId: value?.id ?? null }) };\n        } catch (error) {\n          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });\n          throw error;\n        }\n      }\n      if (toolName === "consultar_memoria" || toolName === "registrar_memoria") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
         try {
