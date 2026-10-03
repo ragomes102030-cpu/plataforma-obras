@@ -16,6 +16,7 @@ import { runEapQaSuite } from "../qa/eap-qa-suite";
 import { runEapValidatorQaSuite } from "../qa/eap-validator-qa-suite";
 import { runEapValidatorQaSuiteV2 } from "../qa/eap-validator-qa-suite-v2";
 import { runCompleteEapQaSuite } from "../qa/complete-eap-qa-suite";
+import { runBrainSkillsQaSuite } from "../qa/brain-skills-qa-suite";
 
 // O schema e responsabilidade de `scripts/migrate-db.mjs`, rodado no
 // pre-deploy. Nao ha, e nao deve haver, DDL no boot do servidor: um remendo
@@ -236,6 +237,7 @@ async function startServer() {
           console.log("[qa-boot] RESULTADO EAP VALIDATOR QA:", JSON.stringify(runEapValidatorQaSuite()));
           console.log("[qa-boot] RESULTADO EAP VALIDATOR QA V2:", JSON.stringify(runEapValidatorQaSuiteV2()));
           console.log("[qa-boot] RESULTADO COMPLETE EAP QA:", JSON.stringify(runCompleteEapQaSuite()));
+          console.log("[qa-boot] RESULTADO BRAIN + SKILLS QA:", JSON.stringify(await runBrainSkillsQaSuite({ ownerUserId: owner.id, projectId: project.id })));
           console.log("[qa-boot] RESULTADO EAP QA:", JSON.stringify(result));
         } catch (error) {
           console.error("[qa-boot] execução EAP QA falhou:", error);
