@@ -10,6 +10,9 @@ import { getDb } from "../db";
 import { ENV } from "./env";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
+import { eq } from "drizzle-orm";
+import { projects, projectPlanVersions, projectMcpIntegrations, users } from "../../drizzle/schema";
+import { runEapQaSuite } from "../qa/eap-qa-suite";
 
 // O schema e responsabilidade de `scripts/migrate-db.mjs`, rodado no
 // pre-deploy. Nao ha, e nao deve haver, DDL no boot do servidor: um remendo
@@ -142,6 +145,31 @@ async function startServer() {
       console.error("[readyz] banco inacessivel:", error);
       res.status(503).json({ ok: false, database: "erro" });
     }
+  });
+
+  app.get("/internal/qa/eap", async (req, res) => {
+    const expected = process.env.QA_RUNNER_SECRET?.trim();
+    const supplied = typeof req.query.token === "string" ? req.query.token.trim() : "";
+    if (!expected || !supplied || supplied !== expected) { res.status(404).json({ ok: false }); return; }
+    const db = await getDb();
+    if (!db) { res.status(503).json({ ok: false, error: "Banco de dados não configurado." }); return; }
+    try {
+      const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
+      if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
+      let [project] = await db.select().from(projects).where(eq(projects.code, "ARQUIMEDES-QA")).limit(1);
+      if (!project) {
+        const plannedStart = new Date(); const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
+        const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish }).$returningIds();
+        if (!projectId) throw new Error("Não foi possível criar a obra QA.");
+        await db.insert(projectPlanVersions).values({ projectId, versionNumber: 1, status: "draft", baseVersionId: null, createdBy: owner.id, notes: "Versão inicial exclusiva para testes automatizados do Arquimedes." });
+        const mcpRows = ([["eap", process.env.MCP_EAP_URL], ["cronograma", process.env.MCP_CRONOGRAMA_URL], ["ganttLob", process.env.MCP_GANTT_LOB_URL]] as const).map(([provider, baseUrl]) => ({ projectId, provider, externalProjectId: "ARQUIMEDES-QA", endpointUrl: baseUrl ? String(baseUrl).replace(/\/$/, "") + (String(baseUrl).endsWith("/mcp") ? "" : "/mcp") : "", syncState: "pending" as const, lastError: null }));
+        await db.insert(projectMcpIntegrations).values(mcpRows);
+        [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+      }
+      if (!project || project.deletedAt) throw new Error("Obra ARQUIMEDES-QA indisponível.");
+      const result = await runEapQaSuite({ db, projectId: project.id, userId: owner.id, mcpProjectIds: { eap: "ARQUIMEDES-QA", cronograma: "ARQUIMEDES-QA", ganttLob: "ARQUIMEDES-QA" } });
+      res.status(result.status === "passed" ? 200 : 422).json({ ok: result.status === "passed", ...result });
+    } catch (error) { console.error("[qa] execução HTTP falhou:", error); res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Falha desconhecida no QA." }); }
   });
   // tRPC API
   app.use(
