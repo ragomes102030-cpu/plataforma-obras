@@ -33,6 +33,10 @@ export function AgentView() {
   const projects = projectsQuery.data ?? [];
   const [projectId, setProjectId] = useState<number>(1);
   const [messages, setMessages] = useState<Message[]>([]);
+  const historyQuery = trpc.agent.history.useQuery(
+    { projectId },
+    { staleTime: 0, refetchOnWindowFocus: false, refetchOnMount: true },
+  );
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const handledRequestRef = useRef<string | null>(null);
   const agentMutation = trpc.agent.chat.useMutation({
@@ -60,6 +64,11 @@ export function AgentView() {
       refetchOnWindowFocus: true,
     }
   );
+
+  useEffect(() => {
+    if (!historyQuery.data) return;
+    setMessages(historyQuery.data.messages);
+  }, [historyQuery.data]);
 
   useEffect(() => {
     if (
