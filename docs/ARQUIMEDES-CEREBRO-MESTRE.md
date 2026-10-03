@@ -124,7 +124,25 @@ Fluxo: teste -> evidência -> candidato -> validação -> regra validada -> regr
 Registrar: resultado, evidência/origem, escopo global/project_type/project, confiança, status candidate/validated/rejected, regra derivada, primeira ocorrência, última ocorrência, ocorrências, validador e teste de regressão.
 Nunca permitir que uma observação isolada reescreva silenciosamente uma regra global.
 
-## 20. Como qualquer IA deve iniciar
+## 20. Skills como camada de conhecimento
+Skills são conhecimento profissional versionado e separado da infraestrutura de ferramentas.
+Cada skill declara modo de execução:
+- independente: não depende de MCP;
+- híbrida: pode trabalhar com contexto local e usar MCP apenas quando necessário;
+- mcp_assistida: depende de evidência obtida por MCP para completar sua função.
+
+Skills não têm permissão de mutação. MCPs também não autorizam aplicação por si só.
+Skills podem ser compostas entre si e podem solicitar MCPs de forma direcionada.
+
+Skills EAP atuais incluem decomposição, regra dos 100%, pacotes de trabalho, critérios de parada, validação, revisão colaborativa e aprendizado/regressão.
+
+## 21. Aprendizado estruturado
+Aprendizados candidatos podem ser registrados na memória persistente com o ciclo:
+observação -> evidência -> candidato -> validação -> regra validada -> regressão.
+
+O registro de aprendizado guarda problema, evidências, regra proposta, escopo, confiança e teste de regressão. O status inicial é candidato/proposto. Só uma validação posterior pode transformar o conhecimento em regra confiável.
+
+## 22. Como qualquer IA deve iniciar
 1. Ler este documento.
 2. Identificar branch e estado atual.
 3. Consultar memória persistente relevante.
@@ -136,14 +154,14 @@ Nunca permitir que uma observação isolada reescreva silenciosamente uma regra 
 9. Executar mudanças pelo fluxo GitHub -> Render -> LIVE -> teste -> validação.
 10. Atualizar este cérebro quando surgir aprendizado estrutural.
 
-## 21. Estado atual
+## 23. Estado atual
 Já existe: Arquimedes, orquestração, execução assíncrona, eventos, checkpoint, memória V1, recuperação histórica, capacidades, MCPs, validação EAP, baseline, QA Runner, QA Suite, fixture E2E e fluxo de aprovação como princípio.
 
 Já validado em execução real: limites de resolutionSummary/descricao, modo readOnly, ausência de aplicação no QA, EAP estrutural, escopo, baseline, dicionário, custos, EAP/cronograma, aprovação explícita e E2E 14/14.
 
 Ainda precisa evoluir: fluxo completo Arquimedes -> Euclides -> MCP -> proposta -> revisão -> aprovação -> aplicação; persistência completa de decisões; aprendizagem validada; matriz de regressão completa; continuidade automática entre LLMs; mais cobertura de falhas dos MCPs; múltiplos tipos de obra.
 
-## 22. Regra de ouro
+## 24. Regra de ouro
 O cérebro registra o que foi aprendido.
 A validação determina o que é confiável.
 A aprovação determina o que pode mudar.
