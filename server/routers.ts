@@ -95,6 +95,8 @@ import {
   startAgentExecution,
 } from "./agent-execution";
 import { getPublicLlmSettings, getStoredLlmProviders, saveStoredLlmProviders } from "./llm-settings";
+import { runEapQaSuite } from "./qa/eap-qa-suite";
+
 import { arquimedesCapabilitiesRouter } from "./agent/capability-router";
 import {
   callControlledMcpTool,
@@ -1246,6 +1248,26 @@ export const appRouter = router({
           const status = await getAgentExecutionStatus(await getDb(), input.requestId, ctx.user.id);
           if (!status) throw notFound("Execução de QA não encontrada.");
           return status;
+        }),
+      runSuite: adminProcedure
+        .input(z.object({
+          projectId: z.number().int().positive(),
+          mcpProjectIds: z.object({
+            eap: z.string().trim().min(1).max(120).optional(),
+            cronograma: z.string().trim().min(1).max(120).optional(),
+            ganttLob: z.string().trim().min(1).max(120).optional(),
+          }).partial().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const db = await getDb();
+          if (!db) throw new Error("Banco de dados não configurado.");
+          return runEapQaSuite({
+            db,
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            mcpProjectIds: input.mcpProjectIds ?? {},
+          });
+        }),
         }),
     }),
     llmSettings: router({
