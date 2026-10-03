@@ -82,22 +82,20 @@ Total: 37 MCPs, 30 habilitados
 | Notion base de conhecimento via Composio | Média | ⏳ |
 | Procore doc manager skill | Baixa | ⏳ |
 
+## Out/2026 — Persistência do histórico conversacional do Arquimedes
 
-## Out/2026 — Fechamento do contrato MCP EAP do Arquimedes
-### Falha encontrada
-- O MCP EAP publicado expõe 23 ferramentas, mas o catálogo/política do Arquimedes reconhecia apenas parte delas.
-- Ferramentas de escopo e dicionário (incluindo `definir_criterio`, `criar_item_escopo`, vínculos e validação dos 100%) ficavam invisíveis ou sem autorização de execução.
-- `deletar_projeto` estava marcado como destrutivo, mas não pertencia ao conjunto de mutações reconhecidas pelo orquestrador.
-- Isso podia produzir bloqueios de fluxo mesmo com a EAP estruturalmente válida.
+### Incidente encontrado
+- Ao fechar/reabrir o agente da obra, o histórico desaparecia porque AgentSidebar e AgentView mantinham as mensagens apenas em useState no navegador.
+- O backend já persistia cada execução em agent_runs.contextJson, mas não existia uma rota para reidratar esse histórico.
+- Isso fazia o Arquimedes voltar a consultar apenas o estado persistido da obra e, em uma obra sem EAP aplicada, concluir incorretamente que a proposta anterior não existia.
 
 ### Correção
-- Alinhado o catálogo do Arquimedes aos 23 tools reais do `mcp-eap-server`.
-- Incluídas as ferramentas de escopo, dicionário e projetos nas políticas correspondentes.
-- Mantida a regra proposta → confirmação explícita → mutação → reconsulta/validação.
-- Criado teste de regressão para exposição controlada do contrato completo da EAP.
+- Criada agent.history, protegida por usuário e obra, para recuperar a última conversa persistida.
+- Criada server/agent-history.ts para reconstruir mensagens a partir de agent_runs.contextJson + resultJson.
+- AgentSidebar e AgentView passam a reidratar o chat ao abrir/reabrir a obra.
+- Respostas que aguardam confirmação também são recuperadas.
+- Limite de mensagem do agente ampliado de 6.000 para 12.000 caracteres para não truncar propostas EAP longas.
+- Criado teste de regressão para recuperação de conversa, contexto inválido e estado aguardando confirmação.
 
-### Evidência
-- Auditoria automatizada: 23/23 tools do servidor EAP possuem domínio no Arquimedes.
-- Nenhuma mutação EAP necessária ficou fora de `MUTATING_TOOLS`.
-- O build do serviço principal passou durante o deploy.
-- A validação funcional na obra `TESTE INTEGRAL ARQUIMEDES 001` ainda é a etapa seguinte; Aurora permanece intocada.
+### Regra preservada
+A persistência da conversa **não aplica EAP, cronograma ou qualquer mutação na obra**. Proposta conversacional continua sendo proposta até aprovação explícita.
