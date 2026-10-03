@@ -210,6 +210,7 @@ async function startServer() {
 
   server.listen(preferredPort, () => {
     console.log(`Server running on http://localhost:${preferredPort}/`);
+    console.log("[qa-boot] QA_RUNNER_ON_BOOT =", process.env.QA_RUNNER_ON_BOOT === "true" ? "true" : "false");
     if (process.env.QA_RUNNER_ON_BOOT === "true") {
       setTimeout(async () => {
         try {
