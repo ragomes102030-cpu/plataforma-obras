@@ -1268,7 +1268,6 @@ export const appRouter = router({
             mcpProjectIds: input.mcpProjectIds ?? {},
           });
         }),
-        }),
     }),
     llmSettings: router({
       get: adminProcedure.query(() => getPublicLlmSettings()),
