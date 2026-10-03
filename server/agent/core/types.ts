@@ -21,8 +21,16 @@ export interface ArquimedesProjectContext {
   }>;
 }
 
+export type ArquimedesSkillMode = "independente" | "mcp_assistida" | "hibrida";
+
 export interface ArquimedesSkill {
-  id: string; version: string; domain: string; purpose: string; content: string;
+  id: string;
+  version: string;
+  domain: string;
+  purpose: string;
+  content: string;
+  mode?: ArquimedesSkillMode;
+  mcpDependencies?: string[];
 }
 
 export type ArquimedesResearchEvidence = {
