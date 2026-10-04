@@ -19,7 +19,7 @@ await db.connect();
 const t = await db.query(`
  SELECT table_name FROM information_schema.tables
  WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type='BASE TABLE'
-   AND table_name <> '__drizzle_migrations' AND table_name NOT LIKE '__%'
+   AND table_name <> '__drizzle_migrations'
  ORDER BY table_name
 `);
 const names = t.rows.map(x=>x.table_name);
