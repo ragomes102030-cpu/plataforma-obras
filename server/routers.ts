@@ -1000,21 +1000,27 @@ export const appRouter = router({
       get: adminProcedure.query(() => getPublicLlmSettings()),
       save: adminProcedure
         .input(
-          z.object({
-            provider: z.string().trim().min(2).max(80),
-            baseUrl: z
-              .string()
-              .trim()
-              .url()
-              .refine(value => value.startsWith("https://"), {
-                message: "A URL do provedor deve usar HTTPS.",
-              }),
-            apiKey: z.string().trim().min(10).max(500),
-            model: z.string().trim().min(2).max(160),
-          })
+          z.union([
+            z.object({
+              provider: z.string().trim().min(2).max(80),
+              baseUrl: z.string().trim().url().refine(value => value.startsWith("https://"), { message: "A URL do provedor deve usar HTTPS." }),
+              apiKey: z.string().trim().min(10).max(500),
+              model: z.string().trim().min(2).max(160),
+            }),
+            z.object({
+              providers: z.array(z.object({
+                provider: z.string().trim().min(2).max(80),
+                baseUrl: z.string().trim().url().refine(value => value.startsWith("https://"), { message: "A URL do provedor deve usar HTTPS." }),
+                apiKey: z.string().trim().min(10).max(500),
+                model: z.string().trim().min(2).max(160),
+                enabled: z.boolean().optional(),
+              })).min(1).max(12),
+            }),
+          ])
         )
         .mutation(async ({ ctx, input }) => {
-          await saveStoredLlmProviders([input], ctx.user.id);
+          const providers = "providers" in input ? input.providers : [input];
+          await saveStoredLlmProviders(providers, ctx.user.id);
           return {
             saved: true as const,
             settings: await getPublicLlmSettings(),
