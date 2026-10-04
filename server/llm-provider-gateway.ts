@@ -52,6 +52,10 @@ export type GatewayResult = LlmResponse & {
 export type GatewayRequest = {
   messages: LlmMessage[];
   tools: LlmTool[];
+  maxTokens?: number;
+  timeoutMs?: number;
+  allowEmptyResponse?: boolean;
+  responseFormat?: Record<string, unknown>;
 };
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429]);
@@ -171,10 +175,11 @@ async function callProvider(
   request: GatewayRequest
 ): Promise<LlmResponse> {
   const controller = new AbortController();
+  const timeoutMs = request.timeoutMs ?? ENV.llmTimeoutMs;
   const timeout = setTimeout(
     () => controller.abort(),
-    Number.isFinite(ENV.llmTimeoutMs) && ENV.llmTimeoutMs > 0
-      ? ENV.llmTimeoutMs
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
       : 45_000
   );
   try {
@@ -189,11 +194,10 @@ async function callProvider(
       body: JSON.stringify({
         model: provider.model,
         temperature: 0.2,
-        max_tokens: Number(process.env.LLM_MAX_TOKENS ?? "1024"),
+        max_tokens: request.maxTokens ?? Number(process.env.LLM_MAX_TOKENS ?? "1024"),
         messages: request.messages,
-        ...(request.tools.length
-          ? { tools: request.tools, tool_choice: "auto" }
-          : {}),
+        ...(request.tools.length ? { tools: request.tools, tool_choice: "auto" } : {}),
+        ...(request.responseFormat ? { response_format: request.responseFormat } : {}),
       }),
       signal: controller.signal,
     });
