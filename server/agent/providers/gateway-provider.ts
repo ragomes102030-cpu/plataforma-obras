@@ -391,7 +391,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
     const maxToolIterations = 0;
 
     for (let iteration = 0; iteration <= maxToolIterations; iteration++) {
-      const response = await generate(messages, outputBudget, []);
+      const response = await generate(messages, outputBudget * (iteration + 1), []);
       const message = response.choices?.[0]?.message;
       const toolCalls = message?.tool_calls ?? [];
 
@@ -399,22 +399,16 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         const raw = extractText(response);
         const json = raw ? normalizeStructuredJson(raw) : null;
         if (json) return json;
+        const finishReason = response.choices?.[0]?.finish_reason;
+        if (finishReason === "length" && iteration < 1) {
+          continue;
+        }
         break;
       }
 
-      if (iteration === maxToolIterations) {
-        break;
-      }
+      if (iteration === maxToolIterations) break;
 
-      messages = [
-        ...messages,
-        {
-          role: "assistant",
-          content: message?.content ?? null,
-          tool_calls: toolCalls,
-        },
-      ];
-
+      messages = [...messages, { role: "assistant", content: message?.content ?? null, tool_calls: toolCalls }];
       const results = await Promise.all(toolCalls.map(async call => {
         try {
           const value = await executeDatabaseTool(call.function.name, call.function.arguments);
