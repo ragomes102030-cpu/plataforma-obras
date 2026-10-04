@@ -2,8 +2,7 @@ import type {
   ArquimedesProjectContext,
   ArquimedesSkill,
   ArquimedesLlmRequest,
-  type ArquimedesAgentId,
-  type ArquimedesEapProposal,
+  ArquimedesEapProposal,
 } from "./types";
 import { getArquimedesAgent } from "../agent-registry";
 
@@ -149,7 +148,7 @@ export function buildEapRequest(
     maxTokens: mode === "resolver_bloqueios" ? 16384 : 4096,
     databaseContext: { projectId: context.projectId },
     eapReviewMode: mode,
-    agentId: specialist.id as Exclude<ArquimedesAgentId, "arquimedes">,
+    agentId: specialist.id as "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia",
     orchestratorId: "arquimedes",
     eapResolutionTargets: mode === "resolver_bloqueios" ? resolutionTargets : [],
     eapResolutionPlan: mode === "resolver_bloqueios" ? resolutionPlan : [],
@@ -298,7 +297,7 @@ export function buildEapSelfHealingRequest(
     maxTokens: 16384,
     databaseContext: { projectId: context.projectId },
     eapReviewMode: "resolver_bloqueios",
-    agentId: specialist.id as Exclude<ArquimedesAgentId, "arquimedes">,
+    agentId: specialist.id as "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia",
     orchestratorId: "arquimedes",
   };
 }
