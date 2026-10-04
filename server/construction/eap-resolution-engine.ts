@@ -115,12 +115,12 @@ export function buildEapResolutionPlan(
       const siblingNodes =
         lastNode &&
         issueNodes.length >= 3 &&
-        issueNodes.slice(0, -1).every(node => node.parentId === lastNode.nodeId)
+        issueNodes.slice(0, -1).every(node => node.parentCode === lastNode.code)
           ? issueNodes.slice(0, -1)
           : issueNodes;
 
       const parentCode =
-        lastNode && siblingNodes.every(node => node.parentId === lastNode.nodeId)
+        lastNode && siblingNodes.every(node => node.parentCode === lastNode.code)
           ? lastNode.code
           : siblingNodes[0]?.parentCode ?? null;
 
