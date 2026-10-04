@@ -298,7 +298,7 @@ async function seedStarterPlan(
       parentId: null,
       sortOrder: index,
     }))
-  ).$returningId();
+  ).returning({ id: wbsNodes.id });
   const wbsIdsByCode = new Map<string, number>();
   starterWbs.forEach(([code], index) => {
     const id = insertedWbs[index]?.id;
@@ -336,7 +336,7 @@ async function seedStarterPlan(
         })
       )
     )
-    .$returningId();
+    .returning({ id: scheduleActivities.id });
   await db.insert(scheduleDependencies).values(
     inserted.slice(0, -1).map((activity, index) => ({
       projectId,
@@ -363,7 +363,7 @@ async function seedSolarAcaciasPlan(
     return id;
   };
   const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
-    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).$returningId();
+    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).returning({ id: wbsNodes.id });
     nodeIdsByCode.set(code, created.id);
     return created.id;
   };
@@ -399,7 +399,7 @@ async function seedSolarAcaciasPlan(
   await addLocationPackages(delivery, "1.7.2", "Unidades e documentação", [["1", "Louças e metais", "un", 64], ["2", "Testes e entrega das unidades", "un", 32], ["3", "As built, manual e habite-se", "un", 1]]);
   const activityRows = structuralLocations.map((location, index) => ({ projectId, wbsNodeId: requireNodeId(`1.3.${index + 1}.4`), externalId: `SOL-EST-${index + 1}`, eapRef: `1.3.${index + 1}.4`, wbsCode: `1.3.${index + 1}.4`, name: `Ciclo estrutural — ${location}`, phase: "Estrutura", startOffset: 120 + index * 14, durationDays: 14, plannedQuantity: "1", productivity: "0.071", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: index }));
   activityRows.push({ projectId, wbsNodeId: requireNodeId("1.2.1.1"), externalId: "SOL-FUND-01", eapRef: "1.2.1.1", wbsCode: "1.2.1.1", name: "Escavação e contenção do subsolo", phase: "Fundação", startOffset: 20, durationDays: 60, plannedQuantity: "2400", productivity: "40", progress: 0, status: "Não iniciado" as const, critical: 0, sortOrder: activityRows.length });
-  const inserted = await db.insert(scheduleActivities).values(activityRows).$returningId();
+  const inserted = await db.insert(scheduleActivities).values(activityRows).returning({ id: scheduleActivities.id });
   await db.insert(scheduleDependencies).values(inserted.slice(0, -1).map((item, index) => ({ projectId, predecessorId: item.id, successorId: inserted[index + 1].id, type: "FS" as const, lag: 0 })));
   await seedProductionCatalog(db, projectId);
   await seedInitialBudget(db, projectId, nodeIdsByCode);
@@ -454,7 +454,7 @@ async function seedInitialBudget(
     status: 'rascunho',
     currency: 'BRL',
     notes: 'Estrutura gerada automaticamente na criação da obra, sem preços nem quantitativos reais. Nenhum valor aqui deve ser usado para decisão de planejamento até ser revisado e preenchido pelo responsável técnico.',
-  }).$returningId();
+  }).returning({ id: budgetVersions.id });
   const skeletonItems: Array<{
     starterCode: string;
     solarCode: string;
@@ -864,7 +864,7 @@ async function persistPhase7Plan(
             sortOrder: node.sortOrder,
             versionId,
           })
-          .$returningId();
+          .returning({ id: wbsNodes.id });
         localWbsByExternalId.set(node.externalId, created.id);
       }
     }
@@ -925,7 +925,7 @@ async function persistPhase7Plan(
         const [created] = await tx
           .insert(scheduleActivities)
           .values(values)
-          .$returningId();
+          .returning({ id: scheduleActivities.id });
         localActivitiesByExternalId.set(activity.externalId, created.id);
       }
     }
@@ -1200,7 +1200,7 @@ export const appRouter = router({
           plannedQuantity: input.plannedQuantity ?? null,
           sortOrder: siblings.length,
           versionId: writable.id,
-        }).$returningId();
+        }).returning({ id: wbsNodes.id });
         return created;
       }),
     moveWbsNode: protectedProcedure
@@ -1312,7 +1312,7 @@ export const appRouter = router({
           ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
           : `${nextNumber}`;
         await assertAvailableWbsCode(db, input.projectId, code);
-        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).$returningId();
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).returning({ id: wbsNodes.id });
         return created;
       }),
     deleteWbsNode: protectedProcedure
@@ -1391,7 +1391,7 @@ export const appRouter = router({
               plannedStart,
               plannedFinish,
             })
-            .$returningId();
+            .returning({ id: projects.id });
           const seedDb = tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>;
           // seedSolarAcaciasPlan é um plano de demonstração e não deve ser
           // acionado por texto no nome da obra digitado por um usuário real.
@@ -1527,7 +1527,7 @@ export const appRouter = router({
             location: input.location || null,
             status: "ativa",
           })
-          .$returningId();
+          .returning({ id: productionFronts.id });
         return created;
       }),
     createTeam: protectedProcedure
@@ -1546,7 +1546,7 @@ export const appRouter = router({
         const [created] = await db
           .insert(productionTeams)
           .values({ ...input, active: 1 })
-          .$returningId();
+          .returning({ id: productionTeams.id });
         return created;
       }),
     createUnit: protectedProcedure
@@ -1565,7 +1565,7 @@ export const appRouter = router({
         const [created] = await db
           .insert(productionUnits)
           .values({ ...input, sortOrder: 0 })
-          .$returningId();
+          .returning({ id: productionUnits.id });
         return created;
       }),
     fronts: protectedProcedure
@@ -1714,7 +1714,7 @@ export const appRouter = router({
             status: input.status,
             createdBy: ctx.user.id,
           })
-          .$returningId();
+          .returning({ id: productionEntries.id });
         return { id: createdId.id };
       }),
     createEntries: protectedProcedure
@@ -1860,7 +1860,7 @@ export const appRouter = router({
             notes: input.notes || null,
             createdBy: ctx.user.id,
           })
-          .$returningId();
+          .returning({ id: budgetVersions.id });
         return { id: createdId.id };
       }),
     ensureVersion: protectedProcedure
@@ -1952,7 +1952,7 @@ export const appRouter = router({
               "Versão inicial criada para orientar o cadastro; preços ainda precisam ser confirmados.",
             createdBy: ctx.user.id,
           })
-          .$returningId();
+          .returning({ id: budgetVersions.id });
         await db.insert(budgetItems).values([
           {
             budgetVersionId: createdId.id,
@@ -2072,7 +2072,7 @@ export const appRouter = router({
             referencePeriod: input.referencePeriod || null,
             compositionNote,
           })
-          .$returningId();
+          .returning({ id: budgetItems.id });
         return { id: createdId.id };
       }),
     createItems: protectedProcedure
@@ -2725,7 +2725,7 @@ export const appRouter = router({
           referencePeriod: input.referencePeriod,
           notes: input.notes || null,
           createdBy: ctx.user.id,
-        }).$returningId();
+        }).returning({ id: priceCatalogs.id });
         return { id: createdId.id };
       }),
     createPriceItem: protectedProcedure
@@ -2753,7 +2753,7 @@ export const appRouter = router({
           itemType: input.itemType,
           unitPrice: input.unitPrice.toFixed(2),
           notes: input.notes || null,
-        }).$returningId();
+        }).returning({ id: priceItems.id });
         cacheClearPrefix("catalog.list:");
         cacheClearPrefix("reconcilePreview:");
         void ctx.user.id;
@@ -2836,7 +2836,7 @@ export const appRouter = router({
               : `${parsed.skipped} linha(s) ignoradas`,
             createdBy: ctx.user.id,
           })
-          .$returningId();
+          .returning({ id: priceCatalogs.id });
         cacheClearPrefix("catalog.list:");
         cacheClearPrefix("reconcilePreview:");
         const chunkSize = 500;
@@ -2940,7 +2940,7 @@ export const appRouter = router({
           sourceCatalogId: input.sourceCatalogId,
           referencePeriod: input.referencePeriod || null,
           createdBy: ctx.user.id,
-        }).$returningId();
+        }).returning({ id: serviceCompositions.id });
         cacheClearPrefix("catalog.list:");
         cacheClearPrefix("reconcilePreview:");
         return { id: createdId.id };
@@ -2967,7 +2967,7 @@ export const appRouter = router({
           componentType: input.componentType,
           coefficient: input.coefficient.toFixed(6),
           unitPriceSnapshot: Number(item.unitPrice).toFixed(2),
-        }).$returningId();
+        }).returning({ id: compositionComponents.id });
         cacheClearPrefix("catalog.list:");
         cacheClearPrefix("reconcilePreview:");
         return { id: createdId.id };
@@ -3049,7 +3049,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
         if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
-        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).$returningId();
+        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length };
       }),
@@ -3097,7 +3097,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [createdId] = await db.insert(planningResources).values({ projectId: input.projectId, name: input.name, resourceType: input.resourceType, unit: input.unit, capacityPerDay: input.capacityPerDay?.toFixed(3), costPerDay: input.costPerDay?.toFixed(2) }).$returningId();
+        const [createdId] = await db.insert(planningResources).values({ projectId: input.projectId, name: input.name, resourceType: input.resourceType, unit: input.unit, capacityPerDay: input.capacityPerDay?.toFixed(3), costPerDay: input.costPerDay?.toFixed(2) }).returning({ id: planningResources.id });
         return { id: createdId.id };
       }),
     createActivity: protectedProcedure
@@ -3119,7 +3119,7 @@ export const appRouter = router({
         if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP desta obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).$returningId();
+        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: scheduleActivities.id });
         return { id: createdId.id };
       }),
     generateFromEap: protectedProcedure
@@ -3198,7 +3198,7 @@ export const appRouter = router({
         const rows = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, [input.predecessorId, input.successorId])));
         if (rows.length !== 2) throw forbidden("As duas atividades precisam pertencer à obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).$returningId();
+        const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).returning({ id: scheduleDependencies.id });
         return { id: createdId.id };
       }),
     createDependencies: protectedProcedure
@@ -3322,7 +3322,7 @@ export const appRouter = router({
         const [activity] = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
         const [resource] = await db.select({ id: planningResources.id }).from(planningResources).where(and(eq(planningResources.id, input.resourceId), eq(planningResources.projectId, input.projectId))).limit(1);
         if (!activity || !resource) throw forbidden("Atividade ou recurso não pertence à obra.");
-        const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).$returningId();
+        const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).returning({ id: activityResourceAllocations.id });
         return { id: createdId.id };
       }),
     allocateResources: protectedProcedure
@@ -3376,10 +3376,11 @@ export const appRouter = router({
               productivity: item.productivity?.toFixed(3) ?? null,
             }))
           )
-          .onDuplicateKeyUpdate({
+          .onConflictDoUpdate({
+            target: [activityResourceAllocations.activityId, activityResourceAllocations.resourceId],
             set: {
-              quantity: sql`VALUES(quantity)`,
-              productivity: sql`VALUES(productivity)`,
+              quantity: sql`excluded.quantity`,
+              productivity: sql`excluded.productivity`,
             },
           });
         return { created: input.allocations.length };
@@ -3771,7 +3772,7 @@ export const appRouter = router({
               reason: input.reason ?? null,
               impactJson: input.impact ? JSON.stringify(input.impact) : null,
             })
-            .$returningId();
+            .returning({ id: agentDecisions.id });
           if (decisionRecord) {
             planVersion = await approveCurrentPlanVersion(
               input.projectId,
@@ -3860,7 +3861,7 @@ export const appRouter = router({
             impact: input.impact ?? null,
             confidence: input.confidence,
           })
-          .$returningId();
+          .returning({ id: agentFindings.id });
         return { id: created.id };
       }),
     transitionFinding: protectedProcedure
@@ -3938,7 +3939,7 @@ export const appRouter = router({
             sourceRef: input.sourceRef ?? null,
             confidence: input.confidence,
           })
-          .$returningId();
+          .returning({ id: agentMemories.id });
         return { id: created.id, status: "proposed" as const };
       }),
     approveMemory: protectedProcedure
@@ -4351,7 +4352,8 @@ export const appRouter = router({
             syncState: "pending",
             lastError: null,
           })
-          .onDuplicateKeyUpdate({
+          .onConflictDoUpdate({
+            target: [projectMcpIntegrations.projectId, projectMcpIntegrations.provider],
             set: {
               externalProjectId: input.externalProjectId,
               endpointUrl: mcpEndpoint(input.provider),
