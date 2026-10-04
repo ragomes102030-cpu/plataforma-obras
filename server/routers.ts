@@ -33,7 +33,7 @@ import {
   arquimedesCapabilities,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
-import { seinfraAdapter } from "@shared/price-sources/seinfra";
+import { seinfraAdapter, lerPrimeiraAba, reconhecerPlanilhaSeinfra } from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
   findCandidates,
@@ -2962,6 +2962,8 @@ export const appRouter = router({
         const bytes = Buffer.from(input.fileDataBase64, "base64");
         if (!bytes.length) throw badRequest("Arquivo vazio ou base64 inválido.");
         const uint8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const planilha = reconhecerPlanilhaSeinfra(await lerPrimeiraAba(uint8));
+        if (planilha === "composicoes") throw badRequest("O arquivo enviado é o Relatório de Composições; use o Planos-de-Serviços para importar serviços e gerar a estrutura da EAP.");
         if (!seinfraAdapter.canParse(input.fileName, uint8)) {
           throw badRequest("Formato não suportado. Envie .xls ou .xlsx da SEINFRA (download manual do site).");
         }
@@ -2970,6 +2972,7 @@ export const appRouter = router({
           throw badRequest("Nenhum preço reconhecido na planilha (cabeçalho não identificado).");
         }
         const referencePeriod = input.referencePeriod || parsed.referenceHint || "s/ ref";
+        const aviso = planilha === "insumos" ? "Tabela de Insumos importada corretamente; ela não contém serviços e, portanto, não gera EAP." : null;
         // Cada import = 1 NOVO priceCatalogs; nunca sobrescreve meses anteriores.
         const [created] = await db
           .insert(priceCatalogs)
@@ -3009,6 +3012,7 @@ export const appRouter = router({
           imported: parsed.records.length,
           skipped: parsed.skipped,
           referenceHint: parsed.referenceHint,
+          aviso,
         };
       }),
     searchPrices: protectedProcedure
