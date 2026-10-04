@@ -46,3 +46,37 @@ describe("restoreAgentConversation", () => {
     });
   });
 });
+
+
+describe("mergePersistedWithIncoming", () => {
+  it("recupera o histórico no backend quando a UI envia somente a nova pergunta", async () => {
+    const { mergePersistedWithIncoming } = await import("./agent-history");
+    const persisted = [
+      { role: "user" as const, content: "Qual é o diagnóstico?" },
+      { role: "assistant" as const, content: "A EAP está vazia." },
+    ];
+    const result = mergePersistedWithIncoming(persisted, [
+      { role: "user", content: "E qual é a proposta?" },
+    ]);
+    expect(result).toEqual([
+      ...persisted,
+      { role: "user", content: "E qual é a proposta?" },
+    ]);
+  });
+
+  it("não duplica o histórico quando a UI já envia mensagens persistidas", async () => {
+    const { mergePersistedWithIncoming } = await import("./agent-history");
+    const persisted = [
+      { role: "user" as const, content: "Pergunta 1" },
+      { role: "assistant" as const, content: "Resposta 1" },
+    ];
+    const result = mergePersistedWithIncoming(persisted, [
+      ...persisted,
+      { role: "user", content: "Pergunta 2" },
+    ]);
+    expect(result).toEqual([
+      ...persisted,
+      { role: "user", content: "Pergunta 2" },
+    ]);
+  });
+});
