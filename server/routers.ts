@@ -3141,6 +3141,11 @@ export const appRouter = router({
         cacheClearPrefix("reconcilePreview:");
         return { ok: true };
       }),
+    importOfficial0281: protectedProcedure
+      .input(z.object({ force: z.boolean().default(false) }))
+      .mutation(async () => {
+        throw badRequest("A importação automática da base oficial 028.1 não está disponível neste contrato. Use o upload manual da planilha oficial para manter a evidência de origem e o versionamento.");
+      }),
   }),
   planning: router({
     list: protectedProcedure
