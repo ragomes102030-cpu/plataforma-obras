@@ -28,6 +28,7 @@ export type LlmResponse = {
   model?: string;
   provider?: string;
   choices?: Array<{
+    finish_reason?: string;
     message?: {
       role?: "assistant";
       content?: LlmMessage["content"];
