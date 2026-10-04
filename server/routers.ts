@@ -1151,6 +1151,7 @@ export const appRouter = router({
           nodeType: z.enum(["grupo", "pacote", "entrega"]),
           unit: z.string().trim().max(32).optional(),
           plannedQuantity: z.number().int().min(0).optional(),
+          decompositionBasis: z.string().trim().max(40).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1183,6 +1184,7 @@ export const appRouter = router({
               nodeType: input.nodeType,
               unit: input.unit || null,
               plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
+              decompositionBasis: input.decompositionBasis ?? null, description: input.description ?? null, inclusions: input.inclusions ?? null, exclusions: input.exclusions ?? null, location: input.location ?? null, responsible: input.responsible ?? null, acceptanceCriteria: input.acceptanceCriteria ?? null, scopeStatus: input.scopeStatus ?? null,
             })
             .where(eq(wbsNodes.id, input.nodeId));
           await tx
@@ -1205,6 +1207,7 @@ export const appRouter = router({
         nodeType: z.enum(["grupo", "pacote", "entrega"]),
         unit: z.string().trim().max(32).optional(),
         plannedQuantity: z.number().int().min(0).optional(),
+        decompositionBasis: z.string().trim().max(40).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
