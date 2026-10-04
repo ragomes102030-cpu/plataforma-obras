@@ -1351,6 +1351,50 @@ export const appRouter = router({
           .from(scheduleDependencies)
           .where(eq(scheduleDependencies.projectId, input.projectId));
       }),
+    trash: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(projects).where(and(eq(projects.ownerUserId, ctx.user.id), sql`${projects.deletedAt} is not null`)).orderBy(desc(projects.deletedAt));
+    }),
+    moveToTrash: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), confirmationName: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [project] = await db.select().from(projects).where(and(eq(projects.id, input.projectId), eq(projects.ownerUserId, ctx.user.id))).limit(1);
+        if (!project) throw notFound("Obra não encontrada.");
+        if (project.name !== input.confirmationName) throw badRequest("O nome de confirmação não confere.");
+        await db.update(projects).set({ deletedAt: new Date(), deletedAtBy: ctx.user.id }).where(eq(projects.id, input.projectId));
+        return { moved: true as const };
+      }),
+    restoreFromTrash: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await db.update(projects).set({ deletedAt: null, deletedAtBy: null }).where(and(eq(projects.id, input.projectId), eq(projects.ownerUserId, ctx.user.id)));
+        return { restored: true as const };
+      }),
+    createDemoGantt: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados não configurado.");
+      const plannedStart = new Date();
+      const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
+      const code = `DEMO-${Date.now().toString(36).slice(-6).toUpperCase()}`;
+      const [createdId] = await db.insert(projects).values({
+        ownerUserId: ctx.user.id,
+        code,
+        name: "Obra demonstrativa — Gantt e Linha de Balanço",
+        location: "Demonstração",
+        status: "Planejamento",
+        progress: 0,
+        plannedStart,
+        plannedFinish,
+      }).returning({ id: projects.id });
+      await seedStarterPlan(db, createdId.id);
+      const [created] = await db.select().from(projects).where(eq(projects.id, createdId.id)).limit(1);
+      return created;
+    }),
     create: protectedProcedure
       .input(
         z
