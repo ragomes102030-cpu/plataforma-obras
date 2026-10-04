@@ -155,7 +155,7 @@ describe("runProjectOrchestrator", () => {
       }
     );
 
-    expect(result.readOnly).toBe(false);
+    expect(result.readOnly).toBe(true);
     expect(result.status).toBe("respondido");
     expect(result.content).toContain("A EAP está vazia.");
     expect(result.content).toContain("EVIDÊNCIAS CONSULTADAS");
