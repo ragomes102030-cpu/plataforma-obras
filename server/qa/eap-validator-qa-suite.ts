@@ -1,6 +1,6 @@
 import { validateEap, validateEapScope, validateWbsCostCoverage } from "../construction/eap-validator";
 import { validateEapForBaseline } from "../construction/eap-approval-validator";
-import type { EapEvidenceNode, EapScopeNode } from "../construction/domain-types";
+import type { EapEvidenceNode } from "../construction/domain-types";
 
 function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
   const value = {
@@ -15,8 +15,8 @@ function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
   return { ...value, level: overrides.level ?? value.code.split(".").length };
 }
 
-function scopeNode(overrides: Partial<EapScopeNode> = {}): EapScopeNode {
-  return node(overrides) as EapScopeNode;
+function scopeNode(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
+  return node(overrides) as EapEvidenceNode;
 }
 
 export function runEapValidatorQaSuite() {
