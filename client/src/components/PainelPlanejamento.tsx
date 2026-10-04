@@ -215,7 +215,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
           <CheckCircle2 size={14} />
           <span>
             CPM válido · {calcular.data.projectDuration} dias úteis · calendário{" "}
-            {calcular.data.calendario?.nome ?? calcular.data.calendario?.origem ?? "da obra"}
+            {"da obra"}
           </span>
         </div>
       )}
