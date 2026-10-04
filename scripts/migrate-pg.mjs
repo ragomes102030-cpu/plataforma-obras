@@ -32,7 +32,18 @@ function fail(msg) {
 }
 
 // ----------------------------------------------------------------- conexão --
-const url = process.env.DATABASE_URL;
+const rawUrl = process.env.USE_SUPABASE === "1"
+  ? (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL)
+  : process.env.DATABASE_URL;
+const url = rawUrl ? (() => {
+  const u = new URL(rawUrl);
+  if (process.env.USE_SUPABASE === "1" && u.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
+    u.hostname = "aws-0-sa-east-1.pooler.supabase.com";
+    u.port = "5432";
+    if (u.username === "postgres") u.username = "postgres.tromrvfijbtihuilvnuk";
+  }
+  return u.toString();
+})() : undefined;
 if (!url) {
   fail("DATABASE_URL ausente. O banco e o PostgreSQL; sem esta variavel nao ha onde aplicar.");
 }
