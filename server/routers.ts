@@ -49,7 +49,7 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
-import { mergeAgentConversations } from "./agent-history";
+import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-history";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -4128,6 +4128,35 @@ export const appRouter = router({
               };
             })()
           : undefined;
+        let persistedMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
+        if (db) {
+          const previousRuns = await db
+            .select({
+              status: agentRuns.status,
+              contextJson: agentRuns.contextJson,
+              resultJson: agentRuns.resultJson,
+            })
+            .from(agentRuns)
+            .where(
+              and(
+                eq(agentRuns.projectId, input.projectId),
+                eq(agentRuns.userId, ctx.user.id),
+              )
+            )
+            .orderBy(desc(agentRuns.createdAt))
+            .limit(100);
+          persistedMessages = mergeAgentConversations(previousRuns.map(run => ({
+            requestId: "",
+            status: run.status,
+            contextJson: run.contextJson,
+            resultJson: run.resultJson,
+          })));
+        }
+        const messagesWithHistory = mergePersistedWithIncoming(
+          persistedMessages,
+          input.messages,
+          20,
+        );
         return startAgentExecution({
           db,
           projectId: input.projectId,
@@ -4139,7 +4168,7 @@ export const appRouter = router({
             coordinator,
             evidence
           ),
-          messages: input.messages,
+          messages: messagesWithHistory,
           mcpProjectIds,
           requestId: requestIdFrom(ctx),
         });
