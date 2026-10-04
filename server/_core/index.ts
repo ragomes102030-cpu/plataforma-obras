@@ -72,6 +72,11 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  if (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL) {
+    console.log("[schema] backend de banco selecionado: Supabase (host ocultado por segurança)");
+  } else {
+    console.warn("[schema] nenhuma conexão Supabase configurada; DATABASE_URL legado será usado");
+  }
   await logSchemaInventory();
   const configVars = configVarNames();
   console.log(
