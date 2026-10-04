@@ -82,7 +82,7 @@ export default function Home() {
   const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
       await obras.refetch();
-      setObraId(created.projectId);
+      setObraId(created.id);
       setDestino("obra");
       setAba("gantt");
     },
