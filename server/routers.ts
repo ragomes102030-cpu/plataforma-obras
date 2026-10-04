@@ -1443,6 +1443,7 @@ export const appRouter = router({
             location: z.string().trim().min(2).max(180).default("A cadastrar"),
             plannedStart: z.coerce.date().optional(),
             plannedFinish: z.coerce.date().optional(),
+            descricao: z.string().trim().max(4000).optional(),
           })
           .refine(
             data =>
@@ -1474,18 +1475,15 @@ export const appRouter = router({
               code,
               name: input.name,
               location: input.location,
+              descricao: input.descricao ?? null,
               status: "Planejamento",
               progress: 0,
               plannedStart,
               plannedFinish,
             })
             .returning({ id: projects.id });
-          const seedDb = tx as unknown as NonNullable<Awaited<ReturnType<typeof getDb>>>;
-          // seedSolarAcaciasPlan é um plano de demonstração e não deve ser
-          // acionado por texto no nome da obra digitado por um usuário real.
-          // Uso apenas manual/administrativo (chamar seedSolarAcaciasPlan
-          // diretamente, se necessário) fora deste fluxo de criação.
-          await seedStarterPlan(seedDb, createdId.id);
+          const [planVersion] = await tx.insert(projectPlanVersions).values({ projectId: createdId.id, versionNumber: 1, status: "draft", notes: "Versão inicial aguardando proposta e revisão da EAP pelo Arquimedes.", createdBy: ctx.user.id }).returning({ id: projectPlanVersions.id });
+          await tx.insert(agentProjectStates).values({ projectId: createdId.id, stage: "EAP_PROPOSTA", activeSection: "eap", activeSubtab: "estrutura" });
           const [created] = await tx
             .select()
             .from(projects)
