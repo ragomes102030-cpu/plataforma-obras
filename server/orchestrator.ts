@@ -1388,6 +1388,11 @@ export async function runProjectOrchestrator(
           ]),
         };
 
+        const availableByDomain: Record<string, Set<string>> = {
+          eap: new Set((catalog.eap ?? []).map(tool => tool.name)),
+          cronograma: new Set((catalog.cronograma ?? []).map(tool => tool.name)),
+          ganttLob: new Set((catalog.ganttLob ?? []).map(tool => tool.name)),
+        };
         const findings: Array<Record<string, unknown>> = [];
         for (const check of selectedChecks) {
           if (gapChecksExecuted.has(check)) {
@@ -1402,6 +1407,12 @@ export async function runProjectOrchestrator(
           const domain = TOOL_DOMAINS[check as keyof typeof TOOL_DOMAINS];
           if (!domain || !knownByDomain[domain]?.has(check)) {
             findings.push({ check, status: "indisponivel" });
+            continue;
+          }
+
+          if (!availableByDomain[domain]?.has(check)) {
+            findings.push({ check, status: "nao_publicado_no_catalogo" });
+            gapChecksExecuted.add(check);
             continue;
           }
 
