@@ -26,6 +26,7 @@ const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
 const MIGRATIONS_TABLE = "__drizzle_migrations";
 const dryRun = process.argv.includes("--dry-run");
 
+// Em produção com Supabase, o schema já é provisionado/validado pelo pipeline de banco.\n// Não bloquear o boot da API tentando executar migrations a cada restart.\nif (process.env.USE_SUPABASE === "1") {\n  console.log("[migrate] USE_SUPABASE=1: migrations de startup desativadas; schema Supabase é gerenciado separadamente.");\n  process.exit(0);\n}\n
 function fail(msg) {
   console.error(`[migrate] ERRO: ${msg}`);
   process.exit(1);
