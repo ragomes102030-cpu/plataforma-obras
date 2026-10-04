@@ -137,6 +137,4 @@ describe("eap-resolution-engine", () => {
     expect(plan[0]?.affectedCodes).toEqual(["1.1.1", "1.1.2"]);
     expect(plan[0]?.issueCount).toBe(2);
   });
-
-  });
 });
