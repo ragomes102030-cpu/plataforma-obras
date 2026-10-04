@@ -388,7 +388,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
     };
 
     const outputBudget = request.maxTokens ?? 4096;
-    const maxToolIterations = 0;
+    const maxToolIterations = 1;
 
     for (let iteration = 0; iteration <= maxToolIterations; iteration++) {
       const response = await generate(messages, outputBudget * (iteration + 1), []);
