@@ -137,3 +137,15 @@ A persistência da conversa **não aplica EAP, cronograma ou qualquer mutação 
 - Adicionados testes para: nova pergunta com UI sem histórico e UI já contendo o histórico persistido.
 - Build Render da correção concluído com sucesso.
 - Nenhuma EAP, cronograma ou outra estrutura de obra foi alterada.
+
+
+## Out/2026 — Fechamento do contrato frontend/backend e regressão integral
+- O CI do `develop` chegou a verde após alinhar componentes legados aos routers atuais.
+- EAP passou a ter fluxo explícito de proposta → revisão → confirmação → aplicação; a criação de nova obra não semeia EAP genérica automaticamente.
+- O router EAP foi exposto separadamente para dicionário, validação, revisão e aplicação controlada.
+- CPM voltou a transportar calendário da obra e restrições declaradas.
+- Gap analysis passou a respeitar somente ferramentas efetivamente publicadas no catálogo MCP.
+- Gateway LLM ganhou recuperação de resposta truncada e o ReAct encerra com mensagem `system`.
+- Regressão final: 483 testes passaram; typecheck e build passaram.
+- Render iniciou o deploy correspondente; logs confirmaram schema íntegro e 0 migrações pendentes.
+- Incidente registrado para rastreabilidade: contratos legados do frontend estavam fora de sincronia com o AppRouter atual.
