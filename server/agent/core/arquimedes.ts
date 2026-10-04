@@ -604,6 +604,13 @@ const eapReviewSchema = z.object({
   assumptions: stringListSchema(30, 2000),
   missingInformation: stringListSchema(30, 1200),
   resolutionSummary: stringListSchema(20, 600).optional(),
+  researchEvidence: z.array(z.object({
+    query: z.string().trim().min(1).max(500),
+    title: z.string().trim().min(1).max(240),
+    url: z.string().trim().url().max(1200),
+    snippet: z.string().trim().max(1200),
+    sourceType: z.enum(["official", "standard", "reference", "other"]),
+  })).max(30).optional(),
   validation: z.object({
     valid: z.boolean(),
     issues: z.array(eapReviewValidationIssueSchema).max(80),
