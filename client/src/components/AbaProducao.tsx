@@ -46,7 +46,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   const frentes = trpc.production.fronts.useQuery({ projectId: projetoId });
   const equipes = trpc.production.teams.useQuery({ projectId: projetoId });
   const unidades = trpc.production.units.useQuery({ projectId: projetoId });
-  const gradeCrono = trpc.planning.grade.useQuery(
+  const gradeCrono = trpc.planning.list.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
@@ -63,12 +63,11 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   // As linhas são as atividades do cronograma, na ordem do código. Vêm do
   // `grade`, que já aplicou o motor e sabe a ordem.
   const linhas: Linha[] = useMemo(() => {
-    const ids = (gradeCrono.data?.idsPorCodigo ?? {}) as Record<string, number>;
-    return (gradeCrono.data?.linhas ?? []).map(l => ({
-      codigo: l.codigo,
-      atividade: l.atividade,
-      unidade: l.unidade,
-      atividadeId: ids[l.codigo] ?? 0,
+    return (gradeCrono.data?.activities ?? []).map(l => ({
+      codigo: l.wbsCode,
+      atividade: l.name,
+      unidade: l.unit ?? null,
+      atividadeId: l.id,
     }));
   }, [gradeCrono.data]);
 
