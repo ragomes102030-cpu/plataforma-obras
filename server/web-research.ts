@@ -98,3 +98,84 @@ export async function searchWebEvidence(
           },
           signal: controller.signal,
         });
+
+        if (!response.ok) {
+          throw new Error("Pesquisa web HTTP " + response.status);
+        }
+
+        const raw = await response.text();
+        return parseSearchResponse(raw, query);
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            evento: "web_research_error",
+            query,
+            erro: error instanceof Error ? error.message : String(error),
+          })
+        );
+        return [];
+      } finally {
+        clearTimeout(timer);
+      }
+    })
+  );
+
+  const dedup = new Map<string, WebResearchEvidence>();
+  for (const batch of results) {
+    for (const item of batch) {
+      if (!dedup.has(item.url)) dedup.set(item.url, item);
+    }
+  }
+
+  return Array.from(dedup.values())
+    .sort((left, right) => {
+      const weight = (item: WebResearchEvidence) =>
+        item.sourceType === "standard"
+          ? 4
+          : item.sourceType === "official"
+            ? 3
+            : item.sourceType === "reference"
+              ? 2
+              : 1;
+      return weight(right) - weight(left);
+    })
+    .slice(0, maxResults);
+}
+
+export function buildEapResearchQueries(
+  issues: Array<{ code: string; message: string }>
+): string[] {
+  const queries = new Set<string>();
+
+  for (const issue of issues) {
+    const message = issue.message.toLowerCase();
+    if (issue.code === "possible_scope_overlap" || /sobreposi|duplicad/.test(message)) {
+      queries.add(
+        "WBS work breakdown structure dictionary scope inclusions exclusions overlapping responsibilities work package construction PMI"
+      );
+      queries.add(
+        "construction WBS work package scope definition responsibility assignment WBS dictionary official guidance"
+      );
+    }
+
+    if (issue.code === "eap_leaf_not_ready" || /falta\(m\) respons|responsável/.test(message)) {
+      queries.add(
+        "WBS work package responsibility assignment WBS dictionary owner accountable construction project PMI"
+      );
+    }
+
+    if (/decompos|nível de detalhe|critério de parada/.test(message)) {
+      queries.add(
+        "WBS decomposition level of detail 100 percent rule work package PMI"
+      );
+    }
+  }
+
+  if (!queries.size) {
+    queries.add(
+      "WBS work breakdown structure construction scope dictionary work package 100 percent rule PMI"
+    );
+  }
+
+  return Array.from(queries).slice(0, 4);
+}
