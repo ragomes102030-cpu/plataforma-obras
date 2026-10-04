@@ -1037,7 +1037,7 @@ export const appRouter = router({
           {id:"gantt-lob",kind:"ability",name:"Gantt e Linha de Balanço",version:"1.0.0",domain:"planejamento",description:"Visualização de cronograma e produção."},
           {id:"arquimedes-coordinator",kind:"skill",name:"Coordenador Arquimedes",version:"1.0.0",domain:"agente",description:"Coordenação do fluxo de engenharia."},
         ];
-        if(!db) return {capabilities:defaults.map(x=>({...x,status:"available",enabled:false,removable:true})),summary:{installed:0,enabled:0,total:defaults.length},overallMcpStatus:"degraded",mcpDomains:[],permissions:[],policy:{},events:[]};
+        if(!db) return {capabilities:defaults.map(x=>({...x,status:"available",enabled:false,removable:true})),summary:{installed:0,enabled:0,total:defaults.length},overallMcpStatus:"degraded",mcpDomains:[],permissions:[],policy:{readOnlyTools:0,confirmationTools:0,destructiveTools:0},events:[]};
         let rows=await db.select().from(arquimedesCapabilities);
         if(!rows.length){await db.insert(arquimedesCapabilities).values(defaults.map(x=>({...x,status:"installed",enabled:true,removable:false,dependenciesJson:"[]"}))); rows=await db.select().from(arquimedesCapabilities);}
         const capabilities=rows.map(row=>({...row,dependencies:parseJsonValue(row.dependenciesJson)}));
@@ -1239,7 +1239,7 @@ export const appRouter = router({
           location: input.location ?? null,
           responsible: input.responsible ?? null,
           acceptanceCriteria: input.acceptanceCriteria ?? null,
-          scopeStatus: input.scopeStatus ?? null,
+          scopeStatus: input.scopeStatus ?? "rascunho",
           sortOrder: siblings.length,
           versionId: writable.id,
         }).returning({ id: wbsNodes.id });
