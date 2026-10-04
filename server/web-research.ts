@@ -27,14 +27,11 @@ export function parseSearchResponse(raw: string, query: string): WebResearchEvid
     return [];
   }
 
-  const candidates: unknown[] =
+  const rawCandidates =
     parsed && typeof parsed === "object"
-      ? Array.isArray((parsed as Record<string, unknown>).data)
-        ? (parsed as Record<string, unknown>).data
-        : Array.isArray(parsed)
-          ? parsed
-          : []
+      ? (parsed as Record<string, unknown>).data ?? parsed
       : [];
+  const candidates: unknown[] = Array.isArray(rawCandidates) ? rawCandidates : [];
 
   return candidates
     .map(item => {
