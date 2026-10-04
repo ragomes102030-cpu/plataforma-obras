@@ -138,3 +138,17 @@ export async function runEapQaSuite(args: {
       status: "failed",
       detail: "A execução terminou sem resultado estruturado.",
     });
+  }
+
+  const passed = checks.every(check => check.status === "passed");
+  return {
+    suite: "EAP_REGRESSION",
+    status: passed ? "passed" : "failed",
+    projectId: args.projectId,
+    requestId: started.requestId,
+    checks,
+    agentStatus: status,
+    changesApplied: false,
+    finished: Boolean(status && isAgentRunTerminal(status.status)),
+  };
+}
