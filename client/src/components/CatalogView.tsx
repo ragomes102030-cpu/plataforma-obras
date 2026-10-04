@@ -109,22 +109,6 @@ export function CatalogView() {
     if (!Number.isFinite(value) || value <= 0) return;
     updateComponent.mutate({ componentId: component.id, coefficient: value });
   };
-  const importOfficial0281 = trpc.catalog.importOfficial0281.useMutation({
-    onSuccess: async result => {
-      setImportResult({
-        catalogId: result.catalogId,
-        referencePeriod: result.referencePeriod,
-        imported: result.imported,
-        skipped: result.skipped,
-        referenceHint: result.referenceHint,
-        aviso: result.reused
-          ? "A base oficial 028.1 já estava carregada; nenhum catálogo duplicado foi criado."
-          : "Base oficial da SEINFRA carregada. Ela já pode gerar a EAP com os códigos C....",
-      });
-      await utils.catalog.list.invalidate();
-      setCatalogId(result.catalogId);
-    },
-  });
   const importSheet = trpc.catalog.importPriceSheet.useMutation({
     onSuccess: async result => {
       setImportResult(result);
@@ -207,15 +191,6 @@ export function CatalogView() {
           <div className="catalog-form-footer">
             <span>Arquivos aceitos: Tabela de Insumos (I...) e Planos de Serviços (C...) da SEINFRA.</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="outline-button"
-                disabled={importOfficial0281.isPending}
-                onClick={() => importOfficial0281.mutate({ force: false })}
-              >
-                <BookOpen size={14} />
-                {importOfficial0281.isPending ? "Baixando base oficial..." : "Carregar SEINFRA 028.1"}
-              </button>
               <button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || importSheet.isPending}>
                 <Upload size={14} /> {importSheet.isPending ? "Importando..." : "Importar planilha"}
               </button>
@@ -223,7 +198,6 @@ export function CatalogView() {
           </div>
         </form>
         {importSheet.error && <p className="form-error">{importSheet.error.message}</p>}
-        {importOfficial0281.error && <p className="form-error">{importOfficial0281.error.message}</p>}
         {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span>{importResult.aviso && <span style={{ color: "var(--warn)" }}>{importResult.aviso}</span>}</div></div>}
       </section>
 
