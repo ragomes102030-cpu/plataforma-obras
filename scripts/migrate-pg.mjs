@@ -180,14 +180,14 @@ await aplicarMigracoes({
 
 // -------------------------------------------------------------- verificar ---
 const after = await conn.query(
-  `SELECT COUNT(*) AS n, MAX(created_at) AS last FROM "${MIGRATIONS_TABLE}"`
+  `SELECT COUNT(DISTINCT created_at) AS n, MAX(created_at) AS last FROM "${MIGRATIONS_TABLE}"`
 );
 const expected = migrations[migrations.length - 1].folderMillis;
 const ok =
   Number(after.rows[0].n) === migrations.length && Number(after.rows[0].last) === expected;
 
 console.log(
-  `[migrate] pos: ${after.rows[0].n}/${migrations.length} migracao(oes) registradas; ` +
+  `[migrate] pos: ${after.rows[0].n}/${migrations.length} migration(oes) distintas registradas; ` +
     `ultima = ${after.rows[0].last} (esperado ${expected})`
 );
 if (!ok) {
