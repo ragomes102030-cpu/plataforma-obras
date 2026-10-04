@@ -140,7 +140,8 @@ function extractText(response: Awaited<ReturnType<typeof invokeLlmGateway>>): st
     if (text.trim()) return text;
   }
 
-  const reasoning = message?.reasoning ?? message?.reasoning_content;
+  const reasoningContent = message && typeof message === "object" ? (message as Record<string, unknown>).reasoning_content : undefined;
+  const reasoning = message?.reasoning ?? reasoningContent;
   if (typeof reasoning === "string" && reasoning.trim()) {
     return reasoning;
   }
