@@ -29,6 +29,7 @@ import {
   scheduleBaselines,
   scheduleBaselineItems,
   agentRuns,
+  arquimedesCapabilities,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
@@ -1026,6 +1027,24 @@ export const appRouter = router({
             settings: await getPublicLlmSettings(),
           };
         }),
+    capabilities: router({
+      snapshot: adminProcedure.query(async () => {
+        const db=await getDb(); const defaults=[
+          {id:"eap",kind:"ability",name:"EAP",version:"1.0.0",domain:"planejamento",description:"Estrutura analítica e validação de EAP."},
+          {id:"cronograma",kind:"ability",name:"Cronograma",version:"1.0.0",domain:"planejamento",description:"Planejamento, atividades e controle de prazo."},
+          {id:"gantt-lob",kind:"ability",name:"Gantt e Linha de Balanço",version:"1.0.0",domain:"planejamento",description:"Visualização de cronograma e produção."},
+          {id:"arquimedes-coordinator",kind:"skill",name:"Coordenador Arquimedes",version:"1.0.0",domain:"agente",description:"Coordenação do fluxo de engenharia."},
+        ];
+        if(!db) return {capabilities:defaults.map(x=>({...x,status:"available",enabled:false,removable:true})),summary:{installed:0,enabled:0,total:defaults.length},overallMcpStatus:"degraded",mcpDomains:[],permissions:[],policy:{},events:[]};
+        let rows=await db.select().from(arquimedesCapabilities);
+        if(!rows.length){await db.insert(arquimedesCapabilities).values(defaults.map(x=>({...x,status:"installed",enabled:true,removable:false,dependenciesJson:"[]"}))); rows=await db.select().from(arquimedesCapabilities);}
+        const capabilities=rows.map(row=>({...row,dependencies:parseJsonValue(row.dependenciesJson)}));
+        return {capabilities,summary:{installed:capabilities.filter(x=>x.status==="installed").length,enabled:capabilities.filter(x=>x.enabled).length,total:capabilities.length},overallMcpStatus:"degraded",mcpDomains:[],permissions:[],policy:{},events:[]};
+      }),
+      install: adminProcedure.input(z.object({capabilityId:z.string().min(1)})).mutation(async({ctx,input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({status:"installed",enabled:true,installedBy:ctx.user.id,installedAt:new Date(),updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name,enabled:true};}),
+      setEnabled: adminProcedure.input(z.object({capabilityId:z.string().min(1),enabled:z.boolean()})).mutation(async({input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({enabled:input.enabled,status:input.enabled?"installed":"available",updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name,enabled:row.enabled};}),
+      uninstall: adminProcedure.input(z.object({capabilityId:z.string().min(1)})).mutation(async({input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({enabled:false,status:"available",updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name};}),
+    }),
     }),
   }),
   projects: router({
