@@ -1028,6 +1028,7 @@ export const appRouter = router({
             settings: await getPublicLlmSettings(),
           };
         }),
+    }),
     capabilities: router({
       snapshot: adminProcedure.query(async () => {
         const db=await getDb(); const defaults=[
@@ -1185,7 +1186,7 @@ export const appRouter = router({
               nodeType: input.nodeType,
               unit: input.unit || null,
               plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
-              decompositionBasis: input.decompositionBasis ?? null, description: input.description ?? null, inclusions: input.inclusions ?? null, exclusions: input.exclusions ?? null, location: input.location ?? null, responsible: input.responsible ?? null, acceptanceCriteria: input.acceptanceCriteria ?? null, scopeStatus: input.scopeStatus ?? null,
+              ...(input.decompositionBasis !== undefined && { decompositionBasis: input.decompositionBasis }), ...(input.description !== undefined && { description: input.description }), ...(input.inclusions !== undefined && { inclusions: input.inclusions }), ...(input.exclusions !== undefined && { exclusions: input.exclusions }), ...(input.location !== undefined && { location: input.location }), ...(input.responsible !== undefined && { responsible: input.responsible }), ...(input.acceptanceCriteria !== undefined && { acceptanceCriteria: input.acceptanceCriteria }), ...(input.scopeStatus !== undefined && { scopeStatus: input.scopeStatus }),
             })
             .where(eq(wbsNodes.id, input.nodeId));
           await tx
@@ -1232,7 +1233,7 @@ export const appRouter = router({
           nodeType: input.nodeType,
           unit: input.unit || null,
           plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
-          decompositionBasis: input.decompositionBasis ?? null,
+          decompositionBasis: input.decompositionBasis,
           description: input.description ?? null,
           inclusions: input.inclusions ?? null,
           exclusions: input.exclusions ?? null,
