@@ -18,7 +18,7 @@ await db.connect();
 
 const t = await db.query(`
  SELECT table_name FROM information_schema.tables
- WHERE table_schema='public' AND table_type='BASE TABLE'
+ WHERE table_schema=current_schema() AND table_type='BASE TABLE'
    AND table_name <> '__drizzle_migrations' AND table_name NOT LIKE '__%'
  ORDER BY table_name
 `);
@@ -33,7 +33,7 @@ const fks = await db.query(`
    ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
  JOIN information_schema.constraint_column_usage ccu
    ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema
- WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='public'
+ WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema=current_schema()
 `);
 const deps = new Map(names.map(n=>[n,new Set()]));
 for(const x of fks.rows) if(deps.has(x.child_table)&&deps.has(x.parent_table)&&x.child_table!==x.parent_table) deps.get(x.child_table).add(x.parent_table);
