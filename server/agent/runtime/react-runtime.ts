@@ -89,7 +89,7 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
 
     if (isFinalTurn) {
       conversation.push({
-        role: "user",
+        role: "system",
         content:
           "ENCERRAMENTO OBRIGATÓRIO: você já recebeu as evidências disponíveis nesta execução. " +
           "Não faça novas consultas, não solicite ferramentas e não execute alterações. " +
