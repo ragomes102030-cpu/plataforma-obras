@@ -118,3 +118,22 @@ A persistência da conversa **não aplica EAP, cronograma ou qualquer mutação 
 - Estado: `live`.
 - Teste de regressão existente cobre reconstrução de múltiplos runs; a validação E2E adicional é fechar/reabrir o Arquimedes e confirmar que uma mensagem anterior reaparece.
 
+
+
+## Out/2026 — Garantia de contexto conversacional no backend
+
+### Incidente encontrado
+- A reidratação da UI e a reconstrução de múltiplos `agent_runs` estavam corretas, porém o próximo `agent.chat` ainda dependia do array de mensagens mantido pelo navegador.
+- O teste pós-deploy confirmou a falha: após reabrir o Arquimedes, o modelo recebia a pergunta atual sem o contexto conversacional anterior.
+- Conclusão: persistência do run e recuperação do histórico não garantiam, por si só, que o contexto recuperado chegasse ao orquestrador.
+
+### Correção
+- O backend agora recupera as conversas persistidas da mesma obra/usuário antes de iniciar um novo run.
+- O histórico persistido é mesclado com as mensagens recebidas da UI, usando sobreposição para não duplicar mensagens que a UI já tenha enviado.
+- O contexto final enviado ao orquestrador permanece limitado a 20 mensagens, preservando o contrato do endpoint.
+- A UI continua reidratando `agent.history`; o backend passa a ser a barreira de segurança contra perda de contexto.
+
+### Regressão
+- Adicionados testes para: nova pergunta com UI sem histórico e UI já contendo o histórico persistido.
+- Build Render da correção concluído com sucesso.
+- Nenhuma EAP, cronograma ou outra estrutura de obra foi alterada.
