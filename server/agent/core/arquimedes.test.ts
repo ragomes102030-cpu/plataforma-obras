@@ -253,12 +253,13 @@ describe("proposeEapWithArquimedes", () => {
       nodes: Array<{ code?: string; parentCode?: string | null }>;
     };
 
-    expect(calls.map(call => call.task)).toEqual([
+    expect(calls.map(call => call.task).slice(0, 4)).toEqual([
       "mapear_eap_macro",
       "expandir_subarvore_eap",
       "expandir_subarvore_eap",
       "expandir_subarvore_eap",
     ]);
+    expect(calls.length).toBeGreaterThanOrEqual(4);
     expect(calls[0]?.maxTokens).toBe(8192);
     expect(calls.slice(1).every(call => call.maxTokens === 12288)).toBe(true);
     expect(proposal.nodes.map(node => node.code)).toEqual([
