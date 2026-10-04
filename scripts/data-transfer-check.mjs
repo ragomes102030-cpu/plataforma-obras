@@ -16,17 +16,35 @@ if (!src || !dst) {
   throw new Error("[transfer] native migration requires DATABASE_URL and a PostgreSQL Supabase connection variable");
 }
 
-function cfg(raw) {
+function cfg(raw, { pooler = false } = {}) {
   const u = new URL(raw);
+  // Supabase direct database host can be IPv6-only from some Render runtimes.
+  // When the supplied URL targets this project directly, use the IPv4 Session
+  // Pooler without changing the password. The pooler user is project-scoped.
+  if (pooler && u.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
+    u.hostname = "aws-0-sa-east-1.pooler.supabase.com";
+    u.port = "5432";
+    if (u.username === "postgres") u.username = "postgres.tromrvfijbtihuilvnuk";
+  }
   const mode = (u.searchParams.get("sslmode") || "").toLowerCase();
   u.searchParams.delete("sslmode");
   u.searchParams.delete("ssl-mode");
   return { connectionString: u.toString(), ...(mode !== "disable" ? { ssl: { rejectUnauthorized: false } } : {}) };
 }
 const source = new Client(cfg(src));
-const target = new Client(cfg(dst));
+const target = new Client(cfg(dst, { pooler: true }));
 await source.connect();
-await target.connect();
+console.log("[transfer] source preflight: connected");
+try {
+  await target.connect();
+  await target.query("SELECT 1");
+  console.log("[transfer] target preflight: connected");
+} catch (error) {
+  console.error("[transfer] target preflight failed: " + (error?.message ?? String(error)));
+  console.error("[transfer] no target data was changed");
+  await source.end();
+  throw new Error("[transfer] Supabase destination is unreachable; migration aborted before TRUNCATE");
+}
 
 const q = (c, sql, params) => c.query(sql, params);
 const quote = (name) => '"' + name.replaceAll('"', '""') + '"';
@@ -79,7 +97,7 @@ while (pending.size) {
 }
 
 console.log("[transfer] native PostgreSQL migration");
-console.log("[transfer] destination variable: " + dstName);
+console.log("[transfer] destination variable: " + dstName + " (IPv4 Session Pooler fallback enabled)");
 console.log("[transfer] Arquimedes tables: " + APP_TABLES.length);
 console.log("[transfer] order: " + order.join(", "));
 
