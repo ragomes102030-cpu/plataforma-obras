@@ -88,7 +88,6 @@ describe("validateAndNormalizeEapProposal", () => {
       }),
     ]));
   });
-  });
 });
 
 describe("validateEap", () => {
