@@ -1185,7 +1185,7 @@ export const appRouter = router({
             .set({
               code: input.code,
               name: input.name,
-              nodeType: input.nodeType,
+              nodeType: input.nodeType as "grupo" | "pacote" | "entrega",
               unit: input.unit || null,
               plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
               ...(input.decompositionBasis !== undefined && { decompositionBasis: input.decompositionBasis }), ...(input.description !== undefined && { description: input.description }), ...(input.inclusions !== undefined && { inclusions: input.inclusions }), ...(input.exclusions !== undefined && { exclusions: input.exclusions }), ...(input.location !== undefined && { location: input.location }), ...(input.responsible !== undefined && { responsible: input.responsible }), ...(input.acceptanceCriteria !== undefined && { acceptanceCriteria: input.acceptanceCriteria }), ...(input.scopeStatus !== undefined && { scopeStatus: input.scopeStatus }),
