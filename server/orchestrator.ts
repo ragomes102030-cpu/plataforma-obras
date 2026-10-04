@@ -953,7 +953,7 @@ export async function runProjectOrchestrator(
           }
 
           const refs = Array.isArray(rawArgs.refs)
-            ? rawArgs.refs.filter((value): value is string => typeof value === "string" && value.trim()).slice(0, 20)
+            ? rawArgs.refs.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).slice(0, 20)
             : [];
           const search = typeof rawArgs.search === "string" ? rawArgs.search.trim().toLowerCase() : "";
           const parentCode = typeof rawArgs.parentCode === "string" ? rawArgs.parentCode.trim().toLowerCase() : "";
