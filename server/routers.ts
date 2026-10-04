@@ -1609,7 +1609,7 @@ export const appRouter = router({
       const db=await getDb(); if(!db) return {valid:true,issues:[],summary:{errors:0,warnings:0,costErrors:0}};
       await assertAccessibleProject(db,input.projectId,ctx.user.id); const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).orderBy(wbsNodes.sortOrder,wbsNodes.id);
       const result=validateEap(nodes); const errors=result.issues.filter(i=>i.severity==="error").length; const warnings=result.issues.filter(i=>i.severity==="warning").length;
-      return {...result,summary:{errors,warnings,costErrors:0}};
+      return {...result,summary:{nodes:nodes.length,leaves:nodes.filter(n=>!nodes.some(child=>child.parentId===n.id)).length,errors,warnings,costErrors:0}};
     }),
     eapArquimedesReview: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{
       const db=await getDb(); if(!db) return {proposal:null,createdAt:null,mode:"analisar",resolutionCycle:null};
@@ -1643,9 +1643,13 @@ export const appRouter = router({
       if(!state) await db.insert(agentProjectStates).values({projectId:input.projectId,stage:"EAP_REVISAO"}); else await db.update(agentProjectStates).set({stage:"EAP_REVISAO",updatedAt:new Date()}).where(eq(agentProjectStates.projectId,input.projectId));
       return {stage:"EAP_REVISAO" as const};
     }),
-    generateEapFromCatalog: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.boolean().optional()})).mutation(async({ctx,input})=>{
+    generateEapFromCatalog: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.boolean().optional(),refazer:z.boolean().optional(),tipoDeObra:z.enum(["edificio","reforma","pavimentacao","saneamento","todos"]).optional()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
-      throw badRequest("A geração automática por catálogo foi retirada do fluxo seguro. Gere uma proposta pelo Arquimedes e aplique-a somente após revisão e confirmação.");
+      const existing=await db.select({id:wbsNodes.id}).from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).limit(1);
+      if(existing.length) throw badRequest("A estrutura-base só pode ser usada em obra sem EAP. Para corrigir uma EAP existente, gere uma proposta do Arquimedes e aplique-a como rascunho após revisão.");
+      await seedStarterPlan(db,input.projectId);
+      const count=await db.select({id:wbsNodes.id}).from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId));
+      return {semeadura:{nosCriados:count.length},message:"Estrutura-base criada como rascunho; ela ainda precisa ser revisada pelo engenheiro."};
     }),
   }),
   production: router({
