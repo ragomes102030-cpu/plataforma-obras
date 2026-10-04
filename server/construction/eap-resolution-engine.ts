@@ -145,8 +145,8 @@ export function buildEapResolutionPlan(
 
       group.issueCount += 1;
       group.evidence.push(issue.message);
+      for (const code of siblingCodes) if (!group.affectedCodes.includes(code)) group.affectedCodes.push(code);
       for (const node of siblingNodes) {
-        if (!group.affectedCodes.includes(node.code)) group.affectedCodes.push(node.code);
         if (!group.affectedNodeIds.includes(node.nodeId)) group.affectedNodeIds.push(node.nodeId);
       }
       continue;
