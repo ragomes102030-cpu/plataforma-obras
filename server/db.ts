@@ -29,6 +29,12 @@ export function runtimeDatabaseUrl() {
   const raw = supabaseUrl || process.env.DATABASE_URL;
   if (!raw) return undefined;
   const url = new URL(raw);
+
+  // Nunca exponha credenciais: registre somente a origem e o host para diagnosticar
+  // divergência entre Dashboard/Blueprint sem vazar segredos nos logs.
+  const source = supabaseUrl ? "supabase" : "legacy";
+  const maskedUser = url.username ? url.username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "<none>";
+  console.log(`[database] source=${source} host=${url.hostname} port=${url.port || "5432"} user=${maskedUser}`);
   if (process.env.USE_SUPABASE === "1" && url.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
     url.hostname = "aws-0-sa-east-1.pooler.supabase.com";
     url.port = "5432";
