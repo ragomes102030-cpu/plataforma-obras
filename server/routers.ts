@@ -3017,6 +3017,89 @@ export const appRouter = router({
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
         return { activities, dependencies, resources, baselines };
       }),
+    grade: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000" };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [activities, entries] = await Promise.all([
+          db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder),
+          db.select().from(productionEntries).where(eq(productionEntries.projectId, input.projectId)).orderBy(productionEntries.productionDate, productionEntries.id),
+        ]);
+        const linhas = activities.map(a => ({ codigo: a.wbsCode, atividade: a.name, unidade: a.unit ?? null, atividadeId: a.id }));
+        const idsPorCodigo = Object.fromEntries(linhas.map(l => [l.codigo, l.atividadeId]));
+        const grade: Record<string, Record<string, string>> = {};
+        const porAtividade: Record<string, string> = {};
+        for (const entry of entries) {
+          const day = new Date(entry.productionDate).toISOString().slice(0, 10);
+          grade[day] ??= {};
+          const key = String(entry.activityId);
+          grade[day][key] = (Number(grade[day][key] ?? 0) + Number(entry.quantity)).toFixed(3);
+          porAtividade[key] = (Number(porAtividade[key] ?? 0) + Number(entry.quantity)).toFixed(3);
+        }
+        const datas = Object.keys(grade).sort();
+        const totalGeral = entries.reduce((sum, entry) => sum + Number(entry.quantity), 0).toFixed(3);
+        return { linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral };
+      }),
+    criarAtividadeDaFolha: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), wbsNodeId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.wbsNodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        if (!node) throw notFound("Folha da EAP não encontrada.");
+        if (node.nodeType !== "entrega") throw badRequest("Somente uma folha da EAP pode virar atividade.");
+        const [existing] = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.wbsNodeId, input.wbsNodeId))).limit(1);
+        if (existing) return { id: existing.id, created: false as const };
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [created] = await db.insert(scheduleActivities).values({
+          projectId: input.projectId,
+          wbsNodeId: node.id,
+          wbsCode: node.code,
+          eapRef: node.code,
+          name: node.name,
+          phase: "Execução",
+          startOffset: 0,
+          durationDays: 1,
+          plannedQuantity: node.plannedQuantity,
+          unit: node.unit,
+          sortOrder: node.sortOrder * 1000 + node.id,
+          versionId: writable.id,
+        }).returning({ id: scheduleActivities.id });
+        return { id: created.id, created: true as const };
+      }),
+    atualizarAtividade: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        atividadeId: z.number().int().positive(),
+        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","quantidade","unidade"]),
+        valor: z.string().max(500),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.atividadeId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        const patch: Record<string, unknown> = {};
+        if (input.campo === "atividade") patch.name = input.valor.trim();
+        if (input.campo === "frente") patch.phase = input.valor.trim();
+        if (input.campo === "pavimento") patch.pavimento = input.valor.trim() || null;
+        if (input.campo === "duracao") patch.durationDays = Math.max(1, Math.round(Number(input.valor)));
+        if (input.campo === "quantidade") patch.plannedQuantity = input.valor.trim() ? Number(input.valor).toFixed(3) : null;
+        if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
+        if (input.campo === "inicio") {
+          const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+          const start = new Date(input.valor);
+          if (!project || Number.isNaN(start.getTime())) throw badRequest("Data de início inválida.");
+          patch.startOffset = Math.max(0, Math.floor((start.getTime() - project.plannedStart.getTime()) / 86400000));
+        }
+        await db.update(scheduleActivities).set(patch).where(eq(scheduleActivities.id, input.atividadeId));
+        await recomputeProjectProgress(db, input.projectId);
+        return { updated: true as const };
+      }),
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
       .query(async ({ ctx, input }) => {
