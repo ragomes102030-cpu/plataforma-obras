@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { ArquimedesEapProposal } from "./agent/core/types";
 import {
   projects,
   productionEntries,
@@ -1151,7 +1152,7 @@ export const appRouter = router({
           nodeType: z.enum(["grupo", "pacote", "entrega"]),
           unit: z.string().trim().max(32).optional(),
           plannedQuantity: z.number().int().min(0).optional(),
-          decompositionBasis: z.string().trim().max(40).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
+          decompositionBasis: z.enum(["project","deliverable","system","discipline","location","phase","component","other"]).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -1613,12 +1614,12 @@ export const appRouter = router({
       const db=await getDb(); if(!db) return {proposal:null,createdAt:null,mode:"analisar",resolutionCycle:null};
       await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const rows=await db.select().from(agentMemories).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed"))).orderBy(desc(agentMemories.updatedAt)).limit(1);
-      return {proposal:rows[0]?parseJsonValue(rows[0].valueJson):null,createdAt:rows[0]?.updatedAt??null,mode:"analisar",resolutionCycle:null};
+      return {proposal:rows[0]?(parseJsonValue(rows[0].valueJson) as ArquimedesEapProposal):null,createdAt:rows[0]?.updatedAt??null,mode:"analisar",resolutionCycle:null};
     }),
     analisarEapComArquimedes: protectedProcedure.input(z.object({projectId:z.number().int().positive(),mode:z.enum(["analisar","resolver_bloqueios"]).optional()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).orderBy(wbsNodes.sortOrder,wbsNodes.id);
-      const proposal={projectId:input.projectId,nodes:nodes.length?[]:[{operation:"create",code:"1",name:"Escopo da obra",nodeType:"grupo",parentCode:null,rationale:"Raiz única para receber o escopo informado da obra."}],basis:["Escopo cadastrado na obra","Regra de raiz única da EAP"],assumptions:[],missingInformation:nodes.length?[]:["Detalhar o escopo e as entregas da obra antes da aprovação final."],validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]};
+      const proposal: ArquimedesEapProposal={action:"propose_eap",nodes:nodes.length?[]:[{operation:"create",code:"1",name:"Escopo da obra",nodeType:"grupo",parentCode:null,rationale:"Raiz única para receber o escopo informado da obra."}],basis:["Escopo cadastrado na obra","Regra de raiz única da EAP"],assumptions:[],missingInformation:nodes.length?[]:["Detalhar o escopo e as entregas da obra antes da aprovação final."],validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]};
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
       await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis",confidence:"medium",status:"proposed"});
       return {proposal};
