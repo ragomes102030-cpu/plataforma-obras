@@ -53,7 +53,7 @@ function val(v){
   if(typeof v==="bigint") return v.toString();
   return v;
 }
-const headers={apikey:key,Authorization:"Bearer "+key,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"};
+const headers={"Content-Type":"application/json","x-transfer-token":key};
 let total=0;
 
 for(const table of order){
@@ -62,7 +62,7 @@ for(const table of order){
   const url=dst.replace(/\\/$/,"")+"/rest/v1/"+encodeURIComponent(table);
   for(let i=0;i<rows.length;i+=100){
     const body=rows.slice(i,i+100).map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[k,val(v)])));
-    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify(body)});
+    const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({table,rows:body})});
     if(!res.ok) throw new Error("[transfer] "+table+" HTTP "+res.status+" "+(await res.text()).slice(0,700));
   }
   total+=rows.length;
