@@ -54,6 +54,7 @@ describe("validateAndNormalizeEapProposal", () => {
     expect(result.validation?.valid).toBe(true);
     expect(result.nodes[0]?.nodeId).toBe(2);
     expect(result.nodes[0]?.code).toBe("1.1");
+  });
 
   it("reconcilia nodeId obsoleto de versão anterior pelo código EAP", () => {
     const current = [
