@@ -660,7 +660,7 @@ export function validateAndNormalizeEapProposal(
         continue;
       }
 
-      if (seenNodeIds.has(resolvedId) {
+      if (seenNodeIds.has(resolvedId)) {
         issues.push({
           code: "proposal_duplicate_node_operation",
           severity: "error",
