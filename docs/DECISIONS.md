@@ -172,3 +172,13 @@
 - **Regressão:** o fluxo obrigatório é enviar uma mensagem, receber a resposta, fechar a janela, reabrir e verificar a reapresentação da conversa.
 - **Data:** 03/10/2026.
 
+
+
+## Decisão 13: O backend é a última barreira do contexto conversacional
+
+- **Decisão:** O próximo `agent.chat` deve recuperar o histórico persistido da obra/usuário no backend antes de chamar o orquestrador.
+- **Motivo:** estado React, reidratação visual e persistência em `agent_runs` não podem ser tratados como garantia de que o LLM receberá o contexto anterior.
+- **Regra:** mensagens persistidas e mensagens recebidas da UI são mescladas por sobreposição; mensagens duplicadas não são reenviadas; o contexto final respeita o limite de 20 mensagens.
+- **Segurança:** esta recuperação é somente leitura e não aplica nenhuma proposta ou mutação na obra.
+- **Regressão:** deve existir cobertura para UI sem histórico e UI já reidratada.
+- **Data:** 04/10/2026.
