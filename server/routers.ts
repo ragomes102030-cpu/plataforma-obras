@@ -59,6 +59,8 @@ import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-sourc
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
+import { carregarCalendarioDaObra, localIso } from "./construction/calendario-obra";
+import { indexOf as calendarIndexOf } from "../shared/work-calendar";
 import {
   allowedSourcesFor,
   canTransitionFinding,
@@ -3298,35 +3300,21 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
-        const result = calculateDeterministicCpm(activities, dependencies);
-        if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
-        const calculatedAt = new Date();
-        const schedule = result.schedule;
-        const items = schedule.activities;
-        if (items.length) {
-          const ids = items.map(item => Number(item.id));
-          const critCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`), sql` `);
-          const esCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`), sql` `);
-          const efCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`), sql` `);
-          const lsCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`), sql` `);
-          const lfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`), sql` `);
-          const tfCase = sql.join(items.map(item => sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`), sql` `);
-          await db.transaction(async tx => {
-            await tx.execute(sql`
-              UPDATE schedule_activities
-              SET critical = CASE id ${critCase} END,
-                  earlyStart = CASE id ${esCase} END,
-                  earlyFinish = CASE id ${efCase} END,
-                  lateStart = CASE id ${lsCase} END,
-                  lateFinish = CASE id ${lfCase} END,
-                  totalFloat = CASE id ${tfCase} END,
-                  cpmCalculatedAt = ${calculatedAt}
-              WHERE projectId = ${input.projectId}
-                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
-          });
-        }
-        return { valid: true as const, projectDuration: result.schedule.projectDuration, criticalPath: result.schedule.criticalPath.map(Number), issues: [] as never[] };
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
+        const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
+        const calendarioObra = await carregarCalendarioDaObra(db,input.projectId,ano);
+        const enrichedActivities = activities.map(activity => ({
+          ...activity,
+          mustStartOnDay: activity.mustStartOn ? calendarIndexOf(calendarioObra.calendar, localIso(new Date(activity.mustStartOn))) : null,
+          finishNoLaterThanDay: activity.finishNoLaterThan ? calendarIndexOf(calendarioObra.calendar, localIso(new Date(activity.finishNoLaterThan))) : null,
+        }));
+        const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
+        const result = calculateDeterministicCpm(enrichedActivities, dependencies);
+        const calendario = { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano };
+        if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, calendario };
+        const calculatedAt=new Date(); const schedule=result.schedule; const items=schedule.activities;
+        if(items.length){const ids=items.map(item=>Number(item.id)); const critCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`),sql` `); const esCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`),sql` `); const efCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`),sql` `); const lsCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`),sql` `); const lfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`),sql` `); const tfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`),sql` `); await db.transaction(async tx=>{await tx.execute(sql`UPDATE schedule_activities SET critical=CASE id ${critCase} END, earlyStart=CASE id ${esCase} END, earlyFinish=CASE id ${efCase} END, lateStart=CASE id ${lsCase} END, lateFinish=CASE id ${lfCase} END, totalFloat=CASE id ${tfCase} END, cpmCalculatedAt=${calculatedAt} WHERE projectId=${input.projectId} AND id IN (${sql.join(ids.map(id=>sql`${id}`),sql`, `)})`);});}
+        return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario};
       }),
     createResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(180), resourceType: z.enum(["mao_de_obra", "equipamento", "material"]), unit: z.string().trim().min(1).max(32), capacityPerDay: z.number().positive().optional(), costPerDay: z.number().nonnegative().optional() }))
