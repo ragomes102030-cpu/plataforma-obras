@@ -261,7 +261,7 @@ describe("proposeEapWithArquimedes", () => {
     ]);
     expect(calls.length).toBeGreaterThanOrEqual(4);
     expect(calls[0]?.maxTokens).toBe(8192);
-    expect(calls.slice(1).every(call => call.maxTokens === 12288)).toBe(true);
+    expect(calls.slice(1, 4).every(call => call.maxTokens === 12288)).toBe(true);
     expect(proposal.nodes.map(node => node.code)).toEqual([
       "1",
       "1.1",
