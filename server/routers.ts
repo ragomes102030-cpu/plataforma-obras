@@ -21,6 +21,7 @@ import {
   wbsNodes,
   budgetVersions,
   budgetItems,
+  projectPlanVersions,
   priceCatalogs,
   priceItems,
   serviceCompositions,
@@ -3304,11 +3305,12 @@ export const appRouter = router({
         const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
+        const inicioCalendario = localIso(project?.plannedStart ?? new Date());
         const calendarioObra = await carregarCalendarioDaObra(db,input.projectId,ano);
         const enrichedActivities = activities.map(activity => ({
           ...activity,
-          mustStartOnDay: activity.mustStartOn ? calendarIndexOf(calendarioObra.calendar, localIso(new Date(activity.mustStartOn))) : null,
-          finishNoLaterThanDay: activity.finishNoLaterThan ? calendarIndexOf(calendarioObra.calendar, localIso(new Date(activity.finishNoLaterThan))) : null,
+          mustStartOnDay: activity.mustStartOn ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.mustStartOn))) : null,
+          finishNoLaterThanDay: activity.finishNoLaterThan ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.finishNoLaterThan))) : null,
         }));
         const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
         const result = calculateDeterministicCpm(enrichedActivities, dependencies);
