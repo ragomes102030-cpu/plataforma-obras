@@ -31,19 +31,33 @@ function cfg(raw, { pooler = false } = {}) {
   u.searchParams.delete("ssl-mode");
   return { connectionString: u.toString(), ...(mode !== "disable" ? { ssl: { rejectUnauthorized: false } } : {}) };
 }
+const ingestUrl = process.env.SUPABASE_INGEST_URL;
+const ingestKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const useHttp = Boolean(ingestUrl && ingestKey);
 const source = new Client(cfg(src));
-const target = new Client(cfg(dst, { pooler: true }));
+const target = useHttp ? null : new Client(cfg(dst, { pooler: true }));
 await source.connect();
 console.log("[transfer] source preflight: connected");
-try {
-  await target.connect();
-  await target.query("SELECT 1");
-  console.log("[transfer] target preflight: connected");
-} catch (error) {
-  console.error("[transfer] target preflight failed: " + (error?.message ?? String(error)));
-  console.error("[transfer] no target data was changed");
-  await source.end();
-  throw new Error("[transfer] Supabase destination is unreachable; migration aborted before TRUNCATE");
+if (useHttp) {
+  console.log("[transfer] destination: HTTPS migration bridge");
+  const probe = await fetch(ingestUrl, {
+    method:"POST",
+    headers:{"apikey":ingestKey,"Authorization":`Bearer ${ingestKey}`,"Content-Type":"application/json"},
+    body:JSON.stringify({op:"insert",table:"users",rows:[]})
+  });
+  if (!probe.ok) throw new Error("[transfer] HTTPS bridge preflight failed: HTTP " + probe.status);
+  console.log("[transfer] HTTPS bridge preflight: connected");
+} else {
+  try {
+    await target.connect();
+    await target.query("SELECT 1");
+    console.log("[transfer] target preflight: connected");
+  } catch (error) {
+    console.error("[transfer] target preflight failed: " + (error?.message ?? String(error)));
+    console.error("[transfer] no target data was changed");
+    await source.end();
+    throw new Error("[transfer] Supabase destination is unreachable; migration aborted before TRUNCATE");
+  }
 }
 
 const q = (c, sql, params) => c.query(sql, params);
@@ -97,13 +111,12 @@ while (pending.size) {
 }
 
 console.log("[transfer] native PostgreSQL migration");
-console.log("[transfer] destination variable: " + dstName + " (IPv4 Session Pooler fallback enabled)");
+console.log("[transfer] destination: " + (useHttp ? "HTTPS bridge" : dstName + " (IPv4 Session Pooler fallback enabled)"));
 console.log("[transfer] Arquimedes tables: " + APP_TABLES.length);
 console.log("[transfer] order: " + order.join(", "));
 
-await target.query("BEGIN");
 try {
-  await target.query("TRUNCATE " + APP_TABLES.map(t => "public." + quote(t)).join(", ") + " CASCADE");
+  if (!useHttp) await target.query("BEGIN");
 
   let total = 0;
   const deferredSelf = [];
@@ -131,10 +144,26 @@ try {
       placeholders.push("(" + vals.map(() => "$" + p++).join(", ") + ")");
       params.push(...vals);
     }
-    await target.query(
-      "INSERT INTO public." + quote(table) + " (" + columns.map(quote).join(", ") + ") VALUES " + placeholders.join(", "),
-      params
-    );
+    if (useHttp) {
+      const plainRows = rows.map(row => {
+        const out = {};
+        for (const column of columns) out[column] = selfColumns.has(column) ? null : row[column];
+        return out;
+      });
+      for (let i = 0; i < plainRows.length; i += 200) {
+        const response = await fetch(ingestUrl, {
+          method:"POST",
+          headers:{"apikey":ingestKey,"Authorization":`Bearer ${ingestKey}`,"Content-Type":"application/json"},
+          body:JSON.stringify({op:"insert",table,rows:plainRows.slice(i,i+200)})
+        });
+        if (!response.ok) throw new Error("[transfer] HTTPS insert failed for " + table + ": HTTP " + response.status + " " + await response.text());
+      }
+    } else {
+      await target.query(
+        "INSERT INTO public." + quote(table) + " (" + columns.map(quote).join(", ") + ") VALUES " + placeholders.join(", "),
+        params
+      );
+    }
     total += rows.length;
     console.log("[transfer] " + table + ": " + rows.length);
   }
@@ -151,20 +180,33 @@ try {
     for (const row of item.rows) {
       for (const column of new Set(selfFk.get(item.table))) {
         if (row[column] !== null) {
-          await target.query("UPDATE public." + quote(item.table) + " SET " + quote(column) + "=$1 WHERE " + quote(pk[0]) + "=$2", [row[column], row[pk[0]]]);
+          if (useHttp) {
+            const response = await fetch(ingestUrl, {
+              method:"POST",
+              headers:{"apikey":ingestKey,"Authorization":`Bearer ${ingestKey}`,"Content-Type":"application/json"},
+              body:JSON.stringify({op:"update",table:item.table,pk:pk[0],column,pkValue:row[pk[0]],value:row[column]})
+            });
+            if (!response.ok) throw new Error("[transfer] HTTPS self-reference update failed for " + item.table + ": HTTP " + response.status + " " + await response.text());
+          } else {
+            await target.query("UPDATE public." + quote(item.table) + " SET " + quote(column) + "=$1 WHERE " + quote(pk[0]) + "=$2", [row[column], row[pk[0]]]);
+          }
         }
       }
     }
   }
 
-  await target.query("COMMIT");
-  await target.query("ANALYZE");
+  if (!useHttp) {
+    await target.query("COMMIT");
+    await target.query("ANALYZE");
+    await target.end();
+  }
   await source.end();
-  await target.end();
   console.log("[transfer] COMPLETE total=" + total);
 } catch (error) {
-  await target.query("ROLLBACK");
+  if (!useHttp && target) {
+    await target.query("ROLLBACK");
+    await target.end();
+  }
   await source.end();
-  await target.end();
   throw error;
 }
