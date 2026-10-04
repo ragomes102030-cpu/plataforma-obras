@@ -28,6 +28,7 @@ import {
   activityResourceAllocations,
   scheduleBaselines,
   scheduleBaselineItems,
+  agentRuns,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
