@@ -169,7 +169,7 @@ export type OrchestratorResult = {
   provider?: string;
   iterations: number;
   audit: AuditEvent[];
-  readOnly: false;
+  readOnly: boolean;
   status: "respondido";
 };
 
@@ -957,7 +957,7 @@ export async function runProjectOrchestrator(
             : [];
           const search = typeof rawArgs.search === "string" ? rawArgs.search.trim().toLowerCase() : "";
           const parentCode = typeof rawArgs.parentCode === "string" ? rawArgs.parentCode.trim().toLowerCase() : "";
-          const leafOnly = rawArgs.leafOnly === true;
+          const leafOnly = rawArgs.leafOnly === true || rawArgs.leafOnly === "true";
           const limit = Math.min(Math.max(Number(rawArgs.limit ?? 20), 1), 30);
           const field = typeof rawArgs.field === "string" ? rawArgs.field : null;
           const fieldState = rawArgs.fieldState === "filled" || rawArgs.fieldState === "missing"
