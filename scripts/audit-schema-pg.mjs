@@ -21,7 +21,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-const MIGRATIONS_FOLDER = "drizzle";
+// Em produção com Supabase, a auditoria de schema não deve conectar no PostgreSQL legado durante o boot.\n// A validação do schema/data é executada separadamente pelo pipeline de banco.\nif (process.env.USE_SUPABASE === "1") {\n  console.log("[audit] USE_SUPABASE=1: auditoria de startup desativada; schema Supabase é validado separadamente.");\n  process.exit(0);\n}\n\nconst MIGRATIONS_FOLDER = "drizzle";
 const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
 
 export function runtimeDatabaseUrl() {
