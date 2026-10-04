@@ -744,7 +744,7 @@ async function loadStageGateEvidence(
     eapDictionaryStandardApproved: false,
     eapDictionaryCompliant: false,
     activitiesPlanned: activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
-    activitiesWithoutQuantity: activities.filter(activity => activity.quantity == null && activity.plannedQuantity == null).length,
+    activitiesWithoutQuantity: activities.filter(activity => activity.plannedQuantity == null).length,
   };
 }
 
@@ -1201,7 +1201,7 @@ export const appRouter = router({
           level: (parent?.level ?? 0) + 1,
           nodeType: input.nodeType,
           unit: input.unit || null,
-          plannedQuantity: input.plannedQuantity ?? null,
+          plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
           sortOrder: siblings.length,
           versionId: writable.id,
         }).returning({ id: wbsNodes.id });
