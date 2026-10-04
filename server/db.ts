@@ -19,9 +19,14 @@ let _db: ReturnType<typeof drizzle> | null = null;
  * vez de confiar que o driver adivinhou certo.
  */
 export function runtimeDatabaseUrl() {
-  const raw = process.env.USE_SUPABASE === "1"
-    ? (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL)
-    : process.env.DATABASE_URL;
+  // Se a conexão Supabase estiver configurada, ela sempre vence o DATABASE_URL legado.
+  // Isso evita que um segredo antigo do Render seja escolhido por engano em produção.
+  const supabaseUrl =
+    process.env.SUPABASE_DB_URL ||
+    process.env.SUPABASE_DATABASE_URL ||
+    process.env.DATABASE_URL_SUPABASE ||
+    process.env.SUPA_DB_URL;
+  const raw = supabaseUrl || process.env.DATABASE_URL;
   if (!raw) return undefined;
   const url = new URL(raw);
   if (process.env.USE_SUPABASE === "1" && url.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
