@@ -114,18 +114,9 @@ export function AdminLlmSettings() {
       setError("Ative pelo menos um provedor.");
       return;
     }
-    void (async () => {
-      try {
-        for (const provider of enabled) {
-          const { label: _label, badge: _badge, ...payload } = provider;
-          await saveMutation.mutateAsync(payload);
-        }
-        setStatus(`Rotação salva: ${enabled.length} provedor(es).`);
-        await settingsQuery.refetch();
-      } catch {
-        // O onError da mutation já apresenta a mensagem ao usuário.
-      }
-    })();
+    saveMutation.mutate({
+      providers: enabled.map(({ label: _label, badge: _badge, ...provider }) => provider),
+    });
   };
 
   return (
