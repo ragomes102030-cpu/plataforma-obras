@@ -42,28 +42,24 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   const [unidade, setUnidade] = useState("");
   const [observacao, setObservacao] = useState("");
 
-  const grade = trpc.planning.listarLancamentos.useQuery({ projectId: projetoId });
+  const grade = trpc.production.entries.useQuery({ projectId: projetoId });
+  const frentes = trpc.production.fronts.useQuery({ projectId: projetoId });
+  const equipes = trpc.production.teams.useQuery({ projectId: projetoId });
+  const unidades = trpc.production.units.useQuery({ projectId: projetoId });
   const gradeCrono = trpc.planning.grade.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
   const utils = trpc.useUtils();
 
-  const registrar = trpc.planning.registrar.useMutation({
+  const registrar = trpc.production.createEntry.useMutation({
     onSuccess: async () => {
-      await utils.planning.listarLancamentos.invalidate({ projectId: projetoId });
-      await utils.planning.grade.invalidate({ projectId: projetoId });
+      await utils.production.entries.invalidate({ projectId: projetoId });
+      await utils.planning.list.invalidate({ projectId: projetoId });
       setQuantidade("");
       setObservacao("");
     },
   });
-  const apagar = trpc.planning.apagarLancamento.useMutation({
-    onSuccess: async () => {
-      await utils.planning.listarLancamentos.invalidate({ projectId: projetoId });
-      await utils.planning.grade.invalidate({ projectId: projetoId });
-    },
-  });
-
   // As linhas são as atividades do cronograma, na ordem do código. Vêm do
   // `grade`, que já aplicou o motor e sabe a ordem.
   const linhas: Linha[] = useMemo(() => {
@@ -76,11 +72,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
     }));
   }, [gradeCrono.data]);
 
-  const erro = registrar.isError
-    ? registrar.error.message
-    : apagar.isError
-      ? apagar.error.message
-      : null;
+  const erro = registrar.isError ? registrar.error.message : null;
 
   if (linhas.length === 0) {
     return (
@@ -95,9 +87,17 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
     );
   }
 
-  const grade_: Record<string, Record<string, string>> = grade.data?.grade ?? {};
-  const datas: string[] = grade.data?.datas ?? [];
-  const porAtividade: Record<string, string> = grade.data?.porAtividade ?? {};
+  const lancamentos = grade.data ?? [];
+  const datas = Array.from(new Set(lancamentos.map(l => new Date(l.productionDate).toISOString().slice(0, 10)))).sort();
+  const grade_: Record<string, Record<string, string>> = {};
+  const porAtividade: Record<string, string> = {};
+  for (const l of lancamentos) {
+    const dia = new Date(l.productionDate).toISOString().slice(0, 10);
+    grade_[dia] ??= {};
+    grade_[dia][String(l.activityId)] = String((Number(grade_[dia][String(l.activityId)] ?? 0) + Number(l.quantity)).toFixed(3));
+    porAtividade[String(l.activityId)] = String((Number(porAtividade[String(l.activityId)] ?? 0) + Number(l.quantity)).toFixed(3));
+  }
+  const totalGeral = lancamentos.reduce((sum, l) => sum + Number(l.quantity), 0).toFixed(3);
 
   return (
     <div className="eap">
@@ -113,7 +113,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           <p>
             {linhas.length} atividades · {datas.length}{" "}
             {datas.length === 1 ? "dia lançado" : "dias lançados"} · total{" "}
-            {grade.data?.totalGeral ?? "0.000"}
+            {totalGeral}
           </p>
         </div>
       </div>
@@ -266,17 +266,24 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           <button
             type="button"
             className="eap-btn"
-            disabled={!selecionada || registrar.isPending || !quantidade.trim()}
+            disabled={!selecionada || registrar.isPending || !quantidade.trim() || !frentes.data?.length || !equipes.data?.length || !unidades.data?.length}
             onClick={() => {
               if (!selecionada) return;
+              const frontId = frentes.data?.[0]?.id;
+              const teamId = equipes.data?.[0]?.id;
+              const unitId = unidades.data?.find(u => u.name === (unidade || ""))?.id ?? unidades.data?.[0]?.id;
+              if (!frontId || !teamId || !unitId) return;
               registrar.mutate({
                 projectId: projetoId,
-                atividadeId: selecionada,
-                data,
-                quantidade,
-                unidade: unidade || "un",
-                observacao: observacao.trim() || undefined,
-                confirmar: true,
+                frontId,
+                teamId,
+                unitId,
+                activityId: selecionada,
+                productionDate: data,
+                quantity: Number(quantidade),
+                measurementUnit: unidade || "un",
+                notes: observacao.trim() || undefined,
+                status: "confirmada",
               });
             }}
           >
