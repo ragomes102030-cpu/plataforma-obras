@@ -182,3 +182,11 @@
 - **Segurança:** esta recuperação é somente leitura e não aplica nenhuma proposta ou mutação na obra.
 - **Regressão:** deve existir cobertura para UI sem histórico e UI já reidratada.
 - **Data:** 04/10/2026.
+
+
+## Decisão 14 — Contrato único entre UI, AppRouter e fluxo seguro da EAP
+- Componentes antigos não devem criar aliases silenciosos nem executar mutações implícitas.
+- Nova obra nasce em `EAP_PROPOSTA`, com versão de planejamento `draft`; estrutura-base só é criada por ação explícita.
+- Propostas EAP permanecem artefatos revisáveis e sua aplicação exige confirmação explícita.
+- Mudanças no contrato MCP/AppRouter devem incluir teste de regressão e validação do CI antes do deploy.
+- O fechamento desta rodada é considerado válido para avançar para a próxima etapa de teste, mas não altera a Aurora durante o teste integral.
