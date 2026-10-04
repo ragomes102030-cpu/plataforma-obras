@@ -24,7 +24,7 @@ function node(overrides: Partial<EapScopeNode> = {}): EapScopeNode {
     decompositionBasis: "project",
     ...overrides,
   };
-  return value;
+  return { ...value, level: overrides.level ?? value.code.split(".").length };
 }
 
 describe("validateEapForBaseline", () => {
