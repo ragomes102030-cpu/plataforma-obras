@@ -3,7 +3,7 @@ services:
     name: plataforma-obras-api
     runtime: node
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm build
     # O schema/dados do banco sao gerenciados separadamente no Supabase.
     # O boot da API nao deve bloquear tentando migrar/auditar o PostgreSQL antigo.
     startCommand: pnpm start
