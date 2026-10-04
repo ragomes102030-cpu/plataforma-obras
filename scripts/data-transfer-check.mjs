@@ -59,7 +59,7 @@ let total=0;
 for(const table of order){
   const rows=(await db.query('SELECT * FROM "public"."'+table.replace(/"/g,'""')+'"')).rows;
   if(!rows.length){console.log("[transfer] "+table+": 0");continue;}
-  const url=dst.replace(/\\/$/,"")+"/functions/v1/arquimedes-transfer";
+  const base=dst.endsWith("/")?dst.slice(0,-1):dst; const url=base+"/functions/v1/arquimedes-transfer";
   for(let i=0;i<rows.length;i+=100){
     const body=rows.slice(i,i+100).map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[k,val(v)])));
     const res=await fetch(url,{method:"POST",headers,body:JSON.stringify({table,rows:body})});
