@@ -25,7 +25,7 @@ function node(overrides: Partial<EapEvidenceNode> = {}): EapEvidenceNode {
   };
   return {
     ...value,
-    level: overrides.level ?? value.code.split(".").length,
+    level: overrides.level ?? String(value.code).split(".").length,
   };
 }
 
