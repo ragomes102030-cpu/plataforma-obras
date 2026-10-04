@@ -1047,7 +1047,6 @@ export const appRouter = router({
       setEnabled: adminProcedure.input(z.object({capabilityId:z.string().min(1),enabled:z.boolean()})).mutation(async({input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({enabled:input.enabled,status:input.enabled?"installed":"available",updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name,enabled:row.enabled};}),
       uninstall: adminProcedure.input(z.object({capabilityId:z.string().min(1)})).mutation(async({input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({enabled:false,status:"available",updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name};}),
     }),
-    }),
   }),
   projects: router({
     list: protectedProcedure.query(async ({ ctx }) => {
