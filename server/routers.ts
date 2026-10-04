@@ -363,7 +363,7 @@ async function seedSolarAcaciasPlan(
     return id;
   };
   const addNode = async (parentId: number | null, code: string, name: string, level: number, nodeType: NodeType, unit?: string, plannedQuantity?: number) => {
-    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity ?? null, sortOrder: order++ }).returning({ id: wbsNodes.id });
+    const [created] = await db.insert(wbsNodes).values({ projectId, parentId, code, name, level, nodeType, unit: unit ?? null, plannedQuantity: plannedQuantity == null ? null : plannedQuantity.toFixed(3), sortOrder: order++ }).returning({ id: wbsNodes.id });
     nodeIdsByCode.set(code, created.id);
     return created.id;
   };
@@ -842,7 +842,7 @@ async function persistPhase7Plan(
             level: node.level,
             nodeType: node.nodeType,
             unit: node.unit,
-            plannedQuantity: node.plannedQuantity,
+            plannedQuantity: node.plannedQuantity == null ? null : Number(node.plannedQuantity).toFixed(3),
             sortOrder: node.sortOrder,
           })
           .where(eq(wbsNodes.id, existingByCode[0].id));
@@ -1152,7 +1152,7 @@ export const appRouter = router({
               name: input.name,
               nodeType: input.nodeType,
               unit: input.unit || null,
-              plannedQuantity: input.plannedQuantity ?? null,
+              plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
             })
             .where(eq(wbsNodes.id, input.nodeId));
           await tx
@@ -3159,10 +3159,8 @@ export const appRouter = router({
             continue;
           }
           const parent = node.parentId != null ? byId.get(node.parentId) : undefined;
-          const durationDays =
-            node.plannedQuantity && node.plannedQuantity > 0
-              ? Math.max(1, node.plannedQuantity)
-              : 1;
+          const plannedQuantity = Number(node.plannedQuantity ?? 0);
+          const durationDays = plannedQuantity > 0 ? Math.max(1, Math.ceil(plannedQuantity)) : 1;
           const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
           await db.insert(scheduleActivities).values({
             projectId: input.projectId,
