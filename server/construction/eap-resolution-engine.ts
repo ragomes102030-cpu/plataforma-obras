@@ -109,22 +109,19 @@ export function buildEapResolutionPlan(
       issue.code === "eap_scope_overlap_evidence" ||
       /sobreposição|responsabilidades duplicadas/i.test(issue.message);
 
-    if (overlap && issueNodes.length >= 2) {
-      const lastCode = codes.at(-1);
-      const lastNode = lastCode ? byCode.get(lastCode) : undefined;
-      const siblingNodes =
-        lastNode &&
-        issueNodes.length >= 3 &&
-        issueNodes.slice(0, -1).every(node => node.parentCode === lastNode.code)
-          ? issueNodes.slice(0, -1)
-          : issueNodes;
-
-      const parentCode =
-        lastNode && siblingNodes.every(node => node.parentCode === lastNode.code)
-          ? lastNode.code
-          : siblingNodes[0]?.parentCode ?? null;
-
-      const affectedCodes = siblingNodes.map(node => node.code).sort();
+    if (overlap && codes.length >= 2) {
+      const explicitParent = issue.message.match(/\bde\s+(\d+(?:\.\d+)*)\b/i)?.[1] ?? null;
+      const candidateCodes = Array.from(new Set(codes));
+      const inferredParent = explicitParent ?? (() => {
+        const parents = candidateCodes.map(code => code.includes(".") ? code.slice(0, code.lastIndexOf(".")) : null).filter(Boolean);
+        return parents[0] ?? null;
+      })();
+      const siblingCodes = candidateCodes.filter(code =>
+        inferredParent ? code !== inferredParent && code.startsWith(`${inferredParent}.`) && code.split(".").length === inferredParent.split(".").length + 1 : code.includes(".")
+      );
+      const parentCode = inferredParent;
+      const siblingNodes = siblingCodes.map(code => byCode.get(code)).filter((node): node is EapResolutionNode => Boolean(node));
+      const affectedCodes = siblingCodes.sort();
       const key = `scope_overlap:${parentCode ?? "root"}`;
 
       let group = groups.get(key);
