@@ -1,0 +1,11 @@
+import { Client } from "pg";
+const src = process.env["DATA"+"BASE_URL"];
+const dst = process.env["SUPA"+"BASE_URL"];
+const key = process.env["SUPA"+"_KEY"];
+if (process.env["RUN"+"_TRANSFER"] !== "1") process.exit(0);
+const c = new Client({ connectionString: src, ssl: { rejectUnauthorized: false } });
+await c.connect();
+const { rows } = await c.query("select current_database() as db, current_user as usr");
+console.log("[transfer] source connected", rows[0]);
+await c.end();
+console.log("[transfer] destination configured", Boolean(dst && key));
