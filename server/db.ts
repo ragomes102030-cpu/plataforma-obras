@@ -35,7 +35,10 @@ export function runtimeDatabaseUrl() {
   const source = supabaseUrl ? "supabase" : "legacy";
   const maskedUser = url.username ? url.username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "<none>";
   console.log(`[database] source=${source} host=${url.hostname} port=${url.port || "5432"} user=${maskedUser}`);
-  if (process.env.USE_SUPABASE === "1" && url.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
+  if (process.env.USE_SUPABASE === "1" && supabaseUrl) {
+    // A conexão de produção usa o pooler da região. O host vindo do segredo
+    // pode estar desatualizado ou apontar para o legado; credenciais e banco
+    // continuam vindo da URL configurada no Render.
     url.hostname = "aws-0-sa-east-1.pooler.supabase.com";
     url.port = "5432";
     if (url.username === "postgres") url.username = "postgres.tromrvfijbtihuilvnuk";
