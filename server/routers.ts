@@ -3013,7 +3013,7 @@ export const appRouter = router({
           imported: parsed.records.length,
           skipped: parsed.skipped,
           referenceHint: parsed.referenceHint,
-          aviso,
+          aviso: planilha === "insumos" ? "Tabela de Insumos importada corretamente; ela não contém serviços e, portanto, não gera EAP." : null,
         };
       }),
     searchPrices: protectedProcedure
