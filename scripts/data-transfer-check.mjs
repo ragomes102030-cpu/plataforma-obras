@@ -18,7 +18,7 @@ await db.connect();
 
 const t = await db.query(`
  SELECT table_name FROM information_schema.tables
- WHERE table_schema=current_schema() AND table_type='BASE TABLE'
+ WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type='BASE TABLE'
    AND table_name <> '__drizzle_migrations' AND table_name NOT LIKE '__%'
  ORDER BY table_name
 `);
