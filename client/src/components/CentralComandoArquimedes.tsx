@@ -295,7 +295,7 @@ export function CentralComandoArquimedes() {
           {activeTab === "security" && (
             <SecurityTab
               permissions={snapshot.data?.permissions ?? []}
-              policy={snapshot.data?.policy}
+              policy={snapshot.data?.policy ?? undefined}
             />
           )}
 
