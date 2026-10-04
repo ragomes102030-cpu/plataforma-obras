@@ -58,23 +58,23 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [modoRevisao, setModoRevisao] = useState(false);
 
   const utils = trpc.useUtils();
-  const dicionarioPadrao = trpc.projects.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
-  const decidirDicionario = trpc.projects.decideEapDictionaryStandard.useMutation({
+  const dicionarioPadrao = trpc.eap.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const decidirDicionario = trpc.eap.decideEapDictionaryStandard.useMutation({
     onSuccess: async () => {
       await dicionarioPadrao.refetch();
-      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
       await revisaoArquimedes.refetch();
     },
   });
-  const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const revisaoArquimedes = trpc.eap.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
 
   const criarNo = trpc.projects.createWbsNode.useMutation({
-    onSuccess: async () => { setEditor(null); await recarregar(); await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId }); },
+    onSuccess: async () => { setEditor(null); await recarregar(); await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId }); },
   });
 
   const editarNo = trpc.projects.updateWbsNode.useMutation({
-    onSuccess: async () => { setEditor(null); await recarregar(); await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId }); },
+    onSuccess: async () => { setEditor(null); await recarregar(); await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId }); },
   });
 
   /**
@@ -112,17 +112,17 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     onSuccess: async () => {
       await coordenador.refetch();
       await versoes.refetch();
-      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
     },
   });
-  const enviarEapParaRevisao = trpc.projects.enviarEapParaRevisao.useMutation({
+  const enviarEapParaRevisao = trpc.eap.enviarEapParaRevisao.useMutation({
     onSuccess: async () => {
       await coordenador.refetch();
       await versoes.refetch();
-      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
     },
   });
-  const validacao = trpc.projects.validateWbsStructure.useQuery(
+  const validacao = trpc.eap.validateWbsStructure.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
@@ -167,7 +167,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
    * Apaga a árvore, as atividades e a versão de orçamento que o seeder criou —
    * e nada mais: uma versão de orçamento criada à mão não é tocada.
    */
-  const refazer = trpc.projects.generateEapFromCatalog.useMutation({
+  const refazer = trpc.eap.generateEapFromCatalog.useMutation({
     onSuccess: async () => {
       await recarregar();
       await utils.planning.grade.invalidate({ projectId: projetoId });
@@ -313,10 +313,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const alertasEap = issuesUnicos.filter(issue => issue.severity === "warning" && !issue.code.startsWith("wbs_")).length;
 
 
-  const aplicarPropostaEap = trpc.projects.aplicarPropostaEap.useMutation({
+  const aplicarPropostaEap = trpc.eap.aplicarPropostaEap.useMutation({
     onSuccess: async () => {
       await recarregar();
-      await utils.projects.validateWbsStructure.invalidate({ projectId: projetoId });
+      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
       await coordenador.refetch();
       await versoes.refetch();
       await revisaoArquimedes.refetch();
@@ -1368,19 +1368,19 @@ function EditorEapPanel({
 /** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
 function EapVazia({ projetoId }: { projetoId: number }) {
   const utils = trpc.useUtils();
-  const revisaoArquimedes = trpc.projects.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
-  const analisar = trpc.projects.analisarEapComArquimedes.useMutation({
+  const revisaoArquimedes = trpc.eap.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
+  const analisar = trpc.eap.analisarEapComArquimedes.useMutation({
     onSuccess: async () => {
       await revisaoArquimedes.refetch();
     },
   });
-  const aplicarProposta = trpc.projects.aplicarPropostaEap.useMutation({
+  const aplicarProposta = trpc.eap.aplicarPropostaEap.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
   const criarRaiz = trpc.projects.createWbsNode.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
-  const gerar = trpc.projects.generateEapFromCatalog.useMutation({
+  const gerar = trpc.eap.generateEapFromCatalog.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
   const [tipo, setTipo] = useState<"edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos">("edificio");
