@@ -18,6 +18,20 @@ let _db: ReturnType<typeof drizzle> | null = null;
  * Por isso o `ssl` volta explícito: o teste consegue afirmar o comportamento em
  * vez de confiar que o driver adivinhou certo.
  */
+export function runtimeDatabaseUrl() {
+  const raw = process.env.USE_SUPABASE === "1"
+    ? (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL)
+    : process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  const url = new URL(raw);
+  if (process.env.USE_SUPABASE === "1" && url.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
+    url.hostname = "aws-0-sa-east-1.pooler.supabase.com";
+    url.port = "5432";
+    if (url.username === "postgres") url.username = "postgres.tromrvfijbtihuilvnuk";
+  }
+  return url.toString();
+}
+
 export function normalizeDatabaseConnection(databaseUrl: string) {
   const url = new URL(databaseUrl);
   const sslMode = (
@@ -40,9 +54,10 @@ export function normalizeDatabaseConnection(databaseUrl: string) {
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+  const databaseUrl = runtimeDatabaseUrl();
+  if (!_db && databaseUrl) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle(databaseUrl);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
