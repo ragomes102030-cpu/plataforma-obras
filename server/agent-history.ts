@@ -64,3 +64,31 @@ export function mergeAgentConversations(
   }
   return messages;
 }
+
+export function mergePersistedWithIncoming(
+  persisted: PersistedAgentMessage[],
+  incoming: PersistedAgentMessage[],
+  maxMessages = 20,
+): PersistedAgentMessage[] {
+  if (incoming.length === 0) return persisted.slice(-maxMessages);
+  if (persisted.length === 0) return incoming.slice(-maxMessages);
+
+  const maxOverlap = Math.min(persisted.length, incoming.length);
+  let overlap = 0;
+  for (let size = maxOverlap; size > 0; size -= 1) {
+    const persistedTail = persisted.slice(-size);
+    const incomingHead = incoming.slice(0, size);
+    if (
+      persistedTail.every(
+        (message, index) =>
+          message.role === incomingHead[index]?.role &&
+          message.content === incomingHead[index]?.content,
+      )
+    ) {
+      overlap = size;
+      break;
+    }
+  }
+
+  return [...persisted, ...incoming.slice(overlap)].slice(-maxMessages);
+}
