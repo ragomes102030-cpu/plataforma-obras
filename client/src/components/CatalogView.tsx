@@ -44,7 +44,7 @@ export function CatalogView() {
   const [seinfraPeriod, setSeinfraPeriod] = useState("");
   const [seinfraUf, setSeinfraUf] = useState("CE");
   const [seinfraName, setSeinfraName] = useState("");
-  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; skipped: number; referenceHint: string | null; aviso: string | null } | null>(null);
+  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; skipped: number; referenceHint: string | null; aviso?: string | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [acQuery, setAcQuery] = useState("");
   const [acOpen, setAcOpen] = useState(false);
