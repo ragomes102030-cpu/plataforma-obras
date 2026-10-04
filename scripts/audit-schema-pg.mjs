@@ -24,6 +24,20 @@ import { join } from "node:path";
 const MIGRATIONS_FOLDER = "drizzle";
 const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
 
+export function runtimeDatabaseUrl() {
+  const raw = process.env.USE_SUPABASE === "1"
+    ? (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL)
+    : process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  const u = new URL(raw);
+  if (process.env.USE_SUPABASE === "1" && u.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
+    u.hostname = "aws-0-sa-east-1.pooler.supabase.com";
+    u.port = "5432";
+    if (u.username === "postgres") u.username = "postgres.tromrvfijbtihuilvnuk";
+  }
+  return u.toString();
+}
+
 /** Os arquivos de migration, na ordem do journal. */
 export function migrationsDoJournal(pasta = MIGRATIONS_FOLDER) {
   const caminho = join(pasta, "meta", "_journal.json");
