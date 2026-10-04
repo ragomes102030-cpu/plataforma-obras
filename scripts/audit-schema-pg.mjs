@@ -68,7 +68,7 @@ export function colunasPorTabela(pasta = MIGRATIONS_FOLDER) {
     if (!existsSync(caminho)) continue;
     const sql = readFileSync(caminho, "utf-8");
 
-    for (const m of sql.matchAll(/CREATE TABLE "([^"]+)" \\(([\\s\\S]*?)\\);/g)) {
+    for (const m of sql.matchAll(/CREATE TABLE "([^"]+)" \(([\s\S]*?)\);/g)) {
       const [, tabela, corpo] = m;
       const cols = out.get(tabela) ?? new Set();
       for (const c of corpo.matchAll(/^\s*"([^"]+)"/gm)) cols.add(c[1]);
