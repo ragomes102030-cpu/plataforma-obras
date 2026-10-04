@@ -117,7 +117,7 @@ export function buildEapResolutionPlan(
         return parents[0] ?? null;
       })();
       const siblingCodes = candidateCodes.filter(code =>
-        inferredParent ? code !== inferredParent && code.startsWith(`${inferredParent}.`) && code.split(".").length === inferredParent.split(".").length + 1 : code.includes(".")
+        inferredParent ? code !== inferredParent && code.startsWith(`${inferredParent}.`) : code.includes(".")
       );
       const parentCode = inferredParent;
       const siblingNodes = siblingCodes.map(code => byCode.get(code)).filter((node): node is EapResolutionNode => Boolean(node));
