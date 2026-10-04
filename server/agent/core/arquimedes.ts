@@ -393,6 +393,12 @@ async function selfHealGeneratedEap(
     );
     const repairedRaw = await provider.complete(repairRequest);
     const repaired = parseEapProposal(repairedRaw);
+    const originalRootCodes = new Set(proposal.nodes.filter(node => node.parentCode == null).map(node => node.code));
+    const repairedRootCodes = new Set(repaired.nodes.filter(node => node.parentCode == null).map(node => node.code));
+    if (originalRootCodes.size > 1 && [...originalRootCodes].some(code => !repairedRootCodes.has(code))) {
+      history[history.length - 1]!.corrected = false;
+      continue;
+    }
     const repairedValidation = validateGeneratedEap(repaired, context.projectId);
     const repairedCodes = new Set(
       repairedValidation.issues.map(issue => issue.code)
