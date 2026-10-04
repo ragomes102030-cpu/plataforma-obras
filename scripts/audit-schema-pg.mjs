@@ -21,7 +21,14 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-// Em produção com Supabase, a auditoria de schema não deve conectar no PostgreSQL legado durante o boot.\n// A validação do schema/data é executada separadamente pelo pipeline de banco.\nif (process.env.USE_SUPABASE === "1") {\n  console.log("[audit] USE_SUPABASE=1: auditoria de startup desativada; schema Supabase é validado separadamente.");\n  process.exit(0);\n}\n\nconst MIGRATIONS_FOLDER = "drizzle";
+// Em produção com Supabase, a auditoria de schema não deve conectar no PostgreSQL legado durante o boot.
+// A validação do schema/data é executada separadamente pelo pipeline de banco.
+if (process.env.USE_SUPABASE === "1") {
+  console.log("[audit] USE_SUPABASE=1: auditoria de startup desativada; schema Supabase é validado separadamente.");
+  process.exit(0);
+}
+
+const MIGRATIONS_FOLDER = "drizzle";
 const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
 
 export function runtimeDatabaseUrl() {
@@ -61,7 +68,8 @@ export function colunasPorTabela(pasta = MIGRATIONS_FOLDER) {
     if (!existsSync(caminho)) continue;
     const sql = readFileSync(caminho, "utf-8");
 
-    for (const m of sql.matchAll(/CREATE TABLE "([^"]+)" \(([\s\S]*?)\n\);/g)) {
+    for (const m of sql.matchAll(/CREATE TABLE "([^"]+)" \(([\s\S]*?)
+\);/g)) {
       const [, tabela, corpo] = m;
       const cols = out.get(tabela) ?? new Set();
       for (const c of corpo.matchAll(/^\s*"([^"]+)"/gm)) cols.add(c[1]);
