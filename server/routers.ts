@@ -741,6 +741,10 @@ async function loadStageGateEvidence(
     cpmValid: cpm.valid,
     blockerCount,
     costCoverageValid: costCoverage.valid,
+    eapDictionaryStandardApproved: false,
+    eapDictionaryCompliant: false,
+    activitiesPlanned: activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
+    activitiesWithoutQuantity: activities.filter(activity => activity.quantity == null && activity.plannedQuantity == null).length,
   };
 }
 
@@ -860,7 +864,7 @@ async function persistPhase7Plan(
             level: node.level,
             nodeType: node.nodeType,
             unit: node.unit,
-            plannedQuantity: node.plannedQuantity,
+            plannedQuantity: node.plannedQuantity == null ? null : Number(node.plannedQuantity).toFixed(3),
             sortOrder: node.sortOrder,
             versionId,
           })
