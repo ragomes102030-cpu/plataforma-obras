@@ -3123,26 +3123,28 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000" };
+        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [activities, entries] = await Promise.all([
-          db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder),
-          db.select().from(productionEntries).where(eq(productionEntries.projectId, input.projectId)).orderBy(productionEntries.productionDate, productionEntries.id),
+        const [project, activities, entries] = await Promise.all([
+          db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1),
+          db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)).orderBy(scheduleActivities.sortOrder),
+          db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
         ]);
-        const linhas = activities.map(a => ({ codigo: a.wbsCode, atividade: a.name, unidade: a.unit ?? null, atividadeId: a.id }));
-        const idsPorCodigo = Object.fromEntries(linhas.map(l => [l.codigo, l.atividadeId]));
-        const grade: Record<string, Record<string, string>> = {};
-        const porAtividade: Record<string, string> = {};
-        for (const entry of entries) {
-          const day = new Date(entry.productionDate).toISOString().slice(0, 10);
-          grade[day] ??= {};
-          const key = String(entry.activityId);
-          grade[day][key] = (Number(grade[day][key] ?? 0) + Number(entry.quantity)).toFixed(3);
-          porAtividade[key] = (Number(porAtividade[key] ?? 0) + Number(entry.quantity)).toFixed(3);
-        }
-        const datas = Object.keys(grade).sort();
-        const totalGeral = entries.reduce((sum, entry) => sum + Number(entry.quantity), 0).toFixed(3);
-        return { linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral };
+        const inicio = project[0]?.plannedStart ?? new Date();
+        const hoje = new Date().toISOString().slice(0,10);
+        const executadoPorAtividade = new Map<number,number>();
+        for (const entry of entries) executadoPorAtividade.set(entry.activityId,(executadoPorAtividade.get(entry.activityId)??0)+Number(entry.quantity));
+        const entradas = activities.map(a => {
+          const d = new Date(inicio); d.setUTCDate(d.getUTCDate()+Number(a.startOffset??0));
+          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:d.toISOString().slice(0,10), duracao:Number(a.durationDays??0), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorAtividade.get(a.id)??0 };
+        });
+        const linhasDerivadas = gradeDoCronograma(CALENDARIO_CORRIDO,hoje,entradas);
+        const linhas = linhasDerivadas.map((l,i)=>({ ...l, atividadeId: activities.find(a=>a.wbsCode===l.codigo)?.id ?? 0 }));
+        const idsPorCodigo = Object.fromEntries(linhas.map(l=>[l.codigo,l.atividadeId]));
+        const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
+        for(const entry of entries){const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; const key=String(entry.activityId); grade[day][key]=(Number(grade[day][key]??0)+Number(entry.quantity)).toFixed(3); porAtividade[key]=(Number(porAtividade[key]??0)+Number(entry.quantity)).toFixed(3);}
+        const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo:{} };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), wbsNodeId: z.number().int().positive() }))
