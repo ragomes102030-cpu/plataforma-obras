@@ -4,28 +4,10 @@ services:
     runtime: node
     plan: free
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    # Migration por ARQUIVO, e nao por estado do schema.
-    #
-    # Antes era `pnpm exec drizzle-kit push`. O `push` compara o schema do codigo
-    # com o banco e altera o que achar diferente, direto, sem registrar qual
-    # migration rodou. O resultado e um banco que tem as tabelas e nao tem
-    # `__drizzle_migrations` — um estado que nenhum relatorio consegue explicar.
-    #
-    # `migrate-pg.mjs` trata esse estado: ele classifica como banco legado e
-    # marca as migrations como aplicadas SEM reexecutar o DDL, entao trocar o
-    # `push` por ele nao duplica tabela nem reapplica migration em cima de banco
-    # ja montado.
-    #
-    # Os `;` sao deliberados, e nao `&&`: cada passo roda mesmo que o anterior
-    # tenha falhado, e a falha de um nao impede o `pnpm start`. A aplicacao
-    # precisa subir para responder `/readyz` e dizer o que esta errado. Com
-    # `&&`, um erro de migration impediria o boot e o servico ficaria em
-    # crash-loop sem nunca reportar a causa.
-    startCommand: node scripts/migrate-pg.mjs; node scripts/audit-schema-pg.mjs; pnpm start
+    # O schema/dados do banco sao gerenciados separadamente no Supabase.
+    # O boot da API nao deve bloquear tentando migrar/auditar o PostgreSQL antigo.
+    startCommand: pnpm start
     autoDeploy: true
-    # `/healthz` e proposital: ele devolve 200 sem tocar o banco. `/readyz` faz
-    # `SELECT 1` e conta tabelas, e um servico que demora para acordar seria
-    # marcado como morto pelo proprio health check.
     healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION
@@ -36,20 +18,14 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      - key: USE_SUPABASE
+        value: "1"
+      - key: SUPABASE_DB_URL
+        sync: false
       - key: GITHUB_CLIENT_ID
         sync: false
       - key: GITHUB_CLIENT_SECRET
         sync: false
-      # Back e front no MESMO dominio, e o banco e a mesma conta. Uma moradia.
-      #
-      # Este valor apontava para a Vercel, a casa antiga, e o login parou com
-      # "redirect_uri não está associado a este aplicativo": o servidor pedia ao
-      # GitHub um callback num host que não é o do serviço, e o GitHub recusava.
-      #
-      # Trocar a variável alinha o servidor com o callback que o GitHub JÁ tem
-      # registrado, que é o do Render. A Vercel não participa mais de nada:
-      # `serveStatic` serve a SPA em `dist/public` no mesmo host da API, e o
-      # `DATABASE_URL` abaixo aponta para o PostgreSQL da mesma conta.
       - key: PUBLIC_APP_URL
         value: https://plataforma-obras-api.onrender.com
       - key: AI_API_BASE_URL
@@ -94,4 +70,3 @@ services:
         sync: false
       - key: MCP_REQUEST_TIMEOUT_MS
         value: "60000"
-# redeploy 20260924172637
