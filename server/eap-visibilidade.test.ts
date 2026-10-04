@@ -19,7 +19,7 @@ const catalogView = readFileSync(
 function corpoDoCreate(): string {
   const inicio = router.indexOf("\n    create: protectedProcedure");
   expect(inicio, "projects.create não existe").toBeGreaterThan(-1);
-  const fim = router.indexOf("\n    createDemoGantt:", inicio);
+  const fim = router.indexOf("\n    initializePlan:", inicio);
   return router.slice(inicio, fim === -1 ? inicio + 9000 : fim);
 }
 
