@@ -268,6 +268,43 @@ describe("validateEapScope", () => {
       expect.objectContaining({ code: "eap_scope_overlap_evidence", severity: "warning" }),
     ]));
   });
+
+  it("aceita profundidade variável sem exigir quatro níveis fixos", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", decompositionBasis: "project" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Estrutura", nodeType: "grupo", decompositionBasis: "system" }),
+      node({ id: 3, parentId: 2, code: "1.1.1", name: "Fundação", nodeType: "grupo", decompositionBasis: "component" }),
+      node({ id: 4, parentId: 3, code: "1.1.1.1", name: "Concretagem de blocos", nodeType: "pacote", decompositionBasis: "deliverable" }),
+    ]);
+    expect(result.valid).toBe(true);
+    expect(result.issues.filter(issue => issue.severity === "error")).toEqual([]);
+  });
+
+  it("alerta mistura de critérios entre irmãos sem bloquear a EAP", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", decompositionBasis: "project" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Estrutura", nodeType: "grupo", decompositionBasis: "system" }),
+      node({ id: 3, parentId: 1, code: "1.2", name: "Térreo", nodeType: "grupo", decompositionBasis: "location" }),
+    ]);
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "eap_mixed_decomposition_basis",
+        severity: "warning",
+      }),
+    ]));
+  });
+
+  it("bloqueia pacote de trabalho que recebeu filhos", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", decompositionBasis: "project" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Concretagem", nodeType: "pacote", decompositionBasis: "deliverable" }),
+      node({ id: 3, parentId: 2, code: "1.1.1", name: "Lançamento", nodeType: "pacote", decompositionBasis: "deliverable" }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_work_package_has_children");
+  });
+
   it("confere o fechamento quantitativo quando pai e filhos usam a mesma unidade", () => {
     const result = validateEapScope([
       node({ id: 1, code: "1", name: "Fundação", nodeType: "grupo", unit: "m3", plannedQuantity: 100 }),
