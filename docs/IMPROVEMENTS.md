@@ -173,3 +173,20 @@ Duplicidade inesperada deve ser investigada primeiro como possível erro de esco
 
 ### Critério de avanço
 A próxima etapa só inicia quando a mesma versão aprovada apresentar zero bloqueios, backend e UI estiverem coerentes e a regressão automatizada estiver aprovada.
+
+
+## Incidente 2026-10-05 — sequences do PostgreSQL ficaram atrás do MAX(id)
+
+**Sintoma:** ao aprovar o padrão do dicionário da EAP na AURORA TESTE, a interface exibiu erro no INSERT de `agent_decisions`.
+
+**Causa raiz:** a transferência dos dados para o Supabase preservou os IDs das linhas, mas as sequences das colunas `identity` permaneceram próximas do valor inicial. Em `agent_decisions`, por exemplo, havia `MAX(id)=2` enquanto a sequence estava em `1`; o próximo INSERT tentava reutilizar um ID existente e colidia com a chave primária.
+
+**Correção imediata:** todas as sequences de identidade do schema público foram comparadas com `MAX(id)` e corrigidas. A sequence nunca é rebaixada quando já está à frente, preservando IDs reservados por transações concorrentes ou testes revertidos.
+
+**Correção permanente:** o boot em Supabase passou a executar uma sincronização idempotente das sequences antes da API subir. Isso cobre futuras transferências/importações sem depender de correção manual.
+
+**Teste de regressão executado:** INSERT transacional em `agent_decisions` com projeto 7, usuário 1, estágio `EAP_DICIONARIO` e decisão `approved` retornou novo ID sem erro; a transação foi revertida. Após o teste, `agent_decisions` permaneceu com `MAX(id)=2` e a sequence avançada para 3.
+
+**Regra permanente:** toda migração/transferência de dados PostgreSQL que preserve IDs deve verificar as sequences de colunas identity. "Tabela com dados" e "sequence pronta para novo INSERT" são condições distintas e ambas precisam ser validadas.
+
+**Não liberar:** nenhuma funcionalidade de escrita deve ser considerada homologada apenas porque leitura, build ou validação estrutural passaram. Toda mutação crítica precisa de teste real contra o banco de homologação.
