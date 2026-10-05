@@ -1,6 +1,6 @@
 # Guia para Agentes
 
-Última atualização: 26/09/2026
+Última atualização: 04/10/2026
 
 ---
 
@@ -133,6 +133,7 @@ docs: atualiza base de conhecimento com melhorias sep/2026
 
 Antes de trabalhar na EAP, qualquer agente deve ler também:
 - docs/EAP-INTEGRIDADE-E-APRENDIZADO.md
+- docs/EAP-POLITICA-DECOMPOSICAO.md
 
 Essa documentação é normativa. Ela registra os incidentes da homologação Aurora e transforma cada incidente em regra + teste de regressão + barreira de produto.
 
@@ -162,3 +163,18 @@ Todo incidente deve resultar em registro documental, teste de regressão e prote
 - **Gerente:** Rafael Gomes (grafaelalexandre@gmail.com)
 - **GitHub:** ragomes102030-cpu
 - **Sistema:** https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app
+
+
+### Política de decomposição adaptativa da EAP
+
+A profundidade da EAP não é fixa. Não implementar nem assumir uma sequência obrigatória como fase → disciplina → serviço.
+
+O Arquimedes deve:
+- decompor por entregáveis/escopo e usar a base mais adequada ao ramo;
+- manter um critério coerente entre irmãos;
+- parar quando chegar a um pacote de trabalho controlável;
+- permitir profundidades diferentes em ramos diferentes;
+- tratar mistura de bases como alerta de revisão, não como erro automático;
+- nunca criar níveis artificiais apenas para padronizar a árvore.
+
+A referência normativa completa está em docs/EAP-POLITICA-DECOMPOSICAO.md.
