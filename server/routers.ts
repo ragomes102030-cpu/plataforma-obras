@@ -3263,31 +3263,80 @@ export const appRouter = router({
         return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo:{} };
       }),
     criarAtividadeDaFolha: protectedProcedure
-      .input(z.object({ projectId: z.number().int().positive(), wbsNodeId: z.number().int().positive() }))
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        wbsNodeId: z.number().int().positive(),
+        durationDays: z.number().int().positive().optional(),
+        plannedQuantity: z.number().positive().optional(),
+        productivity: z.number().positive().optional(),
+        unit: z.string().trim().min(1).max(32).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.wbsNodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
-        if (!node) throw notFound("Folha da EAP não encontrada.");
-        if (node.nodeType !== "entrega") throw badRequest("Somente uma folha da EAP pode virar atividade.");
-        const [existing] = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.wbsNodeId, input.wbsNodeId))).limit(1);
+
+        // Uma atividade só nasce da versão EAP aprovada. Nunca reutilizar a
+        // versão mais recente em estado rascunho/superseded para gerar prazo.
+        const approved = await requireApprovedEapVersion(db, input.projectId);
+        const [node] = await db
+          .select()
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.id, input.wbsNodeId),
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, approved.id)
+            )
+          )
+          .limit(1);
+        if (!node) throw notFound("Folha da EAP aprovada não encontrada.");
+        if (node.nodeType !== "entrega" && node.nodeType !== "pacote") {
+          throw badRequest("Somente uma folha terminal da EAP pode virar atividade.");
+        }
+
+        const durationDays =
+          input.durationDays ??
+          (input.plannedQuantity && input.productivity
+            ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity))
+            : null);
+        if (!durationDays || durationDays <= 0) {
+          throw badRequest(
+            "Informe a duração da atividade ou informe quantitativo e produtividade para o Arquimedes calcular a duração."
+          );
+        }
+
+        const [existing] = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.wbsNodeId, input.wbsNodeId),
+              eq(scheduleActivities.versionId, approved.id)
+            )
+          )
+          .limit(1);
         if (existing) return { id: existing.id, created: false as const };
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const [created] = await db.insert(scheduleActivities).values({
-          projectId: input.projectId,
-          wbsNodeId: node.id,
-          wbsCode: node.code,
-          eapRef: node.code,
-          name: node.name,
-          phase: "Execução",
-          startOffset: 0,
-          durationDays: 1,
-          plannedQuantity: node.plannedQuantity,
-          unit: node.unit,
-          sortOrder: node.sortOrder * 1000 + node.id,
-          versionId: writable.id,
-        }).returning({ id: scheduleActivities.id });
+
+        const [created] = await db
+          .insert(scheduleActivities)
+          .values({
+            projectId: input.projectId,
+            wbsNodeId: node.id,
+            wbsCode: node.code,
+            eapRef: node.code,
+            name: node.name,
+            phase: "Execução",
+            startOffset: 0,
+            durationDays,
+            plannedQuantity: input.plannedQuantity ?? node.plannedQuantity,
+            productivity: input.productivity,
+            unit: input.unit ?? node.unit,
+            sortOrder: node.sortOrder * 1000 + node.id,
+            versionId: approved.id,
+          })
+          .returning({ id: scheduleActivities.id });
         return { id: created.id, created: true as const };
       }),
     atualizarAtividade: protectedProcedure
