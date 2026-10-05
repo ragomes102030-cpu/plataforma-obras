@@ -189,7 +189,7 @@ describe("runConstructionMcpHomologation", () => {
         name: "listar_atividades",
         args: { project_id: "cronograma-456" },
       },
-      { domain: "ganttLob", name: "listar_temas", args: {} },
+      { domain: "ganttLob", name: "listar_temas", args: { project_id: "lob-789" } },
     ]);
   });
 });

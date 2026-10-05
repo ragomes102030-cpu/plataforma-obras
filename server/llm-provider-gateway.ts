@@ -52,6 +52,7 @@ export type GatewayResult = LlmResponse & {
 export type GatewayRequest = {
   messages: LlmMessage[];
   tools: LlmTool[];
+  responseFormat?: Record<string, unknown>;
 };
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429]);
@@ -193,6 +194,9 @@ async function callProvider(
         messages: request.messages,
         ...(request.tools.length
           ? { tools: request.tools, tool_choice: "auto" }
+          : {}),
+        ...(request.responseFormat
+          ? { response_format: request.responseFormat }
           : {}),
       }),
       signal: controller.signal,
