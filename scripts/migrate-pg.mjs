@@ -26,16 +26,69 @@ const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
 const MIGRATIONS_TABLE = "__drizzle_migrations";
 const dryRun = process.argv.includes("--dry-run");
 
-// Em produção com Supabase, o schema já é provisionado/validado pelo pipeline de banco.
-// Não bloquear o boot da API tentando executar migrations a cada restart.
-if (process.env.USE_SUPABASE === "1") {
-  console.log("[migrate] USE_SUPABASE=1: migrations de startup desativadas; schema Supabase é gerenciado separadamente.");
-  process.exit(0);
+// Em produção com Supabase, o schema é provisionado/validado separadamente.
+// Ainda assim, o boot precisa corrigir uma classe de divergência que não é DDL:
+// após uma carga/transferência de dados, as sequences de colunas identity podem
+// ficar atrás do MAX(id), fazendo o próximo INSERT colidir com a PK.
+const supabaseOnly = process.env.USE_SUPABASE === "1";
+if (supabaseOnly) {
+  console.log("[migrate] USE_SUPABASE=1: DDL de startup desativado; conferindo sequences de identidade.");
 }
 
 function fail(msg) {
   console.error(`[migrate] ERRO: ${msg}`);
   process.exit(1);
+}
+
+async function sincronizarSequenciasDeIdentidade(conn) {
+  const result = await conn.query(`
+    SELECT
+      n.nspname AS schema_name,
+      c.relname AS table_name,
+      a.attname AS column_name,
+      pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) AS seq_name
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+      AND a.attidentity IN ('a','d')
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+    ORDER BY c.relname, a.attname
+  `);
+
+  let corrigidas = 0;
+  for (const row of result.rows) {
+    if (!row.seq_name) continue;
+    const maxResult = await conn.query(
+      `SELECT MAX("${row.column_name}") AS max_id FROM "${row.schema_name}"."${row.table_name}"`
+    );
+    const sequenceResult = await conn.query(
+      'SELECT last_value, is_called FROM ' + row.seq_name
+    );
+    const maxId = maxResult.rows[0]?.max_id == null ? null : Number(maxResult.rows[0].max_id);
+    const lastValue = Number(sequenceResult.rows[0]?.last_value ?? 0);
+
+    if (maxId == null) {
+      if (lastValue < 1) {
+        await conn.query('SELECT setval($1::regclass, 1, false)', [row.seq_name]);
+        corrigidas++;
+      }
+      continue;
+    }
+
+    // Nunca rebaixa uma sequência que já esteja à frente: isso preserva IDs
+    // reservados por transações concorrentes ou testes que foram revertidos.
+    if (lastValue < maxId) {
+      await conn.query('SELECT setval($1::regclass, $2, true)', [row.seq_name, maxId]);
+      corrigidas++;
+    }
+  }
+
+  console.log(
+    `[sequences] identidade PostgreSQL conferida: ${result.rows.length} sequência(s), ${corrigidas} corrigida(s).`
+  );
 }
 
 // ----------------------------------------------------------------- conexão --
@@ -152,6 +205,12 @@ if (isFresh) {
       `${pending.length} pendente(s)`
   );
   for (const m of pending) console.log(`[migrate]   pendente ${m.folderMillis}`);
+}
+
+if (supabaseOnly) {
+  await sincronizarSequenciasDeIdentidade(conn);
+  await conn.end();
+  process.exit(0);
 }
 
 if (dryRun) {
