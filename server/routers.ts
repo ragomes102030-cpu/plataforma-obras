@@ -58,6 +58,29 @@ import { localDatabaseEvidenceSource } from "./construction/local-database-sourc
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
+
+async function requireApprovedEapVersion(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+) {
+  const [approved] = await db
+    .select({ id: projectPlanVersions.id, versionNumber: projectPlanVersions.versionNumber })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, projectId), eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber))
+    .limit(1);
+  if (!approved) throw badRequest("A EAP precisa estar aprovada antes de gerar atividades.");
+
+  const nodes = await db
+    .select()
+    .from(wbsNodes)
+    .where(and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, approved.id)));
+  const validation = validateEap(nodes);
+  if (!validation.valid) {
+    throw badRequest("A EAP aprovada possui inconsistências estruturais e não pode originar atividades.");
+  }
+  return approved;
+}
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import { carregarCalendarioDaObra, localIso } from "./construction/calendario-obra";
@@ -3345,8 +3368,12 @@ export const appRouter = router({
           )
           .limit(1);
         if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP desta obra.");
+        await requireApprovedEapVersion(db, input.projectId);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
+        const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 0);
+        if (durationDays <= 0) {
+          throw badRequest("A atividade precisa de duração ou de quantidade + produtividade para calcular a duração.");
+        }
         const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: scheduleActivities.id });
         return { id: createdId.id };
       }),
@@ -3356,12 +3383,14 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const approved = await requireApprovedEapVersion(db, input.projectId);
         const nodes = await db
           .select()
           .from(wbsNodes)
           .where(
             and(
               eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, approved.id),
               eq(wbsNodes.nodeType, "entrega")
             )
           )
