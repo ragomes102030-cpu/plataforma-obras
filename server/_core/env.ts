@@ -36,7 +36,7 @@ export const ENV = {
   mcpCatalogTtlMs: Number(process.env.MCP_CATALOG_TTL_MS ?? "300000"),
   // Hosts conferidos contra a config MCP real. Ja foram *.vercel.app e
   // estavam errados: os MCP servers nunca_publicaram na Vercel. Nao reverter.
-  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras-production.up.railway.app",
+  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras-api.onrender.com",
   mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server.onrender.com",
   mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "https://mcp-cronograma-server.onrender.com",
   mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "https://mcp-gantt-lob-server.onrender.com",
