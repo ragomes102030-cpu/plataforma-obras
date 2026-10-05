@@ -127,6 +127,36 @@ docs: atualiza base de conhecimento com melhorias sep/2026
 
 ---
 
+
+
+## Regra obrigatória de integridade da EAP
+
+Antes de trabalhar na EAP, qualquer agente deve ler também:
+- docs/EAP-INTEGRIDADE-E-APRENDIZADO.md
+
+Essa documentação é normativa. Ela registra os incidentes da homologação Aurora e transforma cada incidente em regra + teste de regressão + barreira de produto.
+
+### Regra crítica: nunca misturar versões
+Quando wbs_nodes possui versionId, nenhuma validação operacional deve carregar todos os nós apenas por projectId. Primeiro deve ser resolvida a versão aplicável e depois os nós devem ser filtrados por projectId + versionId.
+
+Isso vale para validação, árvore EAP, snapshots, atividades, dependências, relatórios e fontes de evidência do agente.
+
+Se números de nós/folhas ou duplicidades forem exatamente o dobro de uma versão conhecida, suspeitar primeiro de mistura de histórico. Não alterar dados antes de verificar o escopo da consulta.
+
+### Gate EAP → Atividades
+Atividades só podem ser liberadas depois de:
+1. versão aprovada identificada;
+2. validação estrutural da mesma versão;
+3. zero bloqueios estruturais;
+4. códigos únicos dentro da versão;
+5. backend e UI coerentes;
+6. regressão Aurora aprovada.
+
+EAP aprovada não autoriza duração artificial. Atividade precisa de duração fundamentada ou quantidade + produtividade válida.
+
+### Aprendizado obrigatório
+Todo incidente deve resultar em registro documental, teste de regressão e proteção no código. Não considerar uma falha resolvida apenas porque a interface ficou verde.
+
 ## Contatos
 
 - **Gerente:** Rafael Gomes (grafaelalexandre@gmail.com)
