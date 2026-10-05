@@ -2675,3 +2675,106 @@ tr:hover .xl-codigo {
   font-weight: 700;
 }
 .xl-sidebar-arquimedes svg { color: #63d4e9; }
+
+
+/* EAP · arquitetura de informação: escopo primeiro, dados de execução depois. */
+.eap-grid-head-enxuta{
+  grid-template-columns: 72px 92px minmax(250px,1.8fr) 150px minmax(130px,1fr) minmax(130px,1fr) 190px !important;
+}
+.eap-linha{
+  grid-template-columns: 72px 92px minmax(250px,1.8fr) 150px minmax(130px,1fr) minmax(130px,1fr) 190px !important;
+}
+.eap-linha:hover{
+  background:#f6fafc;
+  box-shadow:inset 3px 0 0 #b7dce6;
+}
+.eap-nome{
+  font-weight:650;
+}
+.eap-responsavel,.eap-local{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#536675;
+  font-size:10px;
+}
+.eap-editor{
+  position:relative;
+  border:1px solid #cddbe3;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 12px 32px rgba(15,35,48,.10);
+  overflow:hidden;
+}
+.eap-editor-contexto{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:9px 14px;
+  background:#f4f8fa;
+  border-bottom:1px solid #e2e9ee;
+}
+.eap-editor-contexto span{
+  color:#176b87;
+  font-size:9px;
+  font-weight:850;
+  letter-spacing:.12em;
+}
+.eap-editor-contexto small{
+  color:#6b7c89;
+  font-size:10px;
+}
+.eap-editor-secao{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:baseline;
+  gap:9px;
+  padding:7px 0 2px;
+  border-bottom:1px solid #edf2f5;
+}
+.eap-editor-secao strong{
+  color:#263a47;
+  font-size:11px;
+}
+.eap-editor-secao span{
+  color:#7b8b96;
+  font-size:9px;
+}
+.eap-editor-integracoes{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+}
+.eap-editor-integracoes span{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  padding:8px 9px;
+  border:1px solid #e5ebef;
+  border-radius:7px;
+  background:#f9fbfc;
+  color:#6b7c89;
+  font-size:9px;
+}
+.eap-editor-integracoes b{
+  color:#334b5a;
+  font-size:10px;
+}
+@media(max-width:1050px){
+  .eap-grid-head-enxuta,.eap-linha{
+    grid-template-columns:64px 78px minmax(210px,1.6fr) 135px minmax(110px,1fr) minmax(110px,1fr) 165px !important;
+  }
+}
+@media(max-width:760px){
+  .eap-grid-head-enxuta,.eap-linha{
+    min-width:980px;
+  }
+  .eap-editor-contexto{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:4px;
+  }
+  .eap-editor-integracoes{grid-template-columns:1fr;}
+}
