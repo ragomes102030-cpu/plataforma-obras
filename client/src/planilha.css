@@ -3001,3 +3001,37 @@ tr:hover .xl-codigo {
     flex-wrap:wrap;
   }
 }
+
+/* EAP · hierarquia de informação e estados */
+.eap-controle-cabecalho{min-height:48px}
+.eap-controle-identidade{display:flex;align-items:center;gap:9px;min-width:0}
+.eap-controle-icone{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:1px solid #d7e4ea;border-radius:7px;background:#f4f9fb;color:#176b87;flex:0 0 30px}
+.eap-controle-identidade strong{display:block;color:#243844;font-size:11px}
+.eap-controle-identidade span{display:block;margin-top:3px;color:#7a8a95;font-size:9px}
+.eap-controle-cabecalho-acoes{display:flex;align-items:center;gap:7px}
+.eap-etapa-chip{display:inline-flex;align-items:center;min-height:26px;padding:0 8px;border:1px solid #dce5ea;border-radius:5px;background:#f7fafb;color:#647784;font-size:8px;font-weight:800;letter-spacing:.06em;white-space:nowrap}
+.eap-dicionario-padrao-intro{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border-bottom:1px solid #edf2f5}
+.eap-dicionario-padrao-intro>div{min-width:0}
+.eap-secao-kicker{display:block;margin-bottom:4px;color:#81929e;font-size:8px;font-weight:850;letter-spacing:.1em}
+.eap-dicionario-padrao-intro strong{display:block;color:#263b48;font-size:11px}
+.eap-dicionario-padrao-intro p{margin:3px 0 0;color:#6d7e89;font-size:9px;line-height:1.4}
+.eap-status-mini{display:inline-flex;align-items:center;min-height:23px;padding:0 8px;border-radius:5px;font-size:8px;font-weight:850;letter-spacing:.06em;white-space:nowrap}
+.eap-status-mini.ok{border:1px solid #bfe1d1;background:#f1faf6;color:#176a48}
+.eap-status-mini.atencao{border:1px solid #ead5aa;background:#fffaf0;color:#84652a}
+.eap-dicionario-padrao-campos{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(180px,.8fr);gap:8px;padding:9px 12px}
+.eap-dicionario-padrao-campos>div{display:grid;gap:3px;padding:7px 9px;border:1px solid #e6edf1;border-radius:6px;background:#fafcfd}
+.eap-dicionario-padrao-campos span{color:#82929d;font-size:8px;font-weight:850;letter-spacing:.08em}
+.eap-dicionario-padrao-campos small{color:#566b79;font-size:9px;line-height:1.4}
+.eap-baseline{align-items:center}
+.eap-baseline-proxima{display:inline-flex;align-items:center;gap:6px;min-height:31px;padding:0 10px;border:1px solid #bfe1d1;border-radius:6px;background:#f1faf6;color:#176a48;font-size:9px;font-weight:800;white-space:nowrap}
+.eap-controle-card.neutro{border-color:#dfe7ec;background:#fbfcfd}
+.eap-controle-card.neutro strong{font-size:13px;color:#536775}
+.eap-resumo-kicker{display:block;margin-bottom:2px;color:#80919d;font-size:8px;font-weight:850;letter-spacing:.1em}
+.eap-resumo h2{margin:0}
+.eap-status-chip.atencao{border-color:#ead5aa;background:#fffaf0;color:#84652a}
+.eap-status-chip.ok{border-color:#bfe1d1;background:#f1faf6;color:#176a48}
+@media(max-width:760px){
+  .eap-dicionario-padrao-campos{grid-template-columns:1fr}
+  .eap-controle-cabecalho-acoes{flex-wrap:wrap;justify-content:flex-end}
+  .eap-dicionario-padrao-intro{align-items:flex-start}
+}
