@@ -1666,7 +1666,13 @@ export const appRouter = router({
     }),
     validateWbsStructure: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{
       const db=await getDb(); if(!db) return {valid:true,issues:[],summary:{errors:0,warnings:0,costErrors:0}};
-      await assertAccessibleProject(db,input.projectId,ctx.user.id); const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+      await assertAccessibleProject(db,input.projectId,ctx.user.id);
+      const versionId=await getCurrentPlanVersionId(db,input.projectId);
+      const nodes=await db.select().from(wbsNodes).where(
+        versionId == null
+          ? and(eq(wbsNodes.projectId,input.projectId),isNull(wbsNodes.versionId))
+          : and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId))
+      ).orderBy(wbsNodes.sortOrder,wbsNodes.id);
       const result=validateEap(nodes); const errors=result.issues.filter(i=>i.severity==="error").length; const warnings=result.issues.filter(i=>i.severity==="warning").length;
       return {...result,summary:{nodes:nodes.length,leaves:nodes.filter(n=>!nodes.some(child=>child.parentId===n.id)).length,errors,warnings,costErrors:0}};
     }),
