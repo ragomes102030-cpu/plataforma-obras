@@ -39,10 +39,10 @@ const grupo = (
   name,
   nodeType: "grupo",
   decompositionBasis,
-  description: `Escopo da fase ${name.toLowerCase()}.`,
+  description: `Conjunto de escopo de ${name.toLowerCase()} que organiza os entregáveis da EAP.`,
   inclusions: `Todos os entregáveis necessários para concluir ${name.toLowerCase()}.`,
   exclusions: "Escopos pertencentes a outras fases ou fora do contrato.",
-  acceptanceCriteria: `Fase ${name.toLowerCase()} concluída e liberada para a próxima etapa.`,
+  acceptanceCriteria: `Escopo de ${name.toLowerCase()} definido, sem sobreposição entre filhos, e liberado para planejamento detalhado.`,
   children,
 });
 
