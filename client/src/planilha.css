@@ -2630,3 +2630,24 @@ tr:hover .xl-codigo {
   .arquimedes-workbar { min-height: 54px; padding: 8px 12px; }
   .arquimedes-workbar-actions button { width: 28px; height: 28px; }
 }
+
+
+/* Cabeçalho do produto: identidade de plataforma, não de planilha genérica. */
+.xl-titlebar {
+  height: 46px;
+  padding: 0 14px;
+  background: #0c1721;
+  border-bottom: 1px solid #243644;
+  gap: 9px;
+}
+.xl-titlebar-marca strong { color: #f5fbff; font-size: 12px; }
+.xl-titlebar-sub { color: #8ea4b4; }
+.xl-titlebar-marca > svg { color: #56d1e7; }
+.xl-titlebar-fim { gap: 3px; }
+.xl-tb-btn { color: #9db0bf; border-color: transparent; background: transparent; }
+.xl-tb-btn:hover { color: #fff; background: #172733; }
+.xl-tb-btn.ativo { color: #65d4e9; background: #173545; }
+.xl-tb-arquimedes { border-color: #28556a; background: #112c39; color: #63d4e9; }
+.xl-tb-user { background: #1a3443; color: #8fe1ef; }
+.xl-lixeira-btn { border: 1px solid #d7e0e6; background: #fff; color: #647784; box-shadow: 0 2px 7px rgba(18,34,45,.07); }
+.xl-lixeira-btn:hover { color: #b13d3d; border-color: #e4baba; background: #fff8f8; }
