@@ -57,6 +57,27 @@ export const ABAS: readonly AbaDoSistema[] = [
     status: "pronta",
   },
   {
+    id: "dependencias",
+    rotulo: "DEPENDÊNCIAS",
+    status: "pendente",
+    falta:
+      "As relações entre atividades precisam ser definidas antes do CPM. A etapa deve validar predecessoras, sucessoras, tipo de vínculo e ausência de ciclos.",
+  },
+  {
+    id: "cpm",
+    rotulo: "CPM / CAMINHO CRÍTICO",
+    status: "pendente",
+    falta:
+      "O caminho crítico depende de atividades com duração válida e uma rede de dependências consistente. O motor CPM será habilitado após essa base.",
+  },
+  {
+    id: "baseline",
+    rotulo: "BASELINE",
+    status: "pendente",
+    falta:
+      "A linha de base congela uma versão aprovada do planejamento para comparação posterior entre planejado e realizado.",
+  },
+  {
     id: "gantt",
     rotulo: "GANTT",
     status: "pronta",
