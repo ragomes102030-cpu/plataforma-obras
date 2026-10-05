@@ -1,866 +1,667 @@
+// PostgreSQL schema generated from the live Supabase schema.
+// Source: Supabase project tromrvfijbtihuilvnuk, 2026-10-05.
+//
+// Intentionally omits FK/index declarations here: the database already owns those
+// constraints. This file is the runtime Drizzle model for the existing PostgreSQL schema.
 import {
-  foreignKey,
-  boolean,
-  int,
-  mysqlEnum,
-  mysqlTable,
-  AnyMySqlColumn,
-  decimal,
-  index,
-  json,
-  text,
-  timestamp,
-  uniqueIndex,
-  varchar,
-} from "drizzle-orm/mysql-core";
+  bigint, bigserial, boolean, bytea, date, integer, jsonb, numeric, pgTable,
+  serial, text, timestamp, varchar,
+} from "drizzle-orm/pg-core";
 
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+export const activityResourceAllocations = pgTable("activity_resource_allocations", {
+  "id": serial("id").notNull(),
+  "activityId": integer("activityId").notNull(),
+  "resourceId": integer("resourceId").notNull(),
+  "quantity": numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  "productivity": numeric("productivity", { precision: 14, scale: 3, mode: "number" }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const projects = mysqlTable("projects", {
-  id: int("id").autoincrement().primaryKey(),
-  ownerUserId: int("ownerUserId").references(() => users.id),
-  code: varchar("code", { length: 32 }).notNull().unique(),
-  name: varchar("name", { length: 180 }).notNull(),
-  location: varchar("location", { length: 180 }).notNull(),
-  status: mysqlEnum("status", [
-    "Em execução",
-    "Planejamento",
-    "Concluída",
-    "Em risco",
-  ])
-    .default("Planejamento")
-    .notNull(),
-  progress: int("progress").default(0).notNull(),
-  plannedStart: timestamp("plannedStart").notNull(),
-  plannedFinish: timestamp("plannedFinish").notNull(),
-  baseReferencia: mysqlEnum("baseReferencia", ["SEINFRA", "SINAPI", "PROPRIA"]),
-  baseReferenciaRef: varchar("baseReferenciaRef", { length: 20 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const agentDecisions = pgTable("agent_decisions", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "userId": integer("userId").notNull(),
+  "stage": varchar("stage", { length: 50 }).notNull(),
+  "decision": text("decision").notNull(),
+  "scopeJson": text("scopeJson").notNull(),
+  "reason": text("reason"),
+  "impactJson": text("impactJson"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const projectMcpIntegrations = mysqlTable(
-  "project_mcp_integrations",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    provider: mysqlEnum("provider", [
-      "eap",
-      "cronograma",
-      "ganttLob",
-    ]).notNull(),
-    externalProjectId: varchar("externalProjectId", { length: 180 }),
-    endpointUrl: varchar("endpointUrl", { length: 500 }).notNull(),
-    syncState: mysqlEnum("syncState", [
-      "unconfigured",
-      "ready",
-      "pending",
-      "error",
-    ])
-      .default("unconfigured")
-      .notNull(),
-    lastSyncedAt: timestamp("lastSyncedAt"),
-    lastError: text("lastError"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("project_mcp_integrations_project_provider_idx").on(
-      table.projectId,
-      table.provider
-    ),
-    index("project_mcp_integrations_project_idx").on(table.projectId),
-  ]
-);
-
-export const agentDecisions = mysqlTable(
-  "agent_decisions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id),
-    stage: varchar("stage", { length: 50 }).notNull(),
-    decision: mysqlEnum("decision", [
-      "approved",
-      "partially_approved",
-      "rejected",
-      "reopen",
-    ]).notNull(),
-    scopeJson: text("scopeJson").notNull(),
-    reason: text("reason"),
-    impactJson: text("impactJson"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    index("agent_decisions_project_idx").on(table.projectId),
-    index("agent_decisions_project_stage_idx").on(
-      table.projectId,
-      table.stage
-    ),
-  ]
-);
-
-export const projectPlanVersions = mysqlTable(
-  "project_plan_versions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    versionNumber: int("versionNumber").notNull(),
-    status: mysqlEnum("status", ["draft", "proposed", "approved", "superseded"])
-      .default("draft")
-      .notNull(),
-    baseVersionId: int("baseVersionId").references(
-      (): AnyMySqlColumn => projectPlanVersions.id
-    ),
-    decisionId: int("decisionId").references(() => agentDecisions.id),
-    approvedAt: timestamp("approvedAt"),
-    notes: text("notes"),
-    createdBy: int("createdBy").references(() => users.id),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("project_plan_versions_project_version_idx").on(
-      table.projectId,
-      table.versionNumber
-    ),
-    index("project_plan_versions_project_idx").on(table.projectId),
-  ]
-);
-
-export const mcpMutationOperations = mysqlTable(
-  "mcp_mutation_operations",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id),
-    provider: mysqlEnum("provider", [
-      "eap",
-      "cronograma",
-      "ganttLob",
-    ]).notNull(),
-    toolName: varchar("toolName", { length: 100 }).notNull(),
-    externalProjectId: varchar("externalProjectId", { length: 180 }).notNull(),
-    idempotencyKey: varchar("idempotencyKey", { length: 128 }).notNull(),
-    confirmationToken: varchar("confirmationToken", { length: 64 }).notNull(),
-    argsJson: text("argsJson").notNull(),
-    resultJson: text("resultJson"),
-    error: text("error"),
-    status: mysqlEnum("status", [
-      "preview",
-      "confirmed",
-      "executing",
-      "succeeded",
-      "failed",
-      "cancelled",
-    ])
-      .default("preview")
-      .notNull(),
-    confirmedAt: timestamp("confirmedAt"),
-    executedAt: timestamp("executedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("mcp_mutation_operations_idempotency_idx").on(
-      table.idempotencyKey
-    ),
-    index("mcp_mutation_operations_project_idx").on(table.projectId),
-    index("mcp_mutation_operations_user_idx").on(table.userId),
-  ]
-);
-
-export const mcpHomologationRuns = mysqlTable(
-  "mcp_homologation_runs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id),
-    requestId: varchar("requestId", { length: 128 }).notNull(),
-    status: mysqlEnum("status", [
-      "planned",
-      "read_only_running",
-      "read_only_passed",
-      "read_only_degraded",
-      "reconciled",
-      "failed",
-    ])
-      .default("planned")
-      .notNull(),
-    planJson: text("planJson").notNull(),
-    readOnlyResultJson: text("readOnlyResultJson"),
-    reconciliationJson: text("reconciliationJson"),
-    error: text("error"),
-    startedAt: timestamp("startedAt"),
-    finishedAt: timestamp("finishedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    index("mcp_homologation_runs_project_idx").on(table.projectId),
-    index("mcp_homologation_runs_user_idx").on(table.userId),
-  ]
-);
-
-export const scheduleActivities = mysqlTable(
-  "schedule_activities",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    wbsNodeId: int("wbsNodeId")
-      .notNull()
-      .references(() => wbsNodes.id, { onDelete: "restrict" }),
-    externalId: varchar("externalId", { length: 180 }),
-    eapRef: varchar("eapRef", { length: 180 }),
-    wbsCode: varchar("wbsCode", { length: 32 }).notNull(),
-    name: varchar("name", { length: 220 }).notNull(),
-    phase: varchar("phase", { length: 80 }).notNull(),
-    startOffset: int("startOffset").notNull(),
-    durationDays: int("durationDays").notNull(),
-    plannedQuantity: decimal("plannedQuantity", { precision: 14, scale: 3 }),
-    productivity: decimal("productivity", { precision: 14, scale: 3 }),
-    budgetItemId: int("budgetItemId"),
-    progress: int("progress").default(0).notNull(),
-    status: mysqlEnum("status", [
-      "Não iniciado",
-      "Em andamento",
-      "Concluído",
-      "Em risco",
-    ])
-      .default("Não iniciado")
-      .notNull(),
-    critical: int("critical").default(0).notNull(),
-    earlyStart: int("earlyStart"),
-    earlyFinish: int("earlyFinish"),
-    lateStart: int("lateStart"),
-    lateFinish: int("lateFinish"),
-    totalFloat: int("totalFloat"),
-    cpmCalculatedAt: timestamp("cpmCalculatedAt"),
-    versionId: int("versionId").references(() => projectPlanVersions.id),
-    sortOrder: int("sortOrder").default(0).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("schedule_activities_project_external_idx").on(
-      table.projectId,
-      table.externalId
-    ),
-    index("schedule_activities_project_idx").on(table.projectId),
-    index("schedule_activities_plan_version_idx").on(table.versionId),
-    index("schedule_activities_wbs_node_idx").on(table.wbsNodeId),
-  ]
-);
-
-export const wbsNodes = mysqlTable(
-  "wbs_nodes",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    externalId: varchar("externalId", { length: 180 }),
-    externalUid: varchar("externalUid", { length: 180 }),
-    parentId: int("parentId").references((): AnyMySqlColumn => wbsNodes.id, {
-      onDelete: "restrict",
-    }),
-    code: varchar("code", { length: 32 }).notNull(),
-    name: varchar("name", { length: 220 }).notNull(),
-    level: int("level").default(1).notNull(),
-    nodeType: mysqlEnum("nodeType", ["grupo", "pacote", "entrega"])
-      .default("pacote")
-      .notNull(),
-    unit: varchar("unit", { length: 32 }),
-    plannedQuantity: int("plannedQuantity"),
-    versionId: int("versionId").references(() => projectPlanVersions.id),
-    sortOrder: int("sortOrder").default(0).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("wbs_nodes_project_external_idx").on(
-      table.projectId,
-      table.externalId
-    ),
-    uniqueIndex("wbs_nodes_project_code_unique_idx").on(
-      table.projectId,
-      table.code
-    ),
-    index("wbs_nodes_project_idx").on(table.projectId),
-    index("wbs_nodes_plan_version_idx").on(table.versionId),
-  ]
-);
-
-export const scheduleDependencies = mysqlTable(
-  "schedule_dependencies",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    externalId: varchar("externalId", { length: 180 }),
-    predecessorId: int("predecessorId")
-      .notNull()
-      .references(() => scheduleActivities.id),
-    successorId: int("successorId")
-      .notNull()
-      .references(() => scheduleActivities.id),
-    type: mysqlEnum("type", ["FS", "SS", "FF", "SF"]).default("FS").notNull(),
-    lag: int("lag").default(0).notNull(),
-    versionId: int("versionId").references(() => projectPlanVersions.id),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    uniqueIndex("schedule_dependencies_project_external_idx").on(
-      table.projectId,
-      table.externalId
-    ),
-    index("schedule_dependencies_plan_version_idx").on(table.versionId),
-  ]
-);
-
-export const planningResources = mysqlTable("planning_resources", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId").notNull().references(() => projects.id),
-  name: varchar("name", { length: 180 }).notNull(),
-  resourceType: mysqlEnum("resourceType", ["mao_de_obra", "equipamento", "material"]).notNull(),
-  unit: varchar("unit", { length: 32 }).notNull(),
-  capacityPerDay: decimal("capacityPerDay", { precision: 14, scale: 3 }),
-  costPerDay: decimal("costPerDay", { precision: 14, scale: 2 }),
-  active: int("active").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const agentFindings = pgTable("agent_findings", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "stage": varchar("stage", { length: 50 }).notNull(),
+  "classification": text("classification").notNull(),
+  "entityType": varchar("entityType", { length: 50 }).notNull(),
+  "entityRef": varchar("entityRef", { length: 180 }),
+  "sourceJson": text("sourceJson").notNull(),
+  "originalValueJson": text("originalValueJson"),
+  "proposedValueJson": text("proposedValueJson"),
+  "description": text("description").notNull(),
+  "impact": text("impact"),
+  "confidence": text("confidence").notNull(),
+  "status": text("status").notNull(),
+  "resolvedAt": timestamp("resolvedAt", { withTimezone: true, mode: "date" }),
+  "resolvedBy": integer("resolvedBy"),
+  "resolutionNote": text("resolutionNote"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const activityResourceAllocations = mysqlTable(
-  "activity_resource_allocations",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    activityId: int("activityId").notNull(),
-    resourceId: int("resourceId").notNull(),
-    quantity: decimal("quantity", { precision: 14, scale: 3 }).default("1").notNull(),
-    productivity: decimal("productivity", { precision: 14, scale: 3 }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    // Nome explícito: o automático (>64 chars) é recusado pelo MySQL num banco novo.
-    foreignKey({ name: "act_res_alloc_activity_fk", columns: [table.activityId], foreignColumns: [scheduleActivities.id] }),
-    foreignKey({ name: "act_res_alloc_resource_fk", columns: [table.resourceId], foreignColumns: [planningResources.id] }),
-    uniqueIndex("activity_resource_unique_idx").on(table.activityId, table.resourceId),
-    index("activity_resource_activity_idx").on(table.activityId),
-  ]
-);
-
-export const scheduleBaselines = mysqlTable("schedule_baselines", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId").notNull().references(() => projects.id),
-  name: varchar("name", { length: 160 }).notNull(),
-  status: mysqlEnum("status", ["rascunho", "ativa", "arquivada"]).default("ativa").notNull(),
-  createdBy: int("createdBy").references(() => users.id),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const agentMemories = pgTable("agent_memories", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId"),
+  "ownerUserId": integer("ownerUserId").notNull(),
+  "scope": text("scope").notNull(),
+  "category": varchar("category", { length: 80 }).notNull(),
+  "memoryKey": varchar("memoryKey", { length: 180 }).notNull(),
+  "valueJson": text("valueJson").notNull(),
+  "sourceType": varchar("sourceType", { length: 80 }).notNull(),
+  "sourceRef": varchar("sourceRef", { length: 180 }),
+  "confidence": text("confidence").notNull(),
+  "status": text("status").notNull(),
+  "approvedBy": integer("approvedBy"),
+  "approvedAt": timestamp("approvedAt", { withTimezone: true, mode: "date" }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const scheduleBaselineItems = mysqlTable(
-  "schedule_baseline_items",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    baselineId: int("baselineId").notNull().references(() => scheduleBaselines.id),
-    activityId: int("activityId").notNull().references(() => scheduleActivities.id),
-    startOffset: int("startOffset").notNull(),
-    durationDays: int("durationDays").notNull(),
-    earlyStart: int("earlyStart"),
-    earlyFinish: int("earlyFinish"),
-  },
-  table => [
-    uniqueIndex("schedule_baseline_activity_idx").on(table.baselineId, table.activityId),
-    index("schedule_baseline_items_baseline_idx").on(table.baselineId),
-  ]
-);
-
-export const productionFronts = mysqlTable("production_fronts", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  code: varchar("code", { length: 32 }).notNull(),
-  name: varchar("name", { length: 180 }).notNull(),
-  location: varchar("location", { length: 180 }),
-  status: mysqlEnum("status", ["ativa", "pausada", "concluida"])
-    .default("ativa")
-    .notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const agentProjectStates = pgTable("agent_project_states", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "stage": text("stage").notNull(),
+  "activeSection": varchar("activeSection", { length: 40 }).notNull(),
+  "activeSubtab": varchar("activeSubtab", { length: 40 }),
+  "blockerCount": integer("blockerCount").notNull(),
+  "lastSummary": text("lastSummary"),
+  "version": integer("version").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const productionTeams = mysqlTable("production_teams", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  name: varchar("name", { length: 180 }).notNull(),
-  trade: varchar("trade", { length: 120 }).notNull(),
-  memberCount: int("memberCount").default(0).notNull(),
-  active: int("active").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const agentRunEvents = pgTable("agent_run_events", {
+  "id": serial("id").notNull(),
+  "requestId": varchar("requestId", { length: 128 }).notNull(),
+  "projectId": integer("projectId").notNull(),
+  "userId": integer("userId").notNull(),
+  "eventType": varchar("eventType", { length: 80 }).notNull(),
+  "eventJson": text("eventJson").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const productionUnits = mysqlTable("production_units", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  code: varchar("code", { length: 32 }).notNull(),
-  name: varchar("name", { length: 180 }).notNull(),
-  unitType: varchar("unitType", { length: 80 }).notNull(),
-  sortOrder: int("sortOrder").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+export const agentRuns = pgTable("agent_runs", {
+  "id": serial("id").notNull(),
+  "requestId": varchar("requestId", { length: 128 }).notNull(),
+  "projectId": integer("projectId").notNull(),
+  "userId": integer("userId").notNull(),
+  "status": text("status").notNull(),
+  "currentStep": varchar("currentStep", { length: 120 }),
+  "provider": varchar("provider", { length: 80 }),
+  "model": varchar("model", { length: 160 }),
+  "contextJson": text("contextJson").notNull(),
+  "resultJson": text("resultJson"),
+  "errorCode": varchar("errorCode", { length: 100 }),
+  "errorMessage": text("errorMessage"),
+  "iterations": integer("iterations").notNull(),
+  "startedAt": timestamp("startedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "finishedAt": timestamp("finishedAt", { withTimezone: true, mode: "date" }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const productionEntries = mysqlTable("production_entries", {
-  id: int("id").autoincrement().primaryKey(),
-  projectId: int("projectId")
-    .notNull()
-    .references(() => projects.id),
-  frontId: int("frontId")
-    .notNull()
-    .references(() => productionFronts.id),
-  teamId: int("teamId")
-    .notNull()
-    .references(() => productionTeams.id),
-  unitId: int("unitId")
-    .notNull()
-    .references(() => productionUnits.id),
-  activityId: int("activityId")
-    .notNull()
-    .references(() => scheduleActivities.id),
-  productionDate: timestamp("productionDate").notNull(),
-  quantity: decimal("quantity", { precision: 12, scale: 3 }).notNull(),
-  measurementUnit: varchar("measurementUnit", { length: 32 }).notNull(),
-  notes: text("notes"),
-  status: mysqlEnum("status", ["rascunho", "confirmada"])
-    .default("rascunho")
-    .notNull(),
-  createdBy: int("createdBy").references(() => users.id),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const arquimedesCapabilities = pgTable("arquimedes_capabilities", {
+  "id": varchar("id", { length: 120 }).notNull(),
+  "kind": varchar("kind", { length: 32 }).notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "version": varchar("version", { length: 40 }).notNull(),
+  "domain": varchar("domain", { length: 120 }).notNull(),
+  "description": text("description").notNull(),
+  "status": varchar("status", { length: 24 }).notNull(),
+  "enabled": boolean("enabled").notNull(),
+  "removable": boolean("removable").notNull(),
+  "dependenciesJson": text("dependenciesJson").notNull(),
+  "installedBy": integer("installedBy"),
+  "installedAt": timestamp("installedAt", { withTimezone: true, mode: "date" }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const budgetVersions = mysqlTable(
-  "budget_versions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    name: varchar("name", { length: 160 }).notNull(),
-    versionNumber: int("versionNumber").notNull(),
-    status: mysqlEnum("status", ["rascunho", "em_revisao", "aprovado", "arquivado"])
-      .default("rascunho")
-      .notNull(),
-    currency: varchar("currency", { length: 3 }).default("BRL").notNull(),
-    notes: text("notes"),
-    createdBy: int("createdBy").references(() => users.id),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("budget_versions_project_version_idx").on(
-      table.projectId,
-      table.versionNumber
-    ),
-    index("budget_versions_project_idx").on(table.projectId),
-  ]
-);
-
-export const budgetItems = mysqlTable(
-  "budget_items",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    budgetVersionId: int("budgetVersionId")
-      .notNull()
-      .references(() => budgetVersions.id),
-    wbsNodeId: int("wbsNodeId").references(() => wbsNodes.id),
-    code: varchar("code", { length: 48 }).notNull(),
-    description: varchar("description", { length: 240 }).notNull(),
-    unit: varchar("unit", { length: 32 }).notNull(),
-    quantity: decimal("quantity", { precision: 14, scale: 3 }).notNull(),
-    unitPrice: decimal("unitPrice", { precision: 14, scale: 2 }).notNull(),
-    compositionId: int("compositionId"),
-    compositionUnitCost: decimal("compositionUnitCost", { precision: 14, scale: 2 }),
-    productivity: decimal("productivity", { precision: 14, scale: 3 }),
-    plannedDurationDays: int("plannedDurationDays"),
-    source: varchar("source", { length: 80 }),
-    referencePeriod: varchar("referencePeriod", { length: 20 }),
-    compositionNote: text("compositionNote"),
-    isPriceException: boolean("isPriceException").default(false).notNull(),
-    sortOrder: int("sortOrder").default(0).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("budget_items_version_code_idx").on(
-      table.budgetVersionId,
-      table.code
-    ),
-    index("budget_items_version_idx").on(table.budgetVersionId),
-  ]
-);
-
-export const priceCatalogs = mysqlTable(
-  "price_catalogs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 160 }).notNull(),
-    sourceType: mysqlEnum("sourceType", ["propria", "SINAPI", "SEINFRA", "fornecedor"])
-      .notNull(),
-    state: varchar("state", { length: 2 }),
-    referencePeriod: varchar("referencePeriod", { length: 20 }).notNull(),
-    status: mysqlEnum("status", ["ativo", "arquivado"]).default("ativo").notNull(),
-    notes: text("notes"),
-    createdBy: int("createdBy").references(() => users.id),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [index("price_catalogs_reference_idx").on(table.referencePeriod)]
-);
-
-export const priceItems = mysqlTable(
-  "price_items",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    catalogId: int("catalogId")
-      .notNull()
-      .references(() => priceCatalogs.id),
-    code: varchar("code", { length: 64 }).notNull(),
-    description: varchar("description", { length: 240 }).notNull(),
-    unit: varchar("unit", { length: 32 }).notNull(),
-    itemType: mysqlEnum("itemType", ["material", "mao_de_obra", "equipamento", "servico"])
-      .notNull(),
-    unitPrice: decimal("unitPrice", { precision: 14, scale: 2 }).notNull(),
-    notes: text("notes"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("price_items_catalog_code_idx").on(table.catalogId, table.code),
-    index("price_items_catalog_idx").on(table.catalogId),
-  ]
-);
-
-export const serviceCompositions = mysqlTable(
-  "service_compositions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    code: varchar("code", { length: 64 }).notNull(),
-    description: varchar("description", { length: 240 }).notNull(),
-    unit: varchar("unit", { length: 32 }).notNull(),
-    sourceCatalogId: int("sourceCatalogId").references(() => priceCatalogs.id),
-    referencePeriod: varchar("referencePeriod", { length: 20 }),
-    status: mysqlEnum("status", ["rascunho", "validada", "arquivada"])
-      .default("rascunho")
-      .notNull(),
-    createdBy: int("createdBy").references(() => users.id),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("service_compositions_code_idx").on(table.code),
-    index("service_compositions_source_idx").on(table.sourceCatalogId),
-  ]
-);
-
-export const compositionComponents = mysqlTable(
-  "composition_components",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    compositionId: int("compositionId")
-      .notNull()
-      .references(() => serviceCompositions.id),
-    priceItemId: int("priceItemId")
-      .notNull()
-      .references(() => priceItems.id),
-    componentType: mysqlEnum("componentType", ["material", "mao_de_obra", "equipamento"])
-      .notNull(),
-    coefficient: decimal("coefficient", { precision: 14, scale: 6 }).notNull(),
-    unitPriceSnapshot: decimal("unitPriceSnapshot", { precision: 14, scale: 2 }).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    uniqueIndex("composition_components_unique_idx").on(
-      table.compositionId,
-      table.priceItemId
-    ),
-    index("composition_components_composition_idx").on(table.compositionId),
-  ]
-);
-
-export const llmProviderSettings = mysqlTable("llm_provider_settings", {
-  id: int("id").primaryKey(),
-  encryptedConfig: text("encryptedConfig").notNull(),
-  updatedBy: int("updatedBy").references(() => users.id),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const arquimedesCapabilityEvents = pgTable("arquimedes_capability_events", {
+  "id": serial("id").notNull(),
+  "capabilityId": varchar("capabilityId", { length: 120 }).notNull(),
+  "userId": integer("userId"),
+  "action": varchar("action", { length: 40 }).notNull(),
+  "fromStatus": varchar("fromStatus", { length: 40 }),
+  "toStatus": varchar("toStatus", { length: 40 }),
+  "detail": text("detail"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const agentProjectStates = mysqlTable(
-  "agent_project_states",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    stage: mysqlEnum("stage", [
-      "DESCRITIVO",
-      "EAP_PROPOSTA",
-      "EAP_REVISAO",
-      "ATIVIDADES_PROPOSTA",
-      "DEPENDENCIAS_PROPOSTA",
-      "CPM_VALIDADO",
-      "CRONOGRAMA_PROPOSTO",
-      "BASELINE_PROPOSTA",
-      "GANTT_LOB_PROPOSTO",
-      "CONTROLE",
-    ])
-      .default("DESCRITIVO")
-      .notNull(),
-    activeSection: varchar("activeSection", { length: 40 })
-      .default("portfolio")
-      .notNull(),
-    activeSubtab: varchar("activeSubtab", { length: 40 }),
-    blockerCount: int("blockerCount").default(0).notNull(),
-    lastSummary: text("lastSummary"),
-    version: int("version").default(1).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    uniqueIndex("agent_project_states_project_idx").on(table.projectId),
-    index("agent_project_states_stage_idx").on(table.stage),
-  ]
-);
+export const budgetItems = pgTable("budget_items", {
+  "id": serial("id").notNull(),
+  "budgetVersionId": integer("budgetVersionId").notNull(),
+  "wbsNodeId": integer("wbsNodeId"),
+  "code": varchar("code", { length: 48 }).notNull(),
+  "description": varchar("description", { length: 240 }).notNull(),
+  "unit": varchar("unit", { length: 32 }).notNull(),
+  "quantity": numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  "unitPrice": numeric("unitPrice", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  "compositionId": integer("compositionId"),
+  "compositionUnitCost": numeric("compositionUnitCost", { precision: 14, scale: 2, mode: "number" }),
+  "productivity": numeric("productivity", { precision: 14, scale: 3, mode: "number" }),
+  "plannedDurationDays": integer("plannedDurationDays"),
+  "source": varchar("source", { length: 80 }),
+  "referencePeriod": varchar("referencePeriod", { length: 20 }),
+  "compositionNote": text("compositionNote"),
+  "isPriceException": boolean("isPriceException").notNull(),
+  "sortOrder": integer("sortOrder").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
 
-export const agentFindings = mysqlTable(
-  "agent_findings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    stage: varchar("stage", { length: 50 }).notNull(),
-    classification: mysqlEnum("classification", [
-      "blocker",
-      "alert",
-      "recommendation",
-    ]).notNull(),
-    entityType: varchar("entityType", { length: 50 }).notNull(),
-    entityRef: varchar("entityRef", { length: 180 }),
-    sourceJson: text("sourceJson").notNull(),
-    originalValueJson: text("originalValueJson"),
-    proposedValueJson: text("proposedValueJson"),
-    description: text("description").notNull(),
-    impact: text("impact"),
-    confidence: mysqlEnum("confidence", ["high", "medium", "low"])
-      .default("medium")
-      .notNull(),
-    status: mysqlEnum("status", [
-      "open",
-      "confirmed",
-      "rejected",
-      "resolved",
-      "obsolete",
-    ])
-      .default("open")
-      .notNull(),
-    resolvedAt: timestamp("resolvedAt"),
-    resolvedBy: int("resolvedBy").references(() => users.id),
-    resolutionNote: text("resolutionNote"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    index("agent_findings_project_idx").on(table.projectId),
-    index("agent_findings_project_status_idx").on(
-      table.projectId,
-      table.status
-    ),
-  ]
-);
+export const budgetVersions = pgTable("budget_versions", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "name": varchar("name", { length: 160 }).notNull(),
+  "versionNumber": integer("versionNumber").notNull(),
+  "status": text("status").notNull(),
+  "currency": varchar("currency", { length: 3 }).notNull(),
+  "notes": text("notes"),
+  "createdBy": integer("createdBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
 
-export const agentMemories = mysqlTable(
-  "agent_memories",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId").references(() => projects.id),
-    ownerUserId: int("ownerUserId")
-      .notNull()
-      .references(() => users.id),
-    scope: mysqlEnum("scope", ["project", "client", "library"]).notNull(),
-    category: varchar("category", { length: 80 }).notNull(),
-    memoryKey: varchar("memoryKey", { length: 180 }).notNull(),
-    valueJson: text("valueJson").notNull(),
-    sourceType: varchar("sourceType", { length: 80 }).notNull(),
-    sourceRef: varchar("sourceRef", { length: 180 }),
-    confidence: mysqlEnum("confidence", ["high", "medium", "low"])
-      .default("medium")
-      .notNull(),
-    status: mysqlEnum("status", [
-      "proposed",
-      "approved",
-      "rejected",
-      "obsolete",
-    ])
-      .default("proposed")
-      .notNull(),
-    approvedBy: int("approvedBy").references(() => users.id),
-    approvedAt: timestamp("approvedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    index("agent_memories_project_idx").on(table.projectId),
-    index("agent_memories_owner_scope_idx").on(table.ownerUserId, table.scope),
-    index("agent_memories_status_idx").on(table.status),
-  ]
-);
+export const calendarExceptions = pgTable("calendar_exceptions", {
+  "id": serial("id").notNull(),
+  "calendarId": integer("calendarId").notNull(),
+  "date": varchar("date", { length: 10 }).notNull(),
+  "type": text("type").notNull(),
+  "name": varchar("name", { length: 180 }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+});
 
-export const agentRuns = mysqlTable(
-  "agent_runs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    requestId: varchar("requestId", { length: 128 }).notNull().unique(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id),
-    status: mysqlEnum("status", [
-      "executando",
-      "respondido",
-      "falhou",
-      "timeout",
-      "aguardando_confirmacao",
-      "dados_incompletos",
-    ])
-      .default("executando")
-      .notNull(),
-    currentStep: varchar("currentStep", { length: 120 }),
-    provider: varchar("provider", { length: 80 }),
-    model: varchar("model", { length: 160 }),
-    contextJson: text("contextJson").notNull(),
-    resultJson: text("resultJson"),
-    errorCode: varchar("errorCode", { length: 100 }),
-    errorMessage: text("errorMessage"),
-    iterations: int("iterations").default(0).notNull(),
-    startedAt: timestamp("startedAt").defaultNow().notNull(),
-    finishedAt: timestamp("finishedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => [
-    index("agent_runs_project_idx").on(table.projectId),
-    index("agent_runs_user_idx").on(table.userId),
-    index("agent_runs_status_idx").on(table.status),
-  ]
-);
+export const compositionComponents = pgTable("composition_components", {
+  "id": serial("id").notNull(),
+  "compositionId": integer("compositionId").notNull(),
+  "priceItemId": integer("priceItemId").notNull(),
+  "componentType": text("componentType").notNull(),
+  "coefficient": numeric("coefficient", { precision: 14, scale: 6, mode: "number" }).notNull(),
+  "unitPriceSnapshot": numeric("unitPriceSnapshot", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+});
 
-export const agentRunEvents = mysqlTable(
-  "agent_run_events",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    requestId: varchar("requestId", { length: 128 }).notNull(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id),
-    eventType: varchar("eventType", { length: 80 }).notNull(),
-    eventJson: text("eventJson").notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    index("agent_run_events_request_idx").on(table.requestId),
-    index("agent_run_events_project_idx").on(table.projectId),
-    index("agent_run_events_user_idx").on(table.userId),
-  ]
-);
+export const llmProviderSettings = pgTable("llm_provider_settings", {
+  "id": integer("id").notNull(),
+  "encryptedConfig": text("encryptedConfig").notNull(),
+  "updatedBy": integer("updatedBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
 
-export const projectAuditEvents = mysqlTable(
-  "project_audit_events",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    projectId: int("projectId")
-      .notNull()
-      .references(() => projects.id),
-    userId: int("userId").references(() => users.id),
-    action: varchar("action", { length: 64 }).notNull(),
-    payload: json("payload").notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => [
-    index("project_audit_events_project_idx").on(table.projectId, table.action),
-  ]
-);
+export const mcpHomologationRuns = pgTable("mcp_homologation_runs", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "userId": integer("userId").notNull(),
+  "requestId": varchar("requestId", { length: 128 }).notNull(),
+  "status": text("status").notNull(),
+  "planJson": text("planJson").notNull(),
+  "readOnlyResultJson": text("readOnlyResultJson"),
+  "reconciliationJson": text("reconciliationJson"),
+  "error": text("error"),
+  "startedAt": timestamp("startedAt", { withTimezone: true, mode: "date" }),
+  "finishedAt": timestamp("finishedAt", { withTimezone: true, mode: "date" }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
 
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
-export type Project = typeof projects.$inferSelect;
-export type InsertProject = typeof projects.$inferInsert;
-export type ProjectMcpIntegration = typeof projectMcpIntegrations.$inferSelect;
-export type InsertProjectMcpIntegration =
-  typeof projectMcpIntegrations.$inferInsert;
-export type McpMutationOperation = typeof mcpMutationOperations.$inferSelect;
-export type InsertMcpMutationOperation =
-  typeof mcpMutationOperations.$inferInsert;
-export type McpHomologationRun = typeof mcpHomologationRuns.$inferSelect;
-export type InsertMcpHomologationRun = typeof mcpHomologationRuns.$inferInsert;
-export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
-export type WbsNode = typeof wbsNodes.$inferSelect;
-export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;
-export type ProductionFront = typeof productionFronts.$inferSelect;
-export type ProductionTeam = typeof productionTeams.$inferSelect;
-export type ProductionUnit = typeof productionUnits.$inferSelect;
-export type ProductionEntry = typeof productionEntries.$inferSelect;
-export type LlmProviderSettings = typeof llmProviderSettings.$inferSelect;
-export type AgentProjectState = typeof agentProjectStates.$inferSelect;
-export type InsertAgentProjectState = typeof agentProjectStates.$inferInsert;
+export const mcpMutationOperations = pgTable("mcp_mutation_operations", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "userId": integer("userId").notNull(),
+  "provider": text("provider").notNull(),
+  "toolName": varchar("toolName", { length: 100 }).notNull(),
+  "externalProjectId": varchar("externalProjectId", { length: 180 }).notNull(),
+  "idempotencyKey": varchar("idempotencyKey", { length: 128 }).notNull(),
+  "confirmationToken": varchar("confirmationToken", { length: 64 }).notNull(),
+  "argsJson": text("argsJson").notNull(),
+  "resultJson": text("resultJson"),
+  "error": text("error"),
+  "status": text("status").notNull(),
+  "confirmedAt": timestamp("confirmedAt", { withTimezone: true, mode: "date" }),
+  "executedAt": timestamp("executedAt", { withTimezone: true, mode: "date" }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const planningResources = pgTable("planning_resources", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "resourceType": text("resourceType").notNull(),
+  "unit": varchar("unit", { length: 32 }).notNull(),
+  "capacityPerDay": numeric("capacityPerDay", { precision: 14, scale: 3, mode: "number" }),
+  "costPerDay": numeric("costPerDay", { precision: 14, scale: 2, mode: "number" }),
+  "active": integer("active").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const priceCatalogs = pgTable("price_catalogs", {
+  "id": serial("id").notNull(),
+  "name": varchar("name", { length: 160 }).notNull(),
+  "sourceType": text("sourceType").notNull(),
+  "state": varchar("state", { length: 2 }),
+  "referencePeriod": varchar("referencePeriod", { length: 20 }).notNull(),
+  "status": text("status").notNull(),
+  "notes": text("notes"),
+  "createdBy": integer("createdBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const priceItems = pgTable("price_items", {
+  "id": serial("id").notNull(),
+  "catalogId": integer("catalogId").notNull(),
+  "code": varchar("code", { length: 64 }).notNull(),
+  "description": varchar("description", { length: 240 }).notNull(),
+  "unit": varchar("unit", { length: 32 }).notNull(),
+  "itemType": text("itemType").notNull(),
+  "unitPrice": numeric("unitPrice", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  "notes": text("notes"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const productionEntries = pgTable("production_entries", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "frontId": integer("frontId"),
+  "teamId": integer("teamId"),
+  "unitId": integer("unitId"),
+  "activityId": integer("activityId").notNull(),
+  "productionDate": timestamp("productionDate", { withTimezone: true, mode: "date" }).notNull(),
+  "quantity": numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+  "measurementUnit": varchar("measurementUnit", { length: 32 }).notNull(),
+  "notes": text("notes"),
+  "status": text("status").notNull(),
+  "exemplo": integer("exemplo").notNull(),
+  "createdBy": integer("createdBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const productionFronts = pgTable("production_fronts", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "code": varchar("code", { length: 32 }).notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "location": varchar("location", { length: 180 }),
+  "status": text("status").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const productionTeams = pgTable("production_teams", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "trade": varchar("trade", { length: 120 }).notNull(),
+  "memberCount": integer("memberCount").notNull(),
+  "active": integer("active").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const productionUnits = pgTable("production_units", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "code": varchar("code", { length: 32 }).notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "unitType": varchar("unitType", { length: 80 }).notNull(),
+  "sortOrder": integer("sortOrder").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const projectAuditEvents = pgTable("project_audit_events", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "userId": integer("userId"),
+  "action": varchar("action", { length: 64 }).notNull(),
+  "payload": jsonb("payload").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const projectDocuments = pgTable("project_documents", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "ownerUserId": integer("ownerUserId"),
+  "fileName": varchar("fileName", { length: 255 }).notNull(),
+  "mimeType": varchar("mimeType", { length: 120 }).notNull(),
+  "sizeBytes": integer("sizeBytes").notNull(),
+  "content": bytea("content").notNull(),
+  "extractedText": text("extractedText"),
+  "analysisStatus": varchar("analysisStatus", { length: 32 }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const projectMcpIntegrations = pgTable("project_mcp_integrations", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "provider": text("provider").notNull(),
+  "externalProjectId": varchar("externalProjectId", { length: 180 }),
+  "endpointUrl": varchar("endpointUrl", { length: 500 }).notNull(),
+  "syncState": text("syncState").notNull(),
+  "lastSyncedAt": timestamp("lastSyncedAt", { withTimezone: true, mode: "date" }),
+  "lastError": text("lastError"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const projectPlanVersions = pgTable("project_plan_versions", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "versionNumber": integer("versionNumber").notNull(),
+  "status": text("status").notNull(),
+  "baseVersionId": integer("baseVersionId"),
+  "decisionId": integer("decisionId"),
+  "approvedAt": timestamp("approvedAt", { withTimezone: true, mode: "date" }),
+  "notes": text("notes"),
+  "createdBy": integer("createdBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const projects = pgTable("projects", {
+  "id": serial("id").notNull(),
+  "ownerUserId": integer("ownerUserId"),
+  "code": varchar("code", { length: 32 }).notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "location": varchar("location", { length: 180 }).notNull(),
+  "status": text("status").notNull(),
+  "progress": integer("progress").notNull(),
+  "descricao": text("descricao"),
+  "plannedStart": timestamp("plannedStart", { withTimezone: true, mode: "date" }).notNull(),
+  "plannedFinish": timestamp("plannedFinish", { withTimezone: true, mode: "date" }).notNull(),
+  "baseReferencia": text("baseReferencia"),
+  "baseReferenciaRef": varchar("baseReferenciaRef", { length: 20 }),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "deletedAt": timestamp("deletedAt", { withTimezone: true, mode: "date" }),
+  "deletedAtBy": integer("deletedAtBy"),
+  "tipoDeObra": varchar("tipoDeObra", { length: 32 }),
+});
+
+export const scheduleActivities = pgTable("schedule_activities", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "wbsNodeId": integer("wbsNodeId").notNull(),
+  "externalId": varchar("externalId", { length: 180 }),
+  "eapRef": varchar("eapRef", { length: 180 }),
+  "wbsCode": varchar("wbsCode", { length: 32 }).notNull(),
+  "name": varchar("name", { length: 220 }).notNull(),
+  "phase": varchar("phase", { length: 80 }).notNull(),
+  "pavimento": varchar("pavimento", { length: 80 }),
+  "startOffset": integer("startOffset").notNull(),
+  "durationDays": integer("durationDays").notNull(),
+  "plannedQuantity": numeric("plannedQuantity", { precision: 14, scale: 3, mode: "number" }),
+  "unit": varchar("unit", { length: 16 }),
+  "productivity": numeric("productivity", { precision: 14, scale: 3, mode: "number" }),
+  "budgetItemId": integer("budgetItemId"),
+  "progress": integer("progress").notNull(),
+  "exemplo": integer("exemplo").notNull(),
+  "status": text("status").notNull(),
+  "critical": integer("critical").notNull(),
+  "earlyStart": integer("earlyStart"),
+  "earlyFinish": integer("earlyFinish"),
+  "lateStart": integer("lateStart"),
+  "lateFinish": integer("lateFinish"),
+  "totalFloat": integer("totalFloat"),
+  "freeFloat": integer("freeFloat"),
+  "mustStartOn": timestamp("mustStartOn", { withTimezone: true, mode: "date" }),
+  "finishNoLaterThan": timestamp("finishNoLaterThan", { withTimezone: true, mode: "date" }),
+  "cpmCalculatedAt": timestamp("cpmCalculatedAt", { withTimezone: true, mode: "date" }),
+  "versionId": integer("versionId"),
+  "sortOrder": integer("sortOrder").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const scheduleBaselineItems = pgTable("schedule_baseline_items", {
+  "id": serial("id").notNull(),
+  "baselineId": integer("baselineId").notNull(),
+  "activityId": integer("activityId").notNull(),
+  "startOffset": integer("startOffset").notNull(),
+  "durationDays": integer("durationDays").notNull(),
+  "earlyStart": integer("earlyStart"),
+  "earlyFinish": integer("earlyFinish"),
+});
+
+export const scheduleBaselines = pgTable("schedule_baselines", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "name": varchar("name", { length: 160 }).notNull(),
+  "status": text("status").notNull(),
+  "createdBy": integer("createdBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const scheduleDependencies = pgTable("schedule_dependencies", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "externalId": varchar("externalId", { length: 180 }),
+  "predecessorId": integer("predecessorId").notNull(),
+  "successorId": integer("successorId").notNull(),
+  "type": text("type").notNull(),
+  "lag": integer("lag").notNull(),
+  "versionId": integer("versionId"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const serviceCompositions = pgTable("service_compositions", {
+  "id": serial("id").notNull(),
+  "code": varchar("code", { length: 64 }).notNull(),
+  "description": varchar("description", { length: 240 }).notNull(),
+  "unit": varchar("unit", { length: 32 }).notNull(),
+  "sourceCatalogId": integer("sourceCatalogId"),
+  "referencePeriod": varchar("referencePeriod", { length: 20 }),
+  "status": text("status").notNull(),
+  "createdBy": integer("createdBy"),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const users = pgTable("users", {
+  "id": serial("id").notNull(),
+  "openId": varchar("openId", { length: 64 }).notNull(),
+  "name": text("name"),
+  "email": varchar("email", { length: 320 }),
+  "loginMethod": varchar("loginMethod", { length: 64 }),
+  "role": text("role").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "lastSignedIn": timestamp("lastSignedIn", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export const wbsNodes = pgTable("wbs_nodes", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "externalId": varchar("externalId", { length: 180 }),
+  "externalUid": varchar("externalUid", { length: 180 }),
+  "parentId": integer("parentId"),
+  "code": varchar("code", { length: 32 }).notNull(),
+  "name": varchar("name", { length: 220 }).notNull(),
+  "level": integer("level").notNull(),
+  "nodeType": text("nodeType").notNull(),
+  "unit": varchar("unit", { length: 32 }),
+  "plannedQuantity": numeric("plannedQuantity", { precision: 14, scale: 3, mode: "number" }),
+  "versionId": integer("versionId"),
+  "sortOrder": integer("sortOrder").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "description": text("description"),
+  "inclusions": text("inclusions"),
+  "exclusions": text("exclusions"),
+  "location": varchar("location", { length: 180 }),
+  "responsible": varchar("responsible", { length: 180 }),
+  "acceptanceCriteria": text("acceptanceCriteria"),
+  "scopeStatus": varchar("scopeStatus", { length: 24 }).notNull(),
+  "decompositionBasis": varchar("decompositionBasis", { length: 32 }),
+});
+
+export const workCalendars = pgTable("work_calendars", {
+  "id": serial("id").notNull(),
+  "projectId": integer("projectId").notNull(),
+  "name": varchar("name", { length: 180 }).notNull(),
+  "weekPattern": jsonb("weekPattern").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+});
+
+export type ActivityResourceAllocations = typeof activityResourceAllocations.$inferSelect;
+export type InsertActivityResourceAllocations = typeof activityResourceAllocations.$inferInsert;
+export type ActivityResourceAllocation = typeof activityResourceAllocations.$inferSelect;
+export type InsertActivityResourceAllocation = typeof activityResourceAllocations.$inferInsert;
+export type AgentDecisions = typeof agentDecisions.$inferSelect;
+export type InsertAgentDecisions = typeof agentDecisions.$inferInsert;
 export type AgentDecision = typeof agentDecisions.$inferSelect;
 export type InsertAgentDecision = typeof agentDecisions.$inferInsert;
+export type AgentFindings = typeof agentFindings.$inferSelect;
+export type InsertAgentFindings = typeof agentFindings.$inferInsert;
 export type AgentFinding = typeof agentFindings.$inferSelect;
 export type InsertAgentFinding = typeof agentFindings.$inferInsert;
+export type AgentMemories = typeof agentMemories.$inferSelect;
+export type InsertAgentMemories = typeof agentMemories.$inferInsert;
 export type AgentMemory = typeof agentMemories.$inferSelect;
 export type InsertAgentMemory = typeof agentMemories.$inferInsert;
-export type AgentRun = typeof agentRuns.$inferSelect;
-export type InsertAgentRun = typeof agentRuns.$inferInsert;
+export type AgentProjectStates = typeof agentProjectStates.$inferSelect;
+export type InsertAgentProjectStates = typeof agentProjectStates.$inferInsert;
+export type AgentProjectState = typeof agentProjectStates.$inferSelect;
+export type InsertAgentProjectState = typeof agentProjectStates.$inferInsert;
+export type AgentRunEvents = typeof agentRunEvents.$inferSelect;
+export type InsertAgentRunEvents = typeof agentRunEvents.$inferInsert;
 export type AgentRunEvent = typeof agentRunEvents.$inferSelect;
 export type InsertAgentRunEvent = typeof agentRunEvents.$inferInsert;
+export type AgentRuns = typeof agentRuns.$inferSelect;
+export type InsertAgentRuns = typeof agentRuns.$inferInsert;
+export type AgentRun = typeof agentRuns.$inferSelect;
+export type InsertAgentRun = typeof agentRuns.$inferInsert;
+export type ArquimedesCapabilities = typeof arquimedesCapabilities.$inferSelect;
+export type InsertArquimedesCapabilities = typeof arquimedesCapabilities.$inferInsert;
+export type ArquimedesCapability = typeof arquimedesCapabilities.$inferSelect;
+export type InsertArquimedesCapability = typeof arquimedesCapabilities.$inferInsert;
+export type ArquimedesCapabilityEvents = typeof arquimedesCapabilityEvents.$inferSelect;
+export type InsertArquimedesCapabilityEvents = typeof arquimedesCapabilityEvents.$inferInsert;
+export type ArquimedesCapabilityEvent = typeof arquimedesCapabilityEvents.$inferSelect;
+export type InsertArquimedesCapabilityEvent = typeof arquimedesCapabilityEvents.$inferInsert;
+export type BudgetItems = typeof budgetItems.$inferSelect;
+export type InsertBudgetItems = typeof budgetItems.$inferInsert;
+export type BudgetItem = typeof budgetItems.$inferSelect;
+export type InsertBudgetItem = typeof budgetItems.$inferInsert;
+export type BudgetVersions = typeof budgetVersions.$inferSelect;
+export type InsertBudgetVersions = typeof budgetVersions.$inferInsert;
+export type BudgetVersion = typeof budgetVersions.$inferSelect;
+export type InsertBudgetVersion = typeof budgetVersions.$inferInsert;
+export type CalendarExceptions = typeof calendarExceptions.$inferSelect;
+export type InsertCalendarExceptions = typeof calendarExceptions.$inferInsert;
+export type CalendarException = typeof calendarExceptions.$inferSelect;
+export type InsertCalendarException = typeof calendarExceptions.$inferInsert;
+export type CompositionComponents = typeof compositionComponents.$inferSelect;
+export type InsertCompositionComponents = typeof compositionComponents.$inferInsert;
+export type CompositionComponent = typeof compositionComponents.$inferSelect;
+export type InsertCompositionComponent = typeof compositionComponents.$inferInsert;
+export type LlmProviderSettings = typeof llmProviderSettings.$inferSelect;
+export type InsertLlmProviderSettings = typeof llmProviderSettings.$inferInsert;
+export type LlmProviderSetting = typeof llmProviderSettings.$inferSelect;
+export type InsertLlmProviderSetting = typeof llmProviderSettings.$inferInsert;
+export type McpHomologationRuns = typeof mcpHomologationRuns.$inferSelect;
+export type InsertMcpHomologationRuns = typeof mcpHomologationRuns.$inferInsert;
+export type McpHomologationRun = typeof mcpHomologationRuns.$inferSelect;
+export type InsertMcpHomologationRun = typeof mcpHomologationRuns.$inferInsert;
+export type McpMutationOperations = typeof mcpMutationOperations.$inferSelect;
+export type InsertMcpMutationOperations = typeof mcpMutationOperations.$inferInsert;
+export type McpMutationOperation = typeof mcpMutationOperations.$inferSelect;
+export type InsertMcpMutationOperation = typeof mcpMutationOperations.$inferInsert;
+export type PlanningResources = typeof planningResources.$inferSelect;
+export type InsertPlanningResources = typeof planningResources.$inferInsert;
+export type PlanningResource = typeof planningResources.$inferSelect;
+export type InsertPlanningResource = typeof planningResources.$inferInsert;
+export type PriceCatalogs = typeof priceCatalogs.$inferSelect;
+export type InsertPriceCatalogs = typeof priceCatalogs.$inferInsert;
+export type PriceCatalog = typeof priceCatalogs.$inferSelect;
+export type InsertPriceCatalog = typeof priceCatalogs.$inferInsert;
+export type PriceItems = typeof priceItems.$inferSelect;
+export type InsertPriceItems = typeof priceItems.$inferInsert;
+export type PriceItem = typeof priceItems.$inferSelect;
+export type InsertPriceItem = typeof priceItems.$inferInsert;
+export type ProductionEntries = typeof productionEntries.$inferSelect;
+export type InsertProductionEntries = typeof productionEntries.$inferInsert;
+export type ProductionEntry = typeof productionEntries.$inferSelect;
+export type InsertProductionEntry = typeof productionEntries.$inferInsert;
+export type ProductionFronts = typeof productionFronts.$inferSelect;
+export type InsertProductionFronts = typeof productionFronts.$inferInsert;
+export type ProductionFront = typeof productionFronts.$inferSelect;
+export type InsertProductionFront = typeof productionFronts.$inferInsert;
+export type ProductionTeams = typeof productionTeams.$inferSelect;
+export type InsertProductionTeams = typeof productionTeams.$inferInsert;
+export type ProductionTeam = typeof productionTeams.$inferSelect;
+export type InsertProductionTeam = typeof productionTeams.$inferInsert;
+export type ProductionUnits = typeof productionUnits.$inferSelect;
+export type InsertProductionUnits = typeof productionUnits.$inferInsert;
+export type ProductionUnit = typeof productionUnits.$inferSelect;
+export type InsertProductionUnit = typeof productionUnits.$inferInsert;
+export type ProjectAuditEvents = typeof projectAuditEvents.$inferSelect;
+export type InsertProjectAuditEvents = typeof projectAuditEvents.$inferInsert;
+export type ProjectAuditEvent = typeof projectAuditEvents.$inferSelect;
+export type InsertProjectAuditEvent = typeof projectAuditEvents.$inferInsert;
+export type ProjectDocuments = typeof projectDocuments.$inferSelect;
+export type InsertProjectDocuments = typeof projectDocuments.$inferInsert;
+export type ProjectDocument = typeof projectDocuments.$inferSelect;
+export type InsertProjectDocument = typeof projectDocuments.$inferInsert;
+export type ProjectMcpIntegrations = typeof projectMcpIntegrations.$inferSelect;
+export type InsertProjectMcpIntegrations = typeof projectMcpIntegrations.$inferInsert;
+export type ProjectMcpIntegration = typeof projectMcpIntegrations.$inferSelect;
+export type InsertProjectMcpIntegration = typeof projectMcpIntegrations.$inferInsert;
+export type ProjectPlanVersions = typeof projectPlanVersions.$inferSelect;
+export type InsertProjectPlanVersions = typeof projectPlanVersions.$inferInsert;
+export type ProjectPlanVersion = typeof projectPlanVersions.$inferSelect;
+export type InsertProjectPlanVersion = typeof projectPlanVersions.$inferInsert;
+export type Projects = typeof projects.$inferSelect;
+export type InsertProjects = typeof projects.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = typeof projects.$inferInsert;
+export type ScheduleActivities = typeof scheduleActivities.$inferSelect;
+export type InsertScheduleActivities = typeof scheduleActivities.$inferInsert;
+export type ScheduleActivity = typeof scheduleActivities.$inferSelect;
+export type InsertScheduleActivity = typeof scheduleActivities.$inferInsert;
+export type ScheduleBaselineItems = typeof scheduleBaselineItems.$inferSelect;
+export type InsertScheduleBaselineItems = typeof scheduleBaselineItems.$inferInsert;
+export type ScheduleBaselineItem = typeof scheduleBaselineItems.$inferSelect;
+export type InsertScheduleBaselineItem = typeof scheduleBaselineItems.$inferInsert;
+export type ScheduleBaselines = typeof scheduleBaselines.$inferSelect;
+export type InsertScheduleBaselines = typeof scheduleBaselines.$inferInsert;
+export type ScheduleBaseline = typeof scheduleBaselines.$inferSelect;
+export type InsertScheduleBaseline = typeof scheduleBaselines.$inferInsert;
+export type ScheduleDependencies = typeof scheduleDependencies.$inferSelect;
+export type InsertScheduleDependencies = typeof scheduleDependencies.$inferInsert;
+export type ScheduleDependency = typeof scheduleDependencies.$inferSelect;
+export type InsertScheduleDependency = typeof scheduleDependencies.$inferInsert;
+export type ServiceCompositions = typeof serviceCompositions.$inferSelect;
+export type InsertServiceCompositions = typeof serviceCompositions.$inferInsert;
+export type ServiceComposition = typeof serviceCompositions.$inferSelect;
+export type InsertServiceComposition = typeof serviceCompositions.$inferInsert;
+export type Users = typeof users.$inferSelect;
+export type InsertUsers = typeof users.$inferInsert;
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+export type WbsNodes = typeof wbsNodes.$inferSelect;
+export type InsertWbsNodes = typeof wbsNodes.$inferInsert;
+export type WbsNode = typeof wbsNodes.$inferSelect;
+export type InsertWbsNode = typeof wbsNodes.$inferInsert;
+export type WorkCalendars = typeof workCalendars.$inferSelect;
+export type InsertWorkCalendars = typeof workCalendars.$inferInsert;
+export type WorkCalendar = typeof workCalendars.$inferSelect;
+export type InsertWorkCalendar = typeof workCalendars.$inferInsert;
