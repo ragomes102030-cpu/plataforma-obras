@@ -1018,15 +1018,13 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       )}
 
       <div className="eap-arvore" role="tree" aria-label="Estrutura da obra">
-        <div className="eap-grid-head" aria-hidden="true">
+        <div className="eap-grid-head eap-grid-head-enxuta" aria-hidden="true">
           <span className="eap-grid-canto" />
-          <span className="eap-grid-col" />
           <span className="eap-grid-col">EAP</span>
           <span className="eap-grid-col">ESCOPO / ENTREGÁVEL</span>
           <span className="eap-grid-col">TIPO</span>
-          <span className="eap-grid-col">BASE</span>
-          <span className="eap-grid-col">REFERÊNCIA</span>
-          <span className="eap-grid-col">UN.</span>
+          <span className="eap-grid-col">RESPONSÁVEL</span>
+          <span className="eap-grid-col">LOCAL</span>
           <span className="eap-grid-col">STATUS</span>
         </div>
         {filtrada.map(no => (
@@ -1167,6 +1165,8 @@ function NoDaArvore({
     <div role="treeitem" aria-expanded={temFilhos ? aberto : undefined}>
       <div
         className={`eap-linha eap-nivel-${no.level}${no.nodeType === "entrega" ? " eap-folha" : " eap-grupo"}`}
+        title="Duplo clique para abrir a ficha do escopo"
+        onDoubleClick={() => aoEditar(no.id)}
       >
         <span className="eap-rownum" aria-hidden="true">{no.code}</span>
         <span className="eap-indent" style={{ paddingLeft: profundidade * 18 }}>
@@ -1184,16 +1184,13 @@ function NoDaArvore({
         <span className="eap-codigo">{no.code}</span>
         <span
           className="eap-nome"
-          title={`${no.name} · Base de decomposição: ${no.decompositionBasis || "não informada"}`}
+          title={`${no.name} · Duplo clique para abrir a ficha do escopo`}
         >
           {no.name}
         </span>
-        <span className="eap-tipo">{no.nodeType === "grupo" ? "FASE / GRUPO" : no.nodeType === "pacote" ? "SISTEMA / PACOTE" : "ENTREGA"}</span>
-        <span className="eap-base">{no.decompositionBasis || "—"}</span>
-        <span className="eap-oficial" title={no.externalId ? "Referência externa vinculada posteriormente" : "Sem vínculo com catálogo nesta etapa"}>
-          {no.externalId || "—"}
-        </span>
-        <span className="eap-unidade">{no.unit || "—"}</span>
+        <span className="eap-tipo">{no.nodeType === "grupo" ? "FASE / GRUPO" : no.nodeType === "pacote" ? "PACOTE DE TRABALHO" : "ENTREGA"}</span>
+        <span className="eap-responsavel">{no.responsible || "—"}</span>
+        <span className="eap-local">{no.location || "—"}</span>
         <span className="eap-status-cell">
           {no.nodeType === "entrega" ? (
             jaNoCronograma(no.code) ? (
@@ -1275,8 +1272,8 @@ function EditorEapPanel({
     (atual?.decompositionBasis as EapBasis | null) ??
       (editor.mode === "create" && editor.parentId === null ? "project" : "deliverable")
   );
-  const [unit, setUnit] = useState(atual?.unit ?? "");
-  const [quantity, setQuantity] = useState(atual?.plannedQuantity == null ? "" : String(atual.plannedQuantity));
+  const unit = atual?.unit ?? "";
+  const quantity = atual?.plannedQuantity == null ? "" : String(atual.plannedQuantity);
   const [description, setDescription] = useState(atual?.description ?? "");
   const [inclusions, setInclusions] = useState(atual?.inclusions ?? "");
   const [exclusions, setExclusions] = useState(atual?.exclusions ?? "");
@@ -1315,9 +1312,14 @@ function EditorEapPanel({
         </div>
         <button type="button" className="eap-editor-fechar" onClick={onCancel} aria-label="Cancelar"><X size={15} /></button>
       </div>
+      <div className="eap-editor-contexto">
+        <span>{editor.mode === "edit" ? "FICHA DO ESCOPO" : "NOVO ITEM"}</span>
+        <small>{atual?.nodeType === "entrega" ? "Pacote terminal / entrega controlável" : atual ? "Elemento estrutural da EAP" : "Defina primeiro a posição e o papel do novo item."}</small>
+      </div>
       <div className="eap-editor-campos">
+        <div className="eap-editor-secao"><strong>Identidade do escopo</strong><span>Campos que definem a estrutura e o significado do item.</span></div>
         <label>
-          <span>Nome / descrição</span>
+          <span>Nome do elemento</span>
           <input value={name} onChange={e => setName(e.target.value)} autoFocus maxLength={220} />
         </label>
         <label>
@@ -1341,20 +1343,20 @@ function EditorEapPanel({
             <option value="other">Outro critério explícito</option>
           </select>
         </label>
-        <label>
-          <span>Unidade</span>
-          <input value={unit} onChange={e => setUnit(e.target.value)} maxLength={32} placeholder="ex.: m², m³, un" />
-        </label>
-        <label>
-          <span>Quantidade planejada</span>
-          <input type="number" min="0" step="0.001" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Opcional" />
-        </label>
+        <div className="eap-editor-secao"><strong>Informações de controle</strong><span>Responsabilidade e localização ajudam a tornar o pacote controlável; quantitativos ficam na etapa própria.</span></div>
         <label><span>Localização</span><input value={location} onChange={e => setLocation(e.target.value)} maxLength={180} placeholder="ex.: Torre A · pavimento 04" /></label>
         <label><span>Responsável</span><input value={responsible} onChange={e => setResponsible(e.target.value)} maxLength={180} placeholder="Responsável pelo pacote" /></label>
+        <div className="eap-editor-secao"><strong>Dicionário do escopo</strong><span>O que está dentro, fora e como a entrega será aceita.</span></div>
         <label><span>Descrição / escopo</span><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={5000} rows={3} /></label>
         <label><span>Inclusões</span><textarea value={inclusions} onChange={e => setInclusions(e.target.value)} maxLength={5000} rows={2} /></label>
         <label><span>Exclusões</span><textarea value={exclusions} onChange={e => setExclusions(e.target.value)} maxLength={5000} rows={2} /></label>
         <label><span>Critério de aceitação</span><textarea value={acceptanceCriteria} onChange={e => setAcceptanceCriteria(e.target.value)} maxLength={5000} rows={2} /></label>
+        <div className="eap-editor-secao"><strong>Integrações posteriores</strong><span>Unidade e quantidade pertencem aos quantitativos; custo ao orçamento; duração e datas ao cronograma.</span></div>
+        <div className="eap-editor-integracoes">
+          <span>Quantitativos <b>{unit || "unidade não definida"}{quantity ? ` · ${quantity}` : ""}</b></span>
+          <span>Orçamento <b>etapa própria</b></span>
+          <span>Atividades <b>etapa própria</b></span>
+        </div>
         <div className="eap-editor-acoes">
           <button type="button" className="eap-btn-secundario" onClick={onCancel} disabled={busy}><X size={13} /> Cancelar</button>
           <button type="button" className="eap-btn" onClick={salvar} disabled={busy || !name.trim()}><Check size={13} /> {busy ? "Salvando…" : "Salvar"}</button>
