@@ -101,7 +101,7 @@ export const ABAS: readonly AbaDoSistema[] = [
   },
   {
     id: "financeiro",
-    rotulo: "FINANCEIRO",
+    rotulo: "ORÇAMENTO E CUSTOS",
     status: "pendente",
     falta:
       "Medição, faturamento e pagamento são três coisas distintas. Falta a estrutura financeira da obra para comparar planejado, medido, faturado e pago.",
