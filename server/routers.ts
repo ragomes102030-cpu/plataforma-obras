@@ -572,17 +572,6 @@ async function getCurrentPlanVersionId(
   return version?.id ?? null;
 }
 
-function versionScopedCondition<TColumn>(
-  projectColumn: TColumn,
-  versionColumn: TColumn,
-  projectId: number,
-  versionId: number | null
-) {
-  return versionId == null
-    ? and(eq(projectColumn as any, projectId), isNull(versionColumn as any))
-    : and(eq(projectColumn as any, projectId), eq(versionColumn as any, versionId));
-}
-
 async function assertAvailableWbsCode(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
