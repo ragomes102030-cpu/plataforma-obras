@@ -1591,3 +1591,237 @@
   font-size: 9px;
   font-weight: 800;
 }
+
+
+/* ==========================================================================
+   Navegação principal da obra — sidebar recolhível
+   ========================================================================== */
+.xl-pasta-sidebar{
+  display:flex;
+  flex-direction:row;
+  min-height:0;
+  height:calc(100vh - 0px);
+  background:#f5f7f8;
+}
+.xl-sidebar{
+  width:236px;
+  flex:0 0 236px;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  background:#fff;
+  border-right:1px solid #d9e1e6;
+  transition:width .18s ease, flex-basis .18s ease;
+  z-index:5;
+}
+.xl-pasta-sidebar.sidebar-recolhida .xl-sidebar{
+  width:58px;
+  flex-basis:58px;
+}
+.xl-sidebar-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  min-height:58px;
+  padding:8px 10px 8px 13px;
+  border-bottom:1px solid #e5eaee;
+}
+.xl-sidebar-brand{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+  color:#236879;
+}
+.xl-sidebar-brand>div{min-width:0;display:grid;gap:2px}
+.xl-sidebar-brand strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#24343c;
+  font-size:11px;
+}
+.xl-sidebar-brand span{font-size:9px;color:#87949b}
+.xl-sidebar-toggle{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  border:1px solid #d6dfe4;
+  border-radius:5px;
+  background:#fff;
+  color:#61737b;
+  cursor:pointer;
+}
+.xl-sidebar-toggle:hover{background:#f2f7f8;color:#236879;border-color:#b9ccd2}
+.xl-sidebar-nav{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:10px 8px;
+}
+.xl-sidebar-group{display:grid;gap:2px;margin-bottom:13px}
+.xl-sidebar-label{
+  padding:4px 9px 6px;
+  color:#8a979d;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.12em;
+}
+.xl-sidebar-item{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  min-height:38px;
+  padding:0 10px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:#53636b;
+  font:inherit;
+  font-size:11px;
+  font-weight:650;
+  text-align:left;
+  cursor:pointer;
+}
+.xl-sidebar-item svg{flex:0 0 auto;color:#7b8b92}
+.xl-sidebar-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xl-sidebar-item small{
+  margin-left:auto;
+  color:#a17b38;
+  font-size:8px;
+  font-weight:700;
+}
+.xl-sidebar-item:hover{background:#f3f7f8;color:#244d59}
+.xl-sidebar-item:hover svg{color:#236879}
+.xl-sidebar-item.ativa{
+  background:#eaf4f6;
+  color:#1f6576;
+  box-shadow:inset 3px 0 0 #2f7c8e;
+}
+.xl-sidebar-item.ativa svg{color:#236879}
+.sidebar-recolhida .xl-sidebar-head{justify-content:center;padding:8px}
+.sidebar-recolhida .xl-sidebar-brand{display:none}
+.sidebar-recolhida .xl-sidebar-nav{padding-left:9px;padding-right:9px}
+.sidebar-recolhida .xl-sidebar-group{margin-bottom:10px}
+.sidebar-recolhida .xl-sidebar-item{justify-content:center;padding:0}
+.sidebar-recolhida .xl-sidebar-item.ativa{box-shadow:none}
+.xl-sidebar-foot{
+  padding:8px;
+  border-top:1px solid #e5eaee;
+}
+.xl-sidebar-foot button{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  width:100%;
+  min-height:38px;
+  border:1px solid #cfe0e5;
+  border-radius:6px;
+  background:#f2f8f9;
+  color:#236879;
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+}
+.xl-sidebar-foot button:hover{background:#e7f2f4}
+.xl-area-sidebar{
+  flex:1 1 auto;
+  min-width:0;
+  min-height:0;
+  overflow:auto;
+  background:#f5f7f8;
+}
+.xl-escopo{
+  max-width:1200px;
+  margin:0 auto;
+  padding:28px;
+}
+.xl-escopo-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:18px;
+  padding-bottom:20px;
+  border-bottom:1px solid #dce4e8;
+}
+.xl-escopo-head>div:first-child{min-width:0}
+.xl-escopo-head span{
+  color:#2f7484;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.14em;
+}
+.xl-escopo-head h1{margin:6px 0 5px;color:#24343c;font-size:24px;letter-spacing:-.025em}
+.xl-escopo-head p{margin:0;color:#718089;font-size:12px}
+.xl-escopo-status{
+  padding:7px 10px;
+  border:1px solid #cfe0d5;
+  border-radius:999px;
+  background:#f2f8f4;
+  color:#4d755c;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.xl-escopo-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:16px;
+}
+.xl-escopo-card{
+  min-height:145px;
+  padding:18px;
+  border:1px solid #dce4e8;
+  border-radius:8px;
+  background:#fff;
+}
+.xl-escopo-card small{color:#839199;font-size:8px;font-weight:800;letter-spacing:.12em}
+.xl-escopo-card h3{margin:7px 0 6px;color:#2b3d45;font-size:14px}
+.xl-escopo-card p{margin:0;color:#66767e;font-size:11px;line-height:1.55}
+.xl-escopo-arquimedes{background:#f7fbfc;border-color:#cfe1e6}
+.xl-escopo-arquimedes button{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-top:14px;
+  min-height:32px;
+  padding:0 10px;
+  border:1px solid #b9d3da;
+  border-radius:5px;
+  background:#fff;
+  color:#236879;
+  font:inherit;
+  font-size:10px;
+  font-weight:700;
+  cursor:pointer;
+}
+.xl-escopo-arquimedes button:hover{background:#eef7f8}
+.xl-escopo-nota{
+  margin-top:14px;
+  padding:12px 14px;
+  border:1px solid #dce4e8;
+  border-radius:7px;
+  background:#fff;
+  color:#65757d;
+  font-size:10px;
+}
+.xl-escopo-nota strong{color:#2f5965}
+@media(max-width:760px){
+  .xl-sidebar{width:58px;flex-basis:58px}
+  .xl-sidebar-brand,.xl-sidebar-label,.xl-sidebar-item span,.xl-sidebar-item small,.xl-sidebar-foot span{display:none}
+  .xl-sidebar-head{justify-content:center;padding:8px}
+  .xl-sidebar-nav{padding-left:9px;padding-right:9px}
+  .xl-sidebar-item{justify-content:center;padding:0}
+  .xl-sidebar-item.ativa{box-shadow:none}
+  .xl-sidebar-foot button{padding:0}
+  .xl-escopo{padding:18px 14px}
+  .xl-escopo-grid{grid-template-columns:1fr}
+}
