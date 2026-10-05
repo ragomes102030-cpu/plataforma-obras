@@ -3,10 +3,11 @@ services:
     name: plataforma-obras-api
     runtime: node
     plan: free
-    buildCommand: pnpm install --no-frozen-lockfile && pnpm build
-    # O schema/dados do banco sao gerenciados separadamente no Supabase.
-    # O boot da API nao deve bloquear tentando migrar/auditar o PostgreSQL antigo.
-    startCommand: pnpm start
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    # O schema do Supabase e gerenciado separadamente. O primeiro script faz apenas
+    # a manutencao idempotente das sequences identity no boot; a auditoria e somente leitura.
+    # Os separadores sao ';' para que a API ainda suba mesmo se uma etapa auxiliar falhar.
+    startCommand: node scripts/migrate-pg.mjs; node scripts/audit-schema-pg.mjs; pnpm start
     autoDeploy: true
     healthCheckPath: /healthz
     envVars:
