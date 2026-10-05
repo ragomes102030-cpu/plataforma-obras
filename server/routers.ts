@@ -3481,7 +3481,7 @@ export const appRouter = router({
           )
           .limit(1);
         if (!writableNode) throw badRequest("Não foi possível preparar a versão de trabalho da EAP para a atividade.");
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: writableNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: createdId.id });
+        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: writableNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: scheduleActivities.id });
         return { id: createdId.id };
       }),
     generateFromEap: protectedProcedure
