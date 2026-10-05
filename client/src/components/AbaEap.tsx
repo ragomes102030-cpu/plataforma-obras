@@ -699,25 +699,37 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
 
       <div className="eap-controle">
         <div className="eap-controle-cabecalho">
-          <div>
-            <strong><BookOpen size={15} /> Dicionário e controle da EAP</strong>
-            <span>{coordenador.data?.stage ? `Etapa atual: ${coordenador.data.stage}` : "Conferência da estrutura, prontidão e baseline"}</span>
+          <div className="eap-controle-identidade">
+            <div className="eap-controle-icone"><BookOpen size={15} /></div>
+            <div>
+              <strong>Controle da EAP</strong>
+              <span>Dicionário, prontidão e transição para as próximas etapas</span>
+            </div>
           </div>
-          <button type="button" className="eap-tool-btn" onClick={() => setControleAberto(value => !value)}>
-            {controleAberto ? "Ocultar controle" : "Mostrar controle"}
-          </button>
+          <div className="eap-controle-cabecalho-acoes">
+            {coordenador.data?.stage && <span className="eap-etapa-chip">ETAPA · {coordenador.data.stage.replaceAll("_", " ")}</span>}
+            <button type="button" className="eap-tool-btn" onClick={() => setControleAberto(value => !value)}>
+              {controleAberto ? "Ocultar" : "Mostrar"}
+            </button>
+          </div>
         </div>
         {controleAberto && <>
           <div className="eap-dicionario-padrao" role="region" aria-label="Padrão de dicionário da EAP">
-            <div>
-              <strong>Padrão do dicionário</strong>
-              <span>{dicionarioPadrao.data?.status === "approved"
-                ? "Regra aprovada pelo engenheiro e usada como régua de conformidade."
-                : "Proposta técnica aguardando decisão do engenheiro. Não altera a EAP nem cria regra automaticamente."}</span>
+            <div className="eap-dicionario-padrao-intro">
+              <div>
+                <span className="eap-secao-kicker">PADRÃO DE CONFORMIDADE</span>
+                <strong>{dicionarioPadrao.data?.status === "approved" ? "Padrão aprovado" : "Padrão aguardando decisão"}</strong>
+                <p>{dicionarioPadrao.data?.status === "approved"
+                  ? "As regras abaixo são usadas pelo Arquimedes para avaliar a completude do dicionário."
+                  : "A proposta técnica ainda depende da decisão do engenheiro. Nenhuma regra é criada automaticamente."}</p>
+              </div>
+              <span className={dicionarioPadrao.data?.status === "approved" ? "eap-status-mini ok" : "eap-status-mini atencao"}>
+                {dicionarioPadrao.data?.status === "approved" ? "APROVADO" : "AGUARDANDO"}
+              </span>
             </div>
             <div className="eap-dicionario-padrao-campos">
-              <small>Obrigatórios: descrição · inclusões · exclusões · critério de aceitação · responsável · status do escopo · base de decomposição</small>
-              <small>Condicionais: localização · unidade · quantidade</small>
+              <div><span>OBRIGATÓRIOS</span><small>Descrição · inclusões · exclusões · critério de aceitação · responsável · status do escopo · base de decomposição</small></div>
+              <div><span>CONDICIONAIS</span><small>Localização · unidade · quantidade</small></div>
             </div>
             {dicionarioPadrao.data?.status !== "approved" && (
               <div className="eap-dicionario-padrao-acoes">
@@ -729,21 +741,46 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           </div>
           <div className="eap-controle-grid">
             <div className={`eap-controle-card ${dicionarioPendenteDecisao ? "atencao" : folhasSemDicionario.length ? "atencao" : "ok"}`}><span>Dicionário</span><strong>{dicionarioPendenteDecisao ? "AGUARDANDO" : `${folhasEap.length - folhasSemDicionario.length}/${folhasEap.length}`}</strong><small>{dicionarioPendenteDecisao ? "Padrão ainda não aprovado" : folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) fora do padrão` : "Todas as folhas conformes"}</small></div>
-            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "ok"}`}><span>Quantitativos</span><strong>{folhasSemQuantidade.length ? "PENDENTE" : "PRONTO"}</strong><small>{dicionarioPendenteDecisao ? "Aplicabilidade ainda não definida pelo padrão" : folhasSemQuantidade.length ? `${folhasSemQuantidade.length} pacote(s) aguardando unidade/quantidade` : "Levantamento quantitativo preenchido"}</small></div>
+            <div className={`eap-controle-card ${folhasSemQuantidade.length ? "atencao" : "neutro"}`}><span>Quantitativos</span><strong>{dicionarioPendenteDecisao ? "PRÓXIMA ETAPA" : folhasSemQuantidade.length ? `${folhasSemQuantidade.length} PENDENTES` : "DISPONÍVEL"}</strong><small>{dicionarioPendenteDecisao ? "Não avaliados antes da regra do dicionário" : folhasSemQuantidade.length ? `${folhasSemQuantidade.length} pacote(s) aguardando unidade/quantidade` : "Levantamento pronto para a etapa quantitativa"}</small></div>
             <div className={`eap-controle-card ${pacotesTrabalho.length ? "ok" : "atencao"}`}><span>Pacotes de trabalho</span><strong>{pacotesTrabalho.length}</strong><small>Folhas terminais controláveis</small></div>
-            <div className={`eap-controle-card ${validacao.data?.valid ? "ok" : "atencao"}`}><span>Critérios de parada</span><strong>{validacao.data?.valid ? "OK" : "REVISAR"}</strong><small>Sem bloqueios estruturais</small></div>
+            <div className={`eap-controle-card ${validacao.data?.valid ? "ok" : "atencao"}`}><span>Critérios de parada</span><strong>{validacao.data?.valid ? "OK" : "REVISAR"}</strong><small>{validacao.data?.valid ? "Estrutura sem bloqueios" : "Há bloqueios estruturais"}</small></div>
           </div>
           <div className="eap-parada">
             <div><strong>Quando parar a decomposição</strong><span>Parar quando o escopo estiver claro, a unidade de controle definida, a responsabilidade e a medição atribuíveis e o pacote puder virar atividade sem alterar o escopo.</span></div>
             <div><strong>Quando continuar</strong><span>Continuar quando houver mistura de localização, entregáveis, responsáveis, métodos, quantidades ou trabalhos que precisem ser controlados separadamente.</span></div>
           </div>
           <div className="eap-baseline">
-            <div className="eap-baseline-info"><LockKeyhole size={16} /><div><strong>Baseline da EAP</strong><span>{versoes.data?.[0] ? `Versão v${versoes.data[0].versionNumber} · ${versoes.data[0].status}${versoes.data[0].approvedAt ? ` · aprovada em ${new Date(versoes.data[0].approvedAt).toLocaleString("pt-BR")}` : ""}` : "Ainda não existe versão do plano."}</span></div>{!podeAprovarEap && <span className="eap-baseline-bloqueada">{coordenador.data?.stage !== "EAP_REVISAO" ? "Aguardando etapa de revisão" : dicionarioPendenteDecisao ? "Aguardando decisão do padrão de dicionário" : validacao.data?.valid ? (folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) fora do padrão` : "Aguardando validação") : `${validacao.data?.issues.length ?? 0} apontamento(s) precisam ser revisados`}</span>}</div>
-            <button type="button" className="eap-btn" disabled={!podeAprovarEap} title={coordenador.data?.stage !== "EAP_REVISAO" ? "A aprovação da EAP ocorre na etapa EAP_REVISAO." : eapProntaParaAprovacao ? "Aprova a EAP e congela a versão do plano como baseline." : "A EAP ainda possui apontamentos ou campos obrigatórios pendentes."} onClick={() => {
-              if (!podeAprovarEap) return;
-              if (!window.confirm("Aprovar a EAP e criar a baseline?\\n\\nA versão atual será congelada para rastrear a estrutura aprovada. Alterações posteriores deverão ocorrer em uma nova versão.")) return;
-              aprovarEap.mutate({ projectId: projetoId, stage: "EAP_REVISAO", decision: "approved", nextStage: "ATIVIDADES_PROPOSTA", scope: { kind: "eap", nodeCount: nos.length, leafCount: folhasEap.length, workPackageCount: pacotesTrabalho.length }, summary: `EAP aprovada: ${nos.length} nós, ${folhasEap.length} folhas e ${pacotesTrabalho.length} pacotes de trabalho.` });
-            }}><PackageCheck size={14} />{aprovarEap.isPending ? "Concluindo…" : "Concluir revisão e aprovar EAP / Baseline"}</button>
+            <div className="eap-baseline-info">
+              <LockKeyhole size={16} />
+              <div>
+                <strong>Baseline da EAP</strong>
+                <span>{versoes.data?.[0]
+                  ? `Versão v${versoes.data[0].versionNumber} · ${versoes.data[0].status}${versoes.data[0].approvedAt ? ` · aprovada em ${new Date(versoes.data[0].approvedAt).toLocaleString("pt-BR")}` : ""}`
+                  : "Ainda não existe versão do plano."}</span>
+              </div>
+              {!podeAprovarEap && (
+                <span className="eap-baseline-bloqueada">
+                  {versoes.data?.[0]?.status === "approved"
+                    ? "EAP já aprovada · próxima etapa: atividades"
+                    : coordenador.data?.stage !== "EAP_REVISAO"
+                      ? "Aguardando etapa de revisão"
+                      : dicionarioPendenteDecisao
+                        ? "Aguardando decisão do padrão de dicionário"
+                        : validacao.data?.valid
+                          ? (folhasSemDicionario.length ? `${folhasSemDicionario.length} folha(s) fora do padrão` : "Aguardando validação")
+                          : `${validacao.data?.issues.length ?? 0} apontamento(s) precisam ser revisados`}
+                </span>
+              )}
+            </div>
+            {versoes.data?.[0]?.status === "approved" ? (
+              <span className="eap-baseline-proxima"><CheckCircle2 size={14} /> EAP aprovada · seguir para Atividades</span>
+            ) : (
+              <button type="button" className="eap-btn" disabled={!podeAprovarEap} title={coordenador.data?.stage !== "EAP_REVISAO" ? "A aprovação da EAP ocorre na etapa EAP_REVISAO." : eapProntaParaAprovacao ? "Aprova a EAP e congela a versão do plano como baseline." : "A EAP ainda possui apontamentos ou campos obrigatórios pendentes."} onClick={() => {
+                if (!podeAprovarEap) return;
+                if (!window.confirm("Aprovar a EAP e criar a baseline?\n\nA versão atual será congelada para rastrear a estrutura aprovada. Alterações posteriores deverão ocorrer em uma nova versão.")) return;
+                aprovarEap.mutate({ projectId: projetoId, stage: "EAP_REVISAO", decision: "approved", nextStage: "ATIVIDADES_PROPOSTA", scope: { kind: "eap", nodeCount: nos.length, leafCount: folhasEap.length, workPackageCount: pacotesTrabalho.length }, summary: `EAP aprovada: ${nos.length} nós, ${folhasEap.length} folhas e ${pacotesTrabalho.length} pacotes de trabalho.` });
+              }}><PackageCheck size={14} />{aprovarEap.isPending ? "Concluindo…" : "Concluir revisão e aprovar EAP / Baseline"}</button>
+            )}
           </div>
           {aprovarEap.error && <div className="xl-aviso-erro" role="alert">Aprovação da EAP: {aprovarEap.error.message}</div>}
         </>}
@@ -752,10 +789,11 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       <div className="eap-topo">
         <div className="eap-resumo">
           <div>
-            <h2>ESTRUTURA ANALÍTICA DA OBRA</h2>
-            <p>{total} nós · {grupos} grupos · {folhas} folhas · profundidade máxima {Math.max(...nos.map(n => n.level), 1)}</p>
+            <span className="eap-resumo-kicker">ESTRUTURA ANALÍTICA DA OBRA</span>
+            <h2>EAP</h2>
+            <p>{total} nós · {pacotesTrabalho.length} pacotes de trabalho · {grupos} grupos · profundidade máxima {Math.max(...nos.map(n => n.level), 1)}</p>
           </div>
-          <span className="eap-status-chip"><span className="eap-status-dot" /> Estrutura carregada</span>
+          <span className={`eap-status-chip ${validacao.data?.valid ? "ok" : "atencao"}`}><span className="eap-status-dot" /> {validacao.data?.valid ? "Estrutura válida" : "Revisão necessária"}</span>
         </div>
         <div className="eap-topo-acoes">
           <button
