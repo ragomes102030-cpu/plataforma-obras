@@ -25,7 +25,9 @@ import { runBrainSkillsQaSuite } from "../qa/brain-skills-qa-suite";
 async function logSchemaInventory() {
   const db = await getDb();
   if (!db) {
-    console.warn('[schema] banco indisponivel; inventario omitido');
+    const message = '[schema] banco indisponivel';
+    if (process.env.NODE_ENV === "production") throw new Error(message);
+    console.warn(message + '; inventario omitido');
     return;
   }
   try {
@@ -37,7 +39,11 @@ async function logSchemaInventory() {
         (ausentes.length ? ` — AUSENTE: ${ausentes.join(', ')}` : '')
     );
   } catch (error) {
-    console.warn('[schema] inventario indisponivel:', error);
+    console.error('[schema] inventario indisponivel:', error);
+    // Em produção, falha de autenticação/conectividade do banco principal deve
+    // impedir que o Render anuncie a API como "Live" enquanto ela está incapaz
+    // de operar. Em desenvolvimento, mantemos o boot tolerante.
+    if (process.env.NODE_ENV === "production") throw error;
   }
 }
 
