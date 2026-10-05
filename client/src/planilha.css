@@ -2778,3 +2778,146 @@ tr:hover .xl-codigo {
   }
   .eap-editor-integracoes{grid-template-columns:1fr;}
 }
+
+/* ==========================================================================
+   EAP · barra de ações
+   As ações são agrupadas por intenção para evitar uma fileira de botões
+   indistintos. Cada grupo representa uma decisão diferente do engenheiro.
+   ========================================================================== */
+.eap-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:10px 14px;
+  border:1px solid #d9e3e9;
+  border-radius:9px;
+  background:#fff;
+  box-shadow:0 2px 8px rgba(15,35,48,.045);
+}
+.eap-toolbar-acoes{
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  margin-left:auto;
+}
+.eap-toolbar-grupo{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:5px;
+  padding:0 12px;
+  border-left:1px solid #e6edf1;
+}
+.eap-toolbar-grupo:first-child{
+  padding-left:0;
+  border-left:0;
+}
+.eap-toolbar-grupo-titulo{
+  color:#82919c;
+  font-size:8px;
+  font-weight:850;
+  letter-spacing:.12em;
+  line-height:1;
+}
+.eap-toolbar-pares{
+  display:flex;
+  gap:5px;
+}
+.eap-tool-btn{
+  min-height:31px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:0 10px;
+  border:1px solid #cfdbe2;
+  border-radius:6px;
+  background:#fff;
+  color:#3d5361;
+  font:inherit;
+  font-size:10.5px;
+  font-weight:700;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .12s ease,border-color .12s ease,color .12s ease,box-shadow .12s ease;
+}
+.eap-tool-btn:hover{
+  background:#f5fafc;
+  border-color:#9fc5d1;
+  color:#176b87;
+}
+.eap-tool-btn:focus-visible{
+  outline:2px solid #75c6d8;
+  outline-offset:2px;
+}
+.eap-tool-btn-principal{
+  border-color:#176b87;
+  background:#176b87;
+  color:#fff;
+  box-shadow:0 2px 5px rgba(23,107,135,.14);
+}
+.eap-tool-btn-principal:hover{
+  background:#145f78;
+  border-color:#145f78;
+  color:#fff;
+}
+.eap-densidade{
+  display:inline-flex;
+  align-items:center;
+  min-height:31px;
+  padding:2px;
+  border:1px solid #cfdbe2;
+  border-radius:6px;
+  background:#f6f9fa;
+  gap:2px;
+}
+.eap-densidade button{
+  height:25px;
+  min-width:42px;
+  padding:0 6px;
+  border:0;
+  border-radius:4px;
+  background:transparent;
+  color:#71828e;
+  font:inherit;
+  font-size:9px;
+  font-weight:750;
+  cursor:pointer;
+}
+.eap-densidade button:hover{color:#176b87;background:#edf6f8}
+.eap-densidade button.ativo{
+  background:#fff;
+  color:#176b87;
+  box-shadow:0 1px 3px rgba(15,35,48,.10);
+}
+.eap-toolbar-identidade{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.eap-toolbar-icon{
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #cfe1e8;
+  border-radius:7px;
+  background:#f1f8fa;
+  color:#176b87;
+}
+.eap-toolbar-titulo{font-size:13px;font-weight:750;color:#172b37}
+.eap-toolbar-subtitulo{margin-top:2px;font-size:9.5px;color:#788994}
+@media(max-width:900px){
+  .eap-toolbar{align-items:flex-start;flex-direction:column}
+  .eap-toolbar-acoes{width:100%;margin-left:0;justify-content:flex-start;overflow-x:auto;padding-bottom:1px}
+}
+@media(max-width:620px){
+  .eap-toolbar-acoes{width:100%}
+  .eap-toolbar-grupo{padding:0 8px}
+  .eap-toolbar-grupo-titulo{font-size:7px}
+  .eap-tool-btn{padding:0 8px}
+}
