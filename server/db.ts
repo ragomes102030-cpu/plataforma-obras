@@ -28,21 +28,17 @@ export function runtimeDatabaseUrl() {
     process.env.SUPA_DB_URL;
   const raw = supabaseUrl || process.env.DATABASE_URL;
   if (!raw) return undefined;
-  const url = new URL(raw);
 
-  // Nunca exponha credenciais: registre somente a origem e o host para diagnosticar
-  // divergência entre Dashboard/Blueprint sem vazar segredos nos logs.
+  // Quando SUPABASE_DB_URL existe, ela é a fonte de verdade. Não reescrevemos
+  // host, usuário ou senha: a connection string copiada do Supabase já contém
+  // a combinação correta e uma reescrita pode invalidar uma credencial válida.
+  const url = new URL(raw);
   const source = supabaseUrl ? "supabase" : "legacy";
   const maskedUser = url.username ? url.username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "<none>";
-  console.log(`[database] source=${source} host=${url.hostname} port=${url.port || "5432"} user=${maskedUser}`);
-  if (process.env.USE_SUPABASE === "1" && supabaseUrl) {
-    // A conexão de produção usa o pooler da região. O host vindo do segredo
-    // pode estar desatualizado ou apontar para o legado; credenciais e banco
-    // continuam vindo da URL configurada no Render.
-    url.hostname = "aws-0-sa-east-1.pooler.supabase.com";
-    url.port = "5432";
-    if (url.username === "postgres") url.username = "postgres.tromrvfijbtihuilvnuk";
-  }
+  const passwordConfigured = url.password.length > 0;
+  console.log(
+    `[database] source=${source} host=${url.hostname} port=${url.port || "5432"} user=${maskedUser} password=${passwordConfigured ? "configured" : "missing"}`
+  );
   return url.toString();
 }
 
