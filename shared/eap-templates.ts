@@ -48,224 +48,224 @@ const grupo = (
 
 export const TEMPLATES_EAP: Record<Exclude<TipoTemplateEap, "todos">, TemplateEapNode[]> = {
   edificio: [
-    grupo("Implantação e administração", , "phase"
+    grupo("Implantação e administração", [
       pacote("Mobilização e canteiro"),
       pacote("Administração e controle da obra"),
       pacote("Licenças, sinalização e segurança"),
-    ]),
-    grupo("Serviços preliminares", , "phase"
+    ], "phase"),
+    grupo("Serviços preliminares", [
       pacote("Locação e preparação do terreno"),
       pacote("Limpeza e remoção"),
       pacote("Demolições e remanejamentos", "Demolições e remanejamentos previstos no projeto e no escopo da obra."),
-    ]),
-    grupo("Infraestrutura", , "system"
+    ], "phase"),
+    grupo("Infraestrutura", [
       pacote("Terraplenagem"),
       pacote("Fundações"),
       pacote("Contenções"),
-    ]),
-    grupo("Superestrutura", , "system"
+    ], "system"),
+    grupo("Superestrutura", [
       pacote("Pilares"),
       pacote("Vigas"),
       pacote("Lajes"),
       pacote("Escadas e elementos estruturais complementares"),
-    ]),
-    grupo("Vedações", , "system"
+    ], "system"),
+    grupo("Vedações", [
       pacote("Alvenarias"),
       pacote("Divisórias e sistemas leves"),
       pacote("Elementos de vedação complementares"),
-    ]),
-    grupo("Cobertura", , "system"
+    ], "system"),
+    grupo("Cobertura", [
       pacote("Estrutura da cobertura"),
       pacote("Telhamento e fechamento"),
       pacote("Calhas, rufos e arremates"),
-    ]),
-    grupo("Impermeabilização", , "system"
+    ], "system"),
+    grupo("Impermeabilização", [
       pacote("Impermeabilização de fundações e áreas enterradas"),
       pacote("Impermeabilização de áreas molhadas"),
       pacote("Impermeabilização de cobertura e áreas expostas"),
-    ]),
-    grupo("Revestimentos", , "system"
+    ], "system"),
+    grupo("Revestimentos", [
       pacote("Chapisco, emboço e reboco"),
       pacote("Contrapisos"),
       pacote("Revestimentos de paredes"),
       pacote("Revestimentos de pisos"),
       pacote("Forros"),
-    ]),
-    grupo("Esquadrias e vidros", , "system"
+    ], "system"),
+    grupo("Esquadrias e vidros", [
       pacote("Portas e esquadrias"),
       pacote("Vidros"),
       pacote("Ferragens e acessórios"),
-    ]),
-    grupo("Instalações", , "system"
+    ], "system"),
+    grupo("Instalações", [
       pacote("Instalações hidrossanitárias"),
       pacote("Instalações elétricas"),
       pacote("SPDA e aterramento"),
       pacote("Sistemas de incêndio"),
       pacote("Telecomunicações e sistemas especiais"),
       pacote("Climatização e ventilação"),
-    ]),
-    grupo("Fachada", , "system"
+    ], "system"),
+    grupo("Fachada", [
       pacote("Revestimento e acabamento de fachada"),
       pacote("Esquadrias e elementos externos"),
       pacote("Selagens e arremates"),
-    ]),
-    grupo("Acabamentos", , "system"
+    ], "system"),
+    grupo("Acabamentos", [
       pacote("Pintura"),
       pacote("Louças, metais e acessórios"),
       pacote("Bancadas e elementos de acabamento"),
       pacote("Sinalização e acabamento final"),
-    ]),
-    grupo("Áreas externas e urbanização", , "system"
+    ], "system"),
+    grupo("Áreas externas e urbanização", [
       pacote("Calçadas e pavimentação externa"),
       pacote("Drenagem externa"),
       pacote("Muros, gradis e fechamentos"),
       pacote("Paisagismo e urbanização"),
-    ]),
-    grupo("Comissionamento", , "phase"
+    ], "system"),
+    grupo("Comissionamento", [
       pacote("Testes e inspeções"),
       pacote("Comissionamento dos sistemas"),
       pacote("Correção de pendências"),
-    ]),
-    grupo("Entrega da obra", , "phase"
+    ], "phase"),
+    grupo("Entrega da obra", [
       pacote("As built e documentação"),
       pacote("Limpeza e desmobilização"),
       pacote("Entrega e aceite final"),
-    ]),
+    ], "phase"),
   ],
   reforma: [
-    grupo("Implantação e planejamento", , "phase"
+    grupo("Implantação e planejamento", [
       pacote("Mobilização e canteiro"),
       pacote("Proteções, isolamento e segurança"),
       pacote("Administração e controle da obra"),
-    ]),
-    grupo("Levantamentos e demolições", , "phase"
+    ], "phase"),
+    grupo("Levantamentos e demolições", [
       pacote("Levantamento e diagnóstico"),
       pacote("Demolições"),
       pacote("Remoções e remanejamentos"),
-    ]),
-    grupo("Recuperação e adequações", , "system"
+    ], "phase"),
+    grupo("Recuperação e adequações", [
       pacote("Recuperação de elementos existentes"),
       pacote("Adequações civis"),
       pacote("Reforços e correções estruturais"),
-    ]),
-    grupo("Vedações e esquadrias", , "system"
+    ], "system"),
+    grupo("Vedações e esquadrias", [
       pacote("Alvenarias e fechamentos"),
       pacote("Divisórias"),
       pacote("Portas, esquadrias e vidros"),
-    ]),
-    grupo("Instalações", , "system"
+    ], "system"),
+    grupo("Instalações", [
       pacote("Instalações hidrossanitárias"),
       pacote("Instalações elétricas"),
       pacote("Incêndio e segurança"),
       pacote("Telecomunicações e sistemas especiais"),
       pacote("Climatização"),
-    ]),
-    grupo("Impermeabilização", , "system"
+    ], "system"),
+    grupo("Impermeabilização", [
       pacote("Áreas molhadas"),
       pacote("Coberturas e áreas expostas"),
       pacote("Áreas enterradas"),
-    ]),
-    grupo("Revestimentos e acabamentos", , "system"
+    ], "system"),
+    grupo("Revestimentos e acabamentos", [
       pacote("Paredes e tetos"),
       pacote("Pisos"),
       pacote("Forros"),
       pacote("Pintura"),
       pacote("Louças, metais e acessórios"),
-    ]),
-    grupo("Áreas externas", , "system"
+    ], "system"),
+    grupo("Áreas externas", [
       pacote("Pavimentação e calçadas"),
       pacote("Drenagem"),
       pacote("Muros e fechamentos"),
       pacote("Paisagismo e urbanização"),
-    ]),
-    grupo("Comissionamento e entrega", , "phase"
+    ], "system"),
+    grupo("Comissionamento e entrega", [
       pacote("Testes e inspeções"),
       pacote("Correção de pendências"),
       pacote("Documentação e entrega"),
-    ]),
+    ], "phase"),
   ],
   pavimentacao: [
-    grupo("Implantação", , "phase"
+    grupo("Implantação", [
       pacote("Mobilização e canteiro"),
       pacote("Sinalização e segurança de tráfego"),
       pacote("Locação e controle topográfico"),
-    ]),
-    grupo("Terraplenagem", , "system"
+    ], "phase"),
+    grupo("Terraplenagem", [
       pacote("Limpeza e preparação do terreno"),
       pacote("Cortes e escavações"),
       pacote("Aterros e compactação"),
       pacote("Transporte e destinação"),
-    ]),
-    grupo("Drenagem", , "system"
+    ], "system"),
+    grupo("Drenagem", [
       pacote("Drenagem superficial"),
       pacote("Drenagem profunda"),
       pacote("Bueiros e dispositivos"),
-    ]),
-    grupo("Pavimento", , "system"
+    ], "system"),
+    grupo("Pavimento", [
       pacote("Subleito"),
       pacote("Sub-base"),
       pacote("Base"),
       pacote("Revestimento"),
-    ]),
-    grupo("Obras complementares", , "system"
+    ], "system"),
+    grupo("Obras complementares", [
       pacote("Meio-fio e sarjetas"),
       pacote("Calçadas e acessos"),
       pacote("Muros e contenções"),
-    ]),
-    grupo("Sinalização", , "system"
+    ], "system"),
+    grupo("Sinalização", [
       pacote("Sinalização horizontal"),
       pacote("Sinalização vertical"),
       pacote("Dispositivos de segurança"),
-    ]),
-    grupo("Controle e entrega", , "phase"
+    ], "system"),
+    grupo("Controle e entrega", [
       pacote("Controle tecnológico"),
       pacote("Ensaios e inspeções"),
       pacote("As built e entrega"),
-    ]),
+    ], "phase"),
   ],
   saneamento: [
-    grupo("Implantação", , "phase"
+    grupo("Implantação", [
       pacote("Mobilização e canteiro"),
       pacote("Locação e topografia"),
       pacote("Sinalização e segurança"),
-    ]),
-    grupo("Serviços preliminares", , "phase"
+    ], "phase"),
+    grupo("Serviços preliminares", [
       pacote("Limpeza e preparação"),
       pacote("Demolições e remanejamentos"),
       pacote("Escoramentos e contenções provisórias"),
-    ]),
-    grupo("Movimento de terra", , "system"
+    ], "phase"),
+    grupo("Movimento de terra", [
       pacote("Escavação de valas"),
       pacote("Aterro e reaterro"),
       pacote("Transporte e destinação"),
-    ]),
-    grupo("Abastecimento de água", , "system"
+    ], "system"),
+    grupo("Abastecimento de água", [
       pacote("Redes de distribuição"),
       pacote("Adutoras e linhas principais"),
       pacote("Reservação e estruturas"),
       pacote("Ligações prediais"),
-    ]),
-    grupo("Esgotamento sanitário", , "system"
+    ], "system"),
+    grupo("Esgotamento sanitário", [
       pacote("Redes coletoras"),
       pacote("Poços de visita e caixas"),
       pacote("Estações e unidades especiais"),
       pacote("Ligações prediais"),
-    ]),
-    grupo("Drenagem e dispositivos", , "system"
+    ], "system"),
+    grupo("Drenagem e dispositivos", [
       pacote("Drenagem superficial"),
       pacote("Galerias e dispositivos"),
       pacote("Travessias e bueiros"),
-    ]),
-    grupo("Pavimentação e recomposição", , "system"
+    ], "system"),
+    grupo("Pavimentação e recomposição", [
       pacote("Recomposição de pavimento"),
       pacote("Calçadas e acessos"),
       pacote("Sinalização e acabamento"),
-    ]),
-    grupo("Comissionamento", , "phase"
+    ], "system"),
+    grupo("Comissionamento", [
       pacote("Testes de estanqueidade e pressão"),
       pacote("Limpeza e desinfecção"),
       pacote("Inspeção e correção de pendências"),
-    ]),
+    ], "phase"),
     grupo("Entrega", [
       pacote("Documentação e as built"),
       pacote("Treinamento e operação assistida"),
