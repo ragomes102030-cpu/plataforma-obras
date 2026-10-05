@@ -1,5 +1,5 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, CheckCircle2, CircleDashed, GitBranch, Network, LockKeyhole, Search, Bell, Settings2 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2 } from "lucide-react";
+import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
@@ -478,10 +478,10 @@ function Obra({
           </div>
           <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
             {["Escopo", "EAP", "Atividades", "Dependências", "CPM", "Baseline"].map((etapa, index) => (
-              <React.Fragment key={etapa}>
+              <Fragment key={etapa}>
                 {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
                 <span className={etapaAtual === etapa ? "ativo" : ""}>{etapa}</span>
-              </React.Fragment>
+              </Fragment>
             ))}
           </div>
           <div className="arquimedes-workbar-actions">
