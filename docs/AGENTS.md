@@ -132,3 +132,12 @@ docs: atualiza base de conhecimento com melhorias sep/2026
 - **Gerente:** Rafael Gomes (grafaelalexandre@gmail.com)
 - **GitHub:** ragomes102030-cpu
 - **Sistema:** https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app
+
+### Testes e qualidade
+
+Consulte `docs/TESTING.md` antes de alterar contratos críticos.
+- `pnpm test:contracts` valida orquestrador, MCP, LLM gateway e erros de domínio.
+- `pnpm test:aurora` valida a regressão estrutural determinística da Aurora.
+- `pnpm test:gate` executa typecheck + suíte completa + build.
+
+Regra: uma regressão reproduzível deve ser transformada em teste antes da correção, sempre que tecnicamente possível. Testes unitários não devem depender de LLM ou MCP reais.
