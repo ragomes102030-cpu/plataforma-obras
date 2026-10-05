@@ -28,9 +28,9 @@ async function main() {
   );
 
   const approved = versions.rows.filter(row => row.status === "approved");
-  assert(approved.length > 0, "Aurora não possui versão aprovada.");
+  assert(approved.length === 1, `Aurora deve possuir exatamente 1 versão aprovada; encontrou ${approved.length}.`);
 
-  const latestApproved = approved.at(-1);
+  const latestApproved = approved[0];
   const versionId = latestApproved.id;
 
   const nodes = await client.query(
@@ -45,6 +45,7 @@ async function main() {
   );
 
   const rows = nodes.rows;
+  const byId = new Map(rows.map(node => [String(node.id), node]));
   const children = new Map();
 
   for (const node of rows) {
@@ -54,6 +55,12 @@ async function main() {
 
   const leaves = rows.filter(node => !children.has(String(node.id)));
   const roots = rows.filter(node => node.parentId == null);
+  const orphans = rows.filter(
+    node => node.parentId != null && !byId.has(String(node.parentId))
+  );
+  const nonLeavesWithoutChildren = rows.filter(
+    node => node.nodeType !== "pacote" && !children.has(String(node.id))
+  );
   const duplicates = rows.filter((node, index) =>
     rows.some(
       (other, otherIndex) =>
@@ -65,6 +72,11 @@ async function main() {
   const leafChildren = rows.filter(
     node => node.nodeType === "pacote" && children.has(String(node.id))
   );
+  const invalidLevels = rows.filter(node => {
+    if (node.parentId == null) return Number(node.level) !== 1;
+    const parent = byId.get(String(node.parentId));
+    return !parent || Number(node.level) !== Number(parent.level) + 1;
+  });
 
   assert(rows.length === 69, `Esperado 69 nós; encontrado ${rows.length}.`);
   assert(leaves.length === 53, `Esperado 53 folhas; encontrado ${leaves.length}.`);
@@ -73,8 +85,14 @@ async function main() {
     rows.filter(node => node.level === 2).length === 15,
     "Esperados 15 grupos de nível 2."
   );
+  assert(orphans.length === 0, `Existem ${orphans.length} nós órfãos.`);
+  assert(
+    nonLeavesWithoutChildren.length === 0,
+    `Existem ${nonLeavesWithoutChildren.length} nós não-pacote sem filhos.`
+  );
   assert(duplicates.length === 0, `Existem ${duplicates.length} nomes duplicados entre irmãos.`);
   assert(leafChildren.length === 0, `Existem ${leafChildren.length} pacotes com filhos.`);
+  assert(invalidLevels.length === 0, `Existem ${invalidLevels.length} nós com nível hierárquico inválido.`);
 
   for (const leaf of leaves) {
     for (const field of ["description", "inclusions", "exclusions", "acceptanceCriteria"]) {
@@ -100,6 +118,20 @@ async function main() {
     `Aurora não deve possuir atividades antes da etapa formal de derivação; encontrou ${activities.rows[0].total}.`
   );
 
+  const dependencies = await client.query(
+    `
+      SELECT count(*)::int AS total
+      FROM schedule_dependencies
+      WHERE "projectId" = $1
+    `,
+    [projectId]
+  );
+
+  assert(
+    Number(dependencies.rows[0].total) === 0,
+    `Aurora não deve possuir dependências antes da etapa formal de derivação; encontrou ${dependencies.rows[0].total}.`
+  );
+
   console.log(JSON.stringify({
     passed: true,
     projectId,
@@ -108,8 +140,12 @@ async function main() {
     nodes: rows.length,
     leaves: leaves.length,
     level2: 15,
+    roots: roots.length,
+    orphans: orphans.length,
+    invalidLevels: invalidLevels.length,
     structuralBlockers: 0,
     activitiesBeforeScheduling: Number(activities.rows[0].total),
+    dependenciesBeforeScheduling: Number(dependencies.rows[0].total),
   }, null, 2));
 }
 
