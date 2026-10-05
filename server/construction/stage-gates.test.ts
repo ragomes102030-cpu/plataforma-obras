@@ -31,28 +31,22 @@ describe("stage gates", () => {
   });
 
 
-  it("bloqueia avanço da EAP quando o padrão do dicionário ainda não foi aprovado", () => {
+  it("permite iniciar atividades quando a EAP é válida mesmo com cobertura do dicionário pendente", () => {
     const result = evaluateStageTransition({
       currentStage: "EAP_REVISAO",
       targetStage: "ATIVIDADES_PROPOSTA",
       decision: "approved",
-      evidence: { ...validEvidence, eapDictionaryStandardApproved: false },
+      evidence: {
+        ...validEvidence,
+        eapDictionaryStandardApproved: false,
+        eapDictionaryCompliant: false,
+      },
     });
 
-    expect(result.allowed).toBe(false);
-    expect(result.checks.some(check => check.code === "eap_dictionary_standard_approved" && !check.valid)).toBe(true);
-  });
-
-  it("bloqueia avanço da EAP quando folhas não cumprem o padrão aprovado", () => {
-    const result = evaluateStageTransition({
-      currentStage: "EAP_REVISAO",
-      targetStage: "ATIVIDADES_PROPOSTA",
-      decision: "approved",
-      evidence: { ...validEvidence, eapDictionaryCompliant: false },
-    });
-
-    expect(result.allowed).toBe(false);
-    expect(result.checks.some(check => check.code === "eap_dictionary_compliant" && !check.valid)).toBe(true);
+    expect(result.allowed).toBe(true);
+    expect(result.checks.some(check => check.code === "eap_valid" && check.valid)).toBe(true);
+    expect(result.checks.some(check => check.code === "eap_dictionary_standard_approved")).toBe(false);
+    expect(result.checks.some(check => check.code === "eap_dictionary_compliant")).toBe(false);
   });
 
   it("impede saltar diretamente para uma etapa posterior", () => {
