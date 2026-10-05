@@ -348,16 +348,27 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           </div>
         </div>
         <div className="eap-toolbar-acoes">
-          <div className="eap-densidade" role="group" aria-label="Densidade da planilha EAP">
-            <span>Zoom</span>
-            <button type="button" className={densidade === "compacta" ? "ativo" : ""} onClick={() => setDensidade("compacta")}>80%</button>
-            <button type="button" className={densidade === "normal" ? "ativo" : ""} onClick={() => setDensidade("normal")}>100%</button>
-            <button type="button" className={densidade === "confortavel" ? "ativo" : ""} onClick={() => setDensidade("confortavel")}>115%</button>
+          <div className="eap-toolbar-grupo" aria-label="Estrutura">
+            <span className="eap-toolbar-grupo-titulo">ESTRUTURA</span>
+            <button type="button" className="eap-tool-btn eap-tool-btn-principal" onClick={() => setEditor({ mode: "create", parentId: null })} title="Adicionar um novo elemento no nível raiz da EAP">
+              <Plus size={14} /> Adicionar
+            </button>
           </div>
-          <button type="button" className="eap-tool-btn" onClick={recolherTudo}><Minimize2 size={14} /> Recolher</button>
-          <button type="button" className="eap-tool-btn" onClick={expandirTudo}><Maximize2 size={14} /> Expandir</button>
-          <button type="button" className="eap-tool-btn" onClick={() => setEditor({ mode: "create", parentId: null })}><Plus size={14} /> Novo nível</button>
-
+          <div className="eap-toolbar-grupo" aria-label="Árvore">
+            <span className="eap-toolbar-grupo-titulo">ÁRVORE</span>
+            <div className="eap-toolbar-pares">
+              <button type="button" className="eap-tool-btn" onClick={expandirTudo} title="Abrir todos os níveis da EAP"><Maximize2 size={13} /> Expandir</button>
+              <button type="button" className="eap-tool-btn" onClick={recolherTudo} title="Fechar todos os níveis da EAP"><Minimize2 size={13} /> Recolher</button>
+            </div>
+          </div>
+          <div className="eap-toolbar-grupo eap-toolbar-zoom" aria-label="Densidade">
+            <span className="eap-toolbar-grupo-titulo">VISUALIZAÇÃO</span>
+            <div className="eap-densidade" role="group" aria-label="Densidade da planilha EAP">
+              <button type="button" className={densidade === "compacta" ? "ativo" : ""} onClick={() => setDensidade("compacta")} title="Linhas mais compactas">80%</button>
+              <button type="button" className={densidade === "normal" ? "ativo" : ""} onClick={() => setDensidade("normal")} title="Tamanho padrão">100%</button>
+              <button type="button" className={densidade === "confortavel" ? "ativo" : ""} onClick={() => setDensidade("confortavel")} title="Linhas mais espaçosas">115%</button>
+            </div>
+          </div>
         </div>
       </div>
       <div className="eap-analise-orquestrador" role="status" aria-live="polite">
