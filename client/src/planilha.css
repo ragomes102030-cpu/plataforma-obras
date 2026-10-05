@@ -2491,3 +2491,142 @@ tr:hover .xl-codigo {
   background:#fff7f6;
   color:#a33a32;
 }
+
+
+/* ==========================================================================
+   ARQUIMEDES · NOVA EXPERIÊNCIA DE PLANEJAMENTO
+   Camada visual sobre a planilha existente. Não altera a regra de negócio.
+   ========================================================================== */
+
+.xl-pasta-sidebar {
+  background: #f5f7fa;
+  color: #17212b;
+}
+
+.xl-pasta-sidebar .xl-sidebar {
+  background: #101923;
+  color: #dce6ef;
+  border-right: 1px solid #263542;
+  width: 232px;
+  min-width: 232px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.xl-pasta-sidebar.sidebar-recolhida .xl-sidebar {
+  width: 64px;
+  min-width: 64px;
+}
+
+.xl-sidebar-head {
+  min-height: 64px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid #263542;
+}
+
+.xl-sidebar-brand { gap: 10px; }
+.xl-sidebar-brand > svg { color: #55c7df; }
+.xl-sidebar-brand strong { color: #fff; font-size: 13px; }
+.xl-sidebar-brand span { color: #7f94a7; font-size: 10px; margin-top: 2px; }
+.xl-sidebar-toggle { color: #8fa3b5; }
+.xl-sidebar-toggle:hover { color: #fff; background: #1b2a37; }
+
+.xl-sidebar-nav {
+  padding: 12px 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.xl-sidebar-group { margin-bottom: 15px; }
+.xl-sidebar-label {
+  color: #64798c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  padding: 0 11px 7px;
+}
+
+.xl-sidebar-item {
+  min-height: 38px;
+  border-radius: 7px;
+  margin: 2px 0;
+  color: #9eb0bf;
+  padding: 0 11px;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background .15s ease, color .15s ease;
+}
+.xl-sidebar-item:hover { background: #182733; color: #fff; }
+.xl-sidebar-item.ativa {
+  background: #173d50;
+  color: #65d4e9;
+  box-shadow: inset 3px 0 0 #55c7df;
+}
+.xl-sidebar-item small { margin-left: auto; color: #6e8496; font-size: 8px; text-transform: uppercase; }
+.xl-sidebar-foot { border-top: 1px solid #263542; padding: 10px 8px; }
+.xl-sidebar-foot button {
+  width: 100%; min-height: 38px; border-radius: 7px; border: 1px solid #2c5367;
+  background: #132b38; color: #64d2e7; justify-content: center; gap: 8px;
+}
+.xl-sidebar-foot button:hover { background: #194255; }
+
+.xl-area-sidebar { background: #f5f7fa; }
+
+.arquimedes-workbar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 9px 18px;
+  background: rgba(255,255,255,.96);
+  border-bottom: 1px solid #dce3e9;
+  box-shadow: 0 1px 8px rgba(15,31,43,.05);
+}
+.arquimedes-workbar-title { min-width: 150px; display: flex; flex-direction: column; }
+.arquimedes-kicker { color: #738696; font-size: 8px; font-weight: 800; letter-spacing: .13em; }
+.arquimedes-workbar-title strong { margin-top: 3px; color: #14222d; font-size: 15px; }
+.arquimedes-trilha { display: flex; align-items: center; gap: 8px; flex: 1; overflow-x: auto; white-space: nowrap; }
+.arquimedes-trilha span { color: #8999a6; font-size: 10px; font-weight: 600; }
+.arquimedes-trilha span.ativo { color: #167a96; }
+.arquimedes-trilha-seta { color: #c0cad1 !important; font-weight: 400 !important; }
+.arquimedes-workbar-actions { display: flex; gap: 5px; }
+.arquimedes-workbar-actions button {
+  width: 30px; height: 30px; border: 1px solid #d9e1e6; border-radius: 6px;
+  background: #fff; color: #607383; display: inline-flex; align-items: center; justify-content: center;
+}
+.arquimedes-workbar-actions button:hover { color: #14768f; border-color: #9fc6d1; background: #f1f8fa; }
+
+.arquimedes-content { min-height: calc(100% - 62px); }
+
+/* Dashboard mais próximo de uma central operacional: mantém os componentes
+   existentes, mas organiza-os visualmente como uma superfície de comando. */
+.xl-painel { max-width: 1500px; margin: 0 auto; padding: 22px 24px 12px; }
+.xl-cartoes { gap: 10px; }
+.xl-cartao { border: 1px solid #dbe3e8; border-radius: 9px; box-shadow: 0 2px 8px rgba(21,39,51,.035); background: #fff; }
+.xl-cartao-titulo { color: #6c7d89; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.xl-cartao-valor { color: #172a35; font-size: 25px; }
+.xl-status { border: 1px solid #dfe6eb; background: #fff; border-radius: 8px; }
+
+/* EAP / cronograma: superfície de aplicação, não página de marketing. */
+.xl-area-sidebar .xl-escopo,
+.xl-area-sidebar .xl-vazia-folha { max-width: 1500px; margin: 0 auto; }
+
+@media (max-width: 980px) {
+  .arquimedes-workbar { gap: 10px; }
+  .arquimedes-trilha { display: none; }
+  .arquimedes-workbar-title { flex: 1; }
+}
+
+@media (max-width: 720px) {
+  .xl-pasta-sidebar .xl-sidebar { width: 58px; min-width: 58px; }
+  .xl-sidebar-label, .xl-sidebar-brand div, .xl-sidebar-item span, .xl-sidebar-item small, .xl-sidebar-foot span { display: none; }
+  .xl-sidebar-item { justify-content: center; padding: 0; }
+  .xl-sidebar-foot button { padding: 0; }
+  .arquimedes-workbar { min-height: 54px; padding: 8px 12px; }
+  .arquimedes-workbar-actions button { width: 28px; height: 28px; }
+}
