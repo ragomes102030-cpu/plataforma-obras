@@ -1,20 +1,16 @@
 // PostgreSQL schema generated from the live Supabase schema.
 // Source: Supabase project tromrvfijbtihuilvnuk, 2026-10-05.
-//
-// Intentionally omits FK/index declarations here: the database already owns those
-// constraints. This file is the runtime Drizzle model for the existing PostgreSQL schema.
-import {
-  bigint, bigserial, boolean, bytea, date, integer, jsonb, numeric, pgTable,
-  serial, text, timestamp, varchar,
-} from "drizzle-orm/pg-core";
+// This is the runtime Drizzle model; existing DB constraints remain owned by PostgreSQL.
+import { sql } from "drizzle-orm";
+import { bigint, bigserial, boolean, bytea, date, integer, jsonb, numeric, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 export const activityResourceAllocations = pgTable("activity_resource_allocations", {
   "id": serial("id").notNull(),
   "activityId": integer("activityId").notNull(),
   "resourceId": integer("resourceId").notNull(),
-  "quantity": numeric("quantity", { precision: 14, scale: 3, mode: "number" }).notNull(),
+  "quantity": numeric("quantity", { precision: 14, scale: 3, mode: "number" }).default("1").notNull(),
   "productivity": numeric("productivity", { precision: 14, scale: 3, mode: "number" }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const agentDecisions = pgTable("agent_decisions", {
@@ -26,7 +22,7 @@ export const agentDecisions = pgTable("agent_decisions", {
   "scopeJson": text("scopeJson").notNull(),
   "reason": text("reason"),
   "impactJson": text("impactJson"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const agentFindings = pgTable("agent_findings", {
@@ -41,13 +37,13 @@ export const agentFindings = pgTable("agent_findings", {
   "proposedValueJson": text("proposedValueJson"),
   "description": text("description").notNull(),
   "impact": text("impact"),
-  "confidence": text("confidence").notNull(),
-  "status": text("status").notNull(),
+  "confidence": text("confidence").default("medium").notNull(),
+  "status": text("status").default("open").notNull(),
   "resolvedAt": timestamp("resolvedAt", { withTimezone: true, mode: "date" }),
   "resolvedBy": integer("resolvedBy"),
   "resolutionNote": text("resolutionNote"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const agentMemories = pgTable("agent_memories", {
@@ -60,25 +56,25 @@ export const agentMemories = pgTable("agent_memories", {
   "valueJson": text("valueJson").notNull(),
   "sourceType": varchar("sourceType", { length: 80 }).notNull(),
   "sourceRef": varchar("sourceRef", { length: 180 }),
-  "confidence": text("confidence").notNull(),
-  "status": text("status").notNull(),
+  "confidence": text("confidence").default("medium").notNull(),
+  "status": text("status").default("proposed").notNull(),
   "approvedBy": integer("approvedBy"),
   "approvedAt": timestamp("approvedAt", { withTimezone: true, mode: "date" }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const agentProjectStates = pgTable("agent_project_states", {
   "id": serial("id").notNull(),
   "projectId": integer("projectId").notNull(),
-  "stage": text("stage").notNull(),
-  "activeSection": varchar("activeSection", { length: 40 }).notNull(),
+  "stage": text("stage").default("DESCRITIVO").notNull(),
+  "activeSection": varchar("activeSection", { length: 40 }).default("portfolio").notNull(),
   "activeSubtab": varchar("activeSubtab", { length: 40 }),
-  "blockerCount": integer("blockerCount").notNull(),
+  "blockerCount": integer("blockerCount").default(0).notNull(),
   "lastSummary": text("lastSummary"),
-  "version": integer("version").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "version": integer("version").default(1).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const agentRunEvents = pgTable("agent_run_events", {
@@ -88,7 +84,7 @@ export const agentRunEvents = pgTable("agent_run_events", {
   "userId": integer("userId").notNull(),
   "eventType": varchar("eventType", { length: 80 }).notNull(),
   "eventJson": text("eventJson").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const agentRuns = pgTable("agent_runs", {
@@ -96,7 +92,7 @@ export const agentRuns = pgTable("agent_runs", {
   "requestId": varchar("requestId", { length: 128 }).notNull(),
   "projectId": integer("projectId").notNull(),
   "userId": integer("userId").notNull(),
-  "status": text("status").notNull(),
+  "status": text("status").default("executando").notNull(),
   "currentStep": varchar("currentStep", { length: 120 }),
   "provider": varchar("provider", { length: 80 }),
   "model": varchar("model", { length: 160 }),
@@ -104,11 +100,11 @@ export const agentRuns = pgTable("agent_runs", {
   "resultJson": text("resultJson"),
   "errorCode": varchar("errorCode", { length: 100 }),
   "errorMessage": text("errorMessage"),
-  "iterations": integer("iterations").notNull(),
-  "startedAt": timestamp("startedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "iterations": integer("iterations").default(0).notNull(),
+  "startedAt": timestamp("startedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   "finishedAt": timestamp("finishedAt", { withTimezone: true, mode: "date" }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const arquimedesCapabilities = pgTable("arquimedes_capabilities", {
@@ -118,14 +114,14 @@ export const arquimedesCapabilities = pgTable("arquimedes_capabilities", {
   "version": varchar("version", { length: 40 }).notNull(),
   "domain": varchar("domain", { length: 120 }).notNull(),
   "description": text("description").notNull(),
-  "status": varchar("status", { length: 24 }).notNull(),
-  "enabled": boolean("enabled").notNull(),
-  "removable": boolean("removable").notNull(),
-  "dependenciesJson": text("dependenciesJson").notNull(),
+  "status": varchar("status", { length: 24 }).default("available").notNull(),
+  "enabled": boolean("enabled").default(false).notNull(),
+  "removable": boolean("removable").default(true).notNull(),
+  "dependenciesJson": text("dependenciesJson").default("[]").notNull(),
   "installedBy": integer("installedBy"),
   "installedAt": timestamp("installedAt", { withTimezone: true, mode: "date" }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const arquimedesCapabilityEvents = pgTable("arquimedes_capability_events", {
@@ -136,7 +132,7 @@ export const arquimedesCapabilityEvents = pgTable("arquimedes_capability_events"
   "fromStatus": varchar("fromStatus", { length: 40 }),
   "toStatus": varchar("toStatus", { length: 40 }),
   "detail": text("detail"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const budgetItems = pgTable("budget_items", {
@@ -155,10 +151,10 @@ export const budgetItems = pgTable("budget_items", {
   "source": varchar("source", { length: 80 }),
   "referencePeriod": varchar("referencePeriod", { length: 20 }),
   "compositionNote": text("compositionNote"),
-  "isPriceException": boolean("isPriceException").notNull(),
-  "sortOrder": integer("sortOrder").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "isPriceException": boolean("isPriceException").default(false).notNull(),
+  "sortOrder": integer("sortOrder").default(0).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const budgetVersions = pgTable("budget_versions", {
@@ -166,12 +162,12 @@ export const budgetVersions = pgTable("budget_versions", {
   "projectId": integer("projectId").notNull(),
   "name": varchar("name", { length: 160 }).notNull(),
   "versionNumber": integer("versionNumber").notNull(),
-  "status": text("status").notNull(),
-  "currency": varchar("currency", { length: 3 }).notNull(),
+  "status": text("status").default("rascunho").notNull(),
+  "currency": varchar("currency", { length: 3 }).default("BRL").notNull(),
   "notes": text("notes"),
   "createdBy": integer("createdBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const calendarExceptions = pgTable("calendar_exceptions", {
@@ -180,7 +176,7 @@ export const calendarExceptions = pgTable("calendar_exceptions", {
   "date": varchar("date", { length: 10 }).notNull(),
   "type": text("type").notNull(),
   "name": varchar("name", { length: 180 }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const compositionComponents = pgTable("composition_components", {
@@ -190,15 +186,15 @@ export const compositionComponents = pgTable("composition_components", {
   "componentType": text("componentType").notNull(),
   "coefficient": numeric("coefficient", { precision: 14, scale: 6, mode: "number" }).notNull(),
   "unitPriceSnapshot": numeric("unitPriceSnapshot", { precision: 14, scale: 2, mode: "number" }).notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const llmProviderSettings = pgTable("llm_provider_settings", {
   "id": integer("id").notNull(),
   "encryptedConfig": text("encryptedConfig").notNull(),
   "updatedBy": integer("updatedBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const mcpHomologationRuns = pgTable("mcp_homologation_runs", {
@@ -206,15 +202,15 @@ export const mcpHomologationRuns = pgTable("mcp_homologation_runs", {
   "projectId": integer("projectId").notNull(),
   "userId": integer("userId").notNull(),
   "requestId": varchar("requestId", { length: 128 }).notNull(),
-  "status": text("status").notNull(),
+  "status": text("status").default("planned").notNull(),
   "planJson": text("planJson").notNull(),
   "readOnlyResultJson": text("readOnlyResultJson"),
   "reconciliationJson": text("reconciliationJson"),
   "error": text("error"),
   "startedAt": timestamp("startedAt", { withTimezone: true, mode: "date" }),
   "finishedAt": timestamp("finishedAt", { withTimezone: true, mode: "date" }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const mcpMutationOperations = pgTable("mcp_mutation_operations", {
@@ -229,11 +225,11 @@ export const mcpMutationOperations = pgTable("mcp_mutation_operations", {
   "argsJson": text("argsJson").notNull(),
   "resultJson": text("resultJson"),
   "error": text("error"),
-  "status": text("status").notNull(),
+  "status": text("status").default("preview").notNull(),
   "confirmedAt": timestamp("confirmedAt", { withTimezone: true, mode: "date" }),
   "executedAt": timestamp("executedAt", { withTimezone: true, mode: "date" }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const planningResources = pgTable("planning_resources", {
@@ -244,9 +240,9 @@ export const planningResources = pgTable("planning_resources", {
   "unit": varchar("unit", { length: 32 }).notNull(),
   "capacityPerDay": numeric("capacityPerDay", { precision: 14, scale: 3, mode: "number" }),
   "costPerDay": numeric("costPerDay", { precision: 14, scale: 2, mode: "number" }),
-  "active": integer("active").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "active": integer("active").default(1).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const priceCatalogs = pgTable("price_catalogs", {
@@ -255,11 +251,11 @@ export const priceCatalogs = pgTable("price_catalogs", {
   "sourceType": text("sourceType").notNull(),
   "state": varchar("state", { length: 2 }),
   "referencePeriod": varchar("referencePeriod", { length: 20 }).notNull(),
-  "status": text("status").notNull(),
+  "status": text("status").default("ativo").notNull(),
   "notes": text("notes"),
   "createdBy": integer("createdBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const priceItems = pgTable("price_items", {
@@ -271,8 +267,8 @@ export const priceItems = pgTable("price_items", {
   "itemType": text("itemType").notNull(),
   "unitPrice": numeric("unitPrice", { precision: 14, scale: 2, mode: "number" }).notNull(),
   "notes": text("notes"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const productionEntries = pgTable("production_entries", {
@@ -286,11 +282,11 @@ export const productionEntries = pgTable("production_entries", {
   "quantity": numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
   "measurementUnit": varchar("measurementUnit", { length: 32 }).notNull(),
   "notes": text("notes"),
-  "status": text("status").notNull(),
-  "exemplo": integer("exemplo").notNull(),
+  "status": text("status").default("rascunho").notNull(),
+  "exemplo": integer("exemplo").default(0).notNull(),
   "createdBy": integer("createdBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const productionFronts = pgTable("production_fronts", {
@@ -299,9 +295,9 @@ export const productionFronts = pgTable("production_fronts", {
   "code": varchar("code", { length: 32 }).notNull(),
   "name": varchar("name", { length: 180 }).notNull(),
   "location": varchar("location", { length: 180 }),
-  "status": text("status").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "status": text("status").default("ativa").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const productionTeams = pgTable("production_teams", {
@@ -309,10 +305,10 @@ export const productionTeams = pgTable("production_teams", {
   "projectId": integer("projectId").notNull(),
   "name": varchar("name", { length: 180 }).notNull(),
   "trade": varchar("trade", { length: 120 }).notNull(),
-  "memberCount": integer("memberCount").notNull(),
-  "active": integer("active").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "memberCount": integer("memberCount").default(0).notNull(),
+  "active": integer("active").default(1).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const productionUnits = pgTable("production_units", {
@@ -321,8 +317,8 @@ export const productionUnits = pgTable("production_units", {
   "code": varchar("code", { length: 32 }).notNull(),
   "name": varchar("name", { length: 180 }).notNull(),
   "unitType": varchar("unitType", { length: 80 }).notNull(),
-  "sortOrder": integer("sortOrder").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "sortOrder": integer("sortOrder").default(0).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const projectAuditEvents = pgTable("project_audit_events", {
@@ -331,7 +327,7 @@ export const projectAuditEvents = pgTable("project_audit_events", {
   "userId": integer("userId"),
   "action": varchar("action", { length: 64 }).notNull(),
   "payload": jsonb("payload").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const projectDocuments = pgTable("project_documents", {
@@ -343,9 +339,9 @@ export const projectDocuments = pgTable("project_documents", {
   "sizeBytes": integer("sizeBytes").notNull(),
   "content": bytea("content").notNull(),
   "extractedText": text("extractedText"),
-  "analysisStatus": varchar("analysisStatus", { length: 32 }).notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "analysisStatus": varchar("analysisStatus", { length: 32 }).default("pending").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const projectMcpIntegrations = pgTable("project_mcp_integrations", {
@@ -354,25 +350,25 @@ export const projectMcpIntegrations = pgTable("project_mcp_integrations", {
   "provider": text("provider").notNull(),
   "externalProjectId": varchar("externalProjectId", { length: 180 }),
   "endpointUrl": varchar("endpointUrl", { length: 500 }).notNull(),
-  "syncState": text("syncState").notNull(),
+  "syncState": text("syncState").default("unconfigured").notNull(),
   "lastSyncedAt": timestamp("lastSyncedAt", { withTimezone: true, mode: "date" }),
   "lastError": text("lastError"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const projectPlanVersions = pgTable("project_plan_versions", {
   "id": serial("id").notNull(),
   "projectId": integer("projectId").notNull(),
   "versionNumber": integer("versionNumber").notNull(),
-  "status": text("status").notNull(),
+  "status": text("status").default("draft").notNull(),
   "baseVersionId": integer("baseVersionId"),
   "decisionId": integer("decisionId"),
   "approvedAt": timestamp("approvedAt", { withTimezone: true, mode: "date" }),
   "notes": text("notes"),
   "createdBy": integer("createdBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const projects = pgTable("projects", {
@@ -381,15 +377,15 @@ export const projects = pgTable("projects", {
   "code": varchar("code", { length: 32 }).notNull(),
   "name": varchar("name", { length: 180 }).notNull(),
   "location": varchar("location", { length: 180 }).notNull(),
-  "status": text("status").notNull(),
-  "progress": integer("progress").notNull(),
+  "status": text("status").default("Planejamento").notNull(),
+  "progress": integer("progress").default(0).notNull(),
   "descricao": text("descricao"),
   "plannedStart": timestamp("plannedStart", { withTimezone: true, mode: "date" }).notNull(),
   "plannedFinish": timestamp("plannedFinish", { withTimezone: true, mode: "date" }).notNull(),
   "baseReferencia": text("baseReferencia"),
   "baseReferenciaRef": varchar("baseReferenciaRef", { length: 20 }),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   "deletedAt": timestamp("deletedAt", { withTimezone: true, mode: "date" }),
   "deletedAtBy": integer("deletedAtBy"),
   "tipoDeObra": varchar("tipoDeObra", { length: 32 }),
@@ -411,10 +407,10 @@ export const scheduleActivities = pgTable("schedule_activities", {
   "unit": varchar("unit", { length: 16 }),
   "productivity": numeric("productivity", { precision: 14, scale: 3, mode: "number" }),
   "budgetItemId": integer("budgetItemId"),
-  "progress": integer("progress").notNull(),
-  "exemplo": integer("exemplo").notNull(),
-  "status": text("status").notNull(),
-  "critical": integer("critical").notNull(),
+  "progress": integer("progress").default(0).notNull(),
+  "exemplo": integer("exemplo").default(0).notNull(),
+  "status": text("status").default("Não iniciado").notNull(),
+  "critical": integer("critical").default(0).notNull(),
   "earlyStart": integer("earlyStart"),
   "earlyFinish": integer("earlyFinish"),
   "lateStart": integer("lateStart"),
@@ -425,9 +421,9 @@ export const scheduleActivities = pgTable("schedule_activities", {
   "finishNoLaterThan": timestamp("finishNoLaterThan", { withTimezone: true, mode: "date" }),
   "cpmCalculatedAt": timestamp("cpmCalculatedAt", { withTimezone: true, mode: "date" }),
   "versionId": integer("versionId"),
-  "sortOrder": integer("sortOrder").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "sortOrder": integer("sortOrder").default(0).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const scheduleBaselineItems = pgTable("schedule_baseline_items", {
@@ -444,9 +440,9 @@ export const scheduleBaselines = pgTable("schedule_baselines", {
   "id": serial("id").notNull(),
   "projectId": integer("projectId").notNull(),
   "name": varchar("name", { length: 160 }).notNull(),
-  "status": text("status").notNull(),
+  "status": text("status").default("ativa").notNull(),
   "createdBy": integer("createdBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const scheduleDependencies = pgTable("schedule_dependencies", {
@@ -455,10 +451,10 @@ export const scheduleDependencies = pgTable("schedule_dependencies", {
   "externalId": varchar("externalId", { length: 180 }),
   "predecessorId": integer("predecessorId").notNull(),
   "successorId": integer("successorId").notNull(),
-  "type": text("type").notNull(),
-  "lag": integer("lag").notNull(),
+  "type": text("type").default("FS").notNull(),
+  "lag": integer("lag").default(0).notNull(),
   "versionId": integer("versionId"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const serviceCompositions = pgTable("service_compositions", {
@@ -468,10 +464,10 @@ export const serviceCompositions = pgTable("service_compositions", {
   "unit": varchar("unit", { length: 32 }).notNull(),
   "sourceCatalogId": integer("sourceCatalogId"),
   "referencePeriod": varchar("referencePeriod", { length: 20 }),
-  "status": text("status").notNull(),
+  "status": text("status").default("rascunho").notNull(),
   "createdBy": integer("createdBy"),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const users = pgTable("users", {
@@ -480,10 +476,10 @@ export const users = pgTable("users", {
   "name": text("name"),
   "email": varchar("email", { length: 320 }),
   "loginMethod": varchar("loginMethod", { length: 64 }),
-  "role": text("role").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
-  "lastSignedIn": timestamp("lastSignedIn", { withTimezone: true, mode: "date" }).notNull(),
+  "role": text("role").default("user").notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "lastSignedIn": timestamp("lastSignedIn", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export const wbsNodes = pgTable("wbs_nodes", {
@@ -494,21 +490,21 @@ export const wbsNodes = pgTable("wbs_nodes", {
   "parentId": integer("parentId"),
   "code": varchar("code", { length: 32 }).notNull(),
   "name": varchar("name", { length: 220 }).notNull(),
-  "level": integer("level").notNull(),
-  "nodeType": text("nodeType").notNull(),
+  "level": integer("level").default(1).notNull(),
+  "nodeType": text("nodeType").default("pacote").notNull(),
   "unit": varchar("unit", { length: 32 }),
   "plannedQuantity": numeric("plannedQuantity", { precision: 14, scale: 3, mode: "number" }),
   "versionId": integer("versionId"),
-  "sortOrder": integer("sortOrder").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "sortOrder": integer("sortOrder").default(0).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   "description": text("description"),
   "inclusions": text("inclusions"),
   "exclusions": text("exclusions"),
   "location": varchar("location", { length: 180 }),
   "responsible": varchar("responsible", { length: 180 }),
   "acceptanceCriteria": text("acceptanceCriteria"),
-  "scopeStatus": varchar("scopeStatus", { length: 24 }).notNull(),
+  "scopeStatus": varchar("scopeStatus", { length: 24 }).default("rascunho").notNull(),
   "decompositionBasis": varchar("decompositionBasis", { length: 32 }),
 });
 
@@ -517,8 +513,8 @@ export const workCalendars = pgTable("work_calendars", {
   "projectId": integer("projectId").notNull(),
   "name": varchar("name", { length: 180 }).notNull(),
   "weekPattern": jsonb("weekPattern").notNull(),
-  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).notNull(),
-  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).notNull(),
+  "createdAt": timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  "updatedAt": timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
 export type ActivityResourceAllocations = typeof activityResourceAllocations.$inferSelect;
