@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, CheckCircle2, CircleDashed, GitBranch, Network, LockKeyhole, Search, Bell, Settings2 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -396,6 +396,9 @@ function Obra({
     escopo: <ClipboardList size={17} />,
     eap: <TreePine size={17} />,
     atividades: <ListTodo size={17} />,
+    dependencias: <GitBranch size={17} />,
+    cpm: <Network size={17} />,
+    baseline: <LockKeyhole size={17} />,
     gantt: <BarChart3 size={17} />,
     "linha-balanco": <Activity size={17} />,
     producao: <Activity size={17} />,
@@ -406,9 +409,18 @@ function Obra({
   };
 
   const grupos = [
-    { titulo: "PLANEJAMENTO", ids: ["dashboard", "escopo", "eap", "atividades", "gantt", "linha-balanco"] },
+    { titulo: "VISÃO GERAL", ids: ["dashboard"] },
+    { titulo: "PLANEJAMENTO", ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"] },
+    { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
     { titulo: "CONTROLE", ids: ["producao", "suprimentos", "financeiro", "riscos", "curva-s"] },
   ];
+
+  const etapaAtual = ({
+    dashboard: "Visão geral", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
+    dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
+    gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Produção",
+    suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos", "curva-s": "Curva S"
+  } as Record<string, string>)[aba] ?? aba;
 
   return (
     <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}`}>
@@ -459,6 +471,26 @@ function Obra({
       </aside>
 
       <main className="xl-area xl-area-sidebar">
+        <div className="arquimedes-workbar">
+          <div className="arquimedes-workbar-title">
+            <span className="arquimedes-kicker">PLANEJAMENTO DA OBRA</span>
+            <strong>{etapaAtual}</strong>
+          </div>
+          <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
+            {["Escopo", "EAP", "Atividades", "Dependências", "CPM", "Baseline"].map((etapa, index) => (
+              <React.Fragment key={etapa}>
+                {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
+                <span className={etapaAtual === etapa ? "ativo" : ""}>{etapa}</span>
+              </React.Fragment>
+            ))}
+          </div>
+          <div className="arquimedes-workbar-actions">
+            <button type="button" title="Pesquisar na obra"><Search size={15} /></button>
+            <button type="button" title="Notificações"><Bell size={15} /></button>
+            <button type="button" title="Configurações"><Settings2 size={15} /></button>
+          </div>
+        </div>
+        <div className="arquimedes-content">
         {aba === "dashboard" ? (
           <PainelDoCronograma agregado={agregado} projetoId={projetoId} temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0} />
         ) : aba === "escopo" ? (
@@ -479,6 +511,7 @@ function Obra({
         ) : (
           <AbaVazia titulo={definicao?.rotulo ?? aba} falta={definicao?.falta ?? ""} />
         )}
+        </div>
       </main>
     </div>
   );
