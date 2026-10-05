@@ -58,6 +58,7 @@ import { localDatabaseEvidenceSource } from "./construction/local-database-sourc
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
+import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
 
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -3291,19 +3292,19 @@ export const appRouter = router({
           )
           .limit(1);
         if (!node) throw notFound("Folha da EAP aprovada não encontrada.");
-        if (node.nodeType !== "entrega" && node.nodeType !== "pacote") {
+        if (!isTerminalEapNode(node.nodeType)) {
           throw badRequest("Somente uma folha terminal da EAP pode virar atividade.");
         }
 
-        const durationDays =
-          input.durationDays ??
-          (input.plannedQuantity && input.productivity
-            ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity))
-            : null);
-        if (!durationDays || durationDays <= 0) {
-          throw badRequest(
-            "Informe a duração da atividade ou informe quantitativo e produtividade para o Arquimedes calcular a duração."
-          );
+        let durationDays: number;
+        try {
+          durationDays = resolveActivityDuration({
+            durationDays: input.durationDays,
+            plannedQuantity: input.plannedQuantity,
+            productivity: input.productivity,
+          });
+        } catch (error) {
+          throw badRequest(error instanceof Error ? error.message : "Duração inválida para a atividade.");
         }
 
         const [existing] = await db
@@ -3465,9 +3466,15 @@ export const appRouter = router({
         if (approvedNode.nodeType !== "entrega" && approvedNode.nodeType !== "pacote") {
           throw badRequest("A atividade deve partir de uma folha terminal da EAP.");
         }
-        const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 0);
-        if (durationDays <= 0) {
-          throw badRequest("A atividade precisa de duração ou de quantidade + produtividade para calcular a duração.");
+        let durationDays: number;
+        try {
+          durationDays = resolveActivityDuration({
+            durationDays: input.durationDays,
+            plannedQuantity: input.plannedQuantity,
+            productivity: input.productivity,
+          });
+        } catch (error) {
+          throw badRequest(error instanceof Error ? error.message : "Duração inválida para a atividade.");
         }
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const [writableNode] = await db
