@@ -17,7 +17,10 @@
     "db:migrate": "node scripts/migrate-db.mjs",
     "db:migrate:check": "node scripts/migrate-db.mjs --dry-run",
     "db:verify:scratch": "node scripts/verify-migration-from-scratch.mjs",
-    "db:migrate:integrity": "tsx scripts/repair-wbs-identity.ts && tsx scripts/migrate-wbs-integrity.ts"
+    "db:migrate:integrity": "tsx scripts/repair-wbs-identity.ts && tsx scripts/migrate-wbs-integrity.ts",
+    "test:contracts": "vitest run server/orchestrator.test.ts server/qa/orchestrator-regression.test.ts server/integrations/mcp-client.test.ts server/qa/mcp-client-regression.test.ts server/llm-provider-gateway.test.ts server/trpc-error-codes.test.ts",
+    "test:aurora": "vitest run server/qa/aurora-eap-regression.test.ts",
+    "test:gate": "pnpm check && pnpm test --run && pnpm build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
