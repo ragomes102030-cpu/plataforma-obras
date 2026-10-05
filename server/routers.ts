@@ -1107,7 +1107,7 @@ export const appRouter = router({
       const rows = await db
         .select()
         .from(projects)
-        .where(eq(projects.ownerUserId, ctx.user.id))
+        .where(and(eq(projects.ownerUserId, ctx.user.id), isNull(projects.deletedAt)))
         .orderBy(desc(projects.updatedAt));
       return rows;
     }),
