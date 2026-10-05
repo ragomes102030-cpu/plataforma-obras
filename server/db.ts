@@ -1,4 +1,4 @@
-﻿import { and, eq, type ColumnsSelection } from "drizzle-orm";
+import { and, eq, type ColumnsSelection } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgInsertBase, PgQueryResultHKT, PgTable } from "drizzle-orm/pg-core";
 import { InsertUser, users } from "../drizzle/schema";
@@ -33,6 +33,21 @@ export function runtimeDatabaseUrl() {
   // host, usuário ou senha: a connection string copiada do Supabase já contém
   // a combinação correta e uma reescrita pode invalidar uma credencial válida.
   const url = new URL(raw);
+
+  // A Session Pooler do Supabase exige o usuário no formato
+  // `postgres.<project-ref>`. Se alguém colar no Render uma URL do pooler
+  // montada manualmente com apenas `postgres`, o PostgreSQL responde 28P01
+  // mesmo com a senha correta. Corrigimos somente esse caso; URLs já geradas
+  // pelo Supabase permanecem intactas.
+  if (
+    supabaseUrl &&
+    url.hostname.endsWith(".pooler.supabase.com") &&
+    url.username === "postgres"
+  ) {
+    url.username = "postgres.tromrvfijbtihuilvnuk";
+    console.log("[database] pooler Supabase: usuário normalizado para o project-ref");
+  }
+
   const source = supabaseUrl ? "supabase" : "legacy";
   const maskedUser = url.username ? url.username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "<none>";
   const passwordConfigured = url.password.length > 0;
