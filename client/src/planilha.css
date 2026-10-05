@@ -2651,3 +2651,27 @@ tr:hover .xl-codigo {
 .xl-tb-user { background: #1a3443; color: #8fe1ef; }
 .xl-lixeira-btn { border: 1px solid #d7e0e6; background: #fff; color: #647784; box-shadow: 0 2px 7px rgba(18,34,45,.07); }
 .xl-lixeira-btn:hover { color: #b13d3d; border-color: #e4baba; background: #fff8f8; }
+
+
+/* Botões do Arquimedes: mesma identidade e mesma ação em todos os pontos de entrada. */
+.xl-tb-arquimedes {
+  min-height: 30px;
+  padding: 0 10px;
+  gap: 6px;
+  border: 1px solid #28556a;
+  border-radius: 6px;
+  background: #112c39;
+  color: #63d4e9;
+  font-weight: 700;
+}
+.xl-tb-arquimedes:hover {
+  border-color: #3c7891;
+  background: #173d50;
+  color: #7ae0f0;
+}
+.xl-sidebar-arquimedes {
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+}
+.xl-sidebar-arquimedes svg { color: #63d4e9; }
