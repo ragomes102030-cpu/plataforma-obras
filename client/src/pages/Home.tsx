@@ -254,7 +254,7 @@ export default function Home() {
             onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}
             title="Abrir o Arquimedes"
           >
-            <Sparkles size={13} /> Arquimedes
+            <Bot size={13} /> Arquimedes
           </button>
           {user?.role === "admin" && (
             <button
@@ -463,7 +463,7 @@ function Obra({
 
         {!sidebarRecolhida && (
           <div className="xl-sidebar-foot">
-            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}>
+            <button type="button" className="xl-sidebar-arquimedes" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))} title="Abrir o assistente de engenharia Arquimedes">
               <Bot size={17} /><span>Arquimedes</span>
             </button>
           </div>
