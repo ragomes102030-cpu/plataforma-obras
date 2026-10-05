@@ -3448,24 +3448,40 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [wbsNode] = await db
+        const approved = await requireApprovedEapVersion(db, input.projectId);
+        const [approvedNode] = await db
+          .select({ id: wbsNodes.id, code: wbsNodes.code, nodeType: wbsNodes.nodeType })
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, approved.id),
+              eq(wbsNodes.code, input.wbsCode)
+            )
+          )
+          .limit(1);
+        if (!approvedNode) throw badRequest("O código informado não corresponde à EAP aprovada desta obra.");
+        if (approvedNode.nodeType !== "entrega" && approvedNode.nodeType !== "pacote") {
+          throw badRequest("A atividade deve partir de uma folha terminal da EAP.");
+        }
+        const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 0);
+        if (durationDays <= 0) {
+          throw badRequest("A atividade precisa de duração ou de quantidade + produtividade para calcular a duração.");
+        }
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [writableNode] = await db
           .select({ id: wbsNodes.id })
           .from(wbsNodes)
           .where(
             and(
               eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id),
               eq(wbsNodes.code, input.wbsCode)
             )
           )
           .limit(1);
-        if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP desta obra.");
-        await requireApprovedEapVersion(db, input.projectId);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 0);
-        if (durationDays <= 0) {
-          throw badRequest("A atividade precisa de duração ou de quantidade + produtividade para calcular a duração.");
-        }
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: scheduleActivities.id });
+        if (!writableNode) throw badRequest("Não foi possível preparar a versão de trabalho da EAP para a atividade.");
+        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: writableNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: createdId.id });
         return { id: createdId.id };
       }),
     generateFromEap: protectedProcedure
@@ -3486,11 +3502,13 @@ export const appRouter = router({
             )
           )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-        if (!nodes.length) {
+        const terminalNodes = nodes.filter(node => node.nodeType === "entrega" || node.nodeType === "pacote");
+        if (!terminalNodes.length) {
           return {
             created: 0,
             skipped: 0,
-            message: "A EAP desta obra não possui entregas (nós tipo entrega).",
+            pending: 0,
+            message: "A EAP aprovada não possui folhas terminais elegíveis para atividades.",
           };
         }
         const existing = await db
@@ -3498,40 +3516,15 @@ export const appRouter = router({
           .from(scheduleActivities)
           .where(eq(scheduleActivities.projectId, input.projectId));
         const existingCodes = new Set(existing.map(row => row.wbsCode));
-        const byId = new Map(nodes.map(node => [node.id, node]));
-        let created = 0;
-        let skipped = 0;
-        for (const node of nodes) {
-          if (existingCodes.has(node.code)) {
-            skipped += 1;
-            continue;
-          }
-          const parent = node.parentId != null ? byId.get(node.parentId) : undefined;
-          const plannedQuantity = Number(node.plannedQuantity ?? 0);
-          const durationDays = plannedQuantity > 0 ? Math.max(1, Math.ceil(plannedQuantity)) : 1;
-          const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-          await db.insert(scheduleActivities).values({
-            projectId: input.projectId,
-            wbsNodeId: node.id,
-            wbsCode: node.code,
-            eapRef: node.code,
-            name: node.name,
-            phase: parent?.name?.slice(0, 80) || "Execução",
-            startOffset: 0,
-            durationDays,
-            plannedQuantity: node.plannedQuantity
-              ? String(node.plannedQuantity)
-              : null,
-            sortOrder: node.sortOrder * 1000 + node.id,
-            versionId: writable.id,
-          });
-          existingCodes.add(node.code);
-          created += 1;
-        }
+        const skipped = terminalNodes.filter(node => existingCodes.has(node.code)).length;
+        const pending = terminalNodes.filter(node => !existingCodes.has(node.code));
         return {
-          created,
+          created: 0,
           skipped,
-          message: `${created} atividade(s) criada(s) a partir da EAP; ${skipped} já existiam.`,
+          pending: pending.length,
+          message: pending.length
+            ? pending.length + " pacote(s) aguardam duração fundamentada (duração informada ou quantitativo + produtividade)."
+            : "As atividades elegíveis já existem; nenhuma nova atividade foi criada.",
         };
       }),
     createDependency: protectedProcedure
