@@ -2921,3 +2921,83 @@ tr:hover .xl-codigo {
   .eap-toolbar-grupo-titulo{font-size:7px}
   .eap-tool-btn{padding:0 8px}
 }
+
+/* EAP · uniformização das zonas de ação secundárias */
+.eap-topo-acoes,
+.eap-validacao-acoes,
+.eap-controle-cabecalho > button,
+.eap-proposta-correcao-acoes{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.eap-topo-acoes .eap-btn-secundario,
+.eap-validacao-detalhes,
+.eap-revisao-btn,
+.eap-controle-cabecalho .eap-tool-btn{
+  min-height:31px;
+  padding:0 11px;
+  border:1px solid #cfdbe2;
+  border-radius:6px;
+  background:#fff;
+  color:#435866;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.eap-topo-acoes .eap-btn-secundario:hover,
+.eap-validacao-detalhes:hover,
+.eap-revisao-btn:hover,
+.eap-controle-cabecalho .eap-tool-btn:hover{
+  background:#f4f9fb;
+  border-color:#9fc5d1;
+  color:#176b87;
+}
+.eap-validacao-detalhes{
+  cursor:pointer;
+}
+.eap-revisao-btn.ativo{
+  background:#edf7f9;
+  border-color:#8fc5d2;
+  color:#176b87;
+}
+.eap-topo .eap-busca-wrap{
+  border:1px solid #cfdbe2;
+  border-radius:6px;
+  background:#fff;
+}
+.eap-controle-cabecalho{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.eap-controle-cabecalho > button{
+  flex:0 0 auto;
+}
+.eap-btn,
+.eap-btn-secundario,
+.eap-btn-secundario{
+  min-height:32px;
+  border-radius:6px;
+  font-size:10px;
+  font-weight:750;
+}
+.eap-btn{
+  padding:0 12px;
+}
+.eap-btn-secundario{
+  padding:0 11px;
+}
+.eap-btn + .eap-btn-secundario,
+.eap-btn-secundario + .eap-btn,
+.eap-validacao-acoes > * + *{
+  margin-left:0;
+}
+@media(max-width:760px){
+  .eap-topo-acoes,
+  .eap-validacao-acoes,
+  .eap-controle-cabecalho{
+    flex-wrap:wrap;
+  }
+}
