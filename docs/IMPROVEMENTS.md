@@ -149,3 +149,27 @@ A persistência da conversa **não aplica EAP, cronograma ou qualquer mutação 
 - Regressão final: 483 testes passaram; typecheck e build passaram.
 - Render iniciou o deploy correspondente; logs confirmaram schema íntegro e 0 migrações pendentes.
 - Incidente registrado para rastreabilidade: contratos legados do frontend estavam fora de sincronia com o AppRouter atual.
+
+
+## Out/2026 — Homologação Aurora: falso bloqueio por mistura de versões da EAP
+
+### Incidente
+A tela da AURORA TESTE exibiu 138 nós, 106 folhas e 69 bloqueios de código EAP duplicado. A EAP corrente possuía 69 nós e 53 folhas.
+
+### Causa raiz
+A rota de validação carregava wbs_nodes somente por projectId e, portanto, misturava duas versões históricas idênticas antes de executar validateEap().
+
+### Correção
+- validação passou a ser limitada ao versionId da versão de planejamento aplicável;
+- versão histórica concorrente da Aurora deixou de ser aprovada;
+- geração de atividades foi protegida por versão aprovada;
+- leituras de planejamento passaram a usar escopo de versão;
+- atividades inválidas sem duração fundamentada foram removidas da versão de teste;
+- foi criada a regressão scripts/regression-aurora-eap.mjs;
+- foi criada a documentação normativa docs/EAP-INTEGRIDADE-E-APRENDIZADO.md.
+
+### Regra aprendida
+Duplicidade inesperada deve ser investigada primeiro como possível erro de escopo da consulta. Histórico não pode entrar automaticamente em validações operacionais.
+
+### Critério de avanço
+A próxima etapa só inicia quando a mesma versão aprovada apresentar zero bloqueios, backend e UI estiverem coerentes e a regressão automatizada estiver aprovada.
