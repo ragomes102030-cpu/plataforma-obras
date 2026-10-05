@@ -559,6 +559,30 @@ async function assertAccessibleProject(
     throw forbidden("Obra não encontrada ou sem permissão de acesso.");
 }
 
+async function getCurrentPlanVersionId(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number
+): Promise<number | null> {
+  const [version] = await db
+    .select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(eq(projectPlanVersions.projectId, projectId))
+    .orderBy(desc(projectPlanVersions.versionNumber))
+    .limit(1);
+  return version?.id ?? null;
+}
+
+function versionScopedCondition<TColumn>(
+  projectColumn: TColumn,
+  versionColumn: TColumn,
+  projectId: number,
+  versionId: number | null
+) {
+  return versionId == null
+    ? and(eq(projectColumn as any, projectId), isNull(versionColumn as any))
+    : and(eq(projectColumn as any, projectId), eq(versionColumn as any, versionId));
+}
+
 async function assertAvailableWbsCode(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
@@ -723,6 +747,19 @@ async function loadStageGateEvidence(
   userId: number
 ) {
   await assertAccessibleProject(db, projectId, userId);
+  const currentVersionId = await getCurrentPlanVersionId(db, projectId);
+  const eapScope =
+    currentVersionId == null
+      ? and(eq(wbsNodes.projectId, projectId), isNull(wbsNodes.versionId))
+      : and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, currentVersionId));
+  const activityScope =
+    currentVersionId == null
+      ? and(eq(scheduleActivities.projectId, projectId), isNull(scheduleActivities.versionId))
+      : and(eq(scheduleActivities.projectId, projectId), eq(scheduleActivities.versionId, currentVersionId));
+  const dependencyScope =
+    currentVersionId == null
+      ? and(eq(scheduleDependencies.projectId, projectId), isNull(scheduleDependencies.versionId))
+      : and(eq(scheduleDependencies.projectId, projectId), eq(scheduleDependencies.versionId, currentVersionId));
   const [project, eapNodes, activities, dependencies, blockerCount, activeBudgetVersion] =
     await Promise.all([
       db
@@ -730,15 +767,15 @@ async function loadStageGateEvidence(
         .from(projects)
         .where(accessibleProjectCondition(projectId, userId))
         .limit(1),
-      db.select().from(wbsNodes).where(eq(wbsNodes.projectId, projectId)),
+      db.select().from(wbsNodes).where(eapScope),
       db
         .select()
         .from(scheduleActivities)
-        .where(eq(scheduleActivities.projectId, projectId)),
+        .where(activityScope),
       db
         .select()
         .from(scheduleDependencies)
-        .where(eq(scheduleDependencies.projectId, projectId)),
+        .where(dependencyScope),
       countOpenBlockers(db, projectId),
       db
         .select({ id: budgetVersions.id })
@@ -1162,10 +1199,15 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
         return db
           .select()
           .from(wbsNodes)
-          .where(eq(wbsNodes.projectId, input.projectId))
+          .where(
+            versionId == null
+              ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.versionId))
+              : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, versionId))
+          )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
       }),
     updateWbsNode: protectedProcedure
@@ -1410,10 +1452,15 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
         return db
           .select()
           .from(scheduleDependencies)
-          .where(eq(scheduleDependencies.projectId, input.projectId));
+          .where(
+            versionId == null
+              ? and(eq(scheduleDependencies.projectId, input.projectId), isNull(scheduleDependencies.versionId))
+              : and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, versionId))
+          );
       }),
     trash: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
