@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, Settings } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -355,7 +355,7 @@ export default function Home() {
   );
 }
 
-/** A obra: abas embaixo, e no meio a aba que está ativa. */
+/** A obra: navegação lateral recolhível e conteúdo central. */
 function Obra({
   projetoId,
   obra,
@@ -367,13 +367,12 @@ function Obra({
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
 }) {
+  const [sidebarRecolhida, setSidebarRecolhida] = useState(false);
   const grade = trpc.planning.grade.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
 
-  // O motor já devolveu as colunas derivadas no calendário que ele usou, e a
-  // data de hoje veio junto. A grade é desenhada com esse mesmo resultado.
   const calendario: WorkCalendar = CALENDARIO_CORRIDO;
   const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
   const linhas: EntradaDaLinha[] = (grade.data?.linhas ?? []).map(l => ({
@@ -388,38 +387,88 @@ function Obra({
     executado: l.executado,
   }));
   const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
-  // O id de cada linha, para a grade gravar a célula certa. Vem do backend
-  // ao lado das linhas porque o motor é função pura e não conhece id.
   const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
-  const exemploPorCodigo = new Set(
-    Object.keys(grade.data?.exemploPorCodigo ?? {})
-  );
+  const exemploPorCodigo = new Set(Object.keys(grade.data?.exemploPorCodigo ?? {}));
   const definicao = ABAS.find(a => a.id === aba);
 
+  const icones: Record<string, React.ReactNode> = {
+    dashboard: <HomeIcon size={17} />,
+    escopo: <ClipboardList size={17} />,
+    eap: <TreePine size={17} />,
+    atividades: <ListTodo size={17} />,
+    gantt: <BarChart3 size={17} />,
+    "linha-balanco": <Activity size={17} />,
+    producao: <Activity size={17} />,
+    suprimentos: <Package size={17} />,
+    financeiro: <WalletCards size={17} />,
+    riscos: <ShieldAlert size={17} />,
+    "curva-s": <BarChart3 size={17} />,
+  };
+
+  const grupos = [
+    { titulo: "PLANEJAMENTO", ids: ["dashboard", "escopo", "eap", "atividades", "gantt", "linha-balanco"] },
+    { titulo: "CONTROLE", ids: ["producao", "suprimentos", "financeiro", "riscos", "curva-s"] },
+  ];
+
   return (
-    <div className="xl-pasta">
-      <div className="xl-area">
+    <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}`}>
+      <aside className="xl-sidebar" aria-label="Navegação da obra">
+        <div className="xl-sidebar-head">
+          <div className="xl-sidebar-brand">
+            <Layers3 size={17} />
+            {!sidebarRecolhida && <div><strong>{obra}</strong><span>Planejamento da obra</span></div>}
+          </div>
+          <button type="button" className="xl-sidebar-toggle" onClick={() => setSidebarRecolhida(v => !v)} aria-label={sidebarRecolhida ? "Expandir menu" : "Recolher menu"} title={sidebarRecolhida ? "Expandir menu" : "Recolher menu"}>
+            {sidebarRecolhida ? <Menu size={17} /> : <Menu size={17} />}
+          </button>
+        </div>
+
+        <nav className="xl-sidebar-nav">
+          {grupos.map(grupo => (
+            <div className="xl-sidebar-group" key={grupo.titulo}>
+              {!sidebarRecolhida && <div className="xl-sidebar-label">{grupo.titulo}</div>}
+              {grupo.ids.map(id => {
+                const a = ABAS.find(item => item.id === id);
+                if (!a) return null;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className={`xl-sidebar-item${a.id === aba ? " ativa" : ""}`}
+                    onClick={() => onAba(a.id)}
+                    title={sidebarRecolhida ? a.rotulo : (a.falta ?? a.rotulo)}
+                    aria-current={a.id === aba ? "page" : undefined}
+                  >
+                    {icones[a.id] ?? <Activity size={17} />}
+                    {!sidebarRecolhida && <span>{a.rotulo}</span>}
+                    {!sidebarRecolhida && a.status === "pendente" && <small>pendente</small>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {!sidebarRecolhida && (
+          <div className="xl-sidebar-foot">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}>
+              <Bot size={17} /><span>Arquimedes</span>
+            </button>
+          </div>
+        )}
+      </aside>
+
+      <main className="xl-area xl-area-sidebar">
         {aba === "dashboard" ? (
-          <PainelDoCronograma
-            agregado={agregado}
-            projetoId={projetoId}
-            temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0}
-          />
+          <PainelDoCronograma agregado={agregado} projetoId={projetoId} temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0} />
+        ) : aba === "escopo" ? (
+          <EscopoInicial projetoId={projetoId} obra={obra} />
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
           <>
             <PainelPlanejamento projetoId={projetoId} />
-            <GradeCronograma
-            obra={obra}
-            projetoId={projetoId}
-            calendario={calendario}
-            hoje={hoje}
-            linhas={linhas}
-            idPorCodigo={idPorCodigo}
-            exemploPorCodigo={exemploPorCodigo}
-            aoPedirEap={() => onAba("eap")}
-            />
+            <GradeCronograma obra={obra} projetoId={projetoId} calendario={calendario} hoje={hoje} linhas={linhas} idPorCodigo={idPorCodigo} exemploPorCodigo={exemploPorCodigo} aoPedirEap={() => onAba("eap")} />
           </>
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
@@ -428,35 +477,49 @@ function Obra({
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : (
-          <AbaVazia
-            titulo={definicao?.rotulo ?? aba}
-            falta={definicao?.falta ?? ""}
-          />
+          <AbaVazia titulo={definicao?.rotulo ?? aba} falta={definicao?.falta ?? ""} />
         )}
-      </div>
+      </main>
+    </div>
+  );
+}
 
-      <div className="xl-rodape">
-        <div className="xl-abas" role="tablist" aria-label="Abas da obra">
-          {ABAS.map(a => (
-            <button
-              key={a.id}
-              type="button"
-              role="tab"
-              aria-selected={a.id === aba}
-              data-ativa={a.id === aba}
-              data-status={a.status}
-              className={`xl-aba${a.id === aba ? " ativa" : ""}`}
-              onClick={() => onAba(a.id)}
-              title={a.falta ?? a.rotulo}
-            >
-              {a.rotulo}
-            </button>
-          ))}
+/** Escopo: primeira camada de contexto da obra; edição detalhada entra depois. */
+function EscopoInicial({ projetoId, obra }: { projetoId: number; obra: string }) {
+  return (
+    <div className="xl-escopo">
+      <div className="xl-escopo-head">
+        <div>
+          <span>ESCOPO DA OBRA</span>
+          <h1>{obra}</h1>
+          <p>Contexto, premissas e limites que alimentam a EAP e o planejamento.</p>
         </div>
-        <span className="xl-rodape-info" aria-hidden="true">
-          {obra} · {definicao?.rotulo ?? ""}
-        </span>
+        <div className="xl-escopo-status">Em planejamento</div>
       </div>
+      <div className="xl-escopo-grid">
+        <section className="xl-escopo-card">
+          <small>CONTEXTO</small>
+          <h3>Dados da obra</h3>
+          <p>O cadastro inicial da obra continua sendo a fonte dos dados gerais. Aqui vamos consolidar, sem duplicar informação, localização, tipologia, áreas, pavimentos, unidades e prazo preliminar.</p>
+        </section>
+        <section className="xl-escopo-card">
+          <small>DEFINIÇÃO</small>
+          <h3>Premissas e limites</h3>
+          <p>Premissas, inclusões, exclusões e restrições devem ser registradas antes de transformar o escopo em pacotes de trabalho.</p>
+        </section>
+        <section className="xl-escopo-card">
+          <small>PRÓXIMO PASSO</small>
+          <h3>EAP → atividades</h3>
+          <p>A EAP aprovada é a estrutura de escopo. Depois dela, as atividades serão definidas sem inventar duração, produtividade ou quantidade.</p>
+        </section>
+        <section className="xl-escopo-card xl-escopo-arquimedes">
+          <small>ARQUIMEDES</small>
+          <h3>Copiloto do escopo</h3>
+          <p>O agente deve identificar lacunas e impactos no planejamento, mas não preencher dados técnicos sem fundamento.</p>
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={15}/> Analisar escopo</button>
+        </section>
+      </div>
+      <div className="xl-escopo-nota"><strong>Arquitetura:</strong> Escopo → EAP → Atividades → Dependências → CPM → Baseline → Gantt/LOB → Controle.</div>
     </div>
   );
 }
