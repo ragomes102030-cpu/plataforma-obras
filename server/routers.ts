@@ -3319,23 +3319,24 @@ export const appRouter = router({
           .limit(1);
         if (existing) return { id: existing.id, created: false as const };
 
+        const activityValues: typeof scheduleActivities.$inferInsert = {
+          projectId: input.projectId,
+          wbsNodeId: node.id,
+          wbsCode: node.code,
+          eapRef: node.code,
+          name: node.name,
+          phase: "Execução",
+          startOffset: 0,
+          durationDays: Number(durationDays),
+          plannedQuantity: input.plannedQuantity ?? node.plannedQuantity,
+          productivity: input.productivity,
+          unit: input.unit ?? node.unit ?? null,
+          sortOrder: node.sortOrder * 1000 + node.id,
+          versionId: approved.id,
+        };
         const [created] = await db
           .insert(scheduleActivities)
-          .values({
-            projectId: input.projectId,
-            wbsNodeId: node.id,
-            wbsCode: node.code,
-            eapRef: node.code,
-            name: node.name,
-            phase: "Execução",
-            startOffset: 0,
-            durationDays,
-            plannedQuantity: input.plannedQuantity ?? node.plannedQuantity,
-            productivity: input.productivity,
-            unit: input.unit ?? node.unit,
-            sortOrder: node.sortOrder * 1000 + node.id,
-            versionId: approved.id,
-          })
+          .values(activityValues)
           .returning({ id: scheduleActivities.id });
         return { id: created.id, created: true as const };
       }),
