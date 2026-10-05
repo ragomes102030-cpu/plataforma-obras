@@ -14,7 +14,6 @@ import {
   timestamp,
   uniqueIndex,
   varchar,
-  sql,
 } from "drizzle-orm/pg-core";
 import { sql as drizzleSql } from "drizzle-orm";
 
@@ -457,7 +456,7 @@ export const scheduleActivities = pgTable(
       table.versionId,
       table.externalId
     ),
-    check("schedule_activities_duration_positive", sql`"durationDays" > 0`),
+    check("schedule_activities_duration_positive", drizzleSql`"durationDays" > 0`),
     index("schedule_activities_project_idx").on(table.projectId),
     index("schedule_activities_plan_version_idx").on(table.versionId),
     index("schedule_activities_wbs_node_idx").on(table.wbsNodeId),
