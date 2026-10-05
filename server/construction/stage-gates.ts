@@ -122,16 +122,10 @@ function checksForTarget(
           label: "A EAP está válida para receber atividades",
           valid: evidence.eapNodeCount > 0 && evidence.eapValid,
         },
-        {
-          code: "eap_dictionary_standard_approved",
-          label: "O padrão do dicionário da EAP foi aprovado pelo engenheiro",
-          valid: evidence.eapDictionaryStandardApproved,
-        },
-        {
-          code: "eap_dictionary_compliant",
-          label: "As folhas da EAP cumprem os campos obrigatórios do padrão aprovado",
-          valid: evidence.eapDictionaryCompliant,
-        },
+        // Cobertura do dicionário é evidência de qualidade da EAP, não um
+        // bloqueio estrutural para começar a planejar atividades. Campos como
+        // responsável/local podem ainda ser preenchidos durante o detalhamento.
+        // O gate continua exigindo EAP existente e estruturalmente válida.
       ];
     case "DEPENDENCIAS_PROPOSTA":
       return [
