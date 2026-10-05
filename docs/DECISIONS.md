@@ -190,3 +190,14 @@
 - Propostas EAP permanecem artefatos revisáveis e sua aplicação exige confirmação explícita.
 - Mudanças no contrato MCP/AppRouter devem incluir teste de regressão e validação do CI antes do deploy.
 - O fechamento desta rodada é considerado válido para avançar para a próxima etapa de teste, mas não altera a Aurora durante o teste integral.
+
+
+## Decisão 15 — Escopo de versão obrigatório na EAP e no planejamento
+
+- **Decisão:** nenhuma validação ou leitura operacional de EAP pode misturar versões históricas.
+- **Motivo:** na homologação da AURORA TESTE, duas versões de 69 nós foram lidas juntas e produziram 138 nós, 106 folhas e 69 falsos erros de código duplicado.
+- **Regra:** resolver primeiro a versão aplicável e filtrar todas as entidades versionadas por projectId + versionId. Nunca validar wbs_nodes de um projeto inteiro quando há histórico.
+- **Regra adicional:** antes de corrigir dados diante de uma duplicidade inesperada, verificar se a duplicidade veio da consulta.
+- **Gate:** EAP → Atividades somente com versão aprovada, zero bloqueios, regressão automatizada e coerência entre backend e UI.
+- **Aprendizado:** cada incidente deve gerar documentação, teste de regressão e barreira no código.
+- **Data:** 05/10/2026.
