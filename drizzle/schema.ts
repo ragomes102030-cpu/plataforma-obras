@@ -14,7 +14,9 @@ import {
   timestamp,
   uniqueIndex,
   varchar,
+  sql,
 } from "drizzle-orm/pg-core";
+import { sql as drizzleSql } from "drizzle-orm";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
