@@ -1,5 +1,5 @@
 import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, Settings } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
@@ -391,7 +391,7 @@ function Obra({
   const exemploPorCodigo = new Set(Object.keys(grade.data?.exemploPorCodigo ?? {}));
   const definicao = ABAS.find(a => a.id === aba);
 
-  const icones: Record<string, React.ReactNode> = {
+  const icones: Record<string, ReactNode> = {
     dashboard: <HomeIcon size={17} />,
     escopo: <ClipboardList size={17} />,
     eap: <TreePine size={17} />,
