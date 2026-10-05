@@ -3498,11 +3498,11 @@ export const appRouter = router({
             and(
               eq(wbsNodes.projectId, input.projectId),
               eq(wbsNodes.versionId, approved.id),
-              eq(wbsNodes.nodeType, "entrega")
+              inArray(wbsNodes.nodeType, ["entrega", "pacote"])
             )
           )
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-        const terminalNodes = nodes.filter(node => node.nodeType === "entrega" || node.nodeType === "pacote");
+        const terminalNodes = nodes;
         if (!terminalNodes.length) {
           return {
             created: 0,
