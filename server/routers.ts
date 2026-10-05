@@ -3398,6 +3398,17 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.atividadeId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
         if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        if (activity.versionId == null) {
+          throw conflict("A atividade está sem versão de plano; ela precisa ser reconciliada antes de ser editada.");
+        }
+        const [activityVersion] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, activity.versionId), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Abra uma nova versão de trabalho antes de editar a atividade.");
+        }
         const patch: Record<string, unknown> = {};
         if (input.campo === "atividade") patch.name = input.valor.trim();
         if (input.campo === "frente") patch.phase = input.valor.trim();
@@ -3411,7 +3422,7 @@ export const appRouter = router({
           if (!project || Number.isNaN(start.getTime())) throw badRequest("Data de início inválida.");
           patch.startOffset = Math.max(0, Math.floor((start.getTime() - project.plannedStart.getTime()) / 86400000));
         }
-        await db.update(scheduleActivities).set(patch).where(eq(scheduleActivities.id, input.atividadeId));
+        await db.update(scheduleActivities).set(patch).where(and(eq(scheduleActivities.id, input.atividadeId), eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, activity.versionId)));
         await recomputeProjectProgress(db, input.projectId);
         return { updated: true as const };
       }),
