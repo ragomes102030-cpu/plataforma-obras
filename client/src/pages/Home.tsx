@@ -461,13 +461,6 @@ function Obra({
           ))}
         </nav>
 
-        {!sidebarRecolhida && (
-          <div className="xl-sidebar-foot">
-            <button type="button" className="xl-sidebar-arquimedes" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))} title="Abrir o assistente de engenharia Arquimedes">
-              <Bot size={17} /><span>Arquimedes</span>
-            </button>
-          </div>
-        )}
       </aside>
 
       <main className="xl-area xl-area-sidebar">
