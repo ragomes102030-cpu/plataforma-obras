@@ -9,6 +9,7 @@ on:
 
 jobs:
   aurora-eap:
+    if: ${{ secrets.SUPABASE_DB_URL != '' }}
     runs-on: ubuntu-latest
     env:
       AURORA_PROJECT_ID: 7
