@@ -157,6 +157,46 @@ describe("runProjectOrchestrator", () => {
     ).toThrow("faltam seções");
   });
 
+  it("compacta o contexto antes de enviar ao provider", async () => {
+    let maxObserved = 0;
+    await runProjectOrchestrator(
+      {
+        ...context,
+        evidence: {
+          source: "local_db",
+          eapNodeCount: 100,
+          activityCount: 80,
+          dependencyCount: 120,
+          warnings: Array.from({ length: 80 }, (_, i) => `aviso-${i}`),
+          errors: Array.from({ length: 80 }, (_, i) => `erro-${i}`),
+        },
+      },
+      [{ role: "user", content: "Analise esta obra." }],
+      {
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          callLlm: async ({ messages }) => {
+            for (const message of messages) {
+              if (typeof message.content === "string") {
+                maxObserved = Math.max(maxObserved, message.content.length);
+              }
+            }
+            return {
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content:
+                    "MARCO ATUAL\nLeitura.\n\nEVIDÊNCIAS CONSULTADAS\nContexto local.\n\nPROPOSTA\nManter.\n\nEXEMPLOS/REFERÊNCIAS\nDados locais.\n\nDIVERGÊNCIAS E LACUNAS\nNenhuma.\n\nIMPACTO DE APROVAR\nNenhuma alteração.\n\nPRÓXIMA DECISÃO DO CLIENTE\nDeseja revisar?",
+                },
+              }],
+            };
+          },
+        },
+      }
+    );
+    expect(maxObserved).toBeLessThanOrEqual(11_000);
+  });
+
   it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
     let systemMessage = "";
     const result = await runProjectOrchestrator(
