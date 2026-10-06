@@ -3658,7 +3658,7 @@ export const appRouter = router({
         }
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const [writableNode] = await db
-          .select({ id: wbsNodes.id })
+          .select({ id: wbsNodes.id, sortOrder: wbsNodes.sortOrder })
           .from(wbsNodes)
           .where(
             and(
@@ -3669,7 +3669,7 @@ export const appRouter = router({
           )
           .limit(1);
         if (!writableNode) throw badRequest("Não foi possível preparar a versão de trabalho da EAP para a atividade.");
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: writableNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).returning({ id: scheduleActivities.id });
+        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: writableNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: writableNode.sortOrder * 1000 + writableNode.id, versionId: writable.id }).returning({ id: scheduleActivities.id });
         return { id: createdId.id };
       }),
     generateFromEap: protectedProcedure
