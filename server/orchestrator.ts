@@ -1,4 +1,10 @@
 import { ENV } from "./_core/env";
+import { and, desc, eq } from "drizzle-orm";
+import { getDb } from "./db";
+import { projectPlanVersions, scheduleActivities, wbsNodes } from "../drizzle/schema";
+import { validateEap } from "./construction/eap-validator";
+import { ensureWritablePlanVersion } from "./construction/plan-versions";
+import { resolveActivityDuration } from "./construction/activity-planning";
 import type { AgentMessage, AgentProjectContext } from "./agent";
 import {
   MCP_TOOL_POLICY,
@@ -639,6 +645,109 @@ const RUNTIME_TOOLS: LlmTool[] = [
     },
   },
 ];
+
+async function createLocalAgentActivity(args: {
+  projectId: number;
+  userId: number;
+  rawArgs: Record<string, unknown>;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+
+  const eapRef = String(args.rawArgs.eap_ref ?? args.rawArgs.eapRef ?? args.rawArgs.wbsCode ?? "").trim();
+  const name = String(args.rawArgs.name ?? args.rawArgs.nome ?? "").trim();
+  const durationInput = args.rawArgs.durationDays ?? args.rawArgs.duracao_dias ?? args.rawArgs.duration ?? args.rawArgs.duracao;
+  const durationDays = Number(durationInput);
+
+  if (!eapRef) throw new Error("A atividade precisa de uma referência de EAP válida.");
+  if (!name) throw new Error("A atividade precisa de um nome.");
+  if (!Number.isInteger(durationDays) || durationDays < 1) {
+    throw new Error("A atividade precisa de duração inteira maior ou igual a 1 dia.");
+  }
+
+  const [approved] = await db
+    .select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, args.projectId), eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber))
+    .limit(1);
+  if (!approved) throw new Error("A EAP precisa estar aprovada antes de gerar atividades.");
+
+  const [approvedNode] = await db
+    .select()
+    .from(wbsNodes)
+    .where(and(
+      eq(wbsNodes.projectId, args.projectId),
+      eq(wbsNodes.versionId, approved.id),
+      eq(wbsNodes.code, eapRef)
+    ))
+    .limit(1);
+
+  if (!approvedNode) {
+    throw new Error(`O código de EAP ${eapRef} não existe na EAP aprovada desta obra.`);
+  }
+  if (approvedNode.nodeType !== "entrega" && approvedNode.nodeType !== "pacote") {
+    throw new Error(`O código de EAP ${eapRef} não é uma folha terminal e não pode originar atividade.`);
+  }
+
+  const resolvedDuration = resolveActivityDuration({ durationDays });
+  const writable = await ensureWritablePlanVersion(args.projectId, args.userId);
+  const [writableNode] = await db
+    .select({ id: wbsNodes.id, code: wbsNodes.code, name: wbsNodes.name, phase: wbsNodes.level })
+    .from(wbsNodes)
+    .where(and(
+      eq(wbsNodes.projectId, args.projectId),
+      eq(wbsNodes.versionId, writable.id),
+      eq(wbsNodes.code, eapRef)
+    ))
+    .limit(1);
+  if (!writableNode) throw new Error(`A referência de EAP ${eapRef} não foi encontrada na versão de trabalho.`);
+
+  const [created] = await db
+    .insert(scheduleActivities)
+    .values({
+      projectId: args.projectId,
+      wbsNodeId: writableNode.id,
+      wbsCode: writableNode.code,
+      eapRef: writableNode.code,
+      name,
+      phase: eapRef.split(".").slice(0, 2).join(".") || "Execução",
+      startOffset: 0,
+      durationDays: Number(resolvedDuration),
+      sortOrder: Date.now(),
+      versionId: writable.id,
+    })
+    .returning({
+      id: scheduleActivities.id,
+      wbsCode: scheduleActivities.wbsCode,
+      name: scheduleActivities.name,
+      durationDays: scheduleActivities.durationDays,
+      versionId: scheduleActivities.versionId,
+    });
+
+  const [verification] = await db
+    .select({
+      id: scheduleActivities.id,
+      wbsCode: scheduleActivities.wbsCode,
+      name: scheduleActivities.name,
+      durationDays: scheduleActivities.durationDays,
+      versionId: scheduleActivities.versionId,
+    })
+    .from(scheduleActivities)
+    .where(and(
+      eq(scheduleActivities.id, created.id),
+      eq(scheduleActivities.projectId, args.projectId)
+    ))
+    .limit(1);
+
+  return {
+    source: "local_db_fallback",
+    created,
+    verification,
+    approvedEapVersionId: approved.id,
+    writableVersionId: writable.id,
+  };
+}
 
 function currentDateTimeFortaleza() {
   const now = new Date();
@@ -1582,9 +1691,25 @@ export async function runProjectOrchestrator(
       if (mcpProjectId) args.project_id = mcpProjectId;
 
       try {
-        const result = isMutation
-          ? await callMutationMcpTool(domain as any, toolName, args)
-          : await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
+        let result: McpCallResult;
+        if (
+          isMutation &&
+          toolName === "criar_atividade" &&
+          (!mcpProjectId)
+        ) {
+          const localResult = await createLocalAgentActivity({
+            projectId: options.localProjectId!,
+            userId: options.userId!,
+            rawArgs: args,
+          });
+          result = {
+            content: [{ type: "text", text: JSON.stringify(localResult) }],
+          } as McpCallResult;
+        } else {
+          result = isMutation
+            ? await callMutationMcpTool(domain as any, toolName, args)
+            : await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
+        }
         const serialized = compactLlmContent(
           JSON.stringify(result),
           MAX_TOOL_RESULT_CHARS
@@ -1597,6 +1722,43 @@ export async function runProjectOrchestrator(
         return { ok: true, content: serialized };
       } catch (error) {
         const message = error instanceof Error ? error.message : "Falha desconhecida na ferramenta MCP";
+        const canSafelyFallbackToLocal =
+          isMutation &&
+          toolName === "criar_atividade" &&
+          Boolean(options.localProjectId && options.userId) &&
+          /HTTP Error 404|404|eap_ref|não encontrado|not found|project_id/i.test(message);
+        if (canSafelyFallbackToLocal) {
+          try {
+            const localResult = await createLocalAgentActivity({
+              projectId: options.localProjectId!,
+              userId: options.userId!,
+              rawArgs: args,
+            });
+            const serialized = compactLlmContent(
+              JSON.stringify({
+                fallback: true,
+                motivo: "mcp_context_not_resolved",
+                mensagem: "O MCP não resolveu a referência da obra; a operação foi executada e verificada pela fonte local.",
+                resultado: localResult,
+              }),
+              MAX_TOOL_RESULT_CHARS
+            );
+            audit.push({
+              taskId, iteration, event: "tool_call", domain, toolName,
+              status: "success", durationMs: Date.now() - startedAt,
+            });
+            await emit({ type: "tool_finished", iteration, domain, toolName, status: "success" });
+            return { ok: true, content: serialized };
+          } catch (fallbackError) {
+            const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+            audit.push({
+              taskId, iteration, event: "tool_call", domain, toolName,
+              status: "error", durationMs: Date.now() - startedAt, error: fallbackMessage,
+            });
+            await emit({ type: "tool_finished", iteration, domain, toolName, status: "error" });
+            return { ok: false, error: `${message} | fallback local: ${fallbackMessage}`, content: "" };
+          }
+        }
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,
           status: "error", durationMs: Date.now() - startedAt, error: message,
