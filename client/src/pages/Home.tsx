@@ -525,46 +525,97 @@ function Obra({
   );
 }
 
-/** Escopo: primeira camada de contexto da obra; edição detalhada entra depois. */
+/** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
 function EscopoInicial({ projetoId, obra }: { projetoId: number; obra: string }) {
+  const grade = trpc.planning.grade.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const linhas = grade.data?.linhas ?? [];
+  const atividades = linhas.filter(l => !String(l.codigo ?? "").toLowerCase().includes("exemplo"));
+  const frentes = Array.from(new Set(atividades.map(l => l.frente).filter(Boolean)));
+  const pavimentos = Array.from(new Set(atividades.map(l => l.pavimento).filter(Boolean)));
+  const unidades = atividades.reduce((sum, l) => sum + (Number(l.quantidade) || 0), 0);
+  const temPlanejamento = atividades.length > 0;
+
+  const elementos = [
+    { codigo: "E.01", nome: "Edificação / intervenção principal", categoria: "ENTREGÁVEL", detalhe: temPlanejamento ? "Rastreada no planejamento atual" : "Aguardando definição no cadastro do escopo", status: temPlanejamento ? "Identificado" : "Pendente" },
+    { codigo: "E.02", nome: "Sistemas e serviços da obra", categoria: "COMPONENTES", detalhe: frentes.length ? String(frentes.length) + " frente(s) identificada(s) no planejamento" : "Ainda não há frentes derivadas", status: frentes.length ? "Rastreado" : "A definir" },
+    { codigo: "E.03", nome: "Localização / setores de execução", categoria: "LOCAL", detalhe: pavimentos.length ? String(pavimentos.length) + " local(is)/pavimento(s) no planejamento" : "Localização executiva ainda não derivada", status: pavimentos.length ? "Rastreado" : "A definir" },
+    { codigo: "E.04", nome: "Quantidades associadas", categoria: "QUANTITATIVOS", detalhe: unidades > 0 ? String(unidades) + " unidade(s) informada(s) nas linhas atuais" : "Nenhuma quantidade disponível nas linhas atuais", status: unidades > 0 ? "Parcial" : "Pendente" },
+  ];
+
   return (
-    <div className="xl-escopo">
-      <div className="xl-escopo-head">
-        <div>
-          <span>ESCOPO DA OBRA</span>
-          <h1>{obra}</h1>
-          <p>Contexto, premissas e limites que alimentam a EAP e o planejamento.</p>
+    <div className="scopo-workspace">
+      <header className="scopo-workspace-header">
+        <div className="scopo-workspace-title">
+          <span className="scopo-kicker">PLANEJAMENTO · ESCOPO</span>
+          <h1>O que a obra entrega</h1>
+          <p>{obra} · definição do que existe na obra, seus limites e o que será transformado em EAP.</p>
         </div>
-        <div className="xl-escopo-status">Em planejamento</div>
+        <div className="scopo-header-actions">
+          <button type="button" className="scopo-btn secondary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={14}/> Analisar com Arquimedes</button>
+        </div>
+      </header>
+
+      <div className="scopo-flow" aria-label="Fluxo do planejamento">
+        <strong>Obra</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP</span><span>→</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades</span>
       </div>
-      <div className="xl-escopo-grid">
-        <section className="xl-escopo-card">
-          <small>CONTEXTO</small>
-          <h3>Dados da obra</h3>
-          <p>O cadastro inicial da obra continua sendo a fonte dos dados gerais. Aqui vamos consolidar, sem duplicar informação, localização, tipologia, áreas, pavimentos, unidades e prazo preliminar.</p>
-        </section>
-        <section className="xl-escopo-card">
-          <small>DEFINIÇÃO</small>
-          <h3>Premissas e limites</h3>
-          <p>Premissas, inclusões, exclusões e restrições devem ser registradas antes de transformar o escopo em pacotes de trabalho.</p>
-        </section>
-        <section className="xl-escopo-card">
-          <small>PRÓXIMO PASSO</small>
-          <h3>EAP → atividades</h3>
-          <p>A EAP aprovada é a estrutura de escopo. Depois dela, as atividades serão definidas sem inventar duração, produtividade ou quantidade.</p>
-        </section>
-        <section className="xl-escopo-card xl-escopo-arquimedes">
-          <small>ARQUIMEDES</small>
-          <h3>Copiloto do escopo</h3>
-          <p>O agente deve identificar lacunas e impactos no planejamento, mas não preencher dados técnicos sem fundamento.</p>
-          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={15}/> Analisar escopo</button>
-        </section>
+
+      <section className="scopo-metrics" aria-label="Indicadores do escopo">
+        <div><span>ELEMENTOS</span><strong>{elementos.length}</strong><small>camadas do escopo visíveis</small></div>
+        <div><span>FRENTES</span><strong>{frentes.length}</strong><small>derivadas do planejamento atual</small></div>
+        <div><span>LOCAIS</span><strong>{pavimentos.length}</strong><small>setores/pavimentos encontrados</small></div>
+        <div className={!temPlanejamento ? "attention" : ""}><span>RASTREABILIDADE</span><strong>{temPlanejamento ? "PARCIAL" : "AGUARDANDO"}</strong><small>{temPlanejamento ? "há dados para ligar ao planejamento" : "escopo ainda sem dados executivos"}</small></div>
+      </section>
+
+      <div className="scopo-toolbar">
+        <div className="scopo-toolbar-title"><strong>Mapa do escopo</strong><span>Fonte conceitual da EAP; não substitui a estrutura analítica.</span></div>
+        <span className="scopo-readonly">VISÃO DERIVADA · SEM INVENTAR DADOS</span>
       </div>
-      <div className="xl-escopo-nota"><strong>Arquitetura:</strong> Escopo → EAP → Atividades → Dependências → CPM → Baseline → Gantt/LOB → Controle.</div>
+
+      <section className="scopo-table-wrap">
+        <table className="scopo-table">
+          <thead><tr><th className="codigo-col">CÓD.</th><th className="elemento-col">ELEMENTO DA OBRA</th><th>CATEGORIA</th><th>O QUE ESTÁ DEFINIDO</th><th>STATUS</th></tr></thead>
+          <tbody>
+            {elementos.map(item => (
+              <tr key={item.codigo}>
+                <td className="mono">{item.codigo}</td>
+                <td><strong>{item.nome}</strong></td>
+                <td><span className="scopo-tag">{item.categoria}</span></td>
+                <td>{item.detalhe}</td>
+                <td><span className={"scopo-status" + (item.status === "Pendente" || item.status === "A definir" ? " pendente" : "")}>{item.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="scopo-trace-grid">
+        <details open className="scopo-detail">
+          <summary>Limites e critérios do escopo</summary>
+          <div className="scopo-detail-body">
+            <p><strong>Inclusões:</strong> devem ser confirmadas pelo engenheiro antes da aprovação do escopo.</p>
+            <p><strong>Exclusões:</strong> devem ser registradas explicitamente para evitar que a EAP absorva trabalho não contratado.</p>
+            <p><strong>Premissas:</strong> ficam separadas de fatos confirmados; uma premissa não vira requisito técnico automaticamente.</p>
+          </div>
+        </details>
+        <details open className="scopo-detail">
+          <summary>Rastreabilidade para o planejamento</summary>
+          <div className="scopo-detail-body">
+            <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP</span><b>→</b><span>QUANTITATIVOS</span><b>→</b><span>ATIVIDADES</span></div>
+            <p>{temPlanejamento ? "Já existem dados de planejamento que podem receber vínculos de escopo. A aprovação deve ocorrer sem preencher informações ausentes por inferência." : "Ainda não há dados executivos suficientes para declarar cobertura do escopo. Isso não é aprovação."}</p>
+          </div>
+        </details>
+      </section>
+
+      <footer className="scopo-footer">
+        <span><strong>Regra:</strong> escopo define o que será entregue; EAP organiza e controla esse escopo.</span>
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={13}/> Pedir análise do Arquimedes</button>
+      </footer>
     </div>
   );
 }
-
 /** Aba sem conteúdo: diz o que falta e por quê. */
 function AbaVazia({ titulo, falta }: { titulo: string; falta: string }) {
   return (
