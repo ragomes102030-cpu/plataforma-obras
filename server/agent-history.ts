@@ -7,20 +7,20 @@ const MAX_HISTORY_MESSAGE_CHARS = 9_000;
 
 function compactHistoryMessage(message: PersistedAgentMessage): PersistedAgentMessage {
   if (message.content.length <= MAX_HISTORY_MESSAGE_CHARS) return message;
-  const marker = "\n\n[...trecho intermediário compactado do histórico do Arquimedes...]\n\n";
-  const available = MAX_HISTORY_MESSAGE_CHARS - marker.length;
-  const head = Math.floor(available * 0.7);
-  const tail = available - head;
+  const budget = MAX_HISTORY_MESSAGE_CHARS - 80;
+  const head = Math.floor(budget * 0.7);
+  const tail = budget - head;
   return {
     role: message.role,
     content: [
       message.content.slice(0, head),
-      marker.trim(),
+      "",
+      "[...trecho intermediário compactado do histórico do Arquimedes...]",
+      "",
       message.content.slice(-tail),
-    ].join("\n\n"),
+    ].join("\n"),
   };
 }
-
 function compactHistory(messages: PersistedAgentMessage[], maxMessages: number) {
   return messages
     .slice(-maxMessages)
