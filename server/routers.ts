@@ -1713,7 +1713,10 @@ export const appRouter = router({
     }),
     analisarEapComArquimedes: protectedProcedure.input(z.object({projectId:z.number().int().positive(),mode:z.enum(["analisar","resolver_bloqueios"]).optional()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
-      const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+      const current=await getCurrentPlanVersion(input.projectId);
+      const nodes=current
+        ? await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,current.id))).orderBy(wbsNodes.sortOrder,wbsNodes.id)
+        : [];
       const proposal: ArquimedesEapProposal={action:"propose_eap",nodes:nodes.length?[]:[{operation:"create",code:"1",name:"Escopo da obra",nodeType:"grupo",parentCode:null,rationale:"Raiz única para receber o escopo informado da obra."}],basis:["Escopo cadastrado na obra","Regra de raiz única da EAP"],assumptions:[],missingInformation:nodes.length?[]:["Detalhar o escopo e as entregas da obra antes da aprovação final."],validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]};
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
       await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis",confidence:"medium",status:"proposed"});
@@ -1722,14 +1725,25 @@ export const appRouter = router({
     aplicarPropostaEap: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.literal(true),proposal:z.any()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
       if(!Array.isArray(input.proposal?.nodes)) throw badRequest("Proposta EAP inválida.");
-      const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)); const byCode=new Map(nodes.map(n=>[n.code,n])); let created=0;
+      const writable=await ensureWritablePlanVersion(input.projectId,ctx.user.id);
+      const nodes=await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,writable.id)));
+      const byCode=new Map(nodes.map(n=>[n.code,n])); let created=0;
       for(const item of input.proposal.nodes){
-        if(item.operation==="create"){const code=String(item.code??"").trim(); if(!code||byCode.has(code)) continue; const parent=item.parentCode?byCode.get(item.parentCode):null;
-          const [row]=await db.insert(wbsNodes).values({projectId:input.projectId,parentId:parent?.id??null,code,name:String(item.name??"Novo item"),level:code.split(".").length,nodeType:["grupo","pacote","entrega"].includes(item.nodeType)?item.nodeType:"entrega",sortOrder:nodes.length+created,decompositionBasis:item.decompositionBasis??null}).returning({id:wbsNodes.id}); byCode.set(code,{id:row.id,code} as typeof nodes[number]); created++;
-        } else if(item.operation==="update"){const existing=item.nodeId?nodes.find(n=>n.id===Number(item.nodeId)):byCode.get(String(item.code??"")); if(existing) await db.update(wbsNodes).set({name:String(item.name??existing.name),description:item.description??existing.description,inclusions:item.inclusions??existing.inclusions,exclusions:item.exclusions??existing.exclusions,responsible:item.responsible??existing.responsible,acceptanceCriteria:item.acceptanceCriteria??existing.acceptanceCriteria,decompositionBasis:item.decompositionBasis??existing.decompositionBasis}).where(eq(wbsNodes.id,existing.id));}
+        if(item.operation==="create"){
+          const code=String(item.code??"").trim(); if(!code||byCode.has(code)) continue;
+          const parent=item.parentCode?byCode.get(item.parentCode):null;
+          if(item.parentCode && !parent) throw badRequest("A proposta referencia um pai EAP inexistente na versão de trabalho.");
+          const [row]=await db.insert(wbsNodes).values({projectId:input.projectId,parentId:parent?.id??null,code,name:String(item.name??"Novo item"),level:code.split(".").length,nodeType:["grupo","pacote","entrega"].includes(item.nodeType)?item.nodeType:"entrega",sortOrder:nodes.length+created,decompositionBasis:item.decompositionBasis??null,versionId:writable.id}).returning({id:wbsNodes.id});
+          byCode.set(code,{id:row.id,code} as typeof nodes[number]); created++;
+        } else if(item.operation==="update"){
+          const code=String(item.code??"").trim();
+          const existing=byCode.get(code);
+          if(!existing) continue;
+          await db.update(wbsNodes).set({name:String(item.name??existing.name),description:item.description??existing.description,inclusions:item.inclusions??existing.inclusions,exclusions:item.exclusions??existing.exclusions,responsible:item.responsible??existing.responsible,acceptanceCriteria:item.acceptanceCriteria??existing.acceptanceCriteria,decompositionBasis:item.decompositionBasis??existing.decompositionBasis}).where(and(eq(wbsNodes.id,existing.id),eq(wbsNodes.versionId,writable.id)));
+        }
       }
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
-      return {applied:true as const,created,baselineCreated:false as const};
+      return {applied:true as const,created,versionId:writable.id,versionNumber:writable.versionNumber,baselineCreated:false as const};
     }),
     enviarEapParaRevisao: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
@@ -3567,57 +3581,30 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const approved = await requireApprovedEapVersion(db, input.projectId);
-        const nodes = await db
-          .select()
-          .from(wbsNodes)
-          .where(
-            and(
-              eq(wbsNodes.projectId, input.projectId),
-              eq(wbsNodes.versionId, approved.id),
-              inArray(wbsNodes.nodeType, ["entrega", "pacote"])
-            )
-          )
-          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-        const terminalNodes = nodes;
-        if (!terminalNodes.length) {
-          return {
-            created: 0,
-            skipped: 0,
-            pending: 0,
-            message: "A EAP aprovada não possui folhas terminais elegíveis para atividades.",
-          };
-        }
-        const [latestVersion] = await db
-          .select({
-            id: projectPlanVersions.id,
-            status: projectPlanVersions.status,
-          })
-          .from(projectPlanVersions)
-          .where(eq(projectPlanVersions.projectId, input.projectId))
-          .orderBy(desc(projectPlanVersions.versionNumber))
-          .limit(1);
-
-        const existing = latestVersion
-          ? await db
-              .select({ wbsCode: scheduleActivities.wbsCode })
-              .from(scheduleActivities)
-              .where(
-                and(
-                  eq(scheduleActivities.projectId, input.projectId),
-                  eq(scheduleActivities.versionId, latestVersion.id)
-                )
-              )
-          : [];
-        const existingCodes = new Set(existing.map(row => row.wbsCode));
-        const skipped = terminalNodes.filter(node => existingCodes.has(node.code)).length;
-        const pending = terminalNodes.filter(node => !existingCodes.has(node.code));
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,writable.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+        const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),eq(scheduleActivities.versionId,writable.id)));
+        const existingCodes = new Set(existing.map(row=>row.wbsCode));
+        const pending = nodes.filter(node=>!existingCodes.has(node.code)).map(node=>({
+          eapNodeId:node.id,
+          wbsCode:node.code,
+          name:node.name,
+          phase:node.level>2?node.code.split(".").slice(0,2).join("."):node.code,
+          requiresDecompositionReview:true,
+          duration:null,
+          plannedQuantity:node.plannedQuantity==null?null:Number(node.plannedQuantity),
+          unit:node.unit,
+          rationale:"Proposta inicial derivada da folha EAP; o engenheiro deve confirmar se o pacote representa uma única atividade ou se precisa ser decomposto em múltiplas atividades."
+        }));
         return {
-          created: 0,
-          skipped,
-          pending: pending.length,
-          message: pending.length
-            ? pending.length + " pacote(s) aguardam duração fundamentada (duração informada ou quantitativo + produtividade)."
-            : "As atividades elegíveis já existem; nenhuma nova atividade foi criada.",
+          created:0,
+          skipped:nodes.length-pending.length,
+          pending:pending.length,
+          versionId:writable.id,
+          versionNumber:writable.versionNumber,
+          sourceApprovedVersionId:approved.id,
+          proposal:pending,
+          message:pending.length?"Proposta de atividades criada em memória para revisão do engenheiro; nenhuma atividade foi persistida.":"A versão de trabalho já possui atividades para todas as folhas elegíveis; nenhuma nova proposta foi criada."
         };
       }),
     createDependency: protectedProcedure
