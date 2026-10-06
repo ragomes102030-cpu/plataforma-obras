@@ -69,7 +69,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const criarAtividade = trpc.planning.criarAtividadeDaFolha.useMutation({
     onSuccess: async result => {
-      setProposta(atual => atual.filter(item => item.eapNodeId !== result.id && item.wbsCode !== result.wbsCode));
+      const nodeId = criarAtividade.variables?.wbsNodeId;\n      if (nodeId) setProposta(atual => atual.filter(item => item.eapNodeId !== nodeId));
       setMensagem("Atividade criada a partir da folha EAP. Revise início e lógica antes do CPM.");
       await Promise.all([
         utils.planning.list.invalidate({ projectId: projetoId }),
