@@ -3532,8 +3532,36 @@ export const appRouter = router({
         const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
         const result = calculateDeterministicCpm(enrichedActivities, dependencies);
         if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
-        const calculatedAt=new Date(); const schedule=result.schedule; const items=schedule.activities;
-        if(items.length){const ids=items.map(item=>Number(item.id)); const critCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`),sql` `); const esCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`),sql` `); const efCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`),sql` `); const lsCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`),sql` `); const lfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`),sql` `); const tfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`),sql` `); await db.transaction(async tx=>{await tx.execute(sql`UPDATE schedule_activities SET critical=CASE id ${critCase} END, earlyStart=CASE id ${esCase} END, earlyFinish=CASE id ${efCase} END, lateStart=CASE id ${lsCase} END, lateFinish=CASE id ${lfCase} END, totalFloat=CASE id ${tfCase} END, cpmCalculatedAt=${calculatedAt} WHERE projectId=${input.projectId} AND versionId=${currentVersion?.id ?? -1} AND id IN (${sql.join(ids.map(id=>sql`${id}`),sql`, `)})`);});}
+        const calculatedAt = new Date();
+        const schedule = result.schedule;
+        const items = schedule.activities;
+        if (items.length) {
+          await db.transaction(async tx => {
+            for (const item of items) {
+              const activityId = Number(item.id);
+              await tx
+                .update(scheduleActivities)
+                .set({
+                  critical: item.critical ? 1 : 0,
+                  earlyStart: item.earlyStart ?? 0,
+                  earlyFinish: item.earlyFinish ?? 0,
+                  lateStart: item.lateStart ?? 0,
+                  lateFinish: item.lateFinish ?? 0,
+                  totalFloat: item.totalFloat ?? 0,
+                  cpmCalculatedAt: calculatedAt,
+                })
+                .where(
+                  and(
+                    eq(scheduleActivities.id, activityId),
+                    eq(scheduleActivities.projectId, input.projectId),
+                    currentVersion
+                      ? eq(scheduleActivities.versionId, currentVersion.id)
+                      : isNull(scheduleActivities.versionId)
+                  )
+                );
+            }
+          });
+        }
         return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
       }),
     createResource: protectedProcedure
