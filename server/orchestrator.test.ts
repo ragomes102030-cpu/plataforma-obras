@@ -166,8 +166,8 @@ describe("runProjectOrchestrator", () => {
       domain: "eap",
     });
     expect(llmCalls).toEqual([
-      { messages: 2, tools: 17 },
-      { messages: 4, tools: 17 },
+      { messages: 2, tools: 18 },
+      { messages: 4, tools: 18 },
     ]);
     expect(events).toEqual([
       "catalog_started",
