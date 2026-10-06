@@ -8,6 +8,7 @@ import { JanelaAgente } from "@/components/JanelaAgente";
 import { startLogin } from "@/const";
 import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
+import { AbaDependencias } from "@/components/AbaDependencias";
 import { AbaProducao } from "@/components/AbaProducao";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
@@ -505,6 +506,8 @@ function Obra({
             <PainelPlanejamento projetoId={projetoId} />
             <GradeCronograma obra={obra} projetoId={projetoId} calendario={calendario} hoje={hoje} linhas={linhas} idPorCodigo={idPorCodigo} exemploPorCodigo={exemploPorCodigo} aoPedirEap={() => onAba("eap")} />
           </>
+        ) : aba === "dependencias" ? (
+          <AbaDependencias projetoId={projetoId} />
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
         ) : aba === "linha-balanco" ? (
