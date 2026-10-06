@@ -395,6 +395,14 @@ export async function approveCurrentPlanVersion(
   return { id: ensured.id, versionNumber: ensured.versionNumber };
 }
 
+/** Retorna a versão de maior número sem criar ou alterar estado. */
+export async function getCurrentPlanVersion(
+  projectId: number
+): Promise<PlanVersionSummary | null> {
+  const versions = await listPlanVersions(projectId);
+  return versions[0] ?? null;
+}
+
 export type PlanVersionDetail = PlanVersionSummary & {
   eapNodeCount: number;
   activityCount: number;
