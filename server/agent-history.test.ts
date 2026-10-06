@@ -64,6 +64,18 @@ describe("mergePersistedWithIncoming", () => {
     ]);
   });
 
+  it("compacta mensagens históricas longas antes de reenviar ao provider", async () => {
+    const { mergePersistedWithIncoming } = await import("./agent-history");
+    const longMessage = "x".repeat(12_500);
+    const result = mergePersistedWithIncoming(
+      [{ role: "assistant", content: longMessage }],
+      [{ role: "user", content: "nova pergunta" }],
+    );
+    expect(result[0]?.content.length).toBeLessThanOrEqual(9_000);
+    expect(result.at(-1)).toEqual({ role: "user", content: "nova pergunta" });
+    expect(result[0]?.content).toContain("compactado");
+  });
+
   it("não duplica o histórico quando a UI já envia mensagens persistidas", async () => {
     const { mergePersistedWithIncoming } = await import("./agent-history");
     const persisted = [
