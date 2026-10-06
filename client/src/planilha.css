@@ -142,3 +142,19 @@
   .xl-dashboard-proximo { align-items: flex-start; flex-direction: column; }
   .xl-dashboard-fluxo { grid-template-columns: repeat(8, 110px); }
 }
+
+/* Janela do Arquimedes — estilos base mantidos como contrato visual. */
+.janela-agente{display:flex;flex-direction:column;min-height:0;border:1px solid #dfe3e8;border-radius:6px;background:#fff;overflow:hidden}
+.janela-agente-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid #e5e9ed;background:#f7f9fb}
+.janela-agente-toggle,.janela-agente-config,.janela-agente-fechar,.janela-agente-abrir{border:1px solid #cbd3da;border-radius:4px;background:#fff;color:#34414d;padding:6px 9px;font:inherit;font-size:11px;cursor:pointer}
+.janela-agente-toggle:hover,.janela-agente-config:hover,.janela-agente-fechar:hover,.janela-agente-abrir:hover{border-color:#1f6f8b;color:#1f6f8b}
+.janela-agente-obra{font-size:11px;color:#687582}
+.janela-agente-fala{display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto;min-height:120px}
+.janela-agente-vazio{padding:18px;text-align:center;color:#77828d;font-size:12px}
+.janela-msg-pendente,.janela-msg-erro{padding:8px 10px;border-radius:4px;font-size:11px;line-height:1.4}
+.janela-msg-pendente{background:#fff8df;color:#6b5310}
+.janela-msg-erro{background:#fff0f0;color:#8a2f2f}
+.janela-agente-sugestoes{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px}
+.janela-agente-sugestoes button{border:1px solid #d2d9df;border-radius:999px;background:#fff;padding:5px 8px;font:inherit;font-size:10px;cursor:pointer}
+.janela-agente-form{display:flex;gap:7px;padding:10px 12px;border-top:1px solid #e5e9ed}
+.janela-agente-form textarea{flex:1;min-height:38px;resize:vertical;border:1px solid #cbd3da;border-radius:4px;padding:7px;font:inherit;font-size:12px}
