@@ -2,11 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { wbsNodes } from "../../drizzle/schema";
 import type { getDb } from "../db";
 
-export type VersionedWbsNodeRef = {
-  id: number;
-  code: string;
-  versionId: number | null;
-};
+export type VersionedWbsNodeRef = typeof wbsNodes.$inferSelect;
 
 /**
  * Resolve um ID de nó EAP possivelmente histórico para o nó equivalente na
@@ -20,7 +16,7 @@ export async function resolveWbsNodeInVersion(
   versionId: number
 ): Promise<VersionedWbsNodeRef | null> {
   const [source] = await db
-    .select({ id: wbsNodes.id, code: wbsNodes.code, versionId: wbsNodes.versionId })
+    .select()
     .from(wbsNodes)
     .where(and(eq(wbsNodes.id, nodeId), eq(wbsNodes.projectId, projectId)))
     .limit(1);
@@ -29,7 +25,7 @@ export async function resolveWbsNodeInVersion(
   if (source.versionId === versionId) return source;
 
   const [mapped] = await db
-    .select({ id: wbsNodes.id, code: wbsNodes.code, versionId: wbsNodes.versionId })
+    .select()
     .from(wbsNodes)
     .where(
       and(
