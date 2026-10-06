@@ -453,7 +453,9 @@ function Obra({
                   >
                     {icones[a.id] ?? <Activity size={17} />}
                     {!sidebarRecolhida && <span>{a.rotulo}</span>}
-                    {!sidebarRecolhida && a.status === "pendente" && <small>pendente</small>}
+                    {!sidebarRecolhida && a.status === "pendente" && (
+  <span className="xl-sidebar-status" title={a.falta ?? "Etapa ainda não disponível"} aria-label="Etapa pendente">●</span>
+)}
                   </button>
                 );
               })}
@@ -470,6 +472,7 @@ function Obra({
             <strong>{etapaAtual}</strong>
           </div>
           <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
+            <span className="arquimedes-trilha-label">Fluxo:</span>
             {["Escopo", "EAP", "Atividades", "Dependências", "CPM", "Baseline"].map((etapa, index) => (
               <Fragment key={etapa}>
                 {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
