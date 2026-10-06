@@ -12,7 +12,6 @@ import { AbaDependencias } from "@/components/AbaDependencias";
 import { AbaCpm } from "@/components/AbaCpm";
 import { AbaBaseline } from "@/components/AbaBaseline";
 import { AbaProducao } from "@/components/AbaProducao";
-import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
@@ -504,10 +503,7 @@ function Obra({
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
-          <>
-            <PainelPlanejamento projetoId={projetoId} />
-            <GradeCronograma obra={obra} projetoId={projetoId} calendario={calendario} hoje={hoje} linhas={linhas} idPorCodigo={idPorCodigo} exemploPorCodigo={exemploPorCodigo} aoPedirEap={() => onAba("eap")} />
-          </>
+          <PainelPlanejamento projetoId={projetoId} />
         ) : aba === "dependencias" ? (
           <AbaDependencias projetoId={projetoId} />
         ) : aba === "cpm" ? (
