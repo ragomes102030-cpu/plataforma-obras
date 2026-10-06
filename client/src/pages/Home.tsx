@@ -9,6 +9,7 @@ import { startLogin } from "@/const";
 import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
 import { AbaDependencias } from "@/components/AbaDependencias";
+import { AbaCpm } from "@/components/AbaCpm";
 import { AbaProducao } from "@/components/AbaProducao";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
