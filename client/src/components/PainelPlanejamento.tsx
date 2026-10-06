@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, Camera, CheckCircle2, GitBranch, ListPlus, Play, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
@@ -67,6 +67,12 @@ export function PainelPlanejamento({ projetoId }: Props) {
     onError: error => setMensagem(error.message),
   });
 
+  // Depois da EAP aprovada, a aba de atividades deve abrir já com a
+  // proposta derivada das folhas. Isso não cria atividades nem inventa
+  // duração: apenas traz para a revisão do engenheiro o que antes ficava
+  // escondido atrás do botão.
+  const propostaAutoDisparada = useRef(false);
+
   const criarAtividade = trpc.planning.criarAtividadeDaFolha.useMutation({
     onSuccess: async result => {
       const nodeId = criarAtividade.variables?.wbsNodeId;
@@ -118,6 +124,30 @@ export function PainelPlanejamento({ projetoId }: Props) {
   const activities = plano.data?.activities ?? [];
   const dependencies = plano.data?.dependencies ?? [];
   const baselines = plano.data?.baselines ?? [];
+
+  useEffect(() => {
+    if (
+      plano.isPending ||
+      plano.isError ||
+      propostaAutoDisparada.current ||
+      proposta.length > 0 ||
+      gerarProposta.isPending ||
+      activities.length > 0
+    ) {
+      return;
+    }
+
+    propostaAutoDisparada.current = true;
+    gerarProposta.mutate({ projectId: projetoId });
+  }, [
+    activities.length,
+    gerarProposta.isPending,
+    gerarProposta.mutate,
+    plano.isError,
+    plano.isPending,
+    proposta.length,
+    projetoId,
+  ]);
 
   useEffect(() => {
     if (!pred && activities[0]) setPred(String(activities[0].id));
@@ -210,7 +240,11 @@ export function PainelPlanejamento({ projetoId }: Props) {
           title="Ler as folhas terminais da EAP aprovada e preparar uma proposta de atividades"
         >
           <ListPlus size={13} />
-          {gerarProposta.isPending ? "Lendo EAP…" : "Gerar atividades da EAP"}
+          {gerarProposta.isPending
+            ? "Lendo EAP…"
+            : proposta.length > 0
+              ? "Atualizar proposta"
+              : "Gerar proposta de atividades"}
         </button>
       </header>
 
