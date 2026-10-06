@@ -223,7 +223,7 @@ export function AbaCpm({ projetoId }: Props) {
         </div>
         <div className="pl-planejamento-cards">
           <div><span>Duração</span><strong>{resumo.validas.length === activities.length && activities.length ? "OK" : "Pendente"}</strong><small>todas as atividades precisam de duração válida</small></div>
-          <div><span>Rede</span><strong>{dependencies.length || activities.length < 2 ? "OK" : "Pendente"}</strong><small>relações devem representar a lógica real da obra</small></div>
+          <div><span>Rede</span><strong>{dependencies.length > 0 || activities.length < 2 ? "OK" : "Pendente"}</strong><small>relações devem representar a lógica real da obra</small></div>
           <div><span>Resultado</span><strong>{resumo.hasStoredCpm ? "Persistido" : "Não calculado"}</strong><small>o resultado fica registrado nas atividades da versão</small></div>
           <div><span>Próxima etapa</span><strong>{resumo.hasStoredCpm ? "Baseline" : "CPM"}</strong><small>baseline só depois de revisão do caminho crítico</small></div>
         </div>
