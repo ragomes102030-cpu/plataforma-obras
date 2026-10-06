@@ -578,9 +578,11 @@ async function assertAvailableWbsCode(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
   code: string,
-  exceptNodeId?: number
+  exceptNodeId?: number,
+  versionId?: number
 ) {
   const conditions = [eq(wbsNodes.projectId, projectId), eq(wbsNodes.code, code)];
+  if (versionId != null) conditions.push(eq(wbsNodes.versionId, versionId));
   if (exceptNodeId) conditions.push(ne(wbsNodes.id, exceptNodeId));
   const [existingCode] = await db
     .select({ id: wbsNodes.id })
@@ -588,7 +590,7 @@ async function assertAvailableWbsCode(
     .where(and(...conditions))
     .limit(1);
   if (existingCode) {
-    throw conflict(`O código WBS ${code} já está em uso nesta obra.`);
+    throw conflict(`O código WBS ${code} já está em uso nesta versão da obra.`);
   }
 }
 
