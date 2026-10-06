@@ -33,7 +33,7 @@ async function criarObra() {
     .insert(projects)
     .values({
       ownerUserId: userId,
-      code: "VWBS",
+      code: `VWBS-${sequenciaObra}`,
       name: "Obra versionada",
       location: "Teste",
       plannedStart: new Date("2026-01-01T00:00:00Z"),
