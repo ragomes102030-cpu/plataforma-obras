@@ -96,3 +96,8 @@ client/public/__manus__/version.json
 build_log.txt
 build_out.txt
 .env*
+
+# Playwright local auth and reports
+.playwright/auth.json
+playwright-report/
+test-results/
