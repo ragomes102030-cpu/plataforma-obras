@@ -1,0 +1,66 @@
+name: Playwright E2E
+
+on:
+  push:
+    branches:
+      - main
+      - "test/playwright-*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  public-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e:playwright --grep "landing page is reachable"
+        env:
+          PLAYWRIGHT_BASE_URL: https://plataforma-obras-api.onrender.com
+
+  authenticated-aurora:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Restore authenticated browser state
+        env:
+          AUTH_STATE_B64: ${{ secrets.ARQUIMEDES_PLAYWRIGHT_AUTH_B64 }}
+        run: |
+          test -n "$AUTH_STATE_B64" || { echo "Missing ARQUIMEDES_PLAYWRIGHT_AUTH_B64"; exit 1; }
+          mkdir -p .playwright
+          printf '%s' "$AUTH_STATE_B64" | base64 --decode > .playwright/auth.json
+      - run: pnpm e2e:playwright --grep "authenticated Aurora planning flow"
+        env:
+          PLAYWRIGHT_BASE_URL: https://plataforma-obras-api.onrender.com
+          PLAYWRIGHT_STORAGE_STATE: .playwright/auth.json
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-aurora-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
