@@ -116,6 +116,25 @@ function cacheClearPrefix(prefix: string): void {
   }
 }
 
+async function markCpmStaleForVersion(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  versionId: number
+) {
+  // Schedule-network changes invalidate the stored CPM result until the next
+  // scheduling run. Keep the previous timestamp for auditability while clearing
+  // derived dates/float/criticality; updatedAt then makes freshness explicit.
+  await db.update(scheduleActivities).set({
+    critical: 0,
+    earlyStart: null,
+    earlyFinish: null,
+    lateStart: null,
+    lateFinish: null,
+    totalFloat: null,
+    freeFloat: null,
+  }).where(and(eq(scheduleActivities.projectId, projectId), eq(scheduleActivities.versionId, versionId)));
+}
+
 const demoProjects = [
   {
     id: 1,
@@ -1094,6 +1113,13 @@ export const appRouter = router({
             ...(input.budgetItemId !== undefined && { budgetItemId: input.budgetItemId }),
             progress: input.progress,
             status: input.status,
+            critical: 0,
+            earlyStart: null,
+            earlyFinish: null,
+            lateStart: null,
+            lateFinish: null,
+            totalFloat: null,
+            freeFloat: null,
           })
           .where(eq(scheduleActivities.id, input.activityId));
         await recomputeProjectProgress(db, input.projectId);
@@ -3248,6 +3274,7 @@ export const appRouter = router({
             versionId: writable.id,
           }))
         );
+        await markCpmStaleForVersion(db, input.projectId, writable.id);
         return { created: input.dependencies.length };
       }),
     updateActivities: protectedProcedure
@@ -3311,6 +3338,7 @@ export const appRouter = router({
           await applyField("progress", pick("progress"));
           await applyField("status", pick("status"));
         });
+        await markCpmStaleForVersion(db, input.projectId, versionIds[0]!);
         return { updated: input.updates.length };
       }),
     allocateResource: protectedProcedure
