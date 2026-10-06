@@ -64,9 +64,7 @@ export const ABAS: readonly AbaDoSistema[] = [
   {
     id: "cpm",
     rotulo: "CPM / CAMINHO CRÍTICO",
-    status: "pendente",
-    falta:
-      "O caminho crítico depende de atividades com duração válida e uma rede de dependências consistente. O motor CPM será habilitado após essa base.",
+    status: "pronta",
   },
   {
     id: "baseline",
