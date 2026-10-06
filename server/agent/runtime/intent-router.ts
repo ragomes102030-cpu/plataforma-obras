@@ -9,6 +9,7 @@ const CASUAL_PATTERNS = [
 
 const OPERATION_PATTERNS = [
   /\b(crie|criar|adicione|adicionar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|gere|gerar)\b/i,
+  /\b(pode\s+executar|pode\s+aplicar|pode\s+corrigir)\b/i,
 ];
 
 const ANALYSIS_PATTERNS = [
@@ -33,11 +34,3 @@ export function isSimpleCasualMessage(message: string): boolean {
 
 export function casualResponse(message: string): string {
   const text = stripUiContext(message).toLocaleLowerCase("pt-BR");
-  if (/^(obrigado|obrigada|valeu|vlw|show|beleza|blz|entendi|certo|ok|okay)/i.test(text)) {
-    return "Por nada! Quando quiser, podemos continuar o planejamento da obra.";
-  }
-  if (/^(bom dia)/i.test(text)) return "Bom dia! Sou o Arquimedes. Como posso ajudar no planejamento da obra?";
-  if (/^(boa tarde)/i.test(text)) return "Boa tarde! Sou o Arquimedes. Como posso ajudar no planejamento da obra?";
-  if (/^(boa noite)/i.test(text)) return "Boa noite! Sou o Arquimedes. Como posso ajudar no planejamento da obra?";
-  return "Olá! Sou o Arquimedes. Como posso ajudar no planejamento da obra?";
-}
