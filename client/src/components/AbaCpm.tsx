@@ -1,6 +1,7 @@
 import { AlertTriangle, Calculator, CheckCircle2, Network, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { isStoredCpmCurrent } from "@shared/cpm-validity";
 
 type Props = { projetoId: number };
 
