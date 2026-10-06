@@ -343,7 +343,7 @@ describe("runProjectOrchestrator", () => {
     const calls: string[] = [];
     const result = await runProjectOrchestrator(
       context,
-      [{ role: "user", content: "Crie a atividade Mobilização com 5 dias e faça a dependência com a próxima atividade." }],
+      [{ role: "user", content: "Pode executar: crie a atividade Mobilização com 5 dias e faça a dependência com a próxima atividade." }],
       {
         mcpProjectIds: { cronograma: "aurora-externo" },
         deps: {
