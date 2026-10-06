@@ -1380,34 +1380,47 @@ export const appRouter = router({
 
           const updates = Array.from(desired.entries());
           if (updates.length) {
-            const ids = updates.map(([id]) => id);
-            await tx.execute(sql`
-              UPDATE wbs_nodes
-              SET code = CONCAT('__wbs_tmp__', id)
-              WHERE projectId = ${input.projectId}
-                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
-            const parentCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.parentId}`), sql` `);
-            const codeCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.code}`), sql` `);
-            const levelCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.level}`), sql` `);
-            const orderCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.sortOrder}`), sql` `);
-            await tx.execute(sql`
-              UPDATE wbs_nodes
-              SET parentId = CASE id ${parentCase} ELSE parentId END,
-                  code = CASE id ${codeCase} ELSE code END,
-                  level = CASE id ${levelCase} ELSE level END,
-                  sortOrder = CASE id ${orderCase} ELSE sortOrder END
-              WHERE projectId = ${input.projectId}
-                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
-            await tx.execute(sql`
-              UPDATE schedule_activities AS activity
-              INNER JOIN wbs_nodes AS node ON node.id = activity.wbsNodeId
-              SET activity.wbsCode = node.code, activity.eapRef = node.code
-              WHERE activity.projectId = ${input.projectId}
-                AND activity.versionId = ${writable.id}
-                AND activity.wbsNodeId IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
+            for (const [id] of updates) {
+              await tx
+                .update(wbsNodes)
+                .set({ code: `__wbs_tmp__${id}` })
+                .where(
+                  and(
+                    eq(wbsNodes.id, id),
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, writable.id)
+                  )
+                );
+            }
+
+            for (const [id, value] of updates) {
+              await tx
+                .update(wbsNodes)
+                .set({
+                  parentId: value.parentId,
+                  code: value.code,
+                  level: value.level,
+                  sortOrder: value.sortOrder,
+                })
+                .where(
+                  and(
+                    eq(wbsNodes.id, id),
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, writable.id)
+                  )
+                );
+
+              await tx
+                .update(scheduleActivities)
+                .set({ wbsCode: value.code, eapRef: value.code })
+                .where(
+                  and(
+                    eq(scheduleActivities.projectId, input.projectId),
+                    eq(scheduleActivities.versionId, writable.id),
+                    eq(scheduleActivities.wbsNodeId, id)
+                  )
+                );
+            }
           }
           const moved = desired.get(node.id);
           return {
@@ -3765,32 +3778,31 @@ export const appRouter = router({
           .limit(1);
         if (!version || !["draft", "proposed"].includes(version.status))
           throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de editar.");
-        const idsSql = sql.join(activityIds.map(id => sql`${id}`), sql`, `);
-        const applyField = async (field: string, values: Array<[number, unknown]>) => {
-          if (!values.length) return;
-          const caseSql = sql.join(values.map(([id, value]) => sql`WHEN ${id} THEN ${value}`), sql` `);
-          await db.execute(sql`
-            UPDATE schedule_activities
-            SET ${sql.raw(field)} = CASE id ${caseSql} END,
-                cpmCalculatedAt = NULL
-            WHERE projectId = ${input.projectId}
-              AND id IN (${idsSql})
-              AND versionId = ${versionIds[0]}
-          `);
-        };
-        await db.transaction(async () => {
-          const pick = (key: keyof (typeof input.updates)[number]) =>
-            input.updates
-              .filter(item => item[key] !== undefined)
-              .map(item => [item.activityId, item[key]] as [number, unknown]);
-          await applyField("name", pick("name"));
-          await applyField("phase", pick("phase"));
-          await applyField("startOffset", pick("startOffset"));
-          await applyField("durationDays", pick("durationDays"));
-          await applyField("plannedQuantity", pick("plannedQuantity"));
-          await applyField("productivity", pick("productivity"));
-          await applyField("progress", pick("progress"));
-          await applyField("status", pick("status"));
+        await db.transaction(async tx => {
+          for (const item of input.updates) {
+            const patch: Record<string, unknown> = { cpmCalculatedAt: null };
+            if (item.name !== undefined) patch.name = item.name;
+            if (item.phase !== undefined) patch.phase = item.phase;
+            if (item.startOffset !== undefined) patch.startOffset = item.startOffset;
+            if (item.durationDays !== undefined) patch.durationDays = item.durationDays;
+            if (item.plannedQuantity !== undefined)
+              patch.plannedQuantity = item.plannedQuantity.toFixed(3);
+            if (item.productivity !== undefined)
+              patch.productivity = item.productivity.toFixed(3);
+            if (item.progress !== undefined) patch.progress = item.progress;
+            if (item.status !== undefined) patch.status = item.status;
+
+            await tx
+              .update(scheduleActivities)
+              .set(patch)
+              .where(
+                and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, versionIds[0]!),
+                  eq(scheduleActivities.id, item.activityId)
+                )
+              );
+          }
         });
         return { updated: input.updates.length };
       }),
