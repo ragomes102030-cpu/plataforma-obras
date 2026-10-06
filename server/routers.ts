@@ -3500,7 +3500,7 @@ export const appRouter = router({
         const result = calculateDeterministicCpm(enrichedActivities, dependencies);
         if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
         const calculatedAt=new Date(); const schedule=result.schedule; const items=schedule.activities;
-        if(items.length){const ids=items.map(item=>Number(item.id)); const critCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`),sql` `); const esCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`),sql` `); const efCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`),sql` `); const lsCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`),sql` `); const lfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`),sql` `); const tfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`),sql` `); await db.transaction(async tx=>{await tx.execute(sql`UPDATE schedule_activities SET critical=CASE id ${critCase} END, earlyStart=CASE id ${esCase} END, earlyFinish=CASE id ${efCase} END, lateStart=CASE id ${lsCase} END, lateFinish=CASE id ${lfCase} END, totalFloat=CASE id ${tfCase} END, cpmCalculatedAt=${calculatedAt} WHERE projectId=${input.projectId} AND id IN (${sql.join(ids.map(id=>sql`${id}`),sql`, `)})`);});}
+        if(items.length){const ids=items.map(item=>Number(item.id)); const critCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`),sql` `); const esCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`),sql` `); const efCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`),sql` `); const lsCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`),sql` `); const lfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`),sql` `); const tfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`),sql` `); await db.transaction(async tx=>{await tx.execute(sql`UPDATE schedule_activities SET critical=CASE id ${critCase} END, earlyStart=CASE id ${esCase} END, earlyFinish=CASE id ${efCase} END, lateStart=CASE id ${lsCase} END, lateFinish=CASE id ${lfCase} END, totalFloat=CASE id ${tfCase} END, cpmCalculatedAt=${calculatedAt} WHERE projectId=${input.projectId} AND versionId=${currentVersion?.id ?? -1} AND id IN (${sql.join(ids.map(id=>sql`${id}`),sql`, `)})`);});}
         return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
       }),
     createResource: protectedProcedure
@@ -3819,9 +3819,12 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [activity] = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
+        const [activity] = await db.select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId }).from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
         const [resource] = await db.select({ id: planningResources.id }).from(planningResources).where(and(eq(planningResources.id, input.resourceId), eq(planningResources.projectId, input.projectId))).limit(1);
         if (!activity || !resource) throw forbidden("Atividade ou recurso não pertence à obra.");
+        if (activity.versionId == null) throw conflict("A atividade está sem versão de plano.");
+        const [activityVersion] = await db.select({ status: projectPlanVersions.status }).from(projectPlanVersions).where(and(eq(projectPlanVersions.id, activity.versionId), eq(projectPlanVersions.projectId, input.projectId))).limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status)) throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de alocar recursos.");
         const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).returning({ id: activityResourceAllocations.id });
         return { id: createdId.id };
       }),
@@ -3856,7 +3859,7 @@ export const appRouter = router({
         if (!resource) throw forbidden("Recurso não pertence à obra.");
         const activityIds = Array.from(new Set(input.allocations.map(item => item.activityId)));
         const validActivities = await db
-          .select({ id: scheduleActivities.id })
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
           .from(scheduleActivities)
           .where(
             and(
@@ -3866,6 +3869,12 @@ export const appRouter = router({
           );
         if (validActivities.length !== activityIds.length)
           throw forbidden("Uma ou mais atividades não pertencem à obra.");
+        const versionIds = [...new Set(validActivities.map(activity => activity.versionId))];
+        if (versionIds.length !== 1 || versionIds[0] == null)
+          throw conflict("As atividades precisam pertencer a uma única versão de trabalho.");
+        const [activityVersion] = await db.select({ status: projectPlanVersions.status }).from(projectPlanVersions).where(and(eq(projectPlanVersions.id, versionIds[0]), eq(projectPlanVersions.projectId, input.projectId))).limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status))
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de alocar recursos.");
         await db
           .insert(activityResourceAllocations)
           .values(
@@ -3917,7 +3926,9 @@ export const appRouter = router({
           : [];
         const bac = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
@@ -4146,7 +4157,9 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionId = currentVersion?.id ?? null;
+        const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).limit(1);
         if (!activity) throw notFound("Atividade não encontrada.");
         const float = activity.totalFloat ?? 0;
         const current = activity.earlyStart ?? activity.startOffset;
@@ -4156,14 +4169,14 @@ export const appRouter = router({
         if (input.newStartOffset < current || input.newStartOffset > current + float) {
           throw badRequest(`Deslocamento fora da folga total (${float} dia(s)).`);
         }
-        await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId)));
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
-        const all = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
+        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), versionId == null ? isNull(scheduleDependencies.versionId) : eq(scheduleDependencies.versionId, versionId)));
+        const all = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).orderBy(scheduleActivities.sortOrder);
         const result = calculateDeterministicCpm(all, dependencies);
         if (result.valid && result.schedule) {
           const calculatedAt = new Date();
           for (const item of result.schedule.activities) {
-            await db.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
+            await db.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
           }
         }
         return { ok: true as const, newStartOffset: input.newStartOffset, cpmValid: result.valid };
