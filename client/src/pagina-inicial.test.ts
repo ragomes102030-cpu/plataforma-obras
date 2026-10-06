@@ -146,9 +146,9 @@ describe("transição EAP aprovada → atividades", () => {
   it("a aba de atividades expõe a derivação das folhas da EAP", () => {
     const painel = readFileSync("client/src/components/PainelPlanejamento.tsx", "utf-8");
     expect(painel).toMatch(/trpc\.planning\.generateFromEap\.useMutation/);
-    expect(painel).toMatch(/Gerar atividades da EAP/);
-    expect(painel).toMatch(/proposta.*derivada da EAP/i);
-    expect(painel).toMatch(/Nenhuma\s+foi\s+persistida\s+automaticamente/);
+    expect(painel).toMatch(/Atualizar proposta/);
+    expect(painel).toMatch(/Transforme os pacotes da EAP aprovada/i);
+    expect(painel).toMatch(/aguardando revisão e duração/i);
   });
 
   it("a proposta usa IDs da mesma versão EAP que a criação valida", () => {
