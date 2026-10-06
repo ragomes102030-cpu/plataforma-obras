@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import type { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,10 +20,13 @@ type Db = NonNullable<typeof alvo.db>;
 let pg: PGlite;
 let db: Db;
 
+let sequenciaObra = 0;
+
 async function criarObra() {
+  sequenciaObra += 1;
   const [userId] = await db
     .insert(users)
-    .values({ openId: "versioned-wbs", name: "Teste versioned WBS" })
+    .values({ openId: `versioned-wbs-${sequenciaObra}`, name: "Teste versioned WBS" })
     .$returningIds();
 
   const [projectId] = await db
