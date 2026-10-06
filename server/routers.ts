@@ -1245,23 +1245,10 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [node] = await db
-          .select({ id: wbsNodes.id })
-          .from(wbsNodes)
-          .where(
-            and(
-              eq(wbsNodes.id, input.nodeId),
-              eq(wbsNodes.projectId, input.projectId)
-            )
-          )
-          .limit(1);
-        if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
-        await assertAvailableWbsCode(
-          db,
-          input.projectId,
-          input.code,
-          input.nodeId
-        );
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [node] = await db.select({ id: wbsNodes.id }).from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
+        if (!node) throw notFound("Item da EAP não encontrado na versão de trabalho.");
+        await assertAvailableWbsCode(db, input.projectId, input.code, input.nodeId, writable.id);
         return db.transaction(async tx => {
           await tx
             .update(wbsNodes)
@@ -1273,13 +1260,14 @@ export const appRouter = router({
               plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
               ...(input.decompositionBasis !== undefined && { decompositionBasis: input.decompositionBasis }), ...(input.description !== undefined && { description: input.description }), ...(input.inclusions !== undefined && { inclusions: input.inclusions }), ...(input.exclusions !== undefined && { exclusions: input.exclusions }), ...(input.location !== undefined && { location: input.location }), ...(input.responsible !== undefined && { responsible: input.responsible }), ...(input.acceptanceCriteria !== undefined && { acceptanceCriteria: input.acceptanceCriteria }), ...(input.scopeStatus !== undefined && { scopeStatus: input.scopeStatus }),
             })
-            .where(eq(wbsNodes.id, input.nodeId));
+            .where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.versionId, writable.id)));
           await tx
             .update(scheduleActivities)
             .set({ wbsCode: input.code, eapRef: input.code })
             .where(
               and(
                 eq(scheduleActivities.projectId, input.projectId),
+                eq(scheduleActivities.versionId, writable.id),
                 eq(scheduleActivities.wbsNodeId, input.nodeId)
               )
             );
@@ -1300,15 +1288,15 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const parent = input.parentId
-          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId))).limit(1))[0]
+          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1))[0]
           : undefined;
-        if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence a esta obra.");
-        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
+        if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence à versão de trabalho desta obra.");
+        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
-        await assertAvailableWbsCode(db, input.projectId, code);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
         const [created] = await db.insert(wbsNodes).values({
           projectId: input.projectId,
           parentId: parent?.id ?? null,
@@ -1432,15 +1420,16 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
-        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
+        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = source.parentId
           ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
           : `${nextNumber}`;
-        await assertAvailableWbsCode(db, input.projectId, code);
-        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).returning({ id: wbsNodes.id });
+        await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length, versionId: writable.id }).returning({ id: wbsNodes.id });
         return created;
       }),
     deleteWbsNode: protectedProcedure
@@ -1449,19 +1438,20 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
-        const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
+        const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
         const linkedActivities = ids.length
-          ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.wbsNodeId, ids)))
+          ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, writable.id), inArray(scheduleActivities.wbsNodeId, ids)))
           : [];
         if (linkedActivities.length) throw badRequest("Não é possível excluir uma EAP vinculada a atividades. Realoque ou remova as atividades primeiro.");
         const linkedBudgetItems = ids.length
           ? await db.select({ id: budgetItems.id }).from(budgetItems).where(inArray(budgetItems.wbsNodeId, ids))
           : [];
         if (linkedBudgetItems.length) throw badRequest("Não é possível excluir uma EAP vinculada ao orçamento. Realoque ou remova os itens primeiro.");
-        if (ids.length) await db.delete(wbsNodes).where(inArray(wbsNodes.id, ids));
+        if (ids.length) await db.delete(wbsNodes).where(and(eq(wbsNodes.versionId, writable.id), inArray(wbsNodes.id, ids)));
         return { deleted: true as const, count: ids.length };
       }),
     dependencies: protectedProcedure
