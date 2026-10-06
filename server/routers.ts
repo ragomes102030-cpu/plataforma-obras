@@ -3645,7 +3645,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const approved = await requireApprovedEapVersion(db, input.projectId);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,writable.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+        const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,approved.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
         const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),eq(scheduleActivities.versionId,writable.id)));
         const existingCodes = new Set(existing.map(row=>row.wbsCode));
         const pending = nodes.filter(node=>!existingCodes.has(node.code)).map(node=>({
