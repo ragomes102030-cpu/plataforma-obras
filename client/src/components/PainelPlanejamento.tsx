@@ -66,8 +66,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
       plano.isError ||
       propostaAutoDisparada.current ||
       proposta.length > 0 ||
-      gerarProposta.isPending ||
-      activities.length > 0
+      gerarProposta.isPending
     ) return;
 
     propostaAutoDisparada.current = true;
