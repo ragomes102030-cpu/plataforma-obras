@@ -3764,7 +3764,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activityIds = input.updates.map(item => item.activityId);
         const found = await db
-          .select({ id: scheduleActivities.id })
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
           .from(scheduleActivities)
           .where(
             and(
@@ -3774,6 +3774,16 @@ export const appRouter = router({
           );
         if (found.length !== new Set(activityIds).size)
           throw forbidden("Uma ou mais atividades não pertencem à obra.");
+        const versionIds = [...new Set(found.map(row => row.versionId))];
+        if (versionIds.length !== 1 || versionIds[0] == null)
+          throw conflict("As atividades precisam pertencer a uma única versão de trabalho.");
+        const [version] = await db
+          .select({ id: projectPlanVersions.id, status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, versionIds[0]), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!version || !["draft", "proposed"].includes(version.status))
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de editar.");
         const idsSql = sql.join(activityIds.map(id => sql`${id}`), sql`, `);
         const applyField = async (field: string, values: Array<[number, unknown]>) => {
           if (!values.length) return;
@@ -3784,6 +3794,7 @@ export const appRouter = router({
                 cpmCalculatedAt = NULL
             WHERE projectId = ${input.projectId}
               AND id IN (${idsSql})
+              AND versionId = ${versionIds[0]}
           `);
         };
         await db.transaction(async () => {
