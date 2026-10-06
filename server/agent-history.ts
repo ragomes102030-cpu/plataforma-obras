@@ -3,6 +3,30 @@ export type PersistedAgentMessage = {
   content: string;
 };
 
+const MAX_HISTORY_MESSAGE_CHARS = 9_000;
+
+function compactHistoryMessage(message: PersistedAgentMessage): PersistedAgentMessage {
+  if (message.content.length <= MAX_HISTORY_MESSAGE_CHARS) return message;
+  const head = Math.floor(MAX_HISTORY_MESSAGE_CHARS * 0.7);
+  const tail = MAX_HISTORY_MESSAGE_CHARS - head;
+  return {
+    role: message.role,
+    content: [
+      message.content.slice(0, head),
+      "",
+      "[...trecho intermediário compactado do histórico do Arquimedes...]",
+      "",
+      message.content.slice(-tail),
+    ].join("\n"),
+  };
+}
+
+function compactHistory(messages: PersistedAgentMessage[], maxMessages: number) {
+  return messages
+    .slice(-maxMessages)
+    .map(compactHistoryMessage);
+}
+
 export function restoreAgentConversation(
   contextJson: string,
   resultJson: string | null,
@@ -70,8 +94,8 @@ export function mergePersistedWithIncoming(
   incoming: PersistedAgentMessage[],
   maxMessages = 20,
 ): PersistedAgentMessage[] {
-  if (incoming.length === 0) return persisted.slice(-maxMessages);
-  if (persisted.length === 0) return incoming.slice(-maxMessages);
+  if (incoming.length === 0) return compactHistory(persisted, maxMessages);
+  if (persisted.length === 0) return compactHistory(incoming, maxMessages);
 
   const maxOverlap = Math.min(persisted.length, incoming.length);
   let overlap = 0;
@@ -90,5 +114,5 @@ export function mergePersistedWithIncoming(
     }
   }
 
-  return [...persisted, ...incoming.slice(overlap)].slice(-maxMessages);
+  return compactHistory([...persisted, ...incoming.slice(overlap)], maxMessages);
 }
