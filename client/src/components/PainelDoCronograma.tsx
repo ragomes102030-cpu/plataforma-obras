@@ -25,17 +25,57 @@ function pct(n: number): string {
 }
 
 export function PainelDoCronograma({ agregado, projetoId, temExemplo }: Props) {
-  // O painel só faz sentido com quantitativo. Sem ele, a média ponderada não
-  // tem sobre o que incidir e o painel mostra 0% para uma obra que ninguém
-  // mediu — o que é diferente de "avanço zero".
   const semQuantidade = (agregado?.linhasSemQuantidade ?? 0) > 0;
+  const wbs = trpc.projects.wbs.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const plano = trpc.planning.list.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const pacotesEap = (wbs.data ?? []).filter((node: any) => node.nodeType === "pacote").length;
+  const atividades = plano.data?.activities?.length ?? agregado?.totalAtividades ?? 0;
+  const dependencias = plano.data?.dependencies?.length ?? 0;
+  const baselines = plano.data?.baselines?.length ?? 0;
+
   if (!agregado || agregado.totalAtividades === 0) {
     return (
       <div className="xl-painel">
-        <p className="xl-painel-vazio">
-          Sem atividades no cronograma, não há avanço para medir. A aba
-          CRONOGRAMA diz o que falta.
-        </p>
+        <div className="xl-painel-intro">
+          <div>
+            <span className="xl-painel-kicker">VISÃO GERAL DA OBRA</span>
+            <h2>Planejamento ainda não entrou no cronograma</h2>
+            <p>A EAP já estrutura o escopo. O próximo trabalho é transformar os pacotes de trabalho em atividades planejáveis.</p>
+          </div>
+          <span className="xl-painel-status">Em planejamento</span>
+        </div>
+
+        <div className="xl-dashboard-cards">
+          <Cartao titulo="Pacotes EAP" valor={String(pacotesEap)} nota="escopo estruturado" />
+          <Cartao titulo="Atividades" valor={String(atividades)} nota="ainda não criadas" />
+          <Cartao titulo="Dependências" valor={String(dependencias)} nota="rede lógica" />
+          <Cartao titulo="Baseline" valor={String(baselines)} nota="cronograma congelado" />
+        </div>
+
+        <div className="xl-dashboard-proximo">
+          <div>
+            <strong>Próximo passo</strong>
+            <span>Levar os pacotes da EAP para Atividades e informar duração, início e produtividade.</span>
+          </div>
+          <div className="xl-dashboard-acoes">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba-eap"))}>Revisar EAP</button>
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba-atividades"))}>Ir para Atividades</button>
+          </div>
+        </div>
+
+        <div className="xl-dashboard-fluxo" aria-label="Fluxo do planejamento">
+          {["Escopo","EAP","Atividades","Dependências","CPM","Baseline","Gantt / LOB","Controle"].map((etapa, index) => (
+            <div key={etapa} className={index < 2 ? "feito" : index === 2 ? "atual" : "bloqueado"}>
+              <span>{index + 1}</span><strong>{etapa}</strong>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -111,18 +151,20 @@ function Cartao({
   titulo,
   valor,
   children,
+  nota,
   tom,
 }: {
   titulo: string;
   valor: string;
   children?: React.ReactNode;
+  nota?: string;
   tom?: "ruim" | "bom";
 }) {
   return (
     <div className={`xl-cartao${tom ? ` xl-cartao-${tom}` : ""}`}>
       <span className="xl-cartao-titulo">{titulo}</span>
       <strong className="xl-cartao-valor">{valor}</strong>
-      {children && <span className="xl-cartao-nota">{children}</span>}
+      {(children || nota) && <span className="xl-cartao-nota">{nota ?? children}</span>}
     </div>
   );
 }
