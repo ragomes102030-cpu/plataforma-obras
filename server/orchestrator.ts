@@ -15,9 +15,25 @@ import {
 } from "./llm-provider-gateway";
 
 const MAX_ITERATIONS = 4;
-const MAX_TOOL_RESULT_CHARS = 12_000;
+const MAX_TOOL_RESULT_CHARS = 8_000;
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 6_000;
+// Providers can reject a single message around 12k chars. Keep a safety margin
+// because the system prompt contains the planning contract plus live obra context.
+const MAX_LLM_MESSAGE_CHARS = 11_000;
+
+function compactLlmContent(content: string, maxChars = MAX_LLM_MESSAGE_CHARS) {
+  if (content.length <= maxChars) return content;
+  const head = Math.floor(maxChars * 0.68);
+  const tail = maxChars - head;
+  return [
+    content.slice(0, head),
+    "",
+    "[...conteúdo intermediário compactado pelo orquestrador...]", 
+    "",
+    content.slice(-tail),
+  ].join("\n");
+}
 
 const TOOL_DOMAINS = {
   get_eap_tree: "eap",
@@ -440,10 +456,13 @@ export async function runProjectOrchestrator(
   const audit: AuditEvent[] = [];
   const catalogErrorDomains = Object.keys(catalog.errors ?? {});
   const conversation: LlmMessage[] = [
-    { role: "system", content: buildSystem(context, mcpProjectIds) },
+    {
+      role: "system",
+      content: compactLlmContent(buildSystem(context, mcpProjectIds)),
+    },
     ...messages.map(message => ({
       role: message.role,
-      content: message.content,
+      content: compactLlmContent(message.content),
     })),
   ];
 
@@ -549,8 +568,8 @@ export async function runProjectOrchestrator(
           toolName,
           args
         );
-        const serialized = JSON.stringify(result).slice(
-          0,
+        const serialized = compactLlmContent(
+          JSON.stringify(result),
           MAX_TOOL_RESULT_CHARS
         );
         conversation.push({
