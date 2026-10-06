@@ -148,7 +148,7 @@ describe("transição EAP aprovada → atividades", () => {
     expect(painel).toMatch(/trpc\.planning\.generateFromEap\.useMutation/);
     expect(painel).toMatch(/Gerar atividades da EAP/);
     expect(painel).toMatch(/proposta.*derivada da EAP/i);
-    expect(painel).toMatch(/Nenhuma foi persistida automaticamente/);
+    expect(painel).toMatch(/Nenhuma foi\s+persistida automaticamente/);
   });
 
   it("a atividade só pode ser criada a partir de uma folha EAP aprovada", () => {
