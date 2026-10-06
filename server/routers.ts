@@ -59,6 +59,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
+import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -119,6 +120,7 @@ import {
 import {
   approveCurrentPlanVersion,
   ensureWritablePlanVersion,
+  getCurrentPlanVersion,
   listPlanVersionDetails,
 } from "./construction/plan-versions";
 
@@ -577,9 +579,11 @@ async function assertAvailableWbsCode(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
   code: string,
-  exceptNodeId?: number
+  exceptNodeId?: number,
+  versionId?: number
 ) {
   const conditions = [eq(wbsNodes.projectId, projectId), eq(wbsNodes.code, code)];
+  if (versionId != null) conditions.push(eq(wbsNodes.versionId, versionId));
   if (exceptNodeId) conditions.push(ne(wbsNodes.id, exceptNodeId));
   const [existingCode] = await db
     .select({ id: wbsNodes.id })
@@ -587,7 +591,7 @@ async function assertAvailableWbsCode(
     .where(and(...conditions))
     .limit(1);
   if (existingCode) {
-    throw conflict(`O código WBS ${code} já está em uso nesta obra.`);
+    throw conflict(`O código WBS ${code} já está em uso nesta versão da obra.`);
   }
 }
 
@@ -1121,10 +1125,18 @@ export const appRouter = router({
             ? demoActivities
             : [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
         const rows = await db
           .select()
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId))
+          .where(
+            versionId == null
+              ? and(eq(scheduleActivities.projectId, input.projectId), isNull(scheduleActivities.versionId))
+              : and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, versionId)
+                )
+          )
           .orderBy(scheduleActivities.sortOrder);
         return rows;
       }),
@@ -1155,7 +1167,10 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [activity] = await db
-          .select({ id: scheduleActivities.id })
+          .select({
+            id: scheduleActivities.id,
+            versionId: scheduleActivities.versionId,
+          })
           .from(scheduleActivities)
           .where(
             and(
@@ -1165,6 +1180,22 @@ export const appRouter = router({
           )
           .limit(1);
         if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        if (activity.versionId == null) {
+          throw conflict("A atividade está sem versão de plano; ela precisa ser reconciliada antes de ser editada.");
+        }
+        const [activityVersion] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(
+            and(
+              eq(projectPlanVersions.id, activity.versionId),
+              eq(projectPlanVersions.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Abra uma nova versão de trabalho antes de editar a atividade.");
+        }
         await db
           .update(scheduleActivities)
           .set({
@@ -1217,23 +1248,10 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [node] = await db
-          .select({ id: wbsNodes.id })
-          .from(wbsNodes)
-          .where(
-            and(
-              eq(wbsNodes.id, input.nodeId),
-              eq(wbsNodes.projectId, input.projectId)
-            )
-          )
-          .limit(1);
-        if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
-        await assertAvailableWbsCode(
-          db,
-          input.projectId,
-          input.code,
-          input.nodeId
-        );
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const node = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        if (!node) throw notFound("Item da EAP não encontrado na versão de trabalho.");
+        await assertAvailableWbsCode(db, input.projectId, input.code, node.id, writable.id);
         return db.transaction(async tx => {
           await tx
             .update(wbsNodes)
@@ -1245,14 +1263,15 @@ export const appRouter = router({
               plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
               ...(input.decompositionBasis !== undefined && { decompositionBasis: input.decompositionBasis }), ...(input.description !== undefined && { description: input.description }), ...(input.inclusions !== undefined && { inclusions: input.inclusions }), ...(input.exclusions !== undefined && { exclusions: input.exclusions }), ...(input.location !== undefined && { location: input.location }), ...(input.responsible !== undefined && { responsible: input.responsible }), ...(input.acceptanceCriteria !== undefined && { acceptanceCriteria: input.acceptanceCriteria }), ...(input.scopeStatus !== undefined && { scopeStatus: input.scopeStatus }),
             })
-            .where(eq(wbsNodes.id, input.nodeId));
+            .where(and(eq(wbsNodes.id, node.id), eq(wbsNodes.versionId, writable.id)));
           await tx
             .update(scheduleActivities)
             .set({ wbsCode: input.code, eapRef: input.code })
             .where(
               and(
                 eq(scheduleActivities.projectId, input.projectId),
-                eq(scheduleActivities.wbsNodeId, input.nodeId)
+                eq(scheduleActivities.versionId, writable.id),
+                eq(scheduleActivities.wbsNodeId, node.id)
               )
             );
           return { updated: true as const };
@@ -1272,15 +1291,15 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const parent = input.parentId
-          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId))).limit(1))[0]
+          ? await resolveWbsNodeInVersion(db, input.projectId, input.parentId, writable.id)
           : undefined;
-        if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence a esta obra.");
-        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId))).orderBy(wbsNodes.sortOrder);
+        if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence à versão de trabalho desta obra.");
+        const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
-        await assertAvailableWbsCode(db, input.projectId, code);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
         const [created] = await db.insert(wbsNodes).values({
           projectId: input.projectId,
           parentId: parent?.id ?? null,
@@ -1309,17 +1328,25 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const resolvedNode = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        const resolvedParent = input.targetParentId === null
+          ? null
+          : await resolveWbsNodeInVersion(db, input.projectId, input.targetParentId, writable.id);
+        if (!resolvedNode) throw notFound("Item da EAP não encontrado nesta obra.");
+        if (input.targetParentId !== null && !resolvedParent) throw badRequest("Destino inválido.");
+
         return db.transaction(async tx => {
           const all = await tx
             .select()
             .from(wbsNodes)
-            .where(eq(wbsNodes.projectId, input.projectId));
-          const node = all.find(item => item.id === input.nodeId);
-          const parent = input.targetParentId === null
+            .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
+          const node = all.find(item => item.id === resolvedNode.id);
+          const parent = resolvedParent === null
             ? null
-            : all.find(item => item.id === input.targetParentId) ?? null;
+            : all.find(item => item.id === resolvedParent.id) ?? null;
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
-          if (input.targetParentId !== null && !parent) throw badRequest("Destino inválido.");
+          if (resolvedParent !== null && !parent) throw badRequest("Destino inválido.");
 
           const byId = new Map(all.map(item => [item.id, item]));
           let ancestor = parent;
@@ -1361,33 +1388,47 @@ export const appRouter = router({
 
           const updates = Array.from(desired.entries());
           if (updates.length) {
-            const ids = updates.map(([id]) => id);
-            await tx.execute(sql`
-              UPDATE wbs_nodes
-              SET code = CONCAT('__wbs_tmp__', id)
-              WHERE projectId = ${input.projectId}
-                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
-            const parentCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.parentId}`), sql` `);
-            const codeCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.code}`), sql` `);
-            const levelCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.level}`), sql` `);
-            const orderCase = sql.join(updates.map(([id, value]) => sql`WHEN ${id} THEN ${value.sortOrder}`), sql` `);
-            await tx.execute(sql`
-              UPDATE wbs_nodes
-              SET parentId = CASE id ${parentCase} ELSE parentId END,
-                  code = CASE id ${codeCase} ELSE code END,
-                  level = CASE id ${levelCase} ELSE level END,
-                  sortOrder = CASE id ${orderCase} ELSE sortOrder END
-              WHERE projectId = ${input.projectId}
-                AND id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
-            await tx.execute(sql`
-              UPDATE schedule_activities AS activity
-              INNER JOIN wbs_nodes AS node ON node.id = activity.wbsNodeId
-              SET activity.wbsCode = node.code, activity.eapRef = node.code
-              WHERE activity.projectId = ${input.projectId}
-                AND activity.wbsNodeId IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
-            `);
+            for (const [id] of updates) {
+              await tx
+                .update(wbsNodes)
+                .set({ code: `__wbs_tmp__${id}` })
+                .where(
+                  and(
+                    eq(wbsNodes.id, id),
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, writable.id)
+                  )
+                );
+            }
+
+            for (const [id, value] of updates) {
+              await tx
+                .update(wbsNodes)
+                .set({
+                  parentId: value.parentId,
+                  code: value.code,
+                  level: value.level,
+                  sortOrder: value.sortOrder,
+                })
+                .where(
+                  and(
+                    eq(wbsNodes.id, id),
+                    eq(wbsNodes.projectId, input.projectId),
+                    eq(wbsNodes.versionId, writable.id)
+                  )
+                );
+
+              await tx
+                .update(scheduleActivities)
+                .set({ wbsCode: value.code, eapRef: value.code })
+                .where(
+                  and(
+                    eq(scheduleActivities.projectId, input.projectId),
+                    eq(scheduleActivities.versionId, writable.id),
+                    eq(scheduleActivities.wbsNodeId, id)
+                  )
+                );
+            }
           }
           const moved = desired.get(node.id);
           return {
@@ -1404,15 +1445,18 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const mapped = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        if (!mapped) throw notFound("Item da EAP não encontrado nesta obra.");
+        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, mapped.id), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
-        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
+        const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = source.parentId
           ? `${source.code.split(".").slice(0, -1).join(".")}.${nextNumber}`
           : `${nextNumber}`;
-        await assertAvailableWbsCode(db, input.projectId, code);
-        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length }).returning({ id: wbsNodes.id });
+        await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
+        const [created] = await db.insert(wbsNodes).values({ projectId: input.projectId, parentId: source.parentId, code, name: `${source.name} (cópia)`, level: source.level, nodeType: source.nodeType, unit: source.unit, plannedQuantity: source.plannedQuantity, sortOrder: siblings.length, versionId: writable.id }).returning({ id: wbsNodes.id });
         return created;
       }),
     deleteWbsNode: protectedProcedure
@@ -1421,19 +1465,22 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId))).limit(1);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const mapped = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        if (!mapped) throw notFound("Item da EAP não encontrado nesta obra.");
+        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, mapped.id), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
-        const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(eq(wbsNodes.projectId, input.projectId));
+        const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
         const linkedActivities = ids.length
-          ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.wbsNodeId, ids)))
+          ? await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, writable.id), inArray(scheduleActivities.wbsNodeId, ids)))
           : [];
         if (linkedActivities.length) throw badRequest("Não é possível excluir uma EAP vinculada a atividades. Realoque ou remova as atividades primeiro.");
         const linkedBudgetItems = ids.length
           ? await db.select({ id: budgetItems.id }).from(budgetItems).where(inArray(budgetItems.wbsNodeId, ids))
           : [];
         if (linkedBudgetItems.length) throw badRequest("Não é possível excluir uma EAP vinculada ao orçamento. Realoque ou remova os itens primeiro.");
-        if (ids.length) await db.delete(wbsNodes).where(inArray(wbsNodes.id, ids));
+        if (ids.length) await db.delete(wbsNodes).where(and(eq(wbsNodes.versionId, writable.id), inArray(wbsNodes.id, ids)));
         return { deleted: true as const, count: ids.length };
       }),
     dependencies: protectedProcedure
@@ -1685,7 +1732,10 @@ export const appRouter = router({
     }),
     analisarEapComArquimedes: protectedProcedure.input(z.object({projectId:z.number().int().positive(),mode:z.enum(["analisar","resolver_bloqueios"]).optional()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
-      const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+      const current=await getCurrentPlanVersion(input.projectId);
+      const nodes=current
+        ? await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,current.id))).orderBy(wbsNodes.sortOrder,wbsNodes.id)
+        : [];
       const proposal: ArquimedesEapProposal={action:"propose_eap",nodes:nodes.length?[]:[{operation:"create",code:"1",name:"Escopo da obra",nodeType:"grupo",parentCode:null,rationale:"Raiz única para receber o escopo informado da obra."}],basis:["Escopo cadastrado na obra","Regra de raiz única da EAP"],assumptions:[],missingInformation:nodes.length?[]:["Detalhar o escopo e as entregas da obra antes da aprovação final."],validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]};
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
       await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis",confidence:"medium",status:"proposed"});
@@ -1694,14 +1744,25 @@ export const appRouter = router({
     aplicarPropostaEap: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.literal(true),proposal:z.any()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
       if(!Array.isArray(input.proposal?.nodes)) throw badRequest("Proposta EAP inválida.");
-      const nodes=await db.select().from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)); const byCode=new Map(nodes.map(n=>[n.code,n])); let created=0;
+      const writable=await ensureWritablePlanVersion(input.projectId,ctx.user.id);
+      const nodes=await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,writable.id)));
+      const byCode=new Map(nodes.map(n=>[n.code,n])); let created=0;
       for(const item of input.proposal.nodes){
-        if(item.operation==="create"){const code=String(item.code??"").trim(); if(!code||byCode.has(code)) continue; const parent=item.parentCode?byCode.get(item.parentCode):null;
-          const [row]=await db.insert(wbsNodes).values({projectId:input.projectId,parentId:parent?.id??null,code,name:String(item.name??"Novo item"),level:code.split(".").length,nodeType:["grupo","pacote","entrega"].includes(item.nodeType)?item.nodeType:"entrega",sortOrder:nodes.length+created,decompositionBasis:item.decompositionBasis??null}).returning({id:wbsNodes.id}); byCode.set(code,{id:row.id,code} as typeof nodes[number]); created++;
-        } else if(item.operation==="update"){const existing=item.nodeId?nodes.find(n=>n.id===Number(item.nodeId)):byCode.get(String(item.code??"")); if(existing) await db.update(wbsNodes).set({name:String(item.name??existing.name),description:item.description??existing.description,inclusions:item.inclusions??existing.inclusions,exclusions:item.exclusions??existing.exclusions,responsible:item.responsible??existing.responsible,acceptanceCriteria:item.acceptanceCriteria??existing.acceptanceCriteria,decompositionBasis:item.decompositionBasis??existing.decompositionBasis}).where(eq(wbsNodes.id,existing.id));}
+        if(item.operation==="create"){
+          const code=String(item.code??"").trim(); if(!code||byCode.has(code)) continue;
+          const parent=item.parentCode?byCode.get(item.parentCode):null;
+          if(item.parentCode && !parent) throw badRequest("A proposta referencia um pai EAP inexistente na versão de trabalho.");
+          const [row]=await db.insert(wbsNodes).values({projectId:input.projectId,parentId:parent?.id??null,code,name:String(item.name??"Novo item"),level:code.split(".").length,nodeType:["grupo","pacote","entrega"].includes(item.nodeType)?item.nodeType:"entrega",sortOrder:nodes.length+created,decompositionBasis:item.decompositionBasis??null,versionId:writable.id}).returning({id:wbsNodes.id});
+          byCode.set(code,{id:row.id,code} as typeof nodes[number]); created++;
+        } else if(item.operation==="update"){
+          const code=String(item.code??"").trim();
+          const existing=byCode.get(code);
+          if(!existing) continue;
+          await db.update(wbsNodes).set({name:String(item.name??existing.name),description:item.description??existing.description,inclusions:item.inclusions??existing.inclusions,exclusions:item.exclusions??existing.exclusions,responsible:item.responsible??existing.responsible,acceptanceCriteria:item.acceptanceCriteria??existing.acceptanceCriteria,decompositionBasis:item.decompositionBasis??existing.decompositionBasis}).where(and(eq(wbsNodes.id,existing.id),eq(wbsNodes.versionId,writable.id)));
+        }
       }
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
-      return {applied:true as const,created,baselineCreated:false as const};
+      return {applied:true as const,created,versionId:writable.id,versionNumber:writable.versionNumber,baselineCreated:false as const};
     }),
     enviarEapParaRevisao: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
@@ -3230,8 +3291,11 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { activities: [], dependencies: [], resources: [], baselines: [] };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
+        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
         return { activities, dependencies, resources, baselines };
@@ -3242,9 +3306,11 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const [project, activities, entries] = await Promise.all([
           db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1),
-          db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)).orderBy(scheduleActivities.sortOrder),
+          db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder),
           db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
@@ -3307,14 +3373,30 @@ export const appRouter = router({
           throw badRequest(error instanceof Error ? error.message : "Duração inválida para a atividade.");
         }
 
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const [writableNode] = await db
+          .select()
+          .from(wbsNodes)
+          .where(
+            and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id),
+              eq(wbsNodes.code, node.code)
+            )
+          )
+          .limit(1);
+        if (!writableNode) {
+          throw badRequest("Não foi possível preparar a versão de trabalho da EAP para a atividade.");
+        }
+
         const [existing] = await db
           .select({ id: scheduleActivities.id })
           .from(scheduleActivities)
           .where(
             and(
               eq(scheduleActivities.projectId, input.projectId),
-              eq(scheduleActivities.wbsNodeId, input.wbsNodeId),
-              eq(scheduleActivities.versionId, approved.id)
+              eq(scheduleActivities.wbsNodeId, writableNode.id),
+              eq(scheduleActivities.versionId, writable.id)
             )
           )
           .limit(1);
@@ -3322,18 +3404,19 @@ export const appRouter = router({
 
         const activityValues: typeof scheduleActivities.$inferInsert = {
           projectId: input.projectId,
-          wbsNodeId: node.id,
-          wbsCode: node.code,
-          eapRef: node.code,
-          name: node.name,
+          wbsNodeId: writableNode.id,
+          externalId: randomUUID(),
+          wbsCode: writableNode.code,
+          eapRef: writableNode.code,
+          name: writableNode.name,
           phase: "Execução",
           startOffset: 0,
           durationDays: Number(durationDays),
-          plannedQuantity: input.plannedQuantity != null ? input.plannedQuantity.toFixed(3) : node.plannedQuantity ?? null,
+          plannedQuantity: input.plannedQuantity != null ? input.plannedQuantity.toFixed(3) : writableNode.plannedQuantity ?? null,
           productivity: input.productivity != null ? input.productivity.toFixed(3) : null,
-          unit: input.unit ?? node.unit ?? null,
-          sortOrder: node.sortOrder * 1000 + node.id,
-          versionId: approved.id,
+          unit: input.unit ?? writableNode.unit ?? null,
+          sortOrder: writableNode.sortOrder * 1000 + writableNode.id,
+          versionId: writable.id,
         };
         const [created] = await db
           .insert(scheduleActivities)
@@ -3354,6 +3437,17 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.atividadeId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
         if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        if (activity.versionId == null) {
+          throw conflict("A atividade está sem versão de plano; ela precisa ser reconciliada antes de ser editada.");
+        }
+        const [activityVersion] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, activity.versionId), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Abra uma nova versão de trabalho antes de editar a atividade.");
+        }
         const patch: Record<string, unknown> = {};
         if (input.campo === "atividade") patch.name = input.valor.trim();
         if (input.campo === "frente") patch.phase = input.valor.trim();
@@ -3367,7 +3461,7 @@ export const appRouter = router({
           if (!project || Number.isNaN(start.getTime())) throw badRequest("Data de início inválida.");
           patch.startOffset = Math.max(0, Math.floor((start.getTime() - project.plannedStart.getTime()) / 86400000));
         }
-        await db.update(scheduleActivities).set(patch).where(eq(scheduleActivities.id, input.atividadeId));
+        await db.update(scheduleActivities).set(patch).where(and(eq(scheduleActivities.id, input.atividadeId), eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, activity.versionId)));
         await recomputeProjectProgress(db, input.projectId);
         return { updated: true as const };
       }),
@@ -3377,8 +3471,10 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { asOf: new Date(), activities: [], totals: { plannedQuantity: 0, actualQuantity: 0, plannedProgress: 0, actualProgress: 0, variance: 0 } };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
         const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
@@ -3405,7 +3501,9 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
@@ -3417,8 +3515,11 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
         const inicioCalendario = localIso(project?.plannedStart ?? new Date());
@@ -3431,8 +3532,36 @@ export const appRouter = router({
         const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
         const result = calculateDeterministicCpm(enrichedActivities, dependencies);
         if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
-        const calculatedAt=new Date(); const schedule=result.schedule; const items=schedule.activities;
-        if(items.length){const ids=items.map(item=>Number(item.id)); const critCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.critical ? 1 : 0}`),sql` `); const esCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyStart ?? 0}`),sql` `); const efCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.earlyFinish ?? 0}`),sql` `); const lsCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateStart ?? 0}`),sql` `); const lfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.lateFinish ?? 0}`),sql` `); const tfCase=sql.join(items.map(item=>sql`WHEN ${Number(item.id)} THEN ${item.totalFloat ?? 0}`),sql` `); await db.transaction(async tx=>{await tx.execute(sql`UPDATE schedule_activities SET critical=CASE id ${critCase} END, earlyStart=CASE id ${esCase} END, earlyFinish=CASE id ${efCase} END, lateStart=CASE id ${lsCase} END, lateFinish=CASE id ${lfCase} END, totalFloat=CASE id ${tfCase} END, cpmCalculatedAt=${calculatedAt} WHERE projectId=${input.projectId} AND id IN (${sql.join(ids.map(id=>sql`${id}`),sql`, `)})`);});}
+        const calculatedAt = new Date();
+        const schedule = result.schedule;
+        const items = schedule.activities;
+        if (items.length) {
+          await db.transaction(async tx => {
+            for (const item of items) {
+              const activityId = Number(item.id);
+              await tx
+                .update(scheduleActivities)
+                .set({
+                  critical: item.critical ? 1 : 0,
+                  earlyStart: item.earlyStart ?? 0,
+                  earlyFinish: item.earlyFinish ?? 0,
+                  lateStart: item.lateStart ?? 0,
+                  lateFinish: item.lateFinish ?? 0,
+                  totalFloat: item.totalFloat ?? 0,
+                  cpmCalculatedAt: calculatedAt,
+                })
+                .where(
+                  and(
+                    eq(scheduleActivities.id, activityId),
+                    eq(scheduleActivities.projectId, input.projectId),
+                    currentVersion
+                      ? eq(scheduleActivities.versionId, currentVersion.id)
+                      : isNull(scheduleActivities.versionId)
+                  )
+                );
+            }
+          });
+        }
         return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
       }),
     createResource: protectedProcedure
@@ -3499,40 +3628,30 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const approved = await requireApprovedEapVersion(db, input.projectId);
-        const nodes = await db
-          .select()
-          .from(wbsNodes)
-          .where(
-            and(
-              eq(wbsNodes.projectId, input.projectId),
-              eq(wbsNodes.versionId, approved.id),
-              inArray(wbsNodes.nodeType, ["entrega", "pacote"])
-            )
-          )
-          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-        const terminalNodes = nodes;
-        if (!terminalNodes.length) {
-          return {
-            created: 0,
-            skipped: 0,
-            pending: 0,
-            message: "A EAP aprovada não possui folhas terminais elegíveis para atividades.",
-          };
-        }
-        const existing = await db
-          .select({ wbsCode: scheduleActivities.wbsCode })
-          .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId));
-        const existingCodes = new Set(existing.map(row => row.wbsCode));
-        const skipped = terminalNodes.filter(node => existingCodes.has(node.code)).length;
-        const pending = terminalNodes.filter(node => !existingCodes.has(node.code));
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,writable.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+        const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),eq(scheduleActivities.versionId,writable.id)));
+        const existingCodes = new Set(existing.map(row=>row.wbsCode));
+        const pending = nodes.filter(node=>!existingCodes.has(node.code)).map(node=>({
+          eapNodeId:node.id,
+          wbsCode:node.code,
+          name:node.name,
+          phase:node.level>2?node.code.split(".").slice(0,2).join("."):node.code,
+          requiresDecompositionReview:true,
+          duration:null,
+          plannedQuantity:node.plannedQuantity==null?null:Number(node.plannedQuantity),
+          unit:node.unit,
+          rationale:"Proposta inicial derivada da folha EAP; o engenheiro deve confirmar se o pacote representa uma única atividade ou se precisa ser decomposto em múltiplas atividades."
+        }));
         return {
-          created: 0,
-          skipped,
-          pending: pending.length,
-          message: pending.length
-            ? pending.length + " pacote(s) aguardam duração fundamentada (duração informada ou quantitativo + produtividade)."
-            : "As atividades elegíveis já existem; nenhuma nova atividade foi criada.",
+          created:0,
+          skipped:nodes.length-pending.length,
+          pending:pending.length,
+          versionId:writable.id,
+          versionNumber:writable.versionNumber,
+          sourceApprovedVersionId:approved.id,
+          proposal:pending,
+          message:pending.length?"Proposta de atividades criada em memória para revisão do engenheiro; nenhuma atividade foi persistida.":"A versão de trabalho já possui atividades para todas as folhas elegíveis; nenhuma nova proposta foi criada."
         };
       }),
     createDependency: protectedProcedure
@@ -3542,9 +3661,37 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         if (input.predecessorId === input.successorId) throw badRequest("Uma atividade não pode depender dela mesma.");
-        const rows = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, [input.predecessorId, input.successorId])));
+        const rows = await db
+          .select({
+            id: scheduleActivities.id,
+            versionId: scheduleActivities.versionId,
+          })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              inArray(scheduleActivities.id, [input.predecessorId, input.successorId])
+            )
+          );
         if (rows.length !== 2) throw forbidden("As duas atividades precisam pertencer à obra.");
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const versions = new Set(rows.map(row => row.versionId));
+        if (versions.size !== 1 || rows.some(row => row.versionId == null)) {
+          throw conflict("As duas atividades precisam pertencer à mesma versão de trabalho.");
+        }
+        const [version] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(
+            and(
+              eq(projectPlanVersions.id, rows[0].versionId!),
+              eq(projectPlanVersions.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!version || !["draft", "proposed"].includes(version.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de criar dependências.");
+        }
+        const writable = { id: rows[0].versionId!, versionNumber: 0, status: version.status as "draft" | "proposed" };
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).returning({ id: scheduleDependencies.id });
         return { id: createdId.id };
       }),
@@ -3584,7 +3731,36 @@ export const appRouter = router({
           );
         if (found.length !== ids.length)
           throw forbidden("Uma ou mais atividades não pertencem à obra.");
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const foundWithVersions = await db
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              inArray(scheduleActivities.id, ids)
+            )
+          );
+        const versions = new Set(foundWithVersions.map(row => row.versionId));
+        if (
+          versions.size !== 1 ||
+          foundWithVersions.some(row => row.versionId == null)
+        ) {
+          throw conflict("Todas as atividades da rede precisam pertencer à mesma versão de trabalho.");
+        }
+        const [version] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(
+            and(
+              eq(projectPlanVersions.id, foundWithVersions[0].versionId!),
+              eq(projectPlanVersions.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!version || !["draft", "proposed"].includes(version.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de criar dependências.");
+        }
+        const writable = { id: foundWithVersions[0].versionId!, versionNumber: 0, status: version.status as "draft" | "proposed" };
         await db.insert(scheduleDependencies).values(
           input.dependencies.map(item => ({
             projectId: input.projectId,
@@ -3622,7 +3798,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const activityIds = input.updates.map(item => item.activityId);
         const found = await db
-          .select({ id: scheduleActivities.id })
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
           .from(scheduleActivities)
           .where(
             and(
@@ -3632,31 +3808,41 @@ export const appRouter = router({
           );
         if (found.length !== new Set(activityIds).size)
           throw forbidden("Uma ou mais atividades não pertencem à obra.");
-        const idsSql = sql.join(activityIds.map(id => sql`${id}`), sql`, `);
-        const applyField = async (field: string, values: Array<[number, unknown]>) => {
-          if (!values.length) return;
-          const caseSql = sql.join(values.map(([id, value]) => sql`WHEN ${id} THEN ${value}`), sql` `);
-          await db.execute(sql`
-            UPDATE schedule_activities
-            SET ${sql.raw(field)} = CASE id ${caseSql} END,
-                cpmCalculatedAt = NULL
-            WHERE projectId = ${input.projectId}
-              AND id IN (${idsSql})
-          `);
-        };
-        await db.transaction(async () => {
-          const pick = (key: keyof (typeof input.updates)[number]) =>
-            input.updates
-              .filter(item => item[key] !== undefined)
-              .map(item => [item.activityId, item[key]] as [number, unknown]);
-          await applyField("name", pick("name"));
-          await applyField("phase", pick("phase"));
-          await applyField("startOffset", pick("startOffset"));
-          await applyField("durationDays", pick("durationDays"));
-          await applyField("plannedQuantity", pick("plannedQuantity"));
-          await applyField("productivity", pick("productivity"));
-          await applyField("progress", pick("progress"));
-          await applyField("status", pick("status"));
+        const versionIds = [...new Set(found.map(row => row.versionId))];
+        if (versionIds.length !== 1 || versionIds[0] == null)
+          throw conflict("As atividades precisam pertencer a uma única versão de trabalho.");
+        const [version] = await db
+          .select({ id: projectPlanVersions.id, status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, versionIds[0]), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!version || !["draft", "proposed"].includes(version.status))
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de editar.");
+        await db.transaction(async tx => {
+          for (const item of input.updates) {
+            const patch: Record<string, unknown> = { cpmCalculatedAt: null };
+            if (item.name !== undefined) patch.name = item.name;
+            if (item.phase !== undefined) patch.phase = item.phase;
+            if (item.startOffset !== undefined) patch.startOffset = item.startOffset;
+            if (item.durationDays !== undefined) patch.durationDays = item.durationDays;
+            if (item.plannedQuantity !== undefined)
+              patch.plannedQuantity = item.plannedQuantity.toFixed(3);
+            if (item.productivity !== undefined)
+              patch.productivity = item.productivity.toFixed(3);
+            if (item.progress !== undefined) patch.progress = item.progress;
+            if (item.status !== undefined) patch.status = item.status;
+
+            await tx
+              .update(scheduleActivities)
+              .set(patch)
+              .where(
+                and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, versionIds[0]!),
+                  eq(scheduleActivities.id, item.activityId)
+                )
+              );
+          }
         });
         return { updated: input.updates.length };
       }),
@@ -3666,9 +3852,12 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [activity] = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
+        const [activity] = await db.select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId }).from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
         const [resource] = await db.select({ id: planningResources.id }).from(planningResources).where(and(eq(planningResources.id, input.resourceId), eq(planningResources.projectId, input.projectId))).limit(1);
         if (!activity || !resource) throw forbidden("Atividade ou recurso não pertence à obra.");
+        if (activity.versionId == null) throw conflict("A atividade está sem versão de plano.");
+        const [activityVersion] = await db.select({ status: projectPlanVersions.status }).from(projectPlanVersions).where(and(eq(projectPlanVersions.id, activity.versionId), eq(projectPlanVersions.projectId, input.projectId))).limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status)) throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de alocar recursos.");
         const [createdId] = await db.insert(activityResourceAllocations).values({ activityId: input.activityId, resourceId: input.resourceId, quantity: input.quantity.toFixed(3), productivity: input.productivity?.toFixed(3) }).returning({ id: activityResourceAllocations.id });
         return { id: createdId.id };
       }),
@@ -3703,7 +3892,7 @@ export const appRouter = router({
         if (!resource) throw forbidden("Recurso não pertence à obra.");
         const activityIds = Array.from(new Set(input.allocations.map(item => item.activityId)));
         const validActivities = await db
-          .select({ id: scheduleActivities.id })
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
           .from(scheduleActivities)
           .where(
             and(
@@ -3713,6 +3902,12 @@ export const appRouter = router({
           );
         if (validActivities.length !== activityIds.length)
           throw forbidden("Uma ou mais atividades não pertencem à obra.");
+        const versionIds = [...new Set(validActivities.map(activity => activity.versionId))];
+        if (versionIds.length !== 1 || versionIds[0] == null)
+          throw conflict("As atividades precisam pertencer a uma única versão de trabalho.");
+        const [activityVersion] = await db.select({ status: projectPlanVersions.status }).from(projectPlanVersions).where(and(eq(projectPlanVersions.id, versionIds[0]), eq(projectPlanVersions.projectId, input.projectId))).limit(1);
+        if (!activityVersion || !["draft", "proposed"].includes(activityVersion.status))
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de alocar recursos.");
         await db
           .insert(activityResourceAllocations)
           .values(
@@ -3764,7 +3959,9 @@ export const appRouter = router({
           : [];
         const bac = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
@@ -3993,7 +4190,9 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId))).limit(1);
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionId = currentVersion?.id ?? null;
+        const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).limit(1);
         if (!activity) throw notFound("Atividade não encontrada.");
         const float = activity.totalFloat ?? 0;
         const current = activity.earlyStart ?? activity.startOffset;
@@ -4003,14 +4202,14 @@ export const appRouter = router({
         if (input.newStartOffset < current || input.newStartOffset > current + float) {
           throw badRequest(`Deslocamento fora da folga total (${float} dia(s)).`);
         }
-        await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId)));
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
-        const all = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
+        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), versionId == null ? isNull(scheduleDependencies.versionId) : eq(scheduleDependencies.versionId, versionId)));
+        const all = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).orderBy(scheduleActivities.sortOrder);
         const result = calculateDeterministicCpm(all, dependencies);
         if (result.valid && result.schedule) {
           const calculatedAt = new Date();
           for (const item of result.schedule.activities) {
-            await db.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId)));
+            await db.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
           }
         }
         return { ok: true as const, newStartOffset: input.newStartOffset, cpmValid: result.valid };
