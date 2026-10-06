@@ -10,6 +10,7 @@ import { AbaCatalogo } from "@/components/AbaCatalogo";
 import { AbaEap } from "@/components/AbaEap";
 import { AbaDependencias } from "@/components/AbaDependencias";
 import { AbaCpm } from "@/components/AbaCpm";
+import { AbaBaseline } from "@/components/AbaBaseline";
 import { AbaProducao } from "@/components/AbaProducao";
 import { GradeCronograma } from "@/components/GradeCronograma";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
@@ -509,6 +510,10 @@ function Obra({
           </>
         ) : aba === "dependencias" ? (
           <AbaDependencias projetoId={projetoId} />
+        ) : aba === "cpm" ? (
+          <AbaCpm projetoId={projetoId} />
+        ) : aba === "baseline" ? (
+          <AbaBaseline projetoId={projetoId} />
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
         ) : aba === "linha-balanco" ? (
