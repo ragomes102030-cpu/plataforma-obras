@@ -339,6 +339,79 @@ describe("runProjectOrchestrator", () => {
     ]));
   });
 
+  it("permite uma ordem operacional explícita executar atividade e dependência sem segunda confirmação", async () => {
+    const calls: string[] = [];
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Crie a atividade Mobilização com 5 dias e faça a dependência com a próxima atividade." }],
+      {
+        mcpProjectIds: { cronograma: "aurora-externo" },
+        deps: {
+          listTools: async () => ({
+            eap: [],
+            cronograma: [
+              { name: "criar_atividade", description: "Cria atividade", inputSchema: { type: "object", properties: {} } },
+              { name: "criar_dependencia", description: "Cria dependência", inputSchema: { type: "object", properties: {} } },
+            ],
+            ganttLob: [],
+          }),
+          callTool: async (_domain, toolName, args) => {
+            calls.push(toolName);
+            expect(args.project_id).toBe("aurora-externo");
+            return { content: [{ type: "text", text: JSON.stringify({ ok: true, toolName }) }] };
+          },
+          callLlm: async ({ tools }) => {
+            const names = tools.map(tool => tool.function.name);
+            if (calls.length === 0) {
+              expect(names).toContain("criar_atividade");
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "create-activity",
+                      type: "function",
+                      function: { name: "criar_atividade", arguments: '{"name":"Mobilização","durationDays":5}' },
+                    }],
+                  },
+                }],
+              };
+            }
+            if (calls.length === 1) {
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "create-dependency",
+                      type: "function",
+                      function: { name: "criar_dependencia", arguments: '{"predecessorId":1,"successorId":2,"type":"FS","lagDays":0}' },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content: "Concluído: atividade criada e dependência registrada.",
+                },
+              }],
+            };
+          },
+        },
+      }
+    );
+    expect(result.readOnly).toBe(false);
+    expect(calls).toEqual(["criar_atividade", "criar_dependencia"]);
+  });
+
   it("recusa uma ferramenta de escrita mesmo que o modelo tente chamá-la", async () => {
     await expect(
       runProjectOrchestrator(
