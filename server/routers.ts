@@ -1325,11 +1325,12 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         return db.transaction(async tx => {
           const all = await tx
             .select()
             .from(wbsNodes)
-            .where(eq(wbsNodes.projectId, input.projectId));
+            .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
           const node = all.find(item => item.id === input.nodeId);
           const parent = input.targetParentId === null
             ? null
@@ -1402,6 +1403,7 @@ export const appRouter = router({
               INNER JOIN wbs_nodes AS node ON node.id = activity.wbsNodeId
               SET activity.wbsCode = node.code, activity.eapRef = node.code
               WHERE activity.projectId = ${input.projectId}
+                AND activity.versionId = ${writable.id}
                 AND activity.wbsNodeId IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
             `);
           }
