@@ -3599,7 +3599,7 @@ export const appRouter = router({
                   lateStart: item.lateStart ?? 0,
                   lateFinish: item.lateFinish ?? 0,
                   totalFloat: item.totalFloat ?? 0,
-                  cpmCalculatedAt: calculatedAt,
+                  cpmCalculatedAt: sql`CURRENT_TIMESTAMP`,
                 })
                 .where(
                   and(
