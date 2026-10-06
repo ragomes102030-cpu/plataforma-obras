@@ -69,9 +69,7 @@ export const ABAS: readonly AbaDoSistema[] = [
   {
     id: "baseline",
     rotulo: "BASELINE",
-    status: "pendente",
-    falta:
-      "A linha de base congela uma versão aprovada do planejamento para comparação posterior entre planejado e realizado.",
+    status: "pronta",
   },
   {
     id: "gantt",
