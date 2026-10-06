@@ -594,6 +594,34 @@ async function assertAvailableWbsCode(
   }
 }
 
+async function resolveWbsNodeInVersion(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  nodeId: number,
+  versionId: number
+) {
+  const [source] = await db
+    .select({ id: wbsNodes.id, code: wbsNodes.code, versionId: wbsNodes.versionId })
+    .from(wbsNodes)
+    .where(and(eq(wbsNodes.id, nodeId), eq(wbsNodes.projectId, projectId)))
+    .limit(1);
+  if (!source) return null;
+  if (source.versionId === versionId) return source;
+
+  const [mapped] = await db
+    .select({ id: wbsNodes.id, code: wbsNodes.code, versionId: wbsNodes.versionId })
+    .from(wbsNodes)
+    .where(
+      and(
+        eq(wbsNodes.projectId, projectId),
+        eq(wbsNodes.versionId, versionId),
+        eq(wbsNodes.code, source.code)
+      )
+    )
+    .limit(1);
+  return mapped ?? null;
+}
+
 function parseJsonValue(value: string | null | undefined): unknown {
   if (!value) return null;
   try {
@@ -1248,9 +1276,9 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const [node] = await db.select({ id: wbsNodes.id }).from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
+        const node = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
         if (!node) throw notFound("Item da EAP não encontrado na versão de trabalho.");
-        await assertAvailableWbsCode(db, input.projectId, input.code, input.nodeId, writable.id);
+        await assertAvailableWbsCode(db, input.projectId, input.code, node.id, writable.id);
         return db.transaction(async tx => {
           await tx
             .update(wbsNodes)
@@ -1262,7 +1290,7 @@ export const appRouter = router({
               plannedQuantity: input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
               ...(input.decompositionBasis !== undefined && { decompositionBasis: input.decompositionBasis }), ...(input.description !== undefined && { description: input.description }), ...(input.inclusions !== undefined && { inclusions: input.inclusions }), ...(input.exclusions !== undefined && { exclusions: input.exclusions }), ...(input.location !== undefined && { location: input.location }), ...(input.responsible !== undefined && { responsible: input.responsible }), ...(input.acceptanceCriteria !== undefined && { acceptanceCriteria: input.acceptanceCriteria }), ...(input.scopeStatus !== undefined && { scopeStatus: input.scopeStatus }),
             })
-            .where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.versionId, writable.id)));
+            .where(and(eq(wbsNodes.id, node.id), eq(wbsNodes.versionId, writable.id)));
           await tx
             .update(scheduleActivities)
             .set({ wbsCode: input.code, eapRef: input.code })
@@ -1270,7 +1298,7 @@ export const appRouter = router({
               and(
                 eq(scheduleActivities.projectId, input.projectId),
                 eq(scheduleActivities.versionId, writable.id),
-                eq(scheduleActivities.wbsNodeId, input.nodeId)
+                eq(scheduleActivities.wbsNodeId, node.id)
               )
             );
           return { updated: true as const };
@@ -1292,7 +1320,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const parent = input.parentId
-          ? (await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.parentId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1))[0]
+          ? await resolveWbsNodeInVersion(db, input.projectId, input.parentId, writable.id)
           : undefined;
         if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence à versão de trabalho desta obra.");
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
@@ -1328,17 +1356,24 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const resolvedNode = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        const resolvedParent = input.targetParentId === null
+          ? null
+          : await resolveWbsNodeInVersion(db, input.projectId, input.targetParentId, writable.id);
+        if (!resolvedNode) throw notFound("Item da EAP não encontrado nesta obra.");
+        if (input.targetParentId !== null && !resolvedParent) throw badRequest("Destino inválido.");
+
         return db.transaction(async tx => {
           const all = await tx
             .select()
             .from(wbsNodes)
             .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
-          const node = all.find(item => item.id === input.nodeId);
-          const parent = input.targetParentId === null
+          const node = all.find(item => item.id === resolvedNode.id);
+          const parent = resolvedParent === null
             ? null
-            : all.find(item => item.id === input.targetParentId) ?? null;
+            : all.find(item => item.id === resolvedParent.id) ?? null;
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
-          if (input.targetParentId !== null && !parent) throw badRequest("Destino inválido.");
+          if (resolvedParent !== null && !parent) throw badRequest("Destino inválido.");
 
           const byId = new Map(all.map(item => [item.id, item]));
           let ancestor = parent;
@@ -1438,7 +1473,9 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
+        const mapped = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        if (!mapped) throw notFound("Item da EAP não encontrado nesta obra.");
+        const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, mapped.id), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
         const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
@@ -1456,7 +1493,9 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, input.nodeId), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
+        const mapped = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
+        if (!mapped) throw notFound("Item da EAP não encontrado nesta obra.");
+        const [node] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, mapped.id), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
         const all = await db.select({ id: wbsNodes.id, code: wbsNodes.code }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
         const ids = all.filter(item => item.id === node.id || item.code.startsWith(`${node.code}.`)).map(item => item.id);
