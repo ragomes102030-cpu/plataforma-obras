@@ -140,6 +140,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const mostrarPropostas = filtro !== "criadas";
   const mostrarCriadas = filtro !== "pendentes";
+  const temLinhasVisiveis =
+    (mostrarPropostas && propostaFiltrada.length > 0) ||
+    (mostrarCriadas && atividadesFiltradas.length > 0);
 
   return (
     <section className="pl-atividades-page">
@@ -285,7 +288,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
               </tr>
             ))}
 
-            {((mostrarPropostas && propostaFiltrada.length === 0) || (mostrarCriadas && atividadesFiltradas.length === 0)) && (
+            {!temLinhasVisiveis && (
               <tr>
                 <td colSpan={9} className="pl-atividades-empty">
                   <strong>{busca ? "Nenhum resultado encontrado." : filtro === "pendentes" ? "Nenhuma atividade aguardando revisão." : "Nenhuma atividade criada ainda."}</strong>
