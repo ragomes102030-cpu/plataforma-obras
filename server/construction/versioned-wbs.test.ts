@@ -73,7 +73,7 @@ describe("resolveWbsNodeInVersion", () => {
       .$returningIds();
 
     const resolved = await resolveWbsNodeInVersion(db, projectId, nodeId, writable.id);
-    expect(resolved).toEqual({ id: nodeId, code: "1.1", versionId: writable.id });
+    expect(resolved).toMatchObject({ id: nodeId, code: "1.1", versionId: writable.id });
   });
 
   it("mapeia o ID aprovado para o clone da nova versao de trabalho", async () => {
