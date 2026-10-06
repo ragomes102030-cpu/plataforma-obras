@@ -477,7 +477,6 @@ function Obra({
         <div className="arquimedes-workbar">
           <div className="arquimedes-workbar-title">
             <span className="arquimedes-kicker">PLANEJAMENTO DA OBRA</span>
-            <strong>{etapaAtual}</strong>
           </div>
           <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
             <span className="arquimedes-trilha-label">Fluxo:</span>
