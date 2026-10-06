@@ -85,10 +85,11 @@ export function PainelPlanejamento({ projetoId }: Props) {
   }, [activities]);
 
   const cpmExecutadoAgora = calcular.data?.valid === true;
+  const semRede = activities.length === 0;
+  const cpmValido = calcular.data?.valid === true && !semRede;
   const podeCapturarBaseline =
-    cpmExecutadoAgora &&
-    !calcular.isPending &&
-    calcular.data?.valid === true;
+    cpmValido &&
+    !calcular.isPending;
 
   const executarCpm = () => {
     setMensagem(null);
@@ -194,11 +195,13 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
         <div className={resumo.cpmStale ? "alerta" : ""}>
           <span>Estado do CPM</span>
-          <strong>{resumo.cpmStale ? "Desatualizado" : "Calculado"}</strong>
+          <strong>{semRede ? "Sem rede" : resumo.cpmStale ? "Desatualizado" : "Calculado"}</strong>
           <small>
-            {resumo.cpmStale
-              ? "Edite as atividades e recalcule antes de congelar"
-              : "rede e datas coerentes com a última execução"}
+            {semRede
+              ? "Crie atividades antes de calcular o caminho crítico"
+              : resumo.cpmStale
+                ? "Edite as atividades e recalcule antes de congelar"
+                : "rede e datas coerentes com a última execução"}
           </small>
         </div>
       </div>

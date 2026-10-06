@@ -106,8 +106,16 @@ export default function Home() {
 
   useEffect(() => {
     const openConfig = () => setDestino("config");
+    const openEap = () => { setDestino("obra"); setAba("eap"); };
+    const openAtividades = () => { setDestino("obra"); setAba("atividades"); };
     window.addEventListener("abrir-configuracao-llm", openConfig);
-    return () => window.removeEventListener("abrir-configuracao-llm", openConfig);
+    window.addEventListener("abrir-aba-eap", openEap);
+    window.addEventListener("abrir-aba-atividades", openAtividades);
+    return () => {
+      window.removeEventListener("abrir-configuracao-llm", openConfig);
+      window.removeEventListener("abrir-aba-eap", openEap);
+      window.removeEventListener("abrir-aba-atividades", openAtividades);
+    };
   }, []);
 
   return (
@@ -453,7 +461,9 @@ function Obra({
                   >
                     {icones[a.id] ?? <Activity size={17} />}
                     {!sidebarRecolhida && <span>{a.rotulo}</span>}
-                    {!sidebarRecolhida && a.status === "pendente" && <small>pendente</small>}
+                    {!sidebarRecolhida && a.status === "pendente" && (
+  <span className="xl-sidebar-status" title={a.falta ?? "Etapa ainda não disponível"} aria-label="Etapa pendente">●</span>
+)}
                   </button>
                 );
               })}
@@ -467,9 +477,9 @@ function Obra({
         <div className="arquimedes-workbar">
           <div className="arquimedes-workbar-title">
             <span className="arquimedes-kicker">PLANEJAMENTO DA OBRA</span>
-            <strong>{etapaAtual}</strong>
           </div>
           <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
+            <span className="arquimedes-trilha-label">Fluxo:</span>
             {["Escopo", "EAP", "Atividades", "Dependências", "CPM", "Baseline"].map((etapa, index) => (
               <Fragment key={etapa}>
                 {index > 0 && <span className="arquimedes-trilha-seta">→</span>}

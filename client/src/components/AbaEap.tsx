@@ -195,8 +195,8 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     if (nos.length === 0) return;
     setAberto(antigo => {
       if (antigo.size > 0) return antigo;
-      const grupos = nos.filter(n => n.nodeType !== "entrega").map(n => n.id);
-      return grupos.length ? new Set(grupos) : antigo;
+      const primeiroNivel = nos.filter(n => n.parentId === null).map(n => n.id);
+      return primeiroNivel.length ? new Set(primeiroNivel) : antigo;
     });
   }, [nos]);
 
