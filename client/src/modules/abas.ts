@@ -59,9 +59,7 @@ export const ABAS: readonly AbaDoSistema[] = [
   {
     id: "dependencias",
     rotulo: "DEPENDÊNCIAS",
-    status: "pendente",
-    falta:
-      "As relações entre atividades precisam ser definidas antes do CPM. A etapa deve validar predecessoras, sucessoras, tipo de vínculo e ausência de ciclos.",
+    status: "pronta",
   },
   {
     id: "cpm",
