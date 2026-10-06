@@ -151,11 +151,13 @@ describe("transição EAP aprovada → atividades", () => {
     expect(painel).toMatch(/Nenhuma\s+foi\s+persistida\s+automaticamente/);
   });
 
-  it("a atividade só pode ser criada a partir de uma folha EAP aprovada", () => {
+  it("a proposta usa IDs da mesma versão EAP que a criação valida", () => {
     const routers = readFileSync("server/routers.ts", "utf-8");
     expect(routers).toMatch(/generateFromEap:\s*protectedProcedure/);
     expect(routers).toMatch(/criarAtividadeDaFolha:\s*protectedProcedure/);
-    expect(routers).toMatch(/requireApprovedEapVersion\(db, input\.projectId\)/);
+    expect(routers).toMatch(/const approved = await requireApprovedEapVersion\(db, input\.projectId\);/);
+    expect(routers).toMatch(/eq\(wbsNodes\.versionId,approved\.id\).*inArray\(wbsNodes\.nodeType,\["entrega","pacote"\]\)/);
+    expect(routers).toMatch(/eq\(wbsNodes\.versionId, approved\.id\)/);
     expect(routers).toMatch(/Somente uma folha terminal da EAP pode virar atividade/);
   });
 });
