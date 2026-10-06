@@ -106,8 +106,16 @@ export default function Home() {
 
   useEffect(() => {
     const openConfig = () => setDestino("config");
+    const openEap = () => { setDestino("obra"); setAba("eap"); };
+    const openAtividades = () => { setDestino("obra"); setAba("atividades"); };
     window.addEventListener("abrir-configuracao-llm", openConfig);
-    return () => window.removeEventListener("abrir-configuracao-llm", openConfig);
+    window.addEventListener("abrir-aba-eap", openEap);
+    window.addEventListener("abrir-aba-atividades", openAtividades);
+    return () => {
+      window.removeEventListener("abrir-configuracao-llm", openConfig);
+      window.removeEventListener("abrir-aba-eap", openEap);
+      window.removeEventListener("abrir-aba-atividades", openAtividades);
+    };
   }, []);
 
   return (
