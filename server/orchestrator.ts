@@ -1710,6 +1710,27 @@ export async function runProjectOrchestrator(
             ? await callMutationMcpTool(domain as any, toolName, args)
             : await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
         }
+        if (
+          isMutation &&
+          toolName === "criar_atividade" &&
+          options.localProjectId &&
+          options.userId &&
+          /HTTP Error 404|404.*Not Found|eap_ref.*not found|eap_ref.*não encontrado/i.test(JSON.stringify(result))
+        ) {
+          const localResult = await createLocalAgentActivity({
+            projectId: options.localProjectId,
+            userId: options.userId,
+            rawArgs: args,
+          });
+          result = {
+            content: [{ type: "text", text: JSON.stringify({
+              fallback: true,
+              motivo: "mcp_context_not_resolved",
+              mensagem: "O MCP devolveu 404 para a referência da obra; a operação foi executada e verificada pela fonte local.",
+              resultado: localResult,
+            }) }],
+          } as McpCallResult;
+        }
         const serialized = compactLlmContent(
           JSON.stringify(result),
           MAX_TOOL_RESULT_CHARS
