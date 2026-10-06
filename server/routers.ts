@@ -59,6 +59,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
+import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -592,34 +593,6 @@ async function assertAvailableWbsCode(
   if (existingCode) {
     throw conflict(`O código WBS ${code} já está em uso nesta versão da obra.`);
   }
-}
-
-async function resolveWbsNodeInVersion(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  projectId: number,
-  nodeId: number,
-  versionId: number
-) {
-  const [source] = await db
-    .select({ id: wbsNodes.id, code: wbsNodes.code, versionId: wbsNodes.versionId })
-    .from(wbsNodes)
-    .where(and(eq(wbsNodes.id, nodeId), eq(wbsNodes.projectId, projectId)))
-    .limit(1);
-  if (!source) return null;
-  if (source.versionId === versionId) return source;
-
-  const [mapped] = await db
-    .select({ id: wbsNodes.id, code: wbsNodes.code, versionId: wbsNodes.versionId })
-    .from(wbsNodes)
-    .where(
-      and(
-        eq(wbsNodes.projectId, projectId),
-        eq(wbsNodes.versionId, versionId),
-        eq(wbsNodes.code, source.code)
-      )
-    )
-    .limit(1);
-  return mapped ?? null;
 }
 
 function parseJsonValue(value: string | null | undefined): unknown {
