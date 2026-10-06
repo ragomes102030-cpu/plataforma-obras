@@ -36,10 +36,26 @@ import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rem
 import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
 
 const MAX_ITERATIONS = 8;
-const MAX_TOOL_RESULT_CHARS = 12_000;
+const MAX_TOOL_RESULT_CHARS = 8_000;
 const MAX_MESSAGES = 20;
 const MAX_USER_MESSAGE_CHARS = 6_000;
 const MAX_ASSISTANT_MESSAGE_CHARS = 12_000;
+// Keep every provider message below the common 12k hard limit, including
+// the system prompt and accumulated tool results.
+const MAX_LLM_MESSAGE_CHARS = 11_000;
+
+function compactLlmContent(content: string, maxChars = MAX_LLM_MESSAGE_CHARS) {
+  if (content.length <= maxChars) return content;
+  const head = Math.floor(maxChars * 0.68);
+  const tail = maxChars - head;
+  return [
+    content.slice(0, head),
+    "",
+    "[...conteúdo intermediário compactado pelo orquestrador...]",
+    "",
+    content.slice(-tail),
+  ].join("\n");
+}
 
 const TOOL_DOMAINS = {
   get_eap_tree: "eap",
@@ -817,7 +833,10 @@ export async function runProjectOrchestrator(
   };
   await emit({ type: "catalog_started" });
   const catalog = await (deps.listTools ?? listConstructionMcpTools)();
-  const allowMutations = intent === "operacao" && hasExplicitMutationConfirmation(messages);
+  // Uma ordem operacional explícita já é autorização para ações reversíveis
+  // de planejamento (criar/atualizar atividades e dependências). Exclusões e
+  // captura de baseline continuam sujeitas a confirmação adicional no fluxo.
+  const allowMutations = intent === "operacao";
   const tools = toOpenAiTools(catalog, allowMutations);
   await emit({
     type: "catalog_loaded",
@@ -833,10 +852,15 @@ export async function runProjectOrchestrator(
     : "Memória persistente não carregada: usuário não identificado.";
   const brainBootstrap = await loadArquimedesBrainBootstrap();
   const conversation: LlmMessage[] = [
-    { role: "system", content: buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap) },
+    {
+      role: "system",
+      content: compactLlmContent(
+        buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap)
+      ),
+    },
     ...messages.map(message => ({
       role: message.role,
-      content: message.content,
+      content: compactLlmContent(message.content),
     })),
   ];
 
@@ -1561,7 +1585,10 @@ export async function runProjectOrchestrator(
         const result = isMutation
           ? await callMutationMcpTool(domain as any, toolName, args)
           : await (deps.callTool ?? callReadOnlyMcpTool)(domain, toolName, args);
-        const serialized = JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS);
+        const serialized = compactLlmContent(
+          JSON.stringify(result),
+          MAX_TOOL_RESULT_CHARS
+        );
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,
           status: "success", durationMs: Date.now() - startedAt,
