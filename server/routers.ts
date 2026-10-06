@@ -119,6 +119,7 @@ import {
 import {
   approveCurrentPlanVersion,
   ensureWritablePlanVersion,
+  getCurrentPlanVersion,
   listPlanVersionDetails,
 } from "./construction/plan-versions";
 
