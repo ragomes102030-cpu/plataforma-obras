@@ -4842,7 +4842,7 @@ export const appRouter = router({
             evidence
           ),
           messages: messagesWithHistory,
-          mcpProjectIds,
+          mcpProjectIds: resolvedMcpProjectIds,
           requestId: requestIdFrom(ctx),
         });
       }),
