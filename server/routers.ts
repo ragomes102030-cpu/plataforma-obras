@@ -4804,32 +4804,6 @@ export const appRouter = router({
           input.messages,
           20,
         );
-        const resolvedMcpProjectIds: Record<string, string> = {
-          ...(input.mcpProjectId
-            ? {
-                eap: input.mcpProjectId,
-                cronograma: input.mcpProjectId,
-                ganttLob: input.mcpProjectId,
-              }
-            : {}),
-          ...(input.mcpProjectIds ?? {}),
-        };
-        if (db) {
-          const mappings = await db
-            .select({
-              provider: projectMcpIntegrations.provider,
-              externalProjectId: projectMcpIntegrations.externalProjectId,
-            })
-            .from(projectMcpIntegrations)
-            .where(eq(projectMcpIntegrations.projectId, input.projectId));
-          for (const mapping of mappings) {
-            const externalProjectId = mapping.externalProjectId?.trim();
-            if (externalProjectId && externalProjectId.toLowerCase() !== "default") {
-              resolvedMcpProjectIds[mapping.provider] = externalProjectId;
-            }
-          }
-        }
-
         return startAgentExecution({
           db,
           projectId: input.projectId,
@@ -4947,7 +4921,7 @@ export const appRouter = router({
             coordinator
           ),
           messages: input.messages,
-          mcpProjectIds: input.mcpProjectIds,
+          mcpProjectIds: input.mcpProjectIds ?? {},
           requestId: requestIdFrom(ctx),
         });
       }),
