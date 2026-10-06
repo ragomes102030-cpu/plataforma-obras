@@ -348,6 +348,7 @@ async function executeAgentRun(
       input.context,
       input.messages,
       {
+        localProjectId: input.projectId,
         mcpProjectIds: input.mcpProjectIds,
         taskId: requestId,
         maxIterations: ENV.agentMaxIterations,
