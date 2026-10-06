@@ -58,6 +58,7 @@ import { localDatabaseEvidenceSource } from "./construction/local-database-sourc
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
+import { validateDependencies } from "./construction/dependency-validator";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
@@ -3692,6 +3693,41 @@ export const appRouter = router({
           throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de criar dependências.");
         }
         const writable = { id: rows[0].versionId!, versionNumber: 0, status: version.status as "draft" | "proposed" };
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, writable.id)));
+        const selected = activities.filter(activity => [input.predecessorId, input.successorId].includes(activity.id));
+        if (selected.some(activity => Number(activity.durationDays) < 1)) {
+          throw badRequest("Todas as atividades da rede precisam ter duração válida antes de criar dependências.");
+        }
+        const current = await db
+          .select()
+          .from(scheduleDependencies)
+          .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, writable.id)));
+        const duplicate = current.some(item =>
+          item.predecessorId === input.predecessorId &&
+          item.successorId === input.successorId &&
+          item.type === input.type &&
+          Number(item.lag ?? 0) === input.lag
+        );
+        if (duplicate) throw conflict("Esta dependência já existe na versão de trabalho.");
+        const candidate = {
+          id: "candidate",
+          projectId: input.projectId,
+          externalId: null,
+          predecessorId: String(input.predecessorId),
+          successorId: String(input.successorId),
+          type: input.type,
+          lag: input.lag,
+        };
+        const validation = validateDependencies(activities, [
+          ...current,
+          candidate,
+        ]);
+        if (!validation.valid) {
+          throw badRequest(validation.issues.find(issue => issue.severity === "error")?.message ?? "A dependência criaria uma rede inválida.");
+        }
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).returning({ id: scheduleDependencies.id });
         return { id: createdId.id };
       }),
