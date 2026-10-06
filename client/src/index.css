@@ -6384,3 +6384,148 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
   .pl-atividades-search { width:100%; }
   .pl-atividades-filtros { overflow:auto; }
 }
+
+
+/* ==========================================================================
+   ESCOPO — workspace profissional de definição e rastreabilidade
+   ========================================================================== */
+.scopo-workspace {
+  display:flex; flex-direction:column; gap:10px; min-width:0; height:100%;
+  padding:14px 16px 10px; box-sizing:border-box; color:#172b43;
+}
+.scopo-workspace-header {
+  display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding-bottom:2px;
+}
+.scopo-workspace-title { min-width:0; }
+.scopo-kicker {
+  display:block; color:#60758a;
+  font:800 9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.11em;
+}
+.scopo-workspace-title h1 {
+  margin:5px 0 3px; color:#0a1628; font-size:21px; line-height:1.1; letter-spacing:-.025em;
+}
+.scopo-workspace-title p { margin:0; color:#66798c; font-size:11px; }
+.scopo-header-actions { display:flex; gap:7px; flex:0 0 auto; }
+.scopo-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; height:31px; padding:0 10px;
+  border-radius:5px; font:700 11px/1 inherit; cursor:pointer;
+}
+.scopo-btn.secondary { border:1px solid #aebdcc; background:#fff; color:#244563; }
+.scopo-btn:hover { background:#f0f5fa; border-color:#7189a2; }
+
+.scopo-flow {
+  display:flex; align-items:center; gap:7px; min-height:29px; padding:0 9px;
+  border:1px solid #d5dee7; background:#f6f8fa; color:#738496;
+  font-size:10px; white-space:nowrap; overflow:auto;
+}
+.scopo-flow strong { color:#17385f; }
+.scopo-flow .ativo { color:#17385f; font-weight:800; }
+
+.scopo-metrics {
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px;
+  background:#cfd9e3; border:1px solid #cfd9e3;
+}
+.scopo-metrics > div { min-width:0; padding:8px 10px; background:#fff; }
+.scopo-metrics span,.scopo-metrics small { display:block; }
+.scopo-metrics span {
+  color:#6d8092; font:800 8px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  letter-spacing:.07em; text-transform:uppercase;
+}
+.scopo-metrics strong { display:block; margin-top:4px; color:#122b47; font-size:17px; line-height:1; }
+.scopo-metrics small { margin-top:3px; color:#8b9aa8; font-size:9px; }
+.scopo-metrics .attention strong { color:#a16f2d; }
+
+.scopo-toolbar {
+  display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:34px;
+}
+.scopo-toolbar-title { display:flex; align-items:baseline; gap:9px; min-width:0; }
+.scopo-toolbar-title strong { color:#233d57; font-size:11px; }
+.scopo-toolbar-title span { color:#8291a0; font-size:9px; }
+.scopo-readonly {
+  flex:0 0 auto; padding:4px 7px; border:1px solid #d8e0e7; background:#f7f9fb;
+  color:#758696; font:800 8px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+.scopo-table-wrap {
+  flex:1 1 auto; min-height:160px; overflow:auto; border:1px solid #b9c7d5;
+  background:#fff; box-shadow:0 1px 3px rgba(10,22,40,.05);
+}
+.scopo-table {
+  width:100%; min-width:850px; border-collapse:separate; border-spacing:0; table-layout:fixed; font-size:10.5px;
+}
+.scopo-table th {
+  position:sticky; top:0; z-index:3; height:28px; padding:0 7px;
+  background:#e8eef4; border-right:1px solid #cbd6e1; border-bottom:2px solid #aebdcc;
+  color:#3d5268; text-align:left; font:800 9px/1 inherit; letter-spacing:.04em; text-transform:uppercase;
+}
+.scopo-table td {
+  height:38px; padding:0 7px; border-right:1px solid #e5ebf0; border-bottom:1px solid #e0e6ec;
+  color:#53687b; vertical-align:middle; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+}
+.scopo-table tbody tr:hover td { background:#f5f9fc; }
+.scopo-table .codigo-col { width:65px; }
+.scopo-table .elemento-col { width:27%; }
+.scopo-table .mono { color:#77899a; font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+.scopo-table td strong { color:#183653; font-weight:750; }
+.scopo-tag {
+  display:inline-flex; align-items:center; height:18px; padding:0 6px; border:1px solid #ccd8e2;
+  border-radius:3px; background:#f4f7fa; color:#5f7488;
+  font:800 8px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+.scopo-status {
+  display:inline-flex; align-items:center; height:19px; padding:0 7px; border-radius:10px;
+  background:#e9f4ed; color:#3f7353; font-size:8.5px; font-weight:800;
+}
+.scopo-status.pendente { background:#fff3d9; color:#8b6b2f; }
+
+.scopo-trace-grid {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;
+}
+.scopo-detail {
+  border:1px solid #d0dbe5; background:#fff;
+}
+.scopo-detail summary {
+  min-height:31px; box-sizing:border-box; padding:8px 10px; cursor:pointer;
+  color:#294760; font-size:10px; font-weight:800; list-style:none;
+}
+.scopo-detail summary::-webkit-details-marker { display:none; }
+.scopo-detail summary::after { content:"+"; float:right; color:#8293a2; }
+.scopo-detail[open] summary::after { content:"−"; }
+.scopo-detail-body {
+  padding:8px 10px 10px; border-top:1px solid #e4e9ee; color:#6f8191; font-size:9px; line-height:1.45;
+}
+.scopo-detail-body p { margin:0 0 5px; }
+.scopo-detail-body p:last-child { margin-bottom:0; }
+.scopo-detail-body strong { color:#425c73; }
+.scopo-trace {
+  display:flex; align-items:center; gap:5px; margin-bottom:7px; overflow:auto; white-space:nowrap;
+}
+.scopo-trace span {
+  padding:4px 6px; border:1px solid #d3dee7; background:#f5f8fa; color:#516c82;
+  font:800 7.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+.scopo-trace b { color:#8b9aa8; font-size:9px; }
+
+.scopo-footer {
+  display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:25px;
+  color:#7c8d9d; font-size:9px;
+}
+.scopo-footer strong { color:#50677c; }
+.scopo-footer button {
+  display:inline-flex; align-items:center; gap:5px; height:25px; padding:0 7px;
+  border:1px solid #b8c7d5; background:#fff; color:#315b79; font:750 9px/1 inherit; cursor:pointer;
+}
+.scopo-footer button:hover { background:#edf4f9; }
+
+@media (max-width:900px) {
+  .scopo-workspace { padding:10px; }
+  .scopo-workspace-header { align-items:flex-start; flex-direction:column; }
+  .scopo-header-actions { width:100%; }
+  .scopo-btn { width:100%; }
+  .scopo-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .scopo-toolbar { align-items:flex-start; flex-direction:column; }
+  .scopo-toolbar-title { flex-direction:column; gap:3px; }
+  .scopo-readonly { align-self:flex-start; }
+  .scopo-trace-grid { grid-template-columns:1fr; }
+  .scopo-footer { align-items:flex-start; flex-direction:column; }
+}
