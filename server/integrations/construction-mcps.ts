@@ -118,8 +118,14 @@ export const CONTROLLED_MUTATION_POLICY: Record<
     "deletar_eap_node",
     "registrar_retrabalho",
   ]),
-  cronograma: new Set(),
-  ganttLob: new Set(),
+  cronograma: new Set([
+    "criar_atividade",
+    "atualizar_atividade",
+    "criar_dependencia",
+    "salvar_baseline",
+    "gerar_gantt",
+  ]),
+  ganttLob: new Set(["gerar_gantt"]),
 };
 
 export const MUTATING_TOOLS = new Set([
