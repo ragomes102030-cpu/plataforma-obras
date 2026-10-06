@@ -712,7 +712,7 @@ async function createLocalAgentActivity(args: {
   const resolvedDuration = resolveActivityDuration({ durationDays });
   const writable = await ensureWritablePlanVersion(args.projectId, args.userId);
   const [writableNode] = await db
-    .select({ id: wbsNodes.id, code: wbsNodes.code, name: wbsNodes.name, phase: wbsNodes.level })
+    .select({ id: wbsNodes.id, code: wbsNodes.code, name: wbsNodes.name, sortOrder: wbsNodes.sortOrder })
     .from(wbsNodes)
     .where(and(
       eq(wbsNodes.projectId, args.projectId),
@@ -733,7 +733,7 @@ async function createLocalAgentActivity(args: {
       phase: eapRef.split(".").slice(0, 2).join(".") || "Execução",
       startOffset: 0,
       durationDays: Number(resolvedDuration),
-      sortOrder: Date.now(),
+      sortOrder: writableNode.sortOrder * 1000 + writableNode.id,
       versionId: writable.id,
     })
     .returning({
