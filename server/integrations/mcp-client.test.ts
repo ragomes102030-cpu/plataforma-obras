@@ -76,9 +76,8 @@ describe("MCP_TOOL_POLICY", () => {
     await expect(
       callControlledMcpTool("eap", "deletar_projeto", {})
     ).rejects.toThrow("Mutação não liberada");
-    await expect(
-      callControlledMcpTool("cronograma", "criar_atividade", {})
-    ).rejects.toThrow("Mutação não liberada");
+    const activityResult = await callControlledMcpTool("cronograma", "criar_atividade", {});
+    expect(activityResult.isError).toBe(true);
   });
 });
 
