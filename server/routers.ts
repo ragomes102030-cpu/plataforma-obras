@@ -4816,7 +4816,7 @@ export const appRouter = router({
             evidence
           ),
           messages: messagesWithHistory,
-          mcpProjectIds: resolvedMcpProjectIds,
+          mcpProjectIds,
           requestId: requestIdFrom(ctx),
         });
       }),
