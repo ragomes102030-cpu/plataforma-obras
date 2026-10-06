@@ -399,7 +399,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       <div className="eap-workspace-footer"><span><Layers3 size={13}/> EAP = fonte oficial do escopo · atividade = unidade executável do cronograma</span><span>{total} nós · {folhas} folhas · profundidade {Math.max(...nos.map(n=>n.level),1)}</span></div>
     </div>
   );
-
+}
 
 type Ramo = { no: No; filhos: Ramo[] };
 type EditorEap =
