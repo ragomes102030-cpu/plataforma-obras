@@ -140,3 +140,22 @@ describe("a tela inicial não pode ficar esperando para sempre", () => {
     expect(APP).toMatch(/<Router\s*\/>/);
   });
 });
+
+
+describe("transição EAP aprovada → atividades", () => {
+  it("a aba de atividades expõe a derivação das folhas da EAP", () => {
+    const painel = readFileSync("client/src/components/PainelPlanejamento.tsx", "utf-8");
+    expect(painel).toMatch(/trpc\.planning\.generateFromEap\.useMutation/);
+    expect(painel).toMatch(/Gerar atividades da EAP/);
+    expect(painel).toMatch(/proposta.*derivada da EAP/i);
+    expect(painel).toMatch(/Nenhuma\s+foi\s+persistida\s+automaticamente/);
+  });
+
+  it("a atividade só pode ser criada a partir de uma folha EAP aprovada", () => {
+    const routers = readFileSync("server/routers.ts", "utf-8");
+    expect(routers).toMatch(/generateFromEap:\s*protectedProcedure/);
+    expect(routers).toMatch(/criarAtividadeDaFolha:\s*protectedProcedure/);
+    expect(routers).toMatch(/requireApprovedEapVersion\(db, input\.projectId\)/);
+    expect(routers).toMatch(/Somente uma folha terminal da EAP pode virar atividade/);
+  });
+});
