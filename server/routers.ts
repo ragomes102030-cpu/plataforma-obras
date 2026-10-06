@@ -149,6 +149,34 @@ function cacheClearPrefix(prefix: string): void {
   }
 }
 
+async function markCpmStaleForVersion(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  versionId: number
+) {
+  // P6/MS Project principle: a change to activity data or relationships invalidates
+  // the stored schedule result until the network is scheduled again. Keep the last
+  // cpmCalculatedAt for auditability, but clear derived CPM fields; the updatedAt
+  // trigger then makes the stored result explicitly stale.
+  await db
+    .update(scheduleActivities)
+    .set({
+      critical: 0,
+      earlyStart: null,
+      earlyFinish: null,
+      lateStart: null,
+      lateFinish: null,
+      totalFloat: null,
+      freeFloat: null,
+    })
+    .where(
+      and(
+        eq(scheduleActivities.projectId, projectId),
+        eq(scheduleActivities.versionId, versionId)
+      )
+    );
+}
+
 const demoProjects = [
   {
     id: 1,
@@ -1210,6 +1238,13 @@ export const appRouter = router({
             ...(input.budgetItemId !== undefined && { budgetItemId: input.budgetItemId }),
             progress: input.progress,
             status: input.status,
+            critical: 0,
+            earlyStart: null,
+            earlyFinish: null,
+            lateStart: null,
+            lateFinish: null,
+            totalFloat: null,
+            freeFloat: null,
           })
           .where(eq(scheduleActivities.id, input.activityId));
         await recomputeProjectProgress(db, input.projectId);
@@ -3744,6 +3779,7 @@ export const appRouter = router({
           throw badRequest(validation.issues.find(issue => issue.severity === "error")?.message ?? "A dependência criaria uma rede inválida.");
         }
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).returning({ id: scheduleDependencies.id });
+        await markCpmStaleForVersion(db, input.projectId, writable.id);
         return { id: createdId.id };
       }),
     createDependencies: protectedProcedure
@@ -3822,6 +3858,7 @@ export const appRouter = router({
             versionId: writable.id,
           }))
         );
+        await markCpmStaleForVersion(db, input.projectId, writable.id);
         return { created: input.dependencies.length };
       }),
     updateActivities: protectedProcedure
@@ -3871,7 +3908,17 @@ export const appRouter = router({
           throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de editar.");
         await db.transaction(async tx => {
           for (const item of input.updates) {
-            const patch: Record<string, unknown> = { cpmCalculatedAt: null };
+            const patch: Record<string, unknown> = {
+              // Preserve the last CPM timestamp for auditability; the updatedAt
+              // trigger makes that result stale until the network is recalculated.
+              critical: 0,
+              earlyStart: null,
+              earlyFinish: null,
+              lateStart: null,
+              lateFinish: null,
+              totalFloat: null,
+              freeFloat: null,
+            };
             if (item.name !== undefined) patch.name = item.name;
             if (item.phase !== undefined) patch.phase = item.phase;
             if (item.startOffset !== undefined) patch.startOffset = item.startOffset;
@@ -3895,6 +3942,7 @@ export const appRouter = router({
               );
           }
         });
+        await markCpmStaleForVersion(db, input.projectId, versionIds[0]!);
         return { updated: input.updates.length };
       }),
     allocateResource: protectedProcedure
