@@ -86,7 +86,7 @@ export function mergeAgentConversations(
       messages.push(message);
     }
   }
-  return messages;
+  return compactHistory(messages, 20);
 }
 
 export function mergePersistedWithIncoming(
