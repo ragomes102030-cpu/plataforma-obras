@@ -511,6 +511,25 @@ const LOCAL_EAP_TOOL: LlmTool = {
   }
 };
 
+const LOCAL_ACTIVITY_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "criar_atividade_local",
+    description:
+      "Cria uma atividade diretamente na fonte local da obra quando o MCP de cronograma/EAP não consegue resolver o contexto externo. Use somente em uma ordem operacional explícita. Exige eapRef de uma folha terminal da EAP aprovada, nome e duração. A operação é verificada após a gravação.",
+    parameters: {
+      type: "object",
+      properties: {
+        eapRef: { type: "string", minLength: 1, maxLength: 80 },
+        name: { type: "string", minLength: 2, maxLength: 220 },
+        durationDays: { type: "integer", minimum: 1 },
+      },
+      required: ["eapRef", "name", "durationDays"],
+      additionalProperties: false,
+    },
+  },
+};
+
 const RUNTIME_TOOLS: LlmTool[] = [
   {
     type: "function",
@@ -807,7 +826,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -990,6 +1009,42 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (toolName === "criar_atividade_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        if (!allowMutations) {
+          const message = "A criação da atividade ainda não foi autorizada. Aguarde uma ordem operacional explícita.";
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+        try {
+          if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para criar atividade.");
+          const localResult = await createLocalAgentActivity({
+            projectId: options.localProjectId,
+            userId: options.userId,
+            rawArgs: {
+              eap_ref: rawArgs.eapRef,
+              name: rawArgs.name,
+              durationDays: rawArgs.durationDays,
+            },
+          });
+          const serialized = compactLlmContent(JSON.stringify({
+            status: "created_and_verified",
+            source: "local_db",
+            resultado: localResult,
+          }), MAX_TOOL_RESULT_CHARS);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: serialized };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
       if (toolName === "registrar_aprendizado") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
