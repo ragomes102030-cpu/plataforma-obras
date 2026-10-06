@@ -3506,6 +3506,21 @@ export const appRouter = router({
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
+        const semCpm = activities.filter(activity => !activity.cpmCalculatedAt);
+        if (semCpm.length) {
+          throw badRequest(`O CPM precisa ser calculado para todas as atividades antes da baseline; ${semCpm.length} ainda não possuem resultado.`);
+        }
+        const cpmDesatualizado = activities.filter(
+          activity =>
+            new Date(activity.cpmCalculatedAt!).getTime() < new Date(activity.updatedAt).getTime()
+        );
+        if (cpmDesatualizado.length) {
+          throw badRequest(`O CPM está desatualizado em ${cpmDesatualizado.length} atividade(s). Recalcule o CPM antes de congelar a baseline.`);
+        }
+        const semDuracao = activities.filter(activity => Number(activity.durationDays) < 1);
+        if (semDuracao.length) {
+          throw badRequest(`A baseline exige duração válida em todas as atividades; ${semDuracao.length} ainda estão inválidas.`);
+        }
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length };
