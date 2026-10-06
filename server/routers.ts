@@ -4947,7 +4947,7 @@ export const appRouter = router({
             coordinator
           ),
           messages: input.messages,
-          mcpProjectIds: resolvedMcpProjectIds,
+          mcpProjectIds: input.mcpProjectIds,
           requestId: requestIdFrom(ctx),
         });
       }),
