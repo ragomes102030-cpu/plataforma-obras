@@ -1,7 +1,7 @@
 import { ENV } from "./_core/env";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { projectPlanVersions, scheduleActivities, wbsNodes } from "../drizzle/schema";
+import { projectAuditEvents, projectPlanVersions, scheduleActivities, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
 import { ensureWritablePlanVersion } from "./construction/plan-versions";
 import { resolveActivityDuration } from "./construction/activity-planning";
@@ -905,10 +905,71 @@ async function createLocalAgentActivity(args: {
     ))
     .limit(1);
 
+  const evidenceRecord = {
+    activityId: created.id,
+    projectId: args.projectId,
+    eapRef: created.wbsCode,
+    name: created.name,
+    durationDays: Number(created.durationDays),
+    plannedQuantity: created.plannedQuantity ?? null,
+    unit: created.unit ?? null,
+    productivity: created.productivity ?? null,
+    productivityUnit: productivityUnit ?? null,
+    durationMethod: hasProductionBasis ? "ceil(quantidade/produtividade)" : "engineer_informed",
+    evidenceLevel: hasProductionBasis
+      ? (source ? "source_supported" : "engineer_informed")
+      : "engineer_informed",
+    source: source ?? null,
+    premise: hasProductionBasis
+      ? "produtividade expressa na unidade do quantitativo por dia para a equipe considerada"
+      : "duração informada pelo engenheiro/planejamento",
+    approvedEapVersionId: approved.id,
+    writableVersionId: writable.id,
+    recordedAt: new Date().toISOString(),
+  };
+
+  try {
+    await db.insert(projectAuditEvents).values({
+      projectId: args.projectId,
+      userId: args.userId,
+      action: "activity_planning_evidence_recorded",
+      payload: evidenceRecord,
+    });
+  } catch (auditError) {
+    console.warn(JSON.stringify({
+      evento: "activity_planning_evidence_audit_failed",
+      projectId: args.projectId,
+      activityId: created.id,
+      erro: auditError instanceof Error ? auditError.message : String(auditError),
+    }));
+  }
+
+  try {
+    await rememberArquimedes({
+      projectId: args.projectId,
+      ownerUserId: args.userId,
+      scope: "project",
+      category: "activity_planning_evidence",
+      memoryKey: `activity-evidence-${created.id}`,
+      value: evidenceRecord,
+      sourceType: "arquimedes",
+      sourceRef: `schedule_activity:${created.id}`,
+      confidence: source ? "high" : "medium",
+    });
+  } catch (memoryError) {
+    console.warn(JSON.stringify({
+      evento: "activity_planning_evidence_memory_failed",
+      projectId: args.projectId,
+      activityId: created.id,
+      erro: memoryError instanceof Error ? memoryError.message : String(memoryError),
+    }));
+  }
+
   return {
     source: "local_db_fallback",
     created,
     verification,
+    evidence: evidenceRecord,
     approvedEapVersionId: approved.id,
     writableVersionId: writable.id,
   };
