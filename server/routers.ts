@@ -3675,8 +3675,9 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
-        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
-        if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
+        const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+        const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
+        if (!activities.length) throw badRequest("Não há atividades operacionais para congelar como baseline.");
         const semCpm = activities.filter(activity => !activity.cpmCalculatedAt);
         if (semCpm.length) {
           throw badRequest(`O CPM precisa ser calculado para todas as atividades antes da baseline; ${semCpm.length} ainda não possuem resultado.`);
@@ -3705,8 +3706,11 @@ export const appRouter = router({
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
-        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
-        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
+        const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+        const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
+        const operationalIds = new Set(activities.map(activity => activity.id));
+        const dependencies = (await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope)))
+          .filter(dependency => operationalIds.has(dependency.predecessorId) && operationalIds.has(dependency.successorId));
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
         const inicioCalendario = localIso(project?.plannedStart ?? new Date());
@@ -4481,8 +4485,11 @@ export const appRouter = router({
         }
         await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), versionId == null ? isNull(scheduleDependencies.versionId) : eq(scheduleDependencies.versionId, versionId)));
-        const all = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).orderBy(scheduleActivities.sortOrder);
-        const result = calculateDeterministicCpm(all, dependencies);
+        const all = (await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).orderBy(scheduleActivities.sortOrder))
+          .filter(activity => Number(activity.exemplo ?? 0) !== 1);
+        const operationalIds = new Set(all.map(activity => activity.id));
+        const operationalDependencies = dependencies.filter(dependency => operationalIds.has(dependency.predecessorId) && operationalIds.has(dependency.successorId));
+        const result = calculateDeterministicCpm(all, operationalDependencies);
         if (result.valid && result.schedule) {
           const calculatedAt = new Date();
           for (const item of result.schedule.activities) {
