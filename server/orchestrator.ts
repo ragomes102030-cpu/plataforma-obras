@@ -40,7 +40,7 @@ import {
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";
 import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
-import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally } from "./agent/core/engineering-capabilities";
+import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -566,6 +566,38 @@ const INTERNAL_EAP_TOOL: LlmTool = {
   }
 };
 
+const INTERNAL_CPM_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "calcular_cpm_localmente",
+    description: "Calcula CPM deterministicamente no motor interno do Arquimedes, sem depender de MCP. Valida a rede antes do cálculo e retorna duração do projeto, folgas, criticidade e conflitos de restrição.",
+    parameters: {
+      type: "object",
+      properties: {
+        activities: {
+          type: "array",
+          items: { type: "object", properties: {
+            id: { type: ["string","number"] },
+            durationDays: { type: "integer", minimum: 1 },
+            mustStartOnDay: { type: ["integer","null"] },
+            finishNoLaterThanDay: { type: ["integer","null"] }
+          }, required: ["id","durationDays"], additionalProperties: true }
+        },
+        dependencies: {
+          type: "array",
+          items: { type: "object", properties: {
+            predecessorId: { type: ["string","number"] },
+            successorId: { type: ["string","number"] },
+            type: { type: "string", enum: ["FS","SS","FF","SF"] },
+            lag: { type: "integer" }
+          }, required: ["predecessorId","successorId","type"], additionalProperties: true }
+        }
+      },
+      required: ["activities","dependencies"], additionalProperties: false
+    }
+  }
+};
+
 const INTERNAL_ENGINEERING_TOOLS: LlmTool[] = [
   {
     type: "function",
@@ -900,7 +932,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1103,6 +1135,34 @@ export async function runProjectOrchestrator(
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "calcular_cpm_localmente") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          const activities = Array.isArray(rawArgs.activities) ? rawArgs.activities.map((a: any) => ({
+            id: Number(a.id),
+            durationDays: Number(a.durationDays),
+            mustStartOnDay: a.mustStartOnDay == null ? null : Number(a.mustStartOnDay),
+            finishNoLaterThanDay: a.finishNoLaterThanDay == null ? null : Number(a.finishNoLaterThanDay),
+          })) : [];
+          const dependencies = Array.isArray(rawArgs.dependencies) ? rawArgs.dependencies.map((d: any) => ({
+            predecessorId: Number(d.predecessorId),
+            successorId: Number(d.successorId),
+            type: String(d.type),
+            lag: Number(d.lag ?? 0),
+          })) : [];
+          const value = calculateCpmLocally(activities, dependencies);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify({ source: "arquimedes_internal_engine", ...value }).slice(0, MAX_TOOL_RESULT_CHARS) };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
