@@ -61,6 +61,7 @@ import {
   canTransitionFinding,
 } from "./construction/finding-lifecycle";
 import { deriveProjectProgress } from "./construction/project-progress";
+import { derivePlanningEvidence } from "./construction/planning-evidence";
 import {
   getAgentExecutionStatus,
   startAgentExecution,
@@ -720,6 +721,28 @@ async function loadStageGateEvidence(
     ]);
   const eapValidation = validateEap(eapNodes);
   const cpm = calculateDeterministicCpm(activities, dependencies);
+  const planningEvidence = activities.map(activity => ({
+    activityId: activity.id,
+    eapRef: activity.eapRef ?? activity.wbsCode ?? null,
+    name: activity.name,
+    evidence: derivePlanningEvidence({
+      plannedQuantity: activity.plannedQuantity,
+      productivity: activity.productivity,
+      durationDays: Number(activity.durationDays ?? 0),
+      budgetItemId: activity.budgetItemId,
+      source: null,
+    }),
+  }));
+  const evidenceSummary = planningEvidence.reduce((summary, item) => {
+    summary[item.evidence.level] += 1;
+    return summary;
+  }, {
+    not_informed: 0,
+    estimate: 0,
+    engineer_informed: 0,
+    source_supported: 0,
+    validated: 0,
+  } as Record<import("./construction/planning-evidence").EvidenceLevel, number>);
   const budgetItemRefs = activeBudgetVersion[0]
     ? await db
         .select({ wbsNodeId: budgetItems.wbsNodeId })
@@ -741,6 +764,10 @@ async function loadStageGateEvidence(
     cpmValid: cpm.valid,
     blockerCount,
     costCoverageValid: costCoverage.valid,
+    planningEvidence: {
+      summary: evidenceSummary,
+      activities: planningEvidence,
+    },
   };
 }
 
