@@ -1249,19 +1249,30 @@ export async function runProjectOrchestrator(
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
         try {
           const activities = Array.isArray(rawArgs.activities) ? rawArgs.activities.map((a: any) => ({
-          const activities = Array.isArray(rawArgs.activities) ? rawArgs.activities.map((a: any) => ({
             id: Number(a.id),
-            projectId: 0, externalId: null, eapRef: null,
-            wbsCode: String(a.wbsCode ?? a.id), name: String(a.name ?? a.id), phase: String(a.phase ?? "CPM"),
-            startOffset: 0, durationDays: Number(a.durationDays), progress: 0, status: "Não iniciado", critical: 0, sortOrder: 0,
+            projectId: 0,
+            externalId: null,
+            eapRef: null,
+            wbsCode: String(a.wbsCode ?? a.id),
+            name: String(a.name ?? a.id),
+            phase: String(a.phase ?? "CPM"),
+            startOffset: 0,
+            durationDays: Number(a.durationDays),
+            progress: 0,
+            status: "Não iniciado",
+            critical: 0,
+            sortOrder: 0,
             mustStartOnDay: a.mustStartOnDay == null ? null : Number(a.mustStartOnDay),
             finishNoLaterThanDay: a.finishNoLaterThanDay == null ? null : Number(a.finishNoLaterThanDay),
           })) : [];
           const dependencies = Array.isArray(rawArgs.dependencies) ? rawArgs.dependencies.map((d: any) => ({
+            id: 0,
+            projectId: 0,
+            externalId: null,
             predecessorId: Number(d.predecessorId),
-          const dependencies = Array.isArray(rawArgs.dependencies) ? rawArgs.dependencies.map((d: any) => ({
-            id: 0, projectId: 0, externalId: null,
-            predecessorId: Number(d.predecessorId), successorId: Number(d.successorId), type: String(d.type), lag: Number(d.lag ?? 0),
+            successorId: Number(d.successorId),
+            type: String(d.type),
+            lag: Number(d.lag ?? 0),
           })) : [];
           const value = calculateCpmLocally(activities, dependencies);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
