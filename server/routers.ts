@@ -828,8 +828,8 @@ async function loadStageGateEvidence(
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
     evidence: derivePlanningEvidence({
-      plannedQuantity: activity.plannedQuantity == null ? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.quantity ?? null : Number(activity.plannedQuantity),
-      productivity: activity.productivity == null ? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.productivity ?? null : Number(activity.productivity),
+      plannedQuantity: activity.plannedQuantity == null ? (Number(evidenceBudgetById.get(activity.budgetItemId ?? -1)?.quantity) || null) : Number(activity.plannedQuantity),
+      productivity: activity.productivity == null ? (Number(evidenceBudgetById.get(activity.budgetItemId ?? -1)?.productivity) || null) : Number(activity.productivity),
       quantityUnit: activity.unit ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.unit ?? null,
       productivityUnit: null,
       durationDays: Number(activity.durationDays ?? 0),
