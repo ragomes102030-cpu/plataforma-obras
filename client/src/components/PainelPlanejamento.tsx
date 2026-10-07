@@ -27,6 +27,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const [proposta, setProposta] = useState<ProposalItem[]>([]);
   const [duracoes, setDuracoes] = useState<Record<number, string>>({});
+  const [edicoes, setEdicoes] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [mensagem, setMensagem] = useState<string | null>(null);
@@ -58,7 +59,32 @@ export function PainelPlanejamento({ projetoId }: Props) {
     onError: error => setMensagem(error.message),
   });
 
+  const atualizarAtividade = trpc.planning.atualizarAtividade.useMutation({
+    onSuccess: async result => {
+      setMensagem(result.cpmInvalidated ? "Atividade atualizada. O CPM ficou desatualizado e precisa ser recalculado antes da baseline." : "Atividade atualizada.");
+      await Promise.all([
+        utils.planning.list.invalidate({ projectId: projetoId }),
+        utils.planning.grade.invalidate({ projectId: projetoId }),
+      ]);
+    },
+    onError: error => setMensagem(error.message),
+  });
+
   const activities = plano.data?.activities ?? [];
+
+  const valorEdicao = (activity: any, campo: "duracao" | "quantidade" | "unidade") => {
+    const key = activity.id + "|" + campo;
+    if (key in edicoes) return edicoes[key];
+    if (campo === "duracao") return String(activity.durationDays ?? "");
+    if (campo === "quantidade") return activity.plannedQuantity == null ? "" : String(activity.plannedQuantity);
+    return activity.unit ?? "";
+  };
+
+  const salvarEdicao = (activityId: number, campo: "duracao" | "quantidade" | "unidade") => {
+    const key = activityId + "|" + campo;
+    if (!(key in edicoes)) return;
+    atualizarAtividade.mutate({ projectId: projetoId, atividadeId: activityId, campo, valor: edicoes[key] });
+  };
 
   useEffect(() => {
     if (
@@ -230,7 +256,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
               <th className="dur-col">Duração</th>
               <th className="unit-col">Unidade</th>
               <th className="status-col">Estado</th>
-              <th className="action-col">Ação</th>
+              <th className="action-col">Qtd. / estado</th>
             </tr>
           </thead>
           <tbody>
@@ -241,10 +267,42 @@ export function PainelPlanejamento({ projetoId }: Props) {
                 <td className="wbs-col mono">{activity.wbsCode}</td>
                 <td className="name-col"><strong>{activity.name}</strong></td>
                 <td className="type-col"><span className="pl-atividade-tag">Task</span></td>
-                <td className="dur-col mono">{Number(activity.durationDays) > 0 ? `${activity.durationDays}d` : "—"}</td>
-                <td className="unit-col">—</td>
+                <td className="dur-col">
+                  <input
+                    className="pl-duracao-input"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={valorEdicao(activity, "duracao")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|duracao"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "duracao")}
+                    aria-label={"Duração de " + activity.name}
+                  />
+                </td>
+                <td className="unit-col">
+                  <input
+                    className="pl-duracao-input"
+                    type="text"
+                    value={valorEdicao(activity, "unidade")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|unidade"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "unidade")}
+                    aria-label={"Unidade de " + activity.name}
+                  />
+                </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
-                <td className="action-col"><span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span></td>
+                <td className="action-col">
+                  <input
+                    className="pl-duracao-input"
+                    type="number"
+                    min={0}
+                    step="0.001"
+                    value={valorEdicao(activity, "quantidade")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|quantidade"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "quantidade")}
+                    aria-label={"Quantidade de " + activity.name}
+                  />
+                  <span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span>
+                </td>
               </tr>
             ))}
 

@@ -3563,18 +3563,70 @@ export const appRouter = router({
         if (input.campo === "atividade") patch.name = input.valor.trim();
         if (input.campo === "frente") patch.phase = input.valor.trim();
         if (input.campo === "pavimento") patch.pavimento = input.valor.trim() || null;
-        if (input.campo === "duracao") patch.durationDays = Math.max(1, Math.round(Number(input.valor)));
-        if (input.campo === "quantidade") patch.plannedQuantity = input.valor.trim() ? Number(input.valor).toFixed(3) : null;
+        if (input.campo === "duracao") {
+          const duration = Number(input.valor);
+          if (!Number.isInteger(duration) || duration < 1) throw badRequest("A duração deve ser um número inteiro maior que zero.");
+          patch.durationDays = duration;
+        }
+        if (input.campo === "quantidade") {
+          if (input.valor.trim() && (!Number.isFinite(Number(input.valor)) || Number(input.valor) < 0)) {
+            throw badRequest("A quantidade deve ser numérica e não negativa.");
+          }
+          patch.plannedQuantity = input.valor.trim() ? Number(input.valor).toFixed(3) : null;
+        }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
         if (input.campo === "inicio") {
           const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-          const start = new Date(input.valor);
-          if (!project || Number.isNaN(start.getTime())) throw badRequest("Data de início inválida.");
-          patch.startOffset = Math.max(0, Math.floor((start.getTime() - project.plannedStart.getTime()) / 86400000));
+          const startDate = new Date(input.valor);
+          if (!project || Number.isNaN(startDate.getTime())) throw badRequest("Data de início inválida.");
+          patch.startOffset = Math.max(0, Math.floor((startDate.getTime() - project.plannedStart.getTime()) / 86400000));
         }
-        await db.update(scheduleActivities).set(patch).where(and(eq(scheduleActivities.id, input.atividadeId), eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, activity.versionId)));
+
+        const invalidatesCpm = ["duracao", "inicio"].includes(input.campo);
+        const before = {
+          name: activity.name,
+          phase: activity.phase,
+          startOffset: activity.startOffset,
+          durationDays: activity.durationDays,
+          plannedQuantity: activity.plannedQuantity,
+          unit: activity.unit,
+          cpmCalculatedAt: activity.cpmCalculatedAt,
+        };
+
+        await db.transaction(async tx => {
+          const schedulePatch = invalidatesCpm
+            ? { ...patch, critical: 0, earlyStart: 0, earlyFinish: 0, lateStart: 0, lateFinish: 0, totalFloat: 0, cpmCalculatedAt: null }
+            : patch;
+
+          await tx.update(scheduleActivities).set(schedulePatch).where(and(
+            eq(scheduleActivities.id, input.atividadeId),
+            eq(scheduleActivities.projectId, input.projectId),
+            eq(scheduleActivities.versionId, activity.versionId)
+          ));
+
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "activity_updated",
+            payload: {
+              activityId: activity.id,
+              externalId: activity.externalId,
+              wbsNodeId: activity.wbsNodeId,
+              eapRef: activity.eapRef,
+              wbsCode: activity.wbsCode,
+              planVersionId: activity.versionId,
+              field: input.campo,
+              value: input.valor,
+              before,
+              after: { ...before, ...patch, cpmInvalidated: invalidatesCpm },
+              cpmInvalidated: invalidatesCpm,
+              updatedAt: new Date().toISOString(),
+            },
+          });
+        });
+
         await recomputeProjectProgress(db, input.projectId);
-        return { updated: true as const };
+        return { updated: true as const, cpmInvalidated: invalidatesCpm };
       }),
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
