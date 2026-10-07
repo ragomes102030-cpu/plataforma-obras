@@ -524,8 +524,13 @@ const LOCAL_ACTIVITY_TOOL: LlmTool = {
         eapRef: { type: "string", minLength: 1, maxLength: 80 },
         name: { type: "string", minLength: 2, maxLength: 220 },
         durationDays: { type: "integer", minimum: 1 },
+        plannedQuantity: { type: "number", exclusiveMinimum: 0 },
+        unit: { type: "string", minLength: 1, maxLength: 16 },
+        productivity: { type: "number", exclusiveMinimum: 0 },
+        productivityUnit: { type: "string", minLength: 1, maxLength: 32 },
+        source: { type: "string", maxLength: 500 },
       },
-      required: ["eapRef", "name", "durationDays"],
+      required: ["eapRef", "name"],
       additionalProperties: false,
     },
   },
@@ -782,13 +787,38 @@ async function createLocalAgentActivity(args: {
   const eapRef = String(args.rawArgs.eap_ref ?? args.rawArgs.eapRef ?? args.rawArgs.wbsCode ?? "").trim();
   const name = String(args.rawArgs.name ?? args.rawArgs.nome ?? "").trim();
   const durationInput = args.rawArgs.durationDays ?? args.rawArgs.duracao_dias ?? args.rawArgs.duration ?? args.rawArgs.duracao;
-  const durationDays = Number(durationInput);
+  const plannedQuantity = args.rawArgs.plannedQuantity == null ? undefined : Number(args.rawArgs.plannedQuantity);
+  const unit = typeof args.rawArgs.unit === "string" ? args.rawArgs.unit.trim() : undefined;
+  const productivity = args.rawArgs.productivity == null ? undefined : Number(args.rawArgs.productivity);
+  const productivityUnit = typeof args.rawArgs.productivityUnit === "string" ? args.rawArgs.productivityUnit.trim() : undefined;
+  const source = typeof args.rawArgs.source === "string" ? args.rawArgs.source.trim() : undefined;
 
   if (!eapRef) throw new Error("A atividade precisa de uma referência de EAP válida.");
   if (!name) throw new Error("A atividade precisa de um nome.");
-  if (!Number.isInteger(durationDays) || durationDays < 1) {
-    throw new Error("A atividade precisa de duração inteira maior ou igual a 1 dia.");
+
+  const hasDuration = durationInput != null && durationInput !== "";
+  const hasProductionBasis = plannedQuantity !== undefined || productivity !== undefined;
+  if (hasProductionBasis) {
+    if (!(plannedQuantity !== undefined && plannedQuantity > 0)) {
+      throw new Error("Quantidade planejada deve ser informada quando a atividade usar base de produtividade.");
+    }
+    if (!(productivity !== undefined && productivity > 0)) {
+      throw new Error("Produtividade deve ser informada quando a atividade usar base de produtividade.");
+    }
+    if (!unit || !productivityUnit) {
+      throw new Error("Quantidade e produtividade precisam informar suas unidades.");
+    }
+    if (unit.toLowerCase() !== productivityUnit.toLowerCase().split("/").at(-1)) {
+      throw new Error("Unidade do quantitativo incompatível com a unidade da produtividade.");
+    }
   }
+  const calculatedDuration = hasProductionBasis
+    ? Math.max(1, Math.ceil((plannedQuantity as number) / (productivity as number)))
+    : Number(durationInput);
+  if (!Number.isInteger(calculatedDuration) || calculatedDuration < 1) {
+    throw new Error("A atividade precisa de duração inteira maior ou igual a 1 dia, ou quantidade + produtividade válidas.");
+  }
+  const durationDays = calculatedDuration;
 
   const [approved] = await db
     .select({ id: projectPlanVersions.id })
@@ -839,6 +869,9 @@ async function createLocalAgentActivity(args: {
       phase: eapRef.split(".").slice(0, 2).join(".") || "Execução",
       startOffset: 0,
       durationDays: Number(resolvedDuration),
+      plannedQuantity: plannedQuantity ?? null,
+      unit: unit ?? null,
+      productivity: productivity ?? null,
       sortOrder: writableNode.sortOrder * 1000 + writableNode.id,
       versionId: writable.id,
     })
@@ -847,6 +880,9 @@ async function createLocalAgentActivity(args: {
       wbsCode: scheduleActivities.wbsCode,
       name: scheduleActivities.name,
       durationDays: scheduleActivities.durationDays,
+      plannedQuantity: scheduleActivities.plannedQuantity,
+      unit: scheduleActivities.unit,
+      productivity: scheduleActivities.productivity,
       versionId: scheduleActivities.versionId,
     });
 
@@ -856,6 +892,9 @@ async function createLocalAgentActivity(args: {
       wbsCode: scheduleActivities.wbsCode,
       name: scheduleActivities.name,
       durationDays: scheduleActivities.durationDays,
+      plannedQuantity: scheduleActivities.plannedQuantity,
+      unit: scheduleActivities.unit,
+      productivity: scheduleActivities.productivity,
       versionId: scheduleActivities.versionId,
     })
     .from(scheduleActivities)
@@ -1214,6 +1253,11 @@ export async function runProjectOrchestrator(
               eap_ref: rawArgs.eapRef,
               name: rawArgs.name,
               durationDays: rawArgs.durationDays,
+              plannedQuantity: rawArgs.plannedQuantity,
+              unit: rawArgs.unit,
+              productivity: rawArgs.productivity,
+              productivityUnit: rawArgs.productivityUnit,
+              source: rawArgs.source,
             },
           });
           const serialized = compactLlmContent(JSON.stringify({
