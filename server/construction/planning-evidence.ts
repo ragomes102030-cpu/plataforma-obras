@@ -8,6 +8,8 @@ export type EvidenceLevel =
 export type PlanningEvidenceInput = {
   plannedQuantity?: number | null;
   productivity?: number | null;
+  quantityUnit?: string | null;
+  productivityUnit?: string | null;
   durationDays: number;
   budgetItemId?: number | null;
   source?: string | null;
@@ -34,6 +36,8 @@ export function derivePlanningEvidence(
 
   if (input.productivity != null && input.productivity > 0) {
     basis.push("produtividade");
+    if (input.quantityUnit?.trim()) basis.push("unidade do quantitativo");
+    if (input.productivityUnit?.trim()) basis.push("unidade da produtividade");
   } else {
     gaps.push("produtividade");
   }
@@ -42,6 +46,10 @@ export function derivePlanningEvidence(
     gaps.push("duração válida");
   } else {
     basis.push("duração");
+  }
+
+  if (input.quantityUnit?.trim() && input.productivityUnit?.trim() && input.quantityUnit.trim().toLowerCase() !== input.productivityUnit.trim().toLowerCase()) {
+    gaps.push("unidades compatíveis");
   }
 
   if (input.budgetItemId != null) basis.push("vínculo orçamentário");
