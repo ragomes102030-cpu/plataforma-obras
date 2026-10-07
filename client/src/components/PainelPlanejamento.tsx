@@ -72,16 +72,16 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const activities = plano.data?.activities ?? [];
 
-  const valorEdicao = (activity: any, campo: "duracao" | "quantidade" | "produtividade" | "unidade") => {
+  const valorEdicao = (activity: any, campo: "frente" | "pavimento" | "duracao" | "quantidade" | "produtividade" | "unidade") => {
     const key = activity.id + "|" + campo;
     if (key in edicoes) return edicoes[key];
-    if (campo === "duracao") return String(activity.durationDays ?? "");
+    if (campo === "frente") return activity.phase ?? "";\n    if (campo === "pavimento") return activity.pavimento ?? "";\n    if (campo === "duracao") return String(activity.durationDays ?? "");
     if (campo === "quantidade") return activity.plannedQuantity == null ? "" : String(activity.plannedQuantity);
     if (campo === "produtividade") return activity.productivity == null ? "" : String(activity.productivity);
     return activity.unit ?? "";
   };
 
-  const salvarEdicao = (activityId: number, campo: "duracao" | "quantidade" | "produtividade" | "unidade") => {
+  const salvarEdicao = (activityId: number, campo: "frente" | "pavimento" | "duracao" | "quantidade" | "produtividade" | "unidade") => {
     const key = activityId + "|" + campo;
     if (!(key in edicoes)) return;
     atualizarAtividade.mutate({ projectId: projetoId, atividadeId: activityId, campo, valor: edicoes[key] });
