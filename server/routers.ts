@@ -828,8 +828,8 @@ async function loadStageGateEvidence(
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
     evidence: derivePlanningEvidence({
-      plannedQuantity: activity.plannedQuantity ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.quantity ?? null,
-      productivity: activity.productivity ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.productivity ?? null,
+      plannedQuantity: activity.plannedQuantity == null ? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.quantity ?? null : Number(activity.plannedQuantity),
+      productivity: activity.productivity == null ? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.productivity ?? null : Number(activity.productivity),
       quantityUnit: activity.unit ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.unit ?? null,
       productivityUnit: null,
       durationDays: Number(activity.durationDays ?? 0),
@@ -3610,7 +3610,7 @@ export const appRouter = router({
           await tx.update(scheduleActivities).set(schedulePatch).where(and(
             eq(scheduleActivities.id, input.atividadeId),
             eq(scheduleActivities.projectId, input.projectId),
-            eq(scheduleActivities.versionId, activity.versionId)
+             activity.versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, activity.versionId)
           ));
 
           await tx.insert(projectAuditEvents).values({
