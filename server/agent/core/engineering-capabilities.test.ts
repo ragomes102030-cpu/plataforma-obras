@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeEapLocally, calculateActivityDuration, validateDependencyNetwork } from "./engineering-capabilities";
+import { analyzeEapLocally, calculateActivityDuration, calculateCpmLocally, validateDependencyNetwork } from "./engineering-capabilities";
 
 describe("internal engineering capabilities", () => {
   it("calculates duration without MCP", () => {
@@ -45,3 +45,20 @@ describe("internal engineering capabilities", () => {
     expect(result.blockers).toBeGreaterThan(0);
   });
 });
+
+  it("calculates CPM locally without MCP", () => {
+    const result = calculateCpmLocally(
+      [
+        { id: 1, durationDays: 3, mustStartOnDay: null, finishNoLaterThanDay: null },
+        { id: 2, durationDays: 2, mustStartOnDay: null, finishNoLaterThanDay: null },
+        { id: 3, durationDays: 1, mustStartOnDay: null, finishNoLaterThanDay: null },
+      ],
+      [
+        { predecessorId: 1, successorId: 2, type: "FS", lag: 0 },
+        { predecessorId: 2, successorId: 3, type: "FS", lag: 0 },
+      ]
+    );
+    expect(result.valid).toBe(true);
+    expect(result.schedule?.projectDuration).toBe(6);
+    expect(result.schedule?.activities.find(a => a.id === "3")?.critical).toBe(true);
+  });
