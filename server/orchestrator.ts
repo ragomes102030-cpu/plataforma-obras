@@ -1271,7 +1271,7 @@ export async function runProjectOrchestrator(
             externalId: null,
             predecessorId: Number(d.predecessorId),
             successorId: Number(d.successorId),
-            type: String(d.type),
+            type: (["FS", "SS", "FF", "SF"] as const).includes(String(d.type) as any) ? String(d.type) as "FS" | "SS" | "FF" | "SF" : "FS",
             lag: Number(d.lag ?? 0),
           })) : [];
           const value = calculateCpmLocally(activities, dependencies);
