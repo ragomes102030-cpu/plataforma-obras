@@ -3708,8 +3708,50 @@ export const appRouter = router({
           )
           .limit(1);
         if (!writableNode) throw badRequest("Não foi possível preparar a versão de trabalho da EAP para a atividade.");
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: writableNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: writableNode.sortOrder * 1000 + writableNode.id, versionId: writable.id }).returning({ id: scheduleActivities.id });
-        return { id: createdId.id };
+        const externalId = `ACT-${input.projectId}-${randomUUID()}`;
+        const sortOrder = writableNode.sortOrder * 1000 + writableNode.id;
+        const result = await db.transaction(async tx => {
+          const [createdId] = await tx.insert(scheduleActivities).values({
+            projectId: input.projectId,
+            wbsNodeId: writableNode.id,
+            externalId,
+            wbsCode: input.wbsCode,
+            eapRef: input.wbsCode,
+            name: input.name,
+            phase: input.phase,
+            startOffset: input.startOffset,
+            durationDays,
+            plannedQuantity: input.plannedQuantity?.toFixed(3),
+            productivity: input.productivity?.toFixed(3),
+            budgetItemId: input.budgetItemId,
+            sortOrder,
+            versionId: writable.id,
+          }).returning({ id: scheduleActivities.id });
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "activity_created",
+            payload: {
+              activityId: createdId.id,
+              externalId,
+              wbsNodeId: writableNode.id,
+              eapRef: input.wbsCode,
+              wbsCode: input.wbsCode,
+              name: input.name,
+              phase: input.phase,
+              startOffset: input.startOffset,
+              durationDays,
+              durationSource: input.durationDays != null ? "explicit" : "derived",
+              plannedQuantity: input.plannedQuantity ?? null,
+              productivity: input.productivity ?? null,
+              budgetItemId: input.budgetItemId ?? null,
+              planVersionId: writable.id,
+              createdAt: new Date().toISOString(),
+            },
+          });
+          return createdId.id;
+        });
+        return { id: result, externalId, wbsNodeId: writableNode.id, eapRef: input.wbsCode, durationDays, planVersionId: writable.id };
       }),
     generateFromEap: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
