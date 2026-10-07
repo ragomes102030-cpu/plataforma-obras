@@ -873,6 +873,10 @@ async function createLocalAgentActivity(args: {
       plannedQuantity: plannedQuantity ?? null,
       unit: unit ?? null,
       productivity: productivity ?? null,
+      productivityUnit: productivityUnit ?? null,
+      durationMethod: hasProductionBasis ? "ceil(quantidade/produtividade)" : "engineer_informed",
+      evidenceLevel: hasProductionBasis ? (source ? "source_supported" : "engineer_informed") : "engineer_informed",
+      evidenceSource: source ?? null,
       sortOrder: writableNode.sortOrder * 1000 + writableNode.id,
       versionId: writable.id,
     })
@@ -884,6 +888,10 @@ async function createLocalAgentActivity(args: {
       plannedQuantity: scheduleActivities.plannedQuantity,
       unit: scheduleActivities.unit,
       productivity: scheduleActivities.productivity,
+      productivityUnit: scheduleActivities.productivityUnit,
+      durationMethod: scheduleActivities.durationMethod,
+      evidenceLevel: scheduleActivities.evidenceLevel,
+      evidenceSource: scheduleActivities.evidenceSource,
       versionId: scheduleActivities.versionId,
     });
 
