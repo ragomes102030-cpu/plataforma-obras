@@ -810,16 +810,31 @@ async function loadStageGateEvidence(
     ]);
   const eapValidation = validateEap(eapNodes);
   const cpm = calculateDeterministicCpm(activities, dependencies);
+  const evidenceBudgetItems = activeBudgetVersion[0]
+    ? await db
+        .select({
+          id: budgetItems.id,
+          quantity: budgetItems.quantity,
+          unit: budgetItems.unit,
+          productivity: budgetItems.productivity,
+          source: budgetItems.source,
+        })
+        .from(budgetItems)
+        .where(eq(budgetItems.budgetVersionId, activeBudgetVersion[0].id))
+    : [];
+  const evidenceBudgetById = new Map(evidenceBudgetItems.map(item => [item.id, item]));
   const planningEvidence = activities.map(activity => ({
     activityId: activity.id,
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
     evidence: derivePlanningEvidence({
-      plannedQuantity: activity.plannedQuantity,
-      productivity: activity.productivity,
+      plannedQuantity: activity.plannedQuantity ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.quantity ?? null,
+      productivity: activity.productivity ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.productivity ?? null,
+      quantityUnit: activity.unit ?? evidenceBudgetById.get(activity.budgetItemId ?? -1)?.unit ?? null,
+      productivityUnit: null,
       durationDays: Number(activity.durationDays ?? 0),
       budgetItemId: activity.budgetItemId,
-      source: null,
+      source: evidenceBudgetById.get(activity.budgetItemId ?? -1)?.source ?? null,
     }),
   }));
   const evidenceSummary = planningEvidence.reduce((summary, item) => {
