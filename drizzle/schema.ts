@@ -420,6 +420,14 @@ export const scheduleActivities = pgTable(
      */
     unit: varchar("unit", { length: 16 }),
     productivity: numeric("productivity", { precision: 14, scale: 3 }),
+    /** Base/unidade usada para interpretar a produtividade (ex.: m²/dia). */
+    productivityUnit: varchar("productivityUnit", { length: 32 }),
+    /** Método determinístico que produziu a duração da atividade. */
+    durationMethod: varchar("durationMethod", { length: 64 }),
+    /** Nível de evidência da duração/produção: source_supported, engineer_informed ou estimate. */
+    evidenceLevel: varchar("evidenceLevel", { length: 32 }),
+    /** Referência declarada pelo engenheiro/fonte usada para sustentar a premissa. */
+    evidenceSource: varchar("evidenceSource", { length: 500 }),
     budgetItemId: integer("budgetItemId"),
     progress: integer("progress").default(0).notNull(),
     /**
