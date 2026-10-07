@@ -40,6 +40,7 @@ import {
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";
 import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
+import { calculateActivityDuration, validateDependencyNetwork } from "./agent/core/engineering-capabilities";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -530,6 +531,44 @@ const LOCAL_ACTIVITY_TOOL: LlmTool = {
   },
 };
 
+const INTERNAL_ENGINEERING_TOOLS: LlmTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "calcular_duracao_atividade",
+      description: "Motor interno do Arquimedes para calcular duração sem depender de MCP. Aceita duração informada ou quantidade + produtividade compatíveis. Nunca inventa produtividade nem converte unidades sem regra validada.",
+      parameters: {
+        type: "object",
+        properties: {
+          durationDays: { type: "integer", minimum: 1 },
+          plannedQuantity: { type: "number", exclusiveMinimum: 0 },
+          productivity: { type: "number", exclusiveMinimum: 0 },
+          quantityUnit: { type: "string" },
+          productivityUnit: { type: "string" },
+          source: { type: "string", maxLength: 500 }
+        },
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "validar_rede_dependencias_local",
+      description: "Valida no motor interno do Arquimedes se uma rede de dependências é acíclica. Esta validação não depende de MCP.",
+      parameters: {
+        type: "object",
+        properties: {
+          dependencies: {
+            type: "array", minItems: 0,
+            items: { type: "object", properties: { id: {type:"string"}, predecessor:{type:"string"}, successor:{type:"string"} }, required:["id","predecessor","successor"], additionalProperties:false }
+          }
+        },
+        required: ["dependencies"], additionalProperties: false
+      }
+    }
+  }
+];
 const RUNTIME_TOOLS: LlmTool[] = [
   {
     type: "function",
@@ -826,7 +865,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1009,6 +1048,31 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (toolName === "calcular_duracao_atividade" || toolName === "validar_rede_dependencias_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          const value = toolName === "calcular_duracao_atividade"
+            ? calculateActivityDuration({
+                durationDays: rawArgs.durationDays === undefined ? undefined : Number(rawArgs.durationDays),
+                plannedQuantity: rawArgs.plannedQuantity === undefined ? undefined : Number(rawArgs.plannedQuantity),
+                productivity: rawArgs.productivity === undefined ? undefined : Number(rawArgs.productivity),
+                quantityUnit: typeof rawArgs.quantityUnit === "string" ? rawArgs.quantityUnit : undefined,
+                productivityUnit: typeof rawArgs.productivityUnit === "string" ? rawArgs.productivityUnit : undefined,
+                source: typeof rawArgs.source === "string" ? rawArgs.source : null,
+              })
+            : validateDependencyNetwork(Array.isArray(rawArgs.dependencies) ? rawArgs.dependencies.map((dep: any) => ({ id:String(dep.id ?? ""), predecessor:String(dep.predecessor ?? ""), successor:String(dep.successor ?? "") })) : []);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify({ source: "arquimedes_internal_engine", ...value }).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
       if (toolName === "criar_atividade_local") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
