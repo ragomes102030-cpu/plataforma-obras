@@ -9,30 +9,47 @@ Não apagar, resetar, rebasear ou sobrescrever trabalho validado sem criar antes
 - Branch de restauração: checkpoint/arquimedes-2026-10-07-ba5d2e85
 - SHA protegido: ba5d2e85d152e3c4e675bd59a3ea2126020140cf
 - Mensagem: test: update orchestrator tool catalog expectation
-- Base principal naquele momento: main = 8f56dfa2883fa04f3bec103df7ee27274f71d851
-- Merge base main/develop: b5517bf2d1b01e775c909fd1e3cf92e6fe62acc3
+- Este checkpoint continua válido mesmo após novas correções neste documento.
 
-## ÚLTIMO ESTADO DO GITHUB
-- main: 8f56dfa2883fa04f3bec103df7ee27274f71d851
-- develop: ba5d2e85d152e3c4e675bd59a3ea2126020140cf
-- develop está 1.028 commits à frente e 51 atrás de main; branches divergentes.
-- PR #65: aberto, base main, head develop, 1.028 commits, 289 arquivos, mergeable_state dirty.
-- NÃO fazer merge direto do PR #65.
+## ESTADO VERIFICADO GITHUB × RENDER
+- Render live verificado: 8f846cc59512a058be713dfa6880839ba094d8fc
+- Mensagem live: fix: excluir atividades exemplo do CPM e baseline
+- Render: plataforma-obras-api / https://plataforma-obras-api.onrender.com
+- Deploy live: dep-db39a47lot8c73f1su10
+- Branch configurada no Render: develop
+- Auto deploy: não
+- Comparação exata live → checkpoint develop/ba5d2e85:
+  - ahead_by: 7
+  - behind_by: 0
+  - total_commits: 7
+  - merge base: o próprio SHA live
+- Portanto, o checkpoint ba5d2e85 contém exatamente 7 commits posteriores ao código atualmente live no Render. Não há commits do checkpoint ausentes no live e depois presentes novamente no passado; o delta é linear e controlado.
 
-## ÚLTIMO ESTADO LIVE NO RENDER
-Serviço: plataforma-obras-api
-URL: https://plataforma-obras-api.onrender.com
-Branch configurada: develop
-Auto deploy: não
-Último deploy live verificado:
-- SHA: 8f846cc59512a058be713dfa6880839ba094d8fc
-- Mensagem: fix: excluir atividades exemplo do CPM e baseline
-- Deploy: dep-db39a47lot8c73f1su10
-- Status: live
+## ESTADO DO PR #65
+- PR: #65
+- Título: fix: invalidate CPM when schedule inputs change
+- Estado: aberto, não merged
+- Base: main @ 38ea69392ca32f9092192934a05910ef41e2d580
+- Head: develop @ ba5d2e85d152e3c4e675bd59a3ea2126020140cf
+- Não fazer merge cego do PR inteiro.
+- O PR contém histórico amplo; o próximo trabalho deve transportar apenas mudanças comprovadamente necessárias para produção.
 
-O SHA live é ancestral de develop por 7 commits. Portanto, NÃO tratar Render live como equivalente ao HEAD de develop.
+## DELTA LIVE → CHECKPOINT
+A comparação GitHub confirmou que os 7 commits posteriores ao live alteram somente:
+- server/activity-update-regression.test.ts
+- server/orchestrator.test.ts
+- server/orchestrator.ts
+- server/routers.ts
 
-## O QUE JÁ FOI VALIDADO — NÃO REFAZER
+Resumo do delta:
+- activity-update-regression.test.ts: 0 adições / 2 remoções
+- orchestrator.test.ts: 2 adições / 2 remoções
+- orchestrator.ts: 16 adições / 2 remoções
+- routers.ts: 3 adições / 3 remoções
+
+Essas mudanças são pequenas e concentradas em contratos/tipos/testes. Foram verificadas em CI no checkpoint, com validate e aurora-eap verdes.
+
+## O QUE JÁ FOI VALIDADO — NÃO REFAZER SEM MOTIVO
 Aurora:
 - 53 atividades operacionais
 - 53 WBS distintos
@@ -42,48 +59,53 @@ Aurora:
 - atividade QA 142 removida
 - 0 blockers conhecidos
 - Gantt/LOB renderizados em validação Browser Use
-- regressões documentadas para contagem de atividades, dependências e CPM.
+- regressões documentadas para contagem de atividades, dependências e CPM
 
-Correções live relevantes:
+Correções já validadas:
 - rastreabilidade da atividade
 - edição de atividades
 - invalidação/auditoria do CPM
 - exclusão de atividades exemplo do CPM/baseline
-- proteção contra contaminação por atividades QA.
+- proteção contra contaminação por atividades QA
+- fechamento da rastreabilidade atividade → EAP/auditoria
+- criação de atividade + auditoria atômicas
 
-## PR #65
-Título: fix: invalidate CPM when schedule inputs change
-Objetivo: invalidar resultado persistido do CPM quando entradas de cronograma mudarem, preservando timestamp anterior para auditoria e mantendo regressões automatizadas.
+## CONTRATO DE FRESCOR DO CPM
+O comportamento esperado é:
+1. alteração de entrada relevante do cronograma invalida o CPM persistido;
+2. o timestamp anterior deve permanecer disponível para auditoria;
+3. campos calculados não podem ser tratados como atuais após alteração;
+4. nova programação deve ocorrer antes de confiar novamente em ES/EF/LS/LF/folgas/crítico;
+5. a invalidação deve ser coberta por teste automatizado e por teste mutável de interface.
 
-Atenção: a análise anterior concluiu corretamente que o PR inteiro é grande demais para merge direto. Porém, NÃO assumir quais commits individuais são o fix sem verificar o diff real.
+Foi identificado anteriormente o commit de referência:
+- fa03f2dc707611f67907cb3430a0d4f63b37105f
+- mensagem: fix: editar atividades e invalidar cpm com auditoria
 
-## DESCOBERTA IMPORTANTE
-O último deploy live é 8f846cc, e develop possui exatamente 7 commits posteriores a esse SHA. Esses 7 commits tocaram somente:
-- server/activity-update-regression.test.ts
-- server/orchestrator.test.ts
-- server/orchestrator.ts
-- server/routers.ts
+E seu teste:
+- a51ae5d1bc13df7608e8c9c807fa14e0fc5042ab
+- mensagem: test: proteger edição de atividades e invalidação do cpm
 
-Essas alterações incluem correções de tipos/contratos e testes que chegaram a CI verde. Devem ser preservadas.
+Não transportar esses commits por SHA isolado sem antes verificar a árvore atual e as dependências de arquivos.
 
 ## PROCEDIMENTO OBRIGATÓRIO PARA CONTINUAÇÃO
-1. Trabalhar a partir de develop/ba5d2e85, nunca voltar para um SHA antigo sem motivo documentado.
-2. Preservar o checkpoint acima.
-3. Antes de qualquer merge, identificar exatamente os arquivos/commits do contrato de frescor do CPM.
-4. Comparar esses arquivos contra main.
-5. Se necessário, criar branch limpa a partir de main e transportar somente o patch necessário.
-6. Não alterar banco Aurora nem recalcular dados apenas para "testar merge".
-7. Rodar CI antes do merge.
-8. Fazer teste de mutação real com Playwright/Browser Use somente após deploy.
-9. Após qualquer alteração, revalidar o invariável Aurora: 53 atividades / 64 FS / 330 dias / 19 críticas.
-10. Se houver dúvida sobre qual SHA é correto, PARAR A ALTERAÇÃO, comparar GitHub + Render e registrar a dúvida; não adivinhar.
+1. Preservar este checkpoint.
+2. Antes de qualquer merge, comparar GitHub e Render novamente.
+3. Identificar o menor patch funcional necessário.
+4. Criar branch limpa a partir da base de produção escolhida.
+5. Transportar somente o patch necessário, sem rebase destrutivo.
+6. Rodar CI completo.
+7. Fazer deploy controlado.
+8. Testar a interface real com Playwright/Browser Use.
+9. Fazer teste mutável somente em obra QA, nunca em produção sem intenção explícita.
+10. Após alteração, revalidar o invariável Aurora: 53 atividades / 64 FS / 330 dias / 19 críticas.
+11. Registrar SHA, diff, CI, deploy e resultado neste documento.
+12. Se houver divergência entre GitHub, Render e banco, não adivinhar: criar novo checkpoint e investigar.
 
 ## RESTAURAÇÃO
 Para recuperar exatamente o estado protegido:
-- checkout da branch checkpoint/arquimedes-2026-10-07-ba5d2e85
-- SHA ba5d2e85d152e3c4e675bd59a3ea2126020140cf
-
-Essa branch é o ponto de restauração do trabalho antes da próxima intervenção.
+- branch: checkpoint/arquimedes-2026-10-07-ba5d2e85
+- SHA: ba5d2e85d152e3c4e675bd59a3ea2126020140cf
 
 ## PRINCÍPIO DE CONTINUIDADE
 "Não corrigir o que já foi validado. Não substituir histórico por suposição. Toda nova mudança precisa ter SHA, diff, teste e resultado registrados."
