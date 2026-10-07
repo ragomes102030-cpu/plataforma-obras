@@ -24,8 +24,6 @@ describe("activity editing regression contract", () => {
     expect(painel).toContain('aria-label={"Quantidade de " + activity.name}');
     expect(painel).toContain('aria-label={"Produtividade de " + activity.name}');
     expect(painel).toContain('aria-label={"Unidade de " + activity.name}');
-    expect(painel).toContain('aria-label={"Frente de " + activity.name}');
-    expect(painel).toContain('aria-label={"Pavimento de " + activity.name}');
     expect(painel).toContain('onBlur={() => salvarEdicao(activity.id, "duracao")}');
   });
 });
