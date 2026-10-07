@@ -75,7 +75,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
   const valorEdicao = (activity: any, campo: "frente" | "pavimento" | "duracao" | "quantidade" | "produtividade" | "unidade") => {
     const key = activity.id + "|" + campo;
     if (key in edicoes) return edicoes[key];
-    if (campo === "frente") return activity.phase ?? "";\n    if (campo === "pavimento") return activity.pavimento ?? "";\n    if (campo === "duracao") return String(activity.durationDays ?? "");
+    if (campo === "frente") return activity.phase ?? "";
+    if (campo === "pavimento") return activity.pavimento ?? "";
+    if (campo === "duracao") return String(activity.durationDays ?? "");
     if (campo === "quantidade") return activity.plannedQuantity == null ? "" : String(activity.plannedQuantity);
     if (campo === "produtividade") return activity.productivity == null ? "" : String(activity.productivity);
     return activity.unit ?? "";
