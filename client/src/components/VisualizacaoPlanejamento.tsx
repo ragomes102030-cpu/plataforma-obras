@@ -189,72 +189,184 @@ function LinhaDeBalanco({
   linhas: EntradaDaLinha[];
   dados: { start: string; end: string; total: number };
 }) {
-  const width = Math.max(1050, Math.max(1, new Set(linhas.map(l => l.pavimento || l.frente)).size) * 110 + 150);
-  const rowH = 28;
-  const top = 56;
-  const left = 125;
-  const right = 35;
-  const bottom = 25;
-  const height = Math.max(620, top + dados.total * rowH + bottom);
-  const floorNames = Array.from(new Set(linhas.map(l => l.pavimento).filter(Boolean))) as string[];
-  const locations = floorNames.length ? floorNames : Array.from(new Set(linhas.map(l => l.frente)));
-  const xByLocation = new Map(locations.map((f, i) => [f, left + i * ((width - left - right) / Math.max(1, locations.length - 1))]));
-  const y = (iso: string) => top + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * rowH;
-  const fases = Array.from(new Set(linhas.map(l => l.frente)));
+  // Modelo Prevision: tempo no eixo X, localizações no eixo Y.
+  // Cada serviço repetitivo vira uma faixa colorida por localização e uma
+  // linha de ritmo que conecta o início do serviço entre os pavimentos.
+  const locations = Array.from(
+    new Set(linhas.map(l => l.pavimento || l.frente).filter(Boolean))
+  );
+  const locationOrder = [...locations].sort((a, b) => {
+    const na = Number(String(a).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
+    const nb = Number(String(b).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return String(a).localeCompare(String(b), "pt-BR", { numeric: true });
+  });
+
+  const servicos = Array.from(
+    new Map(
+      linhas.map(l => {
+        const key = l.atividade.trim().toLocaleLowerCase("pt-BR");
+        return [key, l.atividade.trim()];
+      })
+    ).entries()
+  ).map(([key, label]) => ({ key, label }));
+
+  const left = 170;
+  const right = 50;
+  const top = 82;
+  const bottom = 42;
+  const rowH = 42;
+  const pxPerDay = dados.total > 360 ? 4 : dados.total > 180 ? 5 : 7;
+  const width = Math.max(1200, left + right + dados.total * pxPerDay);
+  const height = Math.max(420, top + Math.max(1, locationOrder.length) * rowH + bottom);
+  const x = (iso: string) =>
+    left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * pxPerDay;
+  const yByLocation = new Map(locationOrder.map((location, i) => [location, top + i * rowH + rowH / 2]));
+
+  const monthTicks: string[] = [];
+  let cursor = new Date(`${dados.start}T12:00:00Z`);
+  cursor.setUTCDate(1);
+  while (cursor.getTime() <= dateMs(dados.end)) {
+    monthTicks.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+
+  const weekTicks: string[] = [];
+  for (let d = 0; d <= dados.total; d += 7) weekTicks.push(addDays(dados.start, d));
+
+  const fmtMes = (iso: string) => {
+    const [y, m] = iso.split("-");
+    return `${m}/${y.slice(2)}`;
+  };
 
   return (
     <div className="pl-lob-scroll pl-planejamento-scroll">
-      <svg className="pl-lob pl-lob-vertical" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Linha de balanço da obra com datas na vertical">
+      <svg
+        className="pl-lob pl-lob-prevision"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Linha de balanço com tempo horizontal e localizações verticais"
+      >
         <rect x="0" y="0" width={width} height={height} className="pl-lob-bg" />
-        <text x="14" y="22" className="pl-gantt-title">DATA</text>
-        <text x={left} y="22" className="pl-gantt-title">LOCALIZAÇÃO / FRENTE</text>
 
-        {Array.from({ length: Math.ceil(dados.total / 7) + 1 }, (_, i) => addDays(dados.start, i * 7))
-          .filter(d => dateMs(d) <= dateMs(dados.end))
-          .map(d => {
-            const yy = y(d);
-            return (
-              <g key={d}>
-                <line x1={left} x2={width - right} y1={yy} y2={yy} className="pl-lob-grid" />
-                <text x={left - 10} y={yy + 4} textAnchor="end" className="pl-lob-floor">{fmt(d)}</text>
-              </g>
-            );
-          })}
+        <text x="14" y="22" className="pl-gantt-title">LINHA DE BALANÇO</text>
+        <text x="14" y="43" className="pl-lob-subtitle">
+          FLUXO POR LOCALIZAÇÃO · RITMO DAS EQUIPES
+        </text>
 
-        {locations.map(location => {
-          const xx = xByLocation.get(location)!;
+        <rect x={left} y="28" width={width - left - right} height="28" className="pl-lob-header" />
+        {monthTicks.map(month => {
+          const xx = x(month);
+          return (
+            <g key={month}>
+              <line x1={xx} x2={xx} y1="28" y2={height - bottom} className="pl-lob-month-grid" />
+              <text x={xx + 6} y="45" className="pl-lob-month">{fmtMes(month)}</text>
+            </g>
+          );
+        })}
+
+        {weekTicks.filter(d => dateMs(d) <= dateMs(dados.end)).map(d => {
+          const xx = x(d);
+          return (
+            <g key={d}>
+              <line x1={xx} x2={xx} y1={56} y2={height - bottom} className="pl-lob-week-grid" />
+              <text x={xx + 2} y="68" className="pl-lob-date">{fmt(d)}</text>
+            </g>
+          );
+        })}
+
+        <text x={left - 12} y="45" textAnchor="end" className="pl-lob-axis-title">
+          LOCALIZAÇÃO
+        </text>
+
+        {locationOrder.map((location, i) => {
+          const yy = yByLocation.get(location)!;
           return (
             <g key={location}>
-              <line x1={xx} x2={xx} y1={top} y2={height - bottom} className="pl-lob-grid" />
-              <text x={xx} y="42" textAnchor="middle" className="pl-lob-floor">{location}</text>
+              <rect
+                x="0"
+                y={yy - rowH / 2}
+                width={width}
+                height={rowH}
+                className={i % 2 ? "pl-lob-row alt" : "pl-lob-row"}
+              />
+              <line x1={left} x2={width - right} y1={yy + rowH / 2} y2={yy + rowH / 2} className="pl-lob-row-grid" />
+              <text x={left - 12} y={yy + 4} textAnchor="end" className="pl-lob-location">
+                {location}
+              </text>
             </g>
           );
         })}
 
-        <line x1={left} x2={width - right} y1={top} y2={top} className="pl-lob-axis" />
-        <line x1={left} x2={left} y1={top} y2={height - bottom} className="pl-lob-axis" />
-
-        {fases.map((fase, faseIndex) => {
+        {servicos.map((servico, serviceIndex) => {
           const pontos = linhas
-            .filter(l => l.frente === fase && l.pavimento)
+            .filter(l => l.atividade.trim().toLocaleLowerCase("pt-BR") === servico.key)
+            .filter(l => Boolean(l.pavimento || l.frente))
             .map(l => {
-              const xx = xByLocation.get(l.pavimento!)!;
-              return { x: xx, y: y(l.inicio), yFim: y(addDays(l.inicio, Math.max(1, l.duracao) - 1)) };
+              const location = l.pavimento || l.frente;
+              const yy = yByLocation.get(location);
+              if (yy == null) return null;
+              const startX = x(l.inicio);
+              const endX = x(addDays(l.inicio, Math.max(1, l.duracao) - 1));
+              return {
+                location,
+                x: startX,
+                y: yy,
+                width: Math.max(8, endX - startX),
+                duracao: l.duracao,
+                codigo: l.codigo,
+              };
             })
-            .sort((a, b) => a.x - b.x);
-          if (pontos.length < 2) return null;
+            .filter(Boolean) as Array<{ location: string; x: number; y: number; width: number; duracao: number; codigo: string }>;
+
+          if (!pontos.length) return null;
+
+          const colorClass = `lob-service-${serviceIndex % 8}`;
+          const linha = [...pontos].sort((a, b) => a.y - b.y);
+          const polyline = linha.length > 1
+            ? linha.map(p => `${p.x},${p.y}`).join(" ")
+            : "";
+
           return (
-            <g key={fase}>
-              <polyline points={pontos.map(p => `${p.x},${p.y}`).join(" ")} className={`pl-lob-line line-${faseIndex % 4}`} />
-              {pontos.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r="4" className={`pl-lob-point line-${faseIndex % 4}`} />
+            <g key={servico.key}>
+              {polyline && (
+                <polyline points={polyline} className={`pl-lob-rhythm ${colorClass}`} />
+              )}
+              {pontos.map(p => (
+                <g key={`${servico.key}-${p.location}-${p.codigo}`}>
+                  <title>{`${servico.label} · ${p.location} · ${p.duracao} dias · início ${fmt(pontos.length ? linhas.find(l => l.codigo === p.codigo)?.inicio || dados.start : dados.start)}`}</title>
+                  <rect
+                    x={p.x}
+                    y={p.y - 10}
+                    width={p.width}
+                    height="20"
+                    rx="2"
+                    className={`pl-lob-service ${colorClass}`}
+                  />
+                  {p.width > 55 && (
+                    <text x={p.x + 5} y={p.y + 4} className="pl-lob-service-label">
+                      {servico.label.slice(0, 24)}
+                    </text>
+                  )}
+                </g>
               ))}
-              <text x={pontos[pontos.length - 1]!.x + 8} y={pontos[pontos.length - 1]!.y + 4} className="pl-lob-label">{fase}</text>
+              {linha.length > 1 && (
+                <text
+                  x={linha[linha.length - 1]!.x + linha[linha.length - 1]!.width + 8}
+                  y={linha[linha.length - 1]!.y + 4}
+                  className={`pl-lob-rhythm-label ${colorClass}`}
+                >
+                  {servico.label}
+                </text>
+              )}
             </g>
           );
         })}
-        <text x={width / 2} y={height - 8} textAnchor="middle" className="pl-lob-caption">
-          DATAS NA VERTICAL · LOCALIZAÇÕES / FRENTES NA HORIZONTAL
+
+        <line x1={left} x2={width - right} y1={56} y2={56} className="pl-lob-axis" />
+        <line x1={left} x2={left} y1={56} y2={height - bottom} className="pl-lob-axis" />
+        <text x={width / 2} y={height - 12} textAnchor="middle" className="pl-lob-caption">
+          TEMPO →
         </text>
       </svg>
     </div>
