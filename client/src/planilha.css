@@ -1192,14 +1192,31 @@ tr:hover .xl-codigo {
 
 .pl-lob-grid { stroke: #e2e8eb; stroke-width: 1; }
 .pl-lob-axis { stroke: #9baab0; stroke-width: 1; }
-.pl-lob-floor { font-size: 9px; fill: #687981; }
+.pl-lob-subtitle { font-size: 8px; fill: #7a8991; letter-spacing: .05em; }
+.pl-lob-header { fill: #f3f5f6; }
+.pl-lob-month-grid { stroke: #cfd8dc; stroke-width: 1.1; }
+.pl-lob-week-grid { stroke: #e7ecef; stroke-width: 1; }
+.pl-lob-month { font-size: 9px; font-weight: 700; fill: #53656d; }
+.pl-lob-date { font-size: 7px; fill: #8a979d; }
+.pl-lob-axis-title { font-size: 8px; font-weight: 700; fill: #65767e; letter-spacing: .05em; }
+.pl-lob-row { fill: #fff; }
+.pl-lob-row.alt { fill: #fafcfc; }
+.pl-lob-row-grid { stroke: #e4e9ec; stroke-width: 1; }
+.pl-lob-location { font-size: 10px; font-weight: 600; fill: #53656d; }
+.pl-lob-service { opacity: .96; }
+.pl-lob-service-label { font-size: 7px; font-weight: 700; fill: #fff; pointer-events: none; }
+.pl-lob-rhythm { fill: none; stroke-width: 2; stroke-dasharray: 4 2; opacity: .7; }
+.pl-lob-rhythm-label { font-size: 8px; font-weight: 700; }
+.pl-lob-service.lob-service-0, .pl-lob-rhythm.lob-service-0, .pl-lob-rhythm-label.lob-service-0 { fill: #477b89; stroke: #477b89; }
+.pl-lob-service.lob-service-1, .pl-lob-rhythm.lob-service-1, .pl-lob-rhythm-label.lob-service-1 { fill: #7b9a62; stroke: #7b9a62; }
+.pl-lob-service.lob-service-2, .pl-lob-rhythm.lob-service-2, .pl-lob-rhythm-label.lob-service-2 { fill: #b57c57; stroke: #b57c57; }
+.pl-lob-service.lob-service-3, .pl-lob-rhythm.lob-service-3, .pl-lob-rhythm-label.lob-service-3 { fill: #806d9a; stroke: #806d9a; }
+.pl-lob-service.lob-service-4, .pl-lob-rhythm.lob-service-4, .pl-lob-rhythm-label.lob-service-4 { fill: #4f8f63; stroke: #4f8f63; }
+.pl-lob-service.lob-service-5, .pl-lob-rhythm.lob-service-5, .pl-lob-rhythm-label.lob-service-5 { fill: #9a6f4d; stroke: #9a6f4d; }
+.pl-lob-service.lob-service-6, .pl-lob-rhythm.lob-service-6, .pl-lob-rhythm-label.lob-service-6 { fill: #5676a1; stroke: #5676a1; }
+.pl-lob-service.lob-service-7, .pl-lob-rhythm.lob-service-7, .pl-lob-rhythm-label.lob-service-7 { fill: #9a5d78; stroke: #9a5d78; }
 .pl-lob-caption { font-size: 9px; fill: #7d8b91; }
-.pl-lob-line { fill: none; stroke-width: 2.5; }
-.pl-lob-line.line-0, .pl-lob-point.line-0 { stroke: #477b89; fill: #477b89; }
-.pl-lob-line.line-1, .pl-lob-point.line-1 { stroke: #7b9a62; fill: #7b9a62; }
-.pl-lob-line.line-2, .pl-lob-point.line-2 { stroke: #b57c57; fill: #b57c57; }
-.pl-lob-line.line-3, .pl-lob-point.line-3 { stroke: #806d9a; fill: #806d9a; }
-.pl-lob-label { font-size: 9px; fill: #52636a; }
+
 
 .pl-visual-vazio {
   margin: 12px 18px;
