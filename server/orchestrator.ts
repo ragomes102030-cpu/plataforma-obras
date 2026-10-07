@@ -40,7 +40,7 @@ import {
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";
 import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
-import { calculateActivityDuration, validateDependencyNetwork } from "./agent/core/engineering-capabilities";
+import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally } from "./agent/core/engineering-capabilities";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -531,6 +531,41 @@ const LOCAL_ACTIVITY_TOOL: LlmTool = {
   },
 };
 
+const INTERNAL_EAP_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "analisar_eap_localmente",
+    description: "Analisa estruturalmente a EAP diretamente no motor interno do Arquimedes, sem depender de MCP. Use com dados da EAP local para detectar raiz, níveis, órfãos, códigos, duplicidades e ciclos.",
+    parameters: {
+      type: "object",
+      properties: {
+        nodes: {
+          type: "array",
+          minItems: 0,
+          items: {
+            type: "object",
+            properties: {
+              id: { type: ["string","number"] },
+              projectId: { type: ["string","number"] },
+              parentId: { type: ["string","number","null"] },
+              code: { type: "string" },
+              name: { type: "string" },
+              level: { type: "integer" },
+              nodeType: { type: "string" },
+              unit: { type: ["string","null"] },
+              plannedQuantity: { type: ["number","null"] }
+            },
+            required: ["id","code","name","level","nodeType"],
+            additionalProperties: true
+          }
+        }
+      },
+      required: ["nodes"],
+      additionalProperties: false
+    }
+  }
+};
+
 const INTERNAL_ENGINEERING_TOOLS: LlmTool[] = [
   {
     type: "function",
@@ -865,7 +900,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1048,6 +1083,34 @@ export async function runProjectOrchestrator(
       });
     },
     executeTool: async (toolName, rawArgs, iteration) => {
+      if (toolName === "analisar_eap_localmente") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          const nodes = Array.isArray(rawArgs.nodes) ? rawArgs.nodes.map((node: any) => ({
+            ...node,
+            id: Number(node.id),
+            projectId: Number(node.projectId ?? options.localProjectId ?? 0),
+            parentId: node.parentId === null || node.parentId === undefined ? null : Number(node.parentId),
+            code: String(node.code ?? ""),
+            name: String(node.name ?? ""),
+            level: Number(node.level ?? 0),
+            nodeType: String(node.nodeType ?? ""),
+            unit: node.unit == null ? null : String(node.unit),
+            plannedQuantity: node.plannedQuantity == null ? null : Number(node.plannedQuantity),
+          })) : [];
+          const value = analyzeEapLocally(nodes);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
       if (toolName === "calcular_duracao_atividade" || toolName === "validar_rede_dependencias_local") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
