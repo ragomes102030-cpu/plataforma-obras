@@ -1,4 +1,6 @@
 import { validateEap, type EapScopeNode } from "../../construction/eap-validator";
+import { calculateDeterministicCpm, type DeterministicCpmResult } from "../../construction/cpm-calculator";
+import type { ScheduleEvidenceActivity, ScheduleEvidenceDependency } from "../../construction/domain-types";
 
 export type DurationEvidenceInput = {
   durationDays?: number;
@@ -57,4 +59,12 @@ export function analyzeEapLocally(nodes: EapScopeNode[]) {
     engine: "arquimedes_internal_engine",
     rule: "a validação estrutural da EAP é interna e não depende de MCP; lacunas de cobertura devem ser tratadas como evidência/alerta quando não forem bloqueios determinísticos.",
   };
+}
+
+
+export function calculateCpmLocally(
+  activities: ScheduleEvidenceActivity[],
+  dependencies: ScheduleEvidenceDependency[]
+): DeterministicCpmResult {
+  return calculateDeterministicCpm(activities, dependencies);
 }
