@@ -41,53 +41,64 @@ function fail(msg) {
 }
 
 async function sincronizarSequenciasDeIdentidade(conn) {
+  // No Supabase, o boot só precisa garantir que sequences identity não ficaram
+  // atrás do MAX(id). A implementação anterior fazia até 3 round-trips por
+  // coluna/tabela. Em um banco com dezenas de tabelas isso degradava o cold
+  // start do Render sem acrescentar segurança proporcional.
+  //
+  // Executamos a mesma conferência dentro de um único bloco PostgreSQL, mantendo
+  // a regra de nunca rebaixar uma sequence que já esteja à frente.
   const result = await conn.query(`
-    SELECT
-      n.nspname AS schema_name,
-      c.relname AS table_name,
-      a.attname AS column_name,
-      pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) AS seq_name
-    FROM pg_attribute a
-    JOIN pg_class c ON c.oid = a.attrelid
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public'
-      AND c.relkind = 'r'
-      AND a.attidentity IN ('a','d')
-      AND a.attnum > 0
-      AND NOT a.attisdropped
-    ORDER BY c.relname, a.attname
+    DO $$
+    DECLARE
+      r record;
+      max_id bigint;
+      last_value bigint;
+    BEGIN
+      FOR r IN
+        SELECT
+          n.nspname AS schema_name,
+          c.relname AS table_name,
+          a.attname AS column_name,
+          pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname) AS seq_name
+        FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relkind = 'r'
+          AND a.attidentity IN ('a','d')
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+        ORDER BY c.relname, a.attname
+      LOOP
+        IF r.seq_name IS NULL THEN
+          CONTINUE;
+        END IF;
+
+        EXECUTE format(
+          'SELECT MAX(%I)::bigint FROM %I.%I',
+          r.column_name,
+          r.schema_name,
+          r.table_name
+        ) INTO max_id;
+
+        EXECUTE format('SELECT last_value::bigint FROM %s', r.seq_name)
+          INTO last_value;
+
+        IF max_id IS NULL THEN
+          IF last_value < 1 THEN
+            PERFORM setval(r.seq_name::regclass, 1, false);
+          END IF;
+        ELSIF last_value < max_id THEN
+          PERFORM setval(r.seq_name::regclass, max_id, true);
+        END IF;
+      END LOOP;
+    END
+    $$;
   `);
 
-  let corrigidas = 0;
-  for (const row of result.rows) {
-    if (!row.seq_name) continue;
-    const maxResult = await conn.query(
-      `SELECT MAX("${row.column_name}") AS max_id FROM "${row.schema_name}"."${row.table_name}"`
-    );
-    const sequenceResult = await conn.query(
-      'SELECT last_value, is_called FROM ' + row.seq_name
-    );
-    const maxId = maxResult.rows[0]?.max_id == null ? null : Number(maxResult.rows[0].max_id);
-    const lastValue = Number(sequenceResult.rows[0]?.last_value ?? 0);
-
-    if (maxId == null) {
-      if (lastValue < 1) {
-        await conn.query('SELECT setval($1::regclass, 1, false)', [row.seq_name]);
-        corrigidas++;
-      }
-      continue;
-    }
-
-    // Nunca rebaixa uma sequência que já esteja à frente: isso preserva IDs
-    // reservados por transações concorrentes ou testes que foram revertidos.
-    if (lastValue < maxId) {
-      await conn.query('SELECT setval($1::regclass, $2, true)', [row.seq_name, maxId]);
-      corrigidas++;
-    }
-  }
-
   console.log(
-    `[sequences] identidade PostgreSQL conferida: ${result.rows.length} sequência(s), ${corrigidas} corrigida(s).`
+    "[sequences] identidade PostgreSQL conferida em uma única operação transacional."
   );
 }
 
