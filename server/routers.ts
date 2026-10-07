@@ -3418,8 +3418,6 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
 
-        // Uma atividade só nasce da versão EAP aprovada. Nunca reutilizar a
-        // versão mais recente em estado rascunho/superseded para gerar prazo.
         const approved = await requireApprovedEapVersion(db, input.projectId);
         const [node] = await db
           .select()
@@ -3477,10 +3475,11 @@ export const appRouter = router({
           .limit(1);
         if (existing) return { id: existing.id, created: false as const };
 
+        const externalId = `ACT-${input.projectId}-${randomUUID()}`;
         const activityValues: typeof scheduleActivities.$inferInsert = {
           projectId: input.projectId,
           wbsNodeId: writableNode.id,
-          externalId: randomUUID(),
+          externalId,
           wbsCode: writableNode.code,
           eapRef: writableNode.code,
           name: writableNode.name,
@@ -3493,11 +3492,48 @@ export const appRouter = router({
           sortOrder: writableNode.sortOrder * 1000 + writableNode.id,
           versionId: writable.id,
         };
-        const [created] = await db
-          .insert(scheduleActivities)
-          .values(activityValues)
-          .returning({ id: scheduleActivities.id });
-        return { id: created.id, created: true as const };
+
+        const result = await db.transaction(async tx => {
+          const [created] = await tx
+            .insert(scheduleActivities)
+            .values(activityValues)
+            .returning({ id: scheduleActivities.id });
+
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "activity_created",
+            payload: {
+              activityId: created.id,
+              externalId,
+              wbsNodeId: writableNode.id,
+              eapRef: writableNode.code,
+              wbsCode: writableNode.code,
+              name: writableNode.name,
+              phase: "Execução",
+              startOffset: 0,
+              durationDays: Number(durationDays),
+              durationSource: input.durationDays != null ? "explicit" : "derived",
+              plannedQuantity: input.plannedQuantity ?? (writableNode.plannedQuantity != null ? Number(writableNode.plannedQuantity) : null),
+              productivity: input.productivity ?? null,
+              budgetItemId: null,
+              planVersionId: writable.id,
+              createdAt: new Date().toISOString(),
+            },
+          });
+
+          return created.id;
+        });
+
+        return {
+          id: result,
+          externalId,
+          wbsNodeId: writableNode.id,
+          eapRef: writableNode.code,
+          durationDays,
+          planVersionId: writable.id,
+          created: true as const,
+        };
       }),
     atualizarAtividade: protectedProcedure
       .input(z.object({
