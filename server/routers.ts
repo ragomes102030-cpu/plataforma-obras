@@ -3146,8 +3146,47 @@ export const appRouter = router({
         if (!wbsNode) throw badRequest("O código informado não corresponde a um item da EAP desta obra.");
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const durationDays = input.durationDays ?? (input.plannedQuantity && input.productivity ? Math.max(1, Math.ceil(input.plannedQuantity / input.productivity)) : 1);
-        const [createdId] = await db.insert(scheduleActivities).values({ projectId: input.projectId, wbsNodeId: wbsNode.id, wbsCode: input.wbsCode, eapRef: input.wbsCode, name: input.name, phase: input.phase, startOffset: input.startOffset, durationDays, plannedQuantity: input.plannedQuantity?.toFixed(3), productivity: input.productivity?.toFixed(3), budgetItemId: input.budgetItemId, sortOrder: Date.now(), versionId: writable.id }).$returningId();
-        return { id: createdId.id };
+        const externalId = `ACT-${input.projectId}-${randomUUID()}`;
+        const sortOrder = Date.now();
+        const [createdId] = await db.insert(scheduleActivities).values({
+          projectId: input.projectId,
+          wbsNodeId: wbsNode.id,
+          externalId,
+          wbsCode: input.wbsCode,
+          eapRef: input.wbsCode,
+          name: input.name,
+          phase: input.phase,
+          startOffset: input.startOffset,
+          durationDays,
+          plannedQuantity: input.plannedQuantity?.toFixed(3),
+          productivity: input.productivity?.toFixed(3),
+          budgetItemId: input.budgetItemId,
+          sortOrder,
+          versionId: writable.id,
+        }).$returningId();
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "activity_created",
+          payload: {
+            activityId: createdId.id,
+            externalId,
+            wbsNodeId: wbsNode.id,
+            eapRef: input.wbsCode,
+            wbsCode: input.wbsCode,
+            name: input.name,
+            phase: input.phase,
+            startOffset: input.startOffset,
+            durationDays,
+            durationSource: input.durationDays != null ? "explicit" : "derived",
+            plannedQuantity: input.plannedQuantity ?? null,
+            productivity: input.productivity ?? null,
+            budgetItemId: input.budgetItemId ?? null,
+            planVersionId: writable.id,
+            createdAt: new Date().toISOString(),
+          },
+        });
+        return { id: createdId.id, externalId, wbsNodeId: wbsNode.id, eapRef: input.wbsCode, durationDays, planVersionId: writable.id };
       }),
     generateFromEap: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
