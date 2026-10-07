@@ -72,15 +72,16 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const activities = plano.data?.activities ?? [];
 
-  const valorEdicao = (activity: any, campo: "duracao" | "quantidade" | "unidade") => {
+  const valorEdicao = (activity: any, campo: "duracao" | "quantidade" | "produtividade" | "unidade") => {
     const key = activity.id + "|" + campo;
     if (key in edicoes) return edicoes[key];
     if (campo === "duracao") return String(activity.durationDays ?? "");
     if (campo === "quantidade") return activity.plannedQuantity == null ? "" : String(activity.plannedQuantity);
+    if (campo === "produtividade") return activity.productivity == null ? "" : String(activity.productivity);
     return activity.unit ?? "";
   };
 
-  const salvarEdicao = (activityId: number, campo: "duracao" | "quantidade" | "unidade") => {
+  const salvarEdicao = (activityId: number, campo: "duracao" | "quantidade" | "produtividade" | "unidade") => {
     const key = activityId + "|" + campo;
     if (!(key in edicoes)) return;
     atualizarAtividade.mutate({ projectId: projetoId, atividadeId: activityId, campo, valor: edicoes[key] });
@@ -291,6 +292,17 @@ export function PainelPlanejamento({ projetoId }: Props) {
                 </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
                 <td className="action-col">
+                  <input
+                    className="pl-duracao-input"
+                    type="number"
+                    min={0}
+                    step="0.001"
+                    value={valorEdicao(activity, "produtividade")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|produtividade"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "produtividade")}
+                    aria-label={"Produtividade de " + activity.name}
+                    placeholder="prod./dia"
+                  />
                   <input
                     className="pl-duracao-input"
                     type="number"

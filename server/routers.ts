@@ -3539,7 +3539,7 @@ export const appRouter = router({
       .input(z.object({
         projectId: z.number().int().positive(),
         atividadeId: z.number().int().positive(),
-        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","quantidade","unidade"]),
+        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","quantidade","produtividade","unidade"]),
         valor: z.string().max(500),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3574,6 +3574,15 @@ export const appRouter = router({
           }
           patch.plannedQuantity = input.valor.trim() ? Number(input.valor).toFixed(3) : null;
         }
+        if (input.campo === "produtividade") {
+          const productivity = Number(input.valor);
+          if (!Number.isFinite(productivity) || productivity <= 0) throw badRequest("A produtividade deve ser maior que zero.");
+          patch.productivity = productivity.toFixed(3);
+          const quantity = Number(activity.plannedQuantity ?? 0);
+          if (quantity > 0) {
+            patch.durationDays = Math.max(1, Math.ceil(quantity / productivity));
+          }
+        }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
         if (input.campo === "inicio") {
           const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
@@ -3582,7 +3591,7 @@ export const appRouter = router({
           patch.startOffset = Math.max(0, Math.floor((startDate.getTime() - project.plannedStart.getTime()) / 86400000));
         }
 
-        const invalidatesCpm = ["duracao", "inicio"].includes(input.campo);
+        const invalidatesCpm = ["duracao", "inicio", "produtividade"].includes(input.campo);
         const before = {
           name: activity.name,
           phase: activity.phase,
