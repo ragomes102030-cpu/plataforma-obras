@@ -808,7 +808,8 @@ async function createLocalAgentActivity(args: {
     if (!unit || !productivityUnit) {
       throw new Error("Quantidade e produtividade precisam informar suas unidades.");
     }
-    if (unit.toLowerCase() !== productivityUnit.toLowerCase().split("/").at(-1)) {
+    const productivityBaseUnit = productivityUnit.toLowerCase().split("/")[0].trim();
+    if (unit.toLowerCase() !== productivityBaseUnit) {
       throw new Error("Unidade do quantitativo incompatível com a unidade da produtividade.");
     }
   }
