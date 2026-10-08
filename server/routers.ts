@@ -60,6 +60,7 @@ import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-sourc
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
+import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
 async function requireApprovedEapVersion(
@@ -1811,9 +1812,10 @@ export const appRouter = router({
       const nodes=current
         ? await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,current.id))).orderBy(wbsNodes.sortOrder,wbsNodes.id)
         : [];
-      const proposal: ArquimedesEapProposal={action:"propose_eap",nodes:nodes.length?[]:[{operation:"create",code:"1",name:"Escopo da obra",nodeType:"grupo",parentCode:null,rationale:"Raiz única para receber o escopo informado da obra."}],basis:["Escopo cadastrado na obra","Regra de raiz única da EAP"],assumptions:[],missingInformation:nodes.length?[]:["Detalhar o escopo e as entregas da obra antes da aprovação final."],validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]};
+      const [project]=await db.select({name:projects.name,descricao:projects.descricao,tipoDeObra:projects.tipoDeObra}).from(projects).where(eq(projects.id,input.projectId)).limit(1);
+      const proposal=buildInitialEapProposal(project ?? {}, nodes.length > 0);
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
-      await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis",confidence:"medium",status:"proposed"});
+      await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis-scope-aware",confidence:"medium",status:"proposed"});
       return {proposal};
     }),
     aplicarPropostaEap: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.literal(true),proposal:z.any()})).mutation(async({ctx,input})=>{
