@@ -55,7 +55,7 @@ export function buildInitialEapProposal(
           operation: "create" as const,
           code,
           name,
-          nodeType: "grupo" as const,
+          nodeType: "pacote" as const,
           parentCode: "1",
           decompositionBasis: "phase" as const,
           rationale,
