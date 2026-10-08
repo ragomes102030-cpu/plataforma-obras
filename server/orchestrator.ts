@@ -1199,10 +1199,21 @@ export async function runProjectOrchestrator(
     })),
   ];
 
+  // O chat analítico não deve pagar o custo de oito rodadas por padrão.
+  // A análise já recebe evidências locais + MCP direcionado; reservamos uma
+  // rodada final de síntese. Operações explícitas preservam o orçamento maior.
+  const defaultMaxIterations =
+    intent === "operacao"
+      ? MAX_ITERATIONS
+      : intent === "analise"
+        ? 4
+        : intent === "consulta"
+          ? 4
+          : 3;
   const maxIterations =
     Number.isFinite(options.maxIterations) && options.maxIterations! > 0
       ? Math.min(Math.floor(options.maxIterations!), MAX_ITERATIONS)
-      : MAX_ITERATIONS;
+      : defaultMaxIterations;
   const runtimeResult = await runReActAgent({
     messages: conversation,
     tools,
