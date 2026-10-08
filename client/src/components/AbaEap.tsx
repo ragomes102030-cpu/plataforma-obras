@@ -738,7 +738,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
     if (!proposal) {
       return { creates: 0, updates: 0, moves: 0, removes: 0, roots: 0 };
     }
-    const nodes = proposal.nodes;
+    const nodes = proposal.nodes ?? [];
     return {
       creates: nodes.filter(node => node.operation === "create").length,
       updates: nodes.filter(node => node.operation === "update").length,
@@ -749,6 +749,10 @@ function EapVazia({ projetoId }: { projetoId: number }) {
   }, [proposal]);
 
   const proposalNodes = proposal?.nodes ?? [];
+  const proposalBasis = proposal?.basis ?? [];
+  const proposalAssumptions = proposal?.assumptions ?? [];
+  const proposalMissingInformation = proposal?.missingInformation ?? [];
+  const proposalValidationIssues = proposal?.validation?.issues ?? [];
 
   return (
     <div className="eap-inicial">
@@ -841,17 +845,17 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           </header>
 
           <div className="eap-proposta-kpis">
-            <div><span>NÓS PROPOSTOS</span><strong>{proposal.nodes.length}</strong><small>estrutura inicial</small></div>
+            <div><span>NÓS PROPOSTOS</span><strong>{proposalNodes.length}</strong><small>estrutura inicial</small></div>
             <div><span>RAÍZES</span><strong>{proposalStats.roots}</strong><small>blocos principais</small></div>
             <div><span>CRIAÇÕES</span><strong>{proposalStats.creates}</strong><small>novos nós</small></div>
-            <div className={proposal.validation?.valid === false ? "attention" : "ok"}><span>ESTRUTURA</span><strong>{proposal.validation?.valid === false ? "BLOQUEADA" : "OK"}</strong><small>{proposal.validation?.valid === false ? (proposal.validation.issues.filter(item => item.severity === "error").length + " erro(s) estrutural(is)") : "Proposta validada pelo sistema"}</small></div>
+            <div className={proposal.validation?.valid === false ? "attention" : "ok"}><span>ESTRUTURA</span><strong>{proposal.validation?.valid === false ? "BLOQUEADA" : "OK"}</strong><small>{proposal.validation?.valid === false ? (proposalValidationIssues.filter(item => item.severity === "error").length + " erro(s) estrutural(is)") : "Proposta validada pelo sistema"}</small></div>
           </div>
 
           <div className="eap-proposta-grid">
             <section className="eap-proposta-card eap-proposta-estrutura">
               <div className="eap-proposta-card-head">
                 <div><Layers3 size={15} /><div><strong>Estrutura proposta</strong><span>Visão resumida da árvore gerada pelo Arquimedes</span></div></div>
-                <span>{proposal.nodes.length} nós</span>
+                <span>{proposalNodes.length} nós</span>
               </div>
 
               <div className="eap-proposta-tree-head">
@@ -879,7 +883,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
                   <div><ClipboardCheck size={15} /><div><strong>Fundamentação</strong><span>Base usada para construir a proposta</span></div></div>
                 </div>
                 <div className="eap-proposta-copy">
-                  {proposal.basis.length ? proposal.basis.map((item, i) => <p key={i}>{item}</p>) : <p className="muted">Nenhuma fundamentação adicional registrada.</p>}
+                  {proposalBasis.length ? proposalBasis.map((item, i) => <p key={i}>{item}</p>) : <p className="muted">Nenhuma fundamentação adicional registrada.</p>}
                 </div>
               </section>
 
@@ -888,24 +892,24 @@ function EapVazia({ projetoId }: { projetoId: number }) {
                   <div><Info size={15} /><div><strong>Premissas</strong><span>Condições consideradas sem confirmação formal</span></div></div>
                 </div>
                 <div className="eap-proposta-copy">
-                  {proposal.assumptions.length ? proposal.assumptions.map((item, i) => <p key={i}>{item}</p>) : <p className="muted">Nenhuma premissa registrada.</p>}
+                  {proposalAssumptions.length ? proposalAssumptions.map((item, i) => <p key={i}>{item}</p>) : <p className="muted">Nenhuma premissa registrada.</p>}
                 </div>
               </section>
 
               <section className="eap-proposta-card eap-proposta-pendencias">
                 <button type="button" className="eap-proposta-collapse" onClick={() => setPendenciasAbertas(value => !value)}>
                   <div><AlertTriangle size={15} /><div><strong>Informações pendentes</strong><span>Dados que o engenheiro ainda precisa confirmar</span></div></div>
-                  <span className="eap-proposta-count">{proposal.missingInformation.length}</span>
+                  <span className="eap-proposta-count">{proposalMissingInformation.length}</span>
                 </button>
                 {pendenciasAbertas && (
                   <div className="eap-proposta-pendencias-lista">
-                    {proposal.missingInformation.length ? proposal.missingInformation.map((item, i) => <div key={i}><span>{String(i + 1).padStart(2, "0")}</span><p>{item}</p></div>) : <p className="muted">Não há pendências registradas.</p>}
+                    {proposalMissingInformation.length ? proposalMissingInformation.map((item, i) => <div key={i}><span>{String(i + 1).padStart(2, "0")}</span><p>{item}</p></div>) : <p className="muted">Não há pendências registradas.</p>}
               {proposal.validation && !proposal.validation.valid && (
                 <div className="eap-inicial-error">
                   <AlertTriangle size={15} />
                   <div>
                     <strong>Erro estrutural da proposta</strong>
-                    {proposal.validation.issues.filter(item => item.severity === "error").slice(0, 6).map((item, i) => (
+                    {proposalValidationIssues.filter(item => item.severity === "error").slice(0, 6).map((item, i) => (
                       <span key={i}>{item.message}</span>
                     ))}
                   </div>
