@@ -21,6 +21,19 @@ O cérebro possui três camadas conceituais:
 
 Memória de execução é evidência histórica; nunca é autorização de mutação.
 
+## 3. Regra permanente de continuidade
+Toda conversa recebida pelo Arquimedes sobre funcionamento do sistema, arquitetura, decisões, QA, comportamento, uso ou aprendizado deve ser preservada automaticamente no cérebro. O registro deve manter o transcript recuperável e separar histórico de conhecimento validado.
+
+Regras:
+- conversa é evidência histórica;
+- fato confirmado pode alimentar memória estruturada;
+- hipótese/proposta permanece hipótese/proposta até validação;
+- aprendizado estrutural deve seguir observação -> evidência -> candidato -> validação -> regra -> regressão;
+- memória nunca autoriza mutação;
+- falha de gravação da memória não pode derrubar a resposta operacional, mas deve gerar evento observável.
+
+Implementação: rememberArquimedesConversation() em server/agent/memory.ts, chamado automaticamente pelo orquestrador ao finalizar cada execução autenticada.
+
 ## 3. Memória persistente já implementada
 Arquivo principal: server/agent/memory.ts
 Tabela: agent_memories
