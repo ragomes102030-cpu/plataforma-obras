@@ -10,4 +10,12 @@ describe("Arquimedes memory latency guard", () => {
     expect(source).toContain("memoryRecallCache");
     expect(source).toContain("invalidateMemoryRecallCache");
   });
+
+  it("reduces the default ReAct budget for analytical chat", () => {
+    const source = readFileSync(join(process.cwd(), "server/orchestrator.ts"), "utf8");
+    expect(source).toContain('intent === "analise"');
+    expect(source).toContain("? 4");
+    expect(source).toContain('intent === "operacao"');
+  });
+  });
 });
