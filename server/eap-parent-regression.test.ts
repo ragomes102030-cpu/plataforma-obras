@@ -6,7 +6,7 @@ describe("QA-EAP-002 · criação de filho preserva parentId", () => {
     const source = readFileSync("client/src/components/AbaEap.tsx", "utf8");
 
     expect(source).toContain(
-      'parentId:editor.mode==="create"?editor.parentId:undefined'
+      '...(editor.mode==="create" && editor.parentId !== null ? { parentId: editor.parentId } : {}),...dados'
     );
   });
 });
