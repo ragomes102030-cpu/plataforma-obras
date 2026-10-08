@@ -1172,7 +1172,42 @@ export async function runProjectOrchestrator(
   // de planejamento (criar/atualizar atividades e dependências). Exclusões e
   // captura de baseline continuam sujeitas a confirmação adicional no fluxo.
   const allowMutations = intent === "operacao";
-  const tools = toOpenAiTools(catalog, allowMutations);
+  const allTools = toOpenAiTools(catalog, allowMutations);
+  const analysisToolAllowlist = new Set([
+    "get_eap_tree",
+    "get_eap_node",
+    "listar_por_tipo_frente",
+    "buscar_eap_node",
+    "validar_estrutura",
+    "pacotes_sem_dono",
+    "resumo_quantitativos",
+    "listar_escopo",
+    "validar_regra_100_porcento",
+    "listar_atividades",
+    "listar_dependencias",
+    "validar_dependencias",
+    "calcular_caminho_critico",
+    "listar_baselines",
+    "comparar_baseline",
+    "curva_s",
+    "listar_temas",
+    "calcular_linha_balanco",
+    "balancear_ritmos_lob",
+    "dimensionar_equipes_lob",
+    "analisar_eap_localmente",
+    "calcular_cpm_localmente",
+    "calcular_duracao_atividade",
+    "validar_rede_dependencias_local",
+    "consultar_eap_local",
+    "consultar_memoria",
+    "registrar_memoria",
+    "registrar_aprendizado",
+    "engineering_gap_analysis",
+  ]);
+  const tools =
+    intent === "analise"
+      ? allTools.filter(tool => analysisToolAllowlist.has(tool.function.name))
+      : allTools;
   await emit({
     type: "catalog_loaded",
     toolCount: tools.length,
