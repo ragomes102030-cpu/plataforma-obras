@@ -171,6 +171,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const refazer = trpc.eap.generateEapFromCatalog.useMutation({
     onSuccess: async () => {
       await recarregar();
+      await coordenador.refetch();
       await utils.planning.grade.invalidate({ projectId: projetoId });
     },
   });
