@@ -18,7 +18,8 @@
     "db:audit": "node scripts/audit-schema-pg.mjs",
     "db:verify:scratch": "node scripts/verify-migration-from-scratch.mjs",
     "test:regression:aurora-eap": "node scripts/regression-aurora-eap.mjs",
-    "e2e:aurora": "playwright test tests/aurora-arquimedes.e2e.spec.ts"
+    "e2e:aurora": "playwright test tests/aurora-arquimedes.e2e.spec.ts",
+    "e2e:playwright": "tsx scripts/e2e-playwright-readonly.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
