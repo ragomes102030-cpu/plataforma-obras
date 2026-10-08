@@ -60,7 +60,7 @@ export async function runBrainSkillsQaSuite(input: {
     learningKey,
     5
   );
-  const found = recalled.find(item => item.memoryKey === learningKey);
+  const found = recalled.find(item => item.memoryKey === learningKey) as (typeof recalled)[number] | undefined;
   checks.push({
     id: "learning.candidate-recorded",
     passed:
