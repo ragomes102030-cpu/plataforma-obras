@@ -72,8 +72,8 @@ export default function Home() {
     enabled: Boolean(user),
     retry: false,
   });
-  const lista: Array<{ id: number; name: string; code: string }> =
-    (obras.data as Array<{ id: number; name: string; code: string }> | undefined) ?? [];
+  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: string | null }> =
+    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: string | null }> | undefined) ?? [];
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
@@ -351,7 +351,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} aba={aba} onAba={setAba} />
+          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} aba={aba} onAba={setAba} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -369,11 +369,17 @@ export default function Home() {
 function Obra({
   projetoId,
   obra,
+  localizacao,
+  descricao,
+  tipoDeObra,
   aba,
   onAba,
 }: {
   projetoId: number;
   obra: string;
+  localizacao: string;
+  descricao: string;
+  tipoDeObra: string;
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
 }) {
@@ -499,7 +505,7 @@ function Obra({
         {aba === "dashboard" ? (
           <PainelDoCronograma agregado={agregado} projetoId={projetoId} temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0} />
         ) : aba === "escopo" ? (
-          <EscopoInicial projetoId={projetoId} obra={obra} />
+          <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} />
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
@@ -526,7 +532,23 @@ function Obra({
 }
 
 /** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
-function EscopoInicial({ projetoId, obra }: { projetoId: number; obra: string }) {
+function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: string }) {
+  const utils = trpc.useUtils();
+  const [editando, setEditando] = useState(false);
+  const [descricaoEditada, setDescricaoEditada] = useState(descricao);
+  const [localizacaoEditada, setLocalizacaoEditada] = useState(localizacao);
+  const [tipoDeObraEditado, setTipoDeObraEditado] = useState(tipoDeObra);
+  useEffect(() => {
+    setDescricaoEditada(descricao);
+    setLocalizacaoEditada(localizacao);
+    setTipoDeObraEditado(tipoDeObra);
+  }, [descricao, localizacao, tipoDeObra]);
+  const salvarEscopo = trpc.projects.updateScope.useMutation({
+    onSuccess: async () => {
+      await utils.projects.list.invalidate();
+      setEditando(false);
+    },
+  });
   const grade = trpc.planning.grade.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -554,9 +576,51 @@ function EscopoInicial({ projetoId, obra }: { projetoId: number; obra: string })
           <p>{obra} · definição do que existe na obra, seus limites e o que será transformado em EAP.</p>
         </div>
         <div className="scopo-header-actions">
+          {editando ? (
+            <>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim() })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
+            </>
+          ) : (
+            <button type="button" className="scopo-btn secondary" onClick={() => setEditando(true)}><ClipboardList size={14}/> Editar escopo</button>
+          )}
           <button type="button" className="scopo-btn secondary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={14}/> Analisar com Arquimedes</button>
         </div>
       </header>
+
+      <section className="scopo-trace-grid">
+        <details open className="scopo-detail">
+          <summary>Escopo declarado da obra</summary>
+          <div className="scopo-detail-body">
+            <p><strong>Natureza:</strong> {({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? "A confirmar"}</p>
+            <p><strong>Localização cadastrada:</strong> {localizacao || "Não informada"}</p>
+            <p><strong>Descrição original:</strong></p>
+            <p>{descricao.trim() || "Ainda não há uma descrição formal cadastrada para esta obra."}</p>
+          </div>
+        </details>
+      </section>
+      {editando && (
+        <section className="scopo-detail scopo-edit-form">
+          <div className="scopo-detail-body">
+            <label><strong>Localização da obra</strong><input value={localizacaoEditada} onChange={event => setLocalizacaoEditada(event.target.value)} minLength={2} maxLength={180} placeholder="Cidade, endereço ou região" /></label>
+            <label><strong>Natureza da obra</strong>
+              <select value={tipoDeObraEditado} onChange={event => setTipoDeObraEditado(event.target.value)}>
+                <option value="">A confirmar</option>
+                <option value="edificio">Edificação / construção nova</option>
+                <option value="reforma">Reforma</option>
+                <option value="pavimentacao">Pavimentação</option>
+                <option value="saneamento">Saneamento / infraestrutura</option>
+                <option value="todos">Múltiplas frentes</option>
+              </select>
+            </label>
+            <label><strong>Descrição formal do escopo</strong>
+              <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Descreva entregas, inclusões, exclusões, premissas, limites contratuais e itens ainda a confirmar. Separe fatos conhecidos de hipóteses." />
+              <small>{descricaoEditada.length}/4000 caracteres. Não informe quantidades ou sistemas que ainda não foram confirmados.</small>
+            </label>
+            {salvarEscopo.isError && <p role="alert">{salvarEscopo.error.message}</p>}
+          </div>
+        </section>
+      )}
 
       <div className="scopo-flow" aria-label="Fluxo do planejamento">
         <strong>Obra</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP</span><span>→</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades</span>
