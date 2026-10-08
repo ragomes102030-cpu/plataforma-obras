@@ -4946,6 +4946,17 @@ export const appRouter = router({
                   new Set(results.map(result => result.source))
                 ).join("+"),
                 eapNodeCount: eapResult.data?.length ?? null,
+                eapSnapshot: (eapResult.data ?? []).slice(0, 120).map(node => ({
+                  id: node.id,
+                  code: node.code,
+                  name: node.name,
+                  parentId: node.parentId,
+                  level: node.level,
+                  nodeType: node.nodeType,
+                  location: node.location ?? null,
+                  responsible: node.responsible ?? null,
+                  plannedQuantity: node.plannedQuantity ?? null,
+                })),
                 activityCount: activityResult.data?.length ?? null,
                 dependencyCount: dependencyResult.data?.length ?? null,
                 warnings: results.flatMap(result =>
