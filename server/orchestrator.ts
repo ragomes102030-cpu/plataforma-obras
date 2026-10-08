@@ -38,7 +38,7 @@ import {
   setArquimedesCapabilityEnabled,
 } from "./agent/capability-manager";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
-import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning } from "./agent/memory";
+import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning, rememberArquimedesConversation } from "./agent/memory";
 import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
 import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
 
@@ -2229,6 +2229,31 @@ export async function runProjectOrchestrator(
       console.warn(JSON.stringify({
         evento: "arquimedes_analysis_checkpoint_failed",
         projectId: options.localProjectId,
+        taskId,
+        erro: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+
+  // Regra permanente do cérebro: toda conversa operacional que passa pelo
+  // Arquimedes é preservada como histórico recuperável. Isso não transforma
+  // conversa em regra validada e nunca concede autorização de mutação.
+  if (options.userId && messages.length > 0) {
+    try {
+      await rememberArquimedesConversation({
+        ownerUserId: options.userId,
+        projectId: options.localProjectId ?? null,
+        taskId,
+        messages,
+        response: content,
+        sourceRef: taskId,
+      });
+    } catch (error) {
+      // Continuidade é importante, mas uma falha de memória não deve derrubar
+      // a resposta operacional atual.
+      console.warn(JSON.stringify({
+        evento: "arquimedes_conversation_memory_failed",
+        projectId: options.localProjectId ?? null,
         taskId,
         erro: error instanceof Error ? error.message : String(error),
       }));
