@@ -117,6 +117,30 @@ function cacheClearPrefix(prefix: string): void {
   }
 }
 
+/**
+ * Returns the plan version that represents the current operational schedule.
+ * A draft/proposed version is the active working plan; otherwise the latest
+ * approved version is used. Legacy works without versions keep their null
+ * versionId rows isolated from versioned plans.
+ */
+async function getOperationalPlanVersionId(
+  projectId: number
+): Promise<number | null> {
+  const versions = await listPlanVersionDetails(projectId);
+  const active =
+    versions.find(version => version.status === "draft" || version.status === "proposed") ??
+    versions.find(version => version.status === "approved");
+  return active?.id ?? null;
+}
+
+function operationalVersionCondition(versionId: number | null) {
+  return versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId);
+}
+
+function operationalDependencyVersionCondition(versionId: number | null) {
+  return versionId == null ? isNull(scheduleDependencies.versionId) : eq(scheduleDependencies.versionId, versionId);
+}
+
 const demoProjects = [
   {
     id: 1,
@@ -726,8 +750,10 @@ async function loadStageGateEvidence(
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
     evidence: derivePlanningEvidence({
-      plannedQuantity: activity.plannedQuantity,
-      productivity: activity.productivity,
+      plannedQuantity:
+        activity.plannedQuantity == null ? null : Number(activity.plannedQuantity),
+      productivity:
+        activity.productivity == null ? null : Number(activity.productivity),
       durationDays: Number(activity.durationDays ?? 0),
       budgetItemId: activity.budgetItemId,
       source: null,
@@ -3074,8 +3100,12 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
-        if (!activities.length) throw badRequest("Não há atividades para congelar como baseline.");
+        const versionId = await getOperationalPlanVersionId(input.projectId);
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), operationalVersionCondition(versionId)));
+        if (!activities.length) throw badRequest("Não há atividades operacionais para congelar como baseline.");
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).$returningId();
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length };
@@ -3086,8 +3116,17 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
-        const dependencies = await db.select().from(scheduleDependencies).where(eq(scheduleDependencies.projectId, input.projectId));
+        const versionId = await getOperationalPlanVersionId(input.projectId);
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), operationalVersionCondition(versionId)));
+        const operationalIds = new Set(activities.map(activity => activity.id));
+        const dependencies = (await db
+          .select()
+          .from(scheduleDependencies)
+          .where(and(eq(scheduleDependencies.projectId, input.projectId), operationalDependencyVersionCondition(versionId))))
+          .filter(dependency => operationalIds.has(dependency.predecessorId) && operationalIds.has(dependency.successorId));
         const result = calculateDeterministicCpm(activities, dependencies);
         if (!result.valid || !result.schedule) return { valid: false as const, projectDuration: 0, criticalPath: [], issues: result.issues };
         const calculatedAt = new Date();
@@ -3636,7 +3675,12 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { available: false as const, capacity: 0, histogram: [] as { offset: number; demand: number }[], peaks: [] as { offset: number; demand: number }[], suggestions: [] as { activityId: number; wbsCode: string; name: string; fromOffset: number; toOffset: number; float: number }[], note: "Banco de dados não configurado." };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId)).orderBy(scheduleActivities.sortOrder);
+        const versionId = await getOperationalPlanVersionId(input.projectId);
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), operationalVersionCondition(versionId)))
+          .orderBy(scheduleActivities.sortOrder);
         const resources = await db.select().from(planningResources).where(and(eq(planningResources.projectId, input.projectId), eq(planningResources.resourceType, "mao_de_obra"), eq(planningResources.active, 1)));
         if (!activities.length) return { available: true as const, capacity: 0, histogram: [] as { offset: number; demand: number }[], peaks: [] as { offset: number; demand: number }[], suggestions: [] as { activityId: number; wbsCode: string; name: string; fromOffset: number; toOffset: number; float: number }[], note: "Sem atividades no cronograma." };
         const capacity = resources.reduce((sum, resource) => sum + Number(resource.capacityPerDay ?? 0), 0);

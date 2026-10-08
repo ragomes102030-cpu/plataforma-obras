@@ -82,9 +82,64 @@ describe("EvidenceSourceRouter", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it("usa o fallback quando o banco local está vazio e registra a origem", async () => {
+  it("mantém a fonte oficial quando ela está vazia e não promove o MCP a fonte de verdade", async () => {
+    let fallbackCalled = false;
     const router = new EvidenceSourceRouter(
       source(),
+      source({
+        getEapTree: async () => {
+          fallbackCalled = true;
+          return {
+            source: "mcp",
+            projectId: 1,
+            data: [
+              {
+                id: 2,
+                projectId: 1,
+                externalId: "mcp-1",
+                externalUid: null,
+                parentId: null,
+                code: "1",
+                name: "EAP MCP",
+                level: 1,
+                nodeType: "grupo",
+                unit: null,
+                plannedQuantity: null,
+                sortOrder: 1,
+              },
+            ],
+            warnings: [],
+            errors: [],
+          };
+        },
+      })
+    );
+
+    const result = await router.getEapTree(1);
+
+    expect(result.source).toBe("local_db");
+    expect(result.data).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(fallbackCalled).toBe(false);
+  });
+
+  it("consulta o fallback somente quando a fonte oficial está indisponível", async () => {
+    const router = new EvidenceSourceRouter(
+      source({
+        getEapTree: async () => ({
+          source: "local_db",
+          projectId: 1,
+          data: null,
+          warnings: [],
+          errors: [
+            {
+              code: "local_database_unavailable",
+              message: "offline",
+              retryable: true,
+            },
+          ],
+        }),
+      }),
       source({
         getEapTree: async () => ({
           source: "mcp",
@@ -115,7 +170,7 @@ describe("EvidenceSourceRouter", () => {
 
     expect(result.source).toBe("mcp");
     expect(result.data?.[0].externalId).toBe("mcp-1");
-    expect(result.warnings[0]).toMatchObject({ code: "local_empty_fallback" });
+    expect(result.warnings[0]).toMatchObject({ code: "local_unavailable_fallback" });
   });
 
   it("mantém o resultado local e o erro quando nenhuma fonte alternativa está disponível", async () => {
@@ -144,32 +199,35 @@ describe("EvidenceSourceRouter", () => {
     expect(result.errors[0]?.code).toBe("local_database_unavailable");
   });
 
-  it("preserva o erro do MCP quando o local está vazio e o fallback falha", async () => {
+  it("mantém a fonte oficial mesmo quando o fallback MCP estaria indisponível", async () => {
+    let fallbackCalled = false;
     const router = new EvidenceSourceRouter(
       source(),
       source({
-        getEapTree: async () => ({
-          source: "mcp",
-          projectId: 1,
-          data: null,
-          warnings: [],
-          errors: [
-            {
-              code: "mcp_eap_unavailable",
-              message: "MCP 502: Bad Gateway",
-              retryable: true,
-            },
-          ],
-        }),
+        getEapTree: async () => {
+          fallbackCalled = true;
+          return {
+            source: "mcp",
+            projectId: 1,
+            data: null,
+            warnings: [],
+            errors: [
+              {
+                code: "mcp_eap_unavailable",
+                message: "MCP 502: Bad Gateway",
+                retryable: true,
+              },
+            ],
+          };
+        },
       })
     );
 
     const result = await router.getEapTree(1);
 
-    expect(result.source).toBe("local_db+mcp");
+    expect(result.source).toBe("local_db");
     expect(result.data).toEqual([]);
-    expect(result.errors).toMatchObject([
-      { code: "mcp_eap_unavailable", message: "MCP 502: Bad Gateway" },
-    ]);
+    expect(result.errors).toEqual([]);
+    expect(fallbackCalled).toBe(false);
   });
 });
