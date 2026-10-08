@@ -2,30 +2,23 @@ import { describe, expect, it } from "vitest";
 import { normalizeDatabaseConnection } from "./db";
 
 describe("normalizeDatabaseConnection", () => {
-  it("converts ssl-mode=REQUIRED into mysql2 TLS options", () => {
+  it("normalizes a Supabase PostgreSQL URL and enables TLS", () => {
     const connection = normalizeDatabaseConnection(
-      "mysql://user:secret@example.test/app?ssl-mode=REQUIRED&charset=utf8mb4"
+      "postgresql://user:secret@example.test:5432/postgres?sslmode=require"
     );
 
-    expect(connection.uri).not.toContain("ssl-mode");
-    expect(connection.uri).toContain("charset=utf8mb4");
+    expect(connection.connectionString).not.toContain("sslmode");
+    expect(connection.connectionString).toContain("postgresql://user:secret@example.test:5432/postgres");
     expect(connection.ssl).toEqual({ rejectUnauthorized: false });
   });
 
-  it("does not enable TLS when ssl-mode is disabled", () => {
+  it("does not enable TLS when sslmode=disable", () => {
     const connection = normalizeDatabaseConnection(
-      "mysql://user:secret@example.test/app?ssl-mode=DISABLED"
+      "postgresql://user:secret@example.test:5432/postgres?sslmode=disable"
     );
 
-    expect(connection.uri).not.toContain("ssl-mode");
-    expect(connection).not.toHaveProperty("ssl");
-  });
-
-  it("keeps regular MySQL URLs unchanged apart from URL serialization", () => {
-    const connection = normalizeDatabaseConnection("mysql://user:secret@example.test/app");
-
     expect(connection).toEqual({
-      uri: "mysql://user:secret@example.test/app",
+      connectionString: "postgresql://user:secret@example.test:5432/postgres",
     });
   });
 });
