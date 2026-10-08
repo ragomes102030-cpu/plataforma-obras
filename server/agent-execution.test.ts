@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   getAgentExecutionStatus,
@@ -45,6 +47,12 @@ async function waitForTerminal(requestId: string, userId = 7) {
 afterEach(() => resetAgentExecutionMemory());
 
 describe("agent-execution", () => {
+  it("deixa o orçamento de rodadas ser escolhido pelo orquestrador", () => {
+    const source = readFileSync(join(process.cwd(), "server/agent-execution.ts"), "utf8");
+    expect(source).toContain("maxIterations: undefined");
+    expect(source).toContain("orçamento adaptativo");
+  });
+
   it("retorna request_id imediatamente e conclui por polling", async () => {
     const started = await startAgentExecution({
       db: null,
