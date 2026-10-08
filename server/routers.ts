@@ -750,8 +750,10 @@ async function loadStageGateEvidence(
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
     evidence: derivePlanningEvidence({
-      plannedQuantity: activity.plannedQuantity,
-      productivity: activity.productivity,
+      plannedQuantity:
+        activity.plannedQuantity == null ? null : Number(activity.plannedQuantity),
+      productivity:
+        activity.productivity == null ? null : Number(activity.productivity),
       durationDays: Number(activity.durationDays ?? 0),
       budgetItemId: activity.budgetItemId,
       source: null,
@@ -3098,7 +3100,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const versionId = await getOperationalPlanVersionId(db, input.projectId);
+        const versionId = await getOperationalPlanVersionId(input.projectId);
         const activities = await db
           .select()
           .from(scheduleActivities)
@@ -3114,7 +3116,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const versionId = await getOperationalPlanVersionId(db, input.projectId);
+        const versionId = await getOperationalPlanVersionId(input.projectId);
         const activities = await db
           .select()
           .from(scheduleActivities)
@@ -3673,7 +3675,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { available: false as const, capacity: 0, histogram: [] as { offset: number; demand: number }[], peaks: [] as { offset: number; demand: number }[], suggestions: [] as { activityId: number; wbsCode: string; name: string; fromOffset: number; toOffset: number; float: number }[], note: "Banco de dados não configurado." };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const versionId = await getOperationalPlanVersionId(db, input.projectId);
+        const versionId = await getOperationalPlanVersionId(input.projectId);
         const activities = await db
           .select()
           .from(scheduleActivities)
