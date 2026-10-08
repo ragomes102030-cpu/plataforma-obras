@@ -39,6 +39,17 @@ export type AgentProjectContext = {
       projectDuration: number | null;
       criticalPath: string[];
     };
+    eapSnapshot?: Array<{
+      id: number | string;
+      code: string;
+      name: string;
+      parentId: number | string | null;
+      level: number;
+      nodeType: string;
+      location?: string | null;
+      responsible?: string | null;
+      plannedQuantity?: number | string | null;
+    }>;
     localEap?: {
       nodeCount: number;
       leafCount: number;
@@ -121,6 +132,8 @@ function formatContext(context: AgentProjectContext) {
     `Avanço informado: ${project.progress}%`,
     `Início planejado: ${new Date(project.plannedStart).toISOString().slice(0, 10)}`,
     `Término planejado: ${new Date(project.plannedFinish).toISOString().slice(0, 10)}`,
+    `EAP canônica atual (fonte: evidence/banco): ${context.evidence?.eapNodeCount ?? 0} nós`,
+    ...(context.evidence?.eapSnapshot?.slice(0, 120).map(node => `${node.code} | ${node.name} | ${node.nodeType} | pai=${node.parentId ?? "-"} | nível=${node.level}`) ?? ["EAP sem nós no snapshot canônico."]),
     "Atividades (WBS | nome | fase | status | avanço | duração | criticidade):",
     activityLines || "Nenhuma atividade cadastrada.",
   ].join("\n");
@@ -167,6 +180,7 @@ export async function runProjectAgent(
     "Responda em português do Brasil, de forma objetiva e operacional.",
     "Use os conceitos de EAP, linha de base, precedências, caminho crítico, folgas, medição, produtividade, restrições e Linha de Balanço.",
     "Não invente medições, custos, contratos ou datas que não estejam no contexto.",
+    "O snapshot EAP atual vindo do banco/evidence é a fonte canônica do estado atual. O histórico da conversa é apenas contexto narrativo e NUNCA pode substituir ou contradizer esse snapshot.",
     "Quando faltar dado, diga exatamente qual registro deve ser lançado para permitir a análise.",
     "Priorize decisões rastreáveis: evidência, impacto, responsável, prazo e próxima ação.",
     "Contexto atual da obra:\n" + formatContext(context),
