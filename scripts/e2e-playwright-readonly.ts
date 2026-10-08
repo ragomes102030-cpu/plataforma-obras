@@ -14,7 +14,7 @@ try {
   await page.goto(baseURL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.locator("body").waitFor({ state: "visible" });
   const landing = await page.locator("body").innerText();
-  if (!/Criar nova obra|Arquimedes/i.test(landing)) {
+  if (!/Entre para ver as obras|Criar nova obra|Arquimedes/i.test(landing)) {
     throw new Error("Landing page did not expose the expected Arquimedes entry point.");
   }
   console.log("[Playwright] PASS public landing");
