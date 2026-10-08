@@ -352,7 +352,10 @@ async function executeAgentRun(
         userId: input.userId,
         mcpProjectIds: input.mcpProjectIds,
         taskId: requestId,
-        maxIterations: ENV.agentMaxIterations,
+        // O orquestrador escolhe um orçamento adaptativo por intenção.
+        // Não force aqui o limite global do ambiente, senão o chat analítico
+        // perde o orçamento reduzido definido no runtime.
+        maxIterations: undefined,
         onEvent: emit,
         deps: input.deps,
       }
