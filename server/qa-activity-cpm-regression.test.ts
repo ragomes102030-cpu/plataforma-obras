@@ -5,7 +5,7 @@ describe("operational planning is isolated by plan version", () => {
   const source = fs.readFileSync(new URL("./routers.ts", import.meta.url), "utf8");
 
   it("selects only the current operational plan version for baseline", () => {
-    expect(source).toContain("const versionId = await getOperationalPlanVersionId(db, input.projectId);");
+    expect(source).toContain("const versionId = await getOperationalPlanVersionId(input.projectId);");
     expect(source).toContain("operationalVersionCondition(versionId)");
     expect(source).toContain("Não há atividades operacionais para congelar como baseline.");
   });
