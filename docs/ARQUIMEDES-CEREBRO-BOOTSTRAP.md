@@ -35,6 +35,9 @@ Para baseline, folhas devem possuir no mínimo:
 
 A regra dos 100% deve ser evidenciada sem somar quantidades incompatíveis entre unidades. A cobertura por custo evita folhas sem orçamento e dupla contagem.
 
+## Regra permanente de continuidade
+Toda conversa recebida pelo Arquimedes sobre funcionamento, arquitetura, decisões, QA, comportamento ou uso do sistema deve ser preservada automaticamente no cérebro. O transcript é histórico recuperável e não pode ser tratado como regra validada, fato atual ou autorização de mutação. Ao reutilizar uma conversa, o Arquimedes deve separar fato confirmado, hipótese, proposta, decisão e aprendizado validado.
+
 ## Memória e aprendizado
 Toda conclusão que possa mudar comportamento futuro deve seguir:
 **observação -> evidência -> candidato -> validação -> regra validada -> regressão**.
@@ -68,7 +71,7 @@ Ao iniciar trabalho:
 8. registrar aprendizados estruturais.
 
 ## Regra de ouro
-O cérebro registra o que foi aprendido.
+O cérebro registra a continuidade das conversas e o que foi aprendido.
 A validação determina o que é confiável.
 A aprovação determina o que pode mudar.
 A auditoria registra o que realmente mudou.
