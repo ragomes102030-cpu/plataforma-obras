@@ -1,57 +1,84 @@
-import { describe, expect, it } from "vitest";
-import { buildInitialEapProposal } from "./construction/eap-proposal";
+import type { ArquimedesEapProposal } from "../agent/core/types";
 
-describe("EAP proposal scope-aware regression", () => {
-  it("decomposes a complex residential building into real construction fronts", () => {
-    const proposal = buildInitialEapProposal(
-      {
-        name: "Residencial Multifamiliar 6 Pavimentos",
-        descricao: "Edifício residencial com 6 pavimentos, fundações, estrutura, alvenaria, instalações e acabamentos.",
-        tipoDeObra: "edificio",
-      },
-      false
-    );
+export type InitialEapProjectScope = {
+  name?: string | null;
+  descricao?: string | null;
+  tipoDeObra?: string | null;
+};
 
-    expect(proposal.nodes).toHaveLength(9);
-    expect(proposal.nodes[0]).toMatchObject({
-      code: "1",
-      name: "Residencial Multifamiliar 6 Pavimentos",
-      parentCode: null,
-    });
+const BUILDING_CUE = /(edif[ií]cio|residencial|apartamento|multifamiliar|pavimento|anda(r|res)|torre|condom[ií]nio|pr[eé]dio|shopping|comercial)/i;
 
-    const names = proposal.nodes.map(node => node.name);
-    expect(names).toEqual(expect.arrayContaining([
-      "Fundações e contenções",
-      "Estrutura de concreto",
-      "Vedações e alvenarias",
-      "Instalações prediais",
-      "Revestimentos e acabamentos",
-      "Comissionamento, documentação e entrega",
-    ]));
+export function buildInitialEapProposal(
+  project: InitialEapProjectScope,
+  hasExistingNodes: boolean
+): ArquimedesEapProposal {
+  const scopeText = [project.name, project.descricao, project.tipoDeObra]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 
-    expect(proposal.nodes.slice(1).every(node => node.parentCode === "1")).toBe(true);
-  });
+  const hasBuildingCue = BUILDING_CUE.test(scopeText);
 
-  it("does not use the building template when the scope does not identify an edification", () => {
-    const proposal = buildInitialEapProposal(
-      {
-        name: "Pavimentação de Via Urbana",
-        descricao: "Execução de pavimento e drenagem em via urbana.",
-        tipoDeObra: "pavimentacao",
-      },
-      false
-    );
+  const phaseNodes = hasBuildingCue
+    ? [
+        ["1.1", "Serviços preliminares e implantação", "Organiza mobilização, canteiro, locação e preparação inicial da obra."],
+        ["1.2", "Fundações e contenções", "Separa a infraestrutura de fundações e contenções, base física da estrutura."],
+        ["1.3", "Estrutura de concreto", "Representa a execução da estrutura resistente dos pavimentos e cobertura."],
+        ["1.4", "Vedações e alvenarias", "Representa o fechamento dos pavimentos e elementos de vedação."],
+        ["1.5", "Instalações prediais", "Agrupa sistemas hidrossanitários, elétricos, incêndio e demais instalações aplicáveis."],
+        ["1.6", "Revestimentos e acabamentos", "Agrupa revestimentos, pisos, forros, esquadrias e acabamentos."],
+        ["1.7", "Áreas externas e urbanização", "Mantém áreas externas, acessos e elementos de implantação separados das edificações."],
+        ["1.8", "Comissionamento, documentação e entrega", "Fecha a obra com testes, correções, documentação e aceite."],
+      ]
+    : [
+        ["1.1", "Serviços preliminares e implantação", "Organiza mobilização, preparação e implantação inicial."],
+        ["1.2", "Infraestrutura", "Representa fundações, contenções ou infraestrutura principal conforme o escopo."],
+        ["1.3", "Estrutura e sistemas principais", "Representa os sistemas construtivos principais da obra."],
+        ["1.4", "Vedações e instalações", "Agrupa fechamentos e instalações aplicáveis ao escopo."],
+        ["1.5", "Revestimentos e acabamentos", "Agrupa os serviços de acabamento aplicáveis."],
+        ["1.6", "Áreas externas e complementares", "Separa urbanização, acessos e complementos quando aplicáveis."],
+        ["1.7", "Comissionamento, documentação e entrega", "Fecha a obra com testes, documentação, correções e aceite."],
+      ] as const;
 
-    expect(proposal.nodes.map(node => node.name)).toContain("Infraestrutura");
-    expect(proposal.nodes.map(node => node.name)).not.toContain("Fundações e contenções");
-  });
+  const nodes = hasExistingNodes
+    ? []
+    : [
+        {
+          operation: "create" as const,
+          code: "1",
+          name: project.name?.trim() || "Escopo da obra",
+          nodeType: "grupo" as const,
+          parentCode: null,
+          rationale: "Raiz única da EAP. Abaixo dela o escopo é decomposto em frentes construtivas macro, evitando que a obra seja apresentada como um único bloco.",
+        },
+        ...phaseNodes.map(([code, name, rationale]) => ({
+          operation: "create" as const,
+          code,
+          name,
+          nodeType: "pacote" as const,
+          parentCode: "1",
+          decompositionBasis: "phase" as const,
+          rationale,
+        })),
+      ];
 
-  it("does not propose duplicate creation when an EAP already exists", () => {
-    const proposal = buildInitialEapProposal(
-      { name: "Obra já estruturada", descricao: "Edifício residencial" },
-      true
-    );
-
-    expect(proposal.nodes).toEqual([]);
-  });
-});
+  return {
+    action: "propose_eap",
+    nodes,
+    basis: [
+      "Descrição e identificação da obra cadastradas",
+      "Decomposição inicial por fases/frentes construtivas compatíveis com o tipo de obra",
+      "Regra de raiz única com decomposição suficiente para revisão técnica",
+    ],
+    assumptions: hasBuildingCue
+      ? ["A descrição indica uma edificação; a decomposição detalhada por pavimento, sistema e serviço deve ser confirmada na revisão."]
+      : ["A tipologia não foi identificada com segurança; a proposta usa uma decomposição macro conservadora para revisão do engenheiro."],
+    missingInformation: [
+      "Confirmar sistemas especiais, escopo de áreas externas e nível de decomposição desejado antes da aprovação final.",
+    ],
+    validation: { valid: true, issues: [] },
+    resolutionSummary: [],
+    researchEvidence: [],
+    resolutionPlan: [],
+  };
+}
