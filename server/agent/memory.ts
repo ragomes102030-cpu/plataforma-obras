@@ -1,5 +1,22 @@
 import { and, desc, eq, ilike, or, ne } from "drizzle-orm";
 import { agentMemories, agentRuns } from "../../drizzle/schema";
+
+const MEMORY_CACHE_TTL_MS = 15_000;
+type ArquimedesMemoryRecord = {
+  id: number;
+  projectId: number | null;
+  scope: string;
+  category: string;
+  memoryKey: string;
+  value: unknown;
+  sourceType: string;
+  sourceRef: string | null;
+  confidence: string;
+  status: string;
+  updatedAt: Date;
+};
+
+const memoryRecallCache = new Map<string, { expiresAt: number; value: ArquimedesMemoryRecord[] }>();
 import { getDb } from "../db";
 
 export type ArquimedesMemorySource =
@@ -79,6 +96,7 @@ export async function rememberArquimedes(input: ArquimedesMemoryInput) {
       })
       .where(eq(agentMemories.id, existing[0].id))
       .returning();
+    invalidateMemoryRecallCache();
     return updated;
   }
 
@@ -98,6 +116,7 @@ export async function rememberArquimedes(input: ArquimedesMemoryInput) {
     })
     .returning();
 
+  invalidateMemoryRecallCache();
   return created;
 }
 
@@ -181,11 +200,12 @@ export async function rememberArquimedesConversation(input: {
   });
 }
 
-export async function recallArquimedes(
+async function recallArquimedesInternal(
   ownerUserId: number,
   projectId: number | undefined,
   query: string,
-  limit = 10
+  limit = 10,
+  excludeCategories: string[] = []
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -205,6 +225,7 @@ export async function recallArquimedes(
         projectFilter,
         ne(agentMemories.status, "obsolete"),
         ne(agentMemories.status, "rejected"),
+        ...excludeCategories.map(category => ne(agentMemories.category, category)),
         q
           ? or(
               ilike(agentMemories.memoryKey, `%${q}%`),
@@ -232,11 +253,32 @@ export async function recallArquimedes(
   }));
 }
 
+export async function recallArquimedes(
+  ownerUserId: number,
+  projectId: number | undefined,
+  query: string,
+  limit = 10,
+  excludeCategories: string[] = []
+) {
+  const safeLimit = Math.min(Math.max(limit, 1), 20);
+  const key = JSON.stringify([ownerUserId, projectId ?? null, normalize(query, 180), safeLimit, [...excludeCategories].sort()]);
+  const cached = memoryRecallCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached) memoryRecallCache.delete(key);
+  const value = await recallArquimedesInternal(ownerUserId, projectId, query, safeLimit, excludeCategories);
+  memoryRecallCache.set(key, { expiresAt: Date.now() + MEMORY_CACHE_TTL_MS, value });
+  return value;
+}
+
+function invalidateMemoryRecallCache() {
+  memoryRecallCache.clear();
+}
+
 export async function buildArquimedesMemoryContext(
   ownerUserId: number,
   projectId: number | undefined
 ) {
-  const memories = await recallArquimedes(ownerUserId, projectId, "", 12);
+  const memories = await recallArquimedes(ownerUserId, projectId, "", 12, ["conversa_sistema", "historico_execucao"]);
 
   // Backfill de continuidade: antes da V1 do cérebro, análises já executadas
   // ficaram persistidas em agent_runs. Se ainda não houver memória estruturada,
