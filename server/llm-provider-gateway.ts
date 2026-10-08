@@ -218,7 +218,7 @@ async function callProvider(
       body: JSON.stringify({
         model: provider.model,
         temperature: 0.2,
-        max_tokens: request.maxTokens ?? Number(process.env.LLM_MAX_TOKENS ?? "8192"),
+        max_tokens: request.maxTokens ?? Number(process.env.LLM_MAX_TOKENS ?? "4096"),
         messages: request.messages,
         ...(request.tools.length ? { tools: request.tools, tool_choice: "auto" } : {}),
         ...(request.responseFormat ? { response_format: request.responseFormat } : {}),
