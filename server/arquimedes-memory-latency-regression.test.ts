@@ -24,6 +24,4 @@ describe("Arquimedes memory latency guard", () => {
     expect(source).toContain('intent === "analise"');
     expect(source).toContain('engineering_gap_analysis');
   });
-  });
-  });
 });

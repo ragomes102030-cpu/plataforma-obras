@@ -2,8 +2,15 @@ import { ENV } from "./_core/env";
 import { getStoredLlmProvider, type StoredLlmProvider } from "./llm-settings";
 
 const STORED_PROVIDER_CACHE_TTL_MS = 300_000;
-let storedProviderCache: { expiresAt: number; provider: LlmProviderConfig | null } | null = null;
-let storedProviderInFlight: Promise<LlmProviderConfig | null> | null = null;
+let storedProviderCache: { expiresAt: number; provider: StoredLlmProvider | null } | null = null;
+let storedProviderInFlight: Promise<StoredLlmProvider | null> | null = null;
+let storedProviderGeneration = 0;
+
+export function invalidateStoredProviderCache() {
+  storedProviderCache = null;
+  storedProviderInFlight = null;
+  storedProviderGeneration += 1;
+}
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -137,16 +144,19 @@ export async function getConfiguredProvidersAsync(): Promise<
     if (storedProviderInFlight) {
       stored = await storedProviderInFlight;
     } else {
+      const generation = storedProviderGeneration;
       const load = getStoredLlmProvider();
       storedProviderInFlight = load;
       try {
         stored = await load;
-        storedProviderCache = {
-          provider: stored,
-          expiresAt: Date.now() + STORED_PROVIDER_CACHE_TTL_MS,
-        };
+        if (generation === storedProviderGeneration) {
+          storedProviderCache = {
+            provider: stored,
+            expiresAt: Date.now() + STORED_PROVIDER_CACHE_TTL_MS,
+          };
+        }
       } finally {
-        storedProviderInFlight = null;
+        if (generation === storedProviderGeneration) storedProviderInFlight = null;
       }
     }
   }

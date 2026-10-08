@@ -105,7 +105,7 @@ describe("llm-provider-gateway", () => {
     const body = JSON.parse(String(request?.body));
     expect(body.tools).toBeUndefined();
     expect(body.tool_choice).toBeUndefined();
-    expect(body.max_tokens).toBe(8192);
+    expect(body.max_tokens).toBe(4096);
   });
 
   it("envia somente headers ASCII ao provedor", async () => {

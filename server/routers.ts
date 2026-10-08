@@ -100,6 +100,7 @@ import {
   startAgentExecution,
 } from "./agent-execution";
 import { getPublicLlmSettings, saveStoredLlmProviders } from "./llm-settings";
+import { invalidateStoredProviderCache } from "./llm-provider-gateway";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
@@ -1149,6 +1150,7 @@ export const appRouter = router({
         .mutation(async ({ ctx, input }) => {
           const providers = "providers" in input ? input.providers : [input];
           await saveStoredLlmProviders(providers, ctx.user.id);
+          invalidateStoredProviderCache();
           return {
             saved: true as const,
             settings: await getPublicLlmSettings(),
@@ -1185,6 +1187,34 @@ export const appRouter = router({
         .orderBy(desc(projects.updatedAt));
       return rows;
     }),
+    updateScope: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        location: z.string().trim().min(2).max(180),
+        tipoDeObra: z.enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"]).nullable(),
+        descricao: z.string().trim().max(4000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [updated] = await db
+          .update(projects)
+          .set({
+            location: input.location,
+            tipoDeObra: input.tipoDeObra,
+            descricao: input.descricao || null,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(projects.id, input.projectId),
+            eq(projects.ownerUserId, ctx.user.id),
+            isNull(projects.deletedAt),
+          ))
+          .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, updatedAt: projects.updatedAt });
+        if (!updated) throw notFound("Obra não encontrada para atualizar o escopo.");
+        return updated;
+      }),
     activities: protectedProcedure
       .input(z.object({ projectId: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -1628,6 +1658,7 @@ export const appRouter = router({
             plannedStart: z.coerce.date().optional(),
             plannedFinish: z.coerce.date().optional(),
             descricao: z.string().trim().max(4000).optional(),
+            tipoDeObra: z.enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"]).optional(),
           })
           .refine(
             data =>
@@ -1660,6 +1691,7 @@ export const appRouter = router({
               name: input.name,
               location: input.location,
               descricao: input.descricao ?? null,
+              tipoDeObra: input.tipoDeObra ?? null,
               status: "Planejamento",
               progress: 0,
               plannedStart,
