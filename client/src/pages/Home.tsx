@@ -46,6 +46,7 @@ import "@/eap.css";
  * duas verdades sobre a mesma célula.
  */
 
+type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
 type Destino = "obra" | "catalogo" | "config";
 
 export default function Home() {
@@ -72,8 +73,8 @@ export default function Home() {
     enabled: Boolean(user),
     retry: false,
   });
-  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: string | null }> =
-    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: string | null }> | undefined) ?? [];
+  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null }> =
+    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null }> | undefined) ?? [];
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
@@ -379,7 +380,7 @@ function Obra({
   obra: string;
   localizacao: string;
   descricao: string;
-  tipoDeObra: string;
+  tipoDeObra: TipoDeObra | "";
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
 }) {
@@ -532,7 +533,7 @@ function Obra({
 }
 
 /** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
-function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: string }) {
+function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | "" }) {
   const utils = trpc.useUtils();
   const [editando, setEditando] = useState(false);
   const [descricaoEditada, setDescricaoEditada] = useState(descricao);
@@ -736,7 +737,7 @@ type NovaObraValues = {
   location: string;
   plannedStart?: Date;
   plannedFinish?: Date;
-  tipoDeObra: "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
+  tipoDeObra: TipoDeObra;
   descricao?: string;
 };
 
