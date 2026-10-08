@@ -2,7 +2,21 @@ import { and, desc, eq, ilike, or, ne } from "drizzle-orm";
 import { agentMemories, agentRuns } from "../../drizzle/schema";
 
 const MEMORY_CACHE_TTL_MS = 15_000;
-const memoryRecallCache = new Map<string, { expiresAt: number; value: unknown[] }>();
+type ArquimedesMemoryRecord = {
+  id: number;
+  projectId: number | null;
+  scope: string;
+  category: string;
+  memoryKey: string;
+  value: unknown;
+  sourceType: string;
+  sourceRef: string | null;
+  confidence: string;
+  status: string;
+  updatedAt: Date;
+};
+
+const memoryRecallCache = new Map<string, { expiresAt: number; value: ArquimedesMemoryRecord[] }>();
 import { getDb } from "../db";
 
 export type ArquimedesMemorySource =
