@@ -29,7 +29,6 @@ import {
   activityResourceAllocations,
   scheduleBaselines,
   scheduleBaselineItems,
-  projectPlanVersions,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { seinfraAdapter } from "@shared/price-sources/seinfra";
@@ -125,15 +124,12 @@ function cacheClearPrefix(prefix: string): void {
  * versionId rows isolated from versioned plans.
  */
 async function getOperationalPlanVersionId(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
 ): Promise<number | null> {
-  const versions = await db
-    .select({ id: projectPlanVersions.id, status: projectPlanVersions.status, versionNumber: projectPlanVersions.versionNumber })
-    .from(projectPlanVersions)
-    .where(eq(projectPlanVersions.projectId, projectId))
-    .orderBy(desc(projectPlanVersions.versionNumber));
-  const active = versions.find(v => v.status === "draft" || v.status === "proposed") ?? versions.find(v => v.status === "approved");
+  const versions = await listPlanVersionDetails(projectId);
+  const active =
+    versions.find(version => version.status === "draft" || version.status === "proposed") ??
+    versions.find(version => version.status === "approved");
   return active?.id ?? null;
 }
 
