@@ -1811,9 +1811,42 @@ export const appRouter = router({
       const nodes=current
         ? await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,current.id))).orderBy(wbsNodes.sortOrder,wbsNodes.id)
         : [];
-      const proposal: ArquimedesEapProposal={action:"propose_eap",nodes:nodes.length?[]:[{operation:"create",code:"1",name:"Escopo da obra",nodeType:"grupo",parentCode:null,rationale:"Raiz única para receber o escopo informado da obra."}],basis:["Escopo cadastrado na obra","Regra de raiz única da EAP"],assumptions:[],missingInformation:nodes.length?[]:["Detalhar o escopo e as entregas da obra antes da aprovação final."],validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]};
+      const [project]=await db.select({name:projects.name,descricao:projects.descricao,tipoDeObra:projects.tipoDeObra}).from(projects).where(eq(projects.id,input.projectId)).limit(1);
+      const scopeText=[project?.name,project?.descricao,project?.tipoDeObra].filter(Boolean).join(" ").toLowerCase();
+      const hasBuildingCue=/(edif[ií]cio|residencial|apartamento|multifamiliar|pavimento|anda(r|res)|torre|condom[ií]nio|pr[eé]dio|shopping|comercial)/i.test(scopeText);
+      const phaseNodes: Array<{code:string;name:string;rationale:string}> = hasBuildingCue
+        ? [
+            {code:"1.1",name:"Serviços preliminares e implantação",rationale:"Organiza mobilização, canteiro, locação e preparação inicial da obra."},
+            {code:"1.2",name:"Fundações e contenções",rationale:"Separa a infraestrutura de fundações e contenções, base física da estrutura."},
+            {code:"1.3",name:"Estrutura de concreto",rationale:"Representa a execução da estrutura resistente dos pavimentos e cobertura."},
+            {code:"1.4",name:"Vedações e alvenarias",rationale:"Representa o fechamento dos pavimentos e elementos de vedação."},
+            {code:"1.5",name:"Instalações prediais",rationale:"Agrupa sistemas hidrossanitários, elétricos, incêndio e demais instalações aplicáveis."},
+            {code:"1.6",name:"Revestimentos e acabamentos",rationale:"Agrupa revestimentos, pisos, forros, esquadrias e acabamentos."},
+            {code:"1.7",name:"Áreas externas e urbanização",rationale:"Mantém áreas externas, acessos e elementos de implantação separados das edificações."},
+            {code:"1.8",name:"Comissionamento, documentação e entrega",rationale:"Fecha a obra com testes, correções, documentação e aceite."},
+          ]
+        : [
+            {code:"1.1",name:"Serviços preliminares e implantação",rationale:"Organiza mobilização, preparação e implantação inicial."},
+            {code:"1.2",name:"Infraestrutura",rationale:"Representa fundações, contenções ou infraestrutura principal conforme o escopo."},
+            {code:"1.3",name:"Estrutura e sistemas principais",rationale:"Representa os sistemas construtivos principais da obra."},
+            {code:"1.4",name:"Vedações e instalações",rationale:"Agrupa fechamentos e instalações aplicáveis ao escopo."},
+            {code:"1.5",name:"Revestimentos e acabamentos",rationale:"Agrupa os serviços de acabamento aplicáveis."},
+            {code:"1.6",name:"Áreas externas e complementares",rationale:"Separa urbanização, acessos e complementos quando aplicáveis."},
+            {code:"1.7",name:"Comissionamento, documentação e entrega",rationale:"Fecha a obra com testes, documentação, correções e aceite."},
+          ];
+      const nodesForProposal = nodes.length ? [] : [
+        {operation:"create" as const,code:"1",name:project?.name?.trim() || "Escopo da obra",nodeType:"grupo" as const,parentCode:null,rationale:"Raiz única da EAP. Abaixo dela o escopo é decomposto em frentes construtivas macro, evitando que a obra seja apresentada como um único bloco."},
+        ...phaseNodes.map(item=>({operation:"create" as const,code:item.code,name:item.name,nodeType:"grupo" as const,parentCode:"1",decompositionBasis:"phase" as const,rationale:item.rationale})),
+      ];
+      const proposal: ArquimedesEapProposal={
+        action:"propose_eap",nodes:nodesForProposal,
+        basis:["Descrição e identificação da obra cadastradas","Decomposição inicial por fases/frentes construtivas compatíveis com o tipo de obra","Regra de raiz única com decomposição suficiente para revisão técnica"],
+        assumptions:hasBuildingCue?["A descrição indica uma edificação; a decomposição detalhada por pavimento, sistema e serviço deve ser confirmada na revisão."]:["A tipologia não foi identificada com segurança; a proposta usa uma decomposição macro conservadora para revisão do engenheiro."],
+        missingInformation:["Confirmar sistemas especiais, escopo de áreas externas e nível de decomposição desejado antes da aprovação final."],
+        validation:{valid:true,issues:[]},resolutionSummary:[],researchEvidence:[],resolutionPlan:[]
+      };
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
-      await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis",confidence:"medium",status:"proposed"});
+      await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-analysis-scope-aware",confidence:"medium",status:"proposed"});
       return {proposal};
     }),
     aplicarPropostaEap: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.literal(true),proposal:z.any()})).mutation(async({ctx,input})=>{
