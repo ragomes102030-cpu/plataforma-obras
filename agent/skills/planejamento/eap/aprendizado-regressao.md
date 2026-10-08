@@ -31,3 +31,18 @@ Fixture defeituosa não é automaticamente defeito de produção. Antes de criar
 - **Escopo:** somente interface da proposta inicial da EAP; não altera dados da AURORA.
 - **Teste de regressão:** reproduzir geração da proposta com payload parcial e verificar ausência de erro de página/ErrorBoundary; depois validar proposta completa e fluxo de aprovação.
 - **Status:** correção commitada na branch `develop`; aguardando publicação no ambiente oficial para regressão E2E.
+
+
+## Regressão live — snapshot canônico e proposta longa truncada (2026-10-08)
+- **Problema observado A:** mensagens antigas do chat afirmavam que a EAP da obra QA `OB-ZP1H2K` tinha zero nós, embora a tela e o banco local exibissem 9 nós persistidos.
+- **Causa classificada A:** o contexto do agente não incluía a árvore EAP completa; o histórico de chat podia contaminar a leitura do estado atual.
+- **Correção A:** incluir no contexto do agente um snapshot canônico da EAP vindo da fonte de dados atual e instruir explicitamente que o snapshot atual prevalece sobre mensagens antigas.
+- **Evidência A:** teste autenticado via Playwright no ambiente live; Arquimedes leu os 9 nós atuais (raiz + 8 pacotes), listou códigos e nomes, informou 0 atividades e 0 dependências e declarou que a leitura antiga de 0 nós estava superada. Deploy live associado ao commit `34828bcab4df8f9230aad001e4c58e155b7aea12`.
+- **Problema observado B:** uma proposta textual extensa foi interrompida no meio da linha `C2.2`, sem fechar a análise; o chat permaneceu mostrando estado de processamento por dezenas de segundos. A continuação solicitada em uma segunda mensagem foi concluída com os grupos restantes e os gates de aprovação.
+- **Causa classificada B:** limitação de conclusão/segmentação da resposta longa no fluxo do agente/UI (causa técnica exata ainda não isolada; não atribuir a banco ou provedor sem logs conclusivos).
+- **Regra candidata:** propostas longas de EAP devem ser entregues em blocos finitos e retomáveis; cada resposta deve fechar a seção, explicitar o próximo bloco e nunca se apresentar como proposta completa se foi truncada. O agente deve verificar que o texto termina com a conclusão/gates esperados.
+- **Evidência B:** captura da resposta live mostrou truncamento após `C2.2`; a continuação retomou em `C2.2` e cobriu C2–C11, regra dos 100%, sobreposições e gates.
+- **Escopo:** somente obra de QA `OB-ZP1H2K`; AURORA TESTE não foi aberta para edição nem modificada.
+- **Status A:** correção do snapshot confirmada em live.
+- **Status B:** mitigação operacional testada (resposta dividida em blocos); causa raiz e regressão automatizada ainda pendentes.
+- **Próximo teste:** validar que o agente entrega propostas longas em blocos sem truncamento e que o UI deixa claro quando há continuação pendente; adicionar teste de integração com saída artificialmente longa e finalização verificável.
