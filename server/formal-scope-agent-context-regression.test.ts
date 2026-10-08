@@ -9,5 +9,7 @@ describe("formal scope agent context regression", () => {
     expect(source).toContain("context.project.descricao");
     expect(source).toContain("registro local do projeto");
     expect(source).toContain("a falha do MCP não prova ausência de escopo");
+    expect(source).toContain("ESCOPO FORMAL CANÔNICO DO REGISTRO LOCAL");
+    expect(source).toContain("context.project.descricao?.trim().slice(0, 3000)");
   });
 });
