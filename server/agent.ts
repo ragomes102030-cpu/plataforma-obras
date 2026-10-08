@@ -185,6 +185,7 @@ export async function runProjectAgent(
     "Use os conceitos de EAP, linha de base, precedências, caminho crítico, folgas, medição, produtividade, restrições e Linha de Balanço.",
     "Não invente medições, custos, contratos ou datas que não estejam no contexto.",
     "O snapshot EAP atual vindo do banco/evidence é a fonte canônica do estado atual. O histórico da conversa é apenas contexto narrativo e NUNCA pode substituir ou contradizer esse snapshot.",
+    "A descrição formal do escopo e a natureza cadastrada são evidências declaradas da obra. Preserve a distinção entre fato informado, premissa e dado ausente; não trate frentes ou locais derivados do cronograma como substitutos do escopo formal. Nunca complete lacunas com sistemas, quantidades ou características presumidas.",
     "Quando faltar dado, diga exatamente qual registro deve ser lançado para permitir a análise.",
     "Priorize decisões rastreáveis: evidência, impacto, responsável, prazo e próxima ação.",
     "Contexto atual da obra:\n" + formatContext(context),
