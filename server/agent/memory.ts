@@ -133,6 +133,54 @@ export async function rememberArquimedesLearning(input: {
   });
 }
 
+
+/**
+ * Registra automaticamente a conversa operacional recebida pelo Arquimedes.
+ *
+ * Regra de continuidade: toda conversa sobre funcionamento, comportamento,
+ * decisões, QA, arquitetura ou uso do sistema que chegar ao orquestrador deve
+ * ficar recuperável no cérebro. O transcript é evidência histórica; não vira
+ * regra validada nem autorização de mutação.
+ */
+export async function rememberArquimedesConversation(input: {
+  ownerUserId: number;
+  projectId?: number | null;
+  taskId: string;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  response?: string | null;
+  sourceRef?: string | null;
+}) {
+  const scope = input.projectId ? "project" as const : "library" as const;
+  const projectId = input.projectId ?? null;
+  const transcript = input.messages.map(message => ({
+    role: message.role,
+    content: message.content,
+  }));
+  const value = {
+    kind: "operational_conversation",
+    lifecycle: "historical",
+    taskId: input.taskId,
+    projectId,
+    transcript,
+    response: input.response ?? null,
+    capturedAt: new Date().toISOString(),
+    rule:
+      "Use esta conversa como continuidade histórica. Separe fatos confirmados, hipóteses, propostas e regras validadas antes de reutilizar qualquer conteúdo.",
+  };
+
+  return rememberArquimedes({
+    projectId,
+    ownerUserId: input.ownerUserId,
+    scope,
+    category: "conversa_sistema",
+    memoryKey: `conversation-${input.taskId}`,
+    value,
+    sourceType: "engenheiro",
+    sourceRef: input.sourceRef ?? input.taskId,
+    confidence: "medium",
+  });
+}
+
 export async function recallArquimedes(
   ownerUserId: number,
   projectId: number | undefined,
