@@ -605,7 +605,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: 
           <div className="scopo-detail-body">
             <label><strong>Localização da obra</strong><input value={localizacaoEditada} onChange={event => setLocalizacaoEditada(event.target.value)} minLength={2} maxLength={180} placeholder="Cidade, endereço ou região" /></label>
             <label><strong>Natureza da obra</strong>
-              <select value={tipoDeObraEditado} onChange={event => setTipoDeObraEditado(event.target.value)}>
+              <select value={tipoDeObraEditado} onChange={event => setTipoDeObraEditado(event.target.value as TipoDeObra | "")}>
                 <option value="">A confirmar</option>
                 <option value="edificio">Edificação / construção nova</option>
                 <option value="reforma">Reforma</option>
