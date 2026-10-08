@@ -17,5 +17,13 @@ describe("Arquimedes memory latency guard", () => {
     expect(source).toContain("? 4");
     expect(source).toContain('intent === "operacao"');
   });
+
+  it("reduz o catálogo de ferramentas no chat analítico", () => {
+    const source = readFileSync(join(process.cwd(), "server/orchestrator.ts"), "utf8");
+    expect(source).toContain("analysisToolAllowlist");
+    expect(source).toContain('intent === "analise"');
+    expect(source).toContain('engineering_gap_analysis');
+  });
+  });
   });
 });
