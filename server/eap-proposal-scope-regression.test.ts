@@ -1,27 +1,57 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { buildInitialEapProposal } from "./construction/eap-proposal";
 
 describe("EAP proposal scope-aware regression", () => {
-  it("does not reduce a building scope to a single root node", () => {
-    const source = readFileSync(join(process.cwd(), "server", "routers.ts"), "utf8");
+  it("decomposes a complex residential building into real construction fronts", () => {
+    const proposal = buildInitialEapProposal(
+      {
+        name: "Residencial Multifamiliar 6 Pavimentos",
+        descricao: "Edifício residencial com 6 pavimentos, fundações, estrutura, alvenaria, instalações e acabamentos.",
+        tipoDeObra: "edificio",
+      },
+      false
+    );
 
-    expect(source).toContain("const hasBuildingCue=");
-    expect(source).toContain('/(edif[ií]cio|residencial|apartamento|multifamiliar|pavimento|anda(r|res)|torre|condom[ií]nio|pr[eé]dio|shopping|comercial)/i');
-    expect(source).toContain('name:"Fundações e contenções"');
-    expect(source).toContain('name:"Estrutura de concreto"');
-    expect(source).toContain('name:"Vedações e alvenarias"');
-    expect(source).toContain('name:"Instalações prediais"');
-    expect(source).toContain('name:"Revestimentos e acabamentos"');
-    expect(source).toContain('name:"Comissionamento, documentação e entrega"');
-    expect(source).toContain('parentCode:"1"');
-    expect(source).toContain('sourceRef:"eap-analysis-scope-aware"');
+    expect(proposal.nodes).toHaveLength(9);
+    expect(proposal.nodes[0]).toMatchObject({
+      code: "1",
+      name: "Residencial Multifamiliar 6 Pavimentos",
+      parentCode: null,
+    });
+
+    const names = proposal.nodes.map(node => node.name);
+    expect(names).toEqual(expect.arrayContaining([
+      "Fundações e contenções",
+      "Estrutura de concreto",
+      "Vedações e alvenarias",
+      "Instalações prediais",
+      "Revestimentos e acabamentos",
+      "Comissionamento, documentação e entrega",
+    ]));
+
+    expect(proposal.nodes.slice(1).every(node => node.parentCode === "1")).toBe(true);
   });
 
-  it("keeps the generic fallback conservative when building cues are absent", () => {
-    const source = readFileSync(join(process.cwd(), "server", "routers.ts"), "utf8");
-    expect(source).toContain('name:"Infraestrutura"');
-    expect(source).toContain('name:"Estrutura e sistemas principais"');
-    expect(source).toContain('name:"Vedações e instalações"');
+  it("does not use the building template when the scope does not identify an edification", () => {
+    const proposal = buildInitialEapProposal(
+      {
+        name: "Pavimentação de Via Urbana",
+        descricao: "Execução de pavimento e drenagem em via urbana.",
+        tipoDeObra: "pavimentacao",
+      },
+      false
+    );
+
+    expect(proposal.nodes.map(node => node.name)).toContain("Infraestrutura");
+    expect(proposal.nodes.map(node => node.name)).not.toContain("Fundações e contenções");
+  });
+
+  it("does not propose duplicate creation when an EAP already exists", () => {
+    const proposal = buildInitialEapProposal(
+      { name: "Obra já estruturada", descricao: "Edifício residencial" },
+      true
+    );
+
+    expect(proposal.nodes).toEqual([]);
   });
 });
