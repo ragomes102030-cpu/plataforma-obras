@@ -2,8 +2,8 @@ import { ENV } from "./_core/env";
 import { getStoredLlmProvider, type StoredLlmProvider } from "./llm-settings";
 
 const STORED_PROVIDER_CACHE_TTL_MS = 300_000;
-let storedProviderCache: { expiresAt: number; provider: LlmProviderConfig | null } | null = null;
-let storedProviderInFlight: Promise<LlmProviderConfig | null> | null = null;
+let storedProviderCache: { expiresAt: number; provider: StoredLlmProvider | null } | null = null;
+let storedProviderInFlight: Promise<StoredLlmProvider | null> | null = null;
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant" | "tool";
