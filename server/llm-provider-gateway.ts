@@ -1,6 +1,10 @@
 import { ENV } from "./_core/env";
 import { getStoredLlmProvider } from "./llm-settings";
 
+const STORED_PROVIDER_CACHE_TTL_MS = 300_000;
+let storedProviderCache: { expiresAt: number; provider: LlmProviderConfig | null } | null = null;
+let storedProviderInFlight: Promise<LlmProviderConfig | null> | null = null;
+
 export type LlmMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content:
@@ -126,8 +130,27 @@ export async function getConfiguredProvidersAsync(): Promise<
   LlmProviderConfig[]
 > {
   const providers = getConfiguredProviders();
+  let stored: StoredLlmProvider | null = null;
+  if (storedProviderCache && storedProviderCache.expiresAt > Date.now()) {
+    stored = storedProviderCache.provider;
+  } else {
+    if (storedProviderInFlight) {
+      stored = await storedProviderInFlight;
+    } else {
+      const load = getStoredLlmProvider();
+      storedProviderInFlight = load;
+      try {
+        stored = await load;
+        storedProviderCache = {
+          provider: stored,
+          expiresAt: Date.now() + STORED_PROVIDER_CACHE_TTL_MS,
+        };
+      } finally {
+        storedProviderInFlight = null;
+      }
+    }
+  }
   try {
-    const stored = await getStoredLlmProvider();
     if (stored) {
       const configured = configuredProvider(
         stored.provider,
