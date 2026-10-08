@@ -46,3 +46,14 @@ Fixture defeituosa não é automaticamente defeito de produção. Antes de criar
 - **Status A:** correção do snapshot confirmada em live.
 - **Status B:** mitigação operacional testada (resposta dividida em blocos); causa raiz e regressão automatizada ainda pendentes.
 - **Próximo teste:** validar que o agente entrega propostas longas em blocos sem truncamento e que o UI deixa claro quando há continuação pendente; adicionar teste de integração com saída artificialmente longa e finalização verificável.
+## Regressão live — escopo declarado não chegava à EAP (2026-10-08)
+
+- **Problema observado:** a aba Escopo exibia apenas quatro indicadores genéricos derivados das linhas do cronograma; não apresentava a descrição formal cadastrada na obra e não permitia editá-la. Uma obra sem atividades parecia não ter escopo, mesmo quando a descrição havia sido fornecida na criação.
+- **Problema adicional:** o formulário de nova obra coletava a natureza da obra (tipoDeObra), mas projects.create não a persistia.
+- **Falha de contexto do agente:** o registro de projeto continha descricao e tipoDeObra, porém AgentProjectContext/formatContext não os incluía na leitura enviada ao Arquimedes.
+- **Correção implementada no PR #72:** adicionar projects.updateScope usando colunas existentes (location, tipoDeObra, descricao), exibir e editar a descrição declarada na aba Escopo, persistir a natureza da obra na criação e incluir os campos no contexto do agente. O agente deve preservar a distinção entre fato declarado, premissa e dado ausente; frentes derivadas do cronograma não substituem o escopo formal.
+- **Segurança:** sem migração de banco; não regenerar a EAP, não criar atividades, não aprovar baseline e não alterar OB-PUPOCN — AURORA TESTE para corrigir esta classe de problema.
+- **Validação automatizada:** CI passou typecheck, testes e build na branch do PR. A regressão live da Aurora foi marcada como sucesso, mas a etapa que acessaria o Supabase foi ignorada por ausência do segredo SUPABASE_DB_URL; não interpretar isso como validação live de dados da Aurora.
+- **Status da interface live:** pendente de confirmação após o deploy Render associado ao merge 647726c59b31eb6609b0a541c47134b31a6b101f.
+- **Próximo teste:** em OB-ZP1H2K, verificar a descrição/natureza/localização exibidas, editar e salvar um texto de escopo de QA, recarregar para confirmar persistência e perguntar ao Arquimedes o que foi declarado. Comparar com a EAP canônica e confirmar que nenhum nó/atividade foi criado ou alterado por salvar o escopo.
+
