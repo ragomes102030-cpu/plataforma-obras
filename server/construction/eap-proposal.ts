@@ -7,6 +7,7 @@ export type InitialEapProjectScope = {
 };
 
 const BUILDING_CUE = /(edif[ií]cio|residencial|apartamento|multifamiliar|pavimento|anda(r|res)|torre|condom[ií]nio|pr[eé]dio|shopping|comercial)/i;
+const INFRASTRUCTURE_CUE = /(pavimenta[cç][aã]o|infraestrutura vi[aá]ria|rodovia|estrada|saneamento|drenagem|rede de [aá]gua|rede de esgoto)/i;
 
 export function buildInitialEapProposal(
   project: InitialEapProjectScope,
@@ -17,7 +18,7 @@ export function buildInitialEapProposal(
     .join(" ")
     .toLowerCase();
 
-  const hasBuildingCue = BUILDING_CUE.test(scopeText);
+  const hasBuildingCue = BUILDING_CUE.test(scopeText) && !INFRASTRUCTURE_CUE.test(scopeText);
 
   const phaseNodes = hasBuildingCue
     ? [
