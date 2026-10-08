@@ -23,6 +23,6 @@ describe("Arquimedes brain conversation continuity", () => {
   it("keeps historical conversation separate from validated knowledge", () => {
     expect(bootstrap).toContain("transcript é histórico recuperável");
     expect(bootstrap).toContain("não pode ser tratado como regra validada");
-    expect(bootstrap).toContain("memória nunca");
+    expect(bootstrap).toContain("Memória nunca é autorização de mutação.");
   });
 });
