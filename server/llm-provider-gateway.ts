@@ -1,5 +1,5 @@
 import { ENV } from "./_core/env";
-import { getStoredLlmProvider } from "./llm-settings";
+import { getStoredLlmProvider, type StoredLlmProvider } from "./llm-settings";
 
 const STORED_PROVIDER_CACHE_TTL_MS = 300_000;
 let storedProviderCache: { expiresAt: number; provider: LlmProviderConfig | null } | null = null;
