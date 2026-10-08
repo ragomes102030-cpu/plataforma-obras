@@ -114,3 +114,8 @@ client/public/__manus__/version.json
 .project-config.json
 .vercel
 .env*
+
+# Playwright local auth and reports
+.playwright/auth.json
+playwright-report/
+test-results/
