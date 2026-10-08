@@ -726,8 +726,10 @@ async function loadStageGateEvidence(
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
     evidence: derivePlanningEvidence({
-      plannedQuantity: activity.plannedQuantity,
-      productivity: activity.productivity,
+      plannedQuantity:
+        activity.plannedQuantity == null ? null : Number(activity.plannedQuantity),
+      productivity:
+        activity.productivity == null ? null : Number(activity.productivity),
       durationDays: Number(activity.durationDays ?? 0),
       budgetItemId: activity.budgetItemId,
       source: null,
