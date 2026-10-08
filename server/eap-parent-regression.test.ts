@@ -10,3 +10,14 @@ describe("QA-EAP-002 · criação de filho preserva parentId", () => {
     );
   });
 });
+
+
+describe("QA-EAP-003 · gate da EAP após geração", () => {
+  it("atualiza o snapshot do coordenador após gerar a EAP", () => {
+    const source = readFileSync("client/src/components/AbaEap.tsx", "utf8");
+
+    expect(source).toContain(
+      "await coordenador.refetch();"
+    );
+  });
+});
