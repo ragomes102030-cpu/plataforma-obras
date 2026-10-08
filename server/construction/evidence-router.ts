@@ -33,10 +33,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
     fallbackCode: string
   ): Promise<EvidenceResult<T>> {
     const local = await localResult;
-    if (hasData(local) && !Array.isArray(local.data)) return local;
-    if (hasData(local) && Array.isArray(local.data) && local.data.length > 0) {
-      return local;
-    }
+    if (local.errors.length === 0) return local;
     if (!this.fallback) return local;
 
     const fallback = await fallbackResult();
@@ -52,7 +49,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
     return withFallbackWarning(fallback, {
       code: fallbackCode,
       message:
-        "A fonte local não possuía dados suficientes; foi usada a fonte de fallback.",
+        "A fonte oficial local apresentou erro; a fonte auxiliar de fallback foi consultada.",
     });
   }
 
@@ -60,7 +57,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
     return this.choose(
       this.local.getEapTree(projectId),
       () => this.fallback!.getEapTree(projectId),
-      "local_empty_fallback"
+      "local_unavailable_fallback"
     );
   }
 
@@ -81,7 +78,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
     return this.choose(
       this.local.listActivities(projectId),
       () => this.fallback!.listActivities(projectId),
-      "local_empty_fallback"
+      "local_unavailable_fallback"
     );
   }
 
@@ -91,7 +88,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
     return this.choose(
       this.local.listDependencies(projectId),
       () => this.fallback!.listDependencies(projectId),
-      "local_empty_fallback"
+      "local_unavailable_fallback"
     );
   }
 }
