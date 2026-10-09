@@ -14,6 +14,11 @@ Na plataforma, recursos vêm de `composition_components`, classificado por `comp
 O coeficiente do componente é a quantidade de recurso por **uma** unidade do serviço. Multiplicar
 pelo quantitativo do item e depois pelo número de repetições na obra dá o recurso total.
 
+No catálogo SEINFRA-CE a origem é essa mesma: cada linha de `composition_components` do serviço é um
+componente com `componentType`, coeficiente e preço unitário — o recurso da atividade é o componente
+da composição do seu serviço, e não uma lista inventada por serviço. Serviço cuja composição é feita
+de outras composições não se desdobra em recurso pelo modelo atual: registrar a lacuna.
+
 ## Alocação
 
 1. Recurso é alocado na atividade que o consome, com data (não só com total do projeto).

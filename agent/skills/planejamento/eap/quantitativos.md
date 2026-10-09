@@ -28,6 +28,14 @@ lacuna e pedir evidência — não preencher com média de mercado.
 - A regra dos 100% exige que a soma dos filhos cubra exatamente o escopo do pai.
 - Unidade da folha deve ser comparável entre irmãos; divergência de unidade impede roll-up.
 
+## Quantitativo e catálogo SEINFRA
+
+Quando a quantidade serve a um serviço do catálogo (SEINFRA-CE), ela deve ser medida na **mesma
+unidade da composição** desse serviço (`service_compositions`): é a composição que declara o que
+uma unidade do serviço consome, e é ela que o orçamento e a produtividade vão usar depois.
+Quantidade medida em unidade diferente da composição não converte sozinha — ou se reexpressa, ou se
+declara a incompatibilidade. Serviço sem composição no catálogo entra como lacuna declarada.
+
 ## Perdas e critérios
 
 Perdas, espessuras e critérios de medição alteram o quantitativo. Quando não houver definição no
