@@ -106,7 +106,7 @@ Os três MCPs podem estar online enquanto uma obra não existe na coleção exte
 3. vínculo externo persistido para a obra local;
 4. evidência local disponível.
 
-Quando houver snapshot local canônico e não houver vínculo MCP, usar fallback **somente-leitura** para a árvore/validação EAP, pacotes sem responsável e cobertura de quantitativos. Retornar `source: local_db` e explicitar a limitação. Nunca inventar IDs externos ou devolver `projectId: 0` como se fosse real. Para a regra dos 100%, sem itens estruturados de escopo e vínculos escopo↔EAP, o resultado obrigatório é `indecidivel`, com percentual nulo. Validação estrutural sem bloqueios não equivale a EAP completa, aprovada ou pronta para atividades/baseline.
+Quando houver snapshot local canônico e não houver vínculo MCP, usar fallback **somente-leitura** para a árvore/validação EAP, pacotes sem responsável e cobertura de quantitativos. Retornar `source: local_db` e explicitar a limitação. Nunca inventar IDs externos ou devolver `projectId: 0` como se fosse real. Campo omitido não significa valor `null`: reportar “não retornado/indisponível” salvo quando a fonte registrar explicitamente `null`. A ausência de vínculo externo deve ser declarada em metadados de vínculo, não inferida como ID por nó. Para a regra dos 100%, sem itens estruturados de escopo e vínculos escopo↔EAP, o resultado obrigatório é `indecidivel`, com percentual nulo. Validação estrutural sem bloqueios não equivale a EAP completa, aprovada ou pronta para atividades/baseline.
 
 ## Aprendizado crítico — exposição do Supabase
 
