@@ -57,3 +57,32 @@ Fixture defeituosa não é automaticamente defeito de produção. Antes de criar
 - **Status da interface live:** confirmado. O cadastro de escopo foi editado no projeto QA, persistiu após recarregar e o agente live passou a informar natureza `edificio`, descrição declarada e lacunas registradas mesmo com `mcp_sem_vinculo`. Deploy final: `dep-db42jt8473hc73ceatm0`, commit `eb6ebe311064c629d1751af387e43e1b15702271`. Snapshot EAP permaneceu com 9 nós (1 raiz + 8 pacotes), 0 atividades e 0 dependências locais; nenhuma alteração na árvore foi feita.
 - **Próximo teste:** em OB-ZP1H2K, verificar a descrição/natureza/localização exibidas, editar e salvar um texto de escopo de QA, recarregar para confirmar persistência e perguntar ao Arquimedes o que foi declarado. Comparar com a EAP canônica e confirmar que nenhum nó/atividade foi criado ou alterado por salvar o escopo.
 
+## Fechamento de ciclo — fallback local da EAP e segurança Supabase (2026-10-09)
+
+### Evidência observada
+- Obra de QA: `OB-ZP1H2K — QA EAP SCOPE 2026-10-08`. A fonte canônica local tem 9 nós (1 raiz + 8 folhas), todos em rascunho; 0 atividades, 0 dependências, 0 versões de orçamento e 0 baselines.
+- Escopo textual local está acessível: edifício residencial multifamiliar de seis pavimentos; inclui fundações/contenções, estrutura de concreto armado, vedações/alvenarias, instalações elétricas e hidrossanitárias, revestimentos/acabamentos, áreas externas, comissionamento, documentação e entrega.
+- Não há itens estruturados de escopo nem vínculos escopo↔EAP. Por isso, a regra dos 100% deve ficar **indecidível** (não aprovada nem reprovada).
+- 8/8 folhas sem responsável, 0/8 com unidade, 0/8 com quantidade e cobertura do dicionário 0%.
+- Os 3 serviços MCP estavam online (EAP 24 ferramentas, Cronograma 15, Gantt/LOB 7), mas `OB-ZP1H2K` não aparece na coleção externa do MCP de EAP e não tem linha em `project_mcp_integrations`. Saúde do servidor não significa vínculo de obra.
+- Teste funcional real executou `get_eap_tree`, `validar_estrutura`, `pacotes_sem_dono`, `resumo_quantitativos`, `listar_escopo` e `validar_regra_100_porcento` por fallback local; nenhuma mutação foi realizada. A validação estrutural retornou 0 bloqueios/0 avisos, mas isso **não** torna a EAP pronta para aprovação.
+
+### Correções e regressões
+- PR #77: a Central de Comando parou de fixar `mcpDomains=[]` e passou a exibir o estado real dos 3 MCPs. Teste live confirmou 3/3 online e 46 ferramentas totais.
+- PR #78: sem vínculo MCP, consultas somente-leitura de EAP usam o snapshot local; `validar_regra_100_porcento` retorna `indecidivel` sem denominador auditável; ferramentas mutáveis continuam bloqueadas.
+- PR #79: `get_eap_tree` retorna o snapshot original e não inventa `projectId: 0` nem `externalId`. O ID sintético apareceu no primeiro teste de fallback e foi tratado como regressão, não como fato da obra.
+- Verificações: esbuild do servidor/testes, `git diff --check`, harness direto do fallback e smoke test live da Central de Comando/EAP. A suíte Vitest completa não foi executada neste ambiente devido ao limite de memória durante a instalação de dependências.
+
+### Mitigação de exposição pública no Supabase
+- Foi detectado que 37 tabelas do schema `public` estavam com RLS desabilitado e os papéis `anon`/`authenticated` tinham privilégios DML.
+- Mitigação aplicada: revogação de privilégios de tabelas e sequências para `anon`/`authenticated`, revogação de EXECUTE de funções para `PUBLIC`, `anon` e `authenticated`, e alteração dos privilégios padrão de funções para o owner `postgres`.
+- Verificação posterior: 0 tabelas com DML para `anon`, 0 para `authenticated`; 0 sequências acessíveis a esses papéis; 0 funções públicas executáveis por esses papéis. O papel de servidor `arquimedes_app` manteve leitura/gravação necessárias; smoke test live passou.
+- **Limitação residual:** RLS continua desabilitado nas tabelas. A exposição via privilégios públicos foi mitigada; não declarar que uma política RLS completa foi implantada. Planejar políticas por usuário/projeto com testes antes de ativar RLS em massa.
+
+### Regras permanentes
+1. Sempre separar saúde do MCP, existência do projeto externo e vínculo local de integração.
+2. Preferir leitura/validação local quando existir snapshot canônico; nunca inventar IDs externos ou preencher com `default`.
+3. Estrutura válida, dicionário completo, regra dos 100%, aprovação e baseline são gates distintos.
+4. Não criar projeto externo nem salvar mapeamento automaticamente só para remover `mcp_sem_vinculo`; exige decisão e autorização explícita.
+5. Antes de planejar atividades, fechar itens estruturados de escopo, eixo de decomposição e dicionário; manter a árvore em rascunho até revisão formal.
+6. AURORA TESTE permaneceu intocada durante esta rodada.
