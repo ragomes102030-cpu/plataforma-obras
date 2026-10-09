@@ -1238,10 +1238,14 @@ export async function runProjectOrchestrator(
     ? await buildArquimedesMemoryContext(options.userId, options.localProjectId)
     : "Memória persistente não carregada: usuário não identificado.";
   const brainBootstrap = await loadArquimedesBrainBootstrap();
-  const latestUserMessage = [...messages].reverse().find(message => message.role === "user")?.content ?? "";
+  const recentUserContext = messages
+    .filter(message => message.role === "user")
+    .slice(-3)
+    .map(message => message.content.slice(0, 1200))
+    .join("\n");
   const skillContext = intent === "casual"
     ? "Nenhuma skill especializada acionada para conversa casual."
-    : await loadArquimedesSkillsForPrompt(latestUserMessage);
+    : await loadArquimedesSkillsForPrompt(recentUserContext);
   const conversation: LlmMessage[] = [
     {
       role: "system",
