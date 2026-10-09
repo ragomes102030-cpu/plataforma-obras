@@ -25,6 +25,27 @@ export type ConstructionMcpStatus = {
   servers: Record<ConstructionMcpDomain, ConstructionMcpServerStatus>;
 };
 
+export function toCentralCommandMcpDomains(status: ConstructionMcpStatus) {
+  const names: Record<ConstructionMcpDomain, string> = {
+    eap: "EAP",
+    cronograma: "Cronograma",
+    ganttLob: "Gantt / Linha de Balanço",
+  };
+
+  return (Object.entries(status.servers) as Array<
+    [ConstructionMcpDomain, ConstructionMcpServerStatus]
+  >).map(([id, server]) => ({
+    id,
+    name: names[id],
+    status: server.status,
+    latencyMs: server.latencyMs,
+    attempts: server.attempts,
+    toolCount: server.toolCount,
+    tools: server.tools,
+    lastError: server.lastError,
+  }));
+}
+
 export type ConstructionMcpToolCatalog = Record<
   ConstructionMcpDomain,
   McpTool[]
