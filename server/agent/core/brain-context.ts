@@ -45,7 +45,7 @@ export async function loadArquimedesOperationalSkills(taskText: string): Promise
       .map(selector => selector.id);
     const chosen = [...new Set([...matched, "find-skills", "handoff"])]
       .filter(id => byId.has(id))
-      .slice(0, 3);
+      .slice(0, 4);
     if (chosen.length === 2 && byId.has("grill-me")) chosen.push("grill-me");
 
     const playbooks = chosen.map(id => byId.get(id)!).join("\n\n").slice(0, 2600);
