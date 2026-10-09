@@ -6327,8 +6327,10 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .pl-atividades-table .type-col { width:82px; }
 .pl-atividades-table .dur-col { width:82px; }
 .pl-atividades-table .unit-col { width:70px; }
+.pl-atividades-table .prod-col { width:86px; }
+.pl-atividades-table .qtd-col { width:86px; }
 .pl-atividades-table .status-col { width:92px; }
-.pl-atividades-table .action-col { width:120px; }
+.pl-atividades-table .action-col { width:92px; }
 .pl-atividades-table .mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10px; }
 .pl-atividades-table input[type="checkbox"] { accent-color:#174b78; }
 .pl-atividades-table .name-col strong { color:#183653; font-weight:750; }

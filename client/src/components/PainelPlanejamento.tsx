@@ -258,8 +258,10 @@ export function PainelPlanejamento({ projetoId }: Props) {
               <th className="type-col">Tipo</th>
               <th className="dur-col">Duração</th>
               <th className="unit-col">Unidade</th>
+              <th className="prod-col">Produtividade</th>
+              <th className="qtd-col">Quantidade</th>
               <th className="status-col">Estado</th>
-              <th className="action-col">Qtd. / estado</th>
+              <th className="action-col">Observação</th>
             </tr>
           </thead>
           <tbody>
@@ -292,8 +294,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     aria-label={"Unidade de " + activity.name}
                   />
                 </td>
-                <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
-                <td className="action-col">
+                <td className="prod-col">
                   <input
                     className="pl-duracao-input"
                     type="number"
@@ -305,6 +306,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     aria-label={"Produtividade de " + activity.name}
                     placeholder="prod./dia"
                   />
+                </td>
+                <td className="qtd-col">
                   <input
                     className="pl-duracao-input"
                     type="number"
@@ -315,6 +318,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onBlur={() => salvarEdicao(activity.id, "quantidade")}
                     aria-label={"Quantidade de " + activity.name}
                   />
+                </td>
+                <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
+                <td className="action-col">
                   <span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span>
                 </td>
               </tr>
@@ -345,6 +351,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                   />
                 </td>
                 <td className="unit-col">{item.unit ?? "—"}</td>
+                <td className="prod-col">—</td>
+                <td className="qtd-col">—</td>
                 <td className="status-col"><span className="pl-status-badge revisar">Revisar</span></td>
                 <td className="action-col">
                   <button
@@ -362,7 +370,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
             {!temLinhasVisiveis && (
               <tr>
-                <td colSpan={9} className="pl-atividades-empty">
+                <td colSpan={11} className="pl-atividades-empty">
                   <strong>{busca ? "Nenhum resultado encontrado." : filtro === "pendentes" ? "Nenhuma atividade aguardando revisão." : "Nenhuma atividade criada ainda."}</strong>
                   <span>{busca ? "Ajuste a pesquisa para localizar outro item." : "As atividades aparecem aqui quando forem adicionadas a partir da EAP aprovada."}</span>
                 </td>

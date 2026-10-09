@@ -34,12 +34,20 @@ export function AbaBaseline({ projetoId }: Props) {
         new Date(activity.cpmCalculatedAt).getTime() < new Date(activity.updatedAt).getTime()
     );
     const cpmOk = activities.length > 0 && validas.length === activities.length && semCpm.length === 0 && desatualizadas.length === 0;
+    const bloqueios = [
+      ...activities
+        .filter(activity => Number(activity.durationDays) < 1)
+        .map(activity => ({ id: activity.id, wbs: activity.wbsCode, name: activity.name, motivo: "Duração inválida" })),
+      ...semCpm.map(activity => ({ id: activity.id, wbs: activity.wbsCode, name: activity.name, motivo: "Sem CPM calculado" })),
+      ...desatualizadas.map(activity => ({ id: activity.id, wbs: activity.wbsCode, name: activity.name, motivo: "CPM desatualizado" })),
+    ];
     return {
       cpmOk,
       validas: validas.length,
       semDuracao: activities.length - validas.length,
       semCpm: semCpm.length,
       desatualizadas: desatualizadas.length,
+      bloqueios,
     };
   }, [activities]);
 
@@ -99,6 +107,33 @@ export function AbaBaseline({ projetoId }: Props) {
             <div><span>CPM desatualizado</span><strong>{resumo.desatualizadas}</strong><small>foram alteradas depois do último cálculo</small></div>
             <div><span>Ação</span><strong>CPM</strong><small>volte à etapa CPM e recalcule</small></div>
           </div>
+          {resumo.bloqueios.length > 0 && (
+            <div className="pl-tabela-wrap">
+              <table className="pl-tabela-analitica">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Atividade</th>
+                    <th className="pl-bloqueio-motivo-col">Motivo do bloqueio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumo.bloqueios.slice(0, 12).map(bloqueio => (
+                    <tr key={`${bloqueio.id}-${bloqueio.motivo}`}>
+                      <td className="pl-bloqueio-wbs">{bloqueio.wbs}</td>
+                      <td title={bloqueio.name}>{bloqueio.name}</td>
+                      <td className="pl-bloqueio-motivo">{bloqueio.motivo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {resumo.bloqueios.length > 12 && (
+                <p className="pl-tabela-legenda">
+                  Mostrando 12 de {resumo.bloqueios.length} atividades que impedem a captura.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -178,14 +178,37 @@ export function AbaDependencias({ projetoId }: Props) {
                 A rede ainda está vazia. Isso é esperado antes da definição das relações de precedência.
               </p>
             ) : (
-              <div className="pl-dependencia-lista">
-                {dependencies.map(dependency => (
-                  <div key={dependency.id} className="pl-dependencia-item">
-                    <span>{nomeAtividade(activities, dependency.predecessorId)}</span>
-                    <strong>{dependency.type}{dependency.lag ? ` ${dependency.lag > 0 ? "+" : ""}${dependency.lag}d` : ""}</strong>
-                    <span>{nomeAtividade(activities, dependency.successorId)}</span>
-                  </div>
-                ))}
+              <div className="pl-tabela-wrap">
+                <table className="pl-tabela-analitica">
+                  <thead>
+                    <tr>
+                      <th>Predecessora</th>
+                      <th>Tipo</th>
+                      <th>Lag</th>
+                      <th>Sucessora</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dependencies.map(dependency => (
+                      <tr key={dependency.id}>
+                        <td title={nomeAtividade(activities, dependency.predecessorId)}>
+                          {nomeAtividade(activities, dependency.predecessorId)}
+                        </td>
+                        <td className="pl-dep-tipo">{dependency.type}</td>
+                        <td className="pl-dep-lag">
+                          {dependency.lag ? `${dependency.lag > 0 ? "+" : ""}${dependency.lag} d` : "0 d"}
+                        </td>
+                        <td title={nomeAtividade(activities, dependency.successorId)}>
+                          {nomeAtividade(activities, dependency.successorId)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="pl-tabela-legenda">
+                  FS = término → início · SS = início → início · FF = término → término · SF = início → término.
+                  Lag em dias; positivo atrasa a sucessora, negativo antecipa.
+                </p>
               </div>
             )}
           </div>
