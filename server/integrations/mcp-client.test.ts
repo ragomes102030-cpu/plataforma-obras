@@ -6,6 +6,7 @@ import {
   MCP_TOOL_POLICY,
   resetMcpResilienceState,
   runConstructionMcpHomologation,
+  toCentralCommandMcpDomains,
 } from "./construction-mcps";
 
 function response(
@@ -192,3 +193,34 @@ describe("runConstructionMcpHomologation", () => {
     ]);
   });
 });
+describe("toCentralCommandMcpDomains", () => {
+  it("preserva estado, latência, tentativas e ferramentas dos três MCPs", () => {
+    const domains = toCentralCommandMcpDomains({
+      status: "degraded",
+      requestId: "req-central",
+      checkedAt: "2026-10-09T00:00:00.000Z",
+      durationMs: 42,
+      servers: {
+        eap: { status: "online", latencyMs: 10, attempts: 1, toolCount: 2, tools: ["get_eap_tree", "validar_estrutura"], lastError: null },
+        cronograma: { status: "offline", latencyMs: 20, attempts: 2, toolCount: 0, tools: [], lastError: "MCP 503" },
+        ganttLob: { status: "online", latencyMs: 12, attempts: 1, toolCount: 1, tools: ["calcular_linha_balanco"], lastError: null },
+      },
+    });
+
+    expect(domains).toHaveLength(3);
+    expect(domains.map(domain => domain.name)).toEqual([
+      "EAP",
+      "Cronograma",
+      "Gantt / Linha de Balanço",
+    ]);
+    expect(domains.map(domain => domain.status)).toEqual([
+      "online",
+      "offline",
+      "online",
+    ]);
+    expect(domains[1].lastError).toBe("MCP 503");
+    expect(domains[1].attempts).toBe(2);
+    expect(domains[0].tools).toContain("validar_estrutura");
+  });
+});
+
