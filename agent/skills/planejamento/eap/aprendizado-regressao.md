@@ -97,5 +97,5 @@ Fixture defeituosa não é automaticamente defeito de produção. Antes de criar
 - **Proposta versionada:** `docs/QA-OB-ZP1H2K-ESCOPO-EAP-PROPOSTA-2026-10-09.md`. A árvore ali é candidata para revisão, com códigos provisórios; não representa nós persistidos nem aprovação de engenharia.
 - **Gate da regra dos 100%:** permanece `indecidivel` enquanto não houver itens estruturados de escopo e vínculos auditáveis escopo↔EAP. Nove nós e zero bloqueios estruturais não provam cobertura do escopo.
 - **Proteções:** não criar atividades, dependências, orçamento, baseline, projeto externo ou vínculo MCP; não executar regeneração destrutiva; não alterar `OB-PUPOCN — AURORA TESTE`.
-- **Status:** documento de proposta preparado no branch `docs/qa-escopo-eap-proposta-2026-10-09`; revisão técnica/PR pendente. Nenhuma mutação no banco foi executada nesta etapa.
+- **Status:** proposta e aprendizado versionados no branch `docs/qa-escopo-eap-proposta-2026-10-09`; PR #82 aberto em draft para revisão. CI e regressão Aurora do PR ainda precisam concluir. Nenhuma mutação no banco foi executada nesta etapa.
 - **Regressões:** (1) preservar itens explicitamente declarados; (2) marcar especificações/quantidades ausentes como desconhecidas; (3) regra dos 100% indecidível sem denominador e vínculos; (4) proposta não escreve na EAP persistida; (5) nenhum efeito na AURORA.
