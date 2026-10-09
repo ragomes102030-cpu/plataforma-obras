@@ -2,7 +2,7 @@ import type { AgentProjectContext } from "../../agent";
 import type { EapScopeNode } from "../../construction/eap-validator";
 import { analyzeEapLocally } from "./engineering-capabilities";
 
-type LocalEapNode = NonNullable<AgentProjectContext["evidence"]>["eapSnapshot"] extends Array<infer T> ? T : never;
+type LocalEapNode = NonNullable<NonNullable<AgentProjectContext["evidence"]>["eapSnapshot"]>[number];
 
 function normalizeNodes(nodes: LocalEapNode[]): EapScopeNode[] {
   return nodes.map((node, index) => ({
@@ -101,7 +101,7 @@ export function resolveLocalEapToolFallback(
     }
 
     case "resumo_quantitativos": {
-      const withQuantity = leaves.filter(node => isFilled(node.plannedQuantity));
+      const withQuantity = leaves.filter(node => isFilled(node.plannedQuantity) && Number(node.plannedQuantity) > 0);
       const withUnit = leaves.filter(node => isFilled(node.unit));
       return JSON.stringify({
         status: "ok",
