@@ -21,6 +21,24 @@ describe("Arquimedes contextual skills loader", () => {
     expect(selected).toContain("skill-authoring");
   });
 
+  it("recognizes the named skill aliases requested by the administrator", () => {
+    const aliases = [
+      ["dev-experts", "dev-experts"],
+      ["planning-experts", "planning-experts"],
+      ["prompting experts", "prompt-engineering"],
+      ["grill-me", "grill-me"],
+      ["improve codebase architecture", "improve-codebase-architecture"],
+      ["agent-browser", "agent-browser"],
+      ["TDD", "tdd"],
+      ["self-improving agent", "self-improving-agent"],
+      ["front design", "frontend-design"],
+      ["handoff", "handoff"],
+    ] as const;
+    for (const [query, skillId] of aliases) {
+      expect(selectArquimedesSkills(query)).toContain(skillId);
+    }
+  });
+
   it("does not activate skills for an empty or casual query", () => {
     expect(selectArquimedesSkills("")).toEqual([]);
     expect(selectArquimedesSkills("Oi, tudo bem?")).toEqual([]);
