@@ -1062,7 +1062,6 @@ function buildSystem(
   const base = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
     "BOOTSTRAP DO CÉREBRO MESTRE:\n" + brainBootstrap,
-    "SKILLS OPERACIONAIS SELECIONADAS PARA ESTA TAREFA:\n" + operationalSkills,
     `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,
     "Use essa referência quando o usuário perguntar sobre data, dia ou hora atuais. Não diga que não possui relógio.",
     "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta. Não existe formato obrigatório de resposta.",
@@ -1122,6 +1121,8 @@ function buildSystem(
         "Use este registro ao responder sobre o escopo. Se um MCP de escopo estiver sem vínculo, informe apenas que a fonte externa está indisponível; não diga que o cadastro local não é legível. Separe fatos declarados, premissas e lacunas explícitas."
     );
   }
+
+  base.push("SKILLS OPERACIONAIS SELECIONADAS PARA ESTA TAREFA:\n" + operationalSkills);
 
   return base.join("\n\n");
 }
