@@ -41,6 +41,7 @@ import { localDatabaseEvidenceSource } from "./construction/local-database-sourc
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning, rememberArquimedesConversation } from "./agent/memory";
 import { loadArquimedesBrainBootstrap, loadArquimedesOperationalSkills } from "./agent/core/brain-context";
 import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
+import { resolveLocalEapToolFallback } from "./agent/core/local-eap-tool-fallback";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -2083,6 +2084,24 @@ export async function runProjectOrchestrator(
         PROJECT_SCOPED_MUTATION_TOOLS.has(toolName);
 
       if (isProjectScoped && !mcpProjectId) {
+        const localFallback =
+          !isMutation && domain === "eap"
+            ? resolveLocalEapToolFallback(toolName, context)
+            : null;
+        if (localFallback !== null) {
+          audit.push({
+            taskId,
+            iteration,
+            event: "tool_call",
+            domain: "runtime",
+            toolName,
+            status: "success",
+            durationMs: Date.now() - startedAt,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: localFallback.slice(0, MAX_TOOL_RESULT_CHARS) };
+        }
+
         const message =
           "Esta consulta depende de um MCP de obra que não está vinculado no momento. O Arquimedes deve continuar com as evidências locais disponíveis e informar esta limitação.";
         audit.push({

@@ -50,7 +50,14 @@ export type AgentProjectContext = {
       nodeType: string;
       location?: string | null;
       responsible?: string | null;
+      unit?: string | null;
       plannedQuantity?: number | string | null;
+      description?: string | null;
+      inclusions?: string | null;
+      exclusions?: string | null;
+      acceptanceCriteria?: string | null;
+      scopeStatus?: string | null;
+      decompositionBasis?: string | null;
     }>;
     localEap?: {
       nodeCount: number;
