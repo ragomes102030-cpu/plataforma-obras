@@ -5,6 +5,7 @@ import { projectAuditEvents, projectPlanVersions, scheduleActivities, wbsNodes }
 import { validateEap } from "./construction/eap-validator";
 import { ensureWritablePlanVersion } from "./construction/plan-versions";
 import { resolveActivityDuration } from "./construction/activity-planning";
+import { gerarPlanoAcao, formatarPlanoAcao } from "./agent/planning";
 import type { AgentMessage, AgentProjectContext } from "./agent";
 import {
   MCP_TOOL_POLICY,
@@ -1240,11 +1241,28 @@ export async function runProjectOrchestrator(
     : "Memória persistente não carregada: usuário não identificado.";
   const brainBootstrap = await loadArquimedesBrainBootstrap();
   const operationalSkills = await loadArquimedesOperationalSkills(messages.map(message => message.content).join("\n"));
+
+  // Motor de raciocínio: gera plano de ação estruturado antes de rotear tools
+  let plannedAction = "";
+  if (options.localProjectId) {
+    try {
+      const { getProjectModel } = await import("../shared/project-model");
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados não configurado.");
+      const model = await getProjectModel(db as any, options.localProjectId);
+      const plano = gerarPlanoAcao(model, intent === "analise" ? "analise" : intent === "operacao" ? "operacao" : "consulta", lastUserMessage?.content ?? "");
+      plannedAction = formatarPlanoAcao(plano);
+    } catch (error) {
+      console.warn("planning_failed:", error instanceof Error ? error.message : String(error));
+    }
+  }
+
   const conversation: LlmMessage[] = [
     {
       role: "system",
       content: compactLlmContent(
-        buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap, operationalSkills)
+        buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap, operationalSkills) +
+        (plannedAction ? `\n\n${plannedAction}` : "")
       ),
     },
     ...messages.map(message => ({
