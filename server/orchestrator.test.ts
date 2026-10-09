@@ -37,6 +37,74 @@ const catalog = {
 };
 
 describe("runProjectOrchestrator", () => {
+  it("uses local EAP validation when the project has no external MCP mapping", async () => {
+    const localContext: AgentProjectContext = {
+      ...context,
+      evidence: {
+        source: "local_db",
+        eapNodeCount: 2,
+        activityCount: 0,
+        dependencyCount: 0,
+        warnings: [],
+        errors: [],
+        eapSnapshot: [
+          { id: 1, code: "1", name: "Edifício", parentId: null, level: 1, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+          { id: 2, code: "1.1", name: "Estrutura", parentId: 1, level: 2, nodeType: "pacote", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: "phase" },
+        ],
+      },
+    };
+    const result = await runProjectOrchestrator(
+      localContext,
+      [{ role: "user", content: "Valide a estrutura da EAP." }],
+      {
+        mcpProjectIds: {},
+        deps: {
+          listTools: async () => ({
+            eap: [{ name: "validar_estrutura", description: "Valida a EAP", inputSchema: { type: "object", properties: {} } }],
+            cronograma: [],
+            ganttLob: [],
+          }),
+          callTool: async () => {
+            throw new Error("não deveria chamar o MCP sem mapeamento");
+          },
+          callLlm: async ({ messages }) => {
+            if (messages.length === 2) {
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "local-eap-validation",
+                      type: "function",
+                      function: { name: "validar_estrutura", arguments: "{}" },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content: "A validação estrutural local foi executada; o dicionário e a regra dos 100% continuam pendentes.",
+                },
+              }],
+            };
+          },
+        },
+      }
+    );
+
+    expect(result.status).toBe("respondido");
+    const validationEvent = result.audit.find(event => event.toolName === "validar_estrutura");
+    expect(validationEvent?.status).toBe("success");
+    expect(validationEvent?.domain).toBe("runtime");
+  });
+
+
   it("executa a varredura de lacunas antes da conclusão de uma análise", async () => {
     const calls: string[] = [];
     const result = await runProjectOrchestrator(
