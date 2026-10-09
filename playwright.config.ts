@@ -2,7 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: /.*\\.e2e\\.spec\\.ts/,
+  // O escape duplo (\\.) casaria um backslash literal, não um ponto — por isso
+  // este arquivo nunca aparecia em `playwright test --list` e parecia que o
+  // Playwright estava quebrado.
+  testMatch: /\.e2e\.spec\.ts$/,
   timeout: 180_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

@@ -73,4 +73,57 @@ describe("validateDependencies", () => {
       ].sort()
     );
   });
+
+  it("rejeita rede desconectada: activities em cadeias isoladas", () => {
+    // Reproduz o defeito real da AURORA TESTE (OB-PUPOCN): 53 atividades cuja
+    // rede se quebra em 8 componentes. Nenhum ciclo existe, nenhuma referência
+    // está inválida — e ainda assim o "caminho crítico" que sai daqui é o de
+    // uma das 8 metades, não o da obra. Uma rede que o CPM não consegue ler
+    // inteira não é uma rede válida.
+    const activities = [
+      activity("A"),
+      activity("B"),
+      activity("C"),
+      activity("D"),
+      activity("E"),
+      activity("F"),
+    ];
+    const result = validateDependencies(activities, [
+      dependency("A", "B"),
+      dependency("B", "C"),
+      dependency("D", "E"),
+      dependency("E", "F"),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain(
+      "disconnected_network"
+    );
+    expect(result.issues[0].severity).toBe("error");
+    expect(result.issues[0].message).toContain("2");
+  });
+
+  it("rejeita atividade isolada sem nenhuma ligação", () => {
+    const result = validateDependencies(
+      [activity("A"), activity("B"), activity("ORFA")],
+      [dependency("A", "B")]
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain(
+      "disconnected_network"
+    );
+  });
+
+  it("aceita rede única a partir de uma raiz, com TTIs paralelas legítimas", () => {
+    // Sobreposição é legítima em obra: duas frentes independentes que
+    // partem do mesmo marco. Isso continua válido — só rede *desligada* é erro.
+    const result = validateDependencies(
+      [activity("A"), activity("B"), activity("C"), activity("D")],
+      [dependency("A", "B"), dependency("A", "C"), dependency("B", "D")]
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
 });
