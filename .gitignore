@@ -88,6 +88,8 @@ temp/
 client/public/__manus__/version.json
 .project-config.json
 .vercel
+# Relatorios gerados por scripts/ (importar-seinfra-catalogo.mts --json out/...)
+out/
 # Saida do build local. Um log de 200 KB nao pertence ao repositorio, e num
 # repositorio publico ele pode carregar a DATABASE_URL do deploy. Estas duas
 # regras viviam em UTF-16 no fim do arquivo e o Git nao as lia: `check-ignore`
