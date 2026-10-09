@@ -1,0 +1,80 @@
+AURORA TESTE
+OB-PUPOCN
+QA EAP SCOPE 2026-10-08
+TESTE-QA-2026-10-08
+Obra demonstrativa — Gantt e Linha de Balanço
+AURORA TESTE
+Gantt demo
+Obra
+Catálogo
+Arquimedes
+Central de Comando
+R
+Sair
+Lixeira (4)
+AURORA TESTE
+Planejamento da obra
+VISÃO GERAL
+DASHBOARD
+PLANEJAMENTO
+ESCOPO
+EAP
+ATIVIDADES
+DEPENDÊNCIAS
+CPM / CAMINHO CRÍTICO
+BASELINE
+CRONOGRAMA
+GANTT
+LINHA DE BALANÇO
+CONTROLE
+CONTROLE
+SUPRIMENTOS
+●
+ORÇAMENTO E CUSTOS
+●
+RISCOS
+●
+CURVA S
+●
+PLANEJAMENTO DA OBRA
+Não há atividades para medir
+
+A produção é medida por atividade, e a aba CRONOGRAMA está vazia. Vá até lá e traga as folhas da EAP — cada folha vira uma linha que aceita quantidade.
+
+Arquimedes
+AURORA TESTE · producao
+[aba: producao] Analise a AURORA TESTE. Quantas atividades tem? Qual o caminho crítico? O cronograma esta atualizado?
+## Resposta — AURORA TESTE (cronograma)
+
+Antes do conteúdo, uma ressalva de identificação: o registro local canônico desta execução é a obra **DEMO-ZF6A7H**, localização **"Demonstração"**, natureza **não informada** e descrição formal **não cadastrada**. **Não há evidência que confirme que "AURORA TESTE" corresponde a este registro.** Tratei os dados abaixo como sendo da obra ativa desta execução; a equivalência de nome é uma premissa não verificada.
+
+### Fatos confirmados (fonte local, `source: local_db`)
+- **MCP de obra (cronograma): sem vínculo.** As chamadas `listar_atividades`, `listar_dependencias`, `validar_dependencias` e `listar_baselines` retornaram `mcp_sem_vinculo`. A fonte externa está indisponível — a limitação é de **integração**, não de cadastro local.
+- Contagens locais: **12 nós de EAP**, **7 atividades**, **6 dependências**.
+- Validação local: `status: valid`, `bloqueadores: 0`, `problemas: []`, **duração: 581** (unidade não retornada).
+- **Caminho crítico retornado:** IDs `246 → 247 → 248 → 249 → 250 → 251 → 252` (7 nós).
+- EAP local: 12 nós, 7 folhas, **todas com `scopeStatus: rascunho`**. Dicionário (descrição, inclusões, exclusões, responsável, critério de aceitação, base de decomposição, unidade, quantidade): **0% preenchido** em todos os níveis.
+- Memória persistente: **nenhum registro** para esta obra/queries.
+
+### Inferências (não confirmadas)
+- O caminho crítico tem **7 IDs = exatamente o número de atividades locais**. É plausível que todas as atividades estejam em série numa cadeia única (6 dependências para 7 atividades), mas **isso não foi confirmado** — pode ser coincidência ou reflexo de cronograma trivial incompleto.
+- **Não consigo mapear os IDs `246–252` para os códigos da EAP (`1` a `5.2`).** IDs internos de nó **não são referências estáveis** entre versões. Sem correspondência única e segura, a reconciliação está bloqueada.
+
+### Respostas diretas
+1. **Quantas atividades?** **7**, por contagem local. Os detalhes (nomes, durações, datas, folgas) **não foram retornados** — não posso listá-las nem descrevê-las.
+2. **Qual o caminho crítico?** Registrado como os IDs **246→252** (7 nós), com duração 581 e **0 bloqueadores** na validação local. **Não é possível afirmar quais pacotes da EAP isso representa** sem vínculo MCP e sem reconciliação de IDs.
+3. **O cronograma está atualizado?** **Indecidível.** Não há **baseline** acessível (MCP sem vínculo; nenhum baseline local retornado), nem datas de previsto × realizado, nem status de progresso. Ausência de dado não é "em dia" nem "atrasado". Note ainda que um `validation.valid = true` estrutural **não equivale** a cronograma atualizado, nem a EAP aprovada.
+
+### Limitações declaradas
+- Fonte externa de cronograma indisponível; respostas baseadas apenas em fallback local somente-leitura.
+- EAP em **rascunho** com dicionário vazio: insuficiente para baseline e para vincular atividades a pacotes aprovados.
+- Sem vínculo, não devo inferir IDs externos nem tratar omissão como `null`.
+
+### Próximos passos (sem alteração — nenhuma mutação proposta)
+1. **Vincular o MCP de obra** a `DEMO-ZF6A7H` e confirmar se "AURORA TESTE" é o mesmo registro (nome/natureza não cadastrados localmente).
+2. Com vínculo: listar atividades e dependências reais, recalcular CPM e mapear os IDs `246–252` aos códigos da EAP.
+3. Obter **baseline** para responder objetivamente sobre atualização do cronograma (previsto × realizado).
+4. Antes de qualquer uso como cronograma oficial: completar o dicionário da EAP (hoje 0% em 7 folhas, todas em rascunho).
+
+Nenhuma alteração foi feita e nenhuma está sendo proposta. Se quiser que eu proponha um plano de correção (vínculo + reconciliação de IDs + baseline), aguardo sua confirmação explícita.
+Enviar

@@ -1,4 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import * as path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   testDir: "./tests",
@@ -15,7 +20,7 @@ export default defineConfig({
   outputDir: "test-results",
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "https://plataforma-obras-api.onrender.com",
-    storageState: process.env.PLAYWRIGHT_STORAGE_STATE || undefined,
+    storageState: process.env.PLAYWRIGHT_STORAGE_STATE || path.join(__dirname, 'playwright-storage-state.json'),
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...devices["Desktop Chrome"],
