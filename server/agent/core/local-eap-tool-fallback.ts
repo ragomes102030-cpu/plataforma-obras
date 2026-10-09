@@ -35,6 +35,10 @@ function isFilled(value: unknown): boolean {
   return value !== null && value !== undefined && String(value).trim().length > 0;
 }
 
+function hasPositiveQuantity(value: unknown): boolean {
+  return isFilled(value) && Number.isFinite(Number(value)) && Number(value) > 0;
+}
+
 export function resolveLocalEapToolFallback(
   toolName: string,
   context: AgentProjectContext
@@ -43,8 +47,8 @@ export function resolveLocalEapToolFallback(
   if (!Array.isArray(snapshot)) return null;
 
   const nodes = normalizeNodes(snapshot);
-  const childIds = new Set(nodes.map(node => node.parentId).filter((id): id is number | string => id !== null));
-  const leaves = nodes.filter(node => !childIds.has(node.id));
+  const childIds = new Set(nodes.map(node => node.parentId).filter((id): id is number | string => id !== null).map(String));
+  const leaves = nodes.filter(node => !childIds.has(String(node.id)));
   const missingDictionaryFields = [
     "description",
     "inclusions",
@@ -53,10 +57,10 @@ export function resolveLocalEapToolFallback(
     "responsible",
     "acceptanceCriteria",
     "unit",
-    "plannedQuantity",
   ] as const;
   const completeLeaves = leaves.filter(node =>
-    missingDictionaryFields.every(field => isFilled(node[field]))
+    missingDictionaryFields.every(field => isFilled(node[field])) &&
+    hasPositiveQuantity(node.plannedQuantity)
   );
   const mcpNote = "O MCP externo desta obra não está vinculado; resultado calculado a partir do snapshot local persistido.";
 
@@ -101,7 +105,7 @@ export function resolveLocalEapToolFallback(
     }
 
     case "resumo_quantitativos": {
-      const withQuantity = leaves.filter(node => isFilled(node.plannedQuantity) && Number(node.plannedQuantity) > 0);
+      const withQuantity = leaves.filter(node => hasPositiveQuantity(node.plannedQuantity));
       const withUnit = leaves.filter(node => isFilled(node.unit));
       return JSON.stringify({
         status: "ok",
