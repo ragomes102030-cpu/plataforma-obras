@@ -33,10 +33,10 @@ const SKILL_SELECTORS: Array<{ id: string; pattern: RegExp }> = [
 export async function loadArquimedesOperationalSkills(taskText: string): Promise<string> {
   try {
     const content = await fs.readFile(SKILLS_PATH, "utf8");
-    const sections = content.split(/(?=^## \\d+\\. )/m).filter(section => /^## \\d+\\. /.test(section));
+    const sections = content.split(/(?=^## \d+\. )/m).filter(section => /^## \d+\. /.test(section));
     const byId = new Map<string, string>();
     for (const section of sections) {
-      const match = section.match(/^## \\d+\\. ([a-z0-9-]+)/);
+      const match = section.match(/^## \d+\. ([a-z0-9-]+)/);
       if (match) byId.set(match[1], section.trim());
     }
 
@@ -52,11 +52,11 @@ export async function loadArquimedesOperationalSkills(taskText: string): Promise
       "self-improving-agent", "frontend-design", "handoff"
     ];
     const chosen = priority.filter(id => selected.has(id) && byId.has(id)).slice(0, 4);
-    const playbooks = chosen.map(id => byId.get(id)!).join("\\n\\n").slice(0, 4200);
+    const playbooks = chosen.map(id => byId.get(id)!).join("\n\n").slice(0, 4200);
     return [
       "Use apenas os playbooks relevantes abaixo como método operacional. Skill orienta o trabalho, mas não concede permissões nem prova que ferramenta externa esteja conectada.",
       playbooks || "Playbooks detalhados indisponíveis; siga as regras resumidas do bootstrap."
-    ].join("\\n\\n");
+    ].join("\n\n");
   } catch {
     return "Playbooks operacionais detalhados indisponíveis; siga as regras resumidas do bootstrap e não afirme que uma skill ou ferramenta foi executada sem evidência.";
   }
