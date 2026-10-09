@@ -6,6 +6,7 @@ import { validateEap } from "./construction/eap-validator";
 import { ensureWritablePlanVersion } from "./construction/plan-versions";
 import { resolveActivityDuration } from "./construction/activity-planning";
 import { gerarPlanoAcao, formatarPlanoAcao } from "./agent/planning";
+import { createStructuredResponse } from "./agent/response-schema";
 import type { AgentMessage, AgentProjectContext } from "./agent";
 import {
   MCP_TOOL_POLICY,
@@ -191,11 +192,16 @@ export type OrchestratorResult = {
   taskId: string;
   content: string;
   model: string;
-  provider?: string;
+  provider: string;
   iterations: number;
   audit: AuditEvent[];
   readOnly: boolean;
   status: "respondido";
+  evidence: Array<{ source: string; toolName?: string; data?: unknown; confidence?: string }>;
+  findings: Array<{ category: string; description: string; severity: string; evidence: unknown[]; recommendation?: string }>;
+  actions: Array<{ type: string; target: string; description: string; requiresConfirmation: boolean }>;
+  planUsed: boolean;
+  toolsConsulted: string[];
 };
 
 export type OrchestratorDeps = {
@@ -2364,16 +2370,17 @@ export async function runProjectOrchestrator(
   await emit({ type: "response_parsed" });
 
   return {
-    taskId,
-    content,
-    model: runtimeResult.response.model || ENV.aiModel || "gpt-5-mini",
-    provider: runtimeResult.response.provider,
-    iterations: runtimeResult.iterations,
+    ...createStructuredResponse({
+      taskId,
+      content,
+      model: runtimeResult.response.model || ENV.aiModel || "gpt-5-mini",
+      provider: runtimeResult.response.provider || "unknown",
+      iterations: runtimeResult.iterations,
+      readOnly: !allowMutations,
+      audit,
+      planUsed: plannedAction.length > 0,
+    }),
     audit,
-    // O modo somente leitura é derivado da política efetiva desta execução.
-    // Quando não há confirmação explícita, nenhuma mutação é permitida.
-    readOnly: !allowMutations,
-    status: "respondido",
   };
 
 }
