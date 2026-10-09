@@ -171,14 +171,19 @@ export function AbaCpm({ projetoId }: Props) {
               Ainda não há caminho crítico persistido. Calcule o CPM com uma rede válida.
             </p>
           ) : (
-            <div className="pl-dependencia-lista">
+            <div className="pl-cpm-tabela criticos">
+              <div className="pl-cpm-linha pl-cpm-cabecalho">
+                <span>#</span><span>Atividade</span><span>EF</span><span>Folga</span>
+              </div>
               {resumo.critical.map((activity, index) => (
-                <div key={activity.id} className="pl-dependencia-item">
-                  <span>{index + 1}. {activity.wbsCode} — {activity.name}</span>
-                  <strong>F{Number(activity.earlyFinish ?? 0)}</strong>
-                  <span>folga {Number(activity.totalFloat ?? 0)}d</span>
+                <div key={activity.id} className={Number(activity.critical) === 1 ? "pl-cpm-linha critica" : "pl-cpm-linha"}>
+                  <span>{index + 1}</span>
+                  <span title={`${activity.wbsCode} — ${activity.name}`}>{activity.wbsCode} — {activity.name}</span>
+                  <span>{Number(activity.earlyFinish ?? 0)}</span>
+                  <span>{Number(activity.totalFloat ?? 0)}d</span>
                 </div>
               ))}
+              <small>EF = término mais cedo (dias) · Folga = folga total; zero ou negativa caracteriza o caminho crítico.</small>
             </div>
           )}
         </div>
