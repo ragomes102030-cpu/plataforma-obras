@@ -72,8 +72,9 @@ export function resolveLocalEapToolFallback(
         fallback: true,
         mcpStatus: "mcp_sem_vinculo",
         message: mcpNote,
-        nodeCount: nodes.length,
-        nodes,
+        projectCode: context.project.code,
+        nodeCount: snapshot.length,
+        nodes: snapshot,
       });
 
     case "validar_estrutura": {
