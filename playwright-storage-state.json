@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "https://plataforma-obras-api.onrender.com",
+      "localStorage": [
+        {
+          "name": "manus-runtime-user-info",
+          "value": "null"
+        }
+      ]
+    }
+  ]
+}
