@@ -1125,6 +1125,25 @@ function buildSystem(
 
   base.push("SKILLS OPERACIONAIS SELECIONADAS PARA ESTA TAREFA:\n" + operationalSkills);
 
+  // Keep deterministic local evidence available even when the system prompt is compacted.
+  if (responseIntent !== "casual" && context.evidence) {
+    const evidence = context.evidence;
+    base.push([
+      "EVIDÊNCIAS LOCAIS PRIORITÁRIAS — preservar na compactação:",
+      `Fonte de evidências: ${evidence.source}`,
+      `Nós EAP locais: ${evidence.eapNodeCount ?? "indisponível"}`,
+      `Atividades locais consultadas: ${evidence.activityCount ?? "indisponível"}`,
+      `Dependências locais consultadas: ${evidence.dependencyCount ?? "indisponível"}`,
+      `Erros de evidência: ${evidence.errors.join(" | ") || "nenhum"}`,
+      evidence.validation
+        ? `Validação determinística: ${evidence.validation.status} | bloqueadores=${evidence.validation.blockerCount}`
+        : "Validação determinística ainda não executada.",
+      evidence.validation?.issues.length
+        ? `Problemas determinísticos: ${evidence.validation.issues.join(" | ")}`
+        : "Problemas determinísticos: nenhum.",
+    ].join("\n"));
+  }
+
   return base.join("\n\n");
 }
 
