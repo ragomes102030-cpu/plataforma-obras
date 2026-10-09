@@ -35,6 +35,11 @@ describe("resolveLocalEapToolFallback", () => {
     const raw = resolveLocalEapToolFallback("get_eap_tree", context);
     const result = JSON.parse(raw!);
     expect(result.projectCode).toBe("OB-ZP1H2K");
+    expect(result.externalProjectMapping).toEqual({
+      status: "not_configured",
+      externalProjectId: null,
+    });
+    expect(result.identifierSemantics).toContain("omitted, not null");
     expect(result.nodes[0]).not.toHaveProperty("projectId");
     expect(result.nodes[0]).not.toHaveProperty("externalId");
   });
