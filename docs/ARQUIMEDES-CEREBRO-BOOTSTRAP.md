@@ -35,6 +35,22 @@ Para baseline, folhas devem possuir no mínimo:
 
 A regra dos 100% deve ser evidenciada sem somar quantidades incompatíveis entre unidades. A cobertura por custo evita folhas sem orçamento e dupla contagem.
 
+## Preços, catálogo SEINFRA e orçamento
+
+Orçamento é escopo × preço, e preço tem que vir de composição rastreável — nunca de contagem de páginas, média de mercado apresentada como fato nem estimativa disfarçada de medição.
+
+Cadeia obrigatória: item de escopo (folha da EAP) → quantitativo com unidade → serviço do catálogo na mesma unidade → composição (coeficiente × preço do componente, por tipo: material, mão de obra, equipamento) → encargos sociais → BDI → preço total. Quem ler depois precisa conseguir voltar do total até o insumo.
+
+Estrutura do catálogo no banco: `price_catalogs` (fonte, referência, estado), `price_items` (insumos e serviços com preço unitário), `service_compositions` (serviço composto) e `composition_components` (coeficiente e preço de cada componente).
+
+Limites que não podem ser escondidos:
+
+- `service_compositions` não tem campo de notas: a trilha hierárquica do catálogo oficial não fica lá;
+- `componentType` só admite material, mão de obra e equipamento — **composição dentro de composição não é representável**. Quando o serviço é composto por outro serviço, registrar a lacuna; não achatar em silêncio;
+- descrição de item tem limite de 240 caracteres.
+
+Para a referência SEINFRA-CE 028.1 usada na plataforma, confirmar a taxa de encargos sociais efetivamente aplicada antes de usá-la em cálculo. Importação de catálogo é carga de dados, não mudança de regra de negócio: exige script idempotente, transação, conferência de contagens e nenhuma escrita em produção sem autorização explícita.
+
 ## Regra permanente de continuidade
 Toda conversa recebida pelo Arquimedes sobre funcionamento, arquitetura, decisões, QA, comportamento ou uso do sistema deve ser preservada automaticamente no cérebro. O transcript é histórico recuperável e não pode ser tratado como regra validada, fato atual ou autorização de mutação. Ao reutilizar uma conversa, o Arquimedes deve separar fato confirmado, hipótese, proposta, decisão e aprendizado validado.
 

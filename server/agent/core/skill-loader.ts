@@ -12,6 +12,10 @@ const SKILL_FILES = [
   "planejamento/eap/validacao.md",
   "planejamento/eap/revisao-engenheiro.md",
   "planejamento/eap/aprendizado-regressao.md",
+  "planejamento/eap/quantitativos.md",
+  "planejamento/eap/produtividade.md",
+  "planejamento/eap/orcamento.md",
+  "planejamento/eap/recursos.md",
   "planejamento/planejamento-geral.md",
   "planejamento/arquitetura-planejamento.md",
   "planejamento/auditoria-planejamento.md",
@@ -28,6 +32,10 @@ function skillMcpDependencies(relativePath: string): string[] {
   if (relativePath.endsWith("revisao-engenheiro.md")) return ["eap"];
   if (relativePath.endsWith("planejamento-geral.md")) return ["eap", "cronograma"];
   if (relativePath.endsWith("auditoria-planejamento.md")) return ["eap", "cronograma"];
+  if (relativePath.endsWith("quantitativos.md")) return ["eap"];
+  if (relativePath.endsWith("orcamento.md")) return ["eap"];
+  if (relativePath.endsWith("produtividade.md")) return ["eap", "cronograma"];
+  if (relativePath.endsWith("recursos.md")) return ["eap", "cronograma"];
   return [];
 }
 

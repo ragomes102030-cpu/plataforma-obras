@@ -147,7 +147,7 @@ Cada skill declara modo de execução:
 Skills não têm permissão de mutação. MCPs também não autorizam aplicação por si só.
 Skills podem ser compostas entre si e podem solicitar MCPs de forma direcionada.
 
-Skills EAP atuais incluem decomposição, regra dos 100%, pacotes de trabalho, critérios de parada, validação, revisão colaborativa e aprendizado/regressão.
+Skills EAP atuais incluem decomposição, regra dos 100%, pacotes de trabalho, critérios de parada, validação, revisão colaborativa, aprendizado/regressão, quantitativos, produtividade, orçamento e recursos.
 
 ## 21. Aprendizado estruturado
 Aprendizados candidatos podem ser registrados na memória persistente com o ciclo:
@@ -208,3 +208,50 @@ Proteção:
 Status: regra implementada e protegida por regressão; teste funcional Aurora após o novo deploy ainda deve ser confirmado.
 Escopo: global para propostas EAP versionadas.
 Origem: Aurora Teste / OB-PUPOCN.
+
+## 26. Catálogo de preços SEINFRA, importação e orçamento
+
+Conhecimento consolidado em 2026-10-09, junto com o importador em lote do catálogo.
+
+Modelo de dados do preço (quatro tabelas, nesta ordem):
+
+| Tabela | Papel |
+| --- | --- |
+| `price_catalogs` | o catálogo: fonte, referência (ex.: 028.1), estado, status |
+| `price_items` | insumos e serviços avulsos com preço unitário, unidade e `itemType` |
+| `service_compositions` | o serviço composto (código `C…`), unidade e período de referência |
+| `composition_components` | o que compõe o serviço: coeficiente e preço unitário do componente |
+
+Cadeia de orçamento — não pular etapas:
+item de escopo (folha da EAP) → quantitativo com unidade → serviço do catálogo na mesma unidade →
+composição (Σ coeficiente × preço, por tipo) → encargos sociais (quando aplicáveis) → BDI → preço
+total. O total tem que ser reversível até o insumo.
+
+Limites estruturais obrigatórios (declarar, não contornar em silêncio):
+
+- `componentType` admite apenas material, mão de obra e equipamento. **Composição dentro de
+  composição não é representável**; o catálogo 028.1 tem 2 162 componentes desse tipo e 159
+  composições formadas só por outras composições. Registro da lacuna é obrigatório.
+- `service_compositions` não tem coluna de notas — a trilha hierárquica do catálogo oficial não
+  fica persistida nessa tabela.
+- Descrição de item é limitada a 240 caracteres.
+
+Três arquivos oficiais do SEINFRA-CE são distintos e não intercambiáveis: Insumos (insumos `I…`/`G…`),
+Planos de Serviços (serviços `C…` com descrição e unidade) e Composições (relatório em blocos, um
+bloco por serviço).
+
+Importação de catálogo é **carga de dados**, não mudança de regra de negócio. Exige: script
+idempotente por chave, transação única, conferência de contagens antes/depois, relatório de
+divergências e nenhuma escrita em produção sem autorização explícita e ensaio prévio.
+
+Referências:
+
+- `scripts/importar-seinfra-catalogo.mts` — importador em lote (dry-run é o padrão; escrita exige
+  DSN explícito e recusa DSN de produção conhecido);
+- `docs/IMPORTADOR-SEINFRA-CE.md` — comandos, salvaguardas, números do dry-run e limitações;
+- skills `agent/skills/planejamento/eap/quantitativos.md`, `produtividade.md`, `orcamento.md`,
+  `recursos.md`.
+
+Status: importador escrito e validado apenas em simulação; execução real pendente de banco de ensaio.
+Escopo: catálogo de preços, quantitativos, produtividade, orçamento e recursos.
+Origem: plataforma-obras / SEINFRA-CE 028.1 (ENC. SOCIAIS 84,44).
