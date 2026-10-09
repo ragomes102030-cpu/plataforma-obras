@@ -12,7 +12,7 @@
 |---|---|---|
 | Identificador | `OB-ZP1H2K` | Código da obra de QA |
 | Tipologia declarada | Edificação residencial | Contexto de QA previamente declarado |
-| Número de pavimentos | Seis pavimentos | Informação declarada; a convenção de contagem ainda precisa ser confirmada (por exemplo, se térreo, subsolo ou cobertura entram nessa contagem) |
+| Número de pavimentos | Seis pavimentos | Informação declarada; a convenção de contagem ainda precisa ser confirmada (por exemplo, se térreo, subsolo ou cobertura entram nessa contagem) |\n| Escopo textual declarado | Fundações/contenções, estrutura de concreto armado, vedações/alvenarias, instalações elétricas e hidrossanitárias, revestimentos/acabamentos, áreas externas, comissionamento, documentação e entrega | Itens presentes na descrição textual do escopo; ainda precisam ser delimitados e rastreados a pacotes/itens de escopo estruturados |
 | EAP local atual | 9 nós: 1 raiz + 8 folhas | Snapshot canônico live de 2026-10-09 |
 | Estado dos nós | Todos em rascunho | Snapshot canônico live |
 | Atividades / dependências | 0 / 0 | Estado persistido consultado |
@@ -21,7 +21,7 @@
 
 ## 2. Dados ainda desconhecidos — não preencher por inferência
 
-Até confirmação, manter como **desconhecido**: área construída; quantidade e tipologia de unidades; composição e nome dos pavimentos; existência de subsolo, garagem, elevadores e cobertura técnica; padrão de acabamento; sistema construtivo; tipo de fundação; estrutura (concreto, aço, alvenaria estrutural ou outro); sistemas elétricos, hidrossanitários, gás, incêndio, telecomunicações, climatização e energia solar; áreas externas/paisagismo; restrições de terreno/acesso; quantitativos; orçamento; datas; produtividade; calendário e equipe/responsáveis.
+Até confirmação, manter como **desconhecido**: área construída; quantidade e tipologia de unidades; composição e nome dos pavimentos; existência de subsolo, garagem, elevadores e cobertura técnica; padrão/especificação dos acabamentos; método e tipologia de fundação; detalhamento da estrutura de concreto armado e das alvenarias; limites e composição exata das áreas externas; quais projetos, licenças e liberações estão no contrato; sistemas adicionais como gás, incêndio, telecomunicações, climatização e energia solar; restrições de terreno/acesso; quantitativos; orçamento; datas; produtividade; calendário e equipe/responsáveis. A descrição declara instalações elétricas e hidrossanitárias, mas não detalha seus subsistemas, padrões, equipamentos ou quantitativos.
 
 Não converter esses desconhecidos em premissas silenciosas. Uma hipótese necessária deve ser identificada como hipótese, ter responsável por confirmar e não entrar como escopo aprovado.
 
@@ -29,8 +29,8 @@ Não converter esses desconhecidos em premissas silenciosas. Uma hipótese neces
 
 1. **Contagem dos seis pavimentos:** quais pavimentos compõem os seis? Há subsolo, térreo, pavimentos tipo, cobertura ou outros níveis?
 2. **Programa:** quantas unidades e quais áreas comuns/áreas de apoio estão declaradas? Se ainda não definido, registrar explicitamente “a definir”.
-3. **Limites físicos:** garagem, contenções, muros, urbanização e ligações externas fazem parte do contrato/escopo?
-4. **Soluções técnicas:** quais sistemas construtivos e prediais já estão definidos em projeto? Quais seguem pendentes?
+3. **Limites físicos:** a descrição já declara contenções e áreas externas; quais elementos exatos estão incluídos (por exemplo, escavação, muros, urbanização e ligações externas)? Garagem faz parte do escopo?
+4. **Soluções técnicas:** a descrição declara estrutura de concreto armado, alvenarias, instalações elétricas e hidrossanitárias; quais especificações/projetos estão aprovados e quais sistemas adicionais (incêndio, gás, telecomunicações, climatização, energia solar etc.) realmente se aplicam?
 5. **Fronteira contratual:** projetos, licenças, ligações definitivas, comissionamento, documentação “as built” e entrega ao usuário estão incluídos?
 6. **Critério de conclusão:** quais entregáveis e critérios objetivos serão usados para aceitar a obra e seus pacotes?
 
