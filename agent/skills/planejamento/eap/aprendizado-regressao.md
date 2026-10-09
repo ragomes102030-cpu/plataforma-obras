@@ -86,3 +86,16 @@ Fixture defeituosa não é automaticamente defeito de produção. Antes de criar
 4. Não criar projeto externo nem salvar mapeamento automaticamente só para remover `mcp_sem_vinculo`; exige decisão e autorização explícita.
 5. Antes de planejar atividades, fechar itens estruturados de escopo, eixo de decomposição e dicionário; manter a árvore em rascunho até revisão formal.
 6. AURORA TESTE permaneceu intocada durante esta rodada.
+
+
+## Proposta de escopo estruturado e EAP candidata — QA OB-ZP1H2K (2026-10-09)
+
+- **Objetivo:** transformar a descrição textual já declarada em base estruturada de revisão, sem alterar a EAP persistida.
+- **Fatos do escopo textual:** edifício residencial de seis pavimentos; a descrição inclui fundações/contenções, estrutura de concreto armado, vedações/alvenarias, instalações elétricas e hidrossanitárias, revestimentos/acabamentos, áreas externas, comissionamento, documentação e entrega.
+- **Fatos ainda ausentes:** área construída, número/tipologia de unidades, convenção de contagem dos pavimentos, existência de subsolo/garagem/elevadores/cobertura técnica, especificações detalhadas, quantitativos, orçamento, datas e responsáveis. Sistemas adicionais como gás, incêndio, telecomunicações, climatização e energia solar não estão confirmados.
+- **Correção de método:** distinguir “item declarado no escopo textual” de “item estruturado, delimitado e rastreado”. Não reclassificar como desconhecido o que foi explicitamente declarado; também não inferir especificações, quantidades, sistemas adicionais ou limites contratuais a partir do nome genérico do item.
+- **Proposta versionada:** `docs/QA-OB-ZP1H2K-ESCOPO-EAP-PROPOSTA-2026-10-09.md`. A árvore ali é candidata para revisão, com códigos provisórios; não representa nós persistidos nem aprovação de engenharia.
+- **Gate da regra dos 100%:** permanece `indecidivel` enquanto não houver itens estruturados de escopo e vínculos auditáveis escopo↔EAP. Nove nós e zero bloqueios estruturais não provam cobertura do escopo.
+- **Proteções:** não criar atividades, dependências, orçamento, baseline, projeto externo ou vínculo MCP; não executar regeneração destrutiva; não alterar `OB-PUPOCN — AURORA TESTE`.
+- **Status:** proposta e aprendizado versionados no branch `docs/qa-escopo-eap-proposta-2026-10-09`; PR #82 aberto em draft para revisão. CI e regressão Aurora do PR ainda precisam concluir. Nenhuma mutação no banco foi executada nesta etapa.
+- **Regressões:** (1) preservar itens explicitamente declarados; (2) marcar especificações/quantidades ausentes como desconhecidas; (3) regra dos 100% indecidível sem denominador e vínculos; (4) proposta não escreve na EAP persistida; (5) nenhum efeito na AURORA.
