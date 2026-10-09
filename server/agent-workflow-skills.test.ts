@@ -36,10 +36,10 @@ describe("Arquimedes workflow skill pack", () => {
       join(process.cwd(), "docs/ARQUIMEDES-CEREBRO-BOOTSTRAP.md"),
       "utf8"
     );
-    expect(playbook).toContain("Nunca declarar “testado” sem execução observável.");
+    expect(playbook).toContain("não declarar “testado” sem execução observável.");
     expect(playbook).toContain("observação → evidência → classificação");
     expect(playbook).toContain("exigem autorização explícita");
     expect(bootstrap).toContain("## Skills operacionais transversais");
-    expect(bootstrap).toContain("Testar como usuário com Playwright/browser real quando disponível");
+    expect(bootstrap).toContain("testar como usuário com Playwright/browser real quando disponível");
   });
 });
