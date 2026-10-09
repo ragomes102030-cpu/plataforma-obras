@@ -12,7 +12,8 @@
 |---|---|---|
 | Identificador | `OB-ZP1H2K` | Código da obra de QA |
 | Tipologia declarada | Edificação residencial | Contexto de QA previamente declarado |
-| Número de pavimentos | Seis pavimentos | Informação declarada; a convenção de contagem ainda precisa ser confirmada (por exemplo, se térreo, subsolo ou cobertura entram nessa contagem) |\n| Escopo textual declarado | Fundações/contenções, estrutura de concreto armado, vedações/alvenarias, instalações elétricas e hidrossanitárias, revestimentos/acabamentos, áreas externas, comissionamento, documentação e entrega | Itens presentes na descrição textual do escopo; ainda precisam ser delimitados e rastreados a pacotes/itens de escopo estruturados |
+| Número de pavimentos | Seis pavimentos | Informação declarada; a convenção de contagem ainda precisa ser confirmada (por exemplo, se térreo, subsolo ou cobertura entram nessa contagem) |
+| Escopo textual declarado | Fundações/contenções, estrutura de concreto armado, vedações/alvenarias, instalações elétricas e hidrossanitárias, revestimentos/acabamentos, áreas externas, comissionamento, documentação e entrega | Itens presentes na descrição textual do escopo; ainda precisam ser delimitados e rastreados a pacotes/itens de escopo estruturados |
 | EAP local atual | 9 nós: 1 raiz + 8 folhas | Snapshot canônico live de 2026-10-09 |
 | Estado dos nós | Todos em rascunho | Snapshot canônico live |
 | Atividades / dependências | 0 / 0 | Estado persistido consultado |
