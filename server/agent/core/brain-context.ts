@@ -45,10 +45,10 @@ export async function loadArquimedesOperationalSkills(taskText: string): Promise
       .map(selector => selector.id);
     const chosen = [...new Set([...matched, "find-skills", "handoff"])]
       .filter(id => byId.has(id))
-      .slice(0, 4);
+      .slice(0, 3);
     if (chosen.length === 2 && byId.has("grill-me")) chosen.push("grill-me");
 
-    const playbooks = chosen.map(id => byId.get(id)!).join("\n\n").slice(0, 4200);
+    const playbooks = chosen.map(id => byId.get(id)!).join("\n\n").slice(0, 2600);
     return [
       "Use apenas os playbooks relevantes abaixo como método operacional. Skill orienta o trabalho, mas não concede permissões nem prova que ferramenta externa esteja conectada.",
       playbooks || "Playbooks detalhados indisponíveis; siga as regras resumidas do bootstrap."
