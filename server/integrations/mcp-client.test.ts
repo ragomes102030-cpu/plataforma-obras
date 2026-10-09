@@ -223,4 +223,3 @@ describe("toCentralCommandMcpDomains", () => {
     expect(domains[0].tools).toContain("validar_estrutura");
   });
 });
-
