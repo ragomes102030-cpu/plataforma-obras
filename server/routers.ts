@@ -4645,9 +4645,191 @@ export const appRouter = router({
           }
         }
         return { ok: true as const, newStartOffset: input.newStartOffset, cpmValid: result.valid };
-      }),
-  }),
-  agent: router({
+              }),
+          }),
+          resources: router({
+            list: protectedProcedure
+              .input(z.object({ projectId: z.number().int().positive() }))
+              .query(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) return [];
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                return db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
+              }),
+            create: protectedProcedure
+              .input(z.object({
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180),
+                resourceType: z.enum(["mao_de_obra", "equipamento", "material"]),
+                unit: z.string().trim().min(1).max(32),
+                capacityPerDay: z.number().positive().optional(),
+                costPerDay: z.number().min(0).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [created] = await db.insert(planningResources).values({
+                  projectId: input.projectId,
+                  name: input.name,
+                  resourceType: input.resourceType,
+                  unit: input.unit,
+                  capacityPerDay: input.capacityPerDay?.toString() ?? "0",
+                  costPerDay: input.costPerDay?.toString() ?? "0",
+                  active: 1,
+                }).returning({ id: planningResources.id });
+                return created;
+              }),
+            update: protectedProcedure
+                  .input(z.object({
+                    id: z.number().int().positive(),
+                    projectId: z.number().int().positive(),
+                    name: z.string().trim().min(2).max(180).optional(),
+                    resourceType: z.enum(["mao_de_obra", "equipamento", "material"]).optional(),
+                    unit: z.string().trim().min(1).max(32).optional(),
+                    capacityPerDay: z.number().positive().optional(),
+                    costPerDay: z.number().min(0).optional(),
+                    active: z.number().int().min(0).max(1).optional(),
+                  }))
+                  .mutation(async ({ ctx, input }) => {
+                    const db = await getDb();
+                    if (!db) throw new Error("Banco de dados não configurado.");
+                    await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                    const { id, projectId, ...data } = input;
+                    const updateData: Record<string, unknown> = { ...data };
+                    if (data.capacityPerDay !== undefined) updateData.capacityPerDay = data.capacityPerDay.toString();
+                    if (data.costPerDay !== undefined) updateData.costPerDay = data.costPerDay.toString();
+                    const [updated] = await db.update(planningResources).set(updateData).where(and(eq(planningResources.id, id), eq(planningResources.projectId, projectId))).returning({ id: planningResources.id });
+                    if (!updated) throw notFound("Recurso não encontrado.");
+                    return updated;
+                  }),
+            delete: protectedProcedure
+              .input(z.object({ id: z.number().int().positive(), projectId: z.number().int().positive() }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [deleted] = await db.delete(planningResources).where(and(eq(planningResources.id, input.id), eq(planningResources.projectId, input.projectId))).returning({ id: planningResources.id });
+                if (!deleted) throw notFound("Recurso não encontrado.");
+                return { success: true };
+              }),
+          }),
+          teams: router({
+            list: protectedProcedure
+              .input(z.object({ projectId: z.number().int().positive() }))
+              .query(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) return [];
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                return db.select().from(productionTeams).where(eq(productionTeams.projectId, input.projectId)).orderBy(productionTeams.name);
+              }),
+            create: protectedProcedure
+              .input(z.object({
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180),
+                trade: z.string().trim().min(2).max(120),
+                memberCount: z.number().int().min(0).default(0),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [created] = await db.insert(productionTeams).values({
+                  projectId: input.projectId,
+                  name: input.name,
+                  trade: input.trade,
+                  memberCount: input.memberCount,
+                  active: 1,
+                }).returning({ id: productionTeams.id });
+                return created;
+              }),
+            update: protectedProcedure
+              .input(z.object({
+                id: z.number().int().positive(),
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180).optional(),
+                trade: z.string().trim().min(2).max(120).optional(),
+                memberCount: z.number().int().min(0).optional(),
+                active: z.number().int().min(0).max(1).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const { id, projectId, ...data } = input;
+                const [updated] = await db.update(productionTeams).set(data).where(and(eq(productionTeams.id, id), eq(productionTeams.projectId, projectId))).returning({ id: productionTeams.id });
+                if (!updated) throw notFound("Equipe não encontrada.");
+                return updated;
+              }),
+            delete: protectedProcedure
+              .input(z.object({ id: z.number().int().positive(), projectId: z.number().int().positive() }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [deleted] = await db.delete(productionTeams).where(and(eq(productionTeams.id, input.id), eq(productionTeams.projectId, input.projectId))).returning({ id: productionTeams.id });
+                if (!deleted) throw notFound("Equipe não encontrada.");
+                return { success: true };
+              }),
+          }),
+          fronts: router({
+            list: protectedProcedure
+              .input(z.object({ projectId: z.number().int().positive() }))
+              .query(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) return [];
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                return db.select().from(productionFronts).where(eq(productionFronts.projectId, input.projectId)).orderBy(productionFronts.name);
+              }),
+            create: protectedProcedure
+              .input(z.object({
+                projectId: z.number().int().positive(),
+                code: z.string().trim().min(1).max(32),
+                name: z.string().trim().min(2).max(180),
+                location: z.string().trim().max(180).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [created] = await db.insert(productionFronts).values({
+                  projectId: input.projectId,
+                  code: input.code,
+                  name: input.name,
+                  location: input.location ?? null,
+                  status: "ativa",
+                }).returning({ id: productionFronts.id });
+                return created;
+              }),
+            update: protectedProcedure
+              .input(z.object({
+                id: z.number().int().positive(),
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180).optional(),
+                location: z.string().trim().max(180).optional(),
+                status: z.enum(["ativa", "pausada", "concluida"]).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const { id, projectId, ...data } = input;
+                const [updated] = await db.update(productionFronts).set(data).where(and(eq(productionFronts.id, id), eq(productionFronts.projectId, projectId))).returning({ id: productionFronts.id });
+                if (!updated) throw notFound("Frente não encontrada.");
+                return updated;
+              }),
+            delete: protectedProcedure
+              .input(z.object({ id: z.number().int().positive(), projectId: z.number().int().positive() }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [deleted] = await db.delete(productionFronts).where(and(eq(productionFronts.id, input.id), eq(productionFronts.projectId, input.projectId))).returning({ id: productionFronts.id });
+                if (!deleted) throw notFound("Frente não encontrada.");
+                return { success: true };
+              }),
+          }),
+          agent: router({
     snapshot: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
