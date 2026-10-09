@@ -73,6 +73,11 @@ export function resolveLocalEapToolFallback(
         mcpStatus: "mcp_sem_vinculo",
         message: mcpNote,
         projectCode: context.project.code,
+        externalProjectMapping: {
+          status: "not_configured",
+          externalProjectId: null,
+        },
+        identifierSemantics: "Each node contains only fields returned by the persisted local snapshot. projectId/externalId are omitted, not null; do not infer identifiers that are not present.",
         nodeCount: snapshot.length,
         nodes: snapshot,
       });
