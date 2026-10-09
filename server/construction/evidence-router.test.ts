@@ -174,4 +174,141 @@ describe("EvidenceSourceRouter", () => {
       { code: "mcp_eap_unavailable", message: "MCP 502: Bad Gateway" },
     ]);
   });
+
+  it("usa o enriquecimento MCP por padrão quando o local está vazio", async () => {
+    const router = new EvidenceSourceRouter(
+      source(),
+      source({
+        getEapTree: async () => ({
+          source: "mcp",
+          projectId: 1,
+          data: [
+            {
+              id: 9,
+              projectId: 1,
+              externalId: "mcp-default",
+              externalUid: null,
+              parentId: null,
+              code: "9",
+              name: "EAP via MCP",
+              level: 1,
+              nodeType: "grupo",
+              unit: null,
+              plannedQuantity: null,
+              sortOrder: 1,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        }),
+      })
+    );
+
+    const result = await router.getEapTree(1);
+
+    expect(result.source).toBe("mcp");
+    expect(result.data?.[0].externalId).toBe("mcp-default");
+    expect(result.warnings[0]).toMatchObject({ code: "local_empty_fallback" });
+  });
+
+  it("não consulta o MCP quando o local tem dados", async () => {
+    let chamadasMcp = 0;
+    const router = new EvidenceSourceRouter(
+      source({
+        listActivities: async () => ({
+          source: "local_db",
+          projectId: 1,
+          data: [
+            {
+              id: 3,
+              projectId: 1,
+              externalId: "local-3",
+              eapRef: "1.1",
+              wbsCode: "1.1",
+              name: "Atividade local",
+              phase: "Execução",
+              startOffset: 1,
+              durationDays: 1,
+              progress: 0,
+              status: "Não iniciado",
+              critical: 0,
+              sortOrder: 1,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        }),
+      }),
+      source({
+        listActivities: async () => {
+          chamadasMcp += 1;
+          return {
+            source: "mcp",
+            projectId: 1,
+            data: [],
+            warnings: [],
+            errors: [],
+          };
+        },
+      })
+    );
+
+    const result = await router.listActivities(1);
+
+    expect(result.source).toBe("local_db");
+    expect(chamadasMcp).toBe(0);
+  });
+
+  it("sobrevive ao MCP offline e mantém os dados locais", async () => {
+    const router = new EvidenceSourceRouter(
+      source({
+        listActivities: async () => ({
+          source: "local_db",
+          projectId: 1,
+          data: [],
+          warnings: [],
+          errors: [],
+        }),
+      }),
+      source({
+        listActivities: async () => {
+          throw new Error("fetch failed: ECONNREFUSED");
+        },
+      })
+    );
+
+    const result = await router.listActivities(1);
+
+    expect(result.source).toBe("local_db+mcp");
+    expect(result.data).toEqual([]);
+    expect(result.errors).toMatchObject([
+      { code: "mcp_fallback_unavailable", retryable: true },
+    ]);
+    expect(result.errors[0]?.message).toContain("ECONNREFUSED");
+  });
+
+  it("respeita allowFallback desligado explicitamente", async () => {
+    let chamadasMcp = 0;
+    const router = new EvidenceSourceRouter(
+      source(),
+      source({
+        getEapTree: async () => {
+          chamadasMcp += 1;
+          return {
+            source: "mcp",
+            projectId: 1,
+            data: [],
+            warnings: [],
+            errors: [],
+          };
+        },
+      }),
+      false
+    );
+
+    const result = await router.getEapTree(1);
+
+    expect(result.source).toBe("local_db");
+    expect(chamadasMcp).toBe(0);
+  });
 });

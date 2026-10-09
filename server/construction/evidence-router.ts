@@ -12,14 +12,16 @@ function hasData<T>(result: EvidenceResult<T>) {
 }
 
 /**
- * Local platform data is authoritative. MCP evidence is opt-in and must not
- * become an implicit runtime dependency of the core platform.
+ * Os dados locais (plataforma) são a fonte primária e autoritativa. O MCP é
+ * enriquecimento: só é consultado quando o local não tem dados para o item
+ * pedido, e a indisponibilidade do MCP nunca pode derrubar a resposta local.
+ * Para desligar o enriquecimento, passar `allowFallback = false`.
  */
 export class EvidenceSourceRouter implements EvidenceSource {
   constructor(
     private readonly local: EvidenceSource,
     private readonly fallback?: EvidenceSource,
-    private readonly allowFallback = false
+    private readonly allowFallback = true
   ) {}
 
   private async choose<T>(
@@ -34,7 +36,27 @@ export class EvidenceSourceRouter implements EvidenceSource {
     }
     if (!this.allowFallback || !this.fallback) return local;
 
-    const fallback = await fallbackResult();
+    let fallback: EvidenceResult<T>;
+    try {
+      fallback = await fallbackResult();
+    } catch (error) {
+      // Enriquecimento indisponível é degradação, não falha: o local continua valendo.
+      return {
+        ...local,
+        source: "local_db+mcp",
+        errors: [
+          ...local.errors,
+          {
+            code: "mcp_fallback_unavailable",
+            message: `Fonte de enriquecimento MCP indisponível (${
+              error instanceof Error ? error.message : String(error)
+            }); dados locais preservados.`,
+            retryable: true,
+          },
+        ],
+      };
+    }
+
     if (!hasData(fallback)) {
       return {
         ...local,
@@ -51,7 +73,7 @@ export class EvidenceSourceRouter implements EvidenceSource {
         {
           code: fallbackCode,
           message:
-            "A fonte local não possuía dados suficientes; foi usada explicitamente a fonte de fallback MCP.",
+            "A fonte local não possuía dados para este item; a resposta veio do enriquecimento MCP.",
         },
       ],
     };
