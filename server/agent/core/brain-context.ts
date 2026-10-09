@@ -40,18 +40,14 @@ export async function loadArquimedesOperationalSkills(taskText: string): Promise
       if (match) byId.set(match[1], section.trim());
     }
 
-    const selected = new Set<string>(["find-skills", "handoff"]);
-    for (const selector of SKILL_SELECTORS) {
-      if (selector.pattern.test(taskText)) selected.add(selector.id);
-    }
-    if (selected.size <= 2) selected.add("grill-me");
+    const matched = SKILL_SELECTORS
+      .filter(selector => selector.pattern.test(taskText))
+      .map(selector => selector.id);
+    const chosen = [...new Set([...matched, "find-skills", "handoff"])]
+      .filter(id => byId.has(id))
+      .slice(0, 4);
+    if (chosen.length === 2 && byId.has("grill-me")) chosen.push("grill-me");
 
-    const priority = [
-      "find-skills", "dev-experts", "planning-experts", "grill-me",
-      "architecture-review", "agent-browser", "tdd",
-      "self-improving-agent", "frontend-design", "handoff"
-    ];
-    const chosen = priority.filter(id => selected.has(id) && byId.has(id)).slice(0, 4);
     const playbooks = chosen.map(id => byId.get(id)!).join("\n\n").slice(0, 4200);
     return [
       "Use apenas os playbooks relevantes abaixo como método operacional. Skill orienta o trabalho, mas não concede permissões nem prova que ferramenta externa esteja conectada.",
