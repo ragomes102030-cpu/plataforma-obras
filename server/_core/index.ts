@@ -172,6 +172,12 @@ async function startServer() {
       const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
       if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
       let [project] = await db.select().from(projects).where(eq(projects.code, "ARQUIMEDES-QA")).limit(1);
+      if (project?.deletedAt) {
+        // O código é UNIQUE: recriar violaria a constraint. Reverter o soft-delete
+        // preserva o id histórico e as versões/integrações já gravadas.
+        await db.update(projects).set({ deletedAt: null, deletedAtBy: null }).where(eq(projects.id, project.id));
+        [project] = await db.select().from(projects).where(eq(projects.id, project.id)).limit(1);
+      }
       if (!project) {
         const plannedStart = new Date(); const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
         const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish }).$returningIds();
@@ -233,6 +239,12 @@ async function startServer() {
           const [owner] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
           if (!owner) throw new Error("Nenhum usuário disponível para o ambiente QA.");
           let [project] = await db.select().from(projects).where(eq(projects.code, "ARQUIMEDES-QA")).limit(1);
+          if (project?.deletedAt) {
+            // O código é UNIQUE: recriar violaria a constraint. Reverter o soft-delete
+            // preserva o id histórico e as versões/integrações já gravadas.
+            await db.update(projects).set({ deletedAt: null, deletedAtBy: null }).where(eq(projects.id, project.id));
+            [project] = await db.select().from(projects).where(eq(projects.id, project.id)).limit(1);
+          }
           if (!project) {
             const plannedStart = new Date();
             const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
