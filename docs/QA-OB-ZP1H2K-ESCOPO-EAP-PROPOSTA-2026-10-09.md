@@ -44,15 +44,15 @@ A estrutura abaixo é **um roteiro para revisão de engenharia**, não uma afirm
 - **1.0 Edificação residencial — seis pavimentos declarados**
   - **1.1 Planejamento, projetos e liberações** — confirmar se elaboração/compatibilização de projetos, licenças e liberações estão no escopo executado ou são apenas pré-requisitos externos.
   - **1.2 Preparação e implantação do canteiro** — delimitar mobilização, instalações provisórias, segurança e logística conforme contrato.
-  - **1.3 Terreno, escavações e contenções (condicional)** — incluir somente se houver serviços dessa natureza no escopo.
-  - **1.4 Fundações e infraestrutura estrutural (condicional)** — método e elementos dependem de sondagem e projeto; não presumir fundação específica.
-  - **1.5 Estrutura dos pavimentos** — decomposição por sistema e pavimento somente após confirmar sistema construtivo e a convenção dos seis níveis.
-  - **1.6 Vedações e compartimentações (condicional)** — confirmar materiais, interfaces e limites com esquadrias/instalações.
-  - **1.7 Cobertura e impermeabilização (condicional)** — confirmar configuração de cobertura, áreas molhadas, reservatórios e demais locais aplicáveis.
-  - **1.8 Instalações prediais** — abrir subárvores apenas para sistemas confirmados em projeto (por exemplo, elétrica, hidrossanitária, incêndio, telecomunicações, gás ou climatização); não assumir que todos existem.
-  - **1.9 Esquadrias, revestimentos e acabamentos** — detalhar por ambiente/sistema quando o programa, memorial e padrão de acabamento forem conhecidos; evitar duplicidade de interfaces.
-  - **1.10 Áreas externas e ligações definitivas (condicional)** — incluir apenas os limites efetivamente contratados.
-  - **1.11 Testes, comissionamento, documentação e entrega** — confirmar os sistemas a testar, documentos exigidos, treinamento, pendências e critérios de aceite.
+  - **1.3 Terreno, escavações e contenções** — a descrição inclui contenções; detalhar os serviços e limites físicos, sem presumir que todo tipo de escavação ou muro esteja contratado.
+  - **1.4 Fundações** — a descrição inclui fundações; definir solução e elementos somente com sondagem/projeto, sem presumir fundação específica.
+  - **1.5 Estrutura em concreto armado** — sistema declarado; decompor por elemento e/ou pavimento depois de confirmar projeto e a convenção dos seis níveis.
+  - **1.6 Vedações e alvenarias** — sistema declarado; confirmar materiais, interfaces e limites com esquadrias/instalações.
+  - **1.7 Cobertura e impermeabilização (a confirmar)** — a configuração da cobertura, áreas molhadas, reservatórios e os serviços de impermeabilização precisam ser confirmados; não inferir cobertura técnica.
+  - **1.8 Instalações elétricas e hidrossanitárias** — sistemas declarados; abrir subárvores conforme projetos e delimitar equipamentos, pontos, prumadas, testes e interfaces. Incêndio, gás, telecomunicações, climatização e energia solar permanecem não confirmados.
+  - **1.9 Revestimentos e acabamentos** — itens declarados; detalhar por ambiente/sistema somente após confirmar programa, memorial e padrão, evitando duplicidade de interfaces. Esquadrias precisam ser confirmadas como parte do escopo.
+  - **1.10 Áreas externas** — item declarado; detalhar limites, urbanização, drenagem, muros e ligações definitivas conforme escopo contratado.
+  - **1.11 Comissionamento, documentação e entrega** — itens declarados; confirmar documentos exigidos, sistemas a testar, treinamento, pendências e critérios objetivos de aceite.
 
 ### Como decompor cada fase após confirmação
 
