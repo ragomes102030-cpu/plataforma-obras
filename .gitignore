@@ -5,6 +5,12 @@
 dist/
 build/
 *.dist
+# Playwright: traces, screenshots e reports de falha nunca entram no repo.
+# `trace: "retain-on-failure"` produz um .zip por teste quebrado.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
 # Environment variables
 .env
 .env.local
