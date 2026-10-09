@@ -39,7 +39,7 @@ import {
 } from "./agent/capability-manager";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning, rememberArquimedesConversation } from "./agent/memory";
-import { loadArquimedesBrainBootstrap } from "./agent/core/brain-context";
+import { loadArquimedesBrainBootstrap, loadArquimedesOperationalSkills } from "./agent/core/brain-context";
 import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
 
 const MAX_ITERATIONS = 8;
@@ -1051,7 +1051,8 @@ function buildSystem(
   mcpProjectIds: Partial<Record<Extract<ToolDomain, "eap" | "cronograma" | "ganttLob">, string>>,
   responseIntent: "casual" | "consulta" | "analise" | "operacao",
   memoryContext = "Memória persistente não carregada.",
-  brainBootstrap = "Bootstrap do cérebro não carregado."
+  brainBootstrap = "Bootstrap do cérebro não carregado.",
+  operationalSkills = "Playbooks operacionais detalhados indisponíveis."
 ) {
   const workspaceContext = context.workspace
     ? `Aba ativa: ${context.workspace.activeSection}${context.workspace.activeSubtab ? ` / ${context.workspace.activeSubtab}` : ""}.`
@@ -1120,6 +1121,8 @@ function buildSystem(
         "Use este registro ao responder sobre o escopo. Se um MCP de escopo estiver sem vínculo, informe apenas que a fonte externa está indisponível; não diga que o cadastro local não é legível. Separe fatos declarados, premissas e lacunas explícitas."
     );
   }
+
+  base.push("SKILLS OPERACIONAIS SELECIONADAS PARA ESTA TAREFA:\n" + operationalSkills);
 
   return base.join("\n\n");
 }
@@ -1235,11 +1238,12 @@ export async function runProjectOrchestrator(
     ? await buildArquimedesMemoryContext(options.userId, options.localProjectId)
     : "Memória persistente não carregada: usuário não identificado.";
   const brainBootstrap = await loadArquimedesBrainBootstrap();
+  const operationalSkills = await loadArquimedesOperationalSkills(messages.map(message => message.content).join("\n"));
   const conversation: LlmMessage[] = [
     {
       role: "system",
       content: compactLlmContent(
-        buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap)
+        buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap, operationalSkills)
       ),
     },
     ...messages.map(message => ({
