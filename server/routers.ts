@@ -59,6 +59,10 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
+import type {
+  ScheduleEvidenceActivity,
+  ScheduleEvidenceDependency,
+} from "./construction/domain-types";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
@@ -1091,6 +1095,13 @@ async function persistPhase7Plan(
         successorId,
         type: dependency.type,
         lag: Math.round(dependency.lag),
+        // O `versionId` faltava aqui e só aparecia no ramo de insert. Uma
+        // dependência re-importada pelo `externalId` ficava para sempre sem
+        // versão — e `calculateCpm`/`captureBaseline` filtram por `versionId`,
+        // então essa ligação saía da rede sem erro nem aviso: o CPM ficava
+        // "fresco" sem nunca ter considerado a relação. É a origem das 6
+        // dependências órfãs de DEMO-ZF6A7H.
+        versionId,
       };
       if (existing[0]) {
         await tx
@@ -3404,7 +3415,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [] };
+        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, approvedVersionId: null as number | null };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -3413,7 +3424,18 @@ export const appRouter = router({
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
-        return { activities, dependencies, resources, baselines };
+        // A tela de Atividades auto-dispara `generateFromEap` ao montar. Sem isto,
+        // uma obra ainda não aprovada recebe o erro "A EAP precisa estar aprovada
+        // antes de gerar atividades" como se fosse falha do usuário, em vez da
+        // informação de que a etapa anterior é a que está pendente. O gate do
+        // servidor está certo — o que faltava era o cliente saber antes de chamar.
+        const [approved] = await db
+          .select({ id: projectPlanVersions.id })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
+          .orderBy(desc(projectPlanVersions.versionNumber))
+          .limit(1);
+        return { activities, dependencies, resources, baselines, eapApproved: Boolean(approved), approvedVersionId: approved?.id ?? null };
       }),
     grade: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -3715,6 +3737,7 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
         const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
         if (!activities.length) throw badRequest("Não há atividades operacionais para congelar como baseline.");
@@ -3733,9 +3756,53 @@ export const appRouter = router({
         if (semDuracao.length) {
           throw badRequest(`A baseline exige duração válida em todas as atividades; ${semDuracao.length} ainda estão inválidas.`);
         }
+        // Uma baseline congela uma decisão de prazo. Congelar a versão errada é
+        // pior que não congelar: o registro fica ativo, o Gantt o usa como
+        // referência, e ninguém consegue dizer depois qual versão ele mede —
+        // `schedule_baselines` não tem `versionId`, então a pergunta fica sem
+        // resposta no banco.
+        //
+        // `getCurrentPlanVersion` devolve a versão de MAIOR número sem filtrar
+        // status (plan-versions.ts:398-404). Aprovação e baseline são etapas
+        // distintas: a EAP pode estar aprovada em v2 e a obra seguir planejando
+        // em v3, ainda rascunho. Congelar v3 "para não perder tempo" produz uma
+        // baseline de um rascunho — exatamente o caso de OB-ZFSIJO, que tem 1
+        // baseline salva com a v1 ainda em `draft`.
+        if (!currentVersion) {
+          throw badRequest("A obra não possui versão de plano para congelar. Crie a versão de trabalho antes da baseline.");
+        }
+        const [frozenVersion] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, currentVersion.id), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (frozenVersion?.status !== "approved") {
+          throw badRequest(
+            `A versão de trabalho v${currentVersion.versionNumber} está em "${frozenVersion?.status ?? "desconhecido"}". ` +
+              `Só uma versão aprovada pode virar baseline — aprove a EAP primeiro.`
+          );
+        }
+        // A vigência do CPM acima é medida por atividade. Dependência não entra
+        // nessa contagem: `calculateCpm` filtra por `versionId` e uma dependência
+        // órfã (versionId nulo) simplesmente não participa do cálculo — o CPM fica
+        // "fresco" sem nunca ter visto a ligação. Validar a rede aqui fecha essa
+        // janela e impede congelar baseline sobre rede fragmentada.
+        const networkActivities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+        const networkDependencies = await db
+          .select()
+          .from(scheduleDependencies)
+          .where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
+        const networkValidation = validateDependencies(networkActivities as ScheduleEvidenceActivity[], networkDependencies as ScheduleEvidenceDependency[]);
+        if (!networkValidation.valid) {
+          const blocking = networkValidation.issues.find(issue => issue.severity === "error");
+          throw badRequest(blocking?.message ?? "A rede de dependências é inválida para congelar uma baseline.");
+        }
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
-        return { id: created.id, activityCount: activities.length };
+        return { id: created.id, activityCount: activities.length, versionId: currentVersion.id, versionNumber: currentVersion.versionNumber };
       }),
     calculateCpm: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -4070,6 +4137,47 @@ export const appRouter = router({
           throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de criar dependências.");
         }
         const writable = { id: foundWithVersions[0].versionId!, versionNumber: 0, status: version.status as "draft" | "proposed" };
+        // O caminho de par único valida a rede inteira antes de gravar; este
+        // caminho em lote não validava nada além de auto-dependência e
+        // pertencimento à versão. Era por aqui que uma rede fragmentada entrava
+        // sem erro: 5.000 dependências gravadas de uma vez, nenhuma verificação
+        // de ciclo, referência cruzada ou conectividade. A validação roda sobre
+        // a rede JÁ EXISTENTE + o lote novo, porque é a rede resultante que tem
+        // que ser conexa — validar só o lote novo não diria nada sobre o todo.
+        const existingDependencies = await db
+          .select()
+          .from(scheduleDependencies)
+          .where(
+            and(
+              eq(scheduleDependencies.projectId, input.projectId),
+              eq(scheduleDependencies.versionId, writable.id)
+            )
+          );
+        const networkActivities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, writable.id)
+            )
+          );
+        const batchValidation = validateDependencies(networkActivities as ScheduleEvidenceActivity[], [
+          ...existingDependencies,
+          ...input.dependencies.map((item, index) => ({
+            id: `batch-${index}`,
+            projectId: input.projectId,
+            externalId: null,
+            predecessorId: item.predecessorId,
+            successorId: item.successorId,
+            type: item.type,
+            lag: item.lag,
+          })),
+        ] as ScheduleEvidenceDependency[]);
+        if (!batchValidation.valid) {
+          const blocking = batchValidation.issues.find(issue => issue.severity === "error");
+          throw badRequest(blocking?.message ?? "O lote criaria uma rede de dependências inválida.");
+        }
         await db.insert(scheduleDependencies).values(
           input.dependencies.map(item => ({
             projectId: input.projectId,
@@ -4537,9 +4645,191 @@ export const appRouter = router({
           }
         }
         return { ok: true as const, newStartOffset: input.newStartOffset, cpmValid: result.valid };
-      }),
-  }),
-  agent: router({
+              }),
+          }),
+          resources: router({
+            list: protectedProcedure
+              .input(z.object({ projectId: z.number().int().positive() }))
+              .query(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) return [];
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                return db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
+              }),
+            create: protectedProcedure
+              .input(z.object({
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180),
+                resourceType: z.enum(["mao_de_obra", "equipamento", "material"]),
+                unit: z.string().trim().min(1).max(32),
+                capacityPerDay: z.number().positive().optional(),
+                costPerDay: z.number().min(0).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [created] = await db.insert(planningResources).values({
+                  projectId: input.projectId,
+                  name: input.name,
+                  resourceType: input.resourceType,
+                  unit: input.unit,
+                  capacityPerDay: input.capacityPerDay?.toString() ?? "0",
+                  costPerDay: input.costPerDay?.toString() ?? "0",
+                  active: 1,
+                }).returning({ id: planningResources.id });
+                return created;
+              }),
+            update: protectedProcedure
+                  .input(z.object({
+                    id: z.number().int().positive(),
+                    projectId: z.number().int().positive(),
+                    name: z.string().trim().min(2).max(180).optional(),
+                    resourceType: z.enum(["mao_de_obra", "equipamento", "material"]).optional(),
+                    unit: z.string().trim().min(1).max(32).optional(),
+                    capacityPerDay: z.number().positive().optional(),
+                    costPerDay: z.number().min(0).optional(),
+                    active: z.number().int().min(0).max(1).optional(),
+                  }))
+                  .mutation(async ({ ctx, input }) => {
+                    const db = await getDb();
+                    if (!db) throw new Error("Banco de dados não configurado.");
+                    await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                    const { id, projectId, ...data } = input;
+                    const updateData: Record<string, unknown> = { ...data };
+                    if (data.capacityPerDay !== undefined) updateData.capacityPerDay = data.capacityPerDay.toString();
+                    if (data.costPerDay !== undefined) updateData.costPerDay = data.costPerDay.toString();
+                    const [updated] = await db.update(planningResources).set(updateData).where(and(eq(planningResources.id, id), eq(planningResources.projectId, projectId))).returning({ id: planningResources.id });
+                    if (!updated) throw notFound("Recurso não encontrado.");
+                    return updated;
+                  }),
+            delete: protectedProcedure
+              .input(z.object({ id: z.number().int().positive(), projectId: z.number().int().positive() }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [deleted] = await db.delete(planningResources).where(and(eq(planningResources.id, input.id), eq(planningResources.projectId, input.projectId))).returning({ id: planningResources.id });
+                if (!deleted) throw notFound("Recurso não encontrado.");
+                return { success: true };
+              }),
+          }),
+          teams: router({
+            list: protectedProcedure
+              .input(z.object({ projectId: z.number().int().positive() }))
+              .query(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) return [];
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                return db.select().from(productionTeams).where(eq(productionTeams.projectId, input.projectId)).orderBy(productionTeams.name);
+              }),
+            create: protectedProcedure
+              .input(z.object({
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180),
+                trade: z.string().trim().min(2).max(120),
+                memberCount: z.number().int().min(0).default(0),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [created] = await db.insert(productionTeams).values({
+                  projectId: input.projectId,
+                  name: input.name,
+                  trade: input.trade,
+                  memberCount: input.memberCount,
+                  active: 1,
+                }).returning({ id: productionTeams.id });
+                return created;
+              }),
+            update: protectedProcedure
+              .input(z.object({
+                id: z.number().int().positive(),
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180).optional(),
+                trade: z.string().trim().min(2).max(120).optional(),
+                memberCount: z.number().int().min(0).optional(),
+                active: z.number().int().min(0).max(1).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const { id, projectId, ...data } = input;
+                const [updated] = await db.update(productionTeams).set(data).where(and(eq(productionTeams.id, id), eq(productionTeams.projectId, projectId))).returning({ id: productionTeams.id });
+                if (!updated) throw notFound("Equipe não encontrada.");
+                return updated;
+              }),
+            delete: protectedProcedure
+              .input(z.object({ id: z.number().int().positive(), projectId: z.number().int().positive() }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [deleted] = await db.delete(productionTeams).where(and(eq(productionTeams.id, input.id), eq(productionTeams.projectId, input.projectId))).returning({ id: productionTeams.id });
+                if (!deleted) throw notFound("Equipe não encontrada.");
+                return { success: true };
+              }),
+          }),
+          fronts: router({
+            list: protectedProcedure
+              .input(z.object({ projectId: z.number().int().positive() }))
+              .query(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) return [];
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                return db.select().from(productionFronts).where(eq(productionFronts.projectId, input.projectId)).orderBy(productionFronts.name);
+              }),
+            create: protectedProcedure
+              .input(z.object({
+                projectId: z.number().int().positive(),
+                code: z.string().trim().min(1).max(32),
+                name: z.string().trim().min(2).max(180),
+                location: z.string().trim().max(180).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [created] = await db.insert(productionFronts).values({
+                  projectId: input.projectId,
+                  code: input.code,
+                  name: input.name,
+                  location: input.location ?? null,
+                  status: "ativa",
+                }).returning({ id: productionFronts.id });
+                return created;
+              }),
+            update: protectedProcedure
+              .input(z.object({
+                id: z.number().int().positive(),
+                projectId: z.number().int().positive(),
+                name: z.string().trim().min(2).max(180).optional(),
+                location: z.string().trim().max(180).optional(),
+                status: z.enum(["ativa", "pausada", "concluida"]).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const { id, projectId, ...data } = input;
+                const [updated] = await db.update(productionFronts).set(data).where(and(eq(productionFronts.id, id), eq(productionFronts.projectId, projectId))).returning({ id: productionFronts.id });
+                if (!updated) throw notFound("Frente não encontrada.");
+                return updated;
+              }),
+            delete: protectedProcedure
+              .input(z.object({ id: z.number().int().positive(), projectId: z.number().int().positive() }))
+              .mutation(async ({ ctx, input }) => {
+                const db = await getDb();
+                if (!db) throw new Error("Banco de dados não configurado.");
+                await assertAccessibleProject(db, input.projectId, ctx.user.id);
+                const [deleted] = await db.delete(productionFronts).where(and(eq(productionFronts.id, input.id), eq(productionFronts.projectId, input.projectId))).returning({ id: productionFronts.id });
+                if (!deleted) throw notFound("Frente não encontrada.");
+                return { success: true };
+              }),
+          }),
+          agent: router({
     snapshot: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {

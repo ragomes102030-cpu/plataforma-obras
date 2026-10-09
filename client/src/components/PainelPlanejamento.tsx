@@ -98,12 +98,20 @@ export function PainelPlanejamento({ projetoId }: Props) {
       gerarProposta.isPending
     ) return;
 
+    // Não dispara para uma obra sem EAP aprovada. O gate do servidor rejeitaria
+    // com "A EAP precisa estar aprovada antes de gerar atividades", e o
+    // `onError` colocaria isso na tela como se o engenheiro tivesse feito algo
+    // errado — quando a etapa pendente é a anterior. Aqui a mensagem aponta a
+    // etapa certa e o campo fica disponível para o botão manual.
+    if (!plano.data?.eapApproved) return;
+
     propostaAutoDisparada.current = true;
     gerarProposta.mutate({ projectId: projetoId });
   }, [
     activities.length,
     gerarProposta.isPending,
     gerarProposta.mutate,
+    plano.data?.eapApproved,
     plano.isError,
     plano.isPending,
     proposta.length,
@@ -245,6 +253,13 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
       </div>
 
+      {plano.data && !plano.data.eapApproved && (
+        <div className="pl-atividades-alerta">
+          A EAP desta obra ainda não foi aprovada. Aprove a EAP na aba{" "}
+          <strong>EAP</strong> para liberar a proposta de atividades — a etapa
+          anterior é a que está pendente.
+        </div>
+      )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
 
       <div className="pl-atividades-table-wrap">
