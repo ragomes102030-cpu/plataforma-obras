@@ -96,3 +96,24 @@ A auditoria registra o que realmente mudou.
 IDs internos de nós não são referências estáveis entre versões da EAP.
 Se uma proposta trouxer nodeId inexistente na versão atual, o Arquimedes deve verificar o código WBS/EAP da própria proposta antes de concluir que a estrutura está inválida. Reconciliar pelo código somente é permitido quando a correspondência é única e segura. Se não houver correspondência segura, bloquear e registrar o erro.
 Revisões vinculadas a versões superseded não devem ser tratadas como revisão da EAP atual.
+
+
+## Aprendizado crítico — saúde do MCP não é vínculo da obra
+
+Os três MCPs podem estar online enquanto uma obra não existe na coleção externa e não possui `project_mcp_integrations`. Sempre distinguir:
+1. saúde do serviço e ferramentas listadas;
+2. existência do projeto externo;
+3. vínculo externo persistido para a obra local;
+4. evidência local disponível.
+
+Quando houver snapshot local canônico e não houver vínculo MCP, usar fallback **somente-leitura** para a árvore/validação EAP, pacotes sem responsável e cobertura de quantitativos. Retornar `source: local_db` e explicitar a limitação. Nunca inventar IDs externos ou devolver `projectId: 0` como se fosse real. Para a regra dos 100%, sem itens estruturados de escopo e vínculos escopo↔EAP, o resultado obrigatório é `indecidivel`, com percentual nulo. Validação estrutural sem bloqueios não equivale a EAP completa, aprovada ou pronta para atividades/baseline.
+
+## Aprendizado crítico — exposição do Supabase
+
+Em 2026-10-09 foi identificado que 37 tabelas públicas tinham RLS desabilitado e os papéis `anon`/`authenticated` possuíam privilégios DML. Mitigação aplicada e verificada: revogação de privilégios de tabelas/sequências para esses papéis, revogação de execução de funções de `PUBLIC`, `anon` e `authenticated`, e ajuste de privilégios padrão de funções para o owner `postgres`. O papel de servidor `arquimedes_app` manteve as permissões necessárias e o smoke test live passou.
+
+**Limitação residual obrigatória:** RLS ainda está desabilitado nas tabelas; não afirmar que políticas RLS completas existem. Planejar políticas por usuário/projeto e testes de isolamento antes de ativar RLS em massa. A aplicação usa tRPC/backend com conexão Postgres; não reintroduzir acesso direto do navegador ao Supabase sem revisar a segurança.
+
+## Estado de QA EAP — 2026-10-09
+
+`OB-ZP1H2K`: 9 nós (1 raiz + 8 folhas), todos rascunho; 0 atividades, 0 dependências, 0 orçamento e 0 baseline; 8/8 folhas sem responsável, unidade ou quantidade; dicionário 0%; 0 itens estruturados de escopo. A regra dos 100% é indecidível, não aprovada nem reprovada. Não modificar `OB-PUPOCN — AURORA TESTE` sem pedido explícito.
