@@ -8,18 +8,18 @@ type SkillDefinition = {
 };
 
 const SKILLS: SkillDefinition[] = [
-  { id: "find-skills", path: "agent/skills/system/find-skills.md", triggers: [/\bskills?\b/i, /habilidades?/i, /capacidades? do agente/i, /instalar.{0,30}(skill|habilidade)/i] },
-  { id: "dev-experts", path: "agent/skills/system/dev-experts.md", triggers: [/código|bug|falha|depurar|debug|desenvolvimento|especialistas? de software/i] },
-  { id: "planning-experts", path: "agent/skills/system/planning-experts.md", triggers: [/EAP|obra|planejamento|cronograma|quantitativos|caminho crítico|linha de balanço/i] },
-  { id: "prompt-engineering", path: "agent/skills/system/prompt-engineering.md", triggers: [/prompt|instruç(?:ão|ões)|resposta longa|truncad|contexto contraditório/i] },
-  { id: "grill-me", path: "agent/skills/system/grill-me.md", triggers: [/premissas?|decisão|decidir|escopo|aprovar|baseline|risco irreversível/i] },
-  { id: "improve-codebase-architecture", path: "agent/skills/system/improve-codebase-architecture.md", triggers: [/arquitetura|refator|acoplamento|fronteira de módulo|estrutura do código/i] },
-  { id: "agent-browser", path: "agent/skills/system/agent-browser.md", triggers: [/playwright|browser|navegador|interface|e2e|ponta a ponta|fluxo de usuário/i] },
+  { id: "find-skills", path: "agent/skills/system/find-skills.md", triggers: [/\bskills?\b/i, /find.?skills/i, /habilidades?/i, /capacidades? do agente/i, /instalar.{0,30}(skill|habilidade)/i] },
+  { id: "dev-experts", path: "agent/skills/system/dev-experts.md", triggers: [/dev.?experts/i, /código|bug|falha|depurar|debug|desenvolvimento|especialistas? de software/i] },
+  { id: "planning-experts", path: "agent/skills/system/planning-experts.md", triggers: [/planning.?experts/i, /EAP|obra|planejamento|cronograma|quantitativos|caminho crítico|linha de balanço/i] },
+  { id: "prompt-engineering", path: "agent/skills/system/prompt-engineering.md", triggers: [/prompt|prompting.?experts/i, /instruç(?:ão|ões)|resposta longa|truncad|contexto contraditório/i] },
+  { id: "grill-me", path: "agent/skills/system/grill-me.md", triggers: [/grill.?me/i, /premissas?|decisão|decidir|escopo|aprovar|baseline|risco irreversível/i] },
+  { id: "improve-codebase-architecture", path: "agent/skills/system/improve-codebase-architecture.md", triggers: [/improve.?code.?base.?architecture|code.?base.?architecture/i, /arquitetura|refator|acoplamento|fronteira de módulo|estrutura do código/i] },
+  { id: "agent-browser", path: "agent/skills/system/agent-browser.md", triggers: [/agent.?browser/i, /playwright|browser|navegador|interface|e2e|ponta a ponta|fluxo de usuário/i] },
   { id: "tdd", path: "agent/skills/system/tdd.md", triggers: [/\bTDD\b/i, /teste|regressão|typecheck|build|corrigir bug/i] },
-  { id: "self-improving-agent", path: "agent/skills/system/self-improving-agent.md", triggers: [/auto.?melhor|aprendizado|aprend|regressão|falha recorrente|melhorar o agente/i] },
-  { id: "frontend-design", path: "agent/skills/system/frontend-design.md", triggers: [/frontend|design visual|interface|responsiv|dashboard|Gantt|linha de balanço/i] },
+  { id: "self-improving-agent", path: "agent/skills/system/self-improving-agent.md", triggers: [/self.?improving/i, /auto.?melhor|aprendizado|aprend|regressão|falha recorrente|melhorar o agente/i] },
+  { id: "frontend-design", path: "agent/skills/system/frontend-design.md", triggers: [/frontend|front.?design/i, /design visual|interface|responsiv|dashboard|Gantt|linha de balanço/i] },
   { id: "handoff", path: "agent/skills/system/handoff.md", triggers: [/handoff|checkpoint|continuar|prossiga|troca de sessão|retomar/i] },
-  { id: "skill-authoring", path: "agent/skills/system/skill-authoring.md", triggers: [/\bskills?\b/i, /habilidades? do agente/i, /catálogo de skills/i] },
+  { id: "skill-authoring", path: "agent/skills/system/skill-authoring.md", triggers: [/\bskills?\b/i, /skill.?authoring/i, /habilidades? do agente/i, /catálogo de skills/i] },
 ];
 
 export function selectArquimedesSkills(query: string, limit = 4): string[] {
