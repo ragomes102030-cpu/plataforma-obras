@@ -31,6 +31,14 @@ const context: AgentProjectContext = {
 };
 
 describe("resolveLocalEapToolFallback", () => {
+  it("does not invent an external or internal project ID in the returned local tree", () => {
+    const raw = resolveLocalEapToolFallback("get_eap_tree", context);
+    const result = JSON.parse(raw!);
+    expect(result.projectCode).toBe("OB-ZP1H2K");
+    expect(result.nodes[0]).not.toHaveProperty("projectId");
+    expect(result.nodes[0]).not.toHaveProperty("externalId");
+  });
+
   it("validates the persisted EAP structure without an external MCP mapping", () => {
     const raw = resolveLocalEapToolFallback("validar_estrutura", context);
     expect(raw).not.toBeNull();
