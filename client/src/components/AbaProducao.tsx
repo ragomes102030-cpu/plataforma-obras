@@ -98,22 +98,50 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   }
   const totalGeral = lancamentos.reduce((sum, l) => sum + Number(l.quantity), 0).toFixed(3);
 
+  const atividadesComQuantidade = linhas.filter(l => {
+    const totalPlanejado = gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity;
+    return totalPlanejado && Number(totalPlanejado) > 0;
+  });
+  const avancoMedio = atividadesComQuantidade.length > 0
+    ? atividadesComQuantidade.reduce((sum, l) => {
+        const realizado = Number(porAtividade[String(l.atividadeId)] ?? 0);
+        const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
+        return sum + (realizado / planejado) * 100;
+      }, 0) / atividadesComQuantidade.length
+    : 0;
+
   return (
-    <div className="eap">
+    <div className="xl-painel">
       {erro && (
         <div className="xl-aviso-erro" role="alert">
           {erro}
         </div>
       )}
 
-      <div className="eap-topo">
+      <div className="xl-painel-intro">
         <div>
-          <h2>CONTROLE DE PRODUÇÃO</h2>
-          <p>
-            {linhas.length} atividades · {datas.length}{" "}
-            {datas.length === 1 ? "dia lançado" : "dias lançados"} · total{" "}
-            {totalGeral}
-          </p>
+          <span className="xl-painel-kicker">CONTROLE DE PRODUÇÃO</span>
+          <h2>{linhas.length} atividades · {datas.length} {datas.length === 1 ? "dia lançado" : "dias lançados"}</h2>
+          <p>Avanço médio: <strong>{avancoMedio.toFixed(1)}%</strong> · Total geral: <strong>{totalGeral}</strong></p>
+        </div>
+      </div>
+
+      <div className="xl-cartoes">
+        <div className="xl-cartao">
+          <span className="xl-cartao-titulo">Atividades</span>
+          <strong className="xl-cartao-valor">{linhas.length}</strong>
+        </div>
+        <div className="xl-cartao">
+          <span className="xl-cartao-titulo">Dias lançados</span>
+          <strong className="xl-cartao-valor">{datas.length}</strong>
+        </div>
+        <div className="xl-cartao">
+          <span className="xl-cartao-titulo">Avanço médio</span>
+          <strong className="xl-cartao-valor">{avancoMedio.toFixed(1)}%</strong>
+        </div>
+        <div className="xl-cartao">
+          <span className="xl-cartao-titulo">Lançamentos</span>
+          <strong className="xl-cartao-valor">{lancamentos.length}</strong>
         </div>
       </div>
 
@@ -123,37 +151,20 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
         em branco é dia sem produção — e isso é informação, não falta.
       </p>
 
-      <div className="xl-folha-area">
-        <table className="xl-folha">
-          <colgroup>
-            <col style={{ width: 110 }} />
-            {linhas.map(l => (
-              <col key={l.codigo} style={{ width: 130 }} />
-            ))}
-          </colgroup>
+      <div className="xl-tabela-container">
+        <table className="xl-tabela">
           <thead>
-            <tr className="xl-cab-linha">
-              <th className="xl-cab-nome" scope="col">
-                Data
-              </th>
+            <tr>
+              <th className="xl-tabela-th" scope="col">Data</th>
               {linhas.map(l => (
                 <th
                   key={l.codigo}
-                  className="xl-cab-nome"
+                  className="xl-tabela-th xl-tabela-th-atividade"
                   scope="col"
                   title={`${l.atividade}${l.unidade ? ` (${l.unidade})` : ""}`}
                 >
-                  {l.codigo}
-                </th>
-              ))}
-            </tr>
-            <tr>
-              <th className="xl-cab-nota" scope="col">
-                Atividade
-              </th>
-              {linhas.map(l => (
-                <th key={l.codigo} className="xl-cab-nome" scope="col">
-                  <span className="prod-nome">{l.atividade}</span>
+                  <span className="xl-tabela-codigo">{l.codigo}</span>
+                  <span className="xl-tabela-nome">{l.atividade}</span>
                 </th>
               ))}
             </tr>
@@ -165,38 +176,49 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
                   <strong>Nenhum lançamento ainda</strong>
                   <span>
                     Registre a primeira produção no formulário abaixo. O que não é
-                    lançado aparece como 0% no CRONOGRAMA, e a diferença entre 0%
-                    e "não medido" é o que o painel pondera.
+                    lançado aparece como 0% no CRONOGRAMA.
                   </span>
                 </td>
               </tr>
             ) : (
               datas.map(dia => (
                 <tr key={dia}>
-                  <th className="xl-num prod-data" scope="row">
-                    {dia}
+                  <th className="xl-tabela-data" scope="row">
+                    {new Date(dia).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                   </th>
                   {linhas.map(l => {
                     const v = grade_[dia]?.[String(l.atividadeId)];
+                    const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
+                    const realizado = v ? Number(v) : 0;
+                    const pct = planejado > 0 ? (realizado / planejado) * 100 : 0;
                     return (
                       <td
                         key={l.codigo}
-                        className={`xl-calc prod-celula${v ? " prod-com-valor" : ""}`}
+                        className={`xl-tabela-celula${v ? " xl-tabela-celula-valor" : ""}`}
                       >
                         {v ?? ""}
+                        {v && planejado > 0 && (
+                          <span className="xl-tabela-pct">({pct.toFixed(0)}%)</span>
+                        )}
                       </td>
                     );
                   })}
                 </tr>
               ))
             )}
-            <tr className="xl-total">
+            <tr className="xl-tabela-total">
               <th scope="row">TOTAL</th>
               {linhas.map(l => {
                 const v = porAtividade[String(l.atividadeId)];
+                const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
+                const realizado = v ? Number(v) : 0;
+                const pct = planejado > 0 ? (realizado / planejado) * 100 : 0;
                 return (
-                  <td key={l.codigo} className="xl-total-num">
-                    {v ?? "—"}
+                  <td key={l.codigo} className="xl-tabela-celula xl-tabela-total-celula">
+                    <strong>{v ?? "—"}</strong>
+                    {v && planejado > 0 && (
+                      <span className="xl-tabela-pct xl-tabela-pct-total">({pct.toFixed(0)}%)</span>
+                    )}
                   </td>
                 );
               })}
