@@ -90,6 +90,7 @@ async function requireApprovedEapVersion(
   return approved;
 }
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
+import { persistCpmResult } from "./construction/cpm-persister";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import { carregarCalendarioDaObra, localIso } from "./construction/calendario-obra";
 import { indexOf as calendarIndexOf } from "../shared/work-calendar";
@@ -3803,6 +3804,54 @@ export const appRouter = router({
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, versionId: currentVersion.id, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length, versionId: currentVersion.id, versionNumber: currentVersion.versionNumber };
+      }),
+    calculateCpmLocal: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const versionScope = currentVersion
+          ? eq(scheduleActivities.versionId, currentVersion.id)
+          : isNull(scheduleActivities.versionId);
+        const dependencyScope = currentVersion
+          ? eq(scheduleDependencies.versionId, currentVersion.id)
+          : isNull(scheduleDependencies.versionId);
+
+        const activities = await db
+          .select()
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+        const dependencies = await db
+          .select()
+          .from(scheduleDependencies)
+          .where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
+
+        const result = calculateDeterministicCpm(
+          activities as ScheduleEvidenceActivity[],
+          dependencies as ScheduleEvidenceDependency[]
+        );
+
+        if (!result.valid || !result.schedule) {
+          return {
+            valid: false,
+            schedule: null,
+            issues: result.issues,
+            persisted: 0,
+          };
+        }
+
+        const persisted = await persistCpmResult(db as any, input.projectId, currentVersion?.id ?? null, result.schedule);
+
+        return {
+          valid: true,
+          schedule: result.schedule,
+          issues: result.issues,
+          infeasible: result.infeasible,
+          persisted,
+        };
       }),
     calculateCpm: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
