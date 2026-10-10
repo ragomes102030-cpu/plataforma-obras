@@ -12,6 +12,10 @@ import { AbaDependencias } from "@/components/AbaDependencias";
 import { AbaCpm } from "@/components/AbaCpm";
 import { AbaBaseline } from "@/components/AbaBaseline";
 import { AbaProducao } from "@/components/AbaProducao";
+import { AbaCurvaS } from "@/components/AbaCurvaS";
+import { AbaRiscos } from "@/components/AbaRiscos";
+import { AbaSuprimentos } from "@/components/AbaSuprimentos";
+import { AbaOrcamento } from "@/components/AbaOrcamento";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
@@ -523,6 +527,14 @@ function Obra({
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
+        ) : aba === "suprimentos" ? (
+          <AbaSuprimentos projetoId={projetoId} />
+        ) : aba === "financeiro" ? (
+          <AbaOrcamento projetoId={projetoId} />
+        ) : aba === "riscos" ? (
+          <AbaRiscos projetoId={projetoId} />
+        ) : aba === "curva-s" ? (
+          <AbaCurvaS projetoId={projetoId} hoje={hoje} />
         ) : (
           <AbaVazia titulo={definicao?.rotulo ?? aba} falta={definicao?.falta ?? ""} />
         )}

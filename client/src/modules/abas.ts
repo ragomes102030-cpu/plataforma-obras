@@ -89,30 +89,22 @@ export const ABAS: readonly AbaDoSistema[] = [
   {
     id: "suprimentos",
     rotulo: "SUPRIMENTOS",
-    status: "pendente",
-    falta:
-      "Material tem prazo antes de existir na obra: requisição, aprovação, fabricação, inspeção, expedição, entrega. Falta ligar marcos de fornecimento ao planejamento.",
+    status: "pronta",
   },
   {
     id: "financeiro",
     rotulo: "ORÇAMENTO E CUSTOS",
-    status: "pendente",
-    falta:
-      "Medição, faturamento e pagamento são três coisas distintas. Falta a estrutura financeira da obra para comparar planejado, medido, faturado e pago.",
+    status: "pronta",
   },
   {
     id: "riscos",
     rotulo: "RISCOS",
-    status: "pendente",
-    falta:
-      "Registro de risco com responsável, probabilidade, impacto e plano de resposta, e o efeito de cada risco no prazo.",
+    status: "pronta",
   },
   {
     id: "curva-s",
     rotulo: "CURVA S",
-    status: "pendente",
-    falta:
-      "A curva física e a financeira dependem de série histórica e linha de base para comparar planejado e realizado.",
+    status: "pronta",
   },
 ];
 
