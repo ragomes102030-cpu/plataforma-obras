@@ -22,6 +22,11 @@ function stripUiContext(message: string) {
 export function classifyArquimedesIntent(message: string): ArquimedesIntent {
   const text = stripUiContext(message);
   if (CASUAL_PATTERNS.some(pattern => pattern.test(text))) return "casual";
+  // Mensagens que proíbem mutação (READ_ONLY, não aplicar/criar/remover) são
+  // análise, não operação — mesmo que contenham verbos de operação no texto.
+  if (/\bREAD_ONLY\b/i.test(text) || /\bn[aã]o\s+(aplicar|criar|atualizar|mover|remover|alterar|salvar|gerar)\b/i.test(text)) {
+    return "analise";
+  }
   if (OPERATION_PATTERNS.some(pattern => pattern.test(text))) return "operacao";
   if (ANALYSIS_PATTERNS.some(pattern => pattern.test(text))) return "analise";
   return "consulta";
