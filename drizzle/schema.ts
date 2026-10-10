@@ -127,7 +127,7 @@ const enumPriceItemsItemType = pgEnum("price_items_itemType", ["material", "mao_
 const enumServiceCompositionsStatus = pgEnum("service_compositions_status", ["rascunho", "validada", "arquivada"]);
 
 /** `composition_components_componentType` — o enum de `composition_components.componentType`. */
-const enumCompositionComponentsComponentType = pgEnum("composition_components_componentType", ["material", "mao_de_obra", "equipamento"]);
+const enumCompositionComponentsComponentType = pgEnum("composition_components_componentType", ["material", "mao_de_obra", "equipamento", "servico"]);
 
 /** `agent_project_states_stage` — o enum de `agent_project_states.stage`. */
 const enumAgentProjectStatesStage = pgEnum("agent_project_states_stage", ["DESCRITIVO",
