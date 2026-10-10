@@ -35,6 +35,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { createClient } from "@supabase/supabase-js";
 
 import {
   lerPrimeiraAba,
@@ -844,6 +845,33 @@ async function main(): Promise<void> {
     console.log("EXECUTE: gravando...");
     const inicio = Date.now();
 
+    // Usar Supabase JS client (API REST) em vez do driver pg local
+    // O pooler do Supabase rejeita autenticação via driver pg local
+    const supabaseUrl = cli["supabase-url"];
+    const supabaseKey = cli["supabase-key"];
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Modo Supabase API: --supabase-url e --supabase-key são obrigatórios");
+      process.exit(1);
+    }
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Helper para executar queries via Supabase
+    async function execQuery(sql: string, params?: unknown[]): Promise<Array<Record<string, unknown>>> {
+      // Converter placeholders $1, $2, ... para formato Supabase
+      let convertedSql = sql;
+      if (params && params.length > 0) {
+        // Substituir $N por valores literais
+        for (let i = params.length - 1; i >= 0; i--) {
+          const val = params[i];
+          const literal = val === null ? "NULL" : typeof val === "number" ? String(val) : `'${String(val).replace(/'/g, "''")}'`;
+          convertedSql = convertedSql.replace(`$${i + 1}`, literal);
+        }
+      }
+      const { data, error } = await supabase.rpc("exec_sql", { query: convertedSql });
+      if (error) throw new Error(error.message);
+      return (data as Array<Record<string, unknown>>) ?? [];
+    }
+
     type PoolLike = {
       query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
       connect: () => Promise<{
@@ -860,12 +888,21 @@ async function main(): Promise<void> {
     if (!PoolCtor) throw new Error("Não foi possível carregar o driver pg (npm i pg).");
 
     const host = new URL(dsn as string).hostname;
+    // Pooler do Supabase exige username no formato postgres.<project-ref>
+    let normalizedDsn = dsn as string;
+    if (host.endsWith(".pooler.supabase.com")) {
+      const u = new URL(dsn as string);
+      if (u.username === "postgres") {
+        u.username = `postgres.tromrvfijbtihuilvnuk`;
+        normalizedDsn = u.toString();
+      }
+    }
     const pool = new PoolCtor({
-      connectionString: dsn,
+      connectionString: normalizedDsn,
       max: 4,
       ssl:
         cli["no-ssl"] || /localhost|127\.0\.0\.1/.test(host)
-          ? false
+          ? undefined
           : { rejectUnauthorized: false },
     });
 
