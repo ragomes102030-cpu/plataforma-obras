@@ -3,7 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "./db";
 import { projectAuditEvents, projectPlanVersions, scheduleActivities, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
-import { ensureWritablePlanVersion } from "./construction/plan-versions";
+import { ensureWritablePlanVersion, getCurrentPlanVersion } from "./construction/plan-versions";
+import { persistCpmResult } from "./construction/cpm-persister";
 import { resolveActivityDuration } from "./construction/activity-planning";
 import { gerarPlanoAcao, formatarPlanoAcao } from "./agent/planning";
 import { createStructuredResponse } from "./agent/response-schema";
@@ -1364,6 +1365,18 @@ export async function runProjectOrchestrator(
             lag: Number(d.lag ?? 0),
           })) : [];
           const value = calculateCpmLocally(activities, dependencies);
+          // Persiste o resultado do CPM no banco (sem MCP)
+          if (value.valid && value.schedule && options.localProjectId) {
+            try {
+              const db = await getDb();
+              if (db) {
+                const currentVersion = await getCurrentPlanVersion(options.localProjectId);
+                await persistCpmResult(db as any, options.localProjectId, currentVersion?.id ?? null, value.schedule);
+              }
+            } catch (persistError) {
+              console.warn("cpm_persist_failed:", persistError instanceof Error ? persistError.message : String(persistError));
+            }
+          }
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: JSON.stringify({ source: "arquimedes_internal_engine", ...value }).slice(0, MAX_TOOL_RESULT_CHARS) };
