@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerDatabaseTools } from "./database.js";
 
 // Backend MCP servers (SSE protocol)
 const MCP_SERVERS = {
@@ -125,6 +126,9 @@ async function registerAllTools() {
     }
   }
 }
+
+// Register local database tools (Fase 1)
+registerDatabaseTools(server);
 
 const transport = new StdioServerTransport();
 server.connect(transport);
