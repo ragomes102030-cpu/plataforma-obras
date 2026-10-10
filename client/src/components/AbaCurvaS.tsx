@@ -34,26 +34,29 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
 
   const curve: SCurveResult | null = useMemo(() => {
     const activities = planejamento.data?.activities ?? [];
-    if (activities.length === 0) return null;
-
-    // Busca orçamento para peso
     const budgetItems = budget.data?.items ?? [];
-    const costByWbs = new Map<string, number>();
+    if (activities.length === 0 || budgetItems.length === 0) return null;
+
+    // Calcula custo total dos itens de orçamento
+    const totalCost = budgetItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
+    if (totalCost <= 0) return null;
+
+    // Mapeia custo por atividade (via wbsNodeId -> atividade)
+    const costByActivityId = new Map<number, number>();
     for (const item of budgetItems) {
       if (item.wbsNodeId) {
-        const wbsNode = (planejamento.data as any)?.wbsNodes?.find((n: any) => n.id === item.wbsNodeId);
-        if (wbsNode?.code) {
-          costByWbs.set(wbsNode.code, (costByWbs.get(wbsNode.code) ?? 0) + Number(item.quantity) * Number(item.unitPrice));
+        const act = activities.find(a => a.wbsNodeId === item.wbsNodeId);
+        if (act) {
+          costByActivityId.set(act.id, (costByActivityId.get(act.id) ?? 0) + Number(item.quantity) * Number(item.unitPrice));
         }
       }
     }
 
-    const totalCost = Array.from(costByWbs.values()).reduce((s, v) => s + v, 0);
-
     const curveActivities = activities
       .filter(a => a.cpmCalculatedAt && a.durationDays > 0)
       .map(a => {
-        const weight = totalCost > 0 ? ((costByWbs.get(a.wbsCode) ?? 0) / totalCost) * 100 : 0;
+        const cost = costByActivityId.get(a.id) ?? 0;
+        const weight = totalCost > 0 ? (cost / totalCost) * 100 : 0;
         return {
           id: a.id.toString(),
           duration: a.durationDays,
@@ -213,17 +216,11 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
                 .filter(a => a.cpmCalculatedAt && a.durationDays > 0)
                 .map(a => {
                   const budgetItems = budget.data?.items ?? [];
-                  const costByWbs = new Map<string, number>();
-                  for (const item of budgetItems) {
-                    if (item.wbsNodeId) {
-                      const wbsNode = (planejamento.data as any)?.wbsNodes?.find((n: any) => n.id === item.wbsNodeId);
-                      if (wbsNode?.code) {
-                        costByWbs.set(wbsNode.code, (costByWbs.get(wbsNode.code) ?? 0) + Number(item.quantity) * Number(item.unitPrice));
-                      }
-                    }
-                  }
-                  const totalCost = Array.from(costByWbs.values()).reduce((s, v) => s + v, 0);
-                  const weight = totalCost > 0 ? ((costByWbs.get(a.wbsCode) ?? 0) / totalCost) * 100 : 0;
+                  const totalCost = budgetItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
+                  const cost = budgetItems
+                    .filter(item => item.wbsNodeId === a.wbsNodeId)
+                    .reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
+                  const weight = totalCost > 0 ? (cost / totalCost) * 100 : 0;
                   return (
                     <tr key={a.id}>
                       <td>{a.name}</td>
