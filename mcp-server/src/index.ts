@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerDatabaseTools } from "./database.js";
 import { registerCodeTools } from "./code.js";
+import { registerGitTools } from "./git.js";
 
 // Backend MCP servers (SSE protocol)
 const MCP_SERVERS = {
@@ -133,6 +134,9 @@ registerDatabaseTools(server);
 
 // Register local code tools (Fase 2)
 registerCodeTools(server);
+
+// Register local git tools (Fase 3)
+registerGitTools(server);
 
 const transport = new StdioServerTransport();
 server.connect(transport);
