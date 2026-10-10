@@ -65,7 +65,7 @@ const CONTRATO: Record<string, string[]> = {
   projects: ["baseReferencia", "baseReferenciaRef", "code", "createdAt", "deletedAt", "deletedAtBy", "descricao", "id", "location", "name", "ownerUserId", "plannedFinish", "plannedStart", "progress", "status", "tipoDeObra", "updatedAt"],
   schedule_activities: ["budgetItemId", "cpmCalculatedAt", "createdAt", "critical", "durationDays", "eapRef", "earlyFinish", "earlyStart", "exemplo", "externalId", "finishNoLaterThan", "freeFloat", "id", "lateFinish", "lateStart", "mustStartOn", "name", "pavimento", "phase", "plannedQuantity", "productivity", "progress", "projectId", "sortOrder", "startOffset", "status", "totalFloat", "unit", "updatedAt", "versionId", "wbsCode", "wbsNodeId"],
   schedule_baseline_items: ["activityId", "baselineId", "durationDays", "earlyFinish", "earlyStart", "id", "startOffset"],
-  schedule_baselines: ["createdAt", "createdBy", "id", "name", "projectId", "status"],
+  schedule_baselines: ["createdAt", "createdBy", "id", "name", "projectId", "status", "versionId"],
   schedule_dependencies: ["createdAt", "externalId", "id", "lag", "predecessorId", "projectId", "successorId", "type", "versionId"],
   service_compositions: ["code", "createdAt", "createdBy", "description", "id", "referencePeriod", "sourceCatalogId", "status", "unit", "updatedAt"],
   users: ["createdAt", "email", "id", "lastSignedIn", "loginMethod", "name", "openId", "role", "updatedAt"],
@@ -129,10 +129,10 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 404", () => {
+  it("o total de colunas continua 406", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(405);
+    expect(total).toBe(406);
   });
 });

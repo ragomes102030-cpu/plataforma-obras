@@ -3800,7 +3800,7 @@ export const appRouter = router({
           const blocking = networkValidation.issues.find(issue => issue.severity === "error");
           throw badRequest(blocking?.message ?? "A rede de dependências é inválida para congelar uma baseline.");
         }
-        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
+        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, versionId: currentVersion.id, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length, versionId: currentVersion.id, versionNumber: currentVersion.versionNumber };
       }),

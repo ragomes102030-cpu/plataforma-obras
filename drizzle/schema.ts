@@ -578,6 +578,7 @@ export const activityResourceAllocations = pgTable(
 export const scheduleBaselines = pgTable("schedule_baselines", {
   id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
   projectId: integer("projectId").notNull().references(() => projects.id),
+  versionId: integer("versionId").references(() => projectPlanVersions.id),
   name: varchar("name", { length: 160 }).notNull(),
   status: enumScheduleBaselinesStatus("status").default("ativa").notNull(),
   createdBy: integer("createdBy").references(() => users.id),
