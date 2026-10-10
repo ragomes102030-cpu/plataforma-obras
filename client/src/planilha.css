@@ -3164,3 +3164,97 @@ tr:hover .xl-codigo {
 .xl-dashboard-acoes{display:flex;gap:7px;flex:0 0 auto}.xl-dashboard-acoes button{border:1px solid #b8c3cc;border-radius:4px;padding:8px 11px;background:#fff;color:#33414d;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer}.xl-dashboard-acoes button:hover{border-color:#1f6f8b;color:#1f6f8b}
 .xl-dashboard-fluxo{display:grid;grid-template-columns:repeat(8,minmax(90px,1fr));gap:4px;overflow-x:auto}.xl-dashboard-fluxo>div{display:grid;gap:6px;min-width:90px;padding:9px 8px;border-top:2px solid #dfe3e8;color:#7a848e}.xl-dashboard-fluxo>div span{font-size:10px;font-weight:700}.xl-dashboard-fluxo>div strong{font-size:11px}.xl-dashboard-fluxo>.feito{border-color:#2e9e5b;color:#1c5c31}.xl-dashboard-fluxo>.atual{border-color:#d9a441;color:#6b5310;background:#fffdf3}.xl-dashboard-fluxo>.bloqueado{color:#8b95a1}
 @media(max-width:900px){.xl-dashboard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.xl-dashboard-proximo{align-items:flex-start;flex-direction:column}.xl-dashboard-fluxo{grid-template-columns:repeat(8,110px)}}
+
+/* ==========================================================================
+   TABELAS ANALÍTICAS — Aba de Controle, Orçamento, Curva S
+   ========================================================================== */
+
+.xl-tabela-container{overflow-x:auto;margin:16px 0;border:1px solid #dfe3e8;border-radius:6px}
+
+.xl-tabela{width:100%;border-collapse:collapse;font-size:12.5px}
+
+.xl-tabela-th{padding:10px 12px;border-bottom:2px solid #dfe3e8;background:#f7f9fb;color:#5f6b76;font-weight:600;text-align:left;white-space:nowrap}
+
+.xl-tabela-th-atividade{max-width:200px}
+
+.xl-tabela-codigo{display:block;color:#1f6f8b;font-size:11px;font-weight:700}
+
+.xl-tabela-nome{display:block;color:#3c4a57;font-size:11px;margin-top:2px}
+
+.xl-tabela-data{padding:8px 12px;color:#5f6b76;font-weight:500;white-space:nowrap}
+
+.xl-tabela-celula{padding:8px 12px;border-bottom:1px solid #eef1f4;text-align:right;font-variant-numeric:tabular-nums}
+
+.xl-tabela-celula-valor{color:#1f2933;font-weight:500}
+
+.xl-tabela-pct{display:block;color:#7a848e;font-size:10px;margin-top:2px}
+
+.xl-tabela-total{background:#f7f9fb;font-weight:600}
+
+.xl-tabela-total-celula{color:#1f2933}
+
+.xl-tabela-pct-total{color:#1f6f8b}
+
+.xl-vazia{padding:40px 20px;text-align:center;color:#7a848e}
+
+.xl-vazia strong{display:block;margin-bottom:8px;font-size:14px;color:#3c4a57}
+
+.xl-vazia span{font-size:12px;line-height:1.6}
+
+.xl-aviso-erro{margin:0 20px 16px;padding:12px 16px;border-left:3px solid #e74c3c;background:#fdf2f2;color:#c0392b;border-radius:4px;font-size:13px}
+
+.xl-nota-folha{margin:16px 20px;padding:12px 16px;border-left:3px solid #d9a441;background:#fff8df;color:#5c4a1a;border-radius:4px;font-size:12.5px;line-height:1.6}
+
+.xl-curva-container{margin:16px 0;padding:20px;border:1px solid #dfe3e8;border-radius:6px;background:#fff}
+
+.xl-curva-svg{display:block;width:100%;height:auto}
+
+/* ==========================================================================
+   FORMULÁRIOS — Aba de Riscos, Produção
+   ========================================================================== */
+
+.xl-form{margin:20px;padding:20px;border:1px solid #dfe3e8;border-radius:6px;background:#f7f9fb}
+
+.xl-form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px}
+
+.xl-form-group{display:flex;flex-direction:column;gap:6px}
+
+.xl-form-group label{font-size:12px;font-weight:600;color:#5f6b76}
+
+.xl-form-group input,.xl-form-group select,.xl-form-group textarea{padding:8px 10px;border:1px solid #dfe3e8;border-radius:4px;font:inherit;font-size:13px}
+
+.xl-btn{padding:8px 14px;border:1px solid #b8c3cc;border-radius:4px;background:#fff;color:#33414d;font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+
+.xl-btn:hover{border-color:#1f6f8b;color:#1f6f8b}
+
+.xl-btn-primary{background:#1f6f8b;border-color:#1f6f8b;color:#fff}
+
+.xl-btn-primary:hover{background:#155a70}
+
+.xl-filtros{display:flex;gap:8px;flex-wrap:wrap}
+
+.xl-badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+
+.xl-badge-aberto{background:#fdf2f2;color:#c0392b}
+
+.xl-badge-mitigado{background:#e8f5e9;color:#2e7d32}
+
+.xl-badge-ocorrido{background:#e3f2fd;color:#1565c0}
+
+.xl-badge-requisição{background:#fff3e0;color:#e65100}
+
+.xl-badge-aprovação{background:#f3e5f5;color:#7b1fa2}
+
+.xl-badge-fabricação{background:#e0f2f1;color:#00695c}
+
+.xl-badge-inspeção{background:#e8eaf6;color:#283593}
+
+.xl-badge-expedição{background:#fce4ec;color:#c62828}
+
+.xl-badge-entrega{background:#e8f5e9;color:#2e7d32}
+
+.xl-badge-no-prazo{background:#e8f5e9;color:#2e7d32}
+
+.xl-badge-em-atraso{background:#fdf2f2;color:#c0392b}
+
+.xl-badge-entregue{background:#e3f2fd;color:#1565c0}
