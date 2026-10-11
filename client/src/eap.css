@@ -883,6 +883,9 @@
 .eap-documento-info span{font-size:10px;color:#7b8493}
 .eap-documento-remover{border:0;background:transparent;color:#8993a3;cursor:pointer;padding:5px;border-radius:4px}
 .eap-documento-remover:hover{background:#f3f4f7;color:#b42318}
+.eap-documento-acao{border:0;background:transparent;color:#8993a3;cursor:pointer;padding:5px;border-radius:4px}
+.eap-documento-acao:hover{background:#f3f4f7;color:#202733}
+.eap-documento-remover:disabled,.eap-documento-acao:disabled{opacity:.5;cursor:default}
 .eap-documentos-vazio{padding:11px 14px;font-size:11px;color:#7b8493}
 
 
