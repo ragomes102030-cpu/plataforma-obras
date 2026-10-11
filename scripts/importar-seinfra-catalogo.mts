@@ -48,8 +48,11 @@ import {
 // Tipos
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TipoComponente = "material" | "mao_de_obra" | "equipamento";
-type TipoItem = TipoComponente | "servico";
+// Os dois enums do banco (composition_components.componentType e
+// price_items.itemType) têm os mesmos 4 valores, mas são independentes:
+// mantenha-os declarados separadamente.
+type TipoComponente = "material" | "mao_de_obra" | "equipamento" | "servico";
+type TipoItem = "material" | "mao_de_obra" | "equipamento" | "servico";
 
 interface ItemCatalogo {
   code: string;
@@ -66,6 +69,9 @@ interface ComponenteComposicao {
   coefficient: number;
   unitPriceSnapshot: number;
   componentType: TipoComponente;
+  /** Descrição/unidade da própria linha — fallback do espelho quando o C… não tem bloco. */
+  description?: string;
+  unit?: string;
 }
 
 interface ComposicaoPlanilha {
@@ -73,8 +79,8 @@ interface ComposicaoPlanilha {
   description: string;
   unit: string;
   componentes: ComponenteComposicao[];
-  /** Componentes C… (sub-serviços) descartados neste bloco — enum sem "servico". */
-  componentesDescartados: number;
+  /** Quantos componentes C… (sub-serviços) o bloco tem — entram como componentType 'servico'. */
+  componentesServico: number;
   valorGeral: number | null;
 }
 
@@ -90,7 +96,17 @@ interface Avisos {
   descricoesTruncadas: number;
   unidadesTruncadas: number;
   servicosSemTrilha: number;
-  componentesServicoNaoRepresentaveis: number;
+  /** Componentes C… lidos no arquivo — entram como componentType 'servico'. */
+  componentesServico: number;
+  /** price_items espelho criados para os C… usados como componente (itemType 'servico'). */
+  itensEspelho: number;
+  /** Espelhos cujo C… não tem bloco de composição no arquivo (descrição veio da linha). */
+  itensEspelhoSemBloco: number;
+  itensEspelhoSemBlocoExemplos: string[];
+  /** Espelhos sem preço na origem (valor geral e snapshot ausentes) — gravados com 0. */
+  itensEspelhoSemPreco: number;
+  /** price_items espelho já existentes no catálogo (não duplicados). */
+  itensEspelhoJaExistiam: number;
   /** Blocos cujos componentes são TODOS C… (composição de composição). */
   blocosSomenteComposicoes: number;
   blocosSomenteComposicoesExemplos: string[];
@@ -113,12 +129,17 @@ ENTRADAS (ao menos --insumos ou --planos)
   --insumos <arquivo.xls>        Tabela de Insumos  → priceItems
   --planos <arquivo.xls>         Planos de Serviços → serviceCompositions
   --composicoes <arquivo.xls>    Composições        → compositionComponents
+                                 (componente C… vira componentType 'servico' e ganha
+                                 um price_items espelho com itemType 'servico')
 
 CATÁLOGO
   --reference <028.1>            referencePeriod (senão inferido do nome do arquivo)
   --name <texto>                 nome do catálogo (default: "SEINFRA-CE <reference>")
   --state <UF>                   default: CE
   --composition-status <s>       rascunho | validada | arquivada (default: validada)
+  --catalog-id <int>             reusa um price_catalogs existente em vez de criar
+                                 outro (obrigatório para completar um catálogo já
+                                 importado sem duplicá-lo; valida sourceType/UF/versão)
   --also-import-services-as-items
                                  grava também os serviços em price_items (única
                                  forma de preservar a trilha da EAP, porque
@@ -162,9 +183,10 @@ OUTROS
  * (I…/G…) E coeficiente numérico na coluna 3. Assim as linhas de subtotal
  * (coluna 0 vazia) e as de seção caem fora sem heurística frágil.
  *
- * Componente de serviço (C…) existe no arquivo, mas o enum
- * composition_components.componentType não tem "servico" — é contado e
- * descartado com aviso explícito, nunca em silêncio.
+ * Componente de serviço (C…) é a composição de composição: entra como
+ * componentType 'servico' (o enum do banco tem esse valor) e recebe um
+ * price_items espelho na gravação, porque composition_components.priceItemId
+ * é NOT NULL e referencia price_items(id).
  */
 export function parseComposicoesSeinfraRows(rows: unknown[]): ResultadoComposicoes {
   const composicoes: ComposicaoPlanilha[] = [];
@@ -222,7 +244,7 @@ export function parseComposicoesSeinfraRows(rows: unknown[]): ResultadoComposico
         description: descricao,
         unit: unidade || "UN",
         componentes: [],
-        componentesDescartados: 0,
+        componentesServico: 0,
         valorGeral: null,
       };
       composicoes.push(atual);
@@ -237,8 +259,24 @@ export function parseComposicoesSeinfraRows(rows: unknown[]): ResultadoComposico
       if (coeficiente !== null && preco !== null) {
         linhasComponentes += 1;
         if (/^C/i.test(c0)) {
-          componentesServico += 1; // não representável no enum atual
-          if (atual) atual.componentesDescartados += 1;
+          componentesServico += 1; // composição de composição → componentType 'servico'
+          if (!atual) {
+            componentesForaDeBloco += 1;
+            continue;
+          }
+          const codigoServico = c0.toUpperCase();
+          // Mesmo código repetido no bloco: mantém uma linha só (a tabela tem
+          // unique(compositionId, priceItemId)).
+          if (atual.componentes.some((c) => c.code === codigoServico)) continue;
+          atual.componentesServico += 1;
+          atual.componentes.push({
+            code: codigoServico,
+            coefficient: coeficiente,
+            unitPriceSnapshot: preco,
+            componentType: "servico",
+            description: c1,
+            unit: c2,
+          });
           continue;
         }
         if (!atual) {
@@ -433,6 +471,7 @@ async function main(): Promise<void> {
       "composition-status": { type: "string" },
       "also-import-services-as-items": { type: "boolean", default: false },
       execute: { type: "boolean", default: false },
+      "catalog-id": { type: "string" },
       "database-url": { type: "string" },
       "database-url-env": { type: "string" },
       "user-id": { type: "string" },
@@ -508,7 +547,12 @@ async function main(): Promise<void> {
     descricoesTruncadas: 0,
     unidadesTruncadas: 0,
     servicosSemTrilha: 0,
-    componentesServicoNaoRepresentaveis: 0,
+    componentesServico: 0,
+    itensEspelho: 0,
+    itensEspelhoSemBloco: 0,
+    itensEspelhoSemBlocoExemplos: [],
+    itensEspelhoSemPreco: 0,
+    itensEspelhoJaExistiam: 0,
     blocosSomenteComposicoes: 0,
     blocosSomenteComposicoesExemplos: [],
     componentesOrfaos: 0,
@@ -677,20 +721,73 @@ async function main(): Promise<void> {
       if (!itensParaGravar.some(item => item.code === servico.code)) itensParaGravar.push(servico);
     }
   }
+  // ── Fase 3: price_items espelho para os C… usados como componente ─────────
+  // composition_components.priceItemId é NOT NULL e referencia price_items(id).
+  // Sem o espelho, o componente de serviço não tem para onde apontar e toda
+  // composição formada só por outros C… fica sem nenhum componente.
+  // O espelho nasce com itemType 'servico'; o que identifica uma origem real de
+  // serviço (planos) continua sendo a linha em service_compositions.
+  const blocosPorCodigo = new Map(
+    (resultadoComposicoes?.composicoes ?? []).map(composicao => [composicao.code, composicao])
+  );
+  const servicoPorCodigo = new Map(dedupeServicos.unicos.map(servico => [servico.code, servico]));
+  const componentesServicoVistos = new Map<string, ComponenteComposicao>();
+  for (const composicao of resultadoComposicoes?.composicoes ?? []) {
+    for (const componente of composicao.componentes) {
+      if (componente.componentType !== "servico") continue;
+      if (!componentesServicoVistos.has(componente.code)) {
+        componentesServicoVistos.set(componente.code, componente);
+      }
+    }
+  }
+
+  const codigosJaNoCatalogo = new Set(itensParaGravar.map(item => item.code));
+  const espelhos: ItemCatalogo[] = [];
+  for (const [codigo, referencia] of [...componentesServicoVistos.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0])
+  )) {
+    if (codigosJaNoCatalogo.has(codigo)) {
+      avisos.itensEspelhoJaExistiam += 1;
+      continue;
+    }
+    const bloco = blocosPorCodigo.get(codigo);
+    const servico = servicoPorCodigo.get(codigo);
+    if (!bloco) {
+      avisos.itensEspelhoSemBloco += 1;
+      if (avisos.itensEspelhoSemBlocoExemplos.length < 10) {
+        avisos.itensEspelhoSemBlocoExemplos.push(codigo);
+      }
+    }
+    // Preço do espelho: valor geral da própria composição (custo unitário do
+    // serviço) e, na falta dele, o snapshot que o bloco pai pagou por unidade.
+    const precoEspelho = bloco?.valorGeral ?? referencia.unitPriceSnapshot;
+    if (!(precoEspelho > 0)) avisos.itensEspelhoSemPreco += 1;
+    espelhos.push({
+      code: codigo,
+      description: truncarDescricao(bloco?.description ?? servico?.description ?? referencia.description ?? codigo),
+      unit: truncarUnidade(bloco?.unit ?? servico?.unit ?? referencia.unit ?? "UN"),
+      itemType: "servico",
+      unitPrice: precoEspelho,
+      // Espelho de composição não tem trilha EAP: não veio de insumo de planilha.
+      temTrilha: false,
+    });
+  }
+  itensParaGravar.push(...espelhos);
+  avisos.itensEspelho = espelhos.length;
+
   const codigosDeItem = new Set(itensParaGravar.map(item => item.code));
 
   const componentesValidos: Array<{ composicao: string; componente: ComponenteComposicao }> = [];
   let componentesTotal = 0;
   for (const composicao of resultadoComposicoes?.composicoes ?? []) {
     if (composicao.componentes.length === 0) {
-      if (composicao.componentesDescartados > 0) {
-        // Bloco cujos componentes são todos C… (composição de composição).
-        avisos.blocosSomenteComposicoes += 1;
-        if (avisos.blocosSomenteComposicoesExemplos.length < 10) {
-          avisos.blocosSomenteComposicoesExemplos.push(composicao.code);
-        }
-      } else {
-        avisos.blocosSemComponentes += 1;
+      avisos.blocosSemComponentes += 1;
+    } else if (composicao.componentesServico === composicao.componentes.length) {
+      // Bloco cujos componentes são todos C… (composição de composição): agora
+      // entram como componentType 'servico', mas seguem sinalizados.
+      avisos.blocosSomenteComposicoes += 1;
+      if (avisos.blocosSomenteComposicoesExemplos.length < 10) {
+        avisos.blocosSomenteComposicoesExemplos.push(composicao.code);
       }
     }
     const vistos = new Set<string>();
@@ -708,7 +805,7 @@ async function main(): Promise<void> {
       componentesValidos.push({ composicao: composicao.code, componente });
     }
   }
-  avisos.componentesServicoNaoRepresentaveis = resultadoComposicoes?.componentesServico ?? 0;
+  avisos.componentesServico = resultadoComposicoes?.componentesServico ?? 0;
 
   const servicosNoCatalogo = new Set(dedupeServicos.unicos.map(servico => servico.code));
   const composicoesSemServico = (resultadoComposicoes?.composicoes ?? []).filter(
@@ -719,20 +816,53 @@ async function main(): Promise<void> {
   // Componentes que existem no arquivo mas não têm serviço para onde ser amarrados:
   // contam como válidos mas NÃO chegam a ser gravados.
   const nomesSemServico = new Set(composicoesSemServico.map(c => c.code));
-  const componentesSemComposicao = componentesValidos.filter(({ composicao }) =>
-    nomesSemServico.has(composicao)
-  ).length;
+  const componentesPrevistos = componentesValidos.filter(
+    ({ composicao }) => !nomesSemServico.has(composicao)
+  );
+  const componentesSemComposicao = componentesValidos.length - componentesPrevistos.length;
   avisos.componentesSemComposicao = componentesSemComposicao;
+
+  // Composições que terminam sem NENHUM componente. Contadas sobre o que vai
+  // para service_compositions (é a definição da lacuna na produção) — e não
+  // apenas sobre os blocos do arquivo, senão some o serviço que não tem bloco.
+  //
+  //   antes  = como está hoje (componente C… era descartado)
+  //   depois = com o espelho (componente C… entra como 'servico')
+  //
+  // A diferença entre os dois é o que esta correção resolve; o que sobra são
+  // serviços sem bloco nenhum no arquivo de Composições (lacuna de origem).
+  const paisComComponente = new Set(componentesPrevistos.map(({ composicao }) => composicao));
+  const paisComComponenteAntes = new Set(
+    componentesPrevistos
+      .filter(({ componente }) => componente.componentType !== "servico")
+      .map(({ composicao }) => composicao)
+  );
+  const composicoesSemComponenteAntes = dedupeServicos.unicos.filter(
+    servico => !paisComComponenteAntes.has(servico.code)
+  );
+  const composicoesSemComponente = dedupeServicos.unicos.filter(
+    servico => !paisComComponente.has(servico.code)
+  );
+  // Serviço do "Planos de Serviços" sem bloco no arquivo de Composições: não há
+  // de onde tirar componente. Fica registrado para não parecer efeito do espelho.
+  const servicosSemBloco = composicoesSemComponente.filter(servico => !blocosPorCodigo.has(servico.code));
 
   const contagem = {
     catalogo: 1,
     priceItems: itensParaGravar.length,
     priceItemsInsumos: dedupeInsumos.unicos.length,
     priceItemsServicos: itensParaGravar.length - dedupeInsumos.unicos.length,
+    priceItemsEspelho: espelhos.length,
     serviceCompositions: dedupeServicos.unicos.length,
     compositionComponents: componentesValidos.length,
-    compositionComponentsPrevistos: componentesValidos.length - avisos.componentesSemComposicao,
-    componentesDescartados: componentesTotal - componentesValidos.length,
+    compositionComponentsServico: componentesPrevistos.filter(
+      ({ componente }) => componente.componentType === "servico"
+    ).length,
+    compositionComponentsPrevistos: componentesPrevistos.length,
+    composicoesSemComponenteAntes: composicoesSemComponenteAntes.length,
+    composicoesSemComponente: composicoesSemComponente.length,
+    composicoesSemComponentePorFaltaDeBloco: servicosSemBloco.length,
+    componentesForaDaGravacao: componentesTotal - componentesValidos.length,
   };
 
   console.log("");
@@ -748,16 +878,31 @@ async function main(): Promise<void> {
       `  → previstos para gravação: ${contagem.compositionComponentsPrevistos} ` +
         `(${avisos.componentesSemComposicao} ficam de fora por falta de serviço correspondente)`
     );
+  console.log(
+    `  → de serviço ('servico'): ${contagem.compositionComponentsServico} · ` +
+      `price_items espelho: ${contagem.priceItemsEspelho}`
+  );
+  console.log(
+    `  → composições sem nenhum componente: ${contagem.composicoesSemComponenteAntes} → ` +
+      `${contagem.composicoesSemComponente}` +
+      ` (${contagem.composicoesSemComponentePorFaltaDeBloco} não têm bloco no arquivo de ` +
+      "Composições: lacuna de origem, o espelho não resolve)"
+  );
+  if (composicoesSemComponente.length) {
+    console.log(
+      `    ${composicoesSemComponente.slice(0, 10).map(c => c.code).join(", ")}` +
+        (composicoesSemComponente.length > 10 ? " …" : "")
+    );
+  }
 
   console.log("");
   console.log("avisos:");
   if (avisos.versaoComposicoesDivergente)
     console.log(`  ! ${avisos.versaoComposicoesDivergente} (aceito com --allow-version-mismatch)`);
-  if (contagem.componentesDescartados)
+  if (contagem.componentesForaDaGravacao)
     console.log(
-      `  ! ${contagem.componentesDescartados} componente(s) descartado(s): ` +
-        `${avisos.componentesServicoNaoRepresentaveis} de serviço (enum sem "servico"), ` +
-        `${avisos.componentesOrfaos} sem insumo no catálogo`
+      `  ! ${contagem.componentesForaDaGravacao} componente(s) fora da gravação: ` +
+        `${avisos.componentesOrfaos} sem insumo no catálogo (o resto são repetições no mesmo bloco)`
     );
   if (avisos.componentesOrfaosExemplos.length)
     console.log(`    exemplos: ${avisos.componentesOrfaosExemplos.join(", ")}`);
@@ -766,10 +911,27 @@ async function main(): Promise<void> {
   if (avisos.blocosSomenteComposicoes)
     console.log(
       `  ~ ${avisos.blocosSomenteComposicoes} composição(ões) formada(s) só por outras composições ` +
-        "(C…) — sem representação no enum atual; entram com 0 componentes" +
+        "(C…) — entram como componentType 'servico'" +
         (avisos.blocosSomenteComposicoesExemplos.length
           ? `: ${avisos.blocosSomenteComposicoesExemplos.join(", ")}`
           : "")
+    );
+  if (avisos.itensEspelho)
+    console.log(
+      `  ~ ${avisos.itensEspelho} price_item(s) espelho criado(s) de composição (itemType 'servico')` +
+        (avisos.itensEspelhoJaExistiam ? ` · ${avisos.itensEspelhoJaExistiam} já existiam` : "")
+    );
+  if (avisos.itensEspelhoSemBloco)
+    console.log(
+      `  ! ${avisos.itensEspelhoSemBloco} espelho(s) sem bloco de composição no arquivo ` +
+        "(descrição/unidade vieram da linha do componente)" +
+        (avisos.itensEspelhoSemBlocoExemplos.length
+          ? `: ${avisos.itensEspelhoSemBlocoExemplos.join(", ")}`
+          : "")
+    );
+  if (avisos.itensEspelhoSemPreco)
+    console.log(
+      `  ! ${avisos.itensEspelhoSemPreco} espelho(s) sem preço na origem (gravados com 0)`
     );
   if (avisos.composicoesSemItemNoCatalogo)
     console.log(
@@ -805,12 +967,18 @@ async function main(): Promise<void> {
       console.log(sql);
       console.log(`-- params: ${JSON.stringify(valores)}`);
     };
-    bloco("1. price_catalogs", SQL_CATALOGO, [
-      nomeCatalogo,
-      cli.state ?? "CE",
-      reference,
-      Number(cli["user-id"] ?? 0),
-    ]);
+    if (cli["catalog-id"]) {
+      console.log(
+        `\n-- 1. price_catalogs: NENHUM INSERT — reutilizando o id ${cli["catalog-id"]} (--catalog-id)`
+      );
+    } else {
+      bloco("1. price_catalogs", SQL_CATALOGO, [
+        nomeCatalogo,
+        cli.state ?? "CE",
+        reference,
+        Number(cli["user-id"] ?? 0),
+      ]);
+    }
     const amostraItens = sqlItens(0, itensParaGravar.slice(0, 2));
     bloco("2. price_items", amostraItens.sql, amostraItens.valores);
     const amostraServicos = sqlServicos(
@@ -822,7 +990,9 @@ async function main(): Promise<void> {
     );
     bloco("3. service_compositions", amostraServicos.sql, amostraServicos.valores);
     const amostraComponentes = sqlComponentes(
-      componentesValidos.slice(0, 2).map(({ componente }) => ({
+      [...componentesPrevistos.slice(0, 1), ...componentesPrevistos.filter(
+        ({ componente }) => componente.componentType === "servico"
+      ).slice(0, 1)].map(({ componente }) => ({
         compositionId: 0,
         priceItemId: 0,
         componentType: componente.componentType,
@@ -910,15 +1080,48 @@ async function main(): Promise<void> {
     try {
       await client.query("BEGIN");
 
-      // 1) catálogo
-      const catalogo = await client.query(SQL_CATALOGO, [
-        nomeCatalogo,
-        cli.state ?? "CE",
-        reference,
-        Number(cli["user-id"]),
-      ]);
-      const catalogoId = Number(catalogo.rows[0]!.id);
-      console.log(`  price_catalogs: id ${catalogoId}`);
+      // 1) catálogo — cria um novo, ou reusa o existente com --catalog-id
+      // (sem isso um segundo --execute duplicaria o catálogo inteiro).
+      let catalogoId: number;
+      if (cli["catalog-id"]) {
+        const alvo = Number(cli["catalog-id"]);
+        if (!Number.isInteger(alvo) || alvo <= 0) {
+          throw new Error(`--catalog-id "${cli["catalog-id"]}": informe um id inteiro positivo`);
+        }
+        const existente = await client.query(
+          `SELECT id, name, state, "referencePeriod", "sourceType"::text AS "sourceType"
+             FROM price_catalogs WHERE id = $1`,
+          [alvo]
+        );
+        if (existente.rows.length === 0) {
+          throw new Error(`--catalog-id ${alvo}: price_catalogs não tem esse id`);
+        }
+        const linha = existente.rows[0]!;
+        if (String(linha.sourceType) !== "SEINFRA") {
+          throw new Error(
+            `--catalog-id ${alvo}: sourceType é "${linha.sourceType}", esperado "SEINFRA"`
+          );
+        }
+        const ufAlvo = String(linha.state ?? "");
+        const referenciaAlvo = String(linha.referencePeriod ?? "");
+        if (ufAlvo !== (cli.state ?? "CE") || referenciaAlvo !== reference) {
+          throw new Error(
+            `--catalog-id ${alvo}: catálogo é ${ufAlvo}/${referenciaAlvo}, ` +
+              `mas os argumentos apontam ${cli.state ?? "CE"}/${reference}`
+          );
+        }
+        catalogoId = alvo;
+        console.log(`  price_catalogs: reutilizando id ${catalogoId} (${String(linha.name)})`);
+      } else {
+        const catalogo = await client.query(SQL_CATALOGO, [
+          nomeCatalogo,
+          cli.state ?? "CE",
+          reference,
+          Number(cli["user-id"]),
+        ]);
+        catalogoId = Number(catalogo.rows[0]!.id);
+        console.log(`  price_catalogs: id ${catalogoId} (novo)`);
+      }
 
       // 2) price_items
       let gravadosItens = 0;
@@ -1008,6 +1211,17 @@ async function main(): Promise<void> {
     compositionStatus,
     contagem,
     avisos,
+    // Artefatos de auditoria. No banco o espelho é indistinguível de um serviço
+    // importado de verdade (nos dois `itemType = 'servico'`), então a lista vai
+    // aqui — é a única forma de saber depois quais itens foram criados por este
+    // caminho.
+    itensEspelho: espelhos.map(item => ({
+      code: item.code,
+      description: item.description,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+    })),
+    composicoesSemComponente: composicoesSemComponente.map(servico => servico.code),
     entradas,
     gravacao,
     geradoEm: new Date().toISOString(),
