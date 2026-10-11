@@ -2,11 +2,16 @@
  * Auditoria de schema para o PostgreSQL — lê o catálogo e confronta com o que as
  * migrations deste repo declaram.
  *
- * POR QUE ELA INFORMA E NÃO BARRE
+ * POR QUE ELA BARRA (POLITICA ATUAL)
  *
- * Divergência de schema é motivo para investigar, não para impedir deploy
- * automático. Quem decide é o time. A auditoria existiu para transformar
- * "acho que o banco está certo" em contagem — e é isso que ela faz.
+ * A versao anterior informava e nao barrava, e desligava-se por completo quando
+ * `USE_SUPABASE=1`. Agora ela BARRA: havendo divergencia, sai com codigo != 0.
+ * Combinada com o `&&` do startCommand e com o healthcheck em `/readyz`, o
+ * Render nao promove um deploy cujo schema nao confere — e o deploy anterior
+ * continua servindo, entao a disponibilidade e preservada.
+ *
+ * Se a divergencia precisar ser tolerada pontualmente, o caminho e
+ * `AUDIT_ALLOW_DIVERGENCE=1` (explicito e auditavel), nao desligar a auditoria.
  *
  * DUAS MUDANÇAS EM RELAÇÃO AO MySQL
  *
@@ -20,13 +25,14 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-// Em produção com Supabase, a auditoria de schema não deve conectar no PostgreSQL legado durante o boot.
-// A validação do schema/data é executada separadamente pelo pipeline de banco.
-if (process.env.USE_SUPABASE === "1") {
-  console.log("[audit] USE_SUPABASE=1: auditoria de startup desativada; schema Supabase é validado separadamente.");
-  process.exit(0);
-}
+// A auditoria NAO se desliga em producao.
+//
+// Antes, com USE_SUPABASE=1 (o valor do render.yaml), este arquivo imprimia
+// "auditoria de startup desativada" e saia com 0 — o passo de auditoria do
+// startCommand nao auditava nada, e divergencia de schema subia como deploy
+// verde. Agora ela roda, e divergencia faz o processo sair com codigo != 0.
 
 const MIGRATIONS_FOLDER = "drizzle";
 const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
@@ -226,4 +232,70 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     triggersNoBanco: triggersBanco.size,
     journal,
   };
+}
+
+// ------------------------------------------------------------------ main ----
+// Este arquivo e um modulo: exporta as funcoes puras de conferencia E roda
+// como programa quando invocado direto (`node scripts/audit-schema-pg.mjs`,
+// que e o que `pnpm db:audit` faz). Antes so existia a parte de modulo, entao
+// o comando rodava o arquivo e nao auditava nada.
+//
+// A saida de erro (codigo != 0) e o que permite o deploy falhar em vez de
+// seguir com schema divergente.
+async function main() {
+  const { default: pg } = await import("pg");
+  const raw = runtimeDatabaseUrl();
+  if (!raw) {
+    console.error("[audit] sem string de conexao (SUPABASE_DB_URL/DATABASE_URL); nada a auditar.");
+    process.exit(1);
+  }
+  const u = new URL(raw);
+  u.searchParams.delete("ssl-mode");
+  u.searchParams.delete("charset");
+  const sslDesejado = (u.searchParams.get("sslmode") ?? "").toLowerCase();
+  const sslDesligado = sslDesejado === "disable";
+  if (sslDesligado) u.searchParams.delete("sslmode");
+
+  const conn = new pg.Client({
+    connectionString: u.toString(),
+    ...(sslDesejado && !sslDesligado ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
+
+  try {
+    await conn.connect();
+  } catch (error) {
+    console.error("[audit] falha ao conectar:", error?.message ?? String(error));
+    process.exit(1);
+  }
+
+  const r = await auditarSchema({ conn });
+  for (const linha of r.linhas) console.log(`[audit] ${linha}`);
+  await conn.end();
+
+  if (!r.ok) {
+    console.warn("[audit] DIVERGENCIA: o banco nao confere com as migracoes deste repo.");
+    for (const d of r.divergencias) console.warn(`[audit]   ${d}`);
+    if (process.env.AUDIT_ALLOW_DIVERGENCE === "1") {
+      console.warn("[audit] AUDIT_ALLOW_DIVERGENCE=1: divergencia tolerada por decisao explicita.");
+      process.exit(0);
+    }
+    process.exit(1);
+  }
+
+  console.log(
+    `[audit] banco confere com as migracoes (${r.tabelasNoBanco} tabela(s), ` +
+      `${r.enumsNoBanco} enum(s), ${r.triggersNoBanco} trigger(s)).`
+  );
+  process.exit(0);
+}
+
+// Só executa quando invocado como programa — importá-lo (migrate-pg.mjs faz
+// isso) não pode disparar a auditoria nem um process.exit.
+const invocadoDiretamente =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invocadoDiretamente) {
+  main().catch(error => {
+    console.error("[audit] erro inesperado:", error?.message ?? String(error));
+    process.exit(1);
+  });
 }

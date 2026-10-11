@@ -4,12 +4,17 @@ services:
     runtime: node
     plan: free
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    # O schema do Supabase e gerenciado separadamente. O primeiro script faz apenas
-    # a manutencao idempotente das sequences identity no boot; a auditoria e somente leitura.
-    # Os separadores sao ';' para que a API ainda suba mesmo se uma etapa auxiliar falhar.
-    startCommand: node scripts/migrate-pg.mjs; node scripts/audit-schema-pg.mjs; pnpm start
+    # Os separadores sao '&&': se a migracao ou a auditoria falhar, o deploy NAO
+    # e promovido. Antes era ';', e o efeito era o pior possivel — a migracao
+    # falhava, a auditoria (desligada por USE_SUPABASE=1) saia com 0, o servico
+    # subia e o Render marcava o deploy como saudavel com o banco divergente.
+    #
+    # O `&&` so e seguro porque o healthcheck abaixo e /readyz: o Render mantem
+    # o deploy ANTERIOR no ar ate o novo passar no healthcheck, entao uma falha
+    # aqui nao deixa o servico sem resposta — nao ha crash-loop.
+    startCommand: node scripts/migrate-pg.mjs && node scripts/audit-schema-pg.mjs && pnpm start
     autoDeploy: true
-    healthCheckPath: /healthz
+    healthCheckPath: /readyz
     envVars:
       - key: NODE_VERSION
         value: "22"

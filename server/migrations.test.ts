@@ -65,7 +65,7 @@ function readMigration(tag: string): string {
  */
 function sqlSemComentarios(tag: string): string {
   return readMigration(tag)
-    .split("\n")
+    .split(/\r?\n/)
     .map(linha => linha.replace(/--.*$/, ""))
     .join("\n");
 }
@@ -441,18 +441,36 @@ describe("o runtime recebe o que a migracao precisa", () => {
     expect(startCommandRender()).toMatch(/scripts\/migrate-pg\.mjs/);
   });
 
-  it("a auditoria roda, e a falha dela nao impede a aplicacao de subir", () => {
+  it("a migracao e a auditoria barram o deploy quando falham", () => {
     const cmd = startCommandRender();
     expect(cmd, "a auditoria de schema nao roda").toMatch(/scripts\/audit-schema-pg\.mjs/);
 
-    // Separador `;` e nao `&&`: com `&&`, um erro de migracao impediria o
-    // `pnpm start` e o servico ficaria em crash-loop sem nunca responder
-    // `/readyz`. Divergencia de schema e motivo para investigar, e nao para
-    // derrubar o deploy por surprise.
-    expect(cmd, "com `&&`, uma falha de migracao impede o servico de subir").toMatch(
-      /migrate-pg\.mjs\s*;/
+    // Separador `&&`, nao `;`.
+    //
+    // Com `;`, uma falha de migracao nao interrompia nada: a auditoria (que
+    // antes se desligava sozinha com USE_SUPABASE=1) saia com 0, o `pnpm start`
+    // subia e o Render marcava o deploy como saudavel — com o banco divergente.
+    // O `&&` faz a falha interromper a cadeia e o deploy nao ser promovido.
+    //
+    // Isso so e seguro porque o healthcheck do servico e `/readyz`: o Render
+    // mantem o deploy ANTERIOR no ar ate o novo passar, entao nao ha crash-loop
+    // sem resposta — a preocupacao que justificava o `;` deixou de valer quando
+    // o healthcheck passou a olhar o banco.
+    expect(cmd, "com `;`, uma falha de migracao nao impede o deploy").toMatch(
+      /migrate-pg\.mjs\s*&&/
     );
-    expect(cmd).toMatch(/;\s*pnpm start/);
+    expect(cmd).toMatch(/&&\s*node scripts\/audit-schema-pg\.mjs\s*&&\s*pnpm start/);
+  });
+
+  it("o healthcheck do Render olha o banco (/readyz), nao apenas o processo", () => {
+    // `/healthz` responde 200 sem consultar o banco. Com ele como healthcheck,
+    // um deploy com schema divergente e promovido como saudavel. `/readyz`
+    // consulta o banco e responde 503 quando ele esta inacessivel, entao o
+    // Render nao promove o deploy ruim — e o anterior continua servindo.
+    const yaml = readFileSync("render.yaml", "utf-8");
+    const linha = yaml.split("\n").find(l => l.trimStart().startsWith("healthCheckPath:"));
+    expect(linha, "render.yaml sem healthCheckPath").toBeTruthy();
+    expect(linha).toMatch(/healthCheckPath:\s*\/readyz/);
   });
 
   it("a auditoria de schema so escreve: so executa SELECT", () => {
