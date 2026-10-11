@@ -1043,10 +1043,37 @@ async function main(): Promise<void> {
     // Pooler do Supabase exige username no formato postgres.<project-ref>
     let normalizedDsn = dsn as string;
     if (host.endsWith(".pooler.supabase.com")) {
+      // O pooler do Supabase exige `postgres.<project-ref>` no username.
+      //
+      // A versao anterior escrevia `postgres.tromrvfijbtihuilvnuk` — o ref de
+      // PRODUCAO — para QUALQUER host *.pooler.supabase.com. Apontar o script
+      // para o pooler de outro projeto autenticava com o ref errado e falhava
+      // com erro de credencial, que manda quem depura para o lado errado:
+      // parece senha errada, e o problema e o projeto.
+      //
+      // O ref NAO esta no hostname do pooler: `aws-0-sa-east-1.pooler...` traz
+      // a REGIAO (`aws-0-sa-east-1`), nao o project-ref. Extrair dali daria um
+      // username inventado. Ele vem do DSN direto do Supabase
+      // (`db.<ref>.supabase.co`), que e o formato que o painel entrega — a mesma
+      // regra que `scripts/migrate-pg.mjs` usa.
+      //
       const u = new URL(dsn as string);
       if (u.username === "postgres") {
-        u.username = `postgres.tromrvfijbtihuilvnuk`;
-        normalizedDsn = u.toString();
+        // O ref vem do DSN DIRETO (db.<ref>.supabase.co), que e o formato que o
+        // painel do Supabase entrega e a mesma regra que migrate-pg.mjs usa.
+        const refDoHostDireto = host.match(/^db\.([a-z0-9]+)\.supabase\.co$/)?.[1];
+        if (refDoHostDireto) {
+          u.username = `postgres.${refDoHostDireto}`;
+          normalizedDsn = u.toString();
+        } else {
+          // Pooler passado direto, sem ref identificavel. Antes isto chutava o ref
+          // de PRODUCAO e o erro que aparecia era "password authentication failed"
+          // — que aponta para a senha quando o problema e o projeto. Falhar aqui,
+          // nomeando a causa, poupa essa cacada.
+          throw new Error(
+            `DSN de pooler sem project-ref identificavel: "${host}". O pooler exige o username "postgres.<project-ref>", e o ref NAO esta no hostname do pooler (ele traz a regiao, ex. "aws-0-sa-east-1"). Use o DSN direto do painel (db.<ref>.supabase.co) ou informe o username como postgres.<ref>.`
+          );
+        }
       }
     }
     const pool = new PoolCtor({
