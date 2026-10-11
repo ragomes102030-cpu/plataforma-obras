@@ -16,7 +16,7 @@
  * `localIso` que o resto do servidor usa. Fuso é a causa clássica de "a data
  * está errada às vezes", e ela não pode depender de quem chamou.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { calendarExceptions, workCalendars } from "../../drizzle/schema";
 import { getDb } from "../db";
 import {
@@ -130,4 +130,137 @@ export function localIso(d: Date): IsoDate {
 export function isoToLocalDate(iso: IsoDate): Date {
   const [ano, mes, dia] = iso.split("-").map(Number) as [number, number, number];
   return new Date(ano, mes - 1, dia);
+}
+
+// ============================================================ escrita
+//
+// Toda a escrita do calendário vive AQUI, junto da leitura.
+//
+// O router não acessa `work_calendars` nem `calendar_exceptions` diretamente —
+// e há um teste que trava isso (`server/cpm-restricoes.test.ts`, "o calendário
+// da obra tem um único caminho de leitura"). A regra nasceu de um defeito real:
+// duas fontes para a mesma verdade no mesmo arquivo. Mover a escrita para cá
+// preserva a regra em vez de abri-la: continua existindo UM módulo dono do
+// calendário, agora responsável pelos dois sentidos.
+
+/** Cria ou atualiza o calendário da obra. Uma obra tem no máximo um. */
+export async function salvarCalendarioDaObra(
+  db: Db,
+  projectId: number,
+  name: string,
+  workingWeekdays: number[]
+): Promise<{ id: number; criado: boolean }> {
+  const weekPattern = { workingWeekdays: [...workingWeekdays].sort((a, b) => a - b) };
+  const [existente] = await db
+    .select({ id: workCalendars.id })
+    .from(workCalendars)
+    .where(eq(workCalendars.projectId, projectId))
+    .limit(1);
+  if (existente) {
+    await db
+      .update(workCalendars)
+      .set({ name, weekPattern })
+      .where(eq(workCalendars.id, existente.id));
+    return { id: existente.id, criado: false };
+  }
+  const [criado] = await db
+    .insert(workCalendars)
+    .values({ projectId, name, weekPattern })
+    .returning({ id: workCalendars.id });
+  return { id: criado.id, criado: true };
+}
+
+/** Id do calendário da obra, ou null. */
+export async function idDoCalendarioDaObra(db: Db, projectId: number): Promise<number | null> {
+  const [wc] = await db
+    .select({ id: workCalendars.id })
+    .from(workCalendars)
+    .where(eq(workCalendars.projectId, projectId))
+    .limit(1);
+  return (wc?.id as number | undefined) ?? null;
+}
+
+/**
+ * Acrescenta ou substitui uma exceção.
+ *
+ * O schema não tem unique index em (calendarId, date), então apagar a existente
+ * antes de inserir é o que evita duas exceções para o mesmo dia — onde a que
+ * fosse lida por último venceria por acaso.
+ */
+export async function salvarExcecaoDoCalendario(
+  db: Db,
+  projectId: number,
+  date: IsoDate,
+  type: DayType,
+  name?: string
+): Promise<{ id: number }> {
+  const calendarId = await idDoCalendarioDaObra(db, projectId);
+  if (calendarId === null) {
+    throw new Error(
+      "A obra ainda não tem calendário. Salve o calendário antes de cadastrar exceções."
+    );
+  }
+  await db
+    .delete(calendarExceptions)
+    .where(and(eq(calendarExceptions.calendarId, calendarId), eq(calendarExceptions.date, date)));
+  const [criada] = await db
+    .insert(calendarExceptions)
+    .values({ calendarId, date, type, name: name ?? null })
+    .returning({ id: calendarExceptions.id });
+  return { id: criada.id };
+}
+
+export async function removerExcecaoDoCalendario(
+  db: Db,
+  projectId: number,
+  date: IsoDate
+): Promise<{ removidas: number }> {
+  const calendarId = await idDoCalendarioDaObra(db, projectId);
+  if (calendarId === null) return { removidas: 0 };
+  const removidas = await db
+    .delete(calendarExceptions)
+    .where(and(eq(calendarExceptions.calendarId, calendarId), eq(calendarExceptions.date, date)))
+    .returning({ id: calendarExceptions.id });
+  return { removidas: removidas.length };
+}
+
+/**
+ * Materializa o padrão brasileiro como calendário DA OBRA.
+ *
+ * O padrão é calculado, não armazenado: enquanto ninguém salvar, `origem`
+ * continua `padrao_br` e a tela não tem o que editar. Isto torna o padrão um
+ * ponto de partida editável, preservando a decisão do engenheiro a partir dali.
+ * Idempotente: regrava as exceções em vez de acumulá-las.
+ */
+export async function semearCalendarioPadrao(
+  db: Db,
+  projectId: number,
+  ano: number
+): Promise<{ calendarId: number; excecoes: number; criado: boolean }> {
+  const padrao = defaultCalendar(ano);
+  const existente = await idDoCalendarioDaObra(db, projectId);
+  let calendarId = existente;
+  if (calendarId === null) {
+    const [criado] = await db
+      .insert(workCalendars)
+      .values({
+        projectId,
+        name: `Calendário padrão ${ano} (5x2 + feriados nacionais)`,
+        weekPattern: padrao.weekPattern,
+      })
+      .returning({ id: workCalendars.id });
+    calendarId = criado.id as number;
+  }
+  await db.delete(calendarExceptions).where(eq(calendarExceptions.calendarId, calendarId));
+  if (padrao.exceptions.length) {
+    await db.insert(calendarExceptions).values(
+      padrao.exceptions.map(e => ({
+        calendarId: calendarId as number,
+        date: e.date,
+        type: e.type,
+        name: e.name ?? null,
+      }))
+    );
+  }
+  return { calendarId, excecoes: padrao.exceptions.length, criado: existente === null };
 }

@@ -30,6 +30,8 @@ import {
   activityResourceAllocations,
   scheduleBaselines,
   scheduleBaselineItems,
+  workCalendars,
+  calendarExceptions,
   agentRuns,
   arquimedesCapabilities,
 } from "../drizzle/schema";
@@ -92,7 +94,15 @@ async function requireApprovedEapVersion(
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { persistCpmResult } from "./construction/cpm-persister";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
-import { carregarCalendarioDaObra, localIso } from "./construction/calendario-obra";
+import {
+  carregarCalendarioDaObra,
+  idDoCalendarioDaObra,
+  localIso,
+  removerExcecaoDoCalendario,
+  salvarCalendarioDaObra,
+  salvarExcecaoDoCalendario,
+  semearCalendarioPadrao,
+} from "./construction/calendario-obra";
 import { indexOf as calendarIndexOf } from "../shared/work-calendar";
 import {
   allowedSourcesFor,
@@ -3412,6 +3422,101 @@ export const appRouter = router({
       }),
   }),
   planning: router({
+    // ---------------------------------------------------------- calendário
+    // A ESCRITA do calendário vive em server/construction/calendario-obra.ts,
+    // junto da leitura. Este router é só a porta tRPC: não toca
+    // `work_calendars` nem `calendar_exceptions` diretamente — há um teste que
+    // trava isso, porque duas fontes para a mesma verdade no mesmo arquivo já
+    // foi defeito real uma vez.
+    getCalendar: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [project] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
+        const carregado = await carregarCalendarioDaObra(db, input.projectId, ano);
+        const calendarId = await idDoCalendarioDaObra(db, input.projectId);
+        return {
+          calendarId,
+          nome: carregado.nome,
+          origem: carregado.origem,
+          ano: carregado.ano,
+          weekPattern: carregado.calendar.weekPattern,
+          exceptions: carregado.calendar.exceptions,
+        };
+      }),
+
+    saveCalendar: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          name: z.string().trim().min(2).max(180),
+          workingWeekdays: z
+            .array(z.number().int().min(0).max(6))
+            .min(1)
+            .max(7)
+            .refine(dias => new Set(dias).size === dias.length, {
+              message: "Dias da semana repetidos.",
+            }),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return salvarCalendarioDaObra(db, input.projectId, input.name, input.workingWeekdays);
+      }),
+
+    addCalendarException: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato yyyy-mm-dd."),
+          type: z.enum(["working", "national_holiday", "facultative", "observance"]),
+          name: z.string().trim().max(180).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return salvarExcecaoDoCalendario(db, input.projectId, input.date, input.type, input.name);
+      }),
+
+    removeCalendarException: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato yyyy-mm-dd."),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return removerExcecaoDoCalendario(db, input.projectId, input.date);
+      }),
+
+    seedCalendarFromDefault: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          ano: z.number().int().min(2000).max(2100),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return semearCalendarioPadrao(db, input.projectId, input.ano);
+      }),
+
     list: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
