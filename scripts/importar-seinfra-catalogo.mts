@@ -29,13 +29,19 @@
  *   npx tsx scripts/importar-seinfra-catalogo.mts --insumos <xls> --planos <xls> \
  *     --composicoes <xls> --reference 028.1 --execute \
  *     --database-url "postgres://.../teste" --user-id 1
+ *
+ * ── VIA DE GRAVAÇÃO ─────────────────────────────────────────────────────────
+ * A gravação daqui é pelo driver `pg` (`--database-url` / `--database-url-env`).
+ * Quando o pooler do Supabase bloqueia o driver pg existe o importador irmão
+ * `scripts/importar-seinfra-supabase.ts` (mesmos três arquivos, grava pela API
+ * REST). Este script é o canônico: dry-run por padrão, recusa de DSN de produção
+ * sem `--allow-production` e `--catalog-id` para reusar catálogo existente.
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { createClient } from "@supabase/supabase-js";
 
 import {
   lerPrimeiraAba,
@@ -1015,33 +1021,9 @@ async function main(): Promise<void> {
     console.log("EXECUTE: gravando...");
     const inicio = Date.now();
 
-    // Usar Supabase JS client (API REST) em vez do driver pg local
-    // O pooler do Supabase rejeita autenticação via driver pg local
-    const supabaseUrl = cli["supabase-url"];
-    const supabaseKey = cli["supabase-key"];
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("Modo Supabase API: --supabase-url e --supabase-key são obrigatórios");
-      process.exit(1);
-    }
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Helper para executar queries via Supabase
-    async function execQuery(sql: string, params?: unknown[]): Promise<Array<Record<string, unknown>>> {
-      // Converter placeholders $1, $2, ... para formato Supabase
-      let convertedSql = sql;
-      if (params && params.length > 0) {
-        // Substituir $N por valores literais
-        for (let i = params.length - 1; i >= 0; i--) {
-          const val = params[i];
-          const literal = val === null ? "NULL" : typeof val === "number" ? String(val) : `'${String(val).replace(/'/g, "''")}'`;
-          convertedSql = convertedSql.replace(`$${i + 1}`, literal);
-        }
-      }
-      const { data, error } = await supabase.rpc("exec_sql", { query: convertedSql });
-      if (error) throw new Error(error.message);
-      return (data as Array<Record<string, unknown>>) ?? [];
-    }
-
+    // Gravação pelo driver pg — caminho ÚNICO e canônico deste script.
+    // A via REST do Supabase (usada quando o pooler bloqueia o driver pg) tem
+    // script próprio: scripts/importar-seinfra-supabase.ts.
     type PoolLike = {
       query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
       connect: () => Promise<{

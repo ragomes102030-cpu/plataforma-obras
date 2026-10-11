@@ -6,7 +6,8 @@ nas tabelas de preço do plataforma-obras.
 - Arquivo: `scripts/importar-seinfra-catalogo.mts`
 - Execução: `npx tsx scripts/importar-seinfra-catalogo.mts [opções]`
 - Branches: `fix/P2-importador-seinfra` (script + doc, base `dcc8626`) · `fix/fase3-composicoes-servico`
-  (espelho dos `C…` + `--catalog-id`)
+  (espelho dos `C…` + `--catalog-id`) · `fix/fase3-doc-pendencia-89` · `fix/seinfra-remove-supabase-morto`
+  (remoção do caminho Supabase morto — ver §7 item 5)
 - **Status: dry-run, `--print-sql` e typecheck já feitos; a execução contra banco nunca foi feita
   por esta branch.** O catálogo de produção foi carregado por outro caminho (ver §6).
 
@@ -210,12 +211,16 @@ DELETE FROM price_items
 4. O script grava `price_catalogs.status = 'ativo'`. Se já existir catálogo ativo da mesma
    referência, convém avaliar antes (`price_catalogs` não tem índice único por referência) —
    ou usar `--catalog-id` para não criar outro.
-5. **Caminho Supabase pela API está incompleto** (herdado do commit `70d0254`): o trecho que cria
-   o client existe, mas `--supabase-url`/`--supabase-key` **não estão declarados** em `parseArgs`
-   (`strict: true` → "Unknown option") e a gravação abaixo dele continua no driver `pg`. Ou seja,
-   hoje o caminho de escrita utilizável é `--database-url-env` + `pg`; o trecho Supabase é código
-   morto (e é a origem dos 2 erros de typecheck pré-existentes no arquivo). Tarefa separada
-   `01a12b1f-63e8-7981-b232-5bce383ff201` — refactor do lead, não bloqueia nada.
+5. ~~**Caminho Supabase pela API está incompleto**~~ — **RESOLVIDO: o trecho morto foi REMOVIDO.**
+   Do commit `70d0254` até aqui, o script carregava um bloco "Supabase API" que: criava um client
+   Supabase **nunca usado**; exigia `--supabase-url`/`--supabase-key`, que `parseArgs` (`strict:
+   true`) **rejeitava** — o que tornava **todo `--execute` inalcançável**; e a gravação logo abaixo
+   sempre foi pelo driver `pg`. Era, além disso, a origem dos **2 erros de typecheck** do arquivo
+   e chamava um RPC `exec_sql` que não existe em nenhuma migração do projeto. Removido na tarefa
+   `01a12b1f-63e8-7981-b232-5bce383ff201` (branch `fix/seinfra-remove-supabase-morto`): o caminho
+   de escrita deste script é **único**, `--database-url`/`--database-url-env` + `pg`, e o arquivo
+   passou a ter **0 erros** de typecheck. A via REST do Supabase (necessária quando o pooler
+   bloqueia o driver `pg`) tem script próprio: `scripts/importar-seinfra-supabase.ts`.
 6. **PENDÊNCIA DECLARADA E ACEITA — os 89 serviços sem componente.** Depois do espelho ficam
    **89** composições sem nenhum componente (§5.1). Causa: o arquivo **Composições** não traz
    bloco para esses códigos, embora o **Planos de Serviços** os liste (divergência entre os dois
