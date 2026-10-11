@@ -104,3 +104,6 @@ out/
 build_log.txt
 build_out.txt
 .env*
+
+# Codebase Memory MCP — indice local (nao versionar)
+.codebase-memory/
