@@ -51,6 +51,17 @@
 
 ---
 
+### LIMIT-006: Documentos da obra sem extração de texto, base64 e remoção definitiva
+**Severidade:** Média
+**Descrição:** A aba DOCUMENTOS (`documents.*` no tRPC) guarda o arquivo em `project_documents.content`, que é `bytea` — o binário vive dentro do Postgres, não há storage externo. Três consequências, todas conscientes:
+1. **`analysisStatus` e `extractedText` existem no schema mas NÃO têm produtor.** O projeto não tem extrator de texto (nem `pdf-parse`, nem `mammoth`; só `xlsx`). Todo documento entra com `analysisStatus = 'pending'` e `extractedText = null` e ali permanece. Nada marca `'done'`.
+2. **Transporte é base64**, porque o tRPC carrega JSON e não tem tipo binário: o upload recebe base64 e o download devolve base64, sem streaming. Teto de 40 MB de base64 (~30 MB de arquivo), mesmo limite do `catalog.importPriceSheet`.
+3. **Remoção é definitiva.** Não há coluna de exclusão lógica: remover apaga a linha e o bytea. O componente pede confirmação antes.
+**Impacto:** Documento anexado é consultável por metadados; o texto não é indexado nem pesquisável até existir extrator. Arquivos grandes consomem espaço do banco.
+**Status:** CONSCIENTE (Fase 4 do plano de correção de lacunas; extrator é trabalho não iniciado)
+
+---
+
 ## DÍVIDAS TÉCNICAS
 
 ### DÚVIDA-001: Fórmula exata da Linha de Balanço

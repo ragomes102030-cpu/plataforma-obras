@@ -12,6 +12,7 @@ import {
   mcpHomologationRuns,
   projectMcpIntegrations,
   projectAuditEvents,
+  projectDocuments,
   agentProjectStates,
   agentDecisions,
   agentFindings,
@@ -68,6 +69,26 @@ import type {
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
+
+/**
+ * Extensões aceitas em Documentos da obra.
+ *
+ * O arquivo vai para dentro do banco (`project_documents.content` é bytea), então
+ * a lista é curta de propósito. Não é lista de "tudo que a obra tem": é lista do
+ * que a obra precisa anexar para o Arquimedes ler depois.
+ */
+const EXTENSOES_DE_DOCUMENTO = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "txt",
+  "md",
+  "csv",
+  "png",
+  "jpg",
+]);
 
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -5613,6 +5634,143 @@ export const appRouter = router({
         });
       }),
   }),
+
+  /**
+   * Documentos da obra.
+   *
+   * O arquivo vive no próprio banco (`project_documents.content` é bytea), então
+   * não há storage externo a configurar. O tRPC transporta JSON e não tem tipo
+   * binário: o upload recebe base64 e o download devolve base64 — mesmo caminho
+   * que `catalog.importPriceSheet` já usa com `.xls`.
+   *
+   * `analysisStatus` nasce 'pending' e **não tem produtor hoje**: o projeto não
+   * tem extrator de texto (nem `pdf-parse`, nem `mammoth`). O campo é contrato
+   * previsto no schema; gravar 'concluida' sem extrair nada seria mentira
+   * registrada em banco. `extractedText` fica nulo pelo mesmo motivo.
+   */
+  documents: router({
+    /** Metadados dos documentos da obra. Nunca devolve o conteúdo. */
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        // Selecionar `content` aqui arrastaria todos os arquivos da obra para
+        // dentro de uma resposta de listagem — é o erro clássico deste desenho.
+        return db
+          .select({
+            id: projectDocuments.id,
+            fileName: projectDocuments.fileName,
+            mimeType: projectDocuments.mimeType,
+            sizeBytes: projectDocuments.sizeBytes,
+            analysisStatus: projectDocuments.analysisStatus,
+            ownerUserId: projectDocuments.ownerUserId,
+            createdAt: projectDocuments.createdAt,
+          })
+          .from(projectDocuments)
+          .where(eq(projectDocuments.projectId, input.projectId))
+          .orderBy(desc(projectDocuments.createdAt));
+      }),
+
+    upload: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          fileName: z.string().trim().min(1).max(255),
+          mimeType: z.string().trim().min(1).max(120),
+          // base64 do arquivo. Mesmo teto do importPriceSheet: 40 MB de base64
+          // ≈ 30 MB de arquivo.
+          contentBase64: z.string().min(1).max(40_000_000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const extensao = (input.fileName.split(".").pop() ?? "").toLowerCase();
+        if (!input.fileName.includes(".") || !EXTENSOES_DE_DOCUMENTO.has(extensao)) {
+          throw badRequest(
+            `Tipo de arquivo não aceito (${input.fileName}). Aceitos: ${[...EXTENSOES_DE_DOCUMENTO]
+              .sort()
+              .join(", ")}.`
+          );
+        }
+        // `Buffer.from(x, "base64")` ignora caractere inválido em silêncio: sem
+        // esta checagem, lixo vira arquivo vazio sem erro.
+        if (!/^[A-Za-z0-9+/=\s]+$/.test(input.contentBase64)) {
+          throw badRequest("O conteúdo enviado não é base64 válido.");
+        }
+        const conteudo = Buffer.from(input.contentBase64, "base64");
+        if (conteudo.byteLength === 0) throw badRequest("Arquivo vazio.");
+
+        const [criado] = await db
+          .insert(projectDocuments)
+          .values({
+            projectId: input.projectId,
+            ownerUserId: ctx.user.id,
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            sizeBytes: conteudo.byteLength,
+            content: conteudo,
+            // Sem extrator: o documento entra e permanece pendente.
+            analysisStatus: "pending",
+            extractedText: null,
+          })
+          .returning({
+            id: projectDocuments.id,
+            fileName: projectDocuments.fileName,
+            sizeBytes: projectDocuments.sizeBytes,
+            analysisStatus: projectDocuments.analysisStatus,
+          });
+        return criado;
+      }),
+
+    /** Conteúdo de um documento, em base64. Um por vez, de propósito. */
+    download: protectedProcedure
+      .input(z.object({ documentId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [documento] = await db
+          .select({
+            id: projectDocuments.id,
+            projectId: projectDocuments.projectId,
+            fileName: projectDocuments.fileName,
+            mimeType: projectDocuments.mimeType,
+            content: projectDocuments.content,
+          })
+          .from(projectDocuments)
+          .where(eq(projectDocuments.id, input.documentId))
+          .limit(1);
+        if (!documento) throw notFound("Documento não encontrado.");
+        await assertAccessibleProject(db, documento.projectId, ctx.user.id);
+        return {
+          id: documento.id,
+          fileName: documento.fileName,
+          mimeType: documento.mimeType,
+          contentBase64: documento.content.toString("base64"),
+        };
+      }),
+
+    remove: protectedProcedure
+      .input(z.object({ documentId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const [documento] = await db
+          .select({ id: projectDocuments.id, projectId: projectDocuments.projectId })
+          .from(projectDocuments)
+          .where(eq(projectDocuments.id, input.documentId))
+          .limit(1);
+        if (!documento) throw notFound("Documento não encontrado.");
+        await assertAccessibleProject(db, documento.projectId, ctx.user.id);
+        await db.delete(projectDocuments).where(eq(projectDocuments.id, input.documentId));
+        return { id: input.documentId, removido: true };
+      }),
+  }),
+
   integrations: router({
     projectMappings: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))

@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2 } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -12,6 +12,7 @@ import { AbaDependencias } from "@/components/AbaDependencias";
 import { AbaCpm } from "@/components/AbaCpm";
 import { AbaBaseline } from "@/components/AbaBaseline";
 import { AbaProducao } from "@/components/AbaProducao";
+import { DocumentosDaObra } from "@/components/DocumentosDaObra";
 import { AbaCurvaS } from "@/components/AbaCurvaS";
 import { AbaRiscos } from "@/components/AbaRiscos";
 import { AbaSuprimentos } from "@/components/AbaSuprimentos";
@@ -423,6 +424,7 @@ function Obra({
     gantt: <BarChart3 size={17} />,
     "linha-balanco": <Activity size={17} />,
     producao: <Activity size={17} />,
+    documentos: <FileText size={17} />,
     suprimentos: <Package size={17} />,
     financeiro: <WalletCards size={17} />,
     riscos: <ShieldAlert size={17} />,
@@ -433,13 +435,14 @@ function Obra({
     { titulo: "VISÃO GERAL", ids: ["dashboard"] },
     { titulo: "PLANEJAMENTO", ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"] },
     { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
-    { titulo: "CONTROLE", ids: ["producao", "suprimentos", "financeiro", "riscos", "curva-s"] },
+    { titulo: "CONTROLE", ids: ["producao", "documentos", "suprimentos", "financeiro", "riscos", "curva-s"] },
   ];
 
   const etapaAtual = ({
     dashboard: "Visão geral", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
     dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
     gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Produção",
+    documentos: "Documentos",
     suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos", "curva-s": "Curva S"
   } as Record<string, string>)[aba] ?? aba;
 
@@ -527,6 +530,8 @@ function Obra({
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
+        ) : aba === "documentos" ? (
+          <DocumentosDaObra projetoId={projetoId} />
         ) : aba === "suprimentos" ? (
           <AbaSuprimentos projetoId={projetoId} />
         ) : aba === "financeiro" ? (
