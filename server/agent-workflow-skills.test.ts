@@ -37,9 +37,16 @@ describe("Arquimedes workflow skill pack", () => {
       join(process.cwd(), "docs/ARQUIMEDES-CEREBRO-BOOTSTRAP.md"),
       "utf8"
     );
-    expect(playbook).toContain("não declarar “testado” sem execução observável.");
+    // O texto foi reescrito: "não declarar 'testado'" virou "não afirmar
+    // 'testado'". A intencao — nao rotular como testado sem execucao observavel
+    // — e a mesma, e e ela que precisa ficar travada.
+    expect(playbook).toMatch(/n(ã|a)o (declarar|afirmar) “testado” sem execu(ç|c)(ã|a)o observ(á|a)vel\./);
     expect(playbook).toContain("observação → evidência → classificação");
-    expect(playbook).toContain("exigem autorização explícita");
+    // O texto evoluiu de "exigem autorização explícita" para "sem autorização
+    // específica" ao ser reescrito. A intenção verificada e a mesma — mutacao
+    // irreversivel em obra real exige autorizacao — e o teste deve travar a
+    // INTENCAO, nao a frase exata, senao vira ruido a cada revisao de redacao.
+    expect(playbook).toMatch(/sem autoriza(ç|c)(ã|a)o espec(í|i)fica/);
     expect(bootstrap).toContain("## Skills operacionais transversais");
     expect(bootstrap).toContain("testar como usuário com Playwright/browser real quando disponível");
   });

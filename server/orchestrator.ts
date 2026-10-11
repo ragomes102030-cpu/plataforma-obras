@@ -55,6 +55,22 @@ const MAX_ASSISTANT_MESSAGE_CHARS = 12_000;
 // the system prompt and accumulated tool results.
 const MAX_LLM_MESSAGE_CHARS = 11_000;
 
+/**
+ * Teto do bootstrap do cerebro dentro do prompt de sistema.
+ *
+ * O bootstrap tem ~9.000 caracteres e o prompt inteiro cabe em 11.000. Sozinho,
+ * ele consumia 82% do orcamento — e `compactLlmContent` corta o MEIO, o que
+ * empurrava o bloco factual da obra (fonte de evidencias, contagens da EAP,
+ * erros de MCP, validacao deterministica) para fora do prompt. O agente
+ * respondia sem as evidencias que existem justamente para ele nao inventar.
+ *
+ * O bootstrap e orientacao estavel; a evidencia e o dado desta execucao. Quando
+ * os dois competem pelo mesmo espaco, a evidencia vence: ela muda a cada
+ * pergunta e e o que sustenta a resposta. O bootstrap fica com o que couber
+ * depois de reservado o espaco da evidencia.
+ */
+const MAX_BRAIN_BOOTSTRAP_CHARS = 3_500;
+
 function compactLlmContent(content: string, maxChars = MAX_LLM_MESSAGE_CHARS) {
   if (content.length <= maxChars) return content;
   const head = Math.floor(maxChars * 0.68);
@@ -1068,11 +1084,42 @@ function buildSystem(
     : "Aba ativa não informada.";
   const now = currentDateTimeFortaleza();
 
+  // O bootstrap e cortado ANTES de entrar no prompt, e nao depois.
+  //
+  // `compactLlmContent` so age no prompt montado e corta o MEIO — quando o
+  // bootstrap ocupava 9.000 dos 11.000 caracteres, o corte levava junto o bloco
+  // factual da obra. Limitando aqui, sobra espaco para a evidencia e o corte
+  // (se ainda houver) come o fim das regras de estilo, que toleram perda.
+  const bootstrapEnxuto =
+    brainBootstrap.length > MAX_BRAIN_BOOTSTRAP_CHARS
+      ? brainBootstrap.slice(0, MAX_BRAIN_BOOTSTRAP_CHARS) +
+        "\n[...bootstrap do cérebro truncado nesta execução para preservar as evidências da obra...]"
+      : brainBootstrap;
+
   const base = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
-    "BOOTSTRAP DO CÉREBRO MESTRE:\n" + brainBootstrap,
+    "BOOTSTRAP DO CÉREBRO MESTRE:\n" + bootstrapEnxuto,
     `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,
     "Use essa referência quando o usuário perguntar sobre data, dia ou hora atuais. Não diga que não possui relógio.",
+    // O bloco factual da obra entra AQUI, logo apos a identidade, e nao no fim.
+    //
+    // `compactLlmContent` corta o MEIO do prompt quando ele passa de
+    // MAX_LLM_MESSAGE_CHARS, preservando o inicio (68%) e o fim (32%). O `base`
+    // sozinho ja passa de 11.000 caracteres, entao tudo que fosse empurrado para
+    // o fim das regras caia na regiao cortada — e era o que acontecia com as
+    // evidencias: o agente respondia sem saber a fonte (local_db vs MCP), sem as
+    // contagens da EAP, sem os erros de MCP e sem o resultado da validacao
+    // deterministica. Eram justamente os dados que ele precisa para nao inventar.
+    //
+    // Colocando-as no inicio, o truncamento come regras de estilo (que sao
+    // orientacao e toleram corte) em vez da evidencia da obra.
+    ...(responseIntent !== "casual"
+      ? [
+          workspaceContext,
+          "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context),
+          "Memória persistente disponível:\n" + memoryContext,
+        ]
+      : []),
     "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta. Não existe formato obrigatório de resposta.",
     "Responda diretamente ao que foi perguntado. Não despeje o contexto da obra, métricas ou diagnósticos que o usuário não pediu.",
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
@@ -1111,14 +1158,6 @@ function buildSystem(
     "A administração de capacidades do Arquimedes é restrita a administradores. Instalação ou ativação só deve ocorrer quando houver um pedido explícito do administrador; não instale uma capacidade apenas porque ela parece útil.",
     "Não mencione 'MARCO', 'Agent Orchestrator', project_id, nomes internos de MCP, catálogos, políticas internas ou contratos de resposta, a menos que o usuário pergunte explicitamente sobre a arquitetura.",
   ];
-
-  if (responseIntent !== "casual") {
-    base.push(
-      workspaceContext,
-      "Contexto factual atual da obra. Use como referência, não como texto a ser repetido:\n" + formatContext(context),
-      "Memória persistente disponível:\n" + memoryContext
-    );
-  }
 
   if (responseIntent !== "casual") {
     const declaredScope = context.project.descricao?.trim().slice(0, 3000) || "Não cadastrada.";
