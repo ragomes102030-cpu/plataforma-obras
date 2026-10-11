@@ -19,8 +19,15 @@ codebase-memory-mcp cli --progress index_repository \
   --repo-path "C:/Users/Correta Engenharia/po-develop" --mode moderate
 ```
 
-Resultado nesta máquina: projeto `C-Users-Correta-Engenharia-po-develop`,
-**3.080 nós**, **6.688 arestas**, ~12s. Linguagens: TypeScript 153, SQL 10, YAML 4, CSS 4, HTML 1.
+### Projetos indexados nesta máquina (2)
+
+| Projeto | Root | Branch | Nós | Arestas | DB |
+|---|---|---|---|---|---|
+| `C-Users-Correta-Engenharia-po-develop` | `C:/Users/Correta Engenharia/po-develop` | develop-merge | **3.080** | **6.688** | 12,8 MB |
+| `C-Users-Correta-Engenharia-po-seinfra` | `C:/Users/Correta Engenharia/po-seinfra` | fix/P4-seinfra-docs | **2.980** | **6.431** | — |
+
+Índice em `~/.cache/codebase-memory-mcp/<nome-projeto>.db`. Tempo por indexação: ~7-12s.
+Linguagens (po-develop): TypeScript 153, SQL 10, YAML 4, CSS 4, HTML 1.
 
 Node labels: Variable 865, Function 656, Section 531, Type 303, File 233, Module 232,
 EnvVar 69, Method 53, Interface 40, Folder 37, Table 36, Class 12, Route 11.
