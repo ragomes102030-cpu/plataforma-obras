@@ -214,4 +214,12 @@ DELETE FROM price_items
    o client existe, mas `--supabase-url`/`--supabase-key` **não estão declarados** em `parseArgs`
    (`strict: true` → "Unknown option") e a gravação abaixo dele continua no driver `pg`. Ou seja,
    hoje o caminho de escrita utilizável é `--database-url-env` + `pg`; o trecho Supabase é código
-   morto (e é a origem dos 2 erros de typecheck pré-existentes no arquivo).
+   morto (e é a origem dos 2 erros de typecheck pré-existentes no arquivo). Tarefa separada
+   `01a12b1f-63e8-7981-b232-5bce383ff201` — refactor do lead, não bloqueia nada.
+6. **PENDÊNCIA DECLARADA E ACEITA — os 89 serviços sem componente.** Depois do espelho ficam
+   **89** composições sem nenhum componente (§5.1). Causa: o arquivo **Composições** não traz
+   bloco para esses códigos, embora o **Planos de Serviços** os liste (divergência entre os dois
+   arquivos oficiais). Não é falha do importador nem do schema, e **nenhum espelho resolve** —
+   só uma fonte de dados complementar. Decisão do lead (2026-10-11): **aceitar como pendência
+   declarada** e **não inventar componente** para fechar o número. Impacto: essas 89 composições
+   seguem utilizáveis como serviço, mas sem detalhamento de custo.
