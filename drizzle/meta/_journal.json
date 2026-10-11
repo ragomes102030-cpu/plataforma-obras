@@ -69,6 +69,20 @@
       "when": 1790823600000,
       "tag": "0009_project_tipo_obra",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790827200000,
+      "tag": "0010_activity_duration_positive",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790830800000,
+      "tag": "0011_enum_component_type_servico",
+      "breakpoints": true
     }
   ],
   "version": "7",

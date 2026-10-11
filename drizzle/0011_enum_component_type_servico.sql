@@ -1,0 +1,12 @@
+-- Acrescenta 'servico' ao enum de tipo de componente de composicao.
+--
+-- DIVERGENCIA QUE ISTO FECHA: drizzle/schema.ts declara quatro valores
+-- (material, mao_de_obra, equipamento, servico) mas drizzle/0000_baseline.sql
+-- cria apenas tres. O quarto valor existe no banco — entrou por SQL avulso, sem
+-- migration — entao o codigo pedia um valor que nenhuma migration versionada
+-- criava. Sem esta migration, um banco reconstruido do zero a partir de
+-- drizzle/ nasceria sem 'servico' e recusaria os componentes do SEINFRA.
+--
+-- `ADD VALUE IF NOT EXISTS` e idempotente e nao reescreve valores existentes.
+-- PostgreSQL 12+ permite rodar dentro de transacao; o banco e 17.11.
+ALTER TYPE "composition_components_componentType" ADD VALUE IF NOT EXISTS 'servico';

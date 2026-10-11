@@ -83,6 +83,17 @@ export const CONSULTA_POR_TIPO = {
       " WHERE p.proname = $1 AND n.nspname = current_schema()",
     params: alvo => [alvo.nome],
   },
+  enum_value: {
+    // O rotulo de um enum vive em `pg_enum`, ligado ao tipo por `enumtypid`.
+    // Conferir o par (tipo, valor) e o que permite `ADD VALUE` ser pulado quando
+    // o rotulo ja existe — sem isso ele rodaria em todo retry e falharia com
+    // `enum label "x" already exists`.
+    sql:
+      "SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid" +
+      " JOIN pg_namespace n ON n.oid = t.typnamespace" +
+      " WHERE t.typname = $1 AND e.enumlabel = $2 AND n.nspname = current_schema()",
+    params: alvo => [alvo.nome, alvo.valor],
+  },
 };
 
 /** O mesmo statement, sem as linhas de comentario. */
@@ -218,6 +229,15 @@ export function alvoDoStatement(stmt) {
     /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+"([^"]+)"\s*\(/i
   );
   if (criarFuncao) return { tipo: "funcao", nome: criarFuncao[1] };
+
+  // `ALTER TYPE ... ADD VALUE 'x'` acrescenta um rotulo a um enum existente. O
+  // alvo e o PAR (tipo, valor): conferir so o tipo diria que o enum existe
+  // quando o rotulo ainda falta, e o statement seria pulado para sempre.
+  const addValorEnum = stmt.match(
+    /^\s*ALTER\s+TYPE\s+"([^"]+)"\s+ADD\s+VALUE\s+(?:IF\s+NOT\s+EXISTS\s+)?'([^']+)'/i
+  );
+  if (addValorEnum)
+    return { tipo: "enum_value", nome: addValorEnum[1], valor: addValorEnum[2] };
 
   return null;
 }
