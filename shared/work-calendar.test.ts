@@ -225,3 +225,44 @@ describe("formatDate", () => {
     expect(formatDate("2026-01-01")).toBe("01/01/2026");
   });
 });
+
+// ------------------------------- excecao tem precedencia sobre o padrao
+describe("isWorkingDay: a excecao da obra tem precedencia", () => {
+  const semana = { workingWeekdays: [1, 2, 3, 4, 5] };
+
+  it("dia normalmente nao-util vira util quando a obra declara trabalhado", () => {
+    // 2026-01-10 e sabado. Este e o unico motivo de o tipo `working` existir:
+    // um dia que o padrao semanal exclui e a obra trabalha.
+    //
+    // A versao anterior de isWorkingDay checava o padrao semanal PRIMEIRO e
+    // retornava false sem consultar a excecao — a obra nao conseguia declarar
+    // sabado trabalhado, e a excecao so era lida onde nao muda nada.
+    const cal = {
+      weekPattern: semana,
+      exceptions: [{ date: "2026-01-10", type: "working" as const, name: "Sabado trabalhado" }],
+    };
+    expect(isWorkingDay(cal, new Date(2026, 0, 10))).toBe(true);
+    expect(isWorkingDay(cal, new Date(2026, 0, 17))).toBe(false); // outro sabado, sem excecao
+  });
+
+  it("dia util que vira feriado continua nao-util", () => {
+    // 2026-01-07 e quarta (util no padrao). Excecao de feriado deve vencer.
+    const cal = {
+      weekPattern: semana,
+      exceptions: [{ date: "2026-01-07", type: "national_holiday" as const }],
+    };
+    expect(isWorkingDay(cal, new Date(2026, 0, 7))).toBe(false);
+  });
+
+  it("dateAt usa o sabado da obra, e nao pula para segunda", () => {
+    // Prova que a correcao muda o resultado do CPM, nao so o booleano:
+    // sem ela, o indice 1 a partir de sexta 09/01 caia em segunda 12/01.
+    const comSabado = {
+      weekPattern: semana,
+      exceptions: [{ date: "2026-01-10", type: "working" as const }],
+    };
+    const padrao = { weekPattern: semana, exceptions: [] };
+    expect(dateAt(comSabado, "2026-01-09", 1)).toBe("2026-01-10");
+    expect(dateAt(padrao, "2026-01-09", 1)).toBe("2026-01-12");
+  });
+});

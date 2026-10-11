@@ -149,13 +149,23 @@ function isException(cal: WorkCalendar, iso: IsoDate): CalendarException | undef
   return cal.exceptions.find((e) => e.date === iso);
 }
 
-/** Dia útil = dia da semana permitido E que não é exceção não-útil. */
+/**
+ * Dia útil = dia que a obra trabalha.
+ *
+ * A ORDEM IMPORTA, e a versão anterior estava errada: ela checava o padrão
+ * semanal primeiro e retornava `false` sem consultar a exceção. Efeito: uma
+ * obra que trabalha sábado não conseguia declarar isso — a exceção `working`
+ * só era lida para dias que já eram úteis, onde ela não muda nada. O tipo
+ * `working` existe exatamente para o caso oposto (dia normalmente não-útil que
+ * a obra trabalha), então a exceção tem precedência sobre o padrão semanal.
+ *
+ * Exceção de tipo não-`working` continua tornando o dia não-útil mesmo que o
+ * padrão o inclua (feriado que cai numa quarta, por exemplo).
+ */
 export function isWorkingDay(cal: WorkCalendar, d: Date): boolean {
-  if (!isWeekday(cal, d)) return false;
-  const exDate = iso(d);
-  const ex = isException(cal, exDate);
-  if (!ex) return true;
-  return ex.type === "working";
+  const ex = isException(cal, iso(d));
+  if (ex) return ex.type === "working";
+  return isWeekday(cal, d);
 }
 
 // ---------------------------------------------------------- index ↔ data
