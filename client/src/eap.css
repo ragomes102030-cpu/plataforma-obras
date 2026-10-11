@@ -1846,3 +1846,31 @@
 .eap-workspace-baseline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:8px;border:1px solid #d8e0e5;border-radius:4px;background:#fff}.eap-workspace-baseline>div{display:flex;align-items:center;gap:7px}.eap-workspace-baseline strong{display:block;font-size:9.5px;color:#34474f}.eap-workspace-baseline span{display:block;margin-top:2px;font-size:8.5px;color:#7c8a91}.eap-workspace-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px;color:#7a8991;font-size:8.5px}.eap-workspace-footer span{display:inline-flex;align-items:center;gap:5px}
 @media(max-width:900px){.eap-workspace-header{align-items:flex-start;flex-direction:column}.eap-workspace-actions{width:100%}.eap-workspace-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.eap-workspace-validation{align-items:flex-start;flex-direction:column}.eap-workspace-control-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.eap-workspace-toolbar{align-items:stretch}.eap-workspace-filters{overflow:auto}}
 @media(max-width:560px){.eap-workspace-title h1{font-size:15px}.eap-workspace-metrics{grid-template-columns:1fr}.eap-workspace-control-grid,.eap-workspace-review-kpis{grid-template-columns:1fr}.eap-workspace-footer{align-items:flex-start;flex-direction:column}}
+
+
+/* ---------------------------------------- coerencia de engenharia (achados)
+   Painel que mostra o que a validacao de FORMA nao pega: composicao que nao
+   corresponde ao servico, ordem de execucao impossivel, preco sem lastro.
+   Cores na mesma familia dos alertas do workspace (erro/atencao). */
+.xl-achados{margin:10px 0;border:1px solid var(--border);border-radius:6px;background:var(--surf);overflow:hidden}
+.xl-achados-cabecalho{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:11px 13px;cursor:pointer}
+.xl-achados-cabecalho strong{display:block;font-size:12.5px;margin-top:2px}
+.xl-achados-valor{margin:3px 0 0;font-size:11px;font-weight:600}
+.xl-achados-toggle{font-size:10.5px;text-decoration:underline;white-space:nowrap;opacity:.8}
+.xl-achados-carregando,.xl-achados-erro{padding:11px 13px;font-size:11px}
+.xl-achados-erro{border-left:3px solid #d1495b;background:#fdf0f1;color:#8a1f2c}
+.xl-achados-ok{border-left:3px solid #2e7d32;background:#f1f8f2;color:#1b5e20}
+.xl-achados-ok p{margin:4px 0 0;font-size:11px}
+.xl-achados-critico{border-left:3px solid #d1495b;background:#fdf0f1}
+.xl-achados-critico .xl-achados-valor{color:#8a1f2c}
+.xl-achados-atencao{border-left:3px solid #c77700;background:#fff8ec}
+.xl-achados-atencao .xl-achados-valor{color:#8a5200}
+.xl-achados-lista{padding:0 13px 12px;border-top:1px solid var(--border)}
+.xl-achados-grupo{margin:11px 0 6px;font-size:9.5px;font-weight:700;letter-spacing:.06em;opacity:.65}
+.xl-achado{padding:8px 10px;border-radius:4px;margin-bottom:6px}
+.xl-achado-erro{border-left:3px solid #d1495b;background:#fff}
+.xl-achado-aviso{border-left:3px solid #c77700;background:#fff}
+.xl-achado-topo{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.xl-achado-ref{font-family:ui-monospace,monospace;font-size:10.5px;font-weight:700}
+.xl-achado-codigo{font-size:9px;opacity:.55;font-family:ui-monospace,monospace}
+.xl-achado p{margin:0;font-size:11px;line-height:1.45}

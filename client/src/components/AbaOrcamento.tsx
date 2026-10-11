@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 
 type Props = {
   projetoId: number;
@@ -65,6 +66,8 @@ export function AbaOrcamento({ projetoId }: Props) {
           </button>
         </div>
       </div>
+
+      <PainelCoerenciaEngenharia projetoId={projetoId} />
 
       <div className="xl-cartoes">
         <div className="xl-cartao">

@@ -62,6 +62,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
+import { validarCoerenciaEngenharia } from "./construction/coerencia-engenharia";
 import type {
   ScheduleEvidenceActivity,
   ScheduleEvidenceDependency,
@@ -4037,6 +4038,115 @@ export const appRouter = router({
         }
         return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
       }),
+    /**
+     * Coerencia de engenharia.
+     *
+     * As validacoes acima checam FORMA (estrutura da EAP, rede, cobertura de
+     * custo). Esta checa ENGENHARIA: se a composicao vinculada corresponde ao
+     * servico, se a ordem de execucao e construtivamente possivel, se o
+     * quantitativo faz sentido para a escala da obra.
+     *
+     * Motivo concreto: a AURORA TESTE tinha "Drenagem externa" vinculada a um
+     * servico de CADASTRO EM MEIO MAGNETICO (plotter, desenhista CAD) a
+     * R$ 4.137,19/m — R$ 1,45 milhao, 28% do orcamento. Passou por todas as
+     * validacoes de forma porque e um dado valido. So nao e engenharia.
+     */
+    validateEngineeringCoherence: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{
+      const db=await getDb();
+      if(!db) return {valid:true,issues:[],resumo:{total:0,erros:0,avisos:0,porSeveridade:{error:0,warning:0},valorEmRisco:0}};
+      await assertAccessibleProject(db,input.projectId,ctx.user.id);
+      const versionId=await getCurrentPlanVersionId(db,input.projectId);
+
+      const [projeto]=await db.select().from(projects).where(eq(projects.id,input.projectId)).limit(1);
+      if(!projeto) throw notFound("Obra nao encontrada.");
+
+      // Versao de orcamento mais recente da obra.
+      const [orcamento]=await db.select({id:budgetVersions.id}).from(budgetVersions)
+        .where(eq(budgetVersions.projectId,input.projectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
+
+      const itens = orcamento
+        ? await db.select({
+            code:budgetItems.code, description:budgetItems.description, unit:budgetItems.unit,
+            quantity:budgetItems.quantity, unitPrice:budgetItems.unitPrice,
+            compositionId:budgetItems.compositionId,
+          }).from(budgetItems).where(eq(budgetItems.budgetVersionId,orcamento.id))
+        : [];
+
+      // Composicoes citadas + soma dos componentes (coeficiente x snapshot).
+      const idsComposicao=[...new Set(itens.map(i=>i.compositionId).filter((x):x is number=>typeof x==="number"))];
+      const comps = idsComposicao.length
+        ? await db.select({id:serviceCompositions.id,code:serviceCompositions.code,description:serviceCompositions.description,unit:serviceCompositions.unit,status:serviceCompositions.status})
+            .from(serviceCompositions).where(inArray(serviceCompositions.id,idsComposicao))
+        : [];
+      const componentes = idsComposicao.length
+        ? await db.select({compositionId:compositionComponents.compositionId,coefficient:compositionComponents.coefficient,unitPriceSnapshot:compositionComponents.unitPriceSnapshot})
+            .from(compositionComponents).where(inArray(compositionComponents.compositionId,idsComposicao))
+        : [];
+
+      const somaPorComp=new Map<number,number>();
+      const comPrecoPorComp=new Map<number,number>();
+      const totalPorComp=new Map<number,number>();
+      for(const c of componentes){
+        const id=c.compositionId;
+        somaPorComp.set(id,(somaPorComp.get(id)??0)+Number(c.coefficient)*Number(c.unitPriceSnapshot));
+        totalPorComp.set(id,(totalPorComp.get(id)??0)+1);
+        if(Number(c.unitPriceSnapshot)>0) comPrecoPorComp.set(id,(comPrecoPorComp.get(id)??0)+1);
+      }
+      const compPorId=new Map(comps.map(c=>[c.id,c]));
+
+      const atividades = await db.select({
+          id:scheduleActivities.id, wbsCode:scheduleActivities.wbsCode, name:scheduleActivities.name,
+          durationDays:scheduleActivities.durationDays, unit:scheduleActivities.unit,
+          plannedQuantity:scheduleActivities.plannedQuantity,
+          earlyStart:scheduleActivities.earlyStart, earlyFinish:scheduleActivities.earlyFinish,
+          critical:scheduleActivities.critical,
+        }).from(scheduleActivities).where(
+          versionId == null
+            ? and(eq(scheduleActivities.projectId,input.projectId),isNull(scheduleActivities.versionId))
+            : and(eq(scheduleActivities.projectId,input.projectId),eq(scheduleActivities.versionId,versionId))
+        );
+      const deps = await db.select({successorId:scheduleDependencies.successorId}).from(scheduleDependencies).where(
+        versionId == null
+          ? and(eq(scheduleDependencies.projectId,input.projectId),isNull(scheduleDependencies.versionId))
+          : and(eq(scheduleDependencies.projectId,input.projectId),eq(scheduleDependencies.versionId,versionId))
+      );
+      const comPredecessor=new Set(deps.map(d=>d.successorId));
+
+      // Pavimentos: o numero de niveis distintos declarados nas atividades.
+      const pavimentosDeclarados=[...new Set(atividades.map(a=>/^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1]).filter(Boolean))];
+      const pavimentos = pavimentosDeclarados.length > 1
+        ? pavimentosDeclarados.length
+        : (projeto.tipoDeObra === "edificio" ? 6 : null);
+
+      return validarCoerenciaEngenharia({
+        obra:{
+          projectId:input.projectId, nome:projeto.name, tipoDeObra:projeto.tipoDeObra,
+          descricao:projeto.descricao, pavimentos, areaTerreno:null, areaConstruida:null,
+        },
+        itens:itens.map(i=>({
+          code:i.code, description:i.description, unit:i.unit,
+          quantity:Number(i.quantity), unitPrice:Number(i.unitPrice),
+          compositionId:i.compositionId,
+          compositionCode:i.compositionId?(compPorId.get(i.compositionId)?.code??null):null,
+          compositionDescription:i.compositionId?(compPorId.get(i.compositionId)?.description??null):null,
+          compositionUnit:i.compositionId?(compPorId.get(i.compositionId)?.unit??null):null,
+          compositionUnitCost:null,
+          somaComponentes:i.compositionId?(somaPorComp.get(i.compositionId)??0):null,
+        })),
+        composicoes:comps.map(c=>({
+          id:c.id, code:c.code, description:c.description, unit:c.unit, status:c.status,
+          somaComponentes:somaPorComp.get(c.id)??0,
+          componentesComPreco:comPrecoPorComp.get(c.id)??0,
+          totalComponentes:totalPorComp.get(c.id)??0,
+        })),
+        atividades:atividades.map(a=>({
+          id:a.id, wbsCode:a.wbsCode, name:a.name, durationDays:a.durationDays,
+          unit:a.unit, plannedQuantity:a.plannedQuantity==null?null:Number(a.plannedQuantity),
+          earlyStart:a.earlyStart, earlyFinish:a.earlyFinish, critical:Number(a.critical)===1,
+          semPredecessor:!comPredecessor.has(a.id),
+        })),
+      });
+    }),
     createResource: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(180), resourceType: z.enum(["mao_de_obra", "equipamento", "material"]), unit: z.string().trim().min(1).max(32), capacityPerDay: z.number().positive().optional(), costPerDay: z.number().nonnegative().optional() }))
       .mutation(async ({ ctx, input }) => {
