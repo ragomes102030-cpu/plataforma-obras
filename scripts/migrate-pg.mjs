@@ -203,9 +203,31 @@ if (isFresh) {
       `CREATE TABLE IF NOT EXISTS "${MIGRATIONS_TABLE}" (` +
         "id serial primary key, hash text not null, created_at bigint)"
     );
+    // Indice unico em `created_at`, criado ANTES dos INSERTs.
+    //
+    // Sem ele o `ON CONFLICT ("created_at")` abaixo falha com "there is no
+    // unique or exclusion constraint matching" — o ON CONFLICT nao cria a
+    // garantia, ele depende dela. `CREATE UNIQUE INDEX IF NOT EXISTS` e
+    // idempotente, entao roda a cada boot sem efeito depois do primeiro.
+    //
+    // Se o banco ja tiver duplicatas (foi o caso: 20 linhas para 10 migracoes),
+    // a criacao do indice FALHA. Isso e desejado: falhar alto e melhor que
+    // seguir inserindo em cima de um historico duplicado.
+    await conn.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "${MIGRATIONS_TABLE}_created_at_unique"` +
+        ` ON "${MIGRATIONS_TABLE}" ("created_at")`
+    );
     for (const m of migrations) {
+      // `ON CONFLICT` aqui nao e zelo: e a correcao de um defeito que ja
+      // aconteceu. Este bloco rodava a cada boot que caia no caminho legado e
+      // o INSERT nao conferia nada — o resultado foram 20 linhas para 10
+      // migracoes, cada uma com o mesmo hash repetido 2x.
+      //
+      // `created_at` e o `folderMillis` da migration: identifica a migration
+      // dentro do journal e e o que o `MAX(created_at)` do runner usa.
       await conn.query(
-        `INSERT INTO "${MIGRATIONS_TABLE}" ("hash", "created_at") VALUES ($1, $2)`,
+        `INSERT INTO "${MIGRATIONS_TABLE}" ("hash", "created_at") VALUES ($1, $2)` +
+          ` ON CONFLICT ("created_at") DO NOTHING`,
         [m.hash, m.folderMillis]
       );
     }
