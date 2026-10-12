@@ -390,6 +390,28 @@ function Obra({
   onAba: (aba: IdDaAba) => void;
 }) {
   const [sidebarRecolhida, setSidebarRecolhida] = useState(false);
+  // No celular a sidebar vira DRAWER. Sem isto ela ocupa a largura toda em
+  // `position: static` e empurra as abas para fora da tela: o engenheiro abre
+  // a obra no telefone e nao consegue navegar. O estado e separado do
+  // `sidebarRecolhida` de proposito — recolher (icone) e esconder (drawer) sao
+  // coisas diferentes, e misturar as duas quebra o desktop.
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
+
+  // Fecha o drawer ao escolher uma aba: senao ele fica por cima do conteudo.
+  // Usa o `onAba` recebido por prop — este componente nao tem o `setAba` do
+  // pai. Chamar `setAba` aqui nao compila, e foi o que o typecheck pegou.
+  const irParaAba = (id: IdDaAba) => {
+    onAba(id);
+    setMenuMobileAberto(false);
+  };
+
+  // Fecha com Esc — teclado em tablet/celular com teclado externo.
+  useEffect(() => {
+    if (!menuMobileAberto) return;
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuMobileAberto(false); };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [menuMobileAberto]);
   const grade = trpc.planning.grade.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -447,7 +469,11 @@ function Obra({
   } as Record<string, string>)[aba] ?? aba;
 
   return (
-    <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}`}>
+    <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}${menuMobileAberto ? " menu-mobile-aberto" : ""}`}>
+      {/* Backdrop do drawer: so aparece no celular com o menu aberto. */}
+      {menuMobileAberto && (
+        <div className="xl-sidebar-backdrop" onClick={() => setMenuMobileAberto(false)} aria-hidden="true" />
+      )}
       <aside className="xl-sidebar" aria-label="Navegação da obra">
         <div className="xl-sidebar-head">
           <div className="xl-sidebar-brand">
@@ -471,7 +497,7 @@ function Obra({
                     key={a.id}
                     type="button"
                     className={`xl-sidebar-item${a.id === aba ? " ativa" : ""}`}
-                    onClick={() => onAba(a.id)}
+                    onClick={() => irParaAba(a.id)}
                     title={sidebarRecolhida ? a.rotulo : (a.falta ?? a.rotulo)}
                     aria-current={a.id === aba ? "page" : undefined}
                   >
@@ -504,6 +530,9 @@ function Obra({
             ))}
           </div>
           <div className="arquimedes-workbar-actions">
+            <button type="button" className="xl-menu-mobile" title="Menu" aria-label="Abrir menu de navegação" aria-expanded={menuMobileAberto} onClick={() => setMenuMobileAberto(v => !v)}>
+              <Menu size={17} />
+            </button>
             <button type="button" title="Pesquisar na obra"><Search size={15} /></button>
             <button type="button" title="Notificações"><Bell size={15} /></button>
             <button type="button" title="Configurações"><Settings2 size={15} /></button>

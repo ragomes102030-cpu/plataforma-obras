@@ -1874,3 +1874,117 @@
 .xl-achado-ref{font-family:ui-monospace,monospace;font-size:10.5px;font-weight:700}
 .xl-achado-codigo{font-size:9px;opacity:.55;font-family:ui-monospace,monospace}
 .xl-achado p{margin:0;font-size:11px;line-height:1.45}
+
+
+/* ============================================================ CELULAR
+   A sidebar `.xl-sidebar` nao tinha NENHUMA regra em media query: a unica que
+   existia era para `.app-sidebar`, classe que nao existe mais no codigo (0
+   ocorrencias). Resultado medido em 390px: a sidebar ocupava 390px (a tela
+   inteira) em `position: static` e empurrava as 15 abas para fora — o
+   engenheiro abria a obra no telefone e nao conseguia navegar.
+
+   Solucao: drawer deslizante. A sidebar sai do fluxo (`position: fixed`),
+   entra pela esquerda e o conteudo ocupa a largura toda. O botao de menu vive
+   na barra superior, que tambem e reorganizada (o trilha de etapas nao cabe
+   em 390px). */
+
+/* Botao de menu: existe so no celular. */
+.xl-menu-mobile { display: none; }
+
+@media (max-width: 900px) {
+  /* A pasta deixa de ser linha (sidebar | conteudo) e vira coluna. */
+  .xl-pasta-sidebar {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  /* Sidebar vira drawer: fora do fluxo, escondida a esquerda. */
+  .xl-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 84vw);
+    flex: 0 0 auto;
+    transform: translateX(-102%);
+    transition: transform .2s ease;
+    z-index: 80;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.04), 8px 0 28px rgba(16,40,48,.16);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar {
+    transform: translateX(0);
+  }
+
+  /* No drawer o botao de recolher nao faz sentido: ele ja esta oculto/mostrado
+     pelo hamburguer. Esconder evita dois controles para a mesma coisa. */
+  .xl-sidebar-toggle { display: none; }
+
+  /* O estado "recolhida" e do desktop. No celular o drawer e sempre largo. */
+  .xl-pasta-sidebar.sidebar-recolhida .xl-sidebar { width: min(300px, 84vw); flex-basis: auto; }
+
+  /* Backdrop: fecha ao toque fora. */
+  .xl-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(12, 28, 34, .42);
+    z-index: 79;
+    animation: xl-fade-in .16s ease;
+  }
+  @keyframes xl-fade-in { from { opacity: 0 } to { opacity: 1 } }
+
+  /* Area de conteudo ocupa tudo. */
+  .xl-area-sidebar { width: 100%; min-width: 0; }
+
+  /* Barra superior: empilha. O trilha "Escopo -> EAP -> ..." nao cabe em 390px
+     e era o que empurrava a largura. Vira rolagem horizontal contida. */
+  .arquimedes-workbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .arquimedes-workbar-title { flex: 1 1 auto; min-width: 0; }
+  .arquimedes-trilha {
+    order: 3;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .arquimedes-trilha::-webkit-scrollbar { display: none; }
+  .arquimedes-workbar-actions { flex: 0 0 auto; }
+
+  /* Mostra o hamburguer. */
+  .xl-menu-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Alvos de toque: minimo confortavel de 44px (Apple HIG / Material). */
+  .arquimedes-workbar-actions button { min-width: 40px; min-height: 40px; }
+  .xl-sidebar-item { min-height: 44px; }
+
+  /* Tabelas continuam rolando DENTRO do wrapper — nunca empurram a pagina. */
+  .pl-tabela-wrap, .scopo-table-wrap, .xl-tabela-container, .pl-atividades-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* Celular estreito: aperta o que ainda sobrar. */
+@media (max-width: 500px) {
+  .arquimedes-workbar { padding: 7px 10px; }
+  .arquimedes-workbar-title .arquimedes-kicker { font-size: 9.5px; }
+  .xl-sidebar { width: min(286px, 88vw); }
+
+  /* Titulos grandes de painel nao podem dominar a tela. */
+  .xl-painel-intro h2 { font-size: 20px; }
+  .xl-painel { padding: 12px 11px; }
+
+  /* O painel de achados tem texto longo: respira melhor empilhado. */
+  .xl-achados-cabecalho { flex-direction: column; gap: 6px; }
+  .xl-achados-toggle { align-self: flex-start; }
+}
