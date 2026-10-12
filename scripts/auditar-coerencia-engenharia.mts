@@ -154,8 +154,11 @@ type Cena = {
    * ("8 composicoes sem preco") e nao informava o que decide — quanto dinheiro
    * esta preso ali. Cena que so confere o codigo passaria com a mensagem vazia
    * de valor. Aqui o R$ e exigido no texto.
+   *
+   * Aceita mais de um trecho (array) quando a mensagem precisa provar DUAS
+   * coisas ao mesmo tempo — ex.: o valor do item E a composicao dele.
    */
-  contemNoTexto?: string;
+  contemNoTexto?: string | string[];
   input: CoerenciaInput;
 };
 
@@ -397,11 +400,11 @@ const cenas: Cena[] = [
   {
     id: "R4-06",
     regra: "4 preco do item",
-    hipotese: "IMPACTO EM R$ (R4-02 revisado): item cujo custo a regra 4 NAO CONSEGUE conferir (composicao somando zero) agora tem achado proprio, NOMEADO, com o valor — antes saia da regra sem nome nem valor, so contado na cobertura. E o MESMO dinheiro que a regra 5 reporta pela composicao, visto pelo lado do item: nao e um segundo total somavel",
+    hipotese: "IMPACTO EM R$ (R4-02 revisado): item cujo custo a regra 4 NAO CONSEGUE conferir (composicao somando zero) agora tem achado proprio, NOMEADO, que cita o ITEM, a COMPOSICAO e o VALOR — antes saia da regra sem nome nem valor, so contado na cobertura. E o MESMO dinheiro que a regra 5 reporta pela composicao, visto pelo lado do item: nao e um segundo total somavel",
     esperaAcusar: true,
     code: "eng_item_custo_nao_conferivel",
     severidade: "warning",
-    contemNoTexto: "Total: R$ 1.448.016,50",
+    contemNoTexto: ["1.13.2 (R$ 1.448.016,50)", "[composicao C0584]"],
     input: {
       obra: obra(),
       itens: [item({ code: "1.13.2", description: "Drenagem externa", unit: "m", quantity: 2, unitPrice: 724008.25, compositionId: 22195, compositionCode: "C0584", compositionUnit: "M", somaComponentes: 0 })],
@@ -775,7 +778,9 @@ const resultados: ResultadoCena[] = cenas.map(c => {
   const codigos = r.issues.map(i => i.code);
   const acusa = codigos.includes(c.code);
   const achado = r.issues.find(i => i.code === c.code);
-  const contem = !c.contemNoTexto || (achado?.message ?? "").includes(c.contemNoTexto);
+  const exigidos = c.contemNoTexto == null ? [] : Array.isArray(c.contemNoTexto) ? c.contemNoTexto : [c.contemNoTexto];
+  const faltando = exigidos.filter(t => !(achado?.message ?? "").includes(t));
+  const contem = faltando.length === 0;
   return {
     id: c.id,
     regra: c.regra,
@@ -789,7 +794,7 @@ const resultados: ResultadoCena[] = cenas.map(c => {
     avisos: r.resumo.avisos,
     valorEmRisco: r.resumo.valorEmRisco,
     mensagem: achado?.message ?? null,
-    textoExigido: contem ? null : (c.contemNoTexto ?? null),
+    textoExigido: contem ? null : faltando.join(" | "),
   };
 });
 

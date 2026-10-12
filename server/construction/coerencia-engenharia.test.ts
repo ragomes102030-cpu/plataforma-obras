@@ -1303,13 +1303,13 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
       expect(c.motivo).toBe("unidade divergente da composicao");
     });
 
-    it("motivo: soma de componentes indisponivel", () => {
+    it("motivo: soma de componentes nao medida (null — ausencia de dado, nao zero)", () => {
       const r = validarCoerenciaEngenharia({
         obra: obraBase,
         itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 50, compositionId: 1, compositionUnit: "M3", somaComponentes: null })],
         composicoes: [composicao({ id: 1, code: "C1", unit: "M3" })],
       });
-      expect(alcance(r, 4).motivo).toBe("soma de componentes indisponivel");
+      expect(alcance(r, 4).motivo).toBe("soma de componentes nao medida");
     });
 
     it("motivo: preco do item nao informado", () => {
@@ -1712,14 +1712,18 @@ describe("revisao 3 - impacto em R$: a composicao acusa, o item paga", () => {
     expect(achado.severity).toBe("warning");
     expect(achado.dominio).toBe("orcamento");
     expect(achado.refs).toEqual(["1.13.2"]);
+    // o item E a composicao: sem a composicao o engenheiro sabe que ha um preco
+    // sem base, mas nao sabe ONDE a causa esta.
     expect(achado.message).toContain("Total: R$ 1.448.016,50");
+    expect(achado.message).toContain("1.13.2 (R$ 1.448.016,50)");
+    expect(achado.message).toContain("[composicao C0584]");
     expect(achado.message).toContain("ausencia de base para calcular");
     // diz que e o MESMO dinheiro da regra 5: dois totais somaveis para o mesmo
     // valor seria pior que o silencio que estamos consertando.
     expect(achado.message).toContain("regra 5");
   });
 
-  it("regra 4: o motivo separa soma NAO MEDIDA de soma ZERO", () => {
+  it("regra 4: o motivo separa soma NAO MEDIDA de soma ZERO — e nenhum diz 'indisponivel'", () => {
     // "indisponivel" para as duas mandava o engenheiro procurar um dado que
     // existe — e escondia que o preco esta sem base de custo.
     const naoMedida = validarCoerenciaEngenharia({
@@ -1728,7 +1732,7 @@ describe("revisao 3 - impacto em R$: a composicao acusa, o item paga", () => {
       composicoes: [],
       atividades: [],
     });
-    expect(alcance(naoMedida, 4).motivo).toBe("soma de componentes indisponivel");
+    expect(alcance(naoMedida, 4).motivo).toBe("soma de componentes nao medida");
 
     const zero = validarCoerenciaEngenharia({
       obra: obraBase,
@@ -1737,6 +1741,17 @@ describe("revisao 3 - impacto em R$: a composicao acusa, o item paga", () => {
       atividades: [],
     });
     expect(alcance(zero, 4).motivo).toBe("composicao soma zero: sem base de custo");
+
+    // o motivo e o texto inteiro do relatorio nao podem afirmar que a soma esta
+    // "indisponivel": ela esta zero ou nao medida, e as duas coisas sao dados.
+    expect(alcance(naoMedida, 4).motivo).not.toContain("indisponivel");
+    const textoNaoMedida = naoMedida.issues.map(i => i.message).join(" | ");
+    expect(textoNaoMedida).not.toContain("indisponivel");
+    const textoZero = zero.issues.map(i => i.message).join(" | ");
+    expect(textoZero).not.toContain("indisponivel");
+    // e o texto diz QUAL das duas causas, em vez de somar as duas num so motivo
+    expect(textoNaoMedida).toContain("NAO MEDIDA");
+    expect(textoZero).toContain("ZERO");
   });
 
   it("o novo achado NAO infla o valorEmRisco (ausencia de base nao e desvio medido)", () => {

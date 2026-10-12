@@ -31,8 +31,8 @@ item, e só um deles virava consequência financeira visível.
 | --- | --- | --- |
 | 5 — composição sem preço | só o código das composições | cita os itens vinculados e o valor: `Total: R$ ... em N item(ns)`. Itens: `código (R$ valor)` |
 | 5 — composição parcial | idem | idem (é o caso pior: o custo *parece* calculável) |
-| 4 — item sem base de soma | saía da regra sem nome nem valor, só contado na cobertura | achado próprio `eng_item_custo_nao_conferivel`, **warning**, com `refs` dos itens e o valor |
-| 4 — motivo da exclusão | `"soma de componentes indisponivel"` para *não medida* **e** para *zero* | dois motivos: `soma de componentes indisponivel` (null) e `composicao soma zero: sem base de custo` |
+| 4 — item sem base de soma | saía da regra sem nome nem valor, só contado na cobertura | achado próprio `eng_item_custo_nao_conferivel`, **warning**, com `refs` dos itens, o valor **e a composição** de cada item |
+| 4 — motivo da exclusão | `"soma de componentes indisponivel"` para *não medida* **e** para *zero* | dois motivos: `soma de componentes nao medida` (null) e `composicao soma zero: sem base de custo` (0) |
 
 O motivo separado importa pelo mesmo motivo que o da regra 3 (`fdd4a4f`): chamar as
 duas causas de "indisponível" mandava o engenheiro procurar um dado que existe — e
@@ -106,14 +106,16 @@ itens vinculados sem preço informado: são declarados como tais, não somados c
 | composição sem preço **com** item de valor conhecido | a mensagem cita `Total: R$ 1.448.016,50` e o item `1.13.2 (R$ 1.448.016,50)` |
 | composição sem preço **sem** item vinculado | cita `Sem item de orcamento vinculado` e **não** contém `R$ 0,00` |
 | composição **parcial** | cita `Total: R$ 200.724,80` e o item `1.7.4` |
-| item sem base de soma | achado `eng_item_custo_nao_conferivel`, `warning`, `refs: ["1.13.2"]`, valor na mensagem, e a mensagem aponta a regra 5 |
-| motivo da exclusão | `null` → `soma de componentes indisponivel`; `0` → `composicao soma zero: sem base de custo` |
+| item sem base de soma | achado `eng_item_custo_nao_conferivel`, `warning`, `refs: ["1.13.2"]`, valor **e** composição na mensagem (`1.13.2 (R$ 1.448.016,50) [composicao C0584]`), e a mensagem aponta a regra 5 |
+| motivo da exclusão | `null` → `soma de componentes nao medida`; `0` → `composicao soma zero: sem base de custo` |
+| o motivo não mente | nem o motivo nem a mensagem dizem `indisponivel` — a soma está *não medida* ou *zero*, e as duas são dado |
 | invariante | o achado novo **não** infla o `valorEmRisco` (a cena inteira fica em warning) |
 | lista de composições | a mensagem mantém `Composicoes: ...` e `refs` — ganhar o valor não pode esconder a lista |
 
-No reprodutor, as cenas ganharam um campo novo (`contemNoTexto`): achar o **código**
-não basta — a cena exige que o **R$ apareça na mensagem**. Sem isso, uma cena passaria
-com a mensagem vazia de valor, que é exatamente o defeito que estamos consertando.
+No reprodutor, as cenas ganharam um campo novo (`contemNoTexto`, que aceita **lista** de
+trechos): achar o **código** não basta — a cena exige que o **R$ e a composição apareçam
+na mensagem**. Sem isso, uma cena passaria com a mensagem vazia de valor, que é
+exatamente o defeito que estamos consertando.
 
 ## R5-01 está fechado (e duas listas antigas ainda mentem)
 

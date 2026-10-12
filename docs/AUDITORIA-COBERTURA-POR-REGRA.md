@@ -109,7 +109,7 @@ achado para mostrar. Isto NAO e um atestado de coerencia.
 | 1. natureza do servico | sem composicao vinculada · composicao nao encontrada · composicao sem descricao |
 | 2. sistema construtivo | obra sem sistema declarado nem inferivel · obra declara sistema misto · item sem sistema reconhecivel · item declara sistema misto |
 | 3. resistencia do concreto | item nao e elemento estrutural · sem composicao vinculada · composicao sem descricao · composicao nao cita concreto · fck nao declarado na composicao |
-| 4. preco sem lastro | sem composicao vinculada · unidade divergente da composicao · soma de componentes indisponivel · preco do item nao informado |
+| 4. preco sem lastro | sem composicao vinculada · unidade divergente da composicao · soma de componentes nao medida · composicao soma zero: sem base de custo · preco do item nao informado |
 | 5. cobertura de preco | composicao sem componentes |
 | 6. custo por m2 | obra sem area construida · item nao e custo direto · custo direto sem valor informado |
 | 7. unidade orcamento x cronograma | atividade sem item correspondente · atividade sem unidade |

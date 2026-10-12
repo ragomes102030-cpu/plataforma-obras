@@ -323,13 +323,22 @@ function brl(v: number): string {
  * zero com aparencia de medicao e pior que a ausencia declarada. Pelo mesmo
  * motivo, itens vinculados mas sem preco informado sao declarados como tal.
  */
-function impactoEmReais(itens: ItemOrcamentoParaCoerencia[]): string {
+function impactoEmReais(
+  itens: ItemOrcamentoParaCoerencia[],
+  opts?: { comComposicao?: boolean },
+): string {
   if (!itens.length) return "Sem item de orcamento vinculado: nao ha valor a calcular";
   const valores = itens.map(it => it.quantity * it.unitPrice);
   const total = valores.reduce((s, v) => s + v, 0);
   const citados = itens
     .slice(0, 8)
-    .map((it, i) => `${it.code} (R$ ${brl(valores[i])})`)
+    .map((it, i) => {
+      // A regra 4 acusa o ITEM; sem a composicao citada, o engenheiro nao sabe
+      // onde a causa esta (a causa e sempre a composicao do item).
+      const comp =
+        opts?.comComposicao && it.compositionCode ? ` [composicao ${it.compositionCode}]` : "";
+      return `${it.code} (R$ ${brl(valores[i])})${comp}`;
+    })
     .join(", ");
   const resto = itens.length > 8 ? ` (+${itens.length - 8})` : "";
   if (total === 0) {
@@ -819,6 +828,13 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   //       divergencia de valor e efeito da unidade, nao do preco. O campo
   //       compositionUnit existia no contrato e nunca era lido. Agora e lido e
   //       o achado muda de natureza.
+  //   (c) itens cuja composicao nao da base de soma saiam da regra por um skip
+  //       SILENCIOSO, com o motivo "soma de componentes indisponivel". Dois
+  //       defeitos: (1) a soma nao estava indisponivel — estava sem medicao ou
+  //       era ZERO, e o motivo mandava o engenheiro procurar um dado que existe
+  //       (mesma classe da regra 3, fdd4a4f); (2) o valor do item nao aparecia
+  //       em lugar nenhum, e o dinheiro preso sumia do painel. Agora tem achado
+  //       NOMEADO proprio e o impacto em R$, por item e por composicao.
   {
     const TOLERANCIA_PRECO = 0.1; // 10% em torno do esperado, nao em torno de 1,0
     const bdi = typeof input.obra.bdiDeclarado === "number" ? input.obra.bdiDeclarado : null;
@@ -826,9 +842,9 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     const pctBdi = bdi == null ? null : Math.round(bdi * 100);
     const achadosPreco: string[] = [];
     const achadosUnidade: string[] = [];
-    // Itens que a regra 4 NAO consegue conferir: sem base de soma na composicao
-    // vinculada. Hoje eles saem da regra sem nome e sem valor (so a contagem no
-    // bloco de cobertura) — e o dinheiro deles desaparece do painel.
+    // Itens que a regra 4 NAO consegue conferir: a composicao vinculada nao da
+    // base de soma. Saem com achado NOMEADO proprio e com o impacto em R$ — sem
+    // isso o dinheiro deles desaparecia do painel.
     const semBaseDeSoma: ItemOrcamentoParaCoerencia[] = [];
     const exclusoes = new Map<string, number>();
     let avaliados = 0;
@@ -843,12 +859,13 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         achadosUnidade.push(it.code);
         continue; // divergencia de unidade explica o valor; nao acusar preco
       }
-      // Duas causas diferentes, dois motivos nomeados: a soma NAO MEDIDA (null)
-      // e a soma MEDIDA que e ZERO. Chamar as duas de "indisponivel" mandava o
+      // Duas causas diferentes, dois motivos nomeados — e NENHUM deles diz
+      // "indisponivel": a soma nao esta indisponivel, ela esta SEM MEDICAO (null)
+      // ou MEDIDA e igual a ZERO. Dizer "indisponivel" para as duas mandava o
       // engenheiro procurar um dado que existe — e escondia que o preco do item
       // esta sem base de custo nenhuma.
       if (it.somaComponentes == null) {
-        contar(exclusoes, "soma de componentes indisponivel");
+        contar(exclusoes, "soma de componentes nao medida");
         semBaseDeSoma.push(it);
         continue;
       }
@@ -913,6 +930,11 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
       });
     }
     if (semBaseDeSoma.length) {
+      const zeradas = semBaseDeSoma.filter(it => it.somaComponentes != null && it.somaComponentes <= 0).length;
+      const naoMedidas = semBaseDeSoma.filter(it => it.somaComponentes == null).length;
+      const causas: string[] = [];
+      if (zeradas) causas.push(`${zeradas} com a soma dos componentes ZERO (o dado diz que nao ha custo direto a somar)`);
+      if (naoMedidas) causas.push(`${naoMedidas} com a soma NAO MEDIDA (ausencia de dado — nao e zero)`);
       add({
         // WARNING, nao error: nao ha desvio medido — ha AUSENCIA de base para
         // medir. Acusar como error seria afirmar um desvio que ninguem calculou,
@@ -923,8 +945,9 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         refs: semBaseDeSoma.map(it => it.code),
         message:
           `${semBaseDeSoma.length} item(ns) cujo custo a regra 4 NAO CONSEGUE conferir: ` +
-          `a composicao vinculada nao da base para comparar (soma dos componentes igual a zero ou nao medida). ` +
-          `${impactoEmReais(semBaseDeSoma)}. ` +
+          `a composicao vinculada nao da base de soma para comparar` +
+          `${causas.length ? ` (${causas.join("; ")})` : ""}. ` +
+          `${impactoEmReais(semBaseDeSoma, { comComposicao: true })}. ` +
           `Nao e divergencia de preco — e ausencia de base para calcular. A causa esta na composicao ` +
           `e aparece tambem na regra 5: e o mesmo valor, visto pelo lado do item.`,
       });
