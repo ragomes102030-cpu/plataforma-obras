@@ -406,7 +406,8 @@ describe("revisao 2 - regra 3 usa o piso correto (NBR 6118 admite C20)", () => {
 describe("revisao 2 - dedup de causa raiz e ruido", () => {
   it("agrupa varias atividades sem predecessor em UM achado com os codigos", () => {
     // Cena R10-01: 12 atividades sem vinculo geravam 12 achados com a mesma
-    // redacao. Agora e um achado com a lista.
+    // redacao. Agora e um achado com a lista — mas SO quando ha rede parcial.
+    // Aqui: 12 sem predecessor e 1 com (a rede existe, esta incompleta).
     const atividades: AtividadeParaCoerencia[] = Array.from({ length: 12 }, (_, i) => ({
       id: 400 + i,
       wbsCode: `1.9.${i + 1}`,
@@ -417,11 +418,34 @@ describe("revisao 2 - dedup de causa raiz e ruido", () => {
       earlyFinish: 10,
       semPredecessor: true,
     }));
+    atividades.push({ id: 500, wbsCode: "1.9.99", name: "Servico com rede", durationDays: 10, unit: "m2", semPredecessor: false });
     const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [], atividades });
 
     const achados = resultado.issues.filter(i => i.code === "eng_atividade_sem_predecessor");
     expect(achados).toHaveLength(1);
     expect(achados[0].refs).toHaveLength(12);
+  });
+
+  it("R10-03: NENHUMA atividade com predecessor vira achado de DADO, nao de engenharia", () => {
+    // Sugestao da verificacao: se todas as atividades estao sem predecessor, o
+    // problema nao e o cronograma — e o vinculo de versao. Acusar a obra pelo
+    // encanamento faz o engenheiro ver 200 erros e desligar o validador.
+    const atividades: AtividadeParaCoerencia[] = Array.from({ length: 40 }, (_, i) => ({
+      id: 600 + i,
+      wbsCode: `1.9.${i + 1}`,
+      name: `Servico ${i + 1}`,
+      durationDays: 10,
+      unit: "m2",
+      semPredecessor: true,
+    }));
+    const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [], atividades });
+
+    const codes = resultado.issues.map(i => i.code);
+    expect(codes).toContain("eng_dependencias_ausentes_para_a_versao");
+    expect(codes).not.toContain("eng_atividade_sem_predecessor");
+
+    const achado = resultado.issues.find(i => i.code === "eng_dependencias_ausentes_para_a_versao")!;
+    expect(achado.message).toContain("vinculo de versao");
   });
 
   it("NAO acusa mobilizacao nem servicos preliminares por comecarem no dia 0", () => {
@@ -563,6 +587,83 @@ describe("revisao 2 - correcoes do reprodutor do Butler (22 cenas)", () => {
     const codes = resultado.issues.map(i => i.code);
     expect(codes).not.toContain("eng_composicao_preco_incompleto");
     expect(codes).not.toContain("eng_composicao_sem_preco");
+  });
+});
+
+describe("revisao 3 - achados da verificacao (R8-03, R6-03, R6-04)", () => {
+  it("R8-03: o ramo de ERROR da regra 8 e ALCANCAVEL (com pavimentos declarados)", () => {
+    // A versao anterior tinha as duas condicoes mutuamente exclusivas: o ramo de
+    // error era inalcancavel. Aqui a obra DECLARA os pavimentos e nao ha
+    // decomposicao — o caso que antes nunca chegava na regra.
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, pavimentos: 6 },
+      itens: [],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3" },
+        { id: 2, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3" },
+      ],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_estrutura_sem_ciclo_pavimento");
+    expect(achado).toBeDefined();
+    expect(achado!.severity).toBe("error");
+  });
+
+  it("R8-03: COM decomposicao, checa a duracao POR NIVEL (novo diagnostico)", () => {
+    // Antes: ver o dado DESLIGAVA a regra. Agora o dado permite o diagnostico
+    // que era impossivel emitir — "16 dias para 6 pavimentos e implausivel".
+    const atividades: AtividadeParaCoerencia[] = [];
+    for (let n = 1; n <= 6; n++) {
+      atividades.push({ id: 100 + n, wbsCode: `1.4.3.${n}`, name: `Lajes Pav ${n}`, durationDays: 2, unit: "m3" });
+    }
+    const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [], atividades });
+
+    const achado = resultado.issues.find(i => i.code === "eng_ciclo_pavimento_implausivel");
+    expect(achado).toBeDefined();
+    expect(achado!.severity).toBe("error");
+    expect(achado!.message).toContain("2 dia");
+  });
+
+  it("R8-03: decomposicao com duracao plausivel NAO acusa", () => {
+    const atividades: AtividadeParaCoerencia[] = [];
+    for (let n = 1; n <= 6; n++) {
+      atividades.push({ id: 100 + n, wbsCode: `1.4.3.${n}`, name: `Lajes Pav ${n}`, durationDays: 14, unit: "m3" });
+    }
+    const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [], atividades });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_ciclo_pavimento_implausivel");
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_estrutura_sem_ciclo_pavimento");
+  });
+
+  it("R6-04: custoDireto explicito manda sobre a classificacao por texto", () => {
+    // Cena R6-04: numa obra viaria, "Sinalizacao viaria" era classificada como
+    // NAO-custo-direto pelo texto, e a obra era acusada de R$ 1.389/m2 quando
+    // tinha R$ 1.528/m2. Com o campo explicito, a classificacao e do chamador.
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, areaConstruida: 10000 },
+      itens: [
+        item({ code: "1.13.4", description: "Sinalizacao viaria horizontal", unit: "m2", quantity: 10000, unitPrice: 1528, custoDireto: true }),
+      ],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_custo_m2_abaixo_referencia");
+    expect(achado).toBeUndefined();
+  });
+
+  it("R6-04: sem o campo, o fallback por texto ainda funciona", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, areaConstruida: 10000 },
+      itens: [
+        item({ code: "1.1.2", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 5000000 }),
+        item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 100, unitPrice: 500 }),
+      ],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_custo_m2_abaixo_referencia");
+    expect(achado).toBeDefined();
   });
 });
 

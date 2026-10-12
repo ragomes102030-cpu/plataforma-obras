@@ -58,9 +58,18 @@ export type ObraParaCoerencia = {
    * pavimentos" a partir de heuristica — o numero parecia dado e era chute.
    */
   pavimentos?: number | null;
-  /** Area construida em m2. Se ausente, a regra de custo/m2 nao roda. */
+  /**
+   * Area construida em m2.
+   *
+   * ATENCAO a semantica (verificacao R6-03): e a area construida TOTAL — soma
+   * das areas de piso de todos os niveis. O chamador passava o MAX de um item
+   * de piso, e com 2 pavimentos de 1.200 m2 a "area construida" virava 1.200
+   * em vez de 2.400: a obra aparecia 2x mais cara por m2 e a regra acusava de
+   * menos. Mesmo vicio do numero de pavimentos fabricado — numero plausivel de
+   * heuristica exibido como dado.
+   */
   areaConstruida?: number | null;
-  /** Origem da area construida, para a mensagem nao afirmar sem dizer de onde veio. */
+  /** Origem da area construida. Sem isto a mensagem nao pode citar a fonte. */
   areaConstruidaFonte?: string | null;
 };
 
@@ -295,12 +304,25 @@ function fckDeConcreto(texto: string): number | null {
  */
 const FCK_MINIMO_ESTRUTURAL = 20;
 
-/** Itens que nao sao custo direto de construcao (entram no orcamento, nao na obra). */
-const RADICAIS_NAO_CUSTO_DIRETO = ["administrac", "licenc", "projeto", "as built", "comissionament", "teste", "mobilizac", "desmobilizac", "limpez", "seguranc", "sinalizac", "documentac"];
+/**
+ * Itens que nao sao custo direto de construcao (entram no orcamento, nao na obra).
+ *
+ * ATENCAO: esta lista e FALLBACK por texto, e o texto engana. A verificacao
+ * (R6-04) mostrou que `custoDireto` era declarado no contrato e NENHUM chamador
+ * preenchia — o mesmo padrao de campo morto que ja tinha acontecido com
+ * `compositionUnit`. Sem o campo, uma obra viaria tinha "Sinalizacao viaria"
+ * classificada como nao-custo-direto (por causa de "sinalizac") e era acusada
+ * de R$ 1.389/m2 quando tinha R$ 1.528/m2.
+ *
+ * Ordem de confianca: campo explicito > classificacao pelo item de EAP. O
+ * chamador DEVE preencher `custoDireto`; o fallback existe para nao quebrar,
+ * nao para ser a fonte.
+ */
+const RADICAIS_NAO_CUSTO_DIRETO_FALLBACK = ["administrac", "licenc", "projeto executiv", "projeto basic", "as built", "comissionament", "mobilizac", "desmobilizac", "documentac"];
 
 function ehCustoDireto(it: ItemOrcamentoParaCoerencia): boolean {
   if (typeof it.custoDireto === "boolean") return it.custoDireto;
-  return !contemAlgum(it.description, RADICAIS_NAO_CUSTO_DIRETO);
+  return !contemAlgum(it.description, RADICAIS_NAO_CUSTO_DIRETO_FALLBACK);
 }
 
 /** Atividade de elemento que so existe depois da infraestrutura. */
@@ -584,19 +606,30 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     }
   }
 
-  // ---- 8. Superestrutura sem decomposicao por nivel
+  // ---- 8. Superestrutura: decomposicao por nivel E plausibilidade de duracao
   //
-  // A versao anterior FABRICAVA o numero de pavimentos e afirmava "a obra tem 6
-  // pavimentos" como se fosse dado. A prova de que era fabricado: o numero saia
-  // de "1.4.N.M" e so era usado quando NAO havia subnivel "1.4.N." — as duas
-  // condicoes sao mutuamente exclusivas, entao ver o dado desligava a regra.
+  // Revisao 3 (achado R8-03 da verificacao): a versao anterior tinha as duas
+  // condicoes mutuamente exclusivas, entao o ramo de ERROR era INALCANCAVEL:
+  // `pavimentos` so vinha preenchido com >=2 subniveis "1.4.N.M", mas QUALQUER
+  // "1.4.N." ja ligava `temSubnivel` e desligava a regra. Quando o chamador
+  // conseguia medir, a regra nao rodava; quando rodava, o numero nao existia.
+  // Resultado: a mensagem "a obra declara N pavimentos" descrevia um caminho
+  // que o app nunca alcancava — e o diagnostico util ("16 dias para 6
+  // pavimentos e implausivel") era impossivel de emitir.
   //
-  // Agora: se a obra informa pavimentos (dado real), acusa como error citando o
-  // numero. Se nao informa, acusa como warning SEM afirmar numero — o problema
-  // observavel e a ausencia de decomposicao, nao um numero que nao temos.
+  // Agora sao DUAS checagens independentes:
+  //   (a) SEM decomposicao -> nao da para avaliar o ciclo. Error se a obra
+  //       declara mais de um pavimento (e ai a ausencia e defeito), warning se
+  //       nao declara (nao sabemos a escala).
+  //   (b) COM decomposicao -> os niveis existem, entao da para checar se a
+  //       duracao POR NIVEL e plausivel. E onde o dado fica util.
   {
     const estrutura = atividades.filter(a => /^1\.4(\.|$)/.test(a.wbsCode));
-    const temSubnivel = estrutura.some(a => /^1\.4\.\d+\./.test(a.wbsCode));
+    const niveis = new Set(
+      estrutura.map(a => /^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1]).filter((x): x is string => Boolean(x)),
+    );
+    const temSubnivel = niveis.size > 0;
+
     if (estrutura.length > 0 && !temSubnivel) {
       const soma = estrutura.reduce((s, a) => s + a.durationDays, 0);
       const pav = input.obra.pavimentos;
@@ -615,6 +648,35 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
             `desforma) se repete a cada nivel. O numero de pavimentos nao consta da obra — confirme para ` +
             `avaliar se ${soma} dias e plausivel.`,
       });
+    } else if (temSubnivel && niveis.size >= 2) {
+      // Ha decomposicao: checar plausibilidade POR NIVEL. E aqui que o numero
+      // de pavimentos deixa de ser decoracao e vira medida.
+      const porNivel = new Map<string, number>();
+      for (const a of estrutura) {
+        const n = /^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1];
+        if (!n) continue;
+        porNivel.set(n, (porNivel.get(n) ?? 0) + a.durationDays);
+      }
+      const duracoes = [...porNivel.values()];
+      const minNivel = Math.min(...duracoes);
+      // Um ciclo de pavimento em concreto armado leva 2-4 semanas (10-20 dias
+      // uteis) so de forma/armadura/concretagem/cura/desforma. Abaixo de 5 dias
+      // por nivel nao ha ciclo representado — ha um numero digitado.
+      const MINIMO_CICLO_NIVEL = 5;
+      if (minNivel < MINIMO_CICLO_NIVEL) {
+        const nivelCurto = [...porNivel.entries()].sort((a, b) => a[1] - b[1])[0];
+        add({
+          severity: "error",
+          dominio: "cronograma",
+          code: "eng_ciclo_pavimento_implausivel",
+          refs: [...porNivel.keys()].map(n => `1.4.*.${n}`),
+          message:
+            `A superestrutura esta decomposta em ${niveis.size} niveis, mas o nivel ${nivelCurto[0]} soma ` +
+            `apenas ${nivelCurto[1]} dia(s). Um ciclo de pavimento em concreto armado (forma, armadura, ` +
+            `concretagem, cura, desforma) leva semanas — menos de ${MINIMO_CICLO_NIVEL} dias por nivel ` +
+            `nao representa ciclo construtivo.`,
+        });
+      }
     }
   }
 
@@ -655,25 +717,46 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     }
   }
 
-  // ---- 10. Atividade sem predecessor que deveria ter
+  // ---- 10. Atividade sem predecessor
+  //
+  // Revisao 3 (sugestao da verificacao): distinguir DADO de ENGENHARIA.
+  //
+  // A flag `semPredecessor` vem de uma consulta filtrada por versionId. Se as
+  // atividades tiverem versao e as dependencias nao, o conjunto volta VAZIO e
+  // TODA atividade vira "sem predecessor". O engenheiro veria 200 erros,
+  // concluiria que a regra e ruim e pararia de ler.
+  //
+  // Entao: quando NENHUMA atividade tem predecessor, o problema nao e o
+  // cronograma — e o vinculo de versao. Isso e achado de DADO, com um achado
+  // so, e a mensagem diz onde olhar. Acusar a obra pelo encanamento e o que
+  // faz o usuario desligar o validador.
   {
     const PODE_COMECAR_SEM_PREDECESSOR = /^1\.(1|2)\./;
-    const achados: string[] = [];
-    for (const a of atividades) {
-      if (!a.semPredecessor) continue;
-      if (PODE_COMECAR_SEM_PREDECESSOR.test(a.wbsCode)) continue;
-      achados.push(a.wbsCode);
-    }
-    if (achados.length) {
+    const candidatas = atividades.filter(a => !PODE_COMECAR_SEM_PREDECESSOR.test(a.wbsCode));
+    const semPred = candidatas.filter(a => a.semPredecessor);
+
+    const todasSemPred = candidatas.length > 1 && semPred.length === candidatas.length;
+    if (todasSemPred) {
+      add({
+        severity: "error",
+        dominio: "cronograma",
+        code: "eng_dependencias_ausentes_para_a_versao",
+        refs: candidatas.map(a => a.wbsCode),
+        message:
+          `Nenhuma das ${candidatas.length} atividades tem predecessor. Isso nao e um cronograma em serie: ` +
+          `e ausencia de vinculo — provavelmente as atividades estao numa versao do plano e as dependencias ` +
+          `em nenhuma, ou em outra. Verifique o vinculo de versao antes de tratar como erro de rede.`,
+      });
+    } else if (semPred.length) {
       add({
         severity: "error",
         dominio: "cronograma",
         code: "eng_atividade_sem_predecessor",
-        refs: achados,
+        refs: semPred.map(a => a.wbsCode),
         message:
-          `${achados.length} atividade(s) sem predecessor entram no CPM comecando no dia zero, como se ` +
-          `pudessem ser executadas sem nada antes. Itens: ${achados.slice(0, 10).join(", ")}` +
-          `${achados.length > 10 ? ` (+${achados.length - 10})` : ""}.`,
+          `${semPred.length} atividade(s) sem predecessor entram no CPM comecando no dia zero, como se ` +
+          `pudessem ser executadas sem nada antes. Itens: ${semPred.map(a => a.wbsCode).slice(0, 10).join(", ")}` +
+          `${semPred.length > 10 ? ` (+${semPred.length - 10})` : ""}.`,
       });
     }
   }

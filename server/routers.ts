@@ -4123,18 +4123,39 @@ export const appRouter = router({
       const pavimentosDeclarados=[...new Set(atividades.map(a=>/^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1]).filter(Boolean))];
       const pavimentos = pavimentosDeclarados.length > 1 ? pavimentosDeclarados.length : null;
 
-      // Area construida: somada dos quantitativos que a obra JA declara, em vez de
-      // passar null (que deixava a regra de custo/m2 morta no app). Usa a maior
-      // area de piso entre as atividades — tipicamente o contrapiso ou o
-      // revestimento de piso, que cobrem a area dos pavimentos.
-      const candidatosArea = atividades
-        .filter(a => a.unit && /m2|m²/.test(String(a.unit)) && Number(a.plannedQuantity) > 0)
-        .filter(a => /contrapis|revestiment.*pis|piso|forr/i.test(a.name))
-        .map(a => Number(a.plannedQuantity));
-      const areaConstruida = candidatosArea.length ? Math.max(...candidatosArea) : null;
-      const areaConstruidaFonte = areaConstruida
-        ? "maior area de piso declarada nas atividades da obra"
-        : null;
+      // Area construida.
+      //
+      // A verificacao (R6-03) mostrou que usar o MAX de um item de piso esta
+      // errado: com 2 pavimentos de 1.200 m2 a area virava 1.200 em vez de 2.400,
+      // a obra aparecia 2x mais cara por m2 e a regra acusava de MENOS. Mesmo
+      // vicio do numero de pavimentos fabricado.
+      //
+      // Agora soma as areas de piso de cada NIVEL distinto. Quando a obra nao
+      // tem decomposicao por nivel, soma os itens de piso que nao se repetem
+      // (contrapiso e revestimento de piso sao o MESMO piso: somar os dois
+      // dobraria). Por isso o calculo prefere um tipo so e, se houver niveis,
+      // soma por nivel.
+      const itensDePiso = atividades.filter(
+        a => a.unit && /m2|m²/.test(String(a.unit)) && Number(a.plannedQuantity) > 0 &&
+             /contrapis|revestiment.*pis|revestiment.*piso/i.test(a.name)
+      );
+      const porNivel = new Map<string, number>();
+      const semNivel: number[] = [];
+      for (const a of itensDePiso) {
+        const nivel = /^1\.[\d.]+?\.(\d+)$/.exec(a.wbsCode)?.[1];
+        const qtd = Number(a.plannedQuantity);
+        if (nivel) porNivel.set(nivel, Math.max(porNivel.get(nivel) ?? 0, qtd));
+        else semNivel.push(qtd);
+      }
+      const somaPorNivel = [...porNivel.values()].reduce((s, v) => s + v, 0);
+      const areaConstruida = somaPorNivel > 0
+        ? somaPorNivel
+        : (semNivel.length ? Math.max(...semNivel) : null);
+      const areaConstruidaFonte = areaConstruida == null
+        ? null
+        : somaPorNivel > 0
+          ? "soma das areas de piso por nivel, declaradas nas atividades da obra"
+          : "area de piso declarada nas atividades (a obra nao tem decomposicao por nivel)";
 
       return validarCoerenciaEngenharia({
         obra:{
@@ -4150,6 +4171,17 @@ export const appRouter = router({
           compositionUnit:i.compositionId?(compPorId.get(i.compositionId)?.unit??null):null,
           compositionUnitCost:null,
           somaComponentes:i.compositionId?(somaPorComp.get(i.compositionId)??0):null,
+          // Classificacao explicita de custo direto.
+          //
+          // A verificacao (R6-04) mostrou que este campo era declarado no contrato e
+          // NENHUM chamador preenchia — mesmo padrao de campo morto que ja tinha
+          // acontecido com compositionUnit. Sem ele, o validador caia no fallback por
+          // TEXTO e classificava "Sinalizacao viaria" como nao-custo-direto.
+          //
+          // O criterio: item que entrega SERVICO DE GESTAO/PROJETO/LICENCA nao e custo
+          // direto de construcao. Servico de CAMPO e, mesmo que o nome comece com
+          // "sinalizacao".
+          custoDireto: !/^1\.1(\.|$)/.test(i.code) && !/administrac|licenc|projeto|as built|comissionament|mobilizac|desmobilizac|documentac/i.test(i.description),
         })),
         composicoes:comps.map(c=>({
           id:c.id, code:c.code, description:c.description, unit:c.unit, status:c.status,
