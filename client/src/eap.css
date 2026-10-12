@@ -2016,12 +2016,19 @@
     justify-content: center;
   }
 
-  /* Botoes da barra de titulo e da barra de ferramentas. */
+  /* Botoes da barra de titulo e da barra de ferramentas.
+     `height` explicito, nao so `min-height`: planilha.css define padding no
+     .xl-tb-btn e carrega DEPOIS deste arquivo, e a altura ficava em 30px. */
   .xl-titlebar-collapse,
   .xl-titlebar-fechar,
+  .xl-titlebar-fim .xl-tb-btn,
   .xl-tb-btn {
+    height: 40px;
     min-height: 40px;
     min-width: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Botao de nova obra / demo. */
