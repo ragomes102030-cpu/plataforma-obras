@@ -83,6 +83,13 @@
       "when": 1790830800000,
       "tag": "0011_enum_component_type_servico",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790834400000,
+      "tag": "0012_project_cub_bdi_declarados",
+      "breakpoints": true
     }
   ],
   "version": "7",

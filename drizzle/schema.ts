@@ -212,6 +212,19 @@ export const projects = pgTable("projects", {
   plannedFinish: timestamp("plannedFinish", { withTimezone: true }).notNull(),
   baseReferencia: enumProjectsBaseReferencia("baseReferencia"),
   baseReferenciaRef: varchar("baseReferenciaRef", { length: 20 }),
+  // CUB declarado da obra (R$/m2), com UF e mes de referencia (AAAA-MM).
+  // R6-02: e parametro de custo DECLARADO pelo engenheiro — o sistema nao
+  // inventa referencia. Os tres campos juntos SAO a declaracao: valor sem
+  // UF/mes nao e referencia (nao da para dizer de onde o numero veio).
+  // Sempre nullable: a obra pode nao declarar, e a ausencia e um estado valido
+  // (a regra 6 nao roda e a cobertura nomeia o motivo).
+  cubValor: numeric("cubValor", { precision: 12, scale: 2 }),
+  cubUf: varchar("cubUf", { length: 2 }),
+  cubMes: varchar("cubMes", { length: 7 }),
+  // BDI declarado da obra, como fracao (0.25 = 25%). Null = nao declarado.
+  // R6-02: com BDI declarado, o achado de preco da regra 4 vira ERROR
+  // (verificacao); sem, segue warning (conferencia).
+  bdiDeclarado: numeric("bdiDeclarado", { precision: 8, scale: 6 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp("deletedAt", { withTimezone: true }),

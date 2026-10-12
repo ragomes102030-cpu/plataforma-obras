@@ -78,8 +78,8 @@ export default function Home() {
     enabled: Boolean(user),
     retry: false,
   });
-  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null }> =
-    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null }> | undefined) ?? [];
+  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> =
+    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> | undefined) ?? [];
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
   const projetoId = obra?.id ?? null;
@@ -357,7 +357,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} aba={aba} onAba={setAba} />
+          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -378,6 +378,10 @@ function Obra({
   localizacao,
   descricao,
   tipoDeObra,
+  cubValor,
+  cubUf,
+  cubMes,
+  bdiDeclarado,
   aba,
   onAba,
 }: {
@@ -386,6 +390,10 @@ function Obra({
   localizacao: string;
   descricao: string;
   tipoDeObra: TipoDeObra | "";
+  cubValor: string;
+  cubUf: string;
+  cubMes: string;
+  bdiDeclarado: string;
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
 }) {
@@ -542,7 +550,7 @@ function Obra({
         {aba === "dashboard" ? (
           <PainelDoCronograma agregado={agregado} projetoId={projetoId} temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0} />
         ) : aba === "escopo" ? (
-          <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} />
+          <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} cubValor={cubValor} cubUf={cubUf} cubMes={cubMes} bdiDeclarado={bdiDeclarado} />
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
@@ -579,23 +587,49 @@ function Obra({
 }
 
 /** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
-function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | "" }) {
+function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | ""; cubValor: string; cubUf: string; cubMes: string; bdiDeclarado: string }) {
   const utils = trpc.useUtils();
   const [editando, setEditando] = useState(false);
   const [descricaoEditada, setDescricaoEditada] = useState(descricao);
   const [localizacaoEditada, setLocalizacaoEditada] = useState(localizacao);
   const [tipoDeObraEditado, setTipoDeObraEditado] = useState(tipoDeObra);
+  const [cubValorEditado, setCubValorEditado] = useState(cubValor);
+  const [cubUfEditada, setCubUfEditada] = useState(cubUf);
+  const [cubMesEditado, setCubMesEditado] = useState(cubMes);
+  const [bdiEditado, setBdiEditado] = useState(bdiDeclarado);
   useEffect(() => {
     setDescricaoEditada(descricao);
     setLocalizacaoEditada(localizacao);
     setTipoDeObraEditado(tipoDeObra);
-  }, [descricao, localizacao, tipoDeObra]);
+    setCubValorEditado(cubValor);
+    setCubUfEditada(cubUf);
+    setCubMesEditado(cubMes);
+    setBdiEditado(bdiDeclarado);
+  }, [descricao, localizacao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado]);
   const salvarEscopo = trpc.projects.updateScope.useMutation({
     onSuccess: async () => {
       await utils.projects.list.invalidate();
       setEditando(false);
     },
   });
+  // R6-02: o CUB e o BDI sao DECLARADOS pelo engenheiro — vazio significa
+  // "obra nao declarou", nao "zero". Aceita virgula como separador decimal.
+  const numeroOuNulo = (v: string): number | null | "invalido" => {
+    const t = v.trim().replace(",", ".");
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : "invalido";
+  };
+  const cubValorNum = numeroOuNulo(cubValorEditado);
+  const bdiNum = numeroOuNulo(bdiEditado);
+  const cubUfValida = cubUfEditada.trim() === "" || cubUfEditada.trim().length === 2;
+  const cubMesValido = cubMesEditado.trim() === "" || /^\d{4}-(0[1-9]|1[0-2])$/.test(cubMesEditado.trim());
+  const cubBdiValidos = cubValorNum !== "invalido" && bdiNum !== "invalido"
+    && (bdiNum === null || (bdiNum >= 0 && bdiNum <= 1));
+  const formatarReal = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v; };
+  const formatarPct = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? (n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + "%" : v; };
+  const cubCamposPreenchidos = [cubValor.trim(), cubUf.trim(), cubMes.trim()].filter(v => v !== "").length;
+  const cubCompleto = cubCamposPreenchidos === 3;
   const grade = trpc.planning.grade.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -625,8 +659,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: 
         <div className="scopo-header-actions">
           {editando ? (
             <>
-              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim() })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
-              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2 || !cubBdiValidos || !cubUfValida || !cubMesValido} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim(), cubValor: cubValorNum === "invalido" ? null : cubValorNum, cubUf: cubUfEditada.trim() === "" ? null : cubUfEditada.trim().toUpperCase(), cubMes: cubMesEditado.trim() === "" ? null : cubMesEditado.trim(), bdiDeclarado: bdiNum === "invalido" ? null : bdiNum })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setCubValorEditado(cubValor); setCubUfEditada(cubUf); setCubMesEditado(cubMes); setBdiEditado(bdiDeclarado); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
             </>
           ) : (
             <button type="button" className="scopo-btn secondary" onClick={() => setEditando(true)}><ClipboardList size={14}/> Editar escopo</button>
@@ -643,6 +677,14 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: 
             <p><strong>Localização cadastrada:</strong> {localizacao || "Não informada"}</p>
             <p><strong>Descrição original:</strong></p>
             <p>{descricao.trim() || "Ainda não há uma descrição formal cadastrada para esta obra."}</p>
+            <p><strong>CUB declarado (parâmetro de custo por m²):</strong> {cubCamposPreenchidos === 0
+              ? "Não declarado — a conferência de custo por m² não roda sem o CUB da obra."
+              : cubCompleto
+                ? `R$ ${formatarReal(cubValor)}/m² · ${cubUf.trim().toUpperCase()} · referência ${cubMes.trim()}`
+                : `Declaração incompleta (${cubCamposPreenchidos} de 3 campos) — a conferência de custo por m² só roda com valor, UF e mês de referência.`}</p>
+            <p><strong>BDI declarado (parâmetro de preço):</strong> {bdiDeclarado.trim() === ""
+              ? "Não declarado — a conferência de preço segue como aviso, não como erro."
+              : formatarPct(bdiDeclarado)}</p>
           </div>
         </details>
       </section>
@@ -663,6 +705,24 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra }: 
             <label><strong>Descrição formal do escopo</strong>
               <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Descreva entregas, inclusões, exclusões, premissas, limites contratuais e itens ainda a confirmar. Separe fatos conhecidos de hipóteses." />
               <small>{descricaoEditada.length}/4000 caracteres. Não informe quantidades ou sistemas que ainda não foram confirmados.</small>
+            </label>
+            <label><strong>CUB declarado — valor (R$/m²)</strong>
+              <input value={cubValorEditado} onChange={event => setCubValorEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 2850,00 — deixe vazio se a obra não declara" />
+              <small>Parâmetro de custo declarado por você. O sistema não inventa referência: sem valor, UF e mês de referência, a conferência de custo por m² não roda.</small>
+              {cubValorNum === "invalido" && <small role="alert">Informe um número (ex.: 2850,00).</small>}
+            </label>
+            <label><strong>CUB declarado — UF de referência</strong>
+              <input value={cubUfEditada} onChange={event => setCubUfEditada(event.target.value)} maxLength={2} placeholder="Ex.: SP" />
+              {!cubUfValida && <small role="alert">Informe a sigla da UF com 2 letras (ex.: SP).</small>}
+            </label>
+            <label><strong>CUB declarado — mês de referência</strong>
+              <input value={cubMesEditado} onChange={event => setCubMesEditado(event.target.value)} maxLength={7} placeholder="AAAA-MM (ex.: 2026-09)" />
+              {!cubMesValido && <small role="alert">Use o formato AAAA-MM (ex.: 2026-09).</small>}
+            </label>
+            <label><strong>BDI declarado (fração)</strong>
+              <input value={bdiEditado} onChange={event => setBdiEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 0,25 para 25% — deixe vazio se a obra não declara" />
+              <small>Com o BDI declarado, o desvio real de preço passa a ser verificado (erro). Sem ele, segue como aviso de conferência.</small>
+              {bdiNum !== "invalido" && bdiNum !== null && (bdiNum < 0 || bdiNum > 1) && <small role="alert">Informe a fração entre 0 e 1 (ex.: 0,25).</small>}
             </label>
             {salvarEscopo.isError && <p role="alert">{salvarEscopo.error.message}</p>}
           </div>

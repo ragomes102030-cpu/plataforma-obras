@@ -1243,6 +1243,14 @@ export const appRouter = router({
         location: z.string().trim().min(2).max(180),
         tipoDeObra: z.enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"]).nullable(),
         descricao: z.string().trim().max(4000),
+        // R6-02: CUB declarado (valor + UF + mes) e BDI declarado (fracao).
+        // Cada campo e independente de proposito: o estado PARCIAL (ex.: valor
+        // sem mes) existe e precisa ser representavel — a cobertura nomeia o
+        // campo que falta. null limpa a declaracao; undefined nao mexe nela.
+        cubValor: z.number().positive().max(1_000_000).nullable().optional(),
+        cubUf: z.string().trim().toUpperCase().length(2).nullable().optional(),
+        cubMes: z.string().trim().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use o formato AAAA-MM.").nullable().optional(),
+        bdiDeclarado: z.number().min(0).max(1).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -1254,6 +1262,11 @@ export const appRouter = router({
             location: input.location,
             tipoDeObra: input.tipoDeObra,
             descricao: input.descricao || null,
+            // Coluna numeric recebe string; undefined = nao mexer, null = limpar.
+            cubValor: input.cubValor === undefined ? undefined : input.cubValor == null ? null : input.cubValor.toFixed(2),
+            cubUf: input.cubUf === undefined ? undefined : input.cubUf || null,
+            cubMes: input.cubMes === undefined ? undefined : input.cubMes || null,
+            bdiDeclarado: input.bdiDeclarado === undefined ? undefined : input.bdiDeclarado == null ? null : input.bdiDeclarado.toFixed(6),
             updatedAt: new Date(),
           })
           .where(and(
@@ -1261,7 +1274,7 @@ export const appRouter = router({
             eq(projects.ownerUserId, ctx.user.id),
             isNull(projects.deletedAt),
           ))
-          .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, updatedAt: projects.updatedAt });
+          .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, cubValor: projects.cubValor, cubUf: projects.cubUf, cubMes: projects.cubMes, bdiDeclarado: projects.bdiDeclarado, updatedAt: projects.updatedAt });
         if (!updated) throw notFound("Obra não encontrada para atualizar o escopo.");
         return updated;
       }),
@@ -4157,10 +4170,20 @@ export const appRouter = router({
           ? "soma das areas de piso por nivel, declaradas nas atividades da obra"
           : "area de piso declarada nas atividades (a obra nao tem decomposicao por nivel)";
 
+      // Colunas numericas vem do driver como string; normaliza para numero|null.
+      // NaN nao pode virar parametro: silenciaria a regra em vez de declara-la.
+      const numOuNull=(v:unknown):number|null=>{
+        if(v==null)return null;
+        const n=Number(v);
+        return Number.isFinite(n)?n:null;
+      };
+
       return validarCoerenciaEngenharia({
         obra:{
           projectId:input.projectId, nome:projeto.name, tipoDeObra:projeto.tipoDeObra,
           descricao:projeto.descricao, pavimentos, areaConstruida, areaConstruidaFonte,
+          cubValor:numOuNull(projeto.cubValor), cubUf:projeto.cubUf, cubMes:projeto.cubMes,
+          bdiDeclarado:numOuNull(projeto.bdiDeclarado),
         },
         itens:itens.map(i=>({
           code:i.code, description:i.description, unit:i.unit,
