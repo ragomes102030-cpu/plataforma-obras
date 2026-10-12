@@ -244,3 +244,10 @@ acima como aberto **foi entregue**. O chamador agora passa `bdiDeclarado` e o CU
 a regra 6 só roda com CUB declarado; a cobertura ganhou `nota` (o BDI não declarado é nota da
 regra 4, não motivo de exclusão). O reprodutor foi de **28/28 para 30/30**. Este bloco é o
 registro da rodada da cobertura; o estado atual está no documento do R6-02.
+
+Duas correções ao que está acima, que o R6-02 mudou:
+- na tabela DERIVADA, a linha da regra 6 deixa de ser "provável `obra sem area construida`":
+  com o CUB como porta de entrada, a AURORA (que não declara CUB) passa a declarar
+  **`obra nao declarou CUB`** — o gate do CUB vem antes do da área.
+- o chamador **passa a informar `bdiDeclarado`**; a "Nota para o lead" acima (regra 4 presa em
+  conferência) deixa de valer quando a obra declara o BDI.

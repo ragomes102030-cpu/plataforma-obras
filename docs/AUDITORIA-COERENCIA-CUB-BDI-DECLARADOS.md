@@ -141,6 +141,9 @@ Invariante de shape: todo `cobertura[]` tem `nota` (`null` ou `string`).
 
 ## 8. Evidência
 
+Medido na branch **rebaseada sobre `origin/develop` = `fdd4a4f`** (que já contém o medidor
+`00c036b`, a doc `f4c3626` e o fix da regra 3):
+
 ```
 npx tsx scripts/auditar-coerencia-engenharia.mts
   Hipoteses confirmadas: 30/30     (era 28/28; +R6-05 sem CUB, +R6-06 CUB parcial)
@@ -148,12 +151,17 @@ npx tsx scripts/auditar-coerencia-engenharia.mts
 
 npx vitest run
   Test Files  76 passed (76)
-  Tests       696 passed | 8 skipped (704)
-  (coerencia-engenharia.test.ts: 86 -> 94)
+  Tests       698 passed | 8 skipped (706)
+  (coerencia-engenharia.test.ts: 86 -> 96 = +2 do fix da regra 3 que entrou junto, +8 do R6-02)
 
 npx tsc --noEmit      limpo
-npx vite build        built in 7.34s
+npx vite build        built in 6.66s
+server/migrations.test.ts + drizzle/schema-contrato.test.ts   57 passed
 ```
+
+> Nota de integração: a primeira versão desta entrega estava baseada em `59dd298`, que **não**
+> continha o fix da regra 3 (`fdd4a4f`). A branch foi **rebaseada** sobre `fdd4a4f`; a cadeia
+> final é linear e o fix da regra 3 (ordem de ação dos motivos) está preservado no arquivo.
 
 ---
 
