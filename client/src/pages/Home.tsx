@@ -201,7 +201,14 @@ export default function Home() {
             <Layers3 size={16} className="xl-seletor-layers" />
             <span className="xl-seletor-rotulo">
               <span className="xl-seletor-prefixo">Obra</span>
-              <strong className="xl-seletor-nome">{obra?.name ?? "Nenhuma obra"}</strong>
+              {/*
+                Enquanto a lista de obras nao responde, dizer "Nenhuma obra" e
+                mentira: na instancia fria o botao passou ~5s exibindo isso antes
+                de virar o nome certo. Carregando e vazio sao estados distintos.
+              */}
+              <strong className="xl-seletor-nome">
+                {obra?.name ?? (obras.isLoading ? "Carregando…" : "Escolher obra")}
+              </strong>
             </span>
             {obra?.code && <span className="xl-seletor-codigo">{obra.code}</span>}
             <ChevronDown size={16} className="xl-seletor-seta" />

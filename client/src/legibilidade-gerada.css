@@ -1,0 +1,438 @@
+/*
+ * legibilidade-gerada.css -- ARQUIVO GERADO. Nao editar a mao.
+ *
+ * Regerar: node scripts/gerar-legibilidade.mjs tests/contraste/antes.json
+ * Medir:   node scripts/auditar-contraste.mjs
+ *
+ * Cada regra nasce de uma medicao de contraste: o lugar reprovava o minimo da
+ * WCAG 2.1 (4,5:1 para texto normal, 3:1 para texto grande) e a cor foi
+ * ajustada so na luminosidade ate passar em TODOS os fundos em que aquele
+ * lugar foi visto. O comentario traz a cor antiga, a nova, a pior razao antes
+ * e depois, quantos casos, em quantas telas, com que tamanhos de fonte.
+ *
+ * O seletor e o caminho estrutural medido, nao apenas a classe, para nao
+ * atingir lugares que nao foram medidos. O :not() de estado preserva o realce
+ * de item ativo, e o :not(:hover) preserva o realce de interacao.
+ */
+
+/* regras geradas: 70 */
+
+/* .arquimedes-trilha-seta
+   rgb(192, 202, 209) -> #627886  (escureceu; matiz 205o, saturacao 16%, so a luz mudou)
+   contraste: 1.66:1 -> 4.62:1   |   75 casos em 15 telas
+   fontes: 400 10px   |   ex.: "→" */
+html body main.xl-area.xl-area-sidebar > div.arquimedes-workbar > div.arquimedes-trilha > span.arquimedes-trilha-seta:not(.arquimedes-trilha-label):not(.ativo):not(:hover):not(:focus-visible) { color: #627886 !important; }
+
+/* .eap-rownum   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(162, 176, 181) -> #62747b  (escureceu; matiz 196o, saturacao 11%, so a luz mudou)
+   contraste: 2.11:1 -> 4.62:1   |   14 casos em 2 telas
+   fontes: 600 12.5px, 600 7px   |   ex.: "1.1" */
+html body div > div > div.eap-linha.eap-nivel-2.eap-grupo > span.eap-rownum:not(.eap-codigo):not(.eap-nome):not(.eap-tipo):not(.eap-responsavel):not(.eap-local):not(:hover):not(:focus-visible) { color: #62747b !important; }
+
+/* .eap-rownum   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(162, 176, 181) -> #62747b  (escureceu; matiz 196o, saturacao 11%, so a luz mudou)
+   contraste: 2.11:1 -> 4.62:1   |   10 casos em 2 telas
+   fontes: 600 12.5px, 600 7px   |   ex.: "1" */
+html body div.eap-workspace-grid-body > div > div.eap-linha.eap-nivel-1.eap-grupo > span.eap-rownum:not(.eap-codigo):not(.eap-nome):not(.eap-tipo):not(.eap-responsavel):not(.eap-local):not(:hover):not(:focus-visible) { color: #62747b !important; }
+
+/* .eap-grupo-label   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(145, 160, 166) -> #607077  (escureceu; matiz 197o, saturacao 11%, so a luz mudou)
+   contraste: 2.43:1 -> 4.63:1   |   10 casos em 2 telas
+   fontes: 750 12.5px, 750 7px   |   ex.: "1 itens" */
+html body div > div.eap-linha.eap-nivel-1.eap-grupo > span.eap-status-cell > span.eap-grupo-label:not(:hover):not(:focus-visible) { color: #607077 !important; }
+
+/* small   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(148, 163, 184) -> #617693  (escureceu; matiz 215o, saturacao 20%, so a luz mudou)
+   contraste: 2.56:1 -> 4.65:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "ativa" */
+html body div.pl-baseline-lista > div.pl-baseline-item > div > small:not(:hover):not(:focus-visible) { color: #617693 !important; }
+
+/* .pl-baseline-item > span   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(148, 163, 184) -> #617693  (escureceu; matiz 215o, saturacao 20%, so a luz mudou)
+   contraste: 2.56:1 -> 4.65:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "12/10/2026" */
+html body div.pl-planejamento-box > div.pl-baseline-lista > div.pl-baseline-item > span:not(:hover):not(:focus-visible) { color: #617693 !important; }
+
+/* .pl-cpm-tabela.criticos > small   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(148, 163, 184) -> #617693  (escureceu; matiz 215o, saturacao 20%, so a luz mudou)
+   contraste: 2.56:1 -> 4.65:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "EF = término mais cedo (dias) " */
+html body div.pl-planejamento-grid > div.pl-planejamento-box > div.pl-cpm-tabela.criticos > small:not(:hover):not(:focus-visible) { color: #617693 !important; }
+
+/* .pl-tabela-legenda   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(148, 163, 184) -> #617693  (escureceu; matiz 215o, saturacao 20%, so a luz mudou)
+   contraste: 2.56:1 -> 4.65:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "FS = término → início · SS = i" */
+html body div.pl-planejamento-grid > div.pl-planejamento-box > div.pl-tabela-wrap > p.pl-tabela-legenda:not(:hover):not(:focus-visible) { color: #617693 !important; }
+
+/* .eap-grupo-label   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(145, 160, 166) -> #607077  (escureceu; matiz 197o, saturacao 11%, so a luz mudou)
+   contraste: 2.57:1 -> 4.63:1   |   14 casos em 2 telas
+   fontes: 750 12.5px, 750 7px   |   ex.: "Grupo" */
+html body div > div.eap-linha.eap-nivel-2.eap-grupo > span.eap-status-cell > span.eap-grupo-label:not(:hover):not(:focus-visible) { color: #607077 !important; }
+
+/* .prod-form-nota > code   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 2.63:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "% Real" */
+html body div.xl-painel > div.prod-form > p.prod-form-nota > code:not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .scopo-trace > b   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(139, 154, 168) -> #667788  (escureceu; matiz 209o, saturacao 14%, so a luz mudou)
+   contraste: 2.88:1 -> 4.61:1   |   6 casos em 2 telas
+   fontes: 700 12.5px, 700 9px   |   ex.: "→" */
+html body details.scopo-detail > div.scopo-detail-body > div.scopo-trace > b:not(:hover):not(:focus-visible) { color: #667788 !important; }
+
+/* small   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(139, 154, 168) -> #667788  (escureceu; matiz 209o, saturacao 14%, so a luz mudou)
+   contraste: 2.88:1 -> 4.61:1   |   8 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "camadas do escopo visíveis" */
+html body div.scopo-workspace > section.scopo-metrics > div > small:not(:hover):not(:focus-visible) { color: #667788 !important; }
+
+/* small   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(139, 154, 168) -> #667788  (escureceu; matiz 209o, saturacao 14%, so a luz mudou)
+   contraste: 2.88:1 -> 4.61:1   |   8 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "unidades executáveis" */
+html body section.pl-atividades-page > div.pl-atividades-metrics > div > small:not(:hover):not(:focus-visible) { color: #667788 !important; }
+
+/* .arquimedes-trilha > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(137, 153, 166) -> #657786  (escureceu; matiz 207o, saturacao 14%, so a luz mudou)
+   contraste: 2.92:1 -> 4.63:1   |   85 casos em 15 telas
+   fontes: 600 10px   |   ex.: "Escopo" */
+html body main.xl-area.xl-area-sidebar > div.arquimedes-workbar > div.arquimedes-trilha > span:not(.arquimedes-trilha-label):not(.arquimedes-trilha-seta):not(.ativo):not(:hover):not(:focus-visible) { color: #657786 !important; }
+
+/* .arquimedes-trilha-label   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(137, 153, 166) -> #657786  (escureceu; matiz 207o, saturacao 14%, so a luz mudou)
+   contraste: 2.92:1 -> 4.63:1   |   15 casos em 15 telas
+   fontes: 600 10px   |   ex.: "Fluxo:" */
+html body main.xl-area.xl-area-sidebar > div.arquimedes-workbar > div.arquimedes-trilha > span.arquimedes-trilha-label:not(.arquimedes-trilha-seta):not(.ativo):not(:hover):not(:focus-visible) { color: #657786 !important; }
+
+/* .prod-form-nota > strong   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 2.96:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 700 11.5px, 700 12.5px   |   ex.: "confirmado" */
+html body div.xl-painel > div.prod-form > p.prod-form-nota > strong:not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .scopo-toolbar-title > span
+   rgb(130, 145, 160) -> #627281  (escureceu; matiz 210o, saturacao 14%, so a luz mudou)
+   contraste: 3:1 -> 4.61:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "Fonte conceitual da EAP; não s" */
+html body div.scopo-workspace > div.scopo-toolbar > div.scopo-toolbar-title > span:not(:hover):not(:focus-visible) { color: #627281 !important; }
+
+/* .xl-cartao-nota   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 3.04:1 -> 4.62:1   |   8 casos em 4 telas
+   fontes: 400 11.5px, 400 12.5px   |   ex.: "ponderado por quantidade, em 0" */
+html body div.xl-painel > div.xl-cartoes > div.xl-cartao > span.xl-cartao-nota:not(.xl-cartao-titulo):not(.xl-cartao-valor):not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .xl-cartao-nota   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 3.04:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 11.5px, 400 12.5px   |   ex.: "adiantado — real menos planeja" */
+html body div.xl-painel > div.xl-cartoes > div.xl-cartao.xl-cartao-bom > span.xl-cartao-nota:not(.xl-cartao-titulo):not(.xl-cartao-valor):not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .xl-status-nota   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 3.04:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "0% das atividades" */
+html body div.xl-painel > div.xl-status-blocos > div.xl-status.xl-andamento > span.xl-status-nota:not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .xl-status-nota   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 3.04:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "0% das atividades" */
+html body div.xl-painel > div.xl-status-blocos > div.xl-status.xl-atrasado > span.xl-status-nota:not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .xl-status-nota   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 3.04:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "0% das atividades" */
+html body div.xl-painel > div.xl-status-blocos > div.xl-status.xl-concluido > span.xl-status-nota:not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .xl-status-nota   (mesma cor em 8 lugares -- uma cor nova so para todos)
+   rgb(139, 149, 161) -> #626c79  (escureceu; matiz 213o, saturacao 10%, so a luz mudou)
+   contraste: 3.04:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "100% das atividades" */
+html body div.xl-painel > div.xl-status-blocos > div.xl-status.xl-nao-iniciado > span.xl-status-nota:not(:hover):not(:focus-visible) { color: #626c79 !important; }
+
+/* .id-col   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(119, 137, 154) -> #5c6c7c  (escureceu; matiz 209o, saturacao 15%, so a luz mudou)
+   contraste: 3.08:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 800 12.5px, 800 9px   |   ex.: "ID" */
+html body table.pl-atividades-table > thead > tr > th.id-col:not(.wbs-col):not(.name-col):not(.type-col):not(.dur-col):not(.unit-col):not(.prod-col):not(.qtd-col):not(.status-col):not(.action-col):not(:hover):not(:focus-visible) { color: #5c6c7c !important; }
+
+/* small
+   rgb(135, 148, 154) -> #6a777d  (escureceu; matiz 199o, saturacao 9%, so a luz mudou)
+   contraste: 3.12:1 -> 4.62:1   |   8 casos em 2 telas
+   fontes: 400 12.5px, 400 8.5px   |   ex.: "folhas terminais controláveis" */
+html body div.eap-workspace-control-body > div.eap-workspace-control-grid > div > small:not(:hover):not(:focus-visible) { color: #6a777d !important; }
+
+/* .pl-atividades-footer > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(124, 141, 157) -> #617282  (escureceu; matiz 209o, saturacao 14%, so a luz mudou)
+   contraste: 3.18:1 -> 4.61:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "7 criadas · 0 pendentes" */
+html body div.arquimedes-content > section.pl-atividades-page > footer.pl-atividades-footer > span:not(:hover):not(:focus-visible) { color: #617282 !important; }
+
+/* .eap-workspace-footer > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(122, 137, 145) -> #626f76  (escureceu; matiz 201o, saturacao 9%, so a luz mudou)
+   contraste: 3.21:1 -> 4.6:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 8.5px   |   ex.: "12 nós · 7 folhas · profundida" */
+html body div.arquimedes-content > div.eap.eap-densidade-compacta > div.eap-workspace-footer > span:not(:hover):not(:focus-visible) { color: #626f76 !important; }
+
+/* .pl-row-note   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(124, 141, 157) -> #617282  (escureceu; matiz 209o, saturacao 14%, so a luz mudou)
+   contraste: 3.28:1 -> 4.61:1   |   14 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "Crítica" */
+html body tbody > tr.critical-row > td.action-col > span.pl-row-note:not(:hover):not(:focus-visible) { color: #617282 !important; }
+
+/* .eap-tipo   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(111, 137, 146) -> #5b7179  (escureceu; matiz 195o, saturacao 14%, so a luz mudou)
+   contraste: 3.33:1 -> 4.63:1   |   10 casos em 2 telas
+   fontes: 700 12.5px, 700 8.5px   |   ex.: "FASE / GRUPO" */
+html body div.eap-workspace-grid-body > div > div.eap-linha.eap-nivel-1.eap-grupo > span.eap-tipo:not(.eap-rownum):not(.eap-codigo):not(.eap-nome):not(.eap-responsavel):not(.eap-local):not(:hover):not(:focus-visible) { color: #5b7179 !important; }
+
+/* span
+   rgb(123, 137, 144) -> #657178  (escureceu; matiz 200o, saturacao 9%, so a luz mudou)
+   contraste: 3.33:1 -> 4.63:1   |   4 casos em 4 telas
+   fontes: 400 10px, 400 12.5px   |   ex.: "Sequência, duração, avanço e c" */
+html body section.pl-visual.pl-visual-full > header.pl-visual-header > div > span:not(:hover):not(:focus-visible) { color: #657178 !important; }
+
+/* .eap-workspace-flow > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(122, 137, 145) -> #626f76  (escureceu; matiz 201o, saturacao 9%, so a luz mudou)
+   contraste: 3.45:1 -> 4.6:1   |   14 casos em 2 telas
+   fontes: 600 12.5px, 600 9.5px   |   ex.: "→" */
+html body div.arquimedes-content > div.eap.eap-densidade-compacta > div.eap-workspace-flow > span:not(:hover):not(:focus-visible) { color: #626f76 !important; }
+
+/* .id-col.mono   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(119, 137, 154) -> #5c6c7c  (escureceu; matiz 209o, saturacao 15%, so a luz mudou)
+   contraste: 3.46:1 -> 4.62:1   |   14 casos em 2 telas
+   fontes: 400 10px, 400 12.5px   |   ex.: "475" */
+html body table.pl-atividades-table > tbody > tr.critical-row > td.id-col.mono:not(.wbs-col):not(:hover):not(:focus-visible) { color: #5c6c7c !important; }
+
+/* .eap-tipo   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(111, 137, 146) -> #5b7179  (escureceu; matiz 195o, saturacao 14%, so a luz mudou)
+   contraste: 3.53:1 -> 4.63:1   |   14 casos em 2 telas
+   fontes: 700 12.5px, 700 8.5px   |   ex.: "PACOTE DE TRABALHO" */
+html body div > div > div.eap-linha.eap-nivel-2.eap-grupo > span.eap-tipo:not(.eap-rownum):not(.eap-codigo):not(.eap-nome):not(.eap-responsavel):not(.eap-local):not(:hover):not(:focus-visible) { color: #5b7179 !important; }
+
+/* .xl-vazia > span
+   rgb(122, 132, 142) -> #68717a  (escureceu; matiz 210o, saturacao 8%, so a luz mudou)
+   contraste: 3.54:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 12px   |   ex.: "Registre a primeira produção n" */
+html body tbody > tr > td.xl-vazia > span:not(:hover):not(:focus-visible) { color: #68717a !important; }
+
+/* .scopo-readonly
+   rgb(117, 134, 150) -> #637382  (escureceu; matiz 209o, saturacao 14%, so a luz mudou)
+   contraste: 3.55:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 800 12.5px, 800 8px   |   ex.: "VISÃO DERIVADA · SEM INVENTAR " */
+html body div.arquimedes-content > div.scopo-workspace > div.scopo-toolbar > span.scopo-readonly:not(:hover):not(:focus-visible) { color: #637382 !important; }
+
+/* .ok > small   (mesma cor em 5 lugares -- uma cor nova so para todos)
+   rgb(120, 135, 144) -> #67747d  (escureceu; matiz 203o, saturacao 10%, so a luz mudou)
+   contraste: 3.55:1 -> 4.6:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "sem bloqueios estruturais" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-metrics > div.ok > small:not(:hover):not(:focus-visible) { color: #67747d !important; }
+
+/* .ok > span   (mesma cor em 5 lugares -- uma cor nova so para todos)
+   rgb(120, 135, 144) -> #67747d  (escureceu; matiz 203o, saturacao 10%, so a luz mudou)
+   contraste: 3.55:1 -> 4.6:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "Validação" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-metrics > div.ok > span:not(:hover):not(:focus-visible) { color: #67747d !important; }
+
+/* span
+   rgb(124, 138, 145) -> #6a777e  (escureceu; matiz 200o, saturacao 9%, so a luz mudou)
+   contraste: 3.56:1 -> 4.61:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 8.5px   |   ex.: "v9 · draft" */
+html body div.eap-workspace-baseline > div > div > span:not(:hover):not(:focus-visible) { color: #6a777e !important; }
+
+/* span   (mesma cor em 5 lugares -- uma cor nova so para todos)
+   rgb(120, 135, 144) -> #67747d  (escureceu; matiz 203o, saturacao 10%, so a luz mudou)
+   contraste: 3.56:1 -> 4.6:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 9.5px   |   ex.: "12 nós · 7 folhas · 0 bloqueio" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-validation.ok > div > span:not(:hover):not(:focus-visible) { color: #67747d !important; }
+
+/* span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(123, 138, 145) -> #69777e  (escureceu; matiz 199o, saturacao 9%, so a luz mudou)
+   contraste: 3.57:1 -> 4.62:1   |   8 casos em 2 telas
+   fontes: 400 12.5px, 400 8.5px   |   ex.: "Pacotes de trabalho" */
+html body div.eap-workspace-control-body > div.eap-workspace-control-grid > div > span:not(:hover):not(:focus-visible) { color: #69777e !important; }
+
+/* span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(123, 138, 145) -> #69777e  (escureceu; matiz 199o, saturacao 9%, so a luz mudou)
+   contraste: 3.57:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 500 12.5px, 500 9px   |   ex.: "padrão aguardando decisão" */
+html body div.eap.eap-densidade-compacta > details.eap-workspace-control > summary > span:not(:hover):not(:focus-visible) { color: #69777e !important; }
+
+/* .mono   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(119, 137, 154) -> #5c6c7c  (escureceu; matiz 209o, saturacao 15%, so a luz mudou)
+   contraste: 3.6:1 -> 4.62:1   |   8 casos em 2 telas
+   fontes: 700 12.5px, 700 9px   |   ex.: "E.01" */
+html body table.scopo-table > tbody > tr > td.mono:not(:hover):not(:focus-visible) { color: #5c6c7c !important; }
+
+/* .scopo-flow > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(115, 132, 150) -> #627283  (escureceu; matiz 211o, saturacao 14%, so a luz mudou)
+   contraste: 3.61:1 -> 4.64:1   |   18 casos em 2 telas
+   fontes: 400 10px, 400 12.5px   |   ex.: "→" */
+html body div.arquimedes-content > div.scopo-workspace > div.scopo-flow > span:not(.ativo):not(:hover):not(:focus-visible) { color: #627283 !important; }
+
+/* .pl-atividades-flow > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(115, 132, 150) -> #627283  (escureceu; matiz 211o, saturacao 14%, so a luz mudou)
+   contraste: 3.61:1 -> 4.64:1   |   14 casos em 2 telas
+   fontes: 400 10px, 400 12.5px   |   ex.: "→" */
+html body div.arquimedes-content > section.pl-atividades-page > div.pl-atividades-flow > span:not(:hover):not(:focus-visible) { color: #627283 !important; }
+
+/* small   (mesma cor em 5 lugares -- uma cor nova so para todos)
+   rgb(120, 135, 144) -> #67747d  (escureceu; matiz 203o, saturacao 10%, so a luz mudou)
+   contraste: 3.71:1 -> 4.6:1   |   6 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "estrutura completa" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-metrics > div > small:not(:hover):not(:focus-visible) { color: #67747d !important; }
+
+/* span   (mesma cor em 5 lugares -- uma cor nova so para todos)
+   rgb(120, 135, 144) -> #67747d  (escureceu; matiz 203o, saturacao 10%, so a luz mudou)
+   contraste: 3.71:1 -> 4.6:1   |   6 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "Nós da EAP" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-metrics > div > span:not(:hover):not(:focus-visible) { color: #67747d !important; }
+
+/* .arquimedes-kicker
+   rgb(115, 134, 150) -> #657787  (escureceu; matiz 207o, saturacao 14%, so a luz mudou)
+   contraste: 3.75:1 -> 4.62:1   |   30 casos em 30 telas
+   fontes: 800 12.5px, 800 8px   |   ex.: "PLANEJAMENTO DA OBRA" */
+html body main.xl-area.xl-area-sidebar > div.arquimedes-workbar > div.arquimedes-workbar-title > span.arquimedes-kicker:not(:hover):not(:focus-visible) { color: #657787 !important; }
+
+/* .eap-documentos-vazio
+   rgb(123, 132, 147) -> #6c7584  (escureceu; matiz 217o, saturacao 10%, so a luz mudou)
+   contraste: 3.77:1 -> 4.65:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "Nenhum documento nesta obra ai" */
+html body main.xl-area.xl-area-sidebar > div.arquimedes-content > div.eap-documentos > div.eap-documentos-vazio:not(:hover):not(:focus-visible) { color: #6c7584 !important; }
+
+/* .scopo-detail-body > p
+   rgb(111, 129, 145) -> #667786  (escureceu; matiz 208o, saturacao 13%, so a luz mudou)
+   contraste: 4.02:1 -> 4.62:1   |   4 casos em 2 telas
+   fontes: 400 12.5px, 400 9px   |   ex.: "Contratação de empresa especia" */
+html body section.scopo-trace-grid > details.scopo-detail > div.scopo-detail-body > p:not(:hover):not(:focus-visible) { color: #667786 !important; }
+
+/* .eap-codigo   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(94, 123, 133) -> #57727b  (escureceu; matiz 195o, saturacao 17%, so a luz mudou)
+   contraste: 4.07:1 -> 4.61:1   |   10 casos em 2 telas
+   fontes: 700 12.5px, 700 9px   |   ex.: "1" */
+html body div.eap-workspace-grid-body > div > div.eap-linha.eap-nivel-1.eap-grupo > span.eap-codigo:not(.eap-rownum):not(.eap-nome):not(.eap-tipo):not(.eap-responsavel):not(.eap-local):not(:hover):not(:focus-visible) { color: #57727b !important; }
+
+/* .eap-workspace-title > p
+   rgb(113, 128, 138) -> #697780  (escureceu; matiz 204o, saturacao 10%, so a luz mudou)
+   contraste: 4.07:1 -> 4.61:1   |   2 casos em 2 telas
+   fontes: 400 10.5px, 400 12.5px   |   ex.: "Defina e revise o escopo antes" */
+html body div.eap.eap-densidade-compacta > header.eap-workspace-header > div.eap-workspace-title > p:not(:hover):not(:focus-visible) { color: #697780 !important; }
+
+/* span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(109, 128, 146) -> #667788  (escureceu; matiz 209o, saturacao 15%, so a luz mudou)
+   contraste: 4.08:1 -> 4.61:1   |   8 casos em 2 telas
+   fontes: 800 12.5px, 800 8px   |   ex.: "ELEMENTOS" */
+html body div.scopo-workspace > section.scopo-metrics > div > span:not(:hover):not(:focus-visible) { color: #667788 !important; }
+
+/* span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(109, 128, 146) -> #667788  (escureceu; matiz 209o, saturacao 15%, so a luz mudou)
+   contraste: 4.08:1 -> 4.61:1   |   8 casos em 2 telas
+   fontes: 800 12.5px, 800 8px   |   ex.: "Atividades criadas" */
+html body section.pl-atividades-page > div.pl-atividades-metrics > div > span:not(:hover):not(:focus-visible) { color: #667788 !important; }
+
+/* .xl-painel-kicker   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(107, 118, 131) -> #646e7b  (escureceu; matiz 212o, saturacao 10%, so a luz mudou)
+   contraste: 4.16:1 -> 4.66:1   |   2 casos em 2 telas
+   fontes: 700 10px, 700 12.5px   |   ex.: "COERENCIA DE ENGENHARIA" */
+html body div.xl-achados.xl-achados-critico > div.xl-achados-cabecalho > div > span.xl-painel-kicker:not(:hover):not(:focus-visible) { color: #646e7b !important; }
+
+/* .eap-local   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(104, 119, 127) -> #627077  (escureceu; matiz 201o, saturacao 10%, so a luz mudou)
+   contraste: 4.17:1 -> 4.6:1   |   10 casos em 2 telas
+   fontes: 600 12.5px, 600 9.5px   |   ex.: "—" */
+html body div.eap-workspace-grid-body > div > div.eap-linha.eap-nivel-1.eap-grupo > span.eap-local:not(.eap-rownum):not(.eap-codigo):not(.eap-nome):not(.eap-tipo):not(.eap-responsavel):not(:hover):not(:focus-visible) { color: #627077 !important; }
+
+/* .eap-responsavel   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(104, 119, 127) -> #627077  (escureceu; matiz 201o, saturacao 10%, so a luz mudou)
+   contraste: 4.17:1 -> 4.6:1   |   10 casos em 2 telas
+   fontes: 600 12.5px, 600 9.5px   |   ex.: "—" */
+html body div.eap-workspace-grid-body > div > div.eap-linha.eap-nivel-1.eap-grupo > span.eap-responsavel:not(.eap-rownum):not(.eap-codigo):not(.eap-nome):not(.eap-tipo):not(.eap-local):not(:hover):not(:focus-visible) { color: #627077 !important; }
+
+/* .scopo-workspace-title > p   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(102, 121, 140) -> #607284  (escureceu; matiz 210o, saturacao 16%, so a luz mudou)
+   contraste: 4.18:1 -> 4.61:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "Construção de UBS Porte I — Lo" */
+html body div.scopo-workspace > header.scopo-workspace-header > div.scopo-workspace-title > p:not(.scopo-kicker):not(:hover):not(:focus-visible) { color: #607284 !important; }
+
+/* .pl-atividades-title > p   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(102, 121, 140) -> #607284  (escureceu; matiz 210o, saturacao 16%, so a luz mudou)
+   contraste: 4.18:1 -> 4.61:1   |   2 casos em 2 telas
+   fontes: 400 11px, 400 12.5px   |   ex.: "Transforme os pacotes da EAP a" */
+html body section.pl-atividades-page > header.pl-atividades-header > div.pl-atividades-title > p:not(:hover):not(:focus-visible) { color: #607284 !important; }
+
+/* .xl-cartao-titulo   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(108, 125, 137) -> #677783  (escureceu; matiz 205o, saturacao 12%, so a luz mudou)
+   contraste: 4.26:1 -> 4.62:1   |   38 casos em 10 telas
+   fontes: 700 10px, 700 12.5px   |   ex.: "Avanço físico" */
+html body div.xl-painel > div.xl-cartoes > div.xl-cartao > span.xl-cartao-titulo:not(.xl-cartao-valor):not(.xl-cartao-nota):not(:hover):not(:focus-visible) { color: #677783 !important; }
+
+/* .xl-cartao-titulo   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(108, 125, 137) -> #677783  (escureceu; matiz 205o, saturacao 12%, so a luz mudou)
+   contraste: 4.26:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 700 10px, 700 12.5px   |   ex.: "Desvio" */
+html body div.xl-painel > div.xl-cartoes > div.xl-cartao.xl-cartao-bom > span.xl-cartao-titulo:not(.xl-cartao-valor):not(.xl-cartao-nota):not(:hover):not(:focus-visible) { color: #677783 !important; }
+
+/* .xl-painel-nota   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(107, 118, 131) -> #646e7b  (escureceu; matiz 212o, saturacao 10%, so a luz mudou)
+   contraste: 4.3:1 -> 4.66:1   |   2 casos em 2 telas
+   fontes: 400 12.5px, 400 12px   |   ex.: "7 atividades estão fora da méd" */
+html body main.xl-area.xl-area-sidebar > div.arquimedes-content > div.xl-painel > p.xl-painel-nota:not(:hover):not(:focus-visible) { color: #646e7b !important; }
+
+/* .eap-codigo   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(94, 123, 133) -> #57727b  (escureceu; matiz 195o, saturacao 17%, so a luz mudou)
+   contraste: 4.31:1 -> 4.61:1   |   14 casos em 2 telas
+   fontes: 700 12.5px, 700 9px   |   ex.: "1.1" */
+html body div > div > div.eap-linha.eap-nivel-2.eap-grupo > span.eap-codigo:not(.eap-rownum):not(.eap-nome):not(.eap-tipo):not(.eap-responsavel):not(.eap-local):not(:hover):not(:focus-visible) { color: #57727b !important; }
+
+/* .eap-workspace-grid-head > span   (mesma cor em 2 lugares -- uma cor nova so para todos)
+   rgb(99, 115, 123) -> #5f6e76  (escureceu; matiz 200o, saturacao 11%, so a luz mudou)
+   contraste: 4.33:1 -> 4.64:1   |   12 casos em 2 telas
+   fontes: 800 12.5px, 800 8.5px   |   ex.: "EAP" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-grid > div.eap-workspace-grid-head > span:not(.rownum):not(:hover):not(:focus-visible) { color: #5f6e76 !important; }
+
+/* .xl-painel-kicker   (mesma cor em 3 lugares -- uma cor nova so para todos)
+   rgb(107, 118, 131) -> #646e7b  (escureceu; matiz 212o, saturacao 10%, so a luz mudou)
+   contraste: 4.38:1 -> 4.66:1   |   10 casos em 10 telas
+   fontes: 700 10px, 700 12.5px   |   ex.: "CONTROLE DE PRODUÇÃO" */
+html body div.xl-painel > div.xl-painel-intro > div > span.xl-painel-kicker:not(:hover):not(:focus-visible) { color: #646e7b !important; }
+
+/* .pl-atividades-filtros > button
+   rgb(99, 117, 137) -> #607285  (escureceu; matiz 212o, saturacao 16%, so a luz mudou)
+   contraste: 4.41:1 -> 4.61:1   |   4 casos em 2 telas
+   fontes: 600 10px, 600 12.5px   |   ex.: "Revisar · 0" */
+html body section.pl-atividades-page > div.pl-atividades-toolbar > div.pl-atividades-filtros > button:not(.ativo):not(:hover):not(:focus-visible) { color: #607285 !important; }
+
+/* .eap-local   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(104, 119, 127) -> #627077  (escureceu; matiz 201o, saturacao 10%, so a luz mudou)
+   contraste: 4.42:1 -> 4.6:1   |   14 casos em 2 telas
+   fontes: 600 12.5px, 600 9.5px   |   ex.: "—" */
+html body div > div > div.eap-linha.eap-nivel-2.eap-grupo > span.eap-local:not(.eap-rownum):not(.eap-codigo):not(.eap-nome):not(.eap-tipo):not(.eap-responsavel):not(:hover):not(:focus-visible) { color: #627077 !important; }
+
+/* .eap-responsavel   (mesma cor em 4 lugares -- uma cor nova so para todos)
+   rgb(104, 119, 127) -> #627077  (escureceu; matiz 201o, saturacao 10%, so a luz mudou)
+   contraste: 4.42:1 -> 4.6:1   |   14 casos em 2 telas
+   fontes: 600 12.5px, 600 9.5px   |   ex.: "—" */
+html body div > div > div.eap-linha.eap-nivel-2.eap-grupo > span.eap-responsavel:not(.eap-rownum):not(.eap-codigo):not(.eap-nome):not(.eap-tipo):not(.eap-local):not(:hover):not(:focus-visible) { color: #627077 !important; }
+
+/* .scopo-kicker
+   rgb(96, 117, 138) -> #5e7287  (escureceu; matiz 210o, saturacao 18%, so a luz mudou)
+   contraste: 4.43:1 -> 4.62:1   |   2 casos em 2 telas
+   fontes: 800 12.5px, 800 9px   |   ex.: "PLANEJAMENTO · ESCOPO" */
+html body div.scopo-workspace > header.scopo-workspace-header > div.scopo-workspace-title > span.scopo-kicker:not(:hover):not(:focus-visible) { color: #5e7287 !important; }
+
+/* .eap-workspace-filters > button
+   rgb(101, 116, 124) -> #637179  (escureceu; matiz 201o, saturacao 10%, so a luz mudou)
+   contraste: 4.45:1 -> 4.64:1   |   6 casos em 2 telas
+   fontes: 700 12.5px, 700 9.5px   |   ex.: "Grupos · 5" */
+html body div.eap.eap-densidade-compacta > div.eap-workspace-toolbar > div.eap-workspace-filters > button:not(.ativo):not(:hover):not(:focus-visible) { color: #637179 !important; }
+
+/* .scopo-status.pendente
+   rgb(139, 107, 47) -> #89692e  (escureceu; matiz 39o, saturacao 49%, so a luz mudou)
+   contraste: 4.5:1 -> 4.63:1   |   4 casos em 2 telas
+   fontes: 800 12.5px, 800 8.5px   |   ex.: "A definir" */
+html body tbody > tr > td > span.scopo-status.pendente:not(.scopo-tag):not(.xl-badge):not(.xl-badge-requisi):not(.xl-badge-no-prazo):not(.xl-badge-aprova):not(.xl-badge-em-atraso):not(.xl-badge-fabrica):not(.xl-badge-expedi):not(.xl-badge-entrega):not(.xl-badge-entregue):not(.xl-badge-inspe):not(.xl-badge-aberto):not(.xl-badge-mitigado):not(:hover):not(:focus-visible) { color: #89692e !important; }

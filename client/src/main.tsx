@@ -22,6 +22,15 @@ import "@/mobile.css";
 // Gerado por scripts/gerar-tipografia-campo.mjs; precisa vir depois de
 // mobile.css. Ver a secao 3 de mobile.css.
 import "@/campo-tipografia.css";
+// Tema escuro da barra lateral: a `eap.css` descreve uma barra clara e entra
+// depois de `planilha.css`, ganhando os empates de especificidade. Ver o
+// cabecalho de barra-lateral.css para as medicoes.
+import "@/barra-lateral.css";
+// Contraste: gerado por scripts/gerar-legibilidade.mjs a partir da medicao de
+// contraste das 15 telas. Vem por ultimo para poder corrigir qualquer folha
+// anterior -- e nao define tamanho de fonte, entao nao interfere na camada de
+// campo.
+import "@/legibilidade-gerada.css";
 
 const queryClient = new QueryClient();
 

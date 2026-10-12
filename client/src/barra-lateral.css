@@ -1,0 +1,81 @@
+/*
+ * barra-lateral.css -- completa o tema escuro da barra lateral.
+ *
+ * O DIAGNOSTICO (medido, nao suposto)
+ *
+ * O historico mostra duas passagens de desenho. A primeira barra lateral era
+ * clara (`1d1bc00`, 2026-10-05, "feat: adicionar sidebar recolhivel"). Depois
+ * veio uma passagem de "linguagem visual profissional ao shell" (`f279091`, no
+ * mesmo dia) que pintou a barra de escuro, e ela foi reaplicada em `328fc82`
+ * ("restaurar folha completa"), ou seja: alguem ja tinha percebido que o escuro
+ * se perdia.
+ *
+ * Perde-se por ordem de cascata. `planilha.css` e importado antes de `eap.css`
+ * (Home.tsx), entao onde as duas folhas empatam em especificidade a `eap.css`
+ * vence. O fundo do painel escapa porque usa um seletor mais especifico
+ * (`.xl-pasta-sidebar .xl-sidebar`), mas todo o resto do texto e dos estados
+ * perde -- e o resultado medido era um mosaico dos dois temas:
+ *
+ *   nome da obra         #24343c sobre #101923   ->  1,38:1  praticamente invisivel
+ *   rotulo de grupo      #53636b / #8a979d       ->  2,84:1 / 3,93:1
+ *   botao de recolher    fundo branco, sobre painel escuro
+ *   linha do cabecalho   #e5eaee, clara sobre painel escuro
+ *   item ativo           pilula clara #eaf4f6 dentro de um painel escuro
+ *   item com o mouse     fundo claro #f3f7f8 com texto claro
+ *
+ * O QUE ESTA FOLHA FAZ
+ *
+ * Devolve a intencao escura da `planilha.css`, que ja tinha a paleta inteira
+ * (painel #101923, ativo #173d50, ativo em texto #65d4e9, haste #55c7df). Das
+ * cores pretendidas, so uma reprovava o minimo de contraste da WCAG 2.1, e ela
+ * foi ajustada: o rotulo de grupo saiu de #64798c (3,93:1) para #7b90a3
+ * (5,37:1). As demais ja passavam e foram mantidas, porque a intencao de quem
+ * desenhou ja era acessivel.
+ *
+ * Cada numero de contraste abaixo foi calculado por `node scripts/contraste.mjs`.
+ *
+ * POR QUE `html body` NA FRENTE
+ *
+ * Soma dois pontos de elemento na especificidade. Isso basta para ganhar da
+ * `eap.css` sem `!important` e sem mexer em `font-size` -- a tipografia continua
+ * sendo assunto da camada de campo (campo-tipografia.css), que entra antes
+ * desta e por isso continua mandando no que ela define.
+ */
+
+/* --- cabecalho: a linha que separa o topo estava clara sobre painel escuro --- */
+html body .xl-pasta-sidebar .xl-sidebar-head { border-bottom-color: #263542; }
+
+/* --- nome da obra: era #24343c sobre #101923, 1,38:1 (invisivel) --- */
+html body .xl-pasta-sidebar .xl-sidebar-brand strong { color: #fff; }        /* 17,72:1 */
+html body .xl-pasta-sidebar .xl-sidebar-brand span { color: #7f94a7; }       /*  5,65:1 */
+html body .xl-pasta-sidebar .xl-sidebar-brand > svg { color: #55c7df; }      /*  8,96:1 */
+
+/* --- botao de recolher: era uma caixa branca flutuando no painel escuro --- */
+html body .xl-pasta-sidebar .xl-sidebar-toggle {
+  background: #1b2a37;
+  border-color: #33465a;
+  color: #8fa3b5;                                                            /*  5,63:1 sobre o proprio fundo */
+}
+html body .xl-pasta-sidebar .xl-sidebar-toggle:hover {
+  background: #223343;
+  border-color: #3d5266;
+  color: #fff;
+}
+
+/* --- rotulo de grupo: era #64798c, 3,93:1; o unico valor que precisou mudar --- */
+html body .xl-pasta-sidebar .xl-sidebar-label { color: #7b90a3; }            /*  5,37:1 */
+
+/* --- itens de navegacao: o caso mais grave, 2,84:1 em 420 lugares --- */
+html body .xl-pasta-sidebar .xl-sidebar-item { color: #9eb0bf; }             /*  7,94:1 (6,84:1 no hover, 5,17:1 no ativo) */
+html body .xl-pasta-sidebar .xl-sidebar-item svg { color: #91a5b4; }         /*  6,96:1 */
+html body .xl-pasta-sidebar .xl-sidebar-item:hover { background: #182733; color: #fff; }
+html body .xl-pasta-sidebar .xl-sidebar-item:hover svg { color: #65d4e9; }
+html body .xl-pasta-sidebar .xl-sidebar-item.ativa {
+  background: #173d50;
+  color: #65d4e9;                                                            /*  6,68:1 */
+  box-shadow: inset 3px 0 0 #55c7df;
+}
+html body .xl-pasta-sidebar .xl-sidebar-item.ativa svg { color: #65d4e9; }
+
+/* --- ponto de etapa pendente --- */
+html body .xl-pasta-sidebar .xl-sidebar-status { color: #d9a441; }           /*  7,88:1 */

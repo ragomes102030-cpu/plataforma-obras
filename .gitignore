@@ -107,3 +107,11 @@ build_out.txt
 
 # Codebase Memory MCP — indice local (nao versionar)
 .codebase-memory/
+
+# Retratos das telas (scripts/retratar-telas.mjs) e leitura de contraste do
+# "depois". Sao saida de medicao, nao fonte: qualquer um regera com os scripts.
+# A leitura do "antes" (tests/contraste/antes.json) fica versionada porque e a
+# entrada do gerador de legibilidade.
+tests/telas/
+tests/contraste/relatorio.json
+tests/contraste/depois.json
