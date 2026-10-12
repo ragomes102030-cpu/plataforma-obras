@@ -225,10 +225,21 @@ O resto exige o dado: e o que o script resolve.
 
 ## O que continua aberto (por decisao)
 
-R1-04 (composicao de execucao que cita "projeto executivo"), R2-02 e R4-02.
+R1-04 (composicao de execucao que cita "projeto executivo") e R2-02 — os dois com **zero
+caso no dado da AURORA** (medido no banco pelo lead: 0 linhas cada), logo "correcao de
+logica sem caso": nao urgentes, nao irrelevantes.
 
-**R5-01 e R6-02 sairam desta lista — ela mentiu sobre os dois:**
+**R4-02, R5-01 e R6-02 sairam desta lista — ela mentiu sobre os tres:**
 
+- **R4-02 — FECHADO.** O item cuja composicao nao da base de soma (`somaComponentes <= 0`)
+  deixou de sair da regra 4 em silencio e virou achado NOMEADO proprio
+  (`eng_item_custo_nao_conferivel`, **warning**), com o valor e a composicao de cada item.
+  Entregue em duas partes: `ab047ae` (impacto em R$ por item, publicado em `dc436f8`) e o
+  delta `b39f840` (live), que tirou `"soma de componentes indisponivel"` do motivo — a soma
+  nao estava indisponivel, estava **nao medida** (`null`) ou **zero** (`<= 0`), e agora sao
+  motivos distintos. Medido na UI real pelo lead: 11 itens, R$ 2.729.564,58, e
+  "indisponivel" nao aparece mais. O codigo do achado **nao** foi renomeado, de proposito:
+  `custo_nao_conferivel` e fiel as duas causas; `sem_base_de_preco` mentiria no `null`.
 - **R5-01 — FECHADO.** A regra 5 acusa a composicao PARCIAL
   (`cobertura < LIMIAR_COBERTURA` -> `eng_composicao_preco_incompleto`,
   `coerencia-engenharia.ts:893`) e a sem nenhum preco
@@ -258,6 +269,11 @@ acima como aberto **foi entregue**. O chamador agora passa `bdiDeclarado` e o CU
 a regra 6 só roda com CUB declarado; a cobertura ganhou `nota` (o BDI não declarado é nota da
 regra 4, não motivo de exclusão). O reprodutor foi de **28/28 para 30/30**. Este bloco é o
 registro da rodada da cobertura; o estado atual está no documento do R6-02.
+
+**Atualização (R4-02, `b39f840`):** o R4-02 listado como aberto **foi entregue** — ver o
+bloco do R4-02 acima. E esta lista mentiu **duas vezes**: primeiro sobre o R5-01, depois
+sobre o R4-02, nos dois casos afirmando aberto o que o código já fechava. O reprodutor hoje
+está em **34/34 cenas + cobertura 3/3**, e o total de testes do validador em 103.
 
 Duas correções ao que está acima, que o R6-02 mudou:
 - na tabela DERIVADA, a linha da regra 6 deixa de ser "provável `obra sem area construida`":
