@@ -79,3 +79,16 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+// Service worker: permite fixar a Plataforma Obras na tela inicial do celular e
+// deixa a casca do app disponivel quando o sinal cai no canteiro. A estrategia
+// esta documentada em client/public/sw.js (rede primeiro nas navegacoes, para
+// nunca servir versao velha a quem esta online).
+// Registrado apenas em producao: em desenvolvimento o cache atravancaria o HMR.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Sem service worker o app segue funcionando; e um adicional, nao um requisito.
+    });
+  });
+}

@@ -134,18 +134,30 @@ function parseComposicoesSeinfraRows(rows: string[][]): ComposicaoBloco[] {
   const celula = (row: unknown[], indice: number): string =>
     String(row?.[indice] ?? "").trim();
 
-  const parsePtBrCurrency = (valor: string): number | null => {
-    const limpo = valor.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
-    const n = Number(limpo);
-    return limpo && !Number.isNaN(n) ? n : null;
+  // ATENÇÃO: `lerPrimeiraAba` devolve as células como NÚMERO (raw:true), então em
+  // "13,13" vira o número 13.13 — que já está em ponto decimal. A versão anterior
+  // desta função removia TODOS os pontos (tratando-os como separador de milhar),
+  // o que transformava 13.13 em 1313 (e 0.0176 em 176: 10.000× maior!). Isso
+  // corrompeu todos os coeficientes de composition_components na importação.
+  // Agora: número passa direto; string só é tratada como pt-BR quando tem vírgula.
+  const parsePtBrCurrency = (valor: unknown): number | null => {
+    if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
+    const bruto = String(valor ?? "").trim();
+    if (!bruto) return null;
+    const normalizado = bruto.includes(",")
+      ? bruto.replace(/\./g, "").replace(",", ".")
+      : bruto;
+    const n = Number(normalizado.replace(/[^\d.-]/g, ""));
+    return Number.isNaN(n) ? null : n;
   };
 
   for (const rowBruto of rows) {
     const row = rowBruto as unknown[];
     const c0 = celula(row, 0);
     const c1 = celula(row, 1);
-    const c3 = celula(row, 3);
-    const c4 = celula(row, 4);
+    const c3 = row?.[3];
+    const c4 = row?.[4];
+    const c3Vazio = c3 === null || c3 === undefined || String(c3).trim() === "";
 
     // Linha de seção do bloco
     const secaoNormalizada = c0
@@ -153,7 +165,7 @@ function parseComposicoesSeinfraRows(rows: string[][]): ComposicaoBloco[] {
       .replace(/[\u0300-\u036f]/g, "")
       .toUpperCase()
       .replace(/\s+/g, " ");
-    if (!c1 && !c3) {
+    if (!c1 && c3Vazio) {
       if (secaoNormalizada === "MAO DE OBRA") { secao = "mao_de_obra"; continue; }
       if (secaoNormalizada.startsWith("MATERIA")) { secao = "material"; continue; }
       if (secaoNormalizada.startsWith("EQUIPAMENTO")) { secao = "equipamento"; continue; }
@@ -376,7 +388,9 @@ for (const comp of composicoes) {
       priceItemId,
       componentType: c.componentType,
       coefficient: Math.round(coeffTruncado * 1e6) / 1e6,
-      unitPriceSnapshot: 0,
+      // Custava 0 em produção: sem este snapshot TODA composição tem custo 0 e o
+      // reconcilePreview/createItems devolvem preço zero para qualquer obra.
+      unitPriceSnapshot: Math.round((c.unitPriceSnapshot ?? 0) * 1e6) / 1e6,
     });
   }
 }

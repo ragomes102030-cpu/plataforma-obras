@@ -26,6 +26,7 @@ import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import "@/planilha.css";
 import "@/eap.css";
+import "@/mobile.css";
 
 /**
  * A obra como planilha.

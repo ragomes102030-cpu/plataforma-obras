@@ -1,0 +1,219 @@
+/* =============================================================================
+   CAMPO — ajustes finais para uso em celular (obra, canteiro, tablet)
+   =============================================================================
+
+   POR QUE ESTE ARQUIVO EXISTE
+
+   O layout responsivo do app (gaveta lateral, alvos de toque, tabelas com
+   rolagem propria) ja esta nos blocos "CELULAR" de index.css, planilha.css e
+   eap.css. O que faltava era a camada de *dispositivo* — aquilo que o navegador
+   resolve por fora do layout e que, mal declarado, estraga a tela no celular —
+   e alguns cortes que so aparecem em tela estreita.
+
+   Tudo aqui foi medido, nao suposto. Referencia: iPhone 13, 390x844, emulacao
+   de toque, contra o bundle de producao servido localmente.
+
+   1. index.html declarava "maximum-scale=1", o que proibia o zoom por pinca.
+      No canteiro isso impede ampliar a planilha. Removido.
+   2. Faltavam manifest, theme-color e icones: o app abria com barra de endereco
+      e nao podia ser fixado na tela inicial. Adicionados.
+   3. Sem "viewport-fit=cover" o env(safe-area-inset-*) vale 0, entao as regras
+      de area segura que ja existiam em planilha.css nao tinham efeito.
+   4. .xl-app usava height:100vh. No celular a barra do navegador e descontada
+      depois, e o rodape ficava cortado. Medido: 100dvh fecha exatamente em 844.
+   5. Rotulos de 8 a 11,5px sao ilegiveis sob sol. Aplicado piso de leitura.
+   6. Botoes de 37 a 40px de altura ficavam abaixo dos 44px recomendados.
+   7. .xl-obra-chip encostava em 40px e a tira de obras cortava os ultimos botoes.
+   8. Governanca do EAP: a linha "baseline" nao quebrava e vazava 59px para fora,
+      sem rolagem para alcancar.
+
+   IMPORTANTE SOBRE ESPECIFICIDADE
+   As regras originais as vezes usam duas classes (ex.: `.xl-titlebar-fim
+   .xl-tb-btn`). Um seletor de uma classe perderia. Por isso os seletores abaixo
+   usam classes + "html body". Se um dia um ajuste parecer nao fazer efeito,
+   confira a especificidade antes de recorrer a !important.
+
+   Carregado por ULTIMO (Home.tsx, apos eap.css).
+   ============================================================================= */
+
+:root {
+  --campo-topo: env(safe-area-inset-top, 0px);
+  --campo-base: env(safe-area-inset-bottom, 0px);
+  --campo-esq: env(safe-area-inset-left, 0px);
+  --campo-dir: env(safe-area-inset-right, 0px);
+  --campo-fonte-min: 12.5px;
+  --campo-toque: 44px;
+}
+
+/* ---- 1. comportamento de aplicativo no toque ------------------------------ */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* remove o atraso de ~300ms entre o toque e a acao */
+html body :is(button, a, label, summary, select, [role="button"], input[type="checkbox"], input[type="radio"]) {
+  touch-action: manipulation;
+}
+
+/* ---- 2. area segura e altura real da tela --------------------------------- */
+
+html body .xl-app {
+  height: 100dvh; /* sobrepoe o 100vh; se dvh nao existir, o 100vh continua valendo */
+  padding-left: var(--campo-esq);
+  padding-right: var(--campo-dir);
+}
+
+@media (max-width: 900px) {
+  html body .xl-app {
+    padding-top: var(--campo-topo);
+    padding-bottom: var(--campo-base);
+  }
+  /* a gaveta abre em tela cheia: o topo dela tambem precisa escapar do recorte */
+  html body .xl-sidebar {
+    padding-top: var(--campo-topo);
+    padding-bottom: var(--campo-base);
+  }
+}
+
+/* ---- 3. leitura em campo: piso tipografico -------------------------------- */
+
+/*
+   "pointer: coarse" = dedo; um desktop estreito nao entra nesta regra.
+   O piso sobe por elemento, sem tocar em titulos:
+     - "1em" herda o tamanho do pai, entao nada encolhe;
+     - o teto de 15px impede que um texto pequeno dentro de um bloco grande
+       "exploda" e estoure a linha;
+     - ":is([class], ...)" eleva a especificidade acima das regras que declaram
+       8 a 11,5px.
+   Excecoes propositais: campos de formulario (regra propria abaixo), SVG (o
+   desenho do Gantt tem geometria propria) e rotulos de icone/badge.
+*/
+@media (max-width: 900px) and (pointer: coarse) {
+  html body :is([class], p, span, td, th, li, dt, dd, label, small, a, button, div, figcaption, strong, b):not(
+      h1 *,
+      h2 *,
+      h3 *,
+      h4 *,
+      h5 *,
+      h6 *,
+      input,
+      select,
+      textarea,
+      svg,
+      svg *,
+      [class*="icone"],
+      [class*="badge"]
+    ) {
+    font-size: clamp(var(--campo-fonte-min), 1em, 15px);
+  }
+
+  /* >= 16px impede o zoom automatico do iOS ao focar um campo (a tela inteira
+     dava um salto a cada toque em campo de texto). */
+  html body :is(input, select, textarea) {
+    font-size: 16px;
+  }
+}
+
+/* ---- 4. alvos de toque: minimo de 44px ----------------------------------- */
+
+@media (max-width: 900px) and (pointer: coarse) {
+  html body .xl-obra-chip,
+  html body .xl-obra-chip-lixeira,
+  html body .xl-obra-chip-fechar,
+  html body .xl-menu-mobile,
+  html body .xl-lixeira-btn,
+  html body .xl-tb-btn,
+  html body .xl-tb-user,
+  html body .xl-tb-auth,
+  html body .xl-aba,
+  html body .xl-sidebar-item,
+  html body .arquimedes-workbar-actions button,
+  /* acoes do EAP, dependencias, documentos e filtros: ficavam entre 30 e 41px */
+  html body .eap-workspace-btn,
+  html body .pl-planejamento-secondary,
+  html body .pl-planejamento-cpm,
+  html body .pl-dependencia-form input,
+  html body .pl-dependencia-form select,
+  html body .eap-documentos-cabecalho .eap-btn,
+  html body .xl-filtros .xl-btn,
+  /* duas classes: precisa vencer `.xl-titlebar-fim .xl-tb-btn { min-height: 30px }` */
+  html body .xl-titlebar-fim .xl-tb-btn,
+  /* duas classes: precisa vencer `.pl-dependencia-form .pl-planejamento-secondary
+     { min-height: 32px }`. Sem repetir o caminho do DOM a regra perde. */
+  html body .pl-dependencia-form .pl-planejamento-secondary {
+    min-height: var(--campo-toque);
+  }
+
+  /* botoes quadrados de icone ganham a mesma largura minima */
+  html body .xl-obra-chip-lixeira,
+  html body .xl-obra-chip-fechar,
+  html body .xl-menu-mobile {
+    min-width: var(--campo-toque);
+  }
+}
+
+/* ---- 5. barra de titulo: nao cortar conteudo ----------------------------- */
+
+/*
+   DEFEITO MEDIDO: `.xl-titlebar-fim` e um item de flex. Em flexbox o item nao
+   encolhe abaixo do proprio conteudo (min-width: auto -> max-content), e o bloco
+   de celular existente nao zerava esse piso. Resultado: a tira de obras ficava
+   com 504px dentro de uma barra de 390px, e o pai (overflow-x: hidden) cortava
+   os ~140px finais — botoes de enviar/fechar obra fora de alcance.
+
+   Com min-width: 0 a tira encolhe para a largura da tela (medido: 504 -> 362) e
+   passa a valer o overflow-x: auto que ja existia: da para arrastar e chegar em
+   tudo. Nenhum item foi escondido.
+*/
+@media (max-width: 900px) {
+  html body .xl-titlebar .xl-titlebar-fim {
+    min-width: 0;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
+/* ---- 6. Governanca do EAP em tela estreita ------------------------------- */
+
+@media (max-width: 700px) {
+  /*
+     A linha de baseline tinha `justify-content: space-between` sem quebra; o
+     selo de status usa white-space: nowrap, entao o conjunto ficava 59px mais
+     largo que o cartao e vazava sem rolagem. Permitir quebra resolve sem
+     espremer o selo.
+  */
+  html body .eap-workspace-baseline {
+    flex-wrap: wrap;
+  }
+  html body .eap-workspace-baseline > div {
+    flex-wrap: wrap;
+  }
+
+  /*
+     Com o piso de leitura, os rotulos de 8,5px sobem para 12,5px. Em 4 colunas
+     num aparelho de 390px cada cartao ficaria com ~85px e o rotulo quebraria em
+     varias linhas. Duas colunas devolvem largura util sem perder informacao.
+  */
+  html body .eap-workspace-control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html body .eap-workspace-review-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- 7. graficos largos: rolagem previsivel ------------------------------ */
+
+@media (max-width: 900px) {
+  html body :is(.pl-gantt-scroll, .lob-chart-scroll, .gantt-panel .lob-chart-scroll, [class*="gantt"] [class*="scroll"]) {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain; /* nao encadeia com a navegacao do navegador */
+    touch-action: pan-x pan-y;
+  }
+}

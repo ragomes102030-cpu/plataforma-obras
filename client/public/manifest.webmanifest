@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Plataforma Obras - Planejamento integrado",
+  "short_name": "Obras",
+  "description": "Planejamento, orcamento e controle de obras: EAP, cronograma, CPM, linha de balanco, medicoes e suprimentos.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#eef1f4",
+  "theme_color": "#1f6f8b",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
