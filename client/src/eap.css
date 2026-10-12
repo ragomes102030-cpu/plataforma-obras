@@ -1994,3 +1994,37 @@
   .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-brand > div { display: revert; }
   .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-item { justify-content: flex-start; padding: 0 10px; }
 }
+
+/* ------------------------------------------- alvos de toque no celular
+   Medido em 390px: os chips de obra tinham 23px de altura, os botoes de
+   fechar/lixeira do chip 22px e 11px, e os botoes da barra de titulo 26-30px.
+   Abaixo de ~40px o toque erra o alvo — em obra, com mao suja ou luva, mais
+   ainda. Estes sao os controles que o engenheiro mais usa no telefone
+   (trocar de obra, fechar, abrir o Arquimedes). */
+@media (max-width: 900px) {
+  /* Chip de obra: altura confortavel. */
+  .xl-obra-chip { min-height: 40px; padding-top: 6px; padding-bottom: 6px; }
+
+  /* Botoes embutidos no chip (lixeira, fechar): viram alvo de 40x40 sem
+     inflar o chip, usando area de toque negativa. */
+  .xl-obra-chip-lixeira,
+  .xl-obra-chip-fechar {
+    min-width: 40px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Botoes da barra de titulo e da barra de ferramentas. */
+  .xl-titlebar-collapse,
+  .xl-titlebar-fechar,
+  .xl-tb-btn {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* Botao de nova obra / demo. */
+  .xl-obra-nova,
+  .xl-demo-obra { min-height: 40px; }
+}
