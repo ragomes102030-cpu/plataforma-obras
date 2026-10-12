@@ -658,9 +658,15 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     let avaliados = 0;
     let exemplo = "";
     for (const it of input.itens) {
-      const descComp = it.compositionDescription ?? "";
-      if (!contemRadical(descComp, "concret")) { contar(exclusoes, "composicao nao cita concreto"); continue; }
+      // Ordem dos motivos = ordem de ACAO para o engenheiro. O item que nao e elemento
+      // estrutural esta fora da regra independente da composicao; o que e estrutural mas
+      // nao tem composicao vinculada precisa VINCULAR — dizer "a composicao nao cita
+      // concreto" para um item sem composicao manda procurar o que nao existe.
       if (!contemAlgum(it.description, RADICAIS_ESTRUTURAIS)) { contar(exclusoes, "item nao e elemento estrutural"); continue; }
+      if (!it.compositionId) { contar(exclusoes, "sem composicao vinculada"); continue; }
+      const descComp = it.compositionDescription ?? "";
+      if (!descComp) { contar(exclusoes, "composicao sem descricao"); continue; }
+      if (!contemRadical(descComp, "concret")) { contar(exclusoes, "composicao nao cita concreto"); continue; }
       const fck = fckDeConcreto(descComp);
       if (fck == null) { contar(exclusoes, "fck nao declarado na composicao"); continue; }
       avaliados++;

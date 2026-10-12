@@ -49,18 +49,66 @@ Forma exposta, por regra:
 
 ## Linguagem de engenheiro no painel
 
-> a regra de preco conferiu 18 de 53 itens; 35 fora por sem composicao vinculada
+> a regra de preco conferiu 18 de 53 itens | 35 fora por sem composicao vinculada
 
 Quando ha mais de um motivo, todos aparecem: `35 fora por 30 sem composicao vinculada;
 5 unidade divergente da composicao`.
 
-## Os 26 motivos de exclusao (um teste por motivo)
+## Como o painel fica (texto emitido pelo componente)
+
+Achados e cobertura **lado a lado**, na mesma tela: a lista de achados vem primeiro e o
+bloco de cobertura fecha o painel. O painel emite **dois blocos visuais por regra** (a
+contagem, em monoespacada, e o motivo); o medidor imprime os mesmos dois pedacos unidos por
+` | `. Texto literal do componente — **nao e screenshot**: nao havia browser nem banco neste
+ambiente. As linhas de alcance saem de `medir-cobertura-obra.mts --autoteste`, que usa a
+mesma frase do painel:
+
+```
+COERENCIA DE ENGENHARIA
+5 incoerencia(s) que impedem execucao · 6 aviso(s) · R$ 2.336.306,30 em risco
+  ...
+O QUE FOI CONFERIDO
+Nao haver achado em uma regra significa que ela nao encontrou incoerencia no que conseguiu
+conferir. O alcance de cada regra esta abaixo — item fora nao foi reprovado, nao foi conferido.
+a regra de natureza do servico                  conferiu 18 de 53 itens  |  35 fora por sem composicao vinculada
+a regra de sistema construtivo incompativel     conferiu 1 de 53 itens   |  52 fora por item sem sistema construtivo reconhecivel
+a regra de resistencia do concreto              conferiu 18 de 53 itens  |  35 fora por item nao e elemento estrutural
+a regra de preco sem lastro                     conferiu 18 de 53 itens  |  35 fora por sem composicao vinculada
+a regra de cobertura de preco da composicao     conferiu 18 de 18 composicoes
+a regra de custo por m2                         nao havia itens para conferir
+a regra de unidade orcamento x cronograma       conferiu 1 de 2 atividades |  1 fora por atividade sem item correspondente no orcamento
+a regra de superestrutura e ciclo de pavimento  conferiu 1 de 2 atividades |  1 fora por atividade fora da superestrutura
+a regra de sequencia construtiva                conferiu 1 de 2 atividades |  1 fora por atividade que nao e elemento superior
+a regra de atividade sem predecessor            conferiu 1 de 2 atividades |  1 fora por atividade que pode comecar sem predecessor (frente de inicio)
+```
+
+Caminho **sem achado** (o que antes dizia "Nenhuma incoerencia encontrada" e era lido como
+"obra conferida"):
+
+```
+COERENCIA DE ENGENHARIA
+Nenhuma incoerencia encontrada no que foi conferido. Isto nao afirma que a obra esta coerente
+— afirma que as regras nao acusaram nada dentro do alcance delas, que esta declarado abaixo.
+O QUE FOI CONFERIDO
+  <as mesmas linhas de alcance>
+```
+
+Caminho **degenerado** (a analise nao chegou a rodar: sem achado *e* sem cobertura) — a
+ultima brecha de falso conforto, fechada:
+
+```
+COERENCIA DE ENGENHARIA
+Nada foi conferido. A validacao nao chegou a rodar nesta obra, entao nao ha alcance nem
+achado para mostrar. Isto NAO e um atestado de coerencia.
+```
+
+## Os 28 motivos de exclusao (um teste por motivo)
 
 | Regra | Motivos |
 | --- | --- |
 | 1. natureza do servico | sem composicao vinculada · composicao nao encontrada · composicao sem descricao |
 | 2. sistema construtivo | obra sem sistema declarado nem inferivel · obra declara sistema misto · item sem sistema reconhecivel · item declara sistema misto |
-| 3. resistencia do concreto | composicao nao cita concreto · item nao e elemento estrutural · fck nao declarado na composicao |
+| 3. resistencia do concreto | item nao e elemento estrutural · sem composicao vinculada · composicao sem descricao · composicao nao cita concreto · fck nao declarado na composicao |
 | 4. preco sem lastro | sem composicao vinculada · unidade divergente da composicao · soma de componentes indisponivel · preco do item nao informado |
 | 5. cobertura de preco | composicao sem componentes |
 | 6. custo por m2 | obra sem area construida · item nao e custo direto · custo direto sem valor informado |
@@ -68,6 +116,13 @@ Quando ha mais de um motivo, todos aparecem: `35 fora por 30 sem composicao vinc
 | 8. superestrutura | atividade fora da superestrutura · superestrutura em nivel unico |
 | 9. sequencia construtiva | obra sem fundacao com termino no CPM · atividade que nao e elemento superior · atividade sem earlyStart |
 | 10. sem predecessor | atividade que pode comecar sem predecessor (frente de inicio) |
+
+A **ordem** dos motivos dentro de cada regra e a ordem de **acao** para o engenheiro, nao
+a ordem dos testes. Defeito real encontrado pelo medidor (`medir-cobertura-obra.mts`): a
+regra 3 reportava `"composicao nao cita concreto"` para item **sem composicao vinculada** —
+motivo que manda o engenheiro procurar uma composicao que nao existe. Corrigido: o item que
+nao e elemento estrutural sai por isso (esta fora da regra com ou sem composicao); o que e
+estrutural e nao tem composicao sai por `sem composicao vinculada`.
 
 Dois casos que **nao** sao exclusao e ficaram travados por teste, para nao virarem
 desculpa:
@@ -100,12 +155,18 @@ npx tsx scripts/auditar-coerencia-engenharia.mts
   Hipoteses confirmadas: 28/28
   Cobertura confirmada: 3/3        (C1: 18 de 53 · C2: 10/10 fecham a conta · C3: motivo nomeado)
 
+npx tsx scripts/medir-cobertura-obra.mts --autoteste
+  cruzamento 53/18/35 ... OK        VEREDITO DO AUTOTESTE -> 4/4 (instrumento confiavel)
+
 npx vitest run
-  Test Files 76 passed (76) | Tests 685 passed | 8 skipped (693)
-  (coerencia-engenharia.test.ts: 52 -> 84)
+  Test Files 76 passed (76) | Tests 687 passed | 8 skipped (695)
+  (coerencia-engenharia.test.ts: 52 -> 86)
 
 npx tsc --noEmit
-  limpo
+  limpo (exit 0)
+
+npx vite build
+  built in 6.37s (o painel compila)
 ```
 
 ## Como medir a cobertura de uma obra REAL

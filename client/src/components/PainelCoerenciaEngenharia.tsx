@@ -95,6 +95,22 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
   }
 
   const dados = coerencia.data;
+  const cobertura = dados?.resumo.cobertura ?? [];
+  // Sem cobertura registrada e sem achado, nada foi conferido — nao existe "obra ok"
+  // para mostrar. (Caminho degenerado: a analise nao chegou a rodar.) Sem isto, o
+  // zero-achado voltaria a ser lido como coerencia.
+  if (dados && dados.resumo.total === 0 && cobertura.length === 0) {
+    return (
+      <div className="xl-achados xl-achados-erro">
+        <span className="xl-painel-kicker">COERENCIA DE ENGENHARIA</span>
+        <p>
+          <strong>Nada foi conferido.</strong> A validacao nao chegou a rodar nesta obra, entao
+          nao ha alcance nem achado para mostrar. Isto NAO e um atestado de coerencia.
+        </p>
+      </div>
+    );
+  }
+
   if (!dados || dados.resumo.total === 0) {
     return (
       <div className="xl-achados xl-achados-ok">
@@ -104,7 +120,7 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
           Isto nao afirma que a obra esta coerente — afirma que as regras nao acusaram nada
           dentro do alcance delas, que esta declarado abaixo.
         </p>
-        <BlocoCobertura cobertura={dados?.resumo.cobertura ?? []} />
+        <BlocoCobertura cobertura={cobertura} />
       </div>
     );
   }
@@ -171,7 +187,7 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
               ))}
             </>
           )}
-          <BlocoCobertura cobertura={dados.resumo.cobertura} />
+          <BlocoCobertura cobertura={cobertura} />
         </div>
       )}
     </div>

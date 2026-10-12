@@ -1192,6 +1192,42 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
   });
 
   describe("regra 3 - resistencia do concreto", () => {
+    it("motivo: item nao e elemento estrutural (item fora da regra, com ou sem composicao)", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.9.1", description: "Pintura acrilica" })],
+        composicoes: [],
+      });
+      const c = alcance(r, 3);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("item nao e elemento estrutural");
+    });
+
+    it("motivo: sem composicao vinculada (NAO 'composicao nao cita concreto')", () => {
+      // O item E estrutural, mas nao tem composicao. Dizer "a composicao nao cita
+      // concreto" mandaria o engenheiro procurar uma composicao que nao existe.
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.4.1", description: "Pilares" })],
+        composicoes: [],
+      });
+      const c = alcance(r, 3);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("sem composicao vinculada");
+      expect(c.motivos.map(m => m.motivo)).not.toContain("composicao nao cita concreto");
+    });
+
+    it("motivo: composicao sem descricao", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.4.1", description: "Pilares", compositionId: 5 })],
+        composicoes: [composicao({ id: 5, code: "C5", description: "" })],
+      });
+      const c = alcance(r, 3);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("composicao sem descricao");
+    });
+
     it("motivo: composicao nao cita concreto", () => {
       const r = validarCoerenciaEngenharia({
         obra: obraBase,
@@ -1201,15 +1237,6 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
       const c = alcance(r, 3);
       expect(c.avaliados).toBe(0);
       expect(c.motivo).toBe("composicao nao cita concreto");
-    });
-
-    it("motivo: item nao e elemento estrutural", () => {
-      const r = validarCoerenciaEngenharia({
-        obra: obraBase,
-        itens: [item({ code: "1.9.1", description: "Pintura acrilica", compositionId: 1, compositionDescription: "CONCRETO P/VIBR., FCK=15MPa" })],
-        composicoes: [composicao({ id: 1, code: "C1", description: "CONCRETO P/VIBR., FCK=15MPa" })],
-      });
-      expect(alcance(r, 3).motivo).toBe("item nao e elemento estrutural");
     });
 
     it("motivo: fck nao declarado na composicao", () => {
