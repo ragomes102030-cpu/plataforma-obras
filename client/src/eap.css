@@ -1818,13 +1818,9 @@
 }
 .xl-escopo-nota strong{color:#2f5965}
 @media(max-width:760px){
-  .xl-sidebar{width:58px;flex-basis:58px}
-  .xl-sidebar-brand,.xl-sidebar-label,.xl-sidebar-item span,.xl-sidebar-item small,.xl-sidebar-foot span{display:none}
-  .xl-sidebar-head{justify-content:center;padding:8px}
+  /* A rail de 58px foi substituida pelo drawer (bloco CELULAR no fim deste
+     arquivo). Aqui fica so o ajuste de nav, que o drawer reaproveita. */
   .xl-sidebar-nav{padding-left:9px;padding-right:9px}
-  .xl-sidebar-item{justify-content:center;padding:0}
-  .xl-sidebar-item.ativa{box-shadow:none}
-  .xl-sidebar-foot button{padding:0}
   .xl-escopo{padding:18px 14px}
   .xl-escopo-grid{grid-template-columns:1fr}
 }
@@ -1987,4 +1983,14 @@
   /* O painel de achados tem texto longo: respira melhor empilhado. */
   .xl-achados-cabecalho { flex-direction: column; gap: 6px; }
   .xl-achados-toggle { align-self: flex-start; }
+}
+
+/* Dentro do drawer o rotulo precisa aparecer. O `display:none` do <span> que
+   existia para a rail de icones foi removido, mas esta regra explicita garante
+   que o texto volte caso algum outro ponto o esconda. */
+@media (max-width: 900px) {
+  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-item span,
+  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-label,
+  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-brand > div { display: revert; }
+  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-item { justify-content: flex-start; padding: 0 10px; }
 }

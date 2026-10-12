@@ -2739,13 +2739,15 @@ tr:hover .xl-codigo {
 }
 
 @media (max-width: 720px) {
-  .xl-pasta-sidebar .xl-sidebar { width: 58px; min-width: 58px; }
-  .xl-sidebar-label, .xl-sidebar-brand div, .xl-sidebar-item span, .xl-sidebar-item small, .xl-sidebar-foot span { display: none; }
-  .xl-sidebar-item { justify-content: center; padding: 0; }
-  .xl-sidebar-foot button { padding: 0; }
+  /* A rail de 58px (so icones) foi SUBSTITUIDA pelo drawer em eap.css.
+     Motivo medido: em 390px a rail deixava a navegacao sem rotulo e a sidebar
+     ocupava a largura toda em position:static, empurrando as abas para fora.
+     As regras de largura/ocultacao saem daqui: `.xl-pasta-sidebar .xl-sidebar`
+     tem 2 classes e venceria o drawer por especificidade. */
   .arquimedes-workbar { min-height: 54px; padding: 8px 12px; }
-  .arquimedes-workbar-actions button { width: 28px; height: 28px; }
+  .arquimedes-workbar-actions button { width: 40px; height: 40px; }
 }
+
 
 
 /* Cabeçalho do produto: identidade de plataforma, não de planilha genérica. */
