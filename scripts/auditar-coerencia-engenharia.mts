@@ -578,6 +578,78 @@ const cenas: Cena[] = [
   },
 ];
 
+// ------------------------------------------------- cobertura (alcance, nao achado)
+//
+// Nao sao cenas de ACHADO: aqui se verifica a DECLARACAO DE ALCANCE de cada regra.
+// Sem ela, "sem achado" e indistinguivel de "conferido" — e foi assim que o painel
+// chegou a dizer "Nenhuma incoerencia encontrada" na AURORA com 35 de 53 itens fora.
+
+type ResultadoCobertura = {
+  id: string;
+  hipotese: string;
+  confirmou: boolean;
+  detalhe: string;
+};
+
+const coberturas: ResultadoCobertura[] = [];
+const registrarCobertura = (id: string, hipotese: string, ok: boolean, detalhe: string) =>
+  coberturas.push({ id, hipotese, confirmou: ok, detalhe });
+
+// C1 — o caso AURORA em miniatura: 53 itens, 18 com composicao vinculada.
+{
+  const itens = Array.from({ length: 53 }, (_, i) =>
+    i < 18
+      ? item({ code: `i${i}`, description: `Servico ${i}`, unit: "m3", unitPrice: 100, compositionId: 900 + i, compositionUnit: "M3", somaComponentes: 100 })
+      : item({ code: `i${i}`, description: `Servico ${i}`, unit: "m3", unitPrice: 100 }),
+  );
+  const composicoes = Array.from({ length: 18 }, (_, i) =>
+    comp({ id: 900 + i, code: `C${i}`, unit: "M3", totalComponentes: 1, componentesComPreco: 1 }),
+  );
+  const r = validarCoerenciaEngenharia({ obra: obra(), itens, composicoes });
+  const c = r.resumo.cobertura.find(x => x.regra.startsWith("4."));
+  registrarCobertura(
+    "C1",
+    "a regra de preco DECLARA 18 de 53 itens conferidos e 35 fora por 'sem composicao vinculada'",
+    c?.total === 53 && c?.avaliados === 18 && c?.fora === 35 && c?.motivo === "sem composicao vinculada",
+    `regra 4: total=${c?.total} avaliados=${c?.avaliados} fora=${c?.fora} motivo="${c?.motivo}"`,
+  );
+}
+
+// C2 — invariante de fechamento: nenhuma regra pode "esquecer" item sem dizer.
+{
+  const r = validarCoerenciaEngenharia({
+    obra: obra(),
+    itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 50 })],
+    composicoes: [],
+  });
+  const c = r.resumo.cobertura;
+  const fecham = c.filter(x => x.avaliados + x.fora === x.total);
+  registrarCobertura(
+    "C2",
+    "as 10 regras registram cobertura e fecham a conta (avaliados + fora === total)",
+    c.length === 10 && fecham.length === 10,
+    `${fecham.length}/${c.length} regras fecham a conta`,
+  );
+}
+
+// C3 — motivo NOMEADO, nunca generico.
+{
+  const GENERICOS = ["nao aplicavel", "n/a", "outros", "diversos", "generico", "varios"];
+  const r = validarCoerenciaEngenharia({
+    obra: obra(),
+    itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 50 })],
+    composicoes: [],
+  });
+  const comFora = r.resumo.cobertura.filter(x => x.fora > 0);
+  const nomeados = comFora.filter(x => x.motivo && !GENERICOS.includes(x.motivo) && x.motivo.length > 8);
+  registrarCobertura(
+    "C3",
+    "todo motivo de exclusao e NOMEADO — nunca 'nao aplicavel'",
+    comFora.length > 0 && nomeados.length === comFora.length,
+    `${nomeados.length}/${comFora.length} regras com motivo nomeado`,
+  );
+}
+
 // -------------------------------------------------------------------- execucao
 
 const emitirJson = process.argv.includes("--json");
@@ -619,7 +691,7 @@ const resultados: ResultadoCena[] = cenas.map(c => {
 });
 
 if (emitirJson) {
-  console.log(JSON.stringify({ cenas: resultados }, null, 2));
+  console.log(JSON.stringify({ cenas: resultados, cobertura: coberturas }, null, 2));
 } else {
   let confirmadas = 0;
   for (const r of resultados) {
@@ -632,4 +704,14 @@ if (emitirJson) {
     console.log("");
   }
   console.log(`Hipoteses confirmadas: ${confirmadas}/${resultados.length}`);
+
+  let cobConfirmadas = 0;
+  console.log("");
+  for (const c of coberturas) {
+    const marca = c.confirmou ? "CONFIRMOU " : "NAO CONFIRMOU";
+    if (c.confirmou) cobConfirmadas++;
+    console.log(`${marca} ${c.id} [cobertura] ${c.hipotese}`);
+    console.log(`           ${c.detalhe}`);
+  }
+  console.log(`Cobertura confirmada: ${cobConfirmadas}/${coberturas.length}`);
 }

@@ -979,3 +979,489 @@ describe("revisao 3 - R3-03: item chamado apenas 'Estrutura' passa pela regra de
     expect(resultado.issues.map(i => i.code)).not.toContain("eng_concreto_resistencia_insuficiente");
   });
 });
+
+/**
+ * COBERTURA POR REGRA — declaracao de ALCANCE, nao achado.
+ *
+ * O defeito de origem: "sem achado" era indistinguivel de "conferido". Na AURORA,
+ * 35 de 53 itens (66%) nao tem composicao vinculada — a regra de preco conferiu 18
+ * e as outras 35 nao foram reprovadas, nao foram CONFERIDAS. O painel dizia
+ * "Nenhuma incoerencia encontrada" e o engenheiro lia como obra coerente.
+ *
+ * Cada regra declara quantos itens conseguiu avaliar e quantos ficaram fora, com o
+ * motivo NOMEADO (nunca "nao aplicavel"). Ha um teste por motivo de exclusao.
+ * Nada aqui toca no dado nem muda severidade.
+ */
+describe("cobertura por regra (alcance declarado, nao achado)", () => {
+  type Resultado = ReturnType<typeof validarCoerenciaEngenharia>;
+
+  const obraSemSistema: ObraParaCoerencia = {
+    projectId: 7,
+    nome: "OBRA SEM SISTEMA DECLARADO",
+    tipoDeObra: "edificio",
+    descricao: "Obra civil de reforma e ampliacao.",
+  };
+
+  function ativ(over: Partial<AtividadeParaCoerencia>): AtividadeParaCoerencia {
+    return { id: 1, wbsCode: "1.1.1", name: "Atividade", durationDays: 10, unit: "m3", ...over };
+  }
+
+  function alcance(r: Resultado, n: number) {
+    const c = r.resumo.cobertura.find(x => x.regra.startsWith(`${n}.`));
+    if (!c) throw new Error(`a regra ${n} nao registrou cobertura`);
+    return c;
+  }
+
+  /** O motivo NOMEADO tem de estar presente na cobertura da regra. */
+  function esperaMotivo(r: Resultado, n: number, motivo: string) {
+    const c = alcance(r, n);
+    const m = c.motivos.find(x => x.motivo === motivo);
+    expect(m, `motivo "${motivo}" ausente na regra ${n}: ${JSON.stringify(c.motivos)}`).toBeDefined();
+    return c;
+  }
+
+  const cenarioCheio = () => ({
+    obra: { ...obraBase, areaConstruida: 4800 },
+    itens: [
+      item({ code: "1.1.1", description: "Escavacao", unit: "m3", quantity: 100, unitPrice: 50 }),
+      item({
+        code: "1.4.1", description: "Pilares", unit: "m3", quantity: 10, unitPrice: 2000,
+        compositionId: 1, compositionCode: "C1", compositionDescription: "CONCRETO FCK=25MPa",
+        compositionUnit: "M3", somaComponentes: 1900,
+      }),
+    ],
+    composicoes: [composicao({ id: 1, code: "C1", description: "CONCRETO FCK=25MPa", unit: "M3", totalComponentes: 2, componentesComPreco: 2 })],
+    atividades: [
+      ativ({ id: 1, wbsCode: "1.3.2", name: "Fundacao", earlyStart: 1, earlyFinish: 20 }),
+      ativ({ id: 2, wbsCode: "1.4.1", name: "Estrutura", earlyStart: 25, earlyFinish: 60 }),
+    ],
+  });
+
+  it("o resumo expoe cobertura para TODAS as 10 regras, com a forma combinada", () => {
+    const r = validarCoerenciaEngenharia(cenarioCheio());
+    expect(r.resumo.cobertura).toHaveLength(10);
+    for (const c of r.resumo.cobertura) {
+      expect(typeof c.regra).toBe("string");
+      expect(typeof c.total).toBe("number");
+      expect(typeof c.avaliados).toBe("number");
+      expect(typeof c.fora).toBe("number");
+      expect(["itens", "composicoes", "atividades"]).toContain(c.universo);
+      expect(c).toHaveProperty("motivo");
+      expect(Array.isArray(c.motivos)).toBe(true);
+    }
+  });
+
+  it("toda regra fecha a conta: avaliados + fora === total", () => {
+    const r = validarCoerenciaEngenharia(cenarioCheio());
+    for (const c of r.resumo.cobertura) {
+      expect(c.avaliados + c.fora, `${c.regra}: ${c.avaliados} + ${c.fora} != ${c.total}`).toBe(c.total);
+      // e o total declarado e o tamanho real do universo daquela regra
+      const universo = c.universo === "itens" ? 2 : c.universo === "composicoes" ? 1 : 2;
+      expect(c.total, c.regra).toBe(universo);
+    }
+  });
+
+  it("motivo de exclusao e sempre NOMEADO — nunca generico, nunca vazio", () => {
+    const GENERICOS = ["nao aplicavel", "n/a", "outros", "diversos", "generico", "varios"];
+    const r = validarCoerenciaEngenharia(cenarioCheio());
+    for (const c of r.resumo.cobertura) {
+      if (c.fora > 0) {
+        expect(c.motivo, `${c.regra} tem ${c.fora} fora mas motivo nulo`).toBeTruthy();
+        expect(GENERICOS).not.toContain(c.motivo);
+        expect(c.motivo!.length).toBeGreaterThan(8);
+      }
+      for (const m of c.motivos) {
+        expect(m.itens).toBeGreaterThan(0);
+        expect(GENERICOS).not.toContain(m.motivo);
+      }
+      expect(c.motivos.reduce((s, m) => s + m.itens, 0)).toBe(c.fora);
+    }
+  });
+
+  it("'fora' de verdade: 35 de 53 sem composicao vinculada (o caso AURORA, em miniatura)", () => {
+    // 53 itens, 18 com composicao: a regra de preco avalia 18 e declara 35 fora.
+    const itens = Array.from({ length: 53 }, (_, i) =>
+      i < 18
+        ? item({ code: `${i}`, description: `Servico ${i}`, unit: "m3", unitPrice: 100, compositionId: 100 + i, compositionUnit: "M3", somaComponentes: 100 })
+        : item({ code: `${i}`, description: `Servico ${i}`, unit: "m3", unitPrice: 100 }),
+    );
+    const composicoes = Array.from({ length: 18 }, (_, i) =>
+      composicao({ id: 100 + i, code: `C${i}`, unit: "M3", totalComponentes: 1, componentesComPreco: 1 }),
+    );
+
+    const r = validarCoerenciaEngenharia({ obra: obraBase, itens, composicoes });
+    const c = alcance(r, 4);
+    expect(c.total).toBe(53);
+    expect(c.avaliados).toBe(18);
+    expect(c.fora).toBe(35);
+    expect(c.motivo).toBe("sem composicao vinculada");
+    expect(c.motivos.find(m => m.motivo === "sem composicao vinculada")?.itens).toBe(35);
+  });
+
+  describe("regra 1 - natureza do servico", () => {
+    it("motivo: sem composicao vinculada", () => {
+      const r = validarCoerenciaEngenharia({ obra: obraBase, itens: [item({ code: "1.1.1", description: "Escavacao" })], composicoes: [] });
+      const c = alcance(r, 1);
+      expect(c.total).toBe(1);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("sem composicao vinculada");
+    });
+
+    it("motivo: composicao nao encontrada", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", compositionId: 99, compositionCode: "C99" })],
+        composicoes: [],
+      });
+      expect(alcance(r, 1).motivo).toBe("composicao nao encontrada");
+    });
+
+    it("motivo: composicao sem descricao", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", compositionId: 5 })],
+        composicoes: [composicao({ id: 5, code: "C5", description: "" })],
+      });
+      const c = alcance(r, 1);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("composicao sem descricao");
+    });
+  });
+
+  describe("regra 2 - sistema construtivo", () => {
+    it("motivo: obra sem sistema construtivo declarado nem inferivel", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraSemSistema,
+        itens: [item({ code: "1.1.1", description: "Servicos preliminares" })],
+        composicoes: [],
+      });
+      const c = alcance(r, 2);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("obra sem sistema construtivo declarado nem inferivel");
+    });
+
+    it("motivo: obra declara sistema misto (nao avalia por decisao)", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, descricao: "Estrutura em concreto armado com alvenaria estrutural nas vedacoes." },
+        itens: [item({ code: "1.1.1", description: "Servicos preliminares" })],
+        composicoes: [],
+      });
+      const c = alcance(r, 2);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("obra declara sistema misto: a regra nao avalia por decisao");
+    });
+
+    it("motivo: item sem sistema construtivo reconhecivel", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Servicos preliminares" })],
+        composicoes: [],
+      });
+      const c = alcance(r, 2);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("item sem sistema construtivo reconhecivel");
+    });
+
+    it("motivo: item declara sistema misto (nao comparavel a um sistema unico)", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Bloco em concreto armado com alvenaria estrutural" })],
+        composicoes: [],
+      });
+      const c = alcance(r, 2);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("item declara sistema misto (nao comparavel a um sistema unico)");
+    });
+
+    it("quando a regra avalia, os itens deixam de aparecer como fora", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [
+          item({ code: "1.4.1", description: "Pilares em concreto armado", unit: "m3", quantity: 10, unitPrice: 800 }),
+          item({ code: "1.1.1", description: "Servicos preliminares" }),
+        ],
+        composicoes: [],
+      });
+      const c = alcance(r, 2);
+      expect(c.avaliados).toBe(1);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("item sem sistema construtivo reconhecivel");
+    });
+  });
+
+  describe("regra 3 - resistencia do concreto", () => {
+    it("motivo: composicao nao cita concreto", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.4.1", description: "Pilares", unit: "kg", compositionId: 1, compositionDescription: "PERFIL METALICO SOLDADO", compositionUnit: "KG" })],
+        composicoes: [composicao({ id: 1, code: "C1", description: "PERFIL METALICO SOLDADO", unit: "KG" })],
+      });
+      const c = alcance(r, 3);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("composicao nao cita concreto");
+    });
+
+    it("motivo: item nao e elemento estrutural", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.9.1", description: "Pintura acrilica", compositionId: 1, compositionDescription: "CONCRETO P/VIBR., FCK=15MPa" })],
+        composicoes: [composicao({ id: 1, code: "C1", description: "CONCRETO P/VIBR., FCK=15MPa" })],
+      });
+      expect(alcance(r, 3).motivo).toBe("item nao e elemento estrutural");
+    });
+
+    it("motivo: fck nao declarado na composicao", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.4.1", description: "Pilares", compositionId: 1, compositionDescription: "CONCRETO USINADO BOMBEADO" })],
+        composicoes: [composicao({ id: 1, code: "C1", description: "CONCRETO USINADO BOMBEADO" })],
+      });
+      const c = alcance(r, 3);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("fck nao declarado na composicao");
+    });
+  });
+
+  describe("regra 4 - preco sem lastro", () => {
+    it("motivo: sem composicao vinculada", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 50 })],
+        composicoes: [],
+      });
+      expect(alcance(r, 4).motivo).toBe("sem composicao vinculada");
+    });
+
+    it("motivo: unidade divergente da composicao", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 50, compositionId: 1, compositionUnit: "M2", somaComponentes: 40 })],
+        composicoes: [composicao({ id: 1, code: "C1", unit: "M2" })],
+      });
+      const c = alcance(r, 4);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("unidade divergente da composicao");
+    });
+
+    it("motivo: soma de componentes indisponivel", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 50, compositionId: 1, compositionUnit: "M3", somaComponentes: null })],
+        composicoes: [composicao({ id: 1, code: "C1", unit: "M3" })],
+      });
+      expect(alcance(r, 4).motivo).toBe("soma de componentes indisponivel");
+    });
+
+    it("motivo: preco do item nao informado", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3", unitPrice: 0, compositionId: 1, compositionUnit: "M3", somaComponentes: 40 })],
+        composicoes: [composicao({ id: 1, code: "C1", unit: "M3" })],
+      });
+      const c = alcance(r, 4);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("preco do item nao informado");
+    });
+  });
+
+  describe("regra 5 - cobertura de preco da composicao", () => {
+    it("motivo: composicao sem componentes", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [composicao({ id: 1, code: "C1", totalComponentes: 0 })],
+      });
+      const c = alcance(r, 5);
+      expect(c.universo).toBe("composicoes");
+      expect(c.total).toBe(1);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("composicao sem componentes");
+    });
+  });
+
+  describe("regra 6 - custo por m2", () => {
+    it("motivo: obra sem area construida", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, areaConstruida: null },
+        itens: [item({ code: "1.1.1", description: "Escavacao", quantity: 10, unitPrice: 100 })],
+        composicoes: [],
+      });
+      const c = alcance(r, 6);
+      expect(c.total).toBe(1);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("obra sem area construida");
+    });
+
+    it("motivo: item nao e custo direto de construcao", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, areaConstruida: 100, pavimentos: 1 },
+        itens: [
+          item({ code: "1.0.1", description: "Administracao local da obra", quantity: 1, unitPrice: 100, custoDireto: false }),
+          item({ code: "1.0.2", description: "Execucao da estrutura", quantity: 100, unitPrice: 2000, custoDireto: true }),
+        ],
+        composicoes: [],
+      });
+      const c = alcance(r, 6);
+      expect(c.total).toBe(2);
+      expect(c.avaliados).toBe(1);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("item nao e custo direto de construcao");
+    });
+
+    it("motivo: custo direto sem valor informado", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, areaConstruida: 100, pavimentos: 1 },
+        itens: [item({ code: "1.0.2", description: "Execucao da estrutura", quantity: 100, unitPrice: 0, custoDireto: true })],
+        composicoes: [],
+      });
+      const c = alcance(r, 6);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("custo direto sem valor informado");
+    });
+  });
+
+  describe("regra 7 - unidade orcamento x cronograma", () => {
+    it("motivo: atividade sem item correspondente no orcamento", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3" })],
+        composicoes: [],
+        atividades: [ativ({ id: 1, wbsCode: "9.9.9", name: "Sem item", unit: "m3" })],
+      });
+      const c = alcance(r, 7);
+      expect(c.universo).toBe("atividades");
+      expect(c.total).toBe(1);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("atividade sem item correspondente no orcamento");
+    });
+
+    it("motivo: atividade sem unidade", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [item({ code: "1.1.1", description: "Escavacao", unit: "m3" })],
+        composicoes: [],
+        atividades: [ativ({ id: 1, wbsCode: "1.1.1", name: "Escavacao", unit: null })],
+      });
+      const c = alcance(r, 7);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("atividade sem unidade");
+    });
+  });
+
+  describe("regra 8 - superestrutura e ciclo de pavimento", () => {
+    it("motivo: atividade fora da superestrutura", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [ativ({ id: 1, wbsCode: "1.3.2", name: "Fundacao", durationDays: 20 })],
+      });
+      const c = alcance(r, 8);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("atividade fora da superestrutura");
+    });
+
+    it("motivo: superestrutura em nivel unico (nao ha ciclo entre niveis para comparar)", () => {
+      // Ha subnivel (1.4.N.M) mas so UM nivel representado (M=1 nas duas etapas):
+      // nao existe ciclo para comparar, e a regra nao pode ser avaliada.
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [
+          ativ({ id: 1, wbsCode: "1.4.1.1", name: "Forma", durationDays: 30 }),
+          ativ({ id: 2, wbsCode: "1.4.2.1", name: "Armadura", durationDays: 30 }),
+        ],
+      });
+      const c = alcance(r, 8);
+      expect(c.universo).toBe("atividades");
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(2);
+      expect(c.motivo).toBe("superestrutura em nivel unico: nao ha ciclo entre niveis para comparar");
+    });
+
+    it("superestrutura SEM decomposicao NAO e exclusao: a regra avalia (e acusa)", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [
+          ativ({ id: 1, wbsCode: "1.4.1", name: "Estrutura", durationDays: 30 }),
+          ativ({ id: 2, wbsCode: "1.4.2", name: "Estrutura", durationDays: 30 }),
+        ],
+      });
+      const c = alcance(r, 8);
+      expect(c.avaliados).toBe(2);
+      expect(c.fora).toBe(0);
+      expect(c.motivo).toBeNull();
+      expect(r.issues.map(i => i.code)).toContain("eng_estrutura_sem_ciclo_pavimento");
+    });
+  });
+
+  describe("regra 9 - sequencia construtiva", () => {
+    it("motivo: obra sem fundacao (1.3.2) com termino no CPM", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [ativ({ id: 1, wbsCode: "1.4.1", name: "Estrutura", earlyStart: 1, earlyFinish: 30 })],
+      });
+      const c = alcance(r, 9);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("obra sem fundacao (1.3.2) com termino no CPM");
+    });
+
+    it("motivo: atividade que nao e elemento superior", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [
+          ativ({ id: 1, wbsCode: "1.3.2", name: "Fundacao", earlyStart: 1, earlyFinish: 20 }),
+          ativ({ id: 2, wbsCode: "1.3.1", name: "Escavacao", earlyStart: 1, earlyFinish: 5 }),
+        ],
+      });
+      const c = alcance(r, 9);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(2);
+      expect(c.motivo).toBe("atividade que nao e elemento superior");
+    });
+
+    it("motivo: atividade sem inicio (earlyStart) calculado", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [
+          ativ({ id: 1, wbsCode: "1.3.2", name: "Fundacao", earlyStart: 1, earlyFinish: 20 }),
+          ativ({ id: 2, wbsCode: "1.4.1", name: "Estrutura", earlyStart: null, earlyFinish: 30 }),
+        ],
+      });
+      const c = esperaMotivo(r, 9, "atividade sem inicio (earlyStart) calculado");
+      expect(c.avaliados).toBe(0);
+    });
+  });
+
+  describe("regra 10 - atividade sem predecessor", () => {
+    it("motivo: atividade que pode comecar sem predecessor (frente de inicio)", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [],
+        composicoes: [],
+        atividades: [ativ({ id: 1, wbsCode: "1.1.1", name: "Inicio" }), ativ({ id: 2, wbsCode: "1.4.1", name: "Estrutura", semPredecessor: true })],
+      });
+      const c = alcance(r, 10);
+      expect(c.universo).toBe("atividades");
+      expect(c.total).toBe(2);
+      expect(c.avaliados).toBe(1);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("atividade que pode comecar sem predecessor (frente de inicio)");
+    });
+  });
+});
