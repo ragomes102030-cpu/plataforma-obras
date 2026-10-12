@@ -236,3 +236,11 @@ O chamador **nao passa `bdiDeclarado`** (`routers.ts:4161-4164`). Enquanto a obr
 declarar o BDI, a regra 4 opera como conferencia (`warning`), como decidido na rodada 3.
 Expor o BDI na UI de obra transforma esses avisos em verificacao — vale como proxima
 entrada, junto do CUB declarado.
+
+---
+
+**Atualização (R6-02, `docs/AUDITORIA-COERENCIA-CUB-BDI-DECLARADOS.md`):** o R6-02 listado
+acima como aberto **foi entregue**. O chamador agora passa `bdiDeclarado` e o CUB declarado;
+a regra 6 só roda com CUB declarado; a cobertura ganhou `nota` (o BDI não declarado é nota da
+regra 4, não motivo de exclusão). O reprodutor foi de **28/28 para 30/30**. Este bloco é o
+registro da rodada da cobertura; o estado atual está no documento do R6-02.
