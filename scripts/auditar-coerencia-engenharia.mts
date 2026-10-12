@@ -33,7 +33,6 @@ function obra(over: Partial<ObraParaCoerencia> = {}): ObraParaCoerencia {
     tipoDeObra: "edificio",
     descricao: "A estrutura principal sera em concreto armado, incluindo fundacoes, pilares, vigas, lajes e demais elementos estruturais.",
     pavimentos: 6,
-    areaTerreno: 2400,
     ...over,
   };
 }
@@ -63,7 +62,14 @@ function comp(over: Partial<ComposicaoParaCoerencia>): ComposicaoParaCoerencia {
   };
 }
 
-function ativ(over: Partial<AtividadeParaCoerencia>): AtividadeParaCoerencia {
+/**
+ * O chamador le `plannedQuantity` do BANCO (schedule_activities), mas esse campo
+ * nao faz parte do contrato do validador (AtividadeParaCoerencia). Tipo local so
+ * para reproduzir a derivacao de area do chamador.
+ */
+type AtividadeDoChamador = AtividadeParaCoerencia & { plannedQuantity?: number | null };
+
+function ativ(over: Partial<AtividadeDoChamador>): AtividadeDoChamador {
   return {
     id: 1,
     wbsCode: "1.1.1",
@@ -76,13 +82,46 @@ function ativ(over: Partial<AtividadeParaCoerencia>): AtividadeParaCoerencia {
 }
 
 /**
- * Reproduz o chamador real (server/routers.ts:4115-4124), que e onde a
- * heuristica de pavimentos e a area nula vivem. Sem isto a auditoria criticaria
- * o validador por algo que e decisao do chamador.
+ * Reproduz o chamador real (server/routers.ts:4115-4137), que e onde as
+ * heuristicas de pavimentos e de area construida vivem. Sem isto a auditoria
+ * criticaria o validador por algo que e decisao do chamador.
+ *
+ * RODADA 2 (verify/coerencia-fixes): o chamador NAO inventa mais 6 pavimentos
+ * quando tipoDeObra === 'edificio' — o fallback foi removido. A reproducao
+ * abaixo ja reflete o chamador corrigido.
  */
-function pavimentosDoChamador(atividades: AtividadeParaCoerencia[], tipoDeObra?: string | null): number | null {
+function pavimentosDoChamador(atividades: AtividadeDoChamador[]): number | null {
   const declarados = [...new Set(atividades.map(a => /^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1]).filter(Boolean))];
-  return declarados.length > 1 ? declarados.length : tipoDeObra === "edificio" ? 6 : null;
+  return declarados.length > 1 ? declarados.length : null;
+}
+
+/**
+ * Area construida do chamador (routers.ts:4138-4158).
+ *
+ * RODADA 2: o chamador usava o MAX da area de piso — com 2 pavimentos de
+ * 1.200 m2 a area virava 1.200, a obra aparecia 2x mais cara por m2 e a regra
+ * acusava de MENOS (R6-03).
+ *
+ * RODADA 3: o chamador passou a SOMAR as areas de piso de cada NIVEL distinto.
+ * Sem decomposicao por nivel, soma os itens de piso que nao se repetem —
+ * contrapiso e revestimento do MESMO piso dobrariam, por isso usa o MAX dos
+ * sem-nivel. A reproducao abaixo ja reflete o chamador corrigido.
+ */
+function areaDoChamador(atividades: AtividadeDoChamador[]): number | null {
+  const itensDePiso = atividades.filter(
+    a => a.unit && /m2|m²/.test(String(a.unit)) && Number(a.plannedQuantity) > 0 &&
+         /contrapis|revestiment.*pis|revestiment.*piso/i.test(a.name)
+  );
+  const porNivel = new Map<string, number>();
+  const semNivel: number[] = [];
+  for (const a of itensDePiso) {
+    const nivel = /^1\.[\d.]+?\.(\d+)$/.exec(a.wbsCode)?.[1];
+    const qtd = Number(a.plannedQuantity);
+    if (nivel) porNivel.set(nivel, Math.max(porNivel.get(nivel) ?? 0, qtd));
+    else semNivel.push(qtd);
+  }
+  const somaPorNivel = [...porNivel.values()].reduce((s, v) => s + v, 0);
+  return somaPorNivel > 0 ? somaPorNivel : (semNivel.length ? Math.max(...semNivel) : null);
 }
 
 // ------------------------------------------------------------------- as cenas
@@ -95,6 +134,12 @@ type Cena = {
   esperaAcusar: boolean;
   /** codigo do achado observado; se omitido, qualquer achado conta */
   code: string;
+  /**
+   * Severidade exigida do achado, quando ele e observado.
+   * RODADA 3: permite travar "warning de conferencia" (R4-01 sem BDI declarado)
+   * como comportamento esperado, nao como ausencia de achado.
+   */
+  severidade?: "error" | "warning";
   input: CoerenciaInput;
 };
 
@@ -136,16 +181,16 @@ const cenas: Cena[] = [
   {
     id: "R1-02",
     regra: "1 natureza",
-    hipotese: "FALSO NEGATIVO: mesmo caso, mas item chamado 'Instalacoes hidrossanitarias' (plural) NAO e acusado",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO (plural): o mesmo caso com o item 'Instalacoes hidrossanitarias' (plural) agora E acusado — a comparacao passou a ser por radical, nao por palavra inteira",
+    esperaAcusar: true,
     code: "eng_natureza_servico_incompativel",
     input: { obra: obra(), itens: [{ ...CASO_AURORA, description: "Instalacoes hidrossanitarias" }], composicoes: [C_AURORA] },
   },
   {
     id: "R1-03",
     regra: "1 natureza",
-    hipotese: "FALSO NEGATIVO: composicao de projeto puro ('ELABORACAO DE PROJETO DE DRENAGEM') NAO e acusada (nao esta no vocabulario)",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO (R1-03): composicao de projeto puro ('ELABORACAO DE PROJETO DE DRENAGEM - SERVICO TECNICO SEM EXECUCAO') agora E acusada — o vocabulario de escritorio foi ampliado",
+    esperaAcusar: true,
     code: "eng_natureza_servico_incompativel",
     input: {
       obra: obra(),
@@ -161,7 +206,7 @@ const cenas: Cena[] = [
   {
     id: "R1-04",
     regra: "1 natureza",
-    hipotese: "FALSO POSITIVO: composicao de EXECUCAO que menciona 'projeto executivo e as built' e acusada como servico de escritorio",
+    hipotese: "ABERTO POR DECISAO (R1-04): composicao de EXECUCAO que menciona 'projeto executivo e as built' segue acusada como servico de escritorio — o texto nao separa 'o projeto' (assunto) de 'projetar' (servico), e foi por isso que 'projeto' puro NAO entrou no vocabulario",
     esperaAcusar: true,
     code: "eng_natureza_servico_incompativel",
     input: {
@@ -180,19 +225,24 @@ const cenas: Cena[] = [
   {
     id: "R2-01",
     regra: "2 sistema",
-    hipotese: "FALSO NEGATIVO: obra sem o sistema escrito na descricao ('Edificio de 6 pavimentos') desliga a regra inteira",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO (R2-01): obra sem o sistema na descricao tem o sistema INFERIDO da maioria dos itens (concreto armado) e o item divergente E acusado — antes a regra inteira ficava desligada",
+    esperaAcusar: true,
     code: "eng_sistema_construtivo_incompativel",
     input: {
-      obra: obra({ descricao: "Edificio de 6 pavimentos com area construida de 7200 m2." }),
-      itens: [item({ code: "1.4.3", description: "Lajes - Alvenaria estrutural bloco concreto 19x19x39", unit: "m3", quantity: 320, unitPrice: 348.6 })],
+      obra: obra({ descricao: "Obra de reforma e ampliacao do bloco administrativo." }),
+      itens: [
+        item({ code: "1.4.1", description: "Pilares em concreto armado", unit: "m3", quantity: 320, unitPrice: 800 }),
+        item({ code: "1.4.2", description: "Vigas em concreto armado", unit: "m3", quantity: 320, unitPrice: 800 }),
+        item({ code: "1.4.3", description: "Lajes em concreto armado", unit: "m3", quantity: 320, unitPrice: 800 }),
+        item({ code: "1.5.1", description: "Alvenaria estrutural bloco de concreto 19x19x39", unit: "m2", quantity: 3200, unitPrice: 148 }),
+      ],
       composicoes: [],
     },
   },
   {
     id: "R2-02",
     regra: "2 sistema",
-    hipotese: "FALSO POSITIVO: cobertura em estrutura metalica de aco numa obra de concreto armado (solucao corrente) e acusada",
+    hipotese: "ABERTO POR DECISAO (R2-02): cobertura em estrutura metalica de aco numa obra de concreto armado (solucao corrente) segue acusada — cobertura metalica sobre estrutura de concreto nao e incoerencia por si",
     esperaAcusar: true,
     code: "eng_sistema_construtivo_incompativel",
     input: {
@@ -204,8 +254,8 @@ const cenas: Cena[] = [
   {
     id: "R2-03",
     regra: "2 sistema",
-    hipotese: "FALSO POSITIVO: obra declarada 'mista' (concreto + alvenaria estrutural) acusa item de alvenaria estrutural, que ela mesma declara",
-    esperaAcusar: true,
+    hipotese: "CORRIGIDO (obra mista): obra declarada 'mista' (concreto + alvenaria estrutural) NAO acusa mais o item de alvenaria estrutural que ela mesma declara",
+    esperaAcusar: false,
     code: "eng_sistema_construtivo_incompativel",
     input: {
       obra: obra({ descricao: "Estrutura em concreto armado nos andares tipo e alvenaria estrutural nos pavimentos de base." }),
@@ -218,8 +268,8 @@ const cenas: Cena[] = [
   {
     id: "R3-01",
     regra: "3 fck",
-    hipotese: "FALSO NEGATIVO: item 'Fundacoes' (plural) com concreto FCK=15 nao e acusado — 'fundacoes' nao contem 'fundacao'",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO (plural): item 'Fundacoes' (plural) com concreto FCK=15 agora E acusado — 'fundacoes' e 'fundacao' passaram a casar pelo radical 'fundac'",
+    esperaAcusar: true,
     code: "eng_concreto_resistencia_insuficiente",
     input: {
       obra: obra(),
@@ -230,8 +280,8 @@ const cenas: Cena[] = [
   {
     id: "R3-02",
     regra: "3 fck",
-    hipotese: "FALSO POSITIVO: C20 (permitido pela NBR 6118 para concreto estrutural) e acusado como ERROR em 'Sapatas'",
-    esperaAcusar: true,
+    hipotese: "CORRIGIDO (NBR 6118): C20 (permitido pela NBR 6118 para concreto estrutural) NAO e mais acusado nem como ERROR nem como WARNING em 'Sapatas'",
+    esperaAcusar: false,
     code: "eng_concreto_resistencia_insuficiente",
     input: {
       obra: obra(),
@@ -242,8 +292,8 @@ const cenas: Cena[] = [
   {
     id: "R3-03",
     regra: "3 fck",
-    hipotese: "FALSO NEGATIVO: item chamado apenas 'Estrutura' com FCK=15 nao e acusado ('estrutura' saiu da lista de elementos)",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO (R3-03): item chamado apenas 'Estrutura' com FCK=15 agora E acusado — o radical generico 'estrutur' entrou na lista de elementos",
+    esperaAcusar: true,
     code: "eng_concreto_resistencia_insuficiente",
     input: {
       obra: obra(),
@@ -252,23 +302,65 @@ const cenas: Cena[] = [
     },
   },
 
+  {
+    id: "R2-04",
+    regra: "2 sistema",
+    hipotese: "FECHAMENTO R2-01: quando NEM a descricao NEM os itens declaram sistema, a regra avisa que NAO PODE AVALIAR (warning) — antes ficava silenciosa, e a ausencia de achado parecia coerencia",
+    esperaAcusar: true,
+    code: "eng_sistema_construtivo_nao_avaliavel",
+    severidade: "warning",
+    input: {
+      obra: obra({ descricao: "Obra de reforma e ampliacao do bloco administrativo." }),
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    },
+  },
+
   // ----------------------------------------------------------- regra 4
   {
     id: "R4-01",
     regra: "4 preco",
-    hipotese: "FALSO POSITIVO: item com BDI de 25% sobre a composicao (faixa usual em obra publica) e acusado — a banda e +-20%",
-    esperaAcusar: true,
+    hipotese: "CORRIGIDO (R4-01): item a razao 1,25 (BDI de 25%, faixa usual em obra publica) NAO e acusado quando a obra DECLARA esse BDI — a banda passou a ser em torno de 1+BDI, nao de 1,0",
+    esperaAcusar: false,
     code: "eng_preco_sem_lastro",
     input: {
-      obra: obra(),
+      obra: obra({ bdiDeclarado: 0.25 }),
       itens: [item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 80, unitPrice: 114.99, compositionId: 9200, compositionCode: "C9200", compositionDescription: "CONCRETO FCK=30MPA", compositionUnit: "M3", somaComponentes: 91.99 })],
+      composicoes: [comp({ id: 9200, code: "C9200", description: "CONCRETO FCK=30MPA", unit: "M3", somaComponentes: 91.99, componentesComPreco: 6, totalComponentes: 6 })],
+    },
+  },
+
+  {
+    id: "R4-04",
+    regra: "4 preco",
+    hipotese: "CONTROLE (R4-01b): com BDI de 25% DECLARADO, um desvio real de 60% (razao 1,60) continua sendo ERROR — declarar o BDI nao cega a regra",
+    esperaAcusar: true,
+    code: "eng_preco_sem_lastro",
+    severidade: "error",
+    input: {
+      obra: obra({ bdiDeclarado: 0.25 }),
+      itens: [item({ code: "1.4.2", description: "Vigas", unit: "m3", quantity: 40, unitPrice: 147.18, compositionId: 9200, compositionCode: "C9200", compositionDescription: "CONCRETO FCK=30MPA", compositionUnit: "M3", somaComponentes: 91.99 })],
+      composicoes: [comp({ id: 9200, code: "C9200", description: "CONCRETO FCK=30MPA", unit: "M3", somaComponentes: 91.99, componentesComPreco: 6, totalComponentes: 6 })],
+    },
+  },
+
+  {
+    id: "R4-05",
+    regra: "4 preco",
+    hipotese: "CORRIGIDO (R4-01c): SEM BDI declarado o mesmo desvio de 25% e WARNING de conferencia, NUNCA error — era o que acusava em massa quem tem BDI",
+    esperaAcusar: true,
+    code: "eng_preco_sem_lastro",
+    severidade: "warning",
+    input: {
+      obra: obra(),
+      itens: [item({ code: "1.4.3", description: "Lajes", unit: "m3", quantity: 60, unitPrice: 114.99, compositionId: 9200, compositionCode: "C9200", compositionDescription: "CONCRETO FCK=30MPA", compositionUnit: "M3", somaComponentes: 91.99 })],
       composicoes: [comp({ id: 9200, code: "C9200", description: "CONCRETO FCK=30MPA", unit: "M3", somaComponentes: 91.99, componentesComPreco: 6, totalComponentes: 6 })],
     },
   },
   {
     id: "R4-02",
     regra: "4 preco",
-    hipotese: "FALSO NEGATIVO: o caso dos R$ 1,4 milhao (soma=0) NAO e acusado por 'preco sem lastro' — a regra pula soma<=0",
+    hipotese: "ABERTO POR DECISAO (R4-02): o caso dos R$ 1,4 milhao (soma=0) NAO e acusado por 'preco sem lastro' — a regra pula soma<=0. Sem lastro nenhum, o item nao pode ser conferido",
     esperaAcusar: false,
     code: "eng_preco_sem_lastro",
     input: { obra: obra(), itens: [CASO_AURORA], composicoes: [C_AURORA] },
@@ -276,8 +368,8 @@ const cenas: Cena[] = [
   {
     id: "R4-03",
     regra: "4 preco",
-    hipotese: "FALSO POSITIVO: item em 'm' com composicao em 'm3' e acusado por 'preco sem lastro', quando a causa e a UNIDADE (compositionUnit nunca e consultada)",
-    esperaAcusar: true,
+    hipotese: "CORRIGIDO (R4-03): item em 'm' com composicao em 'm3' deixou de ser acusado por 'preco sem lastro' — a divergencia de UNIDADE agora e lida (compositionUnit) e tratada como causa separada",
+    esperaAcusar: false,
     code: "eng_preco_sem_lastro",
     input: {
       obra: obra(),
@@ -290,7 +382,7 @@ const cenas: Cena[] = [
   {
     id: "R5-01",
     regra: "5 composicao sem preco",
-    hipotese: "FALSO NEGATIVO: composicao com 1 de 50 componentes com preco nao e acusada, ainda que a soma seja inutil",
+    hipotese: "ABERTO POR DECISAO (R5-01): composicao com 1 de 50 componentes com preco nao e acusada, ainda que a soma seja inutil",
     esperaAcusar: false,
     code: "eng_composicao_sem_preco",
     input: {
@@ -304,11 +396,11 @@ const cenas: Cena[] = [
   {
     id: "R6-01",
     regra: "6 custo/m2",
-    hipotese: "REGRA MORTA NO APP: com o chamador real (areaConstruida=null, routers.ts:4124) o teste de custo/m2 nao roda nem a R$ 721/m2",
-    esperaAcusar: false,
+    hipotese: "RODADA 2: com area REAL o teste de custo/m2 agora roda — a morte da regra era o chamador passando null, e isso foi corrigido",
+    esperaAcusar: true,
     code: "eng_custo_m2_abaixo_referencia",
     input: {
-      obra: obra({ areaConstruida: null }),
+      obra: obra({ areaConstruida: 7200 }),
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 5193043 })],
       composicoes: [],
     },
@@ -316,7 +408,7 @@ const cenas: Cena[] = [
   {
     id: "R6-02",
     regra: "6 custo/m2",
-    hipotese: "FALSO POSITIVO (quando roda): galpao/obra simples a R$ 1.400/m2 cai abaixo do piso de R$ 1.500 e e acusado",
+    hipotese: "ABERTO POR DECISAO (R6-02): galpao/obra simples a R$ 1.400/m2 cai abaixo do piso de R$ 1.500 (60% de CUB nacional nao calibrado) e e acusado. Sera tratado com CUB DECLARADO por obra (valor + UF + mes)",
     esperaAcusar: true,
     code: "eng_custo_m2_abaixo_referencia",
     input: {
@@ -326,12 +418,46 @@ const cenas: Cena[] = [
     },
   },
 
+  {
+    id: "R6-03",
+    regra: "6 custo/m2",
+    hipotese: "CORRIGIDO (R6-03): o chamador agora SOMA as areas por nivel distinto — os 2 pavimentos de 1.200 m2 viram 2.400 m2 e a obra a R$ 1.000/m2 E acusada (antes o MAX escondia a subestimacao)",
+    esperaAcusar: true,
+    code: "eng_custo_m2_abaixo_referencia",
+    input: {
+      // area do chamador = 1.200 + 1.200 = 2.400 (soma por nivel), nao mais 1.200 (max)
+      obra: obra({
+        areaConstruida: areaDoChamador([
+          ativ({ id: 901, wbsCode: "1.7.1", name: "Contrapiso do pavimento tipo 01", durationDays: 5, unit: "m2", plannedQuantity: 1200 }),
+          ativ({ id: 902, wbsCode: "1.7.2", name: "Contrapiso do pavimento tipo 02", durationDays: 5, unit: "m2", plannedQuantity: 1200 }),
+        ]),
+      }),
+      itens: [item({ code: "1.4.1", description: "Concreto estrutural usinado", unit: "vb", quantity: 1, unitPrice: 2400000 })],
+      composicoes: [],
+    },
+  },
+  {
+    id: "R6-04",
+    regra: "6 custo/m2",
+    hipotese: "CORRIGIDO (R6-04): o fallback por texto nao joga mais 'Sinalizacao viaria' (custo direto de obra viaria) fora da conta — a obra com R$ 1.528/m2 deixou de ser acusada",
+    esperaAcusar: false,
+    code: "eng_custo_m2_abaixo_referencia",
+    input: {
+      obra: obra({ areaConstruida: 7200 }),
+      itens: [
+        item({ code: "1.4.1", description: "Concreto estrutural usinado", unit: "vb", quantity: 1, unitPrice: 10000000 }),
+        item({ code: "1.13.1", description: "Sinalizacao viaria horizontal e vertical", unit: "vb", quantity: 1, unitPrice: 1000000 }),
+      ],
+      composicoes: [],
+    },
+  },
+
   // ----------------------------------------------------------- regra 7
   {
     id: "R7-01",
     regra: "7 unidade",
-    hipotese: "FALSO POSITIVO: 'und' no orcamento e 'un' no cronograma (mesma unidade) sao tratados como divergentes",
-    esperaAcusar: true,
+    hipotese: "CORRIGIDO: 'und' no orcamento e 'un' no cronograma (mesma unidade) NAO sao mais tratados como divergentes",
+    esperaAcusar: false,
     code: "eng_unidade_divergente",
     input: {
       obra: obra(),
@@ -345,14 +471,15 @@ const cenas: Cena[] = [
   {
     id: "R8-01",
     regra: "8 ciclo de pavimento",
-    hipotese: "Pavimentos NUNCA vem da obra: sempre que a regra acusa, o numero e o fallback 6 do chamador (routers.ts:4117-4119)",
+    hipotese: "CORRIGIDO (R8-01): sem subnivel '1.4.N.M' nao ha pavimentos derivaveis, e a regra acusa como WARNING sem afirmar numero (antes afirmava 6) — o chamador nao fabrica mais",
     esperaAcusar: true,
     code: "eng_estrutura_sem_ciclo_pavimento",
+    severidade: "warning",
     input: {
       obra: obra({ pavimentos: pavimentosDoChamador([
         ativ({ id: 375, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3", plannedQuantity: 80, earlyStart: 19, earlyFinish: 27 }),
         ativ({ id: 377, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3", plannedQuantity: 320, earlyStart: 36, earlyFinish: 44 }),
-      ], "edificio") }),
+      ]) }),
       itens: [],
       composicoes: [],
       atividades: [
@@ -364,9 +491,10 @@ const cenas: Cena[] = [
   {
     id: "R8-02",
     regra: "8 ciclo de pavimento",
-    hipotese: "FALSO NEGATIVO: mesma estrutura absurda numa obra sem tipoDeObra='edificio' — pavimentos vira null e a regra desaparece",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO (R8-02): a regra nao desaparece mais em obra que nao e 'edificio' — a mesma estrutura absurda acusa como WARNING (nao sabemos a escala, mas a ausencia de ciclo e dita)",
+    esperaAcusar: true,
     code: "eng_estrutura_sem_ciclo_pavimento",
+    severidade: "warning",
     input: {
       obra: obra({ tipoDeObra: "reforma", pavimentos: null }),
       itens: [],
@@ -378,12 +506,35 @@ const cenas: Cena[] = [
     },
   },
 
+  {
+    id: "R8-03",
+    regra: "8 ciclo de pavimento",
+    hipotese: "CORRIGIDO (R8-03): o ramo de error deixou de ser inalcancavel — com decomposicao por nivel a regra mede a duracao POR NIVEL e 4 dias por nivel e ERROR (novo achado eng_ciclo_pavimento_implausivel)",
+    esperaAcusar: true,
+    code: "eng_ciclo_pavimento_implausivel",
+    severidade: "error",
+    input: {
+      obra: obra({
+        pavimentos: pavimentosDoChamador([
+          ativ({ id: 375, wbsCode: "1.4.1.1", name: "Formas dos pilares do 1o pavimento", durationDays: 4, unit: "m2", plannedQuantity: 600 }),
+          ativ({ id: 376, wbsCode: "1.4.1.2", name: "Armaduras dos pilares do 1o pavimento", durationDays: 4, unit: "kg", plannedQuantity: 9000 }),
+        ]),
+      }),
+      itens: [],
+      composicoes: [],
+      atividades: [
+        ativ({ id: 375, wbsCode: "1.4.1.1", name: "Formas dos pilares do 1o pavimento", durationDays: 4, unit: "m2", plannedQuantity: 600, earlyStart: 19, earlyFinish: 23 }),
+        ativ({ id: 376, wbsCode: "1.4.1.2", name: "Armaduras dos pilares do 1o pavimento", durationDays: 4, unit: "kg", plannedQuantity: 9000, earlyStart: 23, earlyFinish: 27 }),
+      ],
+    },
+  },
+
   // ----------------------------------------------------------- regra 9
   {
     id: "R9-01",
     regra: "9 sequencia",
-    hipotese: "FALSO NEGATIVO: com a fundacao comecando no dia 0 (caso normal) a regra nao roda — exige inicioFundacao > 0",
-    esperaAcusar: false,
+    hipotese: "CORRIGIDO: com a fundacao comecando no dia 0 (caso normal) a regra agora RODA e acusa a estrutura da cobertura antes das fundacoes",
+    esperaAcusar: true,
     code: "eng_sequencia_construtiva_invertida",
     input: {
       obra: obra(),
@@ -400,9 +551,9 @@ const cenas: Cena[] = [
   {
     id: "R10-01",
     regra: "10 sem predecessor",
-    hipotese: "RUIDO: um cronograma com 12 atividades sem vinculo gera 12 achados de severity error, todos 'impedem execucao'",
+    hipotese: "CORRIGIDO (caso degenerado): quando NENHUMA atividade tem predecessor o achado e UM so, de DADO (eng_dependencias_ausentes_para_a_versao), em vez de 12 achados de atividade — acusar a obra pelo encanamento e o que desliga o validador",
     esperaAcusar: true,
-    code: "eng_atividade_sem_predecessor",
+    code: "eng_dependencias_ausentes_para_a_versao",
     input: {
       obra: obra(),
       itens: [],
@@ -457,7 +608,7 @@ const resultados: ResultadoCena[] = cenas.map(c => {
     hipotese: c.hipotese,
     esperado: c.esperaAcusar ? "acusa" : "silencia",
     observado: acusa ? "acusa" : "silencia",
-    confirmou: acusa === c.esperaAcusar,
+    confirmou: acusa === c.esperaAcusar && (!c.severidade || achado?.severity === c.severidade),
     codigos: [...new Set(codigos)],
     severidade: achado?.severity ?? null,
     erros: r.resumo.erros,

@@ -333,7 +333,7 @@ describe("revisao 2 - regra 4: unidade separada de preco", () => {
     expect(resultado.issues.map(i => i.code)).toContain("eng_preco_sem_lastro");
   });
 
-  it("tolerancia estreita: 25% de divergencia acusa (projeto declara BDI 0%)", () => {
+  it("divergencia de 25% acusa mesmo sem BDI declarado — mas como CONFERENCIA", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: obraBase,
       itens: [
@@ -354,6 +354,56 @@ describe("revisao 2 - regra 4: unidade separada de preco", () => {
     });
 
     expect(resultado.issues.map(i => i.code)).toContain("eng_preco_sem_lastro");
+  });
+});
+
+describe("revisao 3 - regra 4: BDI DECLARADO como entrada (R4-01)", () => {
+  // A banda era simetrica em torno da razao 1,0 — isto e, centrada em BDI = 0%
+  // em silencio. Um BDI de 25%, rotina em obra publica, caia fora e virava
+  // ERROR em massa. O esperado agora e (1 + BDI declarado da obra).
+  const cenario = (razao: number, bdiDeclarado?: number | null) => {
+    const obra: ObraParaCoerencia =
+      bdiDeclarado === undefined ? obraBase : { ...obraBase, bdiDeclarado };
+    return validarCoerenciaEngenharia({
+      obra,
+      itens: [
+        item({
+          code: "1.0",
+          description: "Servico",
+          unit: "m2",
+          quantity: 10,
+          unitPrice: 100 * razao,
+          compositionId: 1,
+          compositionCode: "C1",
+          compositionDescription: "Servico",
+          compositionUnit: "M2",
+          somaComponentes: 100,
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C1", description: "Servico", unit: "M2", somaComponentes: 100, componentesComPreco: 3, totalComponentes: 3 })],
+    });
+  };
+
+  it("BDI declarado de 25% EXPLICA o preco: nao acusa (era o falso positivo)", () => {
+    const resultado = cenario(1.25, 0.25);
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_preco_sem_lastro");
+  });
+
+  it("BDI declarado: desvio de 60% (razao 1,60) continua sendo ERROR", () => {
+    const achado = cenario(1.6, 0.25).issues.find(i => i.code === "eng_preco_sem_lastro");
+    expect(achado?.severity).toBe("error");
+    expect(achado?.message).toContain("BDI declarado de 25%");
+  });
+
+  it("SEM BDI declarado o achado e WARNING de conferencia, nunca error", () => {
+    const achado = cenario(1.25, undefined).issues.find(i => i.code === "eng_preco_sem_lastro");
+    expect(achado?.severity).toBe("warning");
+    expect(achado?.message).toContain("NAO declara BDI");
+  });
+
+  it("conferencia sem BDI declarado NAO entra no valor em risco", () => {
+    expect(cenario(1.25, undefined).resumo.valorEmRisco).toBe(0);
+    expect(cenario(1.6, 0.25).resumo.valorEmRisco).toBeGreaterThan(0);
   });
 });
 
@@ -709,5 +759,223 @@ describe("revisao 2 - resumo", () => {
     const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [] });
     expect(resultado.valid).toBe(true);
     expect(resultado.resumo.total).toBe(0);
+  });
+});
+
+describe("revisao 3 - R1-03: o vocabulario de escritorio era fechado demais", () => {
+  it("acusa 'ELABORACAO DE PROJETO DE DRENAGEM - SERVICO TECNICO SEM EXECUCAO'", () => {
+    // Cena R1-03: o item tem radical de EXECUCAO ("drenagem") e a composicao e
+    // de servico de projeto. A lista so tinha "projeto executivo" e "projeto
+    // basico" — "projeto" sozinho nao estava, e a regra nao rodava.
+    const desc = "ELABORACAO DE PROJETO DE DRENAGEM - SERVICO TECNICO SEM EXECUCAO";
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.13.2",
+          description: "Drenagem externa",
+          unit: "m",
+          quantity: 350,
+          unitPrice: 4137.19,
+          compositionId: 1,
+          compositionCode: "C9001",
+          compositionDescription: desc,
+          compositionUnit: "M",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C9001", description: desc, unit: "M" })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_natureza_servico_incompativel");
+  });
+
+  it("cobre os servicos de escritorio que faltavam (sondagem, ensaio, laudo, consultoria, supervisao, plotagem)", () => {
+    for (const desc of [
+      "SONDAGEM A PERCUSSAO SPT",
+      "ENSAIO DE COMPACTACAO",
+      "LAUDO TECNICO DE VIZINHANCA",
+      "CONSULTORIA DE GESTAO DE OBRAS",
+      "SUPERVISAO TECNICA DE OBRA",
+      "PLOTAGEM E IMPRESSAO DE PLANTAS",
+    ]) {
+      const resultado = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [
+          item({
+            code: "1.3.1",
+            description: "Escavacoes e movimento de terra",
+            unit: "m3",
+            quantity: 10,
+            unitPrice: 50,
+            compositionId: 1,
+            compositionCode: "C9",
+            compositionDescription: desc,
+            compositionUnit: "m3",
+          }),
+        ],
+        composicoes: [composicao({ id: 1, code: "C9", description: desc, unit: "m3" })],
+      });
+      expect(resultado.issues.map(i => i.code), desc).toContain("eng_natureza_servico_incompativel");
+    }
+  });
+
+  it("R1-04 (ABERTO POR DECISAO): composicao de EXECUCAO que cita 'projeto executivo' segue acusada", () => {
+    // Trava o falso positivo conhecido que NAO foi corrigido nesta rodada, para
+    // que a pendencia seja consciente: o texto nao separa "o projeto" (assunto)
+    // de "projetar" (servico). Foi por isso que "projeto" puro NAO entrou na
+    // lista — entrar sem um negativo que separe os casos so pioraria esta cena.
+    const desc = "INSTALACAO DE AGUA FRIA - EXECUCAO INCLUSIVE PROJETO EXECUTIVO E AS BUILT";
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.10.1",
+          description: "Instalacoes hidrossanitarias",
+          unit: "vb",
+          quantity: 1,
+          unitPrice: 120000,
+          compositionId: 1,
+          compositionCode: "C9",
+          compositionDescription: desc,
+          compositionUnit: "VB",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C9", description: desc, unit: "VB" })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_natureza_servico_incompativel");
+  });
+});
+
+describe("revisao 3 - R2-01: obra sem o sistema na descricao nao desliga mais a regra 2", () => {
+  const obraSilenciosa: ObraParaCoerencia = {
+    projectId: 7,
+    nome: "OBRA SEM DESCRICAO TECNICA",
+    tipoDeObra: "edificio",
+    descricao: "Obra de reforma e ampliacao do bloco administrativo.",
+    pavimentos: 6,
+  };
+
+  it("infere o sistema da maioria dos itens e acusa o item divergente", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraSilenciosa,
+      itens: [
+        item({ code: "1.4.1", description: "Pilares em concreto armado", unit: "m3", quantity: 100, unitPrice: 800 }),
+        item({ code: "1.4.2", description: "Vigas em concreto armado", unit: "m3", quantity: 100, unitPrice: 800 }),
+        item({ code: "1.4.3", description: "Lajes em concreto armado", unit: "m3", quantity: 100, unitPrice: 800 }),
+        item({ code: "1.5.1", description: "Alvenaria estrutural em bloco de concreto 19x19x39", unit: "m2", quantity: 100, unitPrice: 90 }),
+      ],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_sistema_construtivo_incompativel");
+    expect(achado).toBeDefined();
+    expect(achado?.message).toContain("inferido da maioria dos itens");
+    expect(achado?.refs).toEqual(["1.5.1"]);
+  });
+
+  it("a descricao da obra tem PRECEDENCIA sobre a inferencia", () => {
+    // A descricao declara ALVENARIA e os itens sao de concreto: a divergencia e
+    // do item, e a mensagem nao pode dizer que inferiu (nao inferiu).
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraSilenciosa, descricao: "Estrutura em alvenaria estrutural." },
+      itens: [item({ code: "1.4.1", description: "Pilares em concreto armado", unit: "m3", quantity: 10, unitPrice: 800 })],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_sistema_construtivo_incompativel");
+    expect(achado).toBeDefined();
+    expect(achado?.message).not.toContain("inferido");
+    expect(achado?.message).toContain("alvenaria estrutural");
+  });
+
+  it("sem descricao e sem itens que declarem sistema: AVISA que nao pode avaliar (nao fica silenciosa)", () => {
+    // Fechamento do R2-01: ausencia de achado nao pode ser lida como coerencia.
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraSilenciosa,
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    });
+
+    const codes = resultado.issues.map(i => i.code);
+    expect(codes).not.toContain("eng_sistema_construtivo_incompativel");
+    expect(codes).toContain("eng_sistema_construtivo_nao_avaliavel");
+  });
+
+  it("o aviso de nao-avaliavel e WARNING, nunca error: falta de dado nao bloqueia a obra", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraSilenciosa,
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_sistema_construtivo_nao_avaliavel");
+    expect(achado?.severity).toBe("warning");
+    expect(resultado.valid).toBe(true);
+  });
+
+  it("nao avisa nada quando o sistema e declara na descricao ou inferivel dos itens", () => {
+    const porDescricao = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    });
+    const porInferencia = validarCoerenciaEngenharia({
+      obra: obraSilenciosa,
+      itens: [item({ code: "1.4.1", description: "Pilares em concreto armado", unit: "m3", quantity: 10, unitPrice: 800 })],
+      composicoes: [],
+    });
+
+    expect(porDescricao.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_nao_avaliavel");
+    expect(porInferencia.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_nao_avaliavel");
+  });
+});
+
+describe("revisao 3 - R3-03: item chamado apenas 'Estrutura' passa pela regra de fck", () => {
+  it("acusa FCK insuficiente em item nomeado apenas 'Estrutura'", () => {
+    // Cena R3-03: "Estrutura" nao casava com nenhum radical especifico (pilar,
+    // viga, laje, sapata...) e a checagem de fck era PULADA — o falso negativo
+    // era silencioso justamente no item mais estrutural da EAP.
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.4.0",
+          description: "Estrutura",
+          unit: "m3",
+          quantity: 220,
+          unitPrice: 185,
+          compositionId: 1,
+          compositionCode: "C3270",
+          compositionDescription: "CONCRETO P/VIBR., FCK=15MPa",
+          compositionUnit: "M3",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C3270", description: "CONCRETO P/VIBR., FCK=15MPa", unit: "M3" })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_concreto_resistencia_insuficiente");
+  });
+
+  it("continua silencioso quando a composicao NAO cita concreto (o alargamento e contido)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.4.0",
+          description: "Estrutura metalica da cobertura",
+          unit: "kg",
+          quantity: 1000,
+          unitPrice: 20,
+          compositionId: 1,
+          compositionCode: "C1",
+          compositionDescription: "PERFIL METALICO SOLDADO",
+          compositionUnit: "KG",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C1", description: "PERFIL METALICO SOLDADO", unit: "KG" })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_concreto_resistencia_insuficiente");
   });
 });
