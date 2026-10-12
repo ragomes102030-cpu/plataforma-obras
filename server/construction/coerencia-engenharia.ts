@@ -312,6 +312,36 @@ function brl(v: number): string {
 }
 
 /**
+ * Quanto DINHEIRO esta preso nos itens afetados.
+ *
+ * A regra 5 acusava a composicao sem dizer o R$, e a regra 4 excluia itens sem
+ * nome nem valor: o achado estava correto e nao informava o que decide. O valor
+ * e sempre quantidade x preco unitario — o MESMO criterio do resto do modulo
+ * (regra 1 e valorEmRisco), para nao haver dois numeros para o mesmo dinheiro.
+ *
+ * Quando NAO ha item vinculado, a mensagem diz isso. Nao devolve "R$ 0,00":
+ * zero com aparencia de medicao e pior que a ausencia declarada. Pelo mesmo
+ * motivo, itens vinculados mas sem preco informado sao declarados como tal.
+ */
+function impactoEmReais(itens: ItemOrcamentoParaCoerencia[]): string {
+  if (!itens.length) return "Sem item de orcamento vinculado: nao ha valor a calcular";
+  const valores = itens.map(it => it.quantity * it.unitPrice);
+  const total = valores.reduce((s, v) => s + v, 0);
+  const citados = itens
+    .slice(0, 8)
+    .map((it, i) => `${it.code} (R$ ${brl(valores[i])})`)
+    .join(", ");
+  const resto = itens.length > 8 ? ` (+${itens.length - 8})` : "";
+  if (total === 0) {
+    return (
+      `${itens.length} item(ns) de orcamento vinculado(s), todos sem preco informado ` +
+      `— nao ha valor a calcular. Itens: ${citados}${resto}`
+    );
+  }
+  return `Total: R$ ${brl(total)} em ${itens.length} item(ns) de orcamento vinculado(s). Itens: ${citados}${resto}`;
+}
+
+/**
  * Compara por RADICAL, nao por palavra inteira.
  *
  * Em portugues o plural nao contem o singular: "cao" vira "coes". Logo
@@ -608,6 +638,21 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   const composicaoPorId = new Map<number, ComposicaoParaCoerencia>();
   for (const c of input.composicoes) composicaoPorId.set(c.id, c);
 
+  // Itens vinculados a cada composicao.
+  //
+  // A regra 5 acusa a COMPOSICAO, mas o dinheiro esta no ITEM de orcamento. Sem
+  // este indice o achado fica correto e nao informa o que decide: o engenheiro
+  // le "a composicao C0584 esta sem preco" e nao ve quanto esta preso nela.
+  // A regra 1 ja cita o valor dos itens ("Total: R$ ...") — a 5 passa a citar
+  // igual, e a 4 usa o mesmo para os itens que NAO consegue conferir.
+  const itensPorComposicao = new Map<number, ItemOrcamentoParaCoerencia[]>();
+  for (const it of input.itens) {
+    if (!it.compositionId) continue;
+    const lista = itensPorComposicao.get(it.compositionId);
+    if (lista) lista.push(it);
+    else itensPorComposicao.set(it.compositionId, [it]);
+  }
+
   // Sistema construtivo da obra.
   //
   // R2-01: se a DESCRICAO da obra nao nomeia o sistema, a regra 2 inteira ficava
@@ -781,6 +826,10 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     const pctBdi = bdi == null ? null : Math.round(bdi * 100);
     const achadosPreco: string[] = [];
     const achadosUnidade: string[] = [];
+    // Itens que a regra 4 NAO consegue conferir: sem base de soma na composicao
+    // vinculada. Hoje eles saem da regra sem nome e sem valor (so a contagem no
+    // bloco de cobertura) — e o dinheiro deles desaparece do painel.
+    const semBaseDeSoma: ItemOrcamentoParaCoerencia[] = [];
     const exclusoes = new Map<string, number>();
     let avaliados = 0;
     let exemplo = "";
@@ -794,7 +843,20 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         achadosUnidade.push(it.code);
         continue; // divergencia de unidade explica o valor; nao acusar preco
       }
-      if (it.somaComponentes == null || it.somaComponentes <= 0) { contar(exclusoes, "soma de componentes indisponivel"); continue; }
+      // Duas causas diferentes, dois motivos nomeados: a soma NAO MEDIDA (null)
+      // e a soma MEDIDA que e ZERO. Chamar as duas de "indisponivel" mandava o
+      // engenheiro procurar um dado que existe — e escondia que o preco do item
+      // esta sem base de custo nenhuma.
+      if (it.somaComponentes == null) {
+        contar(exclusoes, "soma de componentes indisponivel");
+        semBaseDeSoma.push(it);
+        continue;
+      }
+      if (it.somaComponentes <= 0) {
+        contar(exclusoes, "composicao soma zero: sem base de custo");
+        semBaseDeSoma.push(it);
+        continue;
+      }
       if (it.unitPrice <= 0) { contar(exclusoes, "preco do item nao informado"); continue; }
       avaliados++;
       const razao = it.unitPrice / it.somaComponentes;
@@ -850,6 +912,23 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
           `Ex.: ${exemplo}.`,
       });
     }
+    if (semBaseDeSoma.length) {
+      add({
+        // WARNING, nao error: nao ha desvio medido — ha AUSENCIA de base para
+        // medir. Acusar como error seria afirmar um desvio que ninguem calculou,
+        // que e o mesmo criterio da regra 4 sem BDI e da regra 5.
+        severity: "warning",
+        dominio: "orcamento",
+        code: "eng_item_custo_nao_conferivel",
+        refs: semBaseDeSoma.map(it => it.code),
+        message:
+          `${semBaseDeSoma.length} item(ns) cujo custo a regra 4 NAO CONSEGUE conferir: ` +
+          `a composicao vinculada nao da base para comparar (soma dos componentes igual a zero ou nao medida). ` +
+          `${impactoEmReais(semBaseDeSoma)}. ` +
+          `Nao e divergencia de preco — e ausencia de base para calcular. A causa esta na composicao ` +
+          `e aparece tambem na regra 5: e o mesmo valor, visto pelo lado do item.`,
+      });
+    }
   }
 
   // ---- 5. Composicao com cobertura de preco insuficiente
@@ -860,18 +939,32 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   //       R5-01: soma 12,50 com 1 de 50).
   //   (b) o criterio binario escondia o caso pior, que e o PARCIAL: o custo
   //       parece calculavel e nao e.
+  //   (c) IMPACTO EM R$: as duas acusavam a composicao sem dizer quanto dinheiro
+  //       estava preso nela. O engenheiro lia "a composicao C0584 esta sem preco"
+  //       e nao via "o item 1.13.2 vale R$ 1.448.016,50 e esta sem lastro".
   {
     const LIMIAR_COBERTURA = 0.5; // menos de metade dos componentes com preco
     const semPreco: string[] = [];
     const parcial: string[] = [];
+    // O que pagam a conta: os itens de orcamento vinculados a cada composicao
+    // acusada. A regra 5 fala de composicao; o dinheiro esta no item.
+    const itensSemPreco: ItemOrcamentoParaCoerencia[] = [];
+    const itensParciais: ItemOrcamentoParaCoerencia[] = [];
     const exclusoes = new Map<string, number>();
     let avaliados = 0;
     for (const c of input.composicoes) {
       if (c.totalComponentes === 0) { contar(exclusoes, "composicao sem componentes"); continue; }
       avaliados++;
-      if (c.componentesComPreco === 0) { semPreco.push(c.code); continue; }
+      if (c.componentesComPreco === 0) {
+        semPreco.push(c.code);
+        itensSemPreco.push(...(itensPorComposicao.get(c.id) ?? []));
+        continue;
+      }
       const cobertura = c.componentesComPreco / c.totalComponentes;
-      if (cobertura < LIMIAR_COBERTURA) parcial.push(c.code);
+      if (cobertura < LIMIAR_COBERTURA) {
+        parcial.push(c.code);
+        itensParciais.push(...(itensPorComposicao.get(c.id) ?? []));
+      }
     }
     registrarAlcance("5. cobertura de preco da composicao", "composicoes", input.composicoes.length, avaliados, exclusoes);
     if (semPreco.length) {
@@ -882,7 +975,8 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         refs: semPreco,
         message:
           `${semPreco.length} composicao(oes) com componentes e NENHUM com preco. ` +
-          `O custo nao e calculavel a partir delas. Composicoes: ${semPreco.slice(0, 8).join(", ")}` +
+          `O custo nao e calculavel a partir delas — e o item de orcamento fica sem lastro de composicao. ` +
+          `${impactoEmReais(itensSemPreco)}. Composicoes: ${semPreco.slice(0, 8).join(", ")}` +
           `${semPreco.length > 8 ? ` (+${semPreco.length - 8})` : ""}.`,
       });
     }
@@ -895,6 +989,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         message:
           `${parcial.length} composicao(oes) com MENOS DA METADE dos componentes precificados. ` +
           `O custo parece calculavel e nao e: a soma sai subestimada sem avisar. ` +
+          `${impactoEmReais(itensParciais)}. ` +
           `Composicoes: ${parcial.slice(0, 8).join(", ")}${parcial.length > 8 ? ` (+${parcial.length - 8})` : ""}.`,
       });
     }

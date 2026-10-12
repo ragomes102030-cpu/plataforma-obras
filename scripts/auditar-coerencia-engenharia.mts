@@ -147,6 +147,15 @@ type Cena = {
    * como comportamento esperado, nao como ausencia de achado.
    */
   severidade?: "error" | "warning";
+  /**
+   * Trecho que PRECISA aparecer na mensagem do achado.
+   *
+   * Existe porque achar o codigo nao basta: o achado da regra 5 estava correto
+   * ("8 composicoes sem preco") e nao informava o que decide — quanto dinheiro
+   * esta preso ali. Cena que so confere o codigo passaria com a mensagem vazia
+   * de valor. Aqui o R$ e exigido no texto.
+   */
+  contemNoTexto?: string;
   input: CoerenciaInput;
 };
 
@@ -385,17 +394,76 @@ const cenas: Cena[] = [
     },
   },
 
+  {
+    id: "R4-06",
+    regra: "4 preco do item",
+    hipotese: "IMPACTO EM R$ (R4-02 revisado): item cujo custo a regra 4 NAO CONSEGUE conferir (composicao somando zero) agora tem achado proprio, NOMEADO, com o valor — antes saia da regra sem nome nem valor, so contado na cobertura. E o MESMO dinheiro que a regra 5 reporta pela composicao, visto pelo lado do item: nao e um segundo total somavel",
+    esperaAcusar: true,
+    code: "eng_item_custo_nao_conferivel",
+    severidade: "warning",
+    contemNoTexto: "Total: R$ 1.448.016,50",
+    input: {
+      obra: obra(),
+      itens: [item({ code: "1.13.2", description: "Drenagem externa", unit: "m", quantity: 2, unitPrice: 724008.25, compositionId: 22195, compositionCode: "C0584", compositionUnit: "M", somaComponentes: 0 })],
+      composicoes: [comp({ id: 22195, code: "C0584", description: "CADASTRO DE REDE DE DRENAGEM (MEIO MAGNETICO)", unit: "M", somaComponentes: 0, componentesComPreco: 0, totalComponentes: 3 })],
+    },
+  },
+
   // ----------------------------------------------------------- regra 5
   {
     id: "R5-01",
     regra: "5 composicao sem preco",
-    hipotese: "ABERTO POR DECISAO (R5-01): composicao com 1 de 50 componentes com preco nao e acusada, ainda que a soma seja inutil",
-    esperaAcusar: false,
-    code: "eng_composicao_sem_preco",
+    hipotese: "FECHADO (era R5-01): composicao com 1 de 50 componentes com preco PASSOU a ser acusada como cobertura PARCIAL — era o achado que passava batido, e a soma de 12,50 com 1 de 50 e tao inutil quanto zero",
+    esperaAcusar: true,
+    code: "eng_composicao_preco_incompleto",
+    severidade: "warning",
+    contemNoTexto: "MENOS DA METADE",
     input: {
       obra: obra(),
       itens: [],
       composicoes: [comp({ id: 9400, code: "C9400", description: "COMPOSICAO QUASE TODA SEM PRECO", unit: "M3", somaComponentes: 12.5, componentesComPreco: 1, totalComponentes: 50 })],
+    },
+  },
+  {
+    id: "R5-02",
+    regra: "5 composicao sem preco",
+    hipotese: "IMPACTO EM R$: a composicao sem preco cita os itens VINCULADOS e o valor preso neles — antes o achado dizia apenas o codigo da composicao, e o R$ nao aparecia em lugar nenhum",
+    esperaAcusar: true,
+    code: "eng_composicao_sem_preco",
+    severidade: "warning",
+    contemNoTexto: "Total: R$ 1.448.016,50",
+    input: {
+      obra: obra(),
+      itens: [item({ code: "1.13.2", description: "Drenagem externa", unit: "m", quantity: 2, unitPrice: 724008.25, compositionId: 22195, compositionCode: "C0584", compositionUnit: "M", somaComponentes: 0 })],
+      composicoes: [comp({ id: 22195, code: "C0584", description: "CADASTRO DE REDE DE DRENAGEM (MEIO MAGNETICO)", unit: "M", somaComponentes: 0, componentesComPreco: 0, totalComponentes: 3 })],
+    },
+  },
+  {
+    id: "R5-03",
+    regra: "5 composicao sem preco",
+    hipotese: "SEM ITEM VINCULADO a mensagem DECLARA a ausencia — nao devolve 'R$ 0,00', que teria aparencia de medicao",
+    esperaAcusar: true,
+    code: "eng_composicao_sem_preco",
+    severidade: "warning",
+    contemNoTexto: "Sem item de orcamento vinculado",
+    input: {
+      obra: obra(),
+      itens: [],
+      composicoes: [comp({ id: 9401, code: "C0095", description: "SERVICO SEM PRECO E SEM ITEM", unit: "M3", somaComponentes: 0, componentesComPreco: 0, totalComponentes: 4 })],
+    },
+  },
+  {
+    id: "R5-04",
+    regra: "5 composicao com preco parcial",
+    hipotese: "IMPACTO EM R$ no caso PARCIAL (o pior: o custo PARECE calculavel): 1 de 50 componentes precificados, item de R$ 200.724,80 citado",
+    esperaAcusar: true,
+    code: "eng_composicao_preco_incompleto",
+    severidade: "warning",
+    contemNoTexto: "Total: R$ 200.724,80",
+    input: {
+      obra: obra(),
+      itens: [item({ code: "1.7.4", description: "Alvenaria de vedacao", unit: "m2", quantity: 4, unitPrice: 50181.20, compositionId: 3270, compositionCode: "C3270", compositionUnit: "M2", somaComponentes: 12.5 })],
+      composicoes: [comp({ id: 3270, code: "C3270", description: "ALVENARIA DE VEDACAO", unit: "M2", somaComponentes: 12.5, componentesComPreco: 1, totalComponentes: 50 })],
     },
   },
 
@@ -699,6 +767,7 @@ type ResultadoCena = {
   avisos: number;
   valorEmRisco: number;
   mensagem: string | null;
+  textoExigido: string | null;
 };
 
 const resultados: ResultadoCena[] = cenas.map(c => {
@@ -706,19 +775,21 @@ const resultados: ResultadoCena[] = cenas.map(c => {
   const codigos = r.issues.map(i => i.code);
   const acusa = codigos.includes(c.code);
   const achado = r.issues.find(i => i.code === c.code);
+  const contem = !c.contemNoTexto || (achado?.message ?? "").includes(c.contemNoTexto);
   return {
     id: c.id,
     regra: c.regra,
     hipotese: c.hipotese,
     esperado: c.esperaAcusar ? "acusa" : "silencia",
     observado: acusa ? "acusa" : "silencia",
-    confirmou: acusa === c.esperaAcusar && (!c.severidade || achado?.severity === c.severidade),
+    confirmou: acusa === c.esperaAcusar && (!c.severidade || achado?.severity === c.severidade) && contem,
     codigos: [...new Set(codigos)],
     severidade: achado?.severity ?? null,
     erros: r.resumo.erros,
     avisos: r.resumo.avisos,
     valorEmRisco: r.resumo.valorEmRisco,
     mensagem: achado?.message ?? null,
+    textoExigido: contem ? null : (c.contemNoTexto ?? null),
   };
 });
 
@@ -733,6 +804,7 @@ if (emitirJson) {
     console.log(`           ${r.hipotese}`);
     console.log(`           achados=${r.codigos.join(",") || "(nenhum)"} erros=${r.erros} avisos=${r.avisos} valorEmRisco=${r.valorEmRisco.toFixed(2)}${r.severidade ? ` severity=${r.severidade}` : ""}`);
     if (r.mensagem) console.log(`           msg: ${r.mensagem}`);
+    if (r.textoExigido) console.log(`           TEXTO EXIGIDO AUSENTE NA MENSAGEM: "${r.textoExigido}"`);
     console.log("");
   }
   console.log(`Hipoteses confirmadas: ${confirmadas}/${resultados.length}`);

@@ -1623,3 +1623,149 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
     });
   });
 });
+
+/**
+ * Impacto em R$ por item — o achado estava CORRETO e nao informava o que decide.
+ *
+ * Medido pelo lead na AURORA real (projectId=7): R$ 2.730.302,90 em 12 itens com
+ * composicao somando zero + R$ 200.724,80 em 6 itens com composicao parcial =
+ * R$ 2.931.027,70 presos em item cujo custo nao da para calcular. A regra 5
+ * acusava a COMPOSICAO (codigo) e a regra 4 acusava o ITEM (natureza): ninguem
+ * ligava as duas, e o R$ — que e o que decide — nao aparecia em lugar nenhum.
+ *
+ * Casos da medicao, usados aqui como cena: C0584 (sem preco, item 1.13.2 =
+ * R$ 1.448.016,50) e C3270 (1 de 50 componentes, item 1.7.4 = R$ 200.724,80).
+ */
+describe("revisao 3 - impacto em R$: a composicao acusa, o item paga", () => {
+  type Resultado = ReturnType<typeof validarCoerenciaEngenharia>;
+  const alcance = (r: Resultado, n: number) => {
+    const c = r.resumo.cobertura.find(x => x.regra.startsWith(`${n}.`));
+    if (!c) throw new Error(`a regra ${n} nao registrou cobertura`);
+    return c;
+  };
+
+  it("regra 5: composicao sem preco cita o valor dos itens vinculados", () => {
+    const r = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.13.2", quantity: 2, unitPrice: 724008.25,
+          compositionId: 1, compositionCode: "C0584", compositionUnit: "m2", somaComponentes: 0,
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C0584", componentesComPreco: 0, totalComponentes: 3, somaComponentes: 0 })],
+      atividades: [],
+    });
+
+    const achado = r.issues.find(i => i.code === "eng_composicao_sem_preco")!;
+    expect(achado.message).toContain("Total: R$ 1.448.016,50");
+    expect(achado.message).toContain("1.13.2 (R$ 1.448.016,50)");
+    expect(achado.severity).toBe("warning");
+  });
+
+  it("regra 5: composicao SEM item vinculado nao inventa zero", () => {
+    // Zero com aparencia de medicao e pior que a ausencia declarada.
+    const r = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [],
+      composicoes: [composicao({ id: 9, code: "C0095", componentesComPreco: 0, totalComponentes: 4 })],
+      atividades: [],
+    });
+
+    const achado = r.issues.find(i => i.code === "eng_composicao_sem_preco")!;
+    expect(achado.message).toContain("Sem item de orcamento vinculado");
+    expect(achado.message).not.toContain("R$ 0,00");
+  });
+
+  it("regra 5: composicao PARCIAL tambem cita o valor (o custo parece calculavel e nao e)", () => {
+    const r = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.7.4", quantity: 4, unitPrice: 50181.20,
+          compositionId: 2, compositionCode: "C3270", compositionUnit: "m2", somaComponentes: 12.5,
+        }),
+      ],
+      composicoes: [composicao({ id: 2, code: "C3270", componentesComPreco: 1, totalComponentes: 50, somaComponentes: 12.5 })],
+      atividades: [],
+    });
+
+    const achado = r.issues.find(i => i.code === "eng_composicao_preco_incompleto")!;
+    expect(achado.message).toContain("Total: R$ 200.724,80");
+    expect(achado.message).toContain("1.7.4");
+  });
+
+  it("regra 4: item sem base de soma vira achado NOMEADO, com valor, e continua warning", () => {
+    const r = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.13.2", quantity: 2, unitPrice: 724008.25,
+          compositionId: 1, compositionCode: "C0584", compositionUnit: "m2", somaComponentes: 0,
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C0584", componentesComPreco: 0, totalComponentes: 3 })],
+      atividades: [],
+    });
+
+    const achado = r.issues.find(i => i.code === "eng_item_custo_nao_conferivel")!;
+    expect(achado.severity).toBe("warning");
+    expect(achado.dominio).toBe("orcamento");
+    expect(achado.refs).toEqual(["1.13.2"]);
+    expect(achado.message).toContain("Total: R$ 1.448.016,50");
+    expect(achado.message).toContain("ausencia de base para calcular");
+    // diz que e o MESMO dinheiro da regra 5: dois totais somaveis para o mesmo
+    // valor seria pior que o silencio que estamos consertando.
+    expect(achado.message).toContain("regra 5");
+  });
+
+  it("regra 4: o motivo separa soma NAO MEDIDA de soma ZERO", () => {
+    // "indisponivel" para as duas mandava o engenheiro procurar um dado que
+    // existe — e escondia que o preco esta sem base de custo.
+    const naoMedida = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.1.1", compositionId: 1, compositionCode: "C0584", compositionUnit: "m2", somaComponentes: null })],
+      composicoes: [],
+      atividades: [],
+    });
+    expect(alcance(naoMedida, 4).motivo).toBe("soma de componentes indisponivel");
+
+    const zero = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.1.2", compositionId: 1, compositionCode: "C0584", compositionUnit: "m2", somaComponentes: 0 })],
+      composicoes: [],
+      atividades: [],
+    });
+    expect(alcance(zero, 4).motivo).toBe("composicao soma zero: sem base de custo");
+  });
+
+  it("o novo achado NAO infla o valorEmRisco (ausencia de base nao e desvio medido)", () => {
+    const r = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.13.2", quantity: 2, unitPrice: 724008.25,
+          compositionId: 1, compositionCode: "C0584", compositionUnit: "m2", somaComponentes: 0,
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C0584", componentesComPreco: 0, totalComponentes: 3 })],
+      atividades: [],
+    });
+
+    expect(r.resumo.valorEmRisco).toBe(0);
+    expect(r.issues.every(i => i.severity === "warning")).toBe(true);
+  });
+
+  it("a mensagem da regra 5 sem item vinculado nao perde a lista das composicoes", () => {
+    // O valor e a lista de composicoes convivem: tirar um nao pode esconder o outro.
+    const r = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [],
+      composicoes: [composicao({ id: 9, code: "C0093", componentesComPreco: 0, totalComponentes: 2 })],
+      atividades: [],
+    });
+    const achado = r.issues.find(i => i.code === "eng_composicao_sem_preco")!;
+    expect(achado.message).toContain("C0093");
+    expect(achado.refs).toEqual(["C0093"]);
+  });
+});
