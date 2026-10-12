@@ -462,6 +462,48 @@ describe("o runtime recebe o que a migracao precisa", () => {
     expect(cmd).toMatch(/&&\s*node scripts\/audit-schema-pg\.mjs\s*&&\s*pnpm start/);
   });
 
+  it("o parser do audit enxerga as colunas que o ALTER TABLE cria", async () => {
+    // Este teste IMPORTA a funcao real. O teste vizinho ("migration repetindo
+    // coluna") reimplementa o parser localmente — e por isso passou verde
+    // enquanto o audit tinha um regex que NUNCA casava: a aspa estava fechada
+    // antes do grupo opcional (`ALTER TABLE "(?:ONLY\s+)?"`), entao o padrao
+    // exigia `ALTER TABLE "` seguido de `ONLY`. O DDL real escreve
+    // `ALTER TABLE "projects" ADD COLUMN ...` e nao casava.
+    //
+    // Consequencia do defeito: as colunas criadas por ALTER TABLE ficavam
+    // invisiveis para a auditoria, e ela imprimia "banco confere" com a coluna
+    // faltando no banco. Foi assim que um deploy subiu lendo 4 colunas que nao
+    // existiam em producao.
+    const { colunasPorTabela } = await import("../scripts/audit-schema-pg.mjs");
+    const declaradas = colunasPorTabela() as Map<string, Set<string>>;
+
+    // Toda coluna que uma migration cria por ALTER TABLE ADD COLUMN tem de
+    // aparecer no mapa. Comparar contra o mesmo regex, mas escrito de forma
+    // independente ([\\s\\S] em vez de \\s), para nao repetir o defeito.
+    const esperadas: string[] = [];
+    for (const entry of journal.entries) {
+      const caminho = join(MIGRATIONS_FOLDER, `${entry.tag}.sql`);
+      if (!existsSync(caminho)) continue;
+      const sql = readFileSync(caminho, "utf-8");
+      for (const m of sql.matchAll(
+        /ALTER TABLE\s+(?:ONLY\s+)?"([^"]+)"[\s\S]{0,200}?ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi
+      )) {
+        esperadas.push(`${m[1]}.${m[2]}`);
+      }
+    }
+
+    expect(esperadas.length, "nenhum ALTER TABLE ADD COLUMN no historico").toBeGreaterThan(0);
+    const invisiveis = esperadas.filter(c => {
+      const [tabela, coluna] = c.split(".");
+      return !declaradas.get(tabela!)?.has(coluna!);
+    });
+    expect(
+      invisiveis,
+      `o audit nao enxerga colunas criadas por ALTER TABLE ` +
+        `(ele diria "banco confere" com a coluna ausente):\n  ${invisiveis.join("\n  ")}`
+    ).toEqual([]);
+  });
+
   it("o healthcheck do Render olha o banco (/readyz), nao apenas o processo", () => {
     // `/healthz` responde 200 sem consultar o banco. Com ele como healthcheck,
     // um deploy com schema divergente e promovido como saudavel. `/readyz`

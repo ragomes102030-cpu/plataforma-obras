@@ -81,8 +81,14 @@ export function colunasPorTabela(pasta = MIGRATIONS_FOLDER) {
       out.set(tabela, cols);
     }
 
+    // A aspa tem de vir DEPOIS do `(?:ONLY\s+)?`: o DDL real escreve
+    // `ALTER TABLE "projects" ADD COLUMN ...`, e a versão anterior exigia
+    // `ALTER TABLE "` + `ONLY` — nunca casava, e as colunas criadas por
+    // ALTER TABLE ficavam invisíveis para a auditoria (ela dizia "banco
+    // confere" com a coluna faltando). Cobre também o `ALTER TABLE` com o
+    // ADD COLUMN na linha seguinte (`\s+` casa a quebra de linha).
     for (const m of sql.matchAll(
-      /ALTER TABLE "(?:ONLY\s+)?"([^"]+)"\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi
+      /ALTER TABLE\s+(?:ONLY\s+)?"([^"]+)"\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi
     )) {
       const cols = out.get(m[1]) ?? new Set();
       cols.add(m[2]);
