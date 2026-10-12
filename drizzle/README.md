@@ -57,9 +57,11 @@ o banco, não. Nenhuma guarda olhava para isso.
   receber, não a descrição do schema em TypeScript
 - **Caminho versionado** — hoje **DESATIVADO em produção**: `USE_SUPABASE=1`
   desliga o DDL de startup do migrador (`scripts/migrate-pg.mjs` — ele lista as
-  pendentes e não aplica nenhuma), e o startCommand do serviço no Render usa `;`,
-  que ignora código de saída. Se precisa aplicar, diga por qual caminho (SQL
-  avulso no banco)
+  pendentes e não aplica nenhuma). **Essa é a causa que continua de pé.** A outra
+  causa do dia 12/10 — o startCommand do serviço no Render, que usava `;` e por
+  isso ignorava o código de saída do migrador e do audit — foi corrigida no painel
+  no mesmo dia; o `render.yaml` do repo já tinha `&&`. Se precisa aplicar, diga
+  por qual caminho (SQL avulso no banco)
 - **Verificação pós-apply** — a consulta em `information_schema` que prova que a
   coluna existe, com o resultado observado (`select column_name, data_type,
   is_nullable from information_schema.columns where table_name = '<tabela>'`)
