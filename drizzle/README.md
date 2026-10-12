@@ -55,13 +55,13 @@ o banco, não. Nenhuma guarda olhava para isso.
   (`ADD COLUMN IF NOT EXISTS`, coluna nullable, `CREATE TABLE IF NOT EXISTS`)
 - **DDL exato** — tabela, colunas, tipos, nulabilidade. O que o banco vai
   receber, não a descrição do schema em TypeScript
-- **Caminho versionado** — hoje **DESATIVADO em produção**: `USE_SUPABASE=1`
-  desliga o DDL de startup do migrador (`scripts/migrate-pg.mjs` — ele lista as
-  pendentes e não aplica nenhuma). **Essa é a causa que continua de pé.** A outra
-  causa do dia 12/10 — o startCommand do serviço no Render, que usava `;` e por
-  isso ignorava o código de saída do migrador e do audit — foi corrigida no painel
-  no mesmo dia; o `render.yaml` do repo já tinha `&&`. Se precisa aplicar, diga
-  por qual caminho (SQL avulso no banco)
+- **Caminho versionado** — o `USE_SUPABASE=1` **desliga o DDL de startup** do
+  migrador (`scripts/migrate-pg.mjs` — ele lista as pendentes e não aplica
+  nenhuma), e é por isso que a migração precisa ser aplicada à mão. O startCommand
+  do serviço no Render **já usa `&&`** (corrigido em 12/10): com o audit enxergando
+  as colunas, migração não aplicada **BARRA o deploy**. O `&&` não aplica a
+  migração — só impede o deploy ruim. Se precisa aplicar, diga por qual caminho
+  (SQL avulso no banco)
 - **Verificação pós-apply** — a consulta em `information_schema` que prova que a
   coluna existe, com o resultado observado (`select column_name, data_type,
   is_nullable from information_schema.columns where table_name = '<tabela>'`)
@@ -73,6 +73,24 @@ o banco, não. Nenhuma guarda olhava para isso.
   (`__drizzle_migrations`), porque é ele — não o `meta/_journal.json` — que o
   `readMigrationFiles`/`ultimaRegistrada()` compara para decidir o que está
   pendente
+
+### O sistema medido nos dois estados
+
+Medição do lead em 12/10, rodando o fluxo inteiro com uma migração nova **não
+aplicada**. Não é reproduzível sem acesso ao banco — por isso ela vai aqui
+**atribuída**, não como se eu a tivesse rodado:
+
+    migrate-pg.mjs (USE_SUPABASE=1) -> "13 aplicada(s), 1 pendente(s)", exit 0
+    audit-schema-pg.mjs            -> "colunas: 1 ausente(s) / DIVERGENCIA: projects.colunaNova"
+    com &&: pnpm start NAO RODA    -> DEPLOY FALHA
+
+O que ela prova — e é o ponto desta seção: **nenhuma das duas guardas bastava
+sozinha**. O `&&` sem o audit consertado não barra nada, porque o audit era cego
+(dizia "banco confere" com a coluna faltando e saía com 0). O audit consertado sem
+o `&&` também não, porque o `;` ignorava o código de saída. O incidente de 12/10
+aconteceu com os dois defeitos juntos; a proteção só passa a existir com os dois
+corrigidos. E o `&&` **não aplica** a migração: ele só impede o deploy ruim — quem
+aplica é o SQL avulso.
 
 ### Exemplo preenchido — a `0012`
 
