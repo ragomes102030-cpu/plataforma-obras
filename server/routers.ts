@@ -4112,16 +4112,34 @@ export const appRouter = router({
       );
       const comPredecessor=new Set(deps.map(d=>d.successorId));
 
-      // Pavimentos: o numero de niveis distintos declarados nas atividades.
+      // Pavimentos: SO o que o dado declara.
+      //
+      // A versao anterior inferia 6 quando tipoDeObra === "edificio". O efeito era
+      // perverso: a contagem por subnivel "1.4.N.M" so existe quando HA subnivel, e
+      // a regra de superestrutura so roda quando NAO ha. As duas condicoes eram
+      // mutuamente exclusivas — ver o dado desligava a regra, e o numero que a
+      // mensagem afirmava era sempre fabricado. Agora: se o subnivel existe, a
+      // contagem e real; se nao existe, nao afirmamos numero nenhum.
       const pavimentosDeclarados=[...new Set(atividades.map(a=>/^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1]).filter(Boolean))];
-      const pavimentos = pavimentosDeclarados.length > 1
-        ? pavimentosDeclarados.length
-        : (projeto.tipoDeObra === "edificio" ? 6 : null);
+      const pavimentos = pavimentosDeclarados.length > 1 ? pavimentosDeclarados.length : null;
+
+      // Area construida: somada dos quantitativos que a obra JA declara, em vez de
+      // passar null (que deixava a regra de custo/m2 morta no app). Usa a maior
+      // area de piso entre as atividades — tipicamente o contrapiso ou o
+      // revestimento de piso, que cobrem a area dos pavimentos.
+      const candidatosArea = atividades
+        .filter(a => a.unit && /m2|m²/.test(String(a.unit)) && Number(a.plannedQuantity) > 0)
+        .filter(a => /contrapis|revestiment.*pis|piso|forr/i.test(a.name))
+        .map(a => Number(a.plannedQuantity));
+      const areaConstruida = candidatosArea.length ? Math.max(...candidatosArea) : null;
+      const areaConstruidaFonte = areaConstruida
+        ? "maior area de piso declarada nas atividades da obra"
+        : null;
 
       return validarCoerenciaEngenharia({
         obra:{
           projectId:input.projectId, nome:projeto.name, tipoDeObra:projeto.tipoDeObra,
-          descricao:projeto.descricao, pavimentos, areaTerreno:null, areaConstruida:null,
+          descricao:projeto.descricao, pavimentos, areaConstruida, areaConstruidaFonte,
         },
         itens:itens.map(i=>({
           code:i.code, description:i.description, unit:i.unit,

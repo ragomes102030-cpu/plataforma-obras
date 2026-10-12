@@ -8,20 +8,20 @@ import {
 } from "./coerencia-engenharia";
 
 /**
- * Estes testes usam os casos REAIS medidos na AURORA TESTE (OB-PUPOCN) em
- * 11/10/2026. Nao sao exemplos inventados: cada numero veio de consulta ao
- * banco de producao. Se o validador deixar de acusar algum deles, o defeito
- * voltou.
+ * Casos derivados de dados REAIS medidos na AURORA TESTE (OB-PUPOCN) em
+ * 11/10/2026, e das 22 cenas da auditoria externa (commit c5abc57).
+ *
+ * A revisao 2 corrigiu defeitos que so apareciam contra o app real. Os testes
+ * abaixo travam cada um deles: se voltarem, quebram aqui.
  */
 
 const obraBase: ObraParaCoerencia = {
   projectId: 7,
   nome: "AURORA TESTE",
   tipoDeObra: "edificio",
-  // Trecho real da descricao da obra: e daqui que sai o sistema construtivo.
-  descricao: "A estrutura principal sera em concreto armado, incluindo fundacoes, pilares, vigas, lajes e demais elementos estruturais.",
+  descricao:
+    "A estrutura principal sera em concreto armado, incluindo fundacoes, pilares, vigas, lajes e demais elementos estruturais.",
   pavimentos: 6,
-  areaTerreno: 2400,
 };
 
 function item(over: Partial<ItemOrcamentoParaCoerencia>): ItemOrcamentoParaCoerencia {
@@ -35,7 +35,6 @@ function item(over: Partial<ItemOrcamentoParaCoerencia>): ItemOrcamentoParaCoere
     compositionCode: null,
     compositionDescription: null,
     compositionUnit: null,
-    compositionUnitCost: null,
     somaComponentes: null,
     ...over,
   };
@@ -55,12 +54,115 @@ function composicao(over: Partial<ComposicaoParaCoerencia>): ComposicaoParaCoere
   };
 }
 
-describe("coerencia de engenharia - natureza do servico", () => {
-  it("acusa servico de escritorio (cadastro/desenho) vinculado a execucao de obra", () => {
-    // Caso real: AURORA 1.13.2 "Drenagem externa" -> C0584 "CADASTRO DE REDE
-    // DE ESGOTO/EMISSARIO/DRENAGEM (MEIO MAGNETICO)". Componentes: plotter,
-    // computador, desenhista CAD, papel vegetal. R$ 1.448.016,50 = 28% do
-    // orcamento total da obra.
+describe("revisao 2 - PLURAL (o defeito que pegou por sorte de grafia)", () => {
+  // Em portugues "cao" vira "coes": "fundacoes" NAO contem "fundacao".
+  // A versao anterior usava palavra inteira e nao reconhecia Fundacoes,
+  // Instalacoes, Pavimentacoes, Escavacoes — os nomes mais comuns de EAP.
+  // O caso dos R$ 1,4 milhao foi pego porque "drenagem" e invariavel.
+
+  it("acusa composicao de escritorio com item no PLURAL (Instalacoes)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.10.1",
+          description: "Instalacoes hidrossanitarias",
+          unit: "vb",
+          quantity: 1,
+          unitPrice: 1448016.5,
+          compositionId: 22195,
+          compositionCode: "C0584",
+          compositionDescription: "CADASTRO DE REDE DE ESGOTO/DRENAGEM (MEIO MAGNETICO)",
+          compositionUnit: "M",
+        }),
+      ],
+      composicoes: [composicao({ id: 22195, code: "C0584", description: "CADASTRO DE REDE DE ESGOTO/DRENAGEM (MEIO MAGNETICO)", unit: "M" })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_natureza_servico_incompativel");
+  });
+
+  it("acusa resistencia insuficiente com item no PLURAL (Fundacoes)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.3.2",
+          description: "Fundacoes",
+          unit: "m3",
+          quantity: 220,
+          unitPrice: 185,
+          compositionId: 1,
+          compositionCode: "C3270",
+          compositionDescription: "CONCRETO P/VIBR., FCK=15MPa",
+          compositionUnit: "M3",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C3270", description: "CONCRETO P/VIBR., FCK=15MPa", unit: "M3" })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_concreto_resistencia_insuficiente");
+  });
+
+  it("acusa com Pavimentacoes, Escavacoes e Impermeabilizacoes (plurais)", () => {
+    for (const [codigo, nome] of [
+      ["1.13.1", "Pavimentacoes externas"],
+      ["1.3.1", "Escavacoes e movimento de terra"],
+      ["1.7.2", "Impermeabilizacoes de areas molhadas"],
+    ] as const) {
+      const resultado = validarCoerenciaEngenharia({
+        obra: obraBase,
+        itens: [
+          item({
+            code: codigo,
+            description: nome,
+            unit: "m2",
+            quantity: 100,
+            unitPrice: 50,
+            compositionId: 9,
+            compositionCode: "C0584",
+            compositionDescription: "CADASTRO DE REDE (MEIO MAGNETICO)",
+            compositionUnit: "M2",
+          }),
+        ],
+        composicoes: [composicao({ id: 9, code: "C0584", description: "CADASTRO DE REDE (MEIO MAGNETICO)", unit: "M2" })],
+      });
+      expect(resultado.issues.map(i => i.code), nome).toContain("eng_natureza_servico_incompativel");
+    }
+  });
+
+  it("NAO volta o falso positivo de termo curto (aco dentro de instalacoes)", () => {
+    // "instalacoes" contem "aco" como substring. Com radical de 4+ letras, a
+    // deteccao de sistema nao confunde instalacao com estrutura metalica.
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.10.1", description: "Instalacoes hidrossanitarias", unit: "vb", quantity: 1, unitPrice: 120000 })],
+      composicoes: [],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_incompativel");
+  });
+});
+
+describe("revisao 2 - valorEmRisco separado por dominio", () => {
+  it("achado de CRONOGRAMA nao joga dinheiro no valorEmRisco", () => {
+    // Cena R10-02 da auditoria: UMA atividade sem predecessor, com codigo que
+    // coincide com codigo de item de R$ 1.000.000, inflava o valor em risco.
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.9.1", description: "Portas e esquadrias", unit: "m2", quantity: 1000, unitPrice: 1000 })],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.9.1", name: "Portas e esquadrias", durationDays: 80, unit: "m2", earlyStart: 0, earlyFinish: 80, semPredecessor: true },
+      ],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_atividade_sem_predecessor");
+    expect(resultado.resumo.valorEmRisco).toBe(0);
+    expect(resultado.resumo.porDominio.cronograma).toBeGreaterThan(0);
+  });
+
+  it("achado de ORCAMENTO soma o valor do item", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: obraBase,
       itens: [
@@ -70,148 +172,145 @@ describe("coerencia de engenharia - natureza do servico", () => {
           unit: "m",
           quantity: 350,
           unitPrice: 4137.19,
-          compositionId: 22195,
+          compositionId: 1,
           compositionCode: "C0584",
-          compositionDescription: "CADASTRO DE REDE DE ESGOTO/EMISSARIO/DRENAGEM (MEIO MAGNETICO)",
+          compositionDescription: "CADASTRO DE REDE (MEIO MAGNETICO)",
           compositionUnit: "M",
-          compositionUnitCost: 4137.19,
-          somaComponentes: 0,
         }),
       ],
-      composicoes: [
-        composicao({
-          id: 22195,
-          code: "C0584",
-          description: "CADASTRO DE REDE DE ESGOTO/EMISSARIO/DRENAGEM (MEIO MAGNETICO)",
-          unit: "M",
-          somaComponentes: 0,
-          componentesComPreco: 0,
-          totalComponentes: 9,
-        }),
-      ],
+      composicoes: [composicao({ id: 1, code: "C0584", description: "CADASTRO DE REDE (MEIO MAGNETICO)", unit: "M" })],
     });
 
-    const achado = resultado.issues.find(i => i.code === "eng_natureza_servico_incompativel");
-    expect(achado).toBeDefined();
-    expect(achado!.severity).toBe("error");
-    expect(achado!.ref).toBe("1.13.2");
-    expect(resultado.valid).toBe(false);
-  });
-
-  it("acusa alvenaria estrutural vinculada a elemento de concreto armado", () => {
-    // Caso real: AURORA 1.4.1..1.4.4 e 1.6.1 -> C3270 (concreto fck=15 MPa)
-    // com descricao de item "Alvenaria estrutural bloco concreto 19x19x39".
-    const resultado = validarCoerenciaEngenharia({
-      obra: obraBase,
-      itens: [
-        item({
-          code: "1.4.3",
-          description: "Lajes - Alvenaria estrutural bloco concreto 19x19x39",
-          unit: "m3",
-          quantity: 320,
-          unitPrice: 348.6,
-          compositionId: 22988,
-          compositionCode: "C3270",
-          compositionDescription: "CONCRETO P/VIBR., FCK=15MPa COM AGREGADO PRODUZIDO (S/ TRANSP.)",
-          compositionUnit: "M3",
-          compositionUnitCost: 348.6,
-          somaComponentes: 91.99,
-        }),
-      ],
-      composicoes: [
-        composicao({
-          id: 22988,
-          code: "C3270",
-          description: "CONCRETO P/VIBR., FCK=15MPa COM AGREGADO PRODUZIDO (S/ TRANSP.)",
-          unit: "M3",
-          somaComponentes: 91.99,
-          componentesComPreco: 2,
-          totalComponentes: 6,
-        }),
-      ],
-    });
-
-    const codes = resultado.issues.map(i => i.code);
-    expect(codes).toContain("eng_sistema_construtivo_incompativel");
-    expect(resultado.valid).toBe(false);
-  });
-
-  it("acusa concreto de baixa resistencia em elemento estrutural", () => {
-    // fck=15 MPa e concreto de regularizacao. NBR 6118 exige >= 25 MPa para
-    // elemento estrutural em classe de agressividade urbana (C30 usual).
-    const resultado = validarCoerenciaEngenharia({
-      obra: obraBase,
-      itens: [
-        item({
-          code: "1.4.1",
-          description: "Pilares",
-          unit: "m3",
-          quantity: 80,
-          unitPrice: 348.6,
-          compositionId: 22988,
-          compositionCode: "C3270",
-          compositionDescription: "CONCRETO P/VIBR., FCK=15MPa COM AGREGADO PRODUZIDO",
-          compositionUnit: "M3",
-          compositionUnitCost: 348.6,
-          somaComponentes: 91.99,
-        }),
-      ],
-      composicoes: [composicao({ id: 22988, code: "C3270", description: "CONCRETO P/VIBR., FCK=15MPa COM AGREGADO PRODUZIDO", unit: "M3", somaComponentes: 91.99, componentesComPreco: 2, totalComponentes: 6 })],
-    });
-
-    expect(resultado.issues.map(i => i.code)).toContain("eng_concreto_resistencia_insuficiente");
-  });
-
-  it("NAO acusa item de vedacao (alvenaria comum) como incompativel", () => {
-    // Falso positivo que ja aconteceu: o termo "estrutura" casava dentro de
-    // "estrutural", e itens de alvenaria passavam a ser tratados como elemento
-    // de concreto. Alvenaria de vedacao e legitima numa obra de concreto.
-    const resultado = validarCoerenciaEngenharia({
-      obra: obraBase,
-      itens: [
-        item({
-          code: "1.5.1",
-          description: "Alvenarias de vedacao em bloco ceramico",
-          unit: "m2",
-          quantity: 4500,
-          unitPrice: 125,
-        }),
-      ],
-      composicoes: [],
-    });
-
-    expect(resultado.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_incompativel");
-  });
-
-  it("NAO acusa composicao compativel (sem falso positivo)", () => {
-    const resultado = validarCoerenciaEngenharia({
-      obra: obraBase,
-      itens: [
-        item({
-          code: "1.4.1",
-          description: "Pilares em concreto armado",
-          unit: "m3",
-          quantity: 80,
-          unitPrice: 520,
-          compositionId: 900,
-          compositionCode: "C3274",
-          compositionDescription: "CONCRETO P/VIBR., FCK=30MPa COM AGREGADO PRODUZIDO",
-          compositionUnit: "M3",
-          compositionUnitCost: 520,
-          somaComponentes: 518.4,
-        }),
-      ],
-      composicoes: [composicao({ id: 900, code: "C3274", description: "CONCRETO P/VIBR., FCK=30MPa COM AGREGADO PRODUZIDO", unit: "M3", somaComponentes: 518.4, componentesComPreco: 6, totalComponentes: 6 })],
-    });
-
-    expect(resultado.issues.map(i => i.code)).not.toContain("eng_concreto_resistencia_insuficiente");
-    expect(resultado.issues.map(i => i.code)).not.toContain("eng_natureza_servico_incompativel");
+    expect(resultado.resumo.valorEmRisco).toBeCloseTo(350 * 4137.19, 2);
+    expect(resultado.resumo.porDominio.orcamento).toBeGreaterThan(0);
+    expect(resultado.resumo.porDominio.cronograma).toBe(0);
   });
 });
 
-describe("coerencia de engenharia - preco", () => {
-  it("acusa preco do item divergente da soma dos componentes da composicao", () => {
-    // Caso real: item a R$ 348,60/m3, soma dos componentes = R$ 91,99/m3 (279%).
+describe("revisao 2 - regra 9 roda com fundacao no dia 0", () => {
+  it("acusa elemento superior antes do FIM da fundacao, mesmo com fundacao no dia 0", () => {
+    // Antes exigia inicioFundacao > 0, entao o caso comum (fundacao no dia 0)
+    // nao rodava. Agora compara com o fim da fundacao.
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.3.2", name: "Fundacoes", durationDays: 7, unit: "m3", earlyStart: 0, earlyFinish: 7 },
+        { id: 2, wbsCode: "1.6.1", name: "Estrutura da cobertura", durationDays: 6, unit: "m3", earlyStart: 0, earlyFinish: 6 },
+      ],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_sequencia_construtiva_invertida");
+    expect(achado).toBeDefined();
+    expect(achado!.refs).toContain("1.6.1");
+  });
+
+  it("NAO acusa quando o elemento superior comeca depois da fundacao terminar", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.3.2", name: "Fundacoes", durationDays: 7, unit: "m3", earlyStart: 0, earlyFinish: 7 },
+        { id: 2, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3", earlyStart: 7, earlyFinish: 15 },
+      ],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_sequencia_construtiva_invertida");
+  });
+});
+
+describe("revisao 2 - regra 8 nao fabrica numero de pavimentos", () => {
+  it("com pavimentos declarados: acusa como error citando o numero", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, pavimentos: 6 },
+      itens: [],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3" },
+        { id: 2, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3" },
+      ],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_estrutura_sem_ciclo_pavimento");
+    expect(achado).toBeDefined();
+    expect(achado!.severity).toBe("error");
+    expect(achado!.message).toContain("6 pavimentos");
+  });
+
+  it("SEM pavimentos declarados: acusa como warning sem afirmar numero", () => {
+    // Antes o numero era fabricado e a mensagem afirmava "a obra tem 6
+    // pavimentos" como se fosse dado. Sem o dado, nao se afirma o dado.
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, pavimentos: null },
+      itens: [],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3" },
+        { id: 2, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3" },
+      ],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_estrutura_sem_ciclo_pavimento");
+    expect(achado).toBeDefined();
+    expect(achado!.severity).toBe("warning");
+    expect(achado!.message).toContain("nao consta da obra");
+    expect(achado!.message).not.toMatch(/\b6 pavimentos\b/);
+  });
+
+  it("roda tambem quando tipoDeObra nao e edificio (reforma/ampliacao)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, tipoDeObra: "reforma", pavimentos: null },
+      itens: [],
+      composicoes: [],
+      atividades: [
+        { id: 1, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3" },
+      ],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_estrutura_sem_ciclo_pavimento");
+  });
+
+  it("NAO acusa quando ha decomposicao por nivel", () => {
+    const atividades: AtividadeParaCoerencia[] = [];
+    for (let i = 1; i <= 6; i++) {
+      atividades.push({ id: 100 + i, wbsCode: `1.4.1.${i}`, name: `Pilares Pav ${i}`, durationDays: 12, unit: "m3" });
+    }
+    const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [], atividades });
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_estrutura_sem_ciclo_pavimento");
+  });
+});
+
+describe("revisao 2 - regra 4: unidade separada de preco", () => {
+  it("acusa UNIDADE divergente como achado proprio, nao como preco", () => {
+    // Cena R4-03: item em "m" com composicao em "m3" era acusado de
+    // "divergencia de 101%" de PRECO quando a causa era UNIDADE.
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.3.2",
+          description: "Fundacoes",
+          unit: "m",
+          quantity: 220,
+          unitPrice: 185,
+          compositionId: 1,
+          compositionCode: "C3270",
+          compositionDescription: "CONCRETO P/VIBR.",
+          compositionUnit: "M3",
+          somaComponentes: 92,
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C3270", description: "CONCRETO P/VIBR.", unit: "M3", somaComponentes: 92, componentesComPreco: 6, totalComponentes: 6 })],
+    });
+
+    const codes = resultado.issues.map(i => i.code);
+    expect(codes).toContain("eng_unidade_composicao_divergente");
+    expect(codes).not.toContain("eng_preco_sem_lastro");
+  });
+
+  it("acusa preco quando as unidades batem e o valor diverge", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: obraBase,
       itens: [
@@ -221,158 +320,108 @@ describe("coerencia de engenharia - preco", () => {
           unit: "m3",
           quantity: 100,
           unitPrice: 348.6,
-          compositionId: 22988,
+          compositionId: 1,
           compositionCode: "C3270",
-          compositionDescription: "CONCRETO P/VIBR., FCK=15MPa",
+          compositionDescription: "CONCRETO P/VIBR.",
           compositionUnit: "M3",
-          compositionUnitCost: 348.6,
           somaComponentes: 91.99,
         }),
       ],
-      composicoes: [composicao({ id: 22988, code: "C3270", description: "CONCRETO P/VIBR., FCK=15MPa", unit: "M3", somaComponentes: 91.99, componentesComPreco: 2, totalComponentes: 6 })],
+      composicoes: [composicao({ id: 1, code: "C3270", description: "CONCRETO P/VIBR.", unit: "M3", somaComponentes: 91.99, componentesComPreco: 6, totalComponentes: 6 })],
     });
 
-    const achado = resultado.issues.find(i => i.code === "eng_preco_sem_lastro");
-    expect(achado).toBeDefined();
-    expect(achado!.ref).toBe("1.4.2");
-    expect(achado!.message).toMatch(/91,99|348,60/);
+    expect(resultado.issues.map(i => i.code)).toContain("eng_preco_sem_lastro");
   });
 
-  it("acusa composicao sem nenhum componente com preco", () => {
-    // Caso real: 21.104 de 23.266 componentes com unitPriceSnapshot = 0.
+  it("tolerancia estreita: 25% de divergencia acusa (projeto declara BDI 0%)", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: obraBase,
       itens: [
         item({
-          code: "1.6.3",
-          description: "Calhas, rufos e arremates",
-          unit: "m",
-          quantity: 140,
-          unitPrice: 4193.78,
-          compositionId: 23476,
-          compositionCode: "C0387",
-          compositionDescription: "BEIRA E BICA EM TELHA COLONIAL",
-          compositionUnit: "M",
-          compositionUnitCost: 4193.78,
-          somaComponentes: 0,
+          code: "1.0",
+          description: "Servico",
+          unit: "m2",
+          quantity: 10,
+          unitPrice: 125,
+          compositionId: 1,
+          compositionCode: "C1",
+          compositionDescription: "Servico",
+          compositionUnit: "M2",
+          somaComponentes: 100,
         }),
       ],
-      composicoes: [composicao({ id: 23476, code: "C0387", description: "BEIRA E BICA EM TELHA COLONIAL", unit: "M", somaComponentes: 0, componentesComPreco: 0, totalComponentes: 5 })],
+      composicoes: [composicao({ id: 1, code: "C1", description: "Servico", unit: "M2", somaComponentes: 100, componentesComPreco: 3, totalComponentes: 3 })],
     });
 
-    expect(resultado.issues.map(i => i.code)).toContain("eng_composicao_sem_preco");
-  });
-
-  it("acusa custo por m2 muito abaixo da referencia de mercado", () => {
-    // Caso real: R$ 5.193.043 para ~7.200 m2 = R$ 721/m2, ~26% do CUB comercial.
-    const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 7200 },
-      itens: [item({ code: "1.0", quantity: 1, unitPrice: 5193043 })],
-      composicoes: [],
-    });
-
-    const achado = resultado.issues.find(i => i.code === "eng_custo_m2_abaixo_referencia");
-    expect(achado).toBeDefined();
-    expect(achado!.severity).toBe("warning");
-  });
-
-  it("NAO acusa custo por m2 quando esta em faixa plausivel", () => {
-    const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 7200 },
-      itens: [item({ code: "1.0", quantity: 1, unitPrice: 7200 * 2800 })],
-      composicoes: [],
-    });
-
-    expect(resultado.issues.map(i => i.code)).not.toContain("eng_custo_m2_abaixo_referencia");
+    expect(resultado.issues.map(i => i.code)).toContain("eng_preco_sem_lastro");
   });
 });
 
-describe("coerencia de engenharia - dimensao e sequencia", () => {
-  it("acusa unidade divergente entre orcamento e cronograma", () => {
-    // Caso real: 1.3.2 orcamento em 'm', cronograma em 'm3'.
+describe("revisao 2 - regra 3 usa o piso correto (NBR 6118 admite C20)", () => {
+  it("NAO acusa C20 (permitido pela NBR 6118 Tabela 7.1)", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: obraBase,
-      itens: [item({ code: "1.3.2", description: "Fundacoes", unit: "m", quantity: 220, unitPrice: 185 })],
-      composicoes: [],
-      atividades: [
-        { id: 1, wbsCode: "1.3.2", name: "Fundacoes", durationDays: 7, unit: "m3", plannedQuantity: 220, earlyStart: 12, earlyFinish: 19, critical: true },
+      itens: [
+        item({
+          code: "1.4.1",
+          description: "Pilares",
+          unit: "m3",
+          quantity: 80,
+          unitPrice: 400,
+          compositionId: 1,
+          compositionCode: "C0842",
+          compositionDescription: "CONCRETO P/VIBR., FCK 20 MPa",
+          compositionUnit: "M3",
+        }),
       ],
+      composicoes: [composicao({ id: 1, code: "C0842", description: "CONCRETO P/VIBR., FCK 20 MPa", unit: "M3" })],
     });
 
-    const achado = resultado.issues.find(i => i.code === "eng_unidade_divergente");
-    expect(achado).toBeDefined();
-    expect(achado!.ref).toBe("1.3.2");
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_concreto_resistencia_insuficiente");
   });
 
-  it("acusa superestrutura sem decomposicao por pavimento", () => {
-    // Caso real: 6 pavimentos, estrutura em 4 atividades unicas de 8-9 dias
-    // (34 dias no total) - sem repeticao por ciclo construtivo.
-    const atividades: AtividadeParaCoerencia[] = [
-      { id: 375, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3", plannedQuantity: 80, earlyStart: 19, earlyFinish: 27, critical: true },
-      { id: 376, wbsCode: "1.4.2", name: "Vigas", durationDays: 9, unit: "m3", plannedQuantity: 100, earlyStart: 27, earlyFinish: 36, critical: true },
-      { id: 377, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3", plannedQuantity: 320, earlyStart: 36, earlyFinish: 44, critical: true },
-      { id: 378, wbsCode: "1.4.4", name: "Escadas", durationDays: 9, unit: "m3", plannedQuantity: 25, earlyStart: 44, earlyFinish: 53, critical: true },
-    ];
-
+  it("acusa fck=15 em elemento estrutural", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: obraBase,
-      itens: [],
-      composicoes: [],
-      atividades,
+      itens: [
+        item({
+          code: "1.4.1",
+          description: "Pilares",
+          unit: "m3",
+          quantity: 80,
+          unitPrice: 348.6,
+          compositionId: 1,
+          compositionCode: "C3270",
+          compositionDescription: "CONCRETO P/VIBR., FCK=15MPa",
+          compositionUnit: "M3",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C3270", description: "CONCRETO P/VIBR., FCK=15MPa", unit: "M3" })],
     });
 
-    const achado = resultado.issues.find(i => i.code === "eng_estrutura_sem_ciclo_pavimento");
-    expect(achado).toBeDefined();
-    expect(achado!.severity).toBe("error");
+    expect(resultado.issues.map(i => i.code)).toContain("eng_concreto_resistencia_insuficiente");
   });
+});
 
-  it("NAO acusa superestrutura quando ha decomposicao por pavimento", () => {
-    const atividades: AtividadeParaCoerencia[] = [];
-    const pavimentos = ["Terreo", "1o Pav", "2o Pav", "3o Pav", "4o Pav", "5o Pav", "Cobertura"];
-    pavimentos.forEach((pav, i) => {
-      atividades.push(
-        { id: 100 + i * 4, wbsCode: `1.4.1.${i + 1}`, name: `Pilares ${pav}`, durationDays: 12, unit: "m3", plannedQuantity: 12, earlyStart: i * 20, earlyFinish: i * 20 + 12, critical: true },
-        { id: 101 + i * 4, wbsCode: `1.4.2.${i + 1}`, name: `Vigas ${pav}`, durationDays: 12, unit: "m3", plannedQuantity: 15, earlyStart: i * 20 + 12, earlyFinish: i * 20 + 24, critical: true },
-        { id: 102 + i * 4, wbsCode: `1.4.3.${i + 1}`, name: `Lajes ${pav}`, durationDays: 14, unit: "m3", plannedQuantity: 46, earlyStart: i * 20 + 24, earlyFinish: i * 20 + 38, critical: true },
-        { id: 103 + i * 4, wbsCode: `1.4.4.${i + 1}`, name: `Escadas ${pav}`, durationDays: 6, unit: "m3", plannedQuantity: 4, earlyStart: i * 20 + 24, earlyFinish: i * 20 + 30, critical: false },
-      );
-    });
-
+describe("revisao 2 - dedup de causa raiz e ruido", () => {
+  it("agrupa varias atividades sem predecessor em UM achado com os codigos", () => {
+    // Cena R10-01: 12 atividades sem vinculo geravam 12 achados com a mesma
+    // redacao. Agora e um achado com a lista.
+    const atividades: AtividadeParaCoerencia[] = Array.from({ length: 12 }, (_, i) => ({
+      id: 400 + i,
+      wbsCode: `1.9.${i + 1}`,
+      name: `Servico ${i + 1}`,
+      durationDays: 10,
+      unit: "m2",
+      earlyStart: 0,
+      earlyFinish: 10,
+      semPredecessor: true,
+    }));
     const resultado = validarCoerenciaEngenharia({ obra: obraBase, itens: [], composicoes: [], atividades });
-    expect(resultado.issues.map(i => i.code)).not.toContain("eng_estrutura_sem_ciclo_pavimento");
-  });
 
-  it("acusa atividade de elemento superior comecando antes da fundacao", () => {
-    // Caso real: 1.6.1 "Estrutura da cobertura" com earlyStart=0, igual a
-    // mobilizacao, antes de qualquer fundacao (1.3.2 comeca no dia 12).
-    const resultado = validarCoerenciaEngenharia({
-      obra: obraBase,
-      itens: [],
-      composicoes: [],
-      atividades: [
-        { id: 383, wbsCode: "1.6.1", name: "Estrutura da cobertura", durationDays: 6, unit: "m3", plannedQuantity: 18, earlyStart: 0, earlyFinish: 6, critical: false },
-        { id: 373, wbsCode: "1.3.2", name: "Fundacoes", durationDays: 7, unit: "m3", plannedQuantity: 220, earlyStart: 12, earlyFinish: 19, critical: true },
-      ],
-    });
-
-    const achado = resultado.issues.find(i => i.code === "eng_sequencia_construtiva_invertida");
-    expect(achado).toBeDefined();
-    expect(achado!.ref).toBe("1.6.1");
-  });
-
-  it("acusa atividades sem predecessor que deveriam ter", () => {
-    const resultado = validarCoerenciaEngenharia({
-      obra: obraBase,
-      itens: [],
-      composicoes: [],
-      atividades: [
-        { id: 393, wbsCode: "1.9.1", name: "Portas e esquadrias", durationDays: 80, unit: "m2", plannedQuantity: 950, earlyStart: 0, earlyFinish: 80, critical: false, semPredecessor: true },
-      ],
-    });
-
-    const achado = resultado.issues.find(i => i.code === "eng_atividade_sem_predecessor");
-    expect(achado).toBeDefined();
-    expect(achado!.ref).toBe("1.9.1");
+    const achados = resultado.issues.filter(i => i.code === "eng_atividade_sem_predecessor");
+    expect(achados).toHaveLength(1);
+    expect(achados[0].refs).toHaveLength(12);
   });
 
   it("NAO acusa mobilizacao nem servicos preliminares por comecarem no dia 0", () => {
@@ -381,8 +430,8 @@ describe("coerencia de engenharia - dimensao e sequencia", () => {
       itens: [],
       composicoes: [],
       atividades: [
-        { id: 366, wbsCode: "1.1.1", name: "Mobilizacao e canteiro", durationDays: 5, unit: "vb", plannedQuantity: 1, earlyStart: 0, earlyFinish: 5, critical: false, semPredecessor: true },
-        { id: 369, wbsCode: "1.2.1", name: "Locacao e preparacao do terreno", durationDays: 3, unit: "m2", plannedQuantity: 2400, earlyStart: 0, earlyFinish: 3, critical: false, semPredecessor: true },
+        { id: 1, wbsCode: "1.1.1", name: "Mobilizacao e canteiro", durationDays: 5, unit: "vb", earlyStart: 0, earlyFinish: 5, semPredecessor: true },
+        { id: 2, wbsCode: "1.2.1", name: "Locacao e preparacao do terreno", durationDays: 3, unit: "m2", earlyStart: 0, earlyFinish: 3, semPredecessor: true },
       ],
     });
 
@@ -390,22 +439,159 @@ describe("coerencia de engenharia - dimensao e sequencia", () => {
   });
 });
 
-describe("coerencia de engenharia - resumo", () => {
-  it("conta erros e avisos e deriva o veredito", () => {
+describe("revisao 2 - regra 2 nao acusa causa que nao observa", () => {
+  it("mensagem descreve a divergencia, nao afirma a causa", () => {
     const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 7200 },
-      itens: [
-        item({ code: "1.13.2", description: "Drenagem externa", unit: "m", quantity: 350, unitPrice: 4137.19, compositionId: 22195, compositionCode: "C0584", compositionDescription: "CADASTRO DE REDE DE ESGOTO/DRENAGEM (MEIO MAGNETICO)", compositionUnit: "M", compositionUnitCost: 4137.19, somaComponentes: 0 }),
-      ],
-      composicoes: [composicao({ id: 22195, code: "C0584", description: "CADASTRO DE REDE DE ESGOTO/DRENAGEM (MEIO MAGNETICO)", unit: "M", somaComponentes: 0, componentesComPreco: 0, totalComponentes: 9 })],
+      obra: obraBase,
+      itens: [item({ code: "1.4.3", description: "Lajes - Alvenaria estrutural bloco concreto", unit: "m3", quantity: 320, unitPrice: 348.6 })],
+      composicoes: [],
     });
 
-    expect(resultado.resumo.erros).toBeGreaterThan(0);
+    const achado = resultado.issues.find(i => i.code === "eng_sistema_construtivo_incompativel");
+    expect(achado).toBeDefined();
+    expect(achado!.message).not.toContain("semelhanca de texto");
+  });
+
+  it("NAO acusa quando a obra declara sistema MISTO", () => {
+    // Cena R2-03: obra declarada mista acusava o item de alvenaria estrutural
+    // que ela mesma declara.
+    const resultado = validarCoerenciaEngenharia({
+      obra: {
+        ...obraBase,
+        descricao: "Estrutura em concreto armado com paredes de alvenaria estrutural nas areas internas.",
+      },
+      itens: [item({ code: "1.5.1", description: "Alvenaria estrutural bloco ceramico", unit: "m2", quantity: 4500, unitPrice: 125 })],
+      composicoes: [],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_incompativel");
+  });
+});
+
+describe("revisao 2 - regra 6: custo direto, e silencio declarado", () => {
+  it("NAO roda sem area construida (e nao inventa)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, areaConstruida: null },
+      itens: [item({ code: "1.0", quantity: 1, unitPrice: 5193043 })],
+      composicoes: [],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_custo_m2_abaixo_referencia");
+  });
+
+  it("usa so custo direto: administracao e licenca nao entram no R$/m2", () => {
+    // Com o total (incluindo administracao), o R$/m2 passaria do piso e a regra
+    // ficaria silenciosa. Com so custo direto, acusa.
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, areaConstruida: 7200, areaConstruidaFonte: "informada pelo usuario" },
+      itens: [
+        item({ code: "1.1.2", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 4000000 }),
+        item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 100, unitPrice: 500 }),
+      ],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_custo_m2_abaixo_referencia");
+    expect(achado).toBeDefined();
+    expect(achado!.message).toContain("custo direto");
+  });
+
+  it("mensagem declara que o piso e heuristica", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: { ...obraBase, areaConstruida: 7200 },
+      itens: [item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 100, unitPrice: 500 })],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_custo_m2_abaixo_referencia");
+    expect(achado!.message).toContain("heuristica");
+  });
+});
+
+describe("revisao 2 - correcoes do reprodutor do Butler (22 cenas)", () => {
+  it("R7-01: 'und' e 'un' sao a MESMA unidade (nao acusar)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.9.1", description: "Portas", unit: "und", quantity: 40, unitPrice: 1250 })],
+      composicoes: [],
+      atividades: [{ id: 400, wbsCode: "1.9.1", name: "Portas", durationDays: 10, unit: "un" }],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_unidade_divergente");
+  });
+
+  it("R7-01: 'm2' e 'm²' sao a mesma unidade (nao acusar)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.8.1", description: "Reboco", unit: "m²", quantity: 8000, unitPrice: 17 })],
+      composicoes: [],
+      atividades: [{ id: 1, wbsCode: "1.8.1", name: "Reboco", durationDays: 45, unit: "m2" }],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_unidade_divergente");
+  });
+
+  it("R7-01: unidades realmente diferentes AINDA sao acusadas", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.3.2", description: "Fundacoes", unit: "m", quantity: 220, unitPrice: 185 })],
+      composicoes: [],
+      atividades: [{ id: 1, wbsCode: "1.3.2", name: "Fundacoes", durationDays: 7, unit: "m3" }],
+    });
+
+    expect(resultado.issues.map(i => i.code)).toContain("eng_unidade_divergente");
+  });
+
+  it("R5-01: composicao com 1 de 50 componentes com preco acusa (cobertura parcial)", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [],
+      composicoes: [composicao({ id: 9400, code: "C9400", description: "QUASE TODA SEM PRECO", unit: "M3", somaComponentes: 12.5, componentesComPreco: 1, totalComponentes: 50 })],
+    });
+
+    const codes = resultado.issues.map(i => i.code);
+    expect(codes).toContain("eng_composicao_preco_incompleto");
+  });
+
+  it("R5-01: composicao com cobertura suficiente NAO acusa", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [],
+      composicoes: [composicao({ id: 1, code: "C1", description: "OK", unit: "M3", somaComponentes: 100, componentesComPreco: 5, totalComponentes: 6 })],
+    });
+
+    const codes = resultado.issues.map(i => i.code);
+    expect(codes).not.toContain("eng_composicao_preco_incompleto");
+    expect(codes).not.toContain("eng_composicao_sem_preco");
+  });
+});
+
+describe("revisao 2 - resumo", () => {
+  it("conta por dominio e deriva o veredito", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.13.2",
+          description: "Drenagem externa",
+          unit: "m",
+          quantity: 350,
+          unitPrice: 4137.19,
+          compositionId: 1,
+          compositionCode: "C0584",
+          compositionDescription: "CADASTRO DE REDE (MEIO MAGNETICO)",
+          compositionUnit: "M",
+        }),
+      ],
+      composicoes: [composicao({ id: 1, code: "C0584", description: "CADASTRO DE REDE (MEIO MAGNETICO)", unit: "M" })],
+    });
+
     expect(resultado.valid).toBe(false);
+    expect(resultado.resumo.porDominio.orcamento).toBeGreaterThan(0);
     expect(resultado.resumo.porSeveridade.error).toBe(resultado.resumo.erros);
   });
 
-  it("obra sem problemas fica valida e com resumo zerado", () => {
+  it("obra sem problemas fica valida e zerada", () => {
     const resultado = validarCoerenciaEngenharia({
       obra: { ...obraBase, areaConstruida: 7200 },
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 7200 * 2800, unit: "vb" })],
@@ -415,6 +601,7 @@ describe("coerencia de engenharia - resumo", () => {
 
     expect(resultado.valid).toBe(true);
     expect(resultado.resumo.erros).toBe(0);
+    expect(resultado.resumo.valorEmRisco).toBe(0);
   });
 
   it("nao quebra com entradas vazias", () => {

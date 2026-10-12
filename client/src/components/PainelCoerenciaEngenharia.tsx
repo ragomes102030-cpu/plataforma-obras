@@ -55,7 +55,7 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
     );
   }
 
-  type Achado = { severity: string; code: string; message: string; ref?: string };
+  type Achado = { severity: string; code: string; message: string; refs?: string[]; ref?: string; dominio?: string };
   const todos = dados.issues as Achado[];
   const erros = todos.filter(i => i.severity === "error");
   const avisos = todos.filter(i => i.severity === "warning");
@@ -73,7 +73,8 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
           </strong>
           {emRisco > 0 && (
             <p className="xl-achados-valor">
-              R$ {emRisco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em itens afetados
+              R$ {emRisco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em itens de orçamento
+              afetados (não inclui achados de cronograma)
             </p>
           )}
         </div>
@@ -88,7 +89,10 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
               {erros.map((i: Achado, n: number) => (
                 <div key={`e-${n}`} className="xl-achado xl-achado-erro">
                   <div className="xl-achado-topo">
-                    <span className="xl-achado-ref">{i.ref}</span>
+                    <span className="xl-achado-ref">
+                      {(i.refs ?? []).slice(0, 6).join(", ")}
+                      {(i.refs ?? []).length > 6 ? ` +${(i.refs ?? []).length - 6}` : ""}
+                    </span>
                     <span className="xl-achado-codigo">{i.code}</span>
                   </div>
                   <p>{i.message}</p>
@@ -102,7 +106,10 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
               {avisos.map((i: Achado, n: number) => (
                 <div key={`w-${n}`} className="xl-achado xl-achado-aviso">
                   <div className="xl-achado-topo">
-                    <span className="xl-achado-ref">{i.ref}</span>
+                    <span className="xl-achado-ref">
+                      {(i.refs ?? []).slice(0, 6).join(", ")}
+                      {(i.refs ?? []).length > 6 ? ` +${(i.refs ?? []).length - 6}` : ""}
+                    </span>
                     <span className="xl-achado-codigo">{i.code}</span>
                   </div>
                   <p>{i.message}</p>
