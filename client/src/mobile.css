@@ -85,38 +85,60 @@ html body .xl-app {
 
 /*
    "pointer: coarse" = dedo; um desktop estreito nao entra nesta regra.
-   O piso sobe por elemento, sem tocar em titulos:
-     - "1em" herda o tamanho do pai, entao nada encolhe;
-     - o teto de 15px impede que um texto pequeno dentro de um bloco grande
-       "exploda" e estoure a linha;
-     - ":is([class], ...)" eleva a especificidade acima das regras que declaram
-       8 a 11,5px.
-   Excecoes propositais: campos de formulario (regra propria abaixo), SVG (o
-   desenho do Gantt tem geometria propria) e rotulos de icone/badge.
+
+   O piso tipografico -- nada de texto abaixo de 12,5px -- esta em
+   `campo-tipografia.css`, um arquivo GERADO por
+   `scripts/gerar-tipografia-campo.mjs`. O motivo de nao caber aqui esta medido,
+   e vale registrar, porque as duas tentativas anteriores falharam.
+
+   PRIMEIRA TENTATIVA: uma regra universal.
+
+       html body :not(svg):not(svg *) { font-size: max(12.5px, 1em) !important }
+
+   Ela resolveu a leitura: levou os 1.116 elementos abaixo de 12,5px das 15
+   telas a zero. E criou outro problema. Em `font-size`, o `1em` vale o tamanho
+   do PAI, nao o do proprio elemento -- entao todo texto maior que o pai era
+   ENCOLHIDO ate o tamanho dele. `verificar-encolhimento.mjs` contou 42
+   elementos encolhidos, entre eles os titulos de pagina (h1 de 21px e h2 de
+   20px caindo para 16px) e os indicadores de 20 e 25px das telas de
+   planejamento. Uma regra de acessibilidade que apaga a hierarquia visual nao
+   serve para nada.
+
+   SEGUNDA TENTATIVA (a original): `clamp(12.5px, 1em, 15px)` sobre "todo
+   elemento com classe". Perdia para qualquer regra de duas classes -- e este CSS
+   e escrito assim. Foi por isso que os rotulos de 8,5 a 10px sobreviviam.
+
+   O QUE FUNCIONA: subir so o que e pequeno, com o mesmo seletor da regra
+   original e declarado depois. Como a especificidade e igual e a declaracao vem
+   depois, a ultima vence; e um numero grande declarado por outro seletor nao e
+   alcancado. Nada encolhe, por construcao. E o que o arquivo gerado faz.
+
+   Aqui ficam os casos que o gerador nao consegue decidir sozinho, porque o
+   tamanho nao esta escrito como numero de pixels.
 */
 @media (max-width: 900px) and (pointer: coarse) {
-  html body :is([class], p, span, td, th, li, dt, dd, label, small, a, button, div, figcaption, strong, b):not(
-      h1 *,
-      h2 *,
-      h3 *,
-      h4 *,
-      h5 *,
-      h6 *,
-      input,
-      select,
-      textarea,
-      svg,
-      svg *,
-      [class*="icone"],
-      [class*="badge"]
-    ) {
-    font-size: clamp(var(--campo-fonte-min), 1em, 15px);
+  /* A EAP inteira herda o tamanho da linha desta variavel: 11,5px no normal,
+     10,5px no compacto, 12px no confortavel (eap.css). Subir a variavel e mais
+     correto que sobrescrever cada `.eap-linha`, porque mantem as tres
+     densidades coerentes entre si. Em 12,5px o texto continua cabendo: a linha
+     tem de 28 a 38px de altura. */
+  html body :is(.eap-densidade-compacta, .eap-densidade-normal, .eap-densidade-confortavel) {
+    --eap-font: var(--campo-fonte-min);
+  }
+
+  /* Declarados em rem: 0.75rem = 12px, logo abaixo do piso. `max()` aqui so
+     pode aumentar, entao a intencao original fica preservada. Os de 0.8rem e
+     0.85rem (12,8px e 13,6px) ja passam do piso e nao entram. */
+  html body .gantt-help,
+  html body .gantt-detail-row,
+  html body .budget-analysis-branch small {
+    font-size: max(var(--campo-fonte-min), 0.75rem);
   }
 
   /* >= 16px impede o zoom automatico do iOS ao focar um campo (a tela inteira
      dava um salto a cada toque em campo de texto). */
   html body :is(input, select, textarea) {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 
@@ -206,6 +228,25 @@ html body .xl-app {
   html body .eap-workspace-review-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  /*
+     Mesmo caso, do outro lado: `.pl-planejamento-cards` tambem e um grid de 4
+     colunas fixas (planilha.css). Com o piso de leitura os rotulos de 9px sobem
+     para 12,5px e nao cabem em ~85px de cartao. Duas colunas devolvem a largura.
+
+     O segundo ajuste e outro defeito do mesmo cartao: `.pl-planejamento-cards
+     strong` e 20px com `line-height: 1`. A caixa fica com exatos 20px, mas o
+     desenho da letra pede ~23px -- o texto passa da caixa e encosta no rotulo de
+     baixo (medido: `scrollHeight` 23 contra `clientHeight` 20, em 24 cartoes das
+     telas de dependencias, CPM e baseline). Entrelinha de 1,15 da os 23px que
+     faltavam, e como a caixa cresce o texto volta a caber dentro dela.
+  */
+  html body .pl-planejamento-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html body .pl-planejamento-cards strong {
+    line-height: 1.15;
+  }
 }
 
 /* ---- 7. graficos largos: rolagem previsivel ------------------------------ */
@@ -217,3 +258,126 @@ html body .xl-app {
     touch-action: pan-x pan-y;
   }
 }
+
+/* ---- 8. alvos de toque: o que a medicao em PRODUCAO ainda reprovou -------- */
+
+/*
+   A regra 4 acima partia de uma suposicao errada: a de que os botoes de
+   recolher e fechar a barra de titulo carregavam a classe `.xl-tb-btn`. Nao
+   carregam. Medido no bundle publicado, emulando um iPhone 13 (390x844):
+
+     .xl-titlebar-collapse        40 x 40   eap.css, sem cobertura nossa
+     .xl-titlebar-fechar          40 x 40   eap.css, sem cobertura nossa
+     .xl-obra-chip.xl-obra-nova   28 x 44   so a largura: e um "+" estreito
+     .xl-tb-btn.xl-tb-auth        40 x 44   `min-width: 40px` do eap.css vencia,
+                                            porque a regra 4 so mexia em
+                                            `min-height`
+     .arquimedes-workbar-actions button
+                                  40 x 44   planilha.css fixa `width: 40px`
+     .xl-dashboard-acoes button  111 x 41   "Revisar EAP" / "Ir para Atividades"
+
+   Nove alvos no total, todos da mesma natureza: uma regra de 40px escrita
+   antes, que ninguem sobrepos. 40px e o minimo de conforto com o mouse; com o
+   dedo, no sol e muitas vezes de luva, o alvo util comeca em 44px.
+
+   O `min-width` tambem precisa ser declarado, e nao so o `min-height`: era
+   exatamente o `min-width: 40px` que segurava a largura dos botoes quadrados
+   de icone.
+*/
+@media (max-width: 900px) and (pointer: coarse) {
+  html body .xl-titlebar-collapse,
+  html body .xl-titlebar-fechar,
+  html body .xl-obra-nova,
+  html body .xl-dashboard-acoes button {
+    min-height: var(--campo-toque);
+  }
+
+  html body .xl-tb-btn,
+  html body .xl-tb-auth,
+  /* duas classes: `.xl-titlebar-fim .xl-tb-btn` (0,2,0) e mais especifico que
+     `.xl-tb-btn` (0,1,0) e segurava o `min-width: 40px` do botao "Sair". */
+  html body .xl-titlebar-fim .xl-tb-btn,
+  html body .xl-titlebar-collapse,
+  html body .xl-titlebar-fechar,
+  html body .xl-obra-nova,
+  html body .arquimedes-workbar-actions button {
+    min-width: var(--campo-toque);
+  }
+}
+
+/* ---- 9. telas internas: altura de toque ---------------------------------- */
+
+/*
+   Medido nas 15 telas internas, emulando um iPhone 13: 60 alvos abaixo de 44px,
+   nenhum deles "quase": sao controles com altura de planilha de desktop, entre
+   17 e 37px.
+
+     input.eap-workspace-search            318 x 17   busca da EAP
+     input.pl-atividades-search            328 x 17   busca de Atividades
+     button.eap-seta                        20 x 22   seta que recolhe a EAP
+     input.pl-duracao-input                 64 x 25   28 deles, um por atividade
+     button (filtro e acao secundaria)      86 a 370 x 25 a 37
+     input, select de formulario           144 a 336 x 31 a 33
+     input[type=checkbox]                   13 x 13   caixa de selecao
+
+   Em vez de repetir a lista, a regra vale para todo controle da tela interna.
+   O `!important` aqui e deliberado e e a unica forma de funcionar: este app
+   declara altura em regras de classe (0,1,0) e de duas classes (0,2,0), e
+   nenhuma regra generica sem `!important` alcanca uma declaracao dessas. Este
+   arquivo existe justamente para sobrepo-las -- so em tela estreita (<= 900px) e
+   so apontando para dedo (`pointer: coarse`). No desktop nada muda.
+
+   Nao entra aqui `a[href]`: link dentro de um paragrafo com `min-height: 44px`
+   quebraria a linha do texto.
+*/
+@media (max-width: 900px) and (pointer: coarse) {
+  /* Botao de icone, filtro, acao de cabecalho, "Registrar", e o resumo do
+     painel de detalhes.
+
+     `height: auto` junto do piso: o piso sozinho NAO basta porque o app declara
+     altura exata em varios botoes (`.scopo-btn { height: 31px }`). Altura exata
+     nao cresce com o conteudo: com `min-height: 44px` a caixa fica presa em 44px
+     e o rotulo de duas linhas vaza a borda. Medido em "Analisar com Arquimedes":
+     o texto ocupava 48px dentro de um botao de 44px -- `scrollHeight` 45 contra
+     `clientHeight` 42, transbordo de 3px. Sem a altura fixa a caixa acompanha o
+     texto e o piso continua garantindo os 44px minimos. Onde o botao e um quadrado
+     de icone, `min-width` (logo abaixo) mantem a proporcao. */
+  html body :is(button, [role="button"], summary) {
+    height: auto !important;
+    min-height: var(--campo-toque) !important;
+  }
+
+  /* Campo de texto e de selecao. Mesmo motivo do bloco acima. */
+  html body :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    height: auto !important;
+    min-height: var(--campo-toque) !important;
+  }
+
+  /* A seta da EAP tem 20px de largura dentro de uma coluna estreita: crescer so
+     em altura nao resolveria o alvo. */
+  html body .eap-seta {
+    min-width: var(--campo-toque) !important;
+  }
+
+  /* Caixa de selecao: 13px ficava abaixo do minimo de 24px da WCAG 2.5.8. Nao
+     vai a 44px de proposito -- uma caixa de 44px parece defeito, e a linha da
+     tabela ja e um alvo largo. 24px e 3,4 vezes a area anterior. */
+  html body :is(input[type="checkbox"], input[type="radio"]) {
+    inline-size: 24px;
+    block-size: 24px;
+  }
+}
+
+/* ---- 10. restauracao: o texto grande que o piso encolheria ---------------- */
+
+/*
+   Este bloco existia para desfazer o estrago da regra universal de `font-size`
+   (secao 3): `.xl-cartao-valor` de 25px e `.xl-status-topo strong` de 17px
+   caiam para 16px. Com o piso agora gerado a partir das declaracoes reais do
+   app (mesmo seletor, sem alcancar texto grande), nao ha mais o que restaurar --
+   `verificar-encolhimento.mjs` confirma zero encolhidos nas 15 telas.
+
+   O bloco fica vazio de proposito, como lembrete de onde a verificacao mora: se
+   um dia aparecer numero grande reduzido, e aqui que ele volta ao tamanho
+   original. Para conferir: `node verificar-encolhimento.mjs <url>`.
+*/

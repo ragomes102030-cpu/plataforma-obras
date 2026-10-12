@@ -7,6 +7,17 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import "./index.css";
+// A camada de campo tem de ser a ULTIMA folha do bundle, e isto aqui e o unico
+// lugar que garante isso. O `import "./index.css"` acima vem DEPOIS de
+// "./App", entao todo o CSS que o app importa (planilha.css, eap.css) entra
+// antes de index.css -- e index.css entra antes disto. Medido no bundle
+// publicado: uma regra `.eap-rownum { font-size: 7px }` de index.css vencia um
+// override de seletor identico vindo de dentro de App, porque na cascata, com
+// especificidade igual, vence a declaracao que aparece depois.
+import "@/mobile.css";
+// Gerado por scripts/gerar-tipografia-campo.mjs; precisa vir depois de
+// mobile.css. Ver a secao 3 de mobile.css.
+import "@/campo-tipografia.css";
 
 const queryClient = new QueryClient();
 
