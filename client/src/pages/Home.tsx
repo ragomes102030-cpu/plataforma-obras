@@ -249,9 +249,21 @@ export default function Home() {
                 </div>
 
                 <div className="xl-seletor-lista">
-                  {obrasBuscadas.length === 0 && (
+                  {/*
+                    Carregando e "nenhuma obra" sao estados diferentes e nao
+                    podem parecer iguais: no primeiro carregamento (ou logo depois
+                    de publicar, com a instancia fria) a consulta ainda esta em
+                    curso e o painel dizia "Nenhuma obra encontrada para """,
+                    como se o usuario nao tivesse obra nenhuma.
+                  */}
+                  {obras.isLoading && (
+                    <p className="xl-seletor-vazio">Carregando obras…</p>
+                  )}
+                  {!obras.isLoading && obrasBuscadas.length === 0 && (
                     <p className="xl-seletor-vazio">
-                      Nenhuma obra encontrada para “{buscaDeObra}”.
+                      {termoDeBusca
+                        ? `Nenhuma obra encontrada para “${buscaDeObra}”.`
+                        : "Nenhuma obra cadastrada ainda. Comece por “Nova obra”."}
                     </p>
                   )}
                   {obrasBuscadas.map(o => {

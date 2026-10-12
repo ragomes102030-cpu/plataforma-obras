@@ -63,6 +63,10 @@ console.log("\n== computador 1440x900 ==");
 
   await botao.click();
   await pagina.waitForSelector(".xl-seletor-painel", { timeout: 5000 });
+  // A lista so aparece quando a consulta de obras responde. Contra producao com
+  // a instancia fria isso passa de um segundo; contar antes disso media zero
+  // linhas e reprovava o teste por um motivo que nao era do produto.
+  await pagina.waitForSelector(".xl-seletor-item", { timeout: 20000 });
   const itens = await pagina.locator(".xl-seletor-item").count();
   ok("o painel abre com a lista de obras", itens > 1, `${itens} obras`);
 
@@ -140,6 +144,7 @@ console.log("\n== celular 390x844 (iPhone 13) ==");
 
   await pagina.locator(".xl-seletor-botao").click();
   await pagina.waitForSelector(".xl-seletor-painel", { timeout: 5000 });
+  await pagina.waitForSelector(".xl-seletor-item", { timeout: 20000 });
   await pagina.waitForTimeout(400);
 
   const painel = await pagina.locator(".xl-seletor-painel").boundingBox();
