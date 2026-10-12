@@ -91,9 +91,12 @@ de todo, é uma linha.
 | **R1-04** | Composição de execução que cita "projeto executivo" segue acusada. Prerequisito: negativo que separe "o projeto" de "projetar". |
 | **R2-02** | Cobertura metálica sobre estrutura de concreto segue acusada — não é incoerência por si. |
 | **R4-02** | Item com `somaComponentes = 0` (R$ 1,4 milhão sem lastro) não é acusado: a regra pula `soma <= 0`. |
-| **R5-01** | Composição com 1 de 50 componentes com preço não é acusada, ainda que a soma seja inútil. |
-| **R6-02** | Piso de 60% do CUB sem calibração. Prerequisito (área) já corrigido em `b2f36f1`; a solução acordada é **CUB declarado por obra**. |
+| **R5-01** | **FECHADO** — composição com 1 de 50 componentes com preço **é** acusada: `cobertura < LIMIAR_COBERTURA` → `eng_composicao_preco_incompleto` (`coerencia-engenharia.ts:893`); sem nenhum preço → `eng_composicao_sem_preco` (`:872`). Testes vivos em `coerencia-engenharia.test.ts:646` e `:657`. Confirmado na UI real pelo lead (1 composição: C3270). **Registro honesto:** esta linha afirmou o contrário do código desde a rodada 2, que já dizia "corrigido" — a lista de abertos foi lida como estado atual e induziu a fila ao erro. |
+| **R6-02** | **ENTREGUE** e publicado (`510da5b`): CUB declarado por obra (valor + UF + mês) como entrada, com tela, e BDI declarado registrado como NOTA da regra 4. O piso de 60% passou a ser heurística sobre o CUB declarado, na mensagem. |
 | residual | O chamador ainda passa `compositionUnitCost: null` ao validador (`server/routers.ts:4172`); o campo saiu do contrato, então a propriedade é ignorada. 1 linha, baixo risco, não tocada para manter o diff focado. |
+
+As duas linhas marcadas **FECHADO** e **ENTREGUE** ficam na tabela por registro, não por
+pendência: o que continua aberto de fato é **R1-04, R2-02 e R4-02**.
 
 ## 6. Como reproduzir
 

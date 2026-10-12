@@ -225,10 +225,24 @@ O resto exige o dado: e o que o script resolve.
 
 ## O que continua aberto (por decisao)
 
-R1-04 (composicao de execucao que cita "projeto executivo"), R2-02, R4-02, R5-01 — e
-**R6-02 (CUB declarado por obra: valor + UF + mes)**, que o lead colocou depois desta por
-ordem: a cobertura mostra quantos itens a regra 6 realmente avalia, e isso informa como
-calibrar o CUB declarado.
+R1-04 (composicao de execucao que cita "projeto executivo"), R2-02 e R4-02.
+
+**R5-01 e R6-02 sairam desta lista — ela mentiu sobre os dois:**
+
+- **R5-01 — FECHADO.** A regra 5 acusa a composicao PARCIAL
+  (`cobertura < LIMIAR_COBERTURA` -> `eng_composicao_preco_incompleto`,
+  `coerencia-engenharia.ts:893`) e a sem nenhum preco
+  (`componentesComPreco === 0` -> `eng_composicao_sem_preco`, `:872`); testes vivos em
+  `coerencia-engenharia.test.ts:646` e `:657`. Confirmado na UI real pelo lead
+  (1 composicao: C3270). A rodada 2 ja dizia "corrigido" — foi esta lista que ficou
+  para tras, e ela foi lida como estado atual.
+- **R6-02 — ENTREGUE** e publicado (`510da5b`): CUB declarado por obra (valor + UF + mes)
+  como entrada, com tela, e BDI declarado como NOTA da regra 4. O piso de 60% passou a ser
+  heuristica sobre o CUB declarado, dito na propria mensagem.
+
+Licao que fica escrita aqui, porque esta lista ja custou uma fila errada: **lista de
+pendencia e codigo — quando nao e conferida contra o arquivo, ela afirma estado que nao
+existe.**
 
 ## Nota para o lead
 
