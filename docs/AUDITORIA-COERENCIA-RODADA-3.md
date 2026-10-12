@@ -92,7 +92,7 @@ de todo, é uma linha.
 | **R1-04** | Composição de execução que cita "projeto executivo" segue acusada. Prerequisito: negativo que separe "o projeto" de "projetar". |
 | **R2-02** | Cobertura metálica sobre estrutura de concreto segue acusada — não é incoerência por si. |
 | **R4-02** | **FECHADO** — item cuja composição não dá base de soma **é** acusado, com achado NOMEADO e valor por item. Entregue em duas partes: `ab047ae` (impacto em R$ por item, publicado em `dc436f8`) e o delta `b39f840` (live): o motivo `"soma de componentes indisponivel"` **saiu** — agora `null` → `soma de componentes nao medida` e `<= 0` → `composicao soma zero: sem base de custo` — e a mensagem cita **item + composição + valor** (`1.13.1 (R$ 282.438,00) [composicao C0095]`). Medido na UI real pelo lead: 11 itens, **R$ 2.729.564,58**, e "indisponivel" **não aparece mais**. Continua `warning` e não entra no `valorEmRisco` — o número no risco exige BDI declarado (R6-02). **O código do achado NÃO foi renomeado** (`eng_item_custo_nao_conferivel`): ele já estava em produção e é fiel às duas causas, enquanto `sem_base_de_preco` descreveria o zero e mentiria no `null`. |
-| **R5-01** | **FECHADO** — composição com 1 de 50 componentes com preço **é** acusada: `cobertura < LIMIAR_COBERTURA` → `eng_composicao_preco_incompleto` (`coerencia-engenharia.ts:893`); sem nenhum preço → `eng_composicao_sem_preco` (`:872`). Testes vivos em `coerencia-engenharia.test.ts:646` e `:657`. Confirmado na UI real pelo lead (1 composição: C3270). **Registro honesto:** esta linha afirmou o contrário do código desde a rodada 2, que já dizia "corrigido" — a lista de abertos foi lida como estado atual e induziu a fila ao erro. |
+| **R5-01** | **FECHADO** — composição com 1 de 50 componentes com preço **é** acusada: `cobertura < LIMIAR_COBERTURA` → `eng_composicao_preco_incompleto` e, sem nenhum preço, `componentesComPreco === 0` → `eng_composicao_sem_preco`. Testes vivos em `coerencia-engenharia.test.ts:646` e `:657`. Confirmado na UI real pelo lead (1 composição: C3270). **Registro honesto:** esta linha afirmou o contrário do código desde a rodada 2, que já dizia "corrigido" — a lista de abertos foi lida como estado atual e induziu a fila ao erro. |
 | **R6-02** | **ENTREGUE** e publicado (`510da5b`): CUB declarado por obra (valor + UF + mês) como entrada, com tela, e BDI declarado registrado como NOTA da regra 4. O piso de 60% passou a ser heurística sobre o CUB declarado, na mensagem. |
 | residual | O chamador ainda passa `compositionUnitCost: null` ao validador (`server/routers.ts:4172`); o campo saiu do contrato, então a propriedade é ignorada. 1 linha, baixo risco, não tocada para manter o diff focado. |
 
@@ -104,6 +104,14 @@ que o item com `somaComponentes = 0` não era acusado, e continuou afirmando iss
 o achado já estar em produção. Foi corrigida só **depois** de o `b39f840` existir — uma
 linha não pode citar o hash do próprio commit que a torna verdadeira, e escrever antes
 faria o doc mentir outra vez.
+
+**Sobre citar LINHA de código:** `coerencia-engenharia.ts` **não** é citado por linha aqui
+de propósito. As citações `:872`/`:893` que a rodada 2 usou valiam só até o `ab047ae` — que
+inseriu ~86 linhas **antes** da regra 5 — entrar na **mesma ponta** (`dc436f8`); ou seja,
+envelheceram no próprio commit que as publicou. A âncora estável é o **identificador do
+achado + a constante** (`LIMIAR_COBERTURA`), que o `grep` acha em qualquer versão; em
+`b39f840` eles estão em `:997` e `:1010`. Citar linha é aceitável quando acompanha a versão
+("em `b39f840`"), nunca sozinha. As linhas de **teste** (`:646`/`:657`) seguem conferindo.
 
 ## 6. Como reproduzir
 

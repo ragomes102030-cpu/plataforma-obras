@@ -241,12 +241,15 @@ logica sem caso": nao urgentes, nao irrelevantes.
   "indisponivel" nao aparece mais. O codigo do achado **nao** foi renomeado, de proposito:
   `custo_nao_conferivel` e fiel as duas causas; `sem_base_de_preco` mentiria no `null`.
 - **R5-01 — FECHADO.** A regra 5 acusa a composicao PARCIAL
-  (`cobertura < LIMIAR_COBERTURA` -> `eng_composicao_preco_incompleto`,
-  `coerencia-engenharia.ts:893`) e a sem nenhum preco
-  (`componentesComPreco === 0` -> `eng_composicao_sem_preco`, `:872`); testes vivos em
+  (`cobertura < LIMIAR_COBERTURA` -> `eng_composicao_preco_incompleto`) e a sem nenhum preco
+  (`componentesComPreco === 0` -> `eng_composicao_sem_preco`); testes vivos em
   `coerencia-engenharia.test.ts:646` e `:657`. Confirmado na UI real pelo lead
   (1 composicao: C3270). A rodada 2 ja dizia "corrigido" — foi esta lista que ficou
   para tras, e ela foi lida como estado atual.
+  (Os `:872`/`:893` que esta secao citava antes estavam desatualizados: o `ab047ae`
+  inseriu ~86 linhas antes da regra 5 **na mesma ponta** em que eles foram publicados.
+  Em `b39f840` sao `:997` e `:1010` — cite o **identificador do achado**, que nao
+  envelhece, e a linha so junto com a versao.)
 - **R6-02 — ENTREGUE** e publicado (`510da5b`): CUB declarado por obra (valor + UF + mes)
   como entrada, com tela, e BDI declarado como NOTA da regra 4. O piso de 60% passou a ser
   heuristica sobre o CUB declarado, dito na propria mensagem.
