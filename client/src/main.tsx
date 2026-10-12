@@ -7,6 +7,10 @@ import superjson from "superjson";
 import App from "./App";
 import { startLogin } from "./const";
 import "./index.css";
+// Componente proprio do cabecalho (o seletor de obra). Vem depois de index.css
+// para poder ajustar o que o app ja define, e ANTES de mobile.css, para a camada
+// de campo ainda ter a ultima palavra no celular.
+import "@/seletor-obra.css";
 // A camada de campo tem de ser a ULTIMA folha do bundle, e isto aqui e o unico
 // lugar que garante isso. O `import "./index.css"` acima vem DEPOIS de
 // "./App", entao todo o CSS que o app importa (planilha.css, eap.css) entra

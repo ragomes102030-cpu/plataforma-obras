@@ -35,7 +35,7 @@ const IGNORAR = new Set(["mobile.css", "campo-tipografia.css"]);
 // Ordem real, tirada do grafo de imports: main.tsx importa `./App` ANTES de
 // `./index.css`; Home.tsx importa planilha.css antes de eap.css; e
 // theme-tokens.css e importado no topo de index.css.
-const ORDEM = ["planilha.css", "eap.css", "theme-tokens.css", "index.css"];
+const ORDEM = ["planilha.css", "eap.css", "theme-tokens.css", "index.css", "seletor-obra.css"];
 const disponiveis = readdirSync(RAIZ).filter((f) => f.endsWith(".css") && !IGNORAR.has(f));
 const arquivos = [
   ...ORDEM.filter((f) => disponiveis.includes(f)),

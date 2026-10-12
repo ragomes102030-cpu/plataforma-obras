@@ -381,3 +381,79 @@ html body .xl-app {
    um dia aparecer numero grande reduzido, e aqui que ele volta ao tamanho
    original. Para conferir: `node verificar-encolhimento.mjs <url>`.
 */
+
+/* ---- 11. cabecalho: seletor de obra no lugar da faixa de chips ------------ */
+
+/*
+   No celular a faixa de 15 chips nao serve: medido em 390px, aparecia um chip e
+   meio por vez, cada chip com 334px de largura, e a unica forma de achar uma obra
+   era arrastar de lado. A faixa sai e o seletor de obra assume -- ele lista
+   todas, com busca, e marca a ativa. As duas setas que recolhiam e fechavam a
+   faixa saem junto: sem faixa, nao ha o que recolher (e as acoes de fechar e
+   reabrir aba continuam no menu de cada obra, dentro do seletor).
+
+   Os tamanhos de alvo (44px) e de fonte (12,5px) ja vem das secoes 3 e 9; aqui
+   so o que e proprio do seletor.
+*/
+@media (max-width: 600px) {
+  html body :is(.xl-titlebar-obras, .xl-titlebar-collapse, .xl-titlebar-fechar) {
+    display: none !important;
+  }
+
+  html body .xl-seletor-obra {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Em 390px nome + codigo + seta apertam o nome, que e o que importa ler. */
+  html body .xl-seletor-codigo {
+    display: none;
+  }
+
+  /* O painel deixa de ser dropdown e vira folha inferior: ancorada no polegar e
+     sem risco de sair da tela pela direita, o que aconteceria com um dropdown
+     ancorado no canto esquerdo do cabecalho. */
+  html body .xl-seletor-painel {
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 76vh;
+    border-radius: 14px;
+  }
+
+  html body .xl-seletor-menu {
+    min-width: min(300px, calc(100vw - 40px));
+  }
+
+  /* O cabecalho nao pode mais esconder o que transborda: o menu "Mais" nasce
+     dentro dele e um `overflow: hidden` cortaria o menu inteiro -- foi assim que
+     o cabecalho ja escondia a propria fileira de acoes antes. Como a faixa de
+     chips saiu, nao ha mais nada para esconder. */
+  html body .xl-titlebar {
+    overflow: visible;
+  }
+
+  /* Os destinos saem da barra e passam para o menu "Mais", com rotulo escrito.
+     Medido: com alvos de 44px os seis botoes somavam 547px em 390px de tela. */
+  html body :is(.xl-tb-destino, .xl-tb-auth),
+  html body .xl-tb-user {
+    display: none !important;
+  }
+
+  html body .xl-topo-mais {
+    display: block;
+  }
+
+  html body .xl-topo-menu {
+    position: fixed;
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    min-width: 0;
+    border-radius: 14px;
+  }
+}

@@ -1812,7 +1812,18 @@ tr:hover .xl-codigo {
    (EAP/Gantt/LoB), mas a moldura e os controles passam a caber no telefone.
    -------------------------------------------------------------------------- */
 @media (max-width: 600px) {
-  .xl-titlebar {
+  /* `html body` aqui NAO e capricho. O bloco "cabecalho do produto" la no fim
+     deste arquivo redeclara `.xl-titlebar` com `height: 46px; padding: 0 14px;
+     gap: 9px`. Em especificidade igual vence a declaracao que aparece depois,
+     entao aquele bloco anulava estas tres linhas e o layout de celular inteiro
+     saia quebrado: a barra ficava presa nos 46px, o conteudo continuava a
+     quebrar linha (`flex-wrap: wrap` sobrevivia) e `align-content: center`
+     empurrava a primeira linha para FORA da barra. Medido em 390px: marca em
+     y=-42, setas em y=-55, e a fileira de destinos (Obra/Catalogo/Arquimedes/
+     Central/Sair) em y=55, tudo fora da caixa de 46px e escondido pelo
+     `overflow: hidden` do cabecalho -- ou seja, no celular so sobrava a faixa
+     de obras, sem nome da obra e sem os botoes da direita. */
+  html body .xl-titlebar {
     height: auto;
     min-height: 46px;
     padding: 5px 7px;
@@ -1856,17 +1867,20 @@ tr:hover .xl-codigo {
     padding-bottom: 2px;
   }
 
+  /* `flex-wrap` no lugar de `overflow-x: auto`: com os alvos de 44px exigidos
+     pela secao 9 do mobile.css, os seis botoes somam ~547px e nao cabem em
+     376px. Rolar de lado escondia a Lixeira e o "Sair" fora da tela (medido:
+     x=477 e x=508 num viewport de 390) -- acao invisivel e pior que uma linha a
+     mais. Aqui a fileira quebra em duas e tudo continua alcancavel. */
   .xl-titlebar-fim {
     order: 5;
     width: 100%;
     display: flex;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow: visible;
     gap: 4px;
     padding-bottom: 1px;
-    scrollbar-width: none;
   }
-
-  .xl-titlebar-fim::-webkit-scrollbar { display: none; }
 
   .xl-titlebar-fim .xl-tb-btn {
     flex: 0 0 auto;
@@ -2767,8 +2781,6 @@ tr:hover .xl-codigo {
 .xl-tb-btn.ativo { color: #65d4e9; background: #173545; }
 .xl-tb-arquimedes { border-color: #28556a; background: #112c39; color: #63d4e9; }
 .xl-tb-user { background: #1a3443; color: #8fe1ef; }
-.xl-lixeira-btn { border: 1px solid #d7e0e6; background: #fff; color: #647784; box-shadow: 0 2px 7px rgba(18,34,45,.07); }
-.xl-lixeira-btn:hover { color: #b13d3d; border-color: #e4baba; background: #fff8f8; }
 
 
 /* Botões do Arquimedes: mesma identidade e mesma ação em todos os pontos de entrada. */
