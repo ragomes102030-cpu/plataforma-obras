@@ -108,6 +108,60 @@ npx tsc --noEmit
   limpo
 ```
 
+## Como medir a cobertura de uma obra REAL
+
+`scripts/medir-cobertura-obra.mts` — **leitura pura** (guarda em `q()` recusa qualquer
+coisa que nao comece com `SELECT`; nao existe `INSERT/UPDATE/DELETE` no arquivo).
+
+```powershell
+$env:SUPABASE_DB_URL = "<string de conexao>"
+npx tsx scripts/medir-cobertura-obra.mts --obra OB-PUPOCN
+```
+
+A string de conexao vem **sempre** de variavel de ambiente; o script recusa recebe-la na
+linha de comando (historico e lista de processos). `--json` sai JSON para anexar em
+relatorio.
+
+O script replica o mapeamento do chamador real (`routers.ts:4054-4198`) e roda **o mesmo
+validador** — entao o numero que ele imprime e exatamente o que o painel vai mostrar,
+sem precisar de deploy. Como a replicacao e por copia (o chamador vive dentro do router,
+dependendo de sessao e do cliente drizzle), a divergencia e **detectavel**: o script
+**cruza** os metadados da base com as medicoes independentes D1-D4 e imprime `DIVERGE`
+quando o numero nao bate. Se `DIVERGE` aparecer, a replicacao (ou o dado) mudou — investigar
+antes de acreditar na tabela.
+
+`--autoteste` roda o pipeline inteiro com dados sinteticos no formato medido da AURORA
+(53 itens, 18 com composicao), **sem banco e sem rede**, e emite um veredito 4/4. Serve para
+provar o instrumento antes de apontar ele para um banco de verdade:
+
+```
+$ npx tsx scripts/medir-cobertura-obra.mts --autoteste
+  CRUZAMENTO ... 53/18/35 OK
+  a regra de preco sem lastro conferiu 18 de 53 itens | 35 fora por sem composicao vinculada
+  VEREDITO DO AUTOTESTE -> 4/4 (instrumento confiavel)
+```
+
+**A cobertura real da AURORA nao foi medida por mim**: nao ha string de conexao nesta
+maquina (verificado: `.env*` ausente nos tres worktrees, variaveis de ambiente do shell sem
+`DATABASE_URL`/`SUPABASE_*`, perfis do Hermes sem chave de banco). Quem tem a conexao roda
+o comando acima e tem o numero em um passo.
+
+### O que os metadados da AURORA permitem prever (DERIVADO, nao medido)
+
+Partindo apenas das medicoes D1-D4 do lead — 53 itens, 18 com `composition_id`, 35 sem —
+a cobertura que o validador vai declarar tem estas linhas ja determinadas:
+
+| Regra | Declaracao (derivada) |
+| --- | --- |
+| 1. natureza do servico | 18 de 53 itens; 35 fora por `sem composicao vinculada` |
+| 3. resistencia do concreto | no maximo 18 de 53 (so os com composicao); o resto `sem composicao vinculada` / `composicao nao cita concreto` |
+| 4. preco sem lastro | 18 de 53 itens; 35 fora por `sem composicao vinculada` |
+| 5. cobertura de preco | 18 de 18 composicoes (as 18 vinculadas tem componente) |
+| 6. custo por m2 | depende de `areaConstruida`, que nao vinha declarada — provavel `obra sem area construida` |
+| 7. unidade orcamento x cronograma | 18 de 18 atividades (as 18 batem com a atividade, medido em D3) |
+
+O resto exige o dado: e o que o script resolve.
+
 ## O que continua aberto (por decisao)
 
 R1-04 (composicao de execucao que cita "projeto executivo"), R2-02, R4-02, R5-01 — e
