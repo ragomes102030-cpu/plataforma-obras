@@ -62,7 +62,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
-import { validarCoerenciaEngenharia } from "./construction/coerencia-engenharia";
+import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
   ScheduleEvidenceActivity,
   ScheduleEvidenceDependency,
@@ -4053,7 +4053,7 @@ export const appRouter = router({
      */
     validateEngineeringCoherence: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{
       const db=await getDb();
-      if(!db) return {valid:true,issues:[],resumo:{total:0,erros:0,avisos:0,porSeveridade:{error:0,warning:0},valorEmRisco:0}};
+      if(!db) return {valid:true,issues:[],resumo:RESUMO_COERENCIA_VAZIO};
       await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const versionId=await getCurrentPlanVersionId(db,input.projectId);
 
@@ -4169,7 +4169,6 @@ export const appRouter = router({
           compositionCode:i.compositionId?(compPorId.get(i.compositionId)?.code??null):null,
           compositionDescription:i.compositionId?(compPorId.get(i.compositionId)?.description??null):null,
           compositionUnit:i.compositionId?(compPorId.get(i.compositionId)?.unit??null):null,
-          compositionUnitCost:null,
           somaComponentes:i.compositionId?(somaPorComp.get(i.compositionId)??0):null,
           // Classificacao explicita de custo direto.
           //

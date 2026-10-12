@@ -166,6 +166,40 @@ export type CoerenciaIssue = ValidationIssue & {
   ref?: string;
 };
 
+/**
+ * Cobertura de uma regra: quantos itens ela CONSEGUIU avaliar e por que os outros
+ * ficaram fora.
+ *
+ * Nasceu da aplicacao do principio "ausencia de achado nao pode ser lida como
+ * coerencia" ao orcamento INTEIRO. Na AURORA, 35 de 53 itens (66%) nao tem
+ * composicao vinculada e o painel mostrava "11 achados" como se a obra tivesse
+ * sido conferida.
+ *
+ * Isto NAO e achado e NAO muda severidade de nada: e declaracao de ALCANCE.
+ * `motivo` e sempre NOMEADO ("sem composicao vinculada"), nunca generico
+ * ("nao aplicavel") — um motivo generico esconde justamente o que se quer ver.
+ */
+export type CoberturaRegra = {
+  /** Nome da regra com o numero, ex.: "4. preco sem lastro". */
+  regra: string;
+  /** Sobre o que a regra conta: itens, composicoes ou atividades. */
+  universo: "itens" | "composicoes" | "atividades";
+  /** Universo da regra (todos os candidatos). */
+  total: number;
+  /** Quantos a regra realmente conseguiu checar. */
+  avaliados: number;
+  /** total - avaliados, com o motivo nomeado. */
+  fora: number;
+  /**
+   * Motivo NOMEADO predominante das exclusoes. `null` quando `fora === 0`.
+   * Uma regra pode ter mais de uma razao de exclusao — por isso o detalhe
+   * completo vem em `motivos`, e nao se esconde a segunda causa atras da primeira.
+   */
+  motivo: string | null;
+  /** Detalhe por motivo, do maior para o menor. */
+  motivos: { motivo: string; itens: number }[];
+};
+
 export type CoerenciaResultado = {
   valid: boolean;
   issues: CoerenciaIssue[];
@@ -184,7 +218,27 @@ export type CoerenciaResultado = {
     valorEmRisco: number;
     /** Quantos achados sao de orcamento e quantos de cronograma. */
     porDominio: Record<DominioAchado, number>;
+    /** Alcance de cada regra. Sem isto, "sem achado" e indistinguivel de "conferido". */
+    cobertura: CoberturaRegra[];
   };
+};
+
+/**
+ * Resumo vazio no formato EXATO do contrato.
+ *
+ * Existe para o caminho degenerado (banco nao configurado) nao poder divergir do
+ * formato real: um `resumo` incompleto aqui faz o tipo do procedimento virar uniao
+ * e o painel so enxergar os campos comuns aos dois lados. Foi o campo `cobertura`
+ * que expos isto — antes era `porDominio`.
+ */
+export const RESUMO_COERENCIA_VAZIO: CoerenciaResultado["resumo"] = {
+  total: 0,
+  erros: 0,
+  avisos: 0,
+  porSeveridade: { error: 0, warning: 0 },
+  valorEmRisco: 0,
+  porDominio: { orcamento: 0, cronograma: 0 },
+  cobertura: [],
 };
 
 // ---------------------------------------------------------------- normalizacao
@@ -445,6 +499,36 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   };
   const { add } = coletor;
 
+  // --------------------------------------------------------------- cobertura
+  //
+  // Cada regra declara quantos candidatos conseguiu avaliar e por que os outros
+  // ficaram fora. O motivo e sempre NOMEADO. Nenhuma severidade e alterada por
+  // isto — e declaracao de ALCANCE, nao achado.
+  const cobertura: CoberturaRegra[] = [];
+  const contar = (exclusoes: Map<string, number>, motivo: string) =>
+    exclusoes.set(motivo, (exclusoes.get(motivo) ?? 0) + 1);
+  const registrarAlcance = (
+    regra: string,
+    universo: CoberturaRegra["universo"],
+    total: number,
+    avaliados: number,
+    exclusoes: Map<string, number>,
+  ) => {
+    const motivos = [...exclusoes.entries()]
+      .filter(([, n]) => n > 0)
+      .map(([motivo, itens]) => ({ motivo, itens }))
+      .sort((a, b) => b.itens - a.itens);
+    cobertura.push({
+      regra,
+      universo,
+      total,
+      avaliados,
+      fora: motivos.reduce((s, m) => s + m.itens, 0),
+      motivo: motivos[0]?.motivo ?? null,
+      motivos,
+    });
+  };
+
   const atividades = input.atividades ?? [];
   const porCodigo = new Map<string, ItemOrcamentoParaCoerencia>();
   for (const it of input.itens) porCodigo.set(it.code, it);
@@ -468,14 +552,20 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   // ---- 1. Natureza do servico: composicao de escritorio em item de execucao
   {
     const achados: string[] = [];
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
     let valor = 0;
     let exemplo = "";
     for (const it of input.itens) {
-      if (!it.compositionId) continue;
+      if (!it.compositionId) { contar(exclusoes, "sem composicao vinculada"); continue; }
       const comp = composicaoPorId.get(it.compositionId);
       const descComp = comp?.description ?? it.compositionDescription ?? "";
       const descItem = it.description;
-      if (!descComp) continue;
+      if (!descComp) {
+        contar(exclusoes, comp ? "composicao sem descricao" : "composicao nao encontrada");
+        continue;
+      }
+      avaliados++;
 
       if (contemAlgum(descComp, RADICAIS_ESCRITORIO) && contemAlgum(descItem, RADICAIS_EXECUCAO)) {
         achados.push(it.code);
@@ -483,6 +573,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         if (!exemplo) exemplo = `"${it.description}" (${it.code}) -> "${it.compositionCode} — ${descComp}"`;
       }
     }
+    registrarAlcance("1. natureza do servico", "itens", input.itens.length, avaliados, exclusoes);
     if (achados.length) {
       add({
         severity: "error",
@@ -505,12 +596,17 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   // A mensagem descreve apenas o OBSERVAVEL (divergencia entre os dois
   // sistemas). A versao anterior afirmava "a vinculacao foi feita por
   // semelhanca de texto" — causa que o validador nao pode observar.
+  {
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
   if (!obraEhMista && sistemaDaObra !== "indefinido") {
     const achados: string[] = [];
     for (const it of input.itens) {
       const descItem = it.description;
       const sistemaDoItem = detectarSistema(descItem);
-      if (sistemaDoItem === "indefinido" || sistemaDoItem === "mista") continue;
+      if (sistemaDoItem === "indefinido") { contar(exclusoes, "item sem sistema construtivo reconhecivel"); continue; }
+      if (sistemaDoItem === "mista") { contar(exclusoes, "item declara sistema misto (nao comparavel a um sistema unico)"); continue; }
+      avaliados++;
       if (sistemaDoItem === sistemaDaObra) continue;
       achados.push(it.code);
     }
@@ -534,6 +630,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     // sistema reconhecivel = a checagem nao rodou, e a AUSENCIA de achado seria
     // lida como "obra coerente". Aqui a nao-avaliacao e declarada ao usuario,
     // como conferencia (nunca error: nao ha dado para acusar).
+    for (const _ of input.itens) contar(exclusoes, "obra sem sistema construtivo declarado nem inferivel");
     add({
       severity: "warning",
       dominio: "orcamento",
@@ -546,21 +643,32 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         "ATENCAO: nao haver achado de incompatibilidade aqui NAO significa que a obra e coerente — " +
         "significa que ela nao foi verificada.",
     });
+  } else {
+    // Obra MISTA: a regra nao acusa por decisao (a obra declara os dois sistemas).
+    // Isto e uma NAO-AVALIACAO declarada, nao um "nao ha nada a ver".
+    for (const _ of input.itens) contar(exclusoes, "obra declara sistema misto: a regra nao avalia por decisao");
+  }
+    registrarAlcance("2. sistema construtivo incompativel", "itens", input.itens.length, avaliados, exclusoes);
   }
 
   // ---- 3. Resistencia do concreto em elemento estrutural
   {
     const achados: string[] = [];
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
     let exemplo = "";
     for (const it of input.itens) {
       const descComp = it.compositionDescription ?? "";
-      if (!contemRadical(descComp, "concret")) continue;
-      if (!contemAlgum(it.description, RADICAIS_ESTRUTURAIS)) continue;
+      if (!contemRadical(descComp, "concret")) { contar(exclusoes, "composicao nao cita concreto"); continue; }
+      if (!contemAlgum(it.description, RADICAIS_ESTRUTURAIS)) { contar(exclusoes, "item nao e elemento estrutural"); continue; }
       const fck = fckDeConcreto(descComp);
-      if (fck == null || fck >= FCK_MINIMO_ESTRUTURAL) continue;
+      if (fck == null) { contar(exclusoes, "fck nao declarado na composicao"); continue; }
+      avaliados++;
+      if (fck >= FCK_MINIMO_ESTRUTURAL) continue;
       achados.push(it.code);
       if (!exemplo) exemplo = `"${it.description}" (${it.code}) usa fck=${fck} MPa`;
     }
+    registrarAlcance("3. resistencia do concreto", "itens", input.itens.length, avaliados, exclusoes);
     if (achados.length) {
       add({
         severity: "error",
@@ -595,17 +703,22 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     const pctBdi = bdi == null ? null : Math.round(bdi * 100);
     const achadosPreco: string[] = [];
     const achadosUnidade: string[] = [];
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
     let exemplo = "";
 
     for (const it of input.itens) {
-      if (!it.compositionId) continue;
+      if (!it.compositionId) { contar(exclusoes, "sem composicao vinculada"); continue; }
       const unitItem = normUnidade(it.unit);
       const unitComp = normUnidade(it.compositionUnit);
       if (unitComp && unitItem && unitComp !== unitItem) {
+        contar(exclusoes, "unidade divergente da composicao");
         achadosUnidade.push(it.code);
         continue; // divergencia de unidade explica o valor; nao acusar preco
       }
-      if (it.somaComponentes == null || it.somaComponentes <= 0 || it.unitPrice <= 0) continue;
+      if (it.somaComponentes == null || it.somaComponentes <= 0) { contar(exclusoes, "soma de componentes indisponivel"); continue; }
+      if (it.unitPrice <= 0) { contar(exclusoes, "preco do item nao informado"); continue; }
+      avaliados++;
       const razao = it.unitPrice / it.somaComponentes;
       if (razao > esperado * (1 + TOLERANCIA_PRECO) || razao < esperado * (1 - TOLERANCIA_PRECO)) {
         achadosPreco.push(it.code);
@@ -616,6 +729,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
             `(razao ${razao.toFixed(2)}, esperado ${esperado.toFixed(2)})`;
       }
     }
+    registrarAlcance("4. preco sem lastro", "itens", input.itens.length, avaliados, exclusoes);
 
     if (achadosUnidade.length) {
       add({
@@ -661,12 +775,16 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     const LIMIAR_COBERTURA = 0.5; // menos de metade dos componentes com preco
     const semPreco: string[] = [];
     const parcial: string[] = [];
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
     for (const c of input.composicoes) {
-      if (c.totalComponentes === 0) continue;
+      if (c.totalComponentes === 0) { contar(exclusoes, "composicao sem componentes"); continue; }
+      avaliados++;
       if (c.componentesComPreco === 0) { semPreco.push(c.code); continue; }
       const cobertura = c.componentesComPreco / c.totalComponentes;
       if (cobertura < LIMIAR_COBERTURA) parcial.push(c.code);
     }
+    registrarAlcance("5. cobertura de preco da composicao", "composicoes", input.composicoes.length, avaliados, exclusoes);
     if (semPreco.length) {
       add({
         severity: "warning",
@@ -704,36 +822,54 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   //       Comparar os dois inflava o R$/m2 e fazia a regra acusar de menos.
   //   (c) o piso de 60% do CUB nao tinha lastro e dava falso alarme em galpao.
   //       Agora o piso e parametro explicito, declarado no resultado.
-  if (input.obra.areaConstruida && input.obra.areaConstruida > 0 && input.itens.length) {
-    const diretos = input.itens.filter(ehCustoDireto);
-    const totalDireto = diretos.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
-    if (totalDireto > 0) {
-      const porM2 = totalDireto / input.obra.areaConstruida;
-      const PISO_CUB = 2500 * 0.6; // 60% do CUB comercial de referencia — HEURISTICA, ver mensagem
-      if (porM2 < PISO_CUB) {
-        add({
-          severity: "warning",
-          dominio: "orcamento",
-          code: "eng_custo_m2_abaixo_referencia",
-          refs: [input.obra.nome],
-          message:
-            `Custo direto por m2 e R$ ${brl(porM2)} (R$ ${brl(totalDireto)} de ${diretos.length} itens de custo ` +
-            `direto / ${input.obra.areaConstruida} m2${input.obra.areaConstruidaFonte ? ` — area ${input.obra.areaConstruidaFonte}` : ""}). ` +
-            `Abaixo do piso de R$ ${brl(PISO_CUB)}/m2 (60% de um CUB comercial de referencia de R$ 2.500/m2). ` +
-            `O piso e heuristica e nao substitui o CUB da regiao: confirme antes de concluir subestimacao.`,
-        });
+  {
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
+    if (!input.obra.areaConstruida || input.obra.areaConstruida <= 0) {
+      for (const _ of input.itens) contar(exclusoes, "obra sem area construida");
+    } else {
+      const diretos = input.itens.filter(ehCustoDireto);
+      for (const it of input.itens) {
+        if (!ehCustoDireto(it)) contar(exclusoes, "item nao e custo direto de construcao");
+      }
+      const totalDireto = diretos.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+      if (totalDireto > 0) {
+        avaliados = diretos.length;
+        const porM2 = totalDireto / input.obra.areaConstruida;
+        const PISO_CUB = 2500 * 0.6; // 60% do CUB comercial de referencia — HEURISTICA, ver mensagem
+        if (porM2 < PISO_CUB) {
+          add({
+            severity: "warning",
+            dominio: "orcamento",
+            code: "eng_custo_m2_abaixo_referencia",
+            refs: [input.obra.nome],
+            message:
+              `Custo direto por m2 e R$ ${brl(porM2)} (R$ ${brl(totalDireto)} de ${diretos.length} itens de custo ` +
+              `direto / ${input.obra.areaConstruida} m2${input.obra.areaConstruidaFonte ? ` — area ${input.obra.areaConstruidaFonte}` : ""}). ` +
+              `Abaixo do piso de R$ ${brl(PISO_CUB)}/m2 (60% de um CUB comercial de referencia de R$ 2.500/m2). ` +
+              `O piso e heuristica e nao substitui o CUB da regiao: confirme antes de concluir subestimacao.`,
+          });
+        }
+      } else {
+        for (const _ of diretos) contar(exclusoes, "custo direto sem valor informado");
       }
     }
+    registrarAlcance("6. custo por m2", "itens", input.itens.length, avaliados, exclusoes);
   }
 
   // ---- 7. Unidade divergente entre orcamento e cronograma
   {
     const achados: string[] = [];
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
     for (const a of atividades) {
       const it = porCodigo.get(a.wbsCode);
-      if (!it || !a.unit) continue;
+      if (!it) { contar(exclusoes, "atividade sem item correspondente no orcamento"); continue; }
+      if (!a.unit) { contar(exclusoes, "atividade sem unidade"); continue; }
+      avaliados++;
       if (normUnidade(it.unit) !== normUnidade(a.unit)) achados.push(a.wbsCode);
     }
+    registrarAlcance("7. unidade orcamento x cronograma", "atividades", atividades.length, avaliados, exclusoes);
     if (achados.length) {
       add({
         severity: "warning",
@@ -820,6 +956,14 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         });
       }
     }
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
+    for (const a of atividades) {
+      if (!/^1\.4(\.|$)/.test(a.wbsCode)) { contar(exclusoes, "atividade fora da superestrutura"); continue; }
+      if (estrutura.length > 0 && (!temSubnivel || niveis.size >= 2)) { avaliados++; continue; }
+      contar(exclusoes, "superestrutura em nivel unico: nao ha ciclo entre niveis para comparar");
+    }
+    registrarAlcance("8. superestrutura e ciclo de pavimento", "atividades", atividades.length, avaliados, exclusoes);
   }
 
   // ---- 9. Sequencia construtiva invertida
@@ -832,12 +976,15 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   {
     const fundacao = atividades.find(a => /^1\.3\.2$/.test(a.wbsCode));
     const fimFundacao = fundacao?.earlyFinish ?? null;
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
     if (fimFundacao != null && fimFundacao > 0) {
       const achados: string[] = [];
       let exemplo = "";
       for (const a of atividades) {
-        if (!ehElementoSuperior(a.wbsCode)) continue;
-        if (a.earlyStart == null) continue;
+        if (!ehElementoSuperior(a.wbsCode)) { contar(exclusoes, "atividade que nao e elemento superior"); continue; }
+        if (a.earlyStart == null) { contar(exclusoes, "atividade sem inicio (earlyStart) calculado"); continue; }
+        avaliados++;
         if (a.earlyStart < fimFundacao) {
           achados.push(a.wbsCode);
           if (!exemplo)
@@ -856,7 +1003,10 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
             `Ex.: ${exemplo}.`,
         });
       }
+    } else {
+      for (const _ of atividades) contar(exclusoes, "obra sem fundacao (1.3.2) com termino no CPM");
     }
+    registrarAlcance("9. sequencia construtiva", "atividades", atividades.length, avaliados, exclusoes);
   }
 
   // ---- 10. Atividade sem predecessor
@@ -874,6 +1024,16 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   // faz o usuario desligar o validador.
   {
     const PODE_COMECAR_SEM_PREDECESSOR = /^1\.(1|2)\./;
+    const exclusoes = new Map<string, number>();
+    let avaliados = 0;
+    for (const a of atividades) {
+      if (PODE_COMECAR_SEM_PREDECESSOR.test(a.wbsCode)) {
+        contar(exclusoes, "atividade que pode comecar sem predecessor (frente de inicio)");
+        continue;
+      }
+      avaliados++;
+    }
+    registrarAlcance("10. atividade sem predecessor", "atividades", atividades.length, avaliados, exclusoes);
     const candidatas = atividades.filter(a => !PODE_COMECAR_SEM_PREDECESSOR.test(a.wbsCode));
     const semPred = candidatas.filter(a => a.semPredecessor);
 
@@ -934,6 +1094,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
       porSeveridade: { error: erros, warning: avisos },
       valorEmRisco,
       porDominio,
+      cobertura,
     },
   };
 }
