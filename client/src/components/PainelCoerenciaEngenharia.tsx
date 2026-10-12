@@ -5,6 +5,58 @@ type Props = {
   projetoId: number;
 };
 
+type CoberturaRegra = {
+  regra: string;
+  universo: string;
+  total: number;
+  avaliados: number;
+  fora: number;
+  motivo: string | null;
+  motivos: { motivo: string; itens: number }[];
+};
+
+/** "4. preco sem lastro" -> "a regra de preco sem lastro" (linguagem de engenheiro). */
+function nomeDaRegra(regra: string): string {
+  return `a regra de ${regra.replace(/^\s*\d+\.\s*/, "").trim()}`;
+}
+
+/**
+ * Alcance de cada regra. NAO sao achados e nao mudam severidade: existem para que
+ * "sem achado" nunca seja lido como "obra coerente" quando a regra nao conseguiu
+ * avaliar tudo. O motivo de exclusao aparece NOMEADO.
+ */
+function BlocoCobertura({ cobertura }: { cobertura: CoberturaRegra[] }) {
+  if (!cobertura || cobertura.length === 0) return null;
+  return (
+    <div className="xl-cobertura">
+      <div className="xl-achados-grupo">O QUE FOI CONFERIDO</div>
+      <p className="xl-cobertura-nota">
+        Nao haver achado em uma regra significa que ela nao encontrou incoerencia <em>no que
+        conseguiu conferir</em>. O alcance de cada regra esta abaixo — item fora nao foi reprovado,
+        nao foi conferido.
+      </p>
+      {cobertura.map((r, n) => (
+        <div key={`c-${n}`} className="xl-cobertura-linha">
+          <span className="xl-cobertura-regra">{nomeDaRegra(r.regra)}</span>
+          <span className="xl-cobertura-conta">
+            {r.total === 0
+              ? `nao havia ${r.universo} para conferir`
+              : `conferiu ${r.avaliados} de ${r.total} ${r.universo}`}
+          </span>
+          {r.fora > 0 && (
+            <span className="xl-cobertura-fora">
+              {r.fora} fora por{" "}
+              {r.motivos.length > 1
+                ? r.motivos.map(m => `${m.itens} ${m.motivo}`).join("; ")
+                : r.motivo}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Painel de coerencia de engenharia.
  *
@@ -48,9 +100,11 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
       <div className="xl-achados xl-achados-ok">
         <span className="xl-painel-kicker">COERENCIA DE ENGENHARIA</span>
         <p>
-          <strong>Nenhuma incoerencia encontrada.</strong> Composicoes correspondem aos
-          servicos, sequencia e construtivamente possivel e os precos tem lastro nos componentes.
+          <strong>Nenhuma incoerencia encontrada no que foi conferido.</strong>{" "}
+          Isto nao afirma que a obra esta coerente — afirma que as regras nao acusaram nada
+          dentro do alcance delas, que esta declarado abaixo.
         </p>
+        <BlocoCobertura cobertura={dados?.resumo.cobertura ?? []} />
       </div>
     );
   }
@@ -117,6 +171,7 @@ export function PainelCoerenciaEngenharia({ projetoId }: Props) {
               ))}
             </>
           )}
+          <BlocoCobertura cobertura={dados.resumo.cobertura} />
         </div>
       )}
     </div>

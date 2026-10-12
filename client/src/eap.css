@@ -1871,6 +1871,15 @@
 .xl-achado-codigo{font-size:9px;opacity:.55;font-family:ui-monospace,monospace}
 .xl-achado p{margin:0;font-size:11px;line-height:1.45}
 
+/* Cobertura por regra: alcance, nao achado. Fica sempre no fim da lista para nao
+   competir visualmente com o que exige acao. */
+.xl-cobertura{margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)}
+.xl-cobertura-nota{margin:0 0 8px;font-size:10.5px;line-height:1.45;opacity:.72}
+.xl-cobertura-linha{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;padding:3px 0;font-size:10.5px;line-height:1.4}
+.xl-cobertura-regra{font-weight:600;min-width:170px}
+.xl-cobertura-conta{font-family:ui-monospace,monospace;font-size:10px;opacity:.8}
+.xl-cobertura-fora{opacity:.72}
+
 
 /* ============================================================ CELULAR
    A sidebar `.xl-sidebar` nao tinha NENHUMA regra em media query: a unica que
