@@ -105,6 +105,27 @@ export type ObraParaCoerencia = {
    * de custo para poder acusar.
    */
   bdiDeclarado?: number | null;
+  /**
+   * CUB declarado da obra, em R$/m2. Ver `cubUf`/`cubMes`.
+   *
+   * R6-02: o CUB e o parametro de custo que a obra DECLARA. Os tres campos
+   * (valor + UF + mes) juntos SAO a declaracao — valor sem UF/mes nao e
+   * referencia, porque nao da para dizer de onde o numero veio. Antes o piso
+   * era um chute fixo (R$ 2.500/m2 * 0,6) que dava falso alarme em galpao.
+   *
+   * Sem CUB declarado a regra 6 NAO RODA: a cobertura nomeia o motivo
+   * ("obra nao declarou CUB") e nenhum item e conferido. Declaracao PARCIAL
+   * (ex.: valor sem mes) tambem nao roda, e a cobertura diz QUAL campo falta —
+   * tratar parcial como "nao declarado" esconderia metade da causa.
+   *
+   * Os tres sao campos separados (e nao um objeto) de proposito: o estado
+   * parcial precisa ser representavel para poder ser NOMEADO.
+   */
+  cubValor?: number | null;
+  /** UF de referencia do CUB declarado (ex.: "SP"). */
+  cubUf?: string | null;
+  /** Mes de referencia do CUB declarado, no formato AAAA-MM (ex.: "2026-09"). */
+  cubMes?: string | null;
 };
 
 export type ItemOrcamentoParaCoerencia = {
@@ -198,6 +219,17 @@ export type CoberturaRegra = {
   motivo: string | null;
   /** Detalhe por motivo, do maior para o menor. */
   motivos: { motivo: string; itens: number }[];
+  /**
+   * Qualificador do ALCANCE que nao e exclusao de item. `null` na maioria.
+   *
+   * R6-02: a regra 4 RODA sem BDI declarado — os itens sao avaliados, so nao
+   * ha parametro declarado. Dizer "item fora por nao declarar BDI" seria mentir
+   * sobre itens que foram conferidos. Entao o estado da declaracao entra aqui,
+   * como nota da REGRA: "obra nao declarou BDI — conferencia, nao verificacao".
+   * `motivo` = item fora; `nota` = parametro que muda a natureza do que foi
+   * conferido. Misturar os dois faria a cobertura repetir o pecado que corrigiu.
+   */
+  nota: string | null;
 };
 
 export type CoerenciaResultado = {
@@ -482,6 +514,44 @@ function ehElementoSuperior(wbsCode: string): boolean {
   return /^1\.(4|5|6|7|8|9|10|11|12|13|14|15)\./.test(wbsCode);
 }
 
+/**
+ * CUB declarado pela obra (R$/m2).
+ *
+ * R6-02: devolve o CUB SOMENTE quando os tres campos estao presentes e o valor
+ * e positivo. Valor sem UF/mes nao e referencia — nao da para dizer de onde o
+ * numero veio. A obra que nao declara (ou declara pela metade) fica sem CUB:
+ * o sistema nao inventa parametro de custo para poder acusar.
+ */
+function cubDeclaradoDaObra(
+  obra: Pick<ObraParaCoerencia, "cubValor" | "cubUf" | "cubMes">,
+): { valor: number; uf: string; mes: string } | null {
+  const valor = obra.cubValor;
+  const uf = obra.cubUf?.trim();
+  const mes = obra.cubMes?.trim();
+  if (typeof valor !== "number" || !Number.isFinite(valor) || valor <= 0) return null;
+  if (!uf || !mes) return null;
+  return { valor, uf, mes };
+}
+
+/**
+ * Campos do CUB que faltam declarar, na ordem em que o engenheiro os preenche.
+ *
+ * Serve para NOMEAR o estado parcial. Se os tres faltam, a obra nao declarou
+ * CUB; se um ou dois faltam, a declaracao esta incompleta e a cobertura diz
+ * QUAL campo falta — tratar parcial como "nao declarado" esconderia metade da
+ * causa e mandaria o engenheiro procurar o problema no lugar errado.
+ */
+function cubCamposFaltantes(
+  obra: Pick<ObraParaCoerencia, "cubValor" | "cubUf" | "cubMes">,
+): string[] {
+  const faltantes: string[] = [];
+  const valor = obra.cubValor;
+  if (typeof valor !== "number" || !Number.isFinite(valor) || valor <= 0) faltantes.push("valor");
+  if (!obra.cubUf?.trim()) faltantes.push("UF");
+  if (!obra.cubMes?.trim()) faltantes.push("mes de referencia");
+  return faltantes;
+}
+
 // ---------------------------------------------------------------- o validador
 
 type Coletor = {
@@ -513,6 +583,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     total: number,
     avaliados: number,
     exclusoes: Map<string, number>,
+    nota: string | null = null,
   ) => {
     const motivos = [...exclusoes.entries()]
       .filter(([, n]) => n > 0)
@@ -526,6 +597,7 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
       fora: motivos.reduce((s, m) => s + m.itens, 0),
       motivo: motivos[0]?.motivo ?? null,
       motivos,
+      nota,
     });
   };
 
@@ -735,7 +807,18 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
             `(razao ${razao.toFixed(2)}, esperado ${esperado.toFixed(2)})`;
       }
     }
-    registrarAlcance("4. preco sem lastro", "itens", input.itens.length, avaliados, exclusoes);
+    registrarAlcance(
+      "4. preco sem lastro",
+      "itens",
+      input.itens.length,
+      avaliados,
+      exclusoes,
+      // R6-02: a regra RODA sem BDI declarado — os itens nao estao "fora", por
+      // isso o estado da declaracao vira NOTA da regra, e nao motivo de exclusao.
+      bdi == null
+        ? "obra nao declarou BDI — a comparacao de preco assume BDI 0% e vale como CONFERENCIA, nao como verificacao"
+        : null,
+    );
 
     if (achadosUnidade.length) {
       add({
@@ -817,21 +900,33 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     }
   }
 
-  // ---- 6. Custo por m2 abaixo da referencia
+  // ---- 6. Custo por m2 abaixo do CUB declarado
   //
-  // Tres correcoes da auditoria:
-  //   (a) a regra estava MORTA no app: o chamador passava area nula. Agora, sem
-  //       area, ela nao roda E ISSO NAO E SILENCIO — o resumo registra que a
-  //       checagem foi pulada e por que.
+  // Correcoes da auditoria (a/b/c) mais o R6-02:
+  //   (a) a regra estava MORTA no app: o chamador passava area nula. Sem area,
+  //       ela nao roda E ISSO NAO E SILENCIO — a cobertura nomeia o motivo.
   //   (b) o numerador era o orcamento TOTAL (com administracao, licencas,
   //       servicos de escritorio). O CUB e CUSTO DIRETO de construcao.
   //       Comparar os dois inflava o R$/m2 e fazia a regra acusar de menos.
-  //   (c) o piso de 60% do CUB nao tinha lastro e dava falso alarme em galpao.
-  //       Agora o piso e parametro explicito, declarado no resultado.
+  //   (c) o piso era R$ 2.500/m2 * 0,6 — um CUB INVENTADO pelo sistema.
+  //       R6-02: a referencia passa a ser o CUB que a OBRA DECLARA (valor + UF
+  //       + mes). Sem CUB declarado a regra NAO RODA — o sistema nao inventa
+  //       parametro de custo para poder acusar. A cobertura nomeia
+  //       "obra nao declarou CUB"; se a declaracao estiver incompleta, nomeia
+  //       QUAL campo falta (parcial != nao declarado). O piso de 60% do CUB
+  //       declarado continua sendo HEURISTICA, e a mensagem diz isso e cita
+  //       valor, UF e mes declarados.
   {
     const exclusoes = new Map<string, number>();
     let avaliados = 0;
-    if (!input.obra.areaConstruida || input.obra.areaConstruida <= 0) {
+    const cub = cubDeclaradoDaObra(input.obra);
+    const faltantes = cubCamposFaltantes(input.obra);
+    if (!cub) {
+      const motivo = faltantes.length === 3
+        ? "obra nao declarou CUB"
+        : `declaracao de CUB incompleta (falta ${faltantes.join(", ")})`;
+      for (const _ of input.itens) contar(exclusoes, motivo);
+    } else if (!input.obra.areaConstruida || input.obra.areaConstruida <= 0) {
       for (const _ of input.itens) contar(exclusoes, "obra sem area construida");
     } else {
       const diretos = input.itens.filter(ehCustoDireto);
@@ -842,8 +937,9 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
       if (totalDireto > 0) {
         avaliados = diretos.length;
         const porM2 = totalDireto / input.obra.areaConstruida;
-        const PISO_CUB = 2500 * 0.6; // 60% do CUB comercial de referencia — HEURISTICA, ver mensagem
-        if (porM2 < PISO_CUB) {
+        const FRACAO_PISO_CUB = 0.6; // heuristica declarada — ver mensagem
+        const piso = cub.valor * FRACAO_PISO_CUB;
+        if (porM2 < piso) {
           add({
             severity: "warning",
             dominio: "orcamento",
@@ -852,8 +948,9 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
             message:
               `Custo direto por m2 e R$ ${brl(porM2)} (R$ ${brl(totalDireto)} de ${diretos.length} itens de custo ` +
               `direto / ${input.obra.areaConstruida} m2${input.obra.areaConstruidaFonte ? ` — area ${input.obra.areaConstruidaFonte}` : ""}). ` +
-              `Abaixo do piso de R$ ${brl(PISO_CUB)}/m2 (60% de um CUB comercial de referencia de R$ 2.500/m2). ` +
-              `O piso e heuristica e nao substitui o CUB da regiao: confirme antes de concluir subestimacao.`,
+              `Abaixo do piso de R$ ${brl(piso)}/m2 = 60% do CUB declarado pela obra (R$ ${brl(cub.valor)}/m2 — ` +
+              `${cub.uf}, referencia ${cub.mes}). ` +
+              `O piso de 60% e heuristica sobre o CUB declarado: confirme antes de concluir subestimacao.`,
           });
         }
       } else {

@@ -24,6 +24,17 @@ const obraBase: ObraParaCoerencia = {
   pavimentos: 6,
 };
 
+/**
+ * CUB declarado pela obra, no formato do R6-02.
+ *
+ * O valor R$ 2.500/m2 * 0,6 = R$ 1.500/m2 reproduz EXATAMENTE o piso que a
+ * regra 6 usava antes (60% de um numero inventado pelo sistema). Os testes de
+ * regra 6 que ja existiam declaram este CUB para continuar medindo o MESMO
+ * alvo: se o comportamento mudar aqui, e regressao de verdade — nao efeito da
+ * nova entrada. `obraBase` continua SEM CUB, como a AURORA real.
+ */
+const CUB_DECLARADO = { cubValor: 2500, cubUf: "SP", cubMes: "2026-09" } as const;
+
 function item(over: Partial<ItemOrcamentoParaCoerencia>): ItemOrcamentoParaCoerencia {
   return {
     code: "1.0",
@@ -405,6 +416,22 @@ describe("revisao 3 - regra 4: BDI DECLARADO como entrada (R4-01)", () => {
     expect(cenario(1.25, undefined).resumo.valorEmRisco).toBe(0);
     expect(cenario(1.6, 0.25).resumo.valorEmRisco).toBeGreaterThan(0);
   });
+
+  // R6-02: a ausencia de BDI e NOTA da regra, nao motivo de exclusao. A regra
+  // RODA sem BDI — os itens sao conferidos; dizer "item fora" seria mentir.
+  it("SEM BDI declarado, a cobertura registra a NOTA (conferencia, nao verificacao)", () => {
+    const c = cenario(1.25, undefined).resumo.cobertura.find(x => x.regra === "4. preco sem lastro");
+    expect(c?.nota).toContain("obra nao declarou BDI");
+    expect(c?.nota).toContain("CONFERENCIA");
+    // E nao virou exclusao: o item foi avaliado, nao esta "fora".
+    expect(c?.avaliados).toBe(1);
+    expect(c?.fora).toBe(0);
+  });
+
+  it("com BDI declarado NAO ha nota: a conferencia VIRA verificacao", () => {
+    const c = cenario(1.25, 0.25).resumo.cobertura.find(x => x.regra === "4. preco sem lastro");
+    expect(c?.nota).toBeNull();
+  });
 });
 
 describe("revisao 2 - regra 3 usa o piso correto (NBR 6118 admite C20)", () => {
@@ -545,7 +572,7 @@ describe("revisao 2 - regra 2 nao acusa causa que nao observa", () => {
 describe("revisao 2 - regra 6: custo direto, e silencio declarado", () => {
   it("NAO roda sem area construida (e nao inventa)", () => {
     const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: null },
+      obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: null },
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 5193043 })],
       composicoes: [],
     });
@@ -557,7 +584,7 @@ describe("revisao 2 - regra 6: custo direto, e silencio declarado", () => {
     // Com o total (incluindo administracao), o R$/m2 passaria do piso e a regra
     // ficaria silenciosa. Com so custo direto, acusa.
     const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 7200, areaConstruidaFonte: "informada pelo usuario" },
+      obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 7200, areaConstruidaFonte: "informada pelo usuario" },
       itens: [
         item({ code: "1.1.2", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 4000000 }),
         item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 100, unitPrice: 500 }),
@@ -572,7 +599,7 @@ describe("revisao 2 - regra 6: custo direto, e silencio declarado", () => {
 
   it("mensagem declara que o piso e heuristica", () => {
     const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 7200 },
+      obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 7200 },
       itens: [item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 100, unitPrice: 500 })],
       composicoes: [],
     });
@@ -691,7 +718,7 @@ describe("revisao 3 - achados da verificacao (R8-03, R6-03, R6-04)", () => {
     // NAO-custo-direto pelo texto, e a obra era acusada de R$ 1.389/m2 quando
     // tinha R$ 1.528/m2. Com o campo explicito, a classificacao e do chamador.
     const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 10000 },
+      obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 10000 },
       itens: [
         item({ code: "1.13.4", description: "Sinalizacao viaria horizontal", unit: "m2", quantity: 10000, unitPrice: 1528, custoDireto: true }),
       ],
@@ -704,7 +731,7 @@ describe("revisao 3 - achados da verificacao (R8-03, R6-03, R6-04)", () => {
 
   it("R6-04: sem o campo, o fallback por texto ainda funciona", () => {
     const resultado = validarCoerenciaEngenharia({
-      obra: { ...obraBase, areaConstruida: 10000 },
+      obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 10000 },
       itens: [
         item({ code: "1.1.2", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 5000000 }),
         item({ code: "1.4.1", description: "Pilares", unit: "m3", quantity: 100, unitPrice: 500 }),
@@ -1048,6 +1075,10 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
       expect(["itens", "composicoes", "atividades"]).toContain(c.universo);
       expect(c).toHaveProperty("motivo");
       expect(Array.isArray(c.motivos)).toBe(true);
+      // R6-02: nota e o qualificador de ALCANCE que nao e exclusao (ex.: a
+      // regra 4 roda sem BDI declarado). `null` quando nao ha.
+      expect(c).toHaveProperty("nota");
+      expect(c.nota === null || typeof c.nota === "string").toBe(true);
     }
   });
 
@@ -1310,9 +1341,35 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
   });
 
   describe("regra 6 - custo por m2", () => {
-    it("motivo: obra sem area construida", () => {
+    it("motivo: obra nao declarou CUB (a regra nao roda)", () => {
       const r = validarCoerenciaEngenharia({
-        obra: { ...obraBase, areaConstruida: null },
+        obra: { ...obraBase, areaConstruida: 7200 },
+        itens: [item({ code: "1.1.1", description: "Escavacao", quantity: 10, unitPrice: 100 })],
+        composicoes: [],
+      });
+      const c = alcance(r, 6);
+      expect(c.total).toBe(1);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(1);
+      expect(c.motivo).toBe("obra nao declarou CUB");
+      // Sem CUB a regra nao inventa referencia: nao ha achado de custo/m2.
+      expect(r.issues.map(i => i.code)).not.toContain("eng_custo_m2_abaixo_referencia");
+    });
+
+    it("motivo: declaracao de CUB incompleta nomeia o campo que falta", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, cubValor: 2500, areaConstruida: 7200 },
+        itens: [item({ code: "1.1.1", description: "Escavacao", quantity: 10, unitPrice: 100 })],
+        composicoes: [],
+      });
+      const c = alcance(r, 6);
+      expect(c.avaliados).toBe(0);
+      expect(c.motivo).toBe("declaracao de CUB incompleta (falta UF, mes de referencia)");
+    });
+
+    it("motivo: obra sem area construida (com CUB declarado)", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: null },
         itens: [item({ code: "1.1.1", description: "Escavacao", quantity: 10, unitPrice: 100 })],
         composicoes: [],
       });
@@ -1324,7 +1381,7 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
 
     it("motivo: item nao e custo direto de construcao", () => {
       const r = validarCoerenciaEngenharia({
-        obra: { ...obraBase, areaConstruida: 100, pavimentos: 1 },
+        obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 100, pavimentos: 1 },
         itens: [
           item({ code: "1.0.1", description: "Administracao local da obra", quantity: 1, unitPrice: 100, custoDireto: false }),
           item({ code: "1.0.2", description: "Execucao da estrutura", quantity: 100, unitPrice: 2000, custoDireto: true }),
@@ -1340,7 +1397,7 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
 
     it("motivo: custo direto sem valor informado", () => {
       const r = validarCoerenciaEngenharia({
-        obra: { ...obraBase, areaConstruida: 100, pavimentos: 1 },
+        obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 100, pavimentos: 1 },
         itens: [item({ code: "1.0.2", description: "Execucao da estrutura", quantity: 100, unitPrice: 0, custoDireto: true })],
         composicoes: [],
       });
@@ -1348,6 +1405,80 @@ describe("cobertura por regra (alcance declarado, nao achado)", () => {
       expect(c.avaliados).toBe(0);
       expect(c.fora).toBe(1);
       expect(c.motivo).toBe("custo direto sem valor informado");
+    });
+  });
+
+  describe("R6-02 - CUB declarado: a obra declara, o sistema nao inventa", () => {
+    // porM2 = 100 * 1000 / 100 = 1.000 ; piso = 2.500 * 0,6 = 1.500 -> acusa.
+    const itemMagro = item({ code: "1.0.2", description: "Execucao da estrutura", quantity: 100, unitPrice: 1000, custoDireto: true });
+
+    it("obra que NAO declara CUB nao recebe referencia inventada", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, areaConstruida: 100, pavimentos: 1 },
+        itens: [itemMagro],
+        composicoes: [],
+      });
+      expect(r.issues.map(i => i.code)).not.toContain("eng_custo_m2_abaixo_referencia");
+      expect(alcance(r, 6).motivo).toBe("obra nao declarou CUB");
+    });
+
+    it("declaracao PARCIAL nao roda como se fosse completa, e nomeia o campo que falta", () => {
+      const r = validarCoerenciaEngenharia({
+        // valor + mes, sem UF: nao e referencia (nao se sabe de que praca).
+        obra: { ...obraBase, cubValor: 2500, cubMes: "2026-09", areaConstruida: 100, pavimentos: 1 },
+        itens: [itemMagro],
+        composicoes: [],
+      });
+      expect(alcance(r, 6).motivo).toBe("declaracao de CUB incompleta (falta UF)");
+      expect(r.issues.map(i => i.code)).not.toContain("eng_custo_m2_abaixo_referencia");
+    });
+
+    it("valor de CUB invalido (zero/negativo) conta como campo nao declarado", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, cubValor: -5, cubUf: "SP", cubMes: "2026-09", areaConstruida: 100, pavimentos: 1 },
+        itens: [itemMagro],
+        composicoes: [],
+      });
+      expect(alcance(r, 6).motivo).toBe("declaracao de CUB incompleta (falta valor)");
+    });
+
+    it("CUB declarado que acusa: a mensagem CITA valor, UF e mes de referencia", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 100, pavimentos: 1 },
+        itens: [itemMagro],
+        composicoes: [],
+      });
+      const achado = r.issues.find(i => i.code === "eng_custo_m2_abaixo_referencia");
+      expect(achado).toBeDefined();
+      expect(achado!.message).toContain("2.500");
+      expect(achado!.message).toContain("SP");
+      expect(achado!.message).toContain("2026-09");
+      // Continua HEURISTICA, e a mensagem diz isso: o CUB declarado e a
+      // referencia, mas o piso de 60% e decisao do validador.
+      expect(achado!.message.toLowerCase()).toContain("heuristica");
+    });
+
+    it("CUB declarado compatível com o custo direto: nao acusa", () => {
+      const r = validarCoerenciaEngenharia({
+        // porM2 = 100 * 2000 / 100 = 2.000 > piso 1.500 -> silencio.
+        obra: { ...obraBase, ...CUB_DECLARADO, areaConstruida: 100, pavimentos: 1 },
+        itens: [item({ code: "1.0.2", description: "Execucao da estrutura", quantity: 100, unitPrice: 2000, custoDireto: true })],
+        composicoes: [],
+      });
+      expect(r.issues.map(i => i.code)).not.toContain("eng_custo_m2_abaixo_referencia");
+      expect(alcance(r, 6).avaliados).toBe(1);
+    });
+
+    it("a cobertura NOMEIA o motivo e o item nao conta como avaliado", () => {
+      const r = validarCoerenciaEngenharia({
+        obra: { ...obraBase, areaConstruida: 100, pavimentos: 1 },
+        itens: [itemMagro],
+        composicoes: [],
+      });
+      const c = alcance(r, 6);
+      expect(c.avaliados).toBe(0);
+      expect(c.fora).toBe(c.total);
+      expect(c.motivos[0]?.motivo).toBe("obra nao declarou CUB");
     });
   });
 

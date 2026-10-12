@@ -26,6 +26,13 @@ import {
 
 // --------------------------------------------------------------- construtores
 
+/**
+ * CUB declarado pela obra (R6-02). R$ 2.500/m2 * 0,6 = R$ 1.500/m2 reproduz o
+ * piso que a regra 6 usava antes: as cenas de regra 6 medem o MESMO alvo, agora
+ * ancorado na declaracao da obra em vez de um numero inventado pelo sistema.
+ */
+const CUB_DECLARADO = { cubValor: 2500, cubUf: "SP", cubMes: "2026-09" } as const;
+
 function obra(over: Partial<ObraParaCoerencia> = {}): ObraParaCoerencia {
   return {
     projectId: 7,
@@ -400,7 +407,7 @@ const cenas: Cena[] = [
     esperaAcusar: true,
     code: "eng_custo_m2_abaixo_referencia",
     input: {
-      obra: obra({ areaConstruida: 7200 }),
+      obra: obra({ ...CUB_DECLARADO, areaConstruida: 7200 }),
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 5193043 })],
       composicoes: [],
     },
@@ -408,11 +415,11 @@ const cenas: Cena[] = [
   {
     id: "R6-02",
     regra: "6 custo/m2",
-    hipotese: "ABERTO POR DECISAO (R6-02): galpao/obra simples a R$ 1.400/m2 cai abaixo do piso de R$ 1.500 (60% de CUB nacional nao calibrado) e e acusado. Sera tratado com CUB DECLARADO por obra (valor + UF + mes)",
+    hipotese: "R6-02: a referencia nao e mais o CUB inventado do sistema — e o CUB DECLARADO pela obra. Custo de R$ 1.400/m2 fica abaixo de 60% do CUB declarado (R$ 2.500/SP/2026-09) e e acusado; a mensagem cita valor, UF e mes",
     esperaAcusar: true,
     code: "eng_custo_m2_abaixo_referencia",
     input: {
-      obra: obra({ areaConstruida: 7200 }),
+      obra: obra({ ...CUB_DECLARADO, areaConstruida: 7200 }),
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 7200 * 1400 })],
       composicoes: [],
     },
@@ -427,6 +434,7 @@ const cenas: Cena[] = [
     input: {
       // area do chamador = 1.200 + 1.200 = 2.400 (soma por nivel), nao mais 1.200 (max)
       obra: obra({
+        ...CUB_DECLARADO,
         areaConstruida: areaDoChamador([
           ativ({ id: 901, wbsCode: "1.7.1", name: "Contrapiso do pavimento tipo 01", durationDays: 5, unit: "m2", plannedQuantity: 1200 }),
           ativ({ id: 902, wbsCode: "1.7.2", name: "Contrapiso do pavimento tipo 02", durationDays: 5, unit: "m2", plannedQuantity: 1200 }),
@@ -443,11 +451,35 @@ const cenas: Cena[] = [
     esperaAcusar: false,
     code: "eng_custo_m2_abaixo_referencia",
     input: {
-      obra: obra({ areaConstruida: 7200 }),
+      obra: obra({ ...CUB_DECLARADO, areaConstruida: 7200 }),
       itens: [
         item({ code: "1.4.1", description: "Concreto estrutural usinado", unit: "vb", quantity: 1, unitPrice: 10000000 }),
         item({ code: "1.13.1", description: "Sinalizacao viaria horizontal e vertical", unit: "vb", quantity: 1, unitPrice: 1000000 }),
       ],
+      composicoes: [],
+    },
+  },
+  {
+    id: "R6-05",
+    regra: "6 custo/m2",
+    hipotese: "R6-02: obra que NAO declara CUB nao recebe referencia inventada — a regra nao roda e nao acusa (a cobertura nomeia 'obra nao declarou CUB')",
+    esperaAcusar: false,
+    code: "eng_custo_m2_abaixo_referencia",
+    input: {
+      obra: obra({ areaConstruida: 7200 }),
+      itens: [item({ code: "1.0", quantity: 1, unitPrice: 7200 * 800 })],
+      composicoes: [],
+    },
+  },
+  {
+    id: "R6-06",
+    regra: "6 custo/m2",
+    hipotese: "R6-02: declaracao PARCIAL de CUB (valor sem UF/mes) tambem nao roda — nao e referencia, e a cobertura nomeia o campo que falta",
+    esperaAcusar: false,
+    code: "eng_custo_m2_abaixo_referencia",
+    input: {
+      obra: obra({ cubValor: 2500, areaConstruida: 7200 }),
+      itens: [item({ code: "1.0", quantity: 1, unitPrice: 7200 * 800 })],
       composicoes: [],
     },
   },

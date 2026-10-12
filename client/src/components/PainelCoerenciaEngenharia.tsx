@@ -13,6 +13,7 @@ type CoberturaRegra = {
   fora: number;
   motivo: string | null;
   motivos: { motivo: string; itens: number }[];
+  nota: string | null;
 };
 
 /** "4. preco sem lastro" -> "a regra de preco sem lastro" (linguagem de engenheiro). */
@@ -50,6 +51,9 @@ function BlocoCobertura({ cobertura }: { cobertura: CoberturaRegra[] }) {
                 ? r.motivos.map(m => `${m.itens} ${m.motivo}`).join("; ")
                 : r.motivo}
             </span>
+          )}
+          {r.nota && (
+            <span className="xl-cobertura-fora xl-cobertura-nota-regra">{r.nota}</span>
           )}
         </div>
       ))}
