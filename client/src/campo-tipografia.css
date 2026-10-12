@@ -162,7 +162,7 @@
     font-size: var(--campo-fonte-min) !important;
   }
 
-  /* o app declarava 9px nestes 151 seletores */
+  /* o app declarava 9px nestes 155 seletores */
   .activity-drawer-fields label span,
     .activity-drawer-head .eyebrow,
     .admin-llm-reorder button,
@@ -272,6 +272,7 @@
     .pl-atividades-footer,
     .pl-atividades-kicker,
     .pl-atividades-metrics small,
+    .pl-atividades-table th,
     .pl-baseline-item small, .pl-baseline-item>span,
     .pl-cpm-linha,
     .pl-cpm-tabela>small,
@@ -284,6 +285,7 @@
     .pl-planejamento-cards small,
     .pl-planejamento-cards span,
     .pl-planejamento-kicker,
+    .pl-row-action,
     .pl-row-note,
     .pl-tabela-analitica,
     .pl-tabela-legenda,
@@ -301,9 +303,11 @@
     .scale-select,
     .scopo-detail-body,
     .scopo-footer,
+    .scopo-footer button,
     .scopo-kicker,
     .scopo-metrics small,
     .scopo-table .mono,
+    .scopo-table th,
     .scopo-toolbar-title span,
     .scopo-trace b,
     .sync-status,
@@ -372,7 +376,7 @@
     font-size: var(--campo-fonte-min);
   }
 
-  /* o app declarava 10px nestes 128 seletores */
+  /* o app declarava 10px nestes 130 seletores */
   .activity-name,
     .admin-llm-order,
     .admin-settings-note code,
@@ -463,10 +467,12 @@
     .outline-button,
     .panel-heading p,
     .pl-atividades-alerta,
+    .pl-atividades-filtros button,
     .pl-atividades-flow,
     .pl-atividades-table .mono,
     .pl-baseline-item strong,
     .pl-dependencia-form select, .pl-dependencia-form input, .pl-baseline-form input,
+    .pl-duracao-input,
     .pl-gantt-cpm-aviso,
     .pl-lob-location,
     .pl-planejamento-alerta,
@@ -557,7 +563,7 @@
     font-size: var(--campo-fonte-min);
   }
 
-  /* o app declarava 11px nestes 103 seletores */
+  /* o app declarava 11px nestes 105 seletores */
   .admin-settings-actions .form-success, .admin-settings-actions .form-error,
     .admin-settings-form label,
     .admin-settings-note p,
@@ -622,6 +628,7 @@
     .nova-obra-kicker,
     .nova-obra-section label>span,
     .nova-obra-section-title small,
+    .pl-atividades-btn,
     .pl-atividades-empty strong,
     .pl-atividades-loading,
     .pl-atividades-search input,
@@ -638,6 +645,7 @@
     .prod-form-nota code,
     .prod-nome,
     .production-catalog-grid strong,
+    .scopo-btn,
     .scopo-toolbar-title strong,
     .scopo-workspace-title p,
     .user-card strong,

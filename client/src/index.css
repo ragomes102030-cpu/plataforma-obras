@@ -6248,7 +6248,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .pl-atividades-header-actions { display:flex; gap:7px; flex:0 0 auto; }
 .pl-atividades-btn {
   display:inline-flex; align-items:center; gap:6px; height:31px; padding:0 10px;
-  border-radius:5px; font:700 11px/1 inherit; cursor:pointer;
+  border-radius:5px; font-family:inherit; font-weight:700; font-size:11px; line-height:1; cursor:pointer;
 }
 .pl-atividades-btn.secondary { border:1px solid #aebdcc; background:#fff; color:#244563; }
 .pl-atividades-btn:hover { background:#f0f5fa; border-color:#7189a2; }
@@ -6288,7 +6288,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .pl-atividades-filtros { display:flex; align-items:center; gap:3px; color:#718398; }
 .pl-atividades-filtros button {
   height:28px; padding:0 9px; border:1px solid transparent; background:transparent;
-  color:#637589; font:600 10px/1 inherit; cursor:pointer;
+  color:#637589; font-family:inherit; font-weight:600; font-size:10px; line-height:1; cursor:pointer;
 }
 .pl-atividades-filtros button.ativo {
   border-color:#b7c6d4; background:#edf3f8; color:#17385f; font-weight:800;
@@ -6310,7 +6310,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .pl-atividades-table th {
   position:sticky; top:0; z-index:3; height:28px; padding:0 7px;
   background:#e8eef4; border-right:1px solid #cbd6e1; border-bottom:2px solid #aebdcc;
-  color:#3d5268; text-align:left; font:800 9px/1 inherit; letter-spacing:.04em; text-transform:uppercase;
+  color:#3d5268; text-align:left; font-family:inherit; font-weight:800; font-size:9px; line-height:1; letter-spacing:.04em; text-transform:uppercase;
 }
 .pl-atividades-table td {
   height:34px; padding:0 7px; border-right:1px solid #e5ebf0; border-bottom:1px solid #e0e6ec;
@@ -6355,13 +6355,13 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .pl-status-badge.revisar { background:#fff3d9; color:#8b6b2f; }
 .pl-duracao-input {
   width:64px; height:25px; box-sizing:border-box; padding:0 6px;
-  border:1px solid #c3cfda; background:#fff; color:#17385f; text-align:right; font:700 10px/1 inherit;
+  border:1px solid #c3cfda; background:#fff; color:#17385f; text-align:right; font-family:inherit; font-weight:700; font-size:10px; line-height:1;
 }
 .pl-duracao-input:focus { outline:2px solid #4d7896; outline-offset:-2px; border-color:#4d7896; }
 .pl-row-action {
   display:inline-flex; align-items:center; gap:4px; height:25px; padding:0 7px;
   border:1px solid #aebdcc; border-radius:4px; background:#fff; color:#234d70;
-  font:750 9px/1 inherit; cursor:pointer;
+  font-family:inherit; font-weight:750; font-size:9px; line-height:1; cursor:pointer;
 }
 .pl-row-action:hover { background:#edf4f9; border-color:#718aa1; }
 .pl-row-action:disabled { opacity:.55; cursor:wait; }
@@ -6410,7 +6410,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .scopo-header-actions { display:flex; gap:7px; flex:0 0 auto; }
 .scopo-btn {
   display:inline-flex; align-items:center; justify-content:center; gap:6px; height:31px; padding:0 10px;
-  border-radius:5px; font:700 11px/1 inherit; cursor:pointer;
+  border-radius:5px; font-family:inherit; font-weight:700; font-size:11px; line-height:1; cursor:pointer;
 }
 .scopo-btn.secondary { border:1px solid #aebdcc; background:#fff; color:#244563; }
 .scopo-btn:hover { background:#f0f5fa; border-color:#7189a2; }
@@ -6458,7 +6458,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .scopo-table th {
   position:sticky; top:0; z-index:3; height:28px; padding:0 7px;
   background:#e8eef4; border-right:1px solid #cbd6e1; border-bottom:2px solid #aebdcc;
-  color:#3d5268; text-align:left; font:800 9px/1 inherit; letter-spacing:.04em; text-transform:uppercase;
+  color:#3d5268; text-align:left; font-family:inherit; font-weight:800; font-size:9px; line-height:1; letter-spacing:.04em; text-transform:uppercase;
 }
 .scopo-table td {
   height:38px; padding:0 7px; border-right:1px solid #e5ebf0; border-bottom:1px solid #e0e6ec;
@@ -6515,7 +6515,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .scopo-footer strong { color:#50677c; }
 .scopo-footer button {
   display:inline-flex; align-items:center; gap:5px; height:25px; padding:0 7px;
-  border:1px solid #b8c7d5; background:#fff; color:#315b79; font:750 9px/1 inherit; cursor:pointer;
+  border:1px solid #b8c7d5; background:#fff; color:#315b79; font-family:inherit; font-weight:750; font-size:9px; line-height:1; cursor:pointer;
 }
 .scopo-footer button:hover { background:#edf4f9; }
 
