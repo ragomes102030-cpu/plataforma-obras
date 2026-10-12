@@ -33,7 +33,6 @@ function obra(over: Partial<ObraParaCoerencia> = {}): ObraParaCoerencia {
     tipoDeObra: "edificio",
     descricao: "A estrutura principal sera em concreto armado, incluindo fundacoes, pilares, vigas, lajes e demais elementos estruturais.",
     pavimentos: 6,
-    areaTerreno: 2400,
     ...over,
   };
 }
@@ -63,7 +62,14 @@ function comp(over: Partial<ComposicaoParaCoerencia>): ComposicaoParaCoerencia {
   };
 }
 
-function ativ(over: Partial<AtividadeParaCoerencia>): AtividadeParaCoerencia {
+/**
+ * O chamador le `plannedQuantity` do BANCO (schedule_activities), mas esse campo
+ * nao faz parte do contrato do validador (AtividadeParaCoerencia). Tipo local so
+ * para reproduzir a derivacao de area do chamador.
+ */
+type AtividadeDoChamador = AtividadeParaCoerencia & { plannedQuantity?: number | null };
+
+function ativ(over: Partial<AtividadeDoChamador>): AtividadeDoChamador {
   return {
     id: 1,
     wbsCode: "1.1.1",
@@ -76,13 +82,30 @@ function ativ(over: Partial<AtividadeParaCoerencia>): AtividadeParaCoerencia {
 }
 
 /**
- * Reproduz o chamador real (server/routers.ts:4115-4124), que e onde a
- * heuristica de pavimentos e a area nula vivem. Sem isto a auditoria criticaria
- * o validador por algo que e decisao do chamador.
+ * Reproduz o chamador real (server/routers.ts:4115-4137), que e onde as
+ * heuristicas de pavimentos e de area construida vivem. Sem isto a auditoria
+ * criticaria o validador por algo que e decisao do chamador.
+ *
+ * RODADA 2 (verify/coerencia-fixes): o chamador NAO inventa mais 6 pavimentos
+ * quando tipoDeObra === 'edificio' — o fallback foi removido. A reproducao
+ * abaixo ja reflete o chamador corrigido.
  */
-function pavimentosDoChamador(atividades: AtividadeParaCoerencia[], tipoDeObra?: string | null): number | null {
+function pavimentosDoChamador(atividades: AtividadeDoChamador[]): number | null {
   const declarados = [...new Set(atividades.map(a => /^1\.4\.\d+\.(\d+)/.exec(a.wbsCode)?.[1]).filter(Boolean))];
-  return declarados.length > 1 ? declarados.length : tipoDeObra === "edificio" ? 6 : null;
+  return declarados.length > 1 ? declarados.length : null;
+}
+
+/**
+ * Area construida do chamador (routers.ts:4130-4134): a MAIOR area de piso
+ * declarada nas atividades em m2, nao a soma. Reproduzido aqui porque e a
+ * decisao que alimenta a regra 6 — e ela pode esconder subestimacao (R6-03).
+ */
+function areaDoChamador(atividades: AtividadeDoChamador[]): number | null {
+  const candidatos = atividades
+    .filter(a => a.unit && /m2|m²/.test(String(a.unit)) && Number(a.plannedQuantity) > 0)
+    .filter(a => /contrapis|revestiment.*pis|piso|forr/i.test(a.name))
+    .map(a => Number(a.plannedQuantity));
+  return candidatos.length ? Math.max(...candidatos) : null;
 }
 
 // ------------------------------------------------------------------- as cenas
@@ -304,11 +327,11 @@ const cenas: Cena[] = [
   {
     id: "R6-01",
     regra: "6 custo/m2",
-    hipotese: "REGRA MORTA NO APP: com o chamador real (areaConstruida=null, routers.ts:4124) o teste de custo/m2 nao roda nem a R$ 721/m2",
-    esperaAcusar: false,
+    hipotese: "RODADA 2: com area REAL o teste de custo/m2 agora roda — a morte da regra era o chamador passando null, e isso foi corrigido",
+    esperaAcusar: true,
     code: "eng_custo_m2_abaixo_referencia",
     input: {
-      obra: obra({ areaConstruida: null }),
+      obra: obra({ areaConstruida: 7200 }),
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 5193043 })],
       composicoes: [],
     },
@@ -322,6 +345,40 @@ const cenas: Cena[] = [
     input: {
       obra: obra({ areaConstruida: 7200 }),
       itens: [item({ code: "1.0", quantity: 1, unitPrice: 7200 * 1400 })],
+      composicoes: [],
+    },
+  },
+
+  {
+    id: "R6-03",
+    regra: "6 custo/m2",
+    hipotese: "FALSO NEGATIVO NOVO: a area do chamador e o MAX (nao a soma) das areas de piso — com 2 pavimentos de 1.200 m2 ela vira 1.200 e a regra deixa de acusar uma obra a R$ 1.000/m2",
+    esperaAcusar: false,
+    code: "eng_custo_m2_abaixo_referencia",
+    input: {
+      // area do chamador = 1.200 (max), area real dos 2 pavimentos = 2.400
+      obra: obra({
+        areaConstruida: areaDoChamador([
+          ativ({ id: 901, wbsCode: "1.7.1", name: "Contrapiso do pavimento tipo 01", durationDays: 5, unit: "m2", plannedQuantity: 1200 }),
+          ativ({ id: 902, wbsCode: "1.7.2", name: "Contrapiso do pavimento tipo 02", durationDays: 5, unit: "m2", plannedQuantity: 1200 }),
+        ]),
+      }),
+      itens: [item({ code: "1.4.1", description: "Concreto estrutural usinado", unit: "vb", quantity: 1, unitPrice: 2400000 })],
+      composicoes: [],
+    },
+  },
+  {
+    id: "R6-04",
+    regra: "6 custo/m2",
+    hipotese: "FALSO POSITIVO NOVO: o chamador nunca preenche `custoDireto`, entao o numerador cai no heuristico por texto — 'Sinalizacao viaria' (custo direto numa obra viaria) sai da conta e a obra e acusada por R$ 1.389/m2 quando ela tem R$ 1.528/m2",
+    esperaAcusar: true,
+    code: "eng_custo_m2_abaixo_referencia",
+    input: {
+      obra: obra({ areaConstruida: 7200 }),
+      itens: [
+        item({ code: "1.4.1", description: "Concreto estrutural usinado", unit: "vb", quantity: 1, unitPrice: 10000000 }),
+        item({ code: "1.13.1", description: "Sinalizacao viaria horizontal e vertical", unit: "vb", quantity: 1, unitPrice: 1000000 }),
+      ],
       composicoes: [],
     },
   },
@@ -345,14 +402,14 @@ const cenas: Cena[] = [
   {
     id: "R8-01",
     regra: "8 ciclo de pavimento",
-    hipotese: "Pavimentos NUNCA vem da obra: sempre que a regra acusa, o numero e o fallback 6 do chamador (routers.ts:4117-4119)",
+    hipotese: "RODADA 2: sem pavimentos derivaveis a regra acusa como WARNING e NAO afirma numero (antes afirmava 6) — o chamador nao fabrica mais",
     esperaAcusar: true,
     code: "eng_estrutura_sem_ciclo_pavimento",
     input: {
       obra: obra({ pavimentos: pavimentosDoChamador([
         ativ({ id: 375, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3", plannedQuantity: 80, earlyStart: 19, earlyFinish: 27 }),
         ativ({ id: 377, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3", plannedQuantity: 320, earlyStart: 36, earlyFinish: 44 }),
-      ], "edificio") }),
+      ]) }),
       itens: [],
       composicoes: [],
       atividades: [
@@ -374,6 +431,28 @@ const cenas: Cena[] = [
       atividades: [
         ativ({ id: 375, wbsCode: "1.4.1", name: "Pilares", durationDays: 8, unit: "m3", plannedQuantity: 80, earlyStart: 19, earlyFinish: 27 }),
         ativ({ id: 377, wbsCode: "1.4.3", name: "Lajes", durationDays: 8, unit: "m3", plannedQuantity: 320, earlyStart: 36, earlyFinish: 44 }),
+      ],
+    },
+  },
+
+  {
+    id: "R8-03",
+    regra: "8 ciclo de pavimento",
+    hipotese: "RAMO DE ERROR INALCANCAVEL NO APP: quando o chamador CONSEGUE derivar pavimentos (aqui 2, de 1.4.1.1/1.4.1.2) o mesmo subnivel desliga a regra — a mensagem nunca mais volta a citar um numero (pavimentos!=null exige 1.4.N.M, que faz temSubnivel=true)",
+    esperaAcusar: false,
+    code: "eng_estrutura_sem_ciclo_pavimento",
+    input: {
+      obra: obra({
+        pavimentos: pavimentosDoChamador([
+          ativ({ id: 375, wbsCode: "1.4.1.1", name: "Formas dos pilares do 1o pavimento", durationDays: 4, unit: "m2", plannedQuantity: 600 }),
+          ativ({ id: 376, wbsCode: "1.4.1.2", name: "Armaduras dos pilares do 1o pavimento", durationDays: 4, unit: "kg", plannedQuantity: 9000 }),
+        ]),
+      }),
+      itens: [],
+      composicoes: [],
+      atividades: [
+        ativ({ id: 375, wbsCode: "1.4.1.1", name: "Formas dos pilares do 1o pavimento", durationDays: 4, unit: "m2", plannedQuantity: 600, earlyStart: 19, earlyFinish: 23 }),
+        ativ({ id: 376, wbsCode: "1.4.1.2", name: "Armaduras dos pilares do 1o pavimento", durationDays: 4, unit: "kg", plannedQuantity: 9000, earlyStart: 23, earlyFinish: 27 }),
       ],
     },
   },

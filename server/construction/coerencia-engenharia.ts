@@ -37,12 +37,31 @@ import type { ValidationIssue, ValidationSeverity } from "./eap-validator";
  *   3. Tres regras nao rodavam no app: a 6 porque o chamador passa area nula,
  *      a 9 porque exigia fundacao depois do dia 0, a 8 porque inferia um
  *      numero de pavimentos que o proprio dado desligava.
- *   4. A regra 4 tinha a banda centrada em BDI = 0% em silencio, e o projeto
- *      decidiu nao ter BDI. Pior: acusava divergencia de PRECO quando a causa
- *      era UNIDADE (o campo compositionUnit existia e nunca era lido).
+ *   4. A regra 4 tinha a banda centrada em BDI = 0% em silencio. Pior: acusava
+ *      divergencia de PRECO quando a causa era UNIDADE (o campo compositionUnit
+ *      existia e nunca era lido).
  *   5. A regra 3 tratava C20 como invalido, mas a NBR 6118 o permite.
  *
  * Principio mantido: cada achado devolve EVIDENCIA, nunca suspeito generico.
+ * ---------------------------------------------------------------------------
+ * REVISAO 3 — achados que continuavam ABERTOS na rodada 2 da auditoria.
+ *
+ *   1. R1-03: o vocabulario de escritorio era fechado. Uma composicao
+ *      "ELABORACAO DE PROJETO DE DRENAGEM - SERVICO TECNICO SEM EXECUCAO" nao
+ *      era reconhecida, porque so existiam "projeto executivo" e "projeto
+ *      basico". Faltavam sondagem, ensaio, laudo, consultoria, supervisao,
+ *      plotagem/impressao. "projeto" puro NAO foi adicionado: casa tambem
+ *      "EXECUCAO ... INCLUSIVE PROJETO EXECUTIVO" (cena R1-04) — o texto nao
+ *      separa "o projeto" (assunto) de "projetar" (servico).
+ *   2. R2-01: obra cuja DESCRICAO nao nomeia o sistema DESLIGAVA a regra 2
+ *      inteira. O sistema passa a ser inferido da maioria dos itens da EAP, e a
+ *      mensagem declara que a base foi inferida.
+ *   3. R3-03: um item chamado apenas "Estrutura" nao casava com nenhum radical
+ *      estrutural especifico, e a checagem de fck era PULADA nele — justamente
+ *      no item mais estrutural da EAP.
+ *   4. R4-01: o esperado passa a ser (1 + BDI DECLARADO da obra), com a banda em
+ *      torno dele. SEM BDI declarado o achado e WARNING de conferencia, nunca
+ *      error: assumir 0% para poder acusar era a origem do falso positivo.
  * ---------------------------------------------------------------------------
  */
 
@@ -71,6 +90,18 @@ export type ObraParaCoerencia = {
   areaConstruida?: number | null;
   /** Origem da area construida. Sem isto a mensagem nao pode citar a fonte. */
   areaConstruidaFonte?: string | null;
+  /**
+   * BDI declarado da obra, em FRACAO (0.25 = 25%). Ausente/null = nao declarado.
+   *
+   * R4-01: a banda de preco era simetrica em torno da razao 1,0 — ou seja,
+   * centrada em BDI = 0% em silencio. Um BDI de 25%, rotina em obra publica,
+   * caia fora e virava ERROR em massa. Agora o esperado e (1 + BDI declarado) e
+   * a mensagem cita o valor usado. Sem BDI declarado o achado e WARNING de
+   * conferencia, nunca error: assumir 0% e exatamente o que produzia o falso
+   * positivo. Mesma logica do CUB declarado por obra — nao se inventa parametro
+   * de custo para poder acusar.
+   */
+  bdiDeclarado?: number | null;
 };
 
 export type ItemOrcamentoParaCoerencia = {
@@ -233,6 +264,33 @@ const RADICAIS_ESCRITORIO = [
   "digitalizac",
   "escaneament",
   "planilha orcament",
+  // R1-03: o vocabulario era fechado demais. Uma composicao
+  // "ELABORACAO DE PROJETO DE DRENAGEM - SERVICO TECNICO SEM EXECUCAO" nao era
+  // reconhecida, porque so existiam "projeto executivo" e "projeto basico" —
+  // "projeto" sozinho nao estava na lista. Os termos abaixo cobrem os servicos
+  // de escritorio que faltavam (projeto generico, sondagem, ensaio, laudo,
+  // consultoria, supervisao, plotagem/impressao).
+  //
+  // NAO foi adicionado "projeto" puro de proposito: ele casa tambem
+  // "EXECUCAO ... INCLUSIVE PROJETO EXECUTIVO E AS BUILT", composicao de
+  // EXECUCAO que menciona o projeto como parte do escopo (cena R1-04 da
+  // auditoria). O texto nao distingue "o projeto" (assunto) de "projetar"
+  // (servico) — por isso o radical generico so entra quando houver um negativo
+  // que separe os dois casos. "elaborac"/"anteprojet" cobrem o caso real sem
+  // esse risco.
+  "elaborac",
+  "anteprojet",
+  "servico tecnic",
+  "sem execuc",
+  "sondag",
+  "ensai",
+  "laudo",
+  "consultoria",
+  "supervis",
+  "fiscalizac",
+  "plotagem",
+  "impress",
+  "projetist",
 ];
 
 /** Radicais de execucao fisica: o item pede OBRA, nao documento. */
@@ -265,8 +323,18 @@ const RADICAIS_EXECUCAO = [
   "laje",
 ];
 
-/** Elementos estruturais de concreto. */
-const RADICAIS_ESTRUTURAIS = ["pilar", "viga", "laje", "escada", "fundac", "sapata", "superestrutur", "estrutura da cobertur"];
+/**
+ * Elementos estruturais de concreto.
+ *
+ * R3-03: faltava o radical generico "estrutur". Um item chamado apenas
+ * "Estrutura" — nome comum de EAP — nao casava com nenhum dos especificos
+ * (pilar, viga, laje, sapata...) e a checagem de fck era PULADA nele. O falso
+ * negativo era silencioso justamente no item mais estrutural da EAP.
+ * "estrutur" casa "estrutura", "estruturas" e "superestrutura" de uma vez; o
+ * alargamento e contido pela segunda condicao da regra, que continua exigindo
+ * que a composicao cite concreto.
+ */
+const RADICAIS_ESTRUTURAIS = ["pilar", "viga", "laje", "escada", "fundac", "sapata", "estrutur"];
 
 type SistemaConstrutivo = "concreto_armado" | "alvenaria_estrutural" | "metalica" | "mista" | "indefinido";
 
@@ -279,6 +347,33 @@ function detectarSistema(texto: string): SistemaConstrutivo {
   if (temAlvenariaEstrutural) return "alvenaria_estrutural";
   if (contemRadical(t, "estrutura metalic")) return "metalica";
   return "indefinido";
+}
+
+/**
+ * Sistema construtivo inferido dos ITENS da EAP, quando a obra nao declara.
+ *
+ * R2-01: obra cuja descricao nao nomeia o sistema DESLIGAVA a regra 2 inteira, e
+ * o item que contradiz a obra passava sem ser visto. A EAP e um dado da propria
+ * obra: quando um sistema aparece de forma consistente nos itens, esse e o
+ * sistema que a obra declara. Um item isolado contra a maioria e exatamente o
+ * que a regra deve apontar — logo nao ha circularidade util em exigir maioria.
+ *
+ * Itens "indefinido" e "mista" nao votam: nao declaram sistema, e usa-los como
+ * voto faria a propria indefinicao virar o sistema da obra.
+ */
+function inferirSistemaDosItens(itens: ItemOrcamentoParaCoerencia[]): SistemaConstrutivo {
+  const votos = new Map<SistemaConstrutivo, number>();
+  for (const it of itens) {
+    const s = detectarSistema(it.description);
+    if (s === "indefinido" || s === "mista") continue;
+    votos.set(s, (votos.get(s) ?? 0) + 1);
+  }
+  let vencedor: SistemaConstrutivo = "indefinido";
+  let max = 0;
+  for (const [s, n] of votos) {
+    if (n > max) { max = n; vencedor = s; }
+  }
+  return vencedor;
 }
 
 /**
@@ -354,7 +449,17 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   const composicaoPorId = new Map<number, ComposicaoParaCoerencia>();
   for (const c of input.composicoes) composicaoPorId.set(c.id, c);
 
-  const sistemaDaObra = detectarSistema(input.obra.descricao ?? "");
+  // Sistema construtivo da obra.
+  //
+  // R2-01: se a DESCRICAO da obra nao nomeia o sistema, a regra 2 inteira ficava
+  // desligada — e o item que contradiz a obra passava. A EAP e um dado da obra:
+  // quando um sistema aparece de forma consistente nos itens, e ele que a obra
+  // declara. A mensagem diz qual foi a base (declarada na descricao ou inferida).
+  const sistemaDeclarado = detectarSistema(input.obra.descricao ?? "");
+  const sistemaDaObra = sistemaDeclarado !== "indefinido"
+    ? sistemaDeclarado
+    : inferirSistemaDosItens(input.itens);
+  const sistemaInferido = sistemaDeclarado === "indefinido" && sistemaDaObra !== "indefinido";
   const obraEhMista = sistemaDaObra === "mista";
 
   // ---- 1. Natureza do servico: composicao de escritorio em item de execucao
@@ -414,7 +519,9 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
         refs: achados,
         message:
           `${achados.length} item(ns) declaram sistema construtivo diferente do declarado pela obra ` +
-          `(${sistemaDaObra.replace("_", " ")}). Itens: ${achados.slice(0, 8).join(", ")}` +
+          `(${sistemaDaObra.replace("_", " ")}` +
+          `${sistemaInferido ? ", inferido da maioria dos itens — a obra nao nomeia o sistema na descricao" : ""}). ` +
+          `Itens: ${achados.slice(0, 8).join(", ")}` +
           `${achados.length > 8 ? ` (+${achados.length - 8})` : ""}.`,
       });
     }
@@ -449,15 +556,22 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
   // ---- 4. Preco sem lastro (e unidade divergente como causa separada)
   //
   // Duas correcoes da auditoria:
-  //   (a) a banda era centrada em BDI = 0% em silencio, e o projeto decidiu nao
-  //       ter BDI. A tolerancia agora e DECLARADA e estreita, coerente com essa
-  //       decisao — nao ha BDI a absorver.
+  //   (a) R4-01: a banda era SIMETRICA em torno da razao 1,0 — isto e, centrada
+  //       em BDI = 0% em silencio. Um BDI de 25%, rotina em obra publica, caia
+  //       fora e virava error em massa. Agora o esperado e (1 + BDI DECLARADO da
+  //       obra) e a mensagem cita o valor usado. SEM BDI declarado o achado e
+  //       WARNING de conferencia, nunca error: assumir 0% para poder acusar e
+  //       exatamente o que produzia o falso positivo. Mesma logica do CUB
+  //       declarado por obra — nao se inventa parametro de custo.
   //   (b) quando a UNIDADE do item difere da unidade da composicao, a
   //       divergencia de valor e efeito da unidade, nao do preco. O campo
   //       compositionUnit existia no contrato e nunca era lido. Agora e lido e
   //       o achado muda de natureza.
   {
-    const TOLERANCIA_PRECO = 0.1; // projeto sem BDI: 10% cobre arredondamento de referencia
+    const TOLERANCIA_PRECO = 0.1; // 10% em torno do esperado, nao em torno de 1,0
+    const bdi = typeof input.obra.bdiDeclarado === "number" ? input.obra.bdiDeclarado : null;
+    const esperado = 1 + (bdi ?? 0);
+    const pctBdi = bdi == null ? null : Math.round(bdi * 100);
     const achadosPreco: string[] = [];
     const achadosUnidade: string[] = [];
     let exemplo = "";
@@ -472,12 +586,13 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
       }
       if (it.somaComponentes == null || it.somaComponentes <= 0 || it.unitPrice <= 0) continue;
       const razao = it.unitPrice / it.somaComponentes;
-      if (razao > 1 + TOLERANCIA_PRECO || razao < 1 - TOLERANCIA_PRECO) {
+      if (razao > esperado * (1 + TOLERANCIA_PRECO) || razao < esperado * (1 - TOLERANCIA_PRECO)) {
         achadosPreco.push(it.code);
         if (!exemplo)
           exemplo =
             `"${it.description}" (${it.code}) a R$ ${brl(it.unitPrice)}/${it.unit} contra ` +
-            `R$ ${brl(it.somaComponentes)} dos componentes de ${it.compositionCode}`;
+            `R$ ${brl(it.somaComponentes)} dos componentes de ${it.compositionCode} ` +
+            `(razao ${razao.toFixed(2)}, esperado ${esperado.toFixed(2)})`;
       }
     }
 
@@ -495,13 +610,19 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
     }
     if (achadosPreco.length) {
       add({
-        severity: "error",
+        // BDI declarado -> ha parametro e o desvio e medido contra ele: ERROR.
+        // Sem BDI declarado -> WARNING de conferencia: nao se assume 0% para
+        // poder acusar (R4-01).
+        severity: bdi == null ? "warning" : "error",
         dominio: "orcamento",
         code: "eng_preco_sem_lastro",
         refs: achadosPreco,
         message:
           `${achadosPreco.length} item(ns) com preco divergindo mais de ${Math.round(TOLERANCIA_PRECO * 100)}% ` +
-          `da soma dos componentes da propria composicao (tolerancia estreita: o projeto declara BDI 0%). ` +
+          `do esperado para a propria composicao (` +
+          `${pctBdi == null
+            ? "a obra NAO declara BDI: a comparacao assume BDI 0% e vale como CONFERENCIA, nao como acusacao — declarar o BDI da obra transforma isto em verificacao"
+            : `soma dos componentes (custo direto) + BDI declarado de ${pctBdi}%`}). ` +
           `Ex.: ${exemplo}.`,
       });
     }
