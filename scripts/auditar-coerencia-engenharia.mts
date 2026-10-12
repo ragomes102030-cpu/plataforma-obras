@@ -302,6 +302,20 @@ const cenas: Cena[] = [
     },
   },
 
+  {
+    id: "R2-04",
+    regra: "2 sistema",
+    hipotese: "FECHAMENTO R2-01: quando NEM a descricao NEM os itens declaram sistema, a regra avisa que NAO PODE AVALIAR (warning) — antes ficava silenciosa, e a ausencia de achado parecia coerencia",
+    esperaAcusar: true,
+    code: "eng_sistema_construtivo_nao_avaliavel",
+    severidade: "warning",
+    input: {
+      obra: obra({ descricao: "Obra de reforma e ampliacao do bloco administrativo." }),
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    },
+  },
+
   // ----------------------------------------------------------- regra 4
   {
     id: "R4-01",

@@ -13,12 +13,12 @@ Base: `origin/develop` @ `b2f36f1`. Branch: `fix/coerencia-regras-abertas`. Sem 
 | Cena | Defeito (rodada 2) | Correção |
 | --- | --- | --- |
 | **R1-03** | Composição de projeto puro não era reconhecida: a lista de escritório só tinha `"projeto executivo"` e `"projeto básico"`, então `"ELABORACAO DE PROJETO DE DRENAGEM - SERVICO TECNICO SEM EXECUCAO"` passava batido — falso negativo silencioso na regra 1. | `RADICAIS_ESCRITORIO` ampliado com `elaborac`, `anteprojet`, `servico tecnic`, `sem execuc`, `sondag`, `ensai`, `laudo`, `consultoria`, `supervis`, `fiscalizac`, `plotagem`, `impress`, `projetist`. |
-| **R2-01** | Obra cuja **descrição** não nomeia o sistema desligava a regra 2 INTEIRA: o item que contradiz a obra passava sem ser visto. | Quando a descrição é omissa, o sistema passa a ser **inferido da maioria dos itens da EAP** (`inferirSistemaDosItens`), e a mensagem declara que a base foi inferida. Itens `indefinido`/`mista` não votam. |
+| **R2-01** | Obra cuja **descrição** não nomeia o sistema desligava a regra 2 INTEIRA: o item que contradiz a obra passava sem ser visto. | Quando a descrição é omissa, o sistema passa a ser **inferido da maioria dos itens da EAP** (`inferirSistemaDosItens`), e a mensagem declara que a base foi inferida. Itens `indefinido`/`mista` não votam. Se **nem** a descrição **nem** os itens declararem sistema, a regra emite `eng_sistema_construtivo_nao_avaliavel` (warning) — ela **avisa que não pôde avaliar** em vez de ficar silenciosa. |
 | **R3-03** | Item chamado apenas `"Estrutura"` não casava com nenhum radical específico (`pilar`, `viga`, `laje`, `sapata`…) e a checagem de fck era **pulada** — o falso negativo era silencioso no item mais estrutural da EAP. | Radical genérico `estrutur` entrou em `RADICAIS_ESTRUTURAIS` (cobre `estrutura`, `estruturas`, `superestrutura`). O alargamento é contido pela 2ª condição da regra, que continua exigindo que a composição cite concreto. |
 | **R4-01** | A banda de preço era **simétrica em torno da razão 1,0** — isto é, centrada em BDI = 0% **em silêncio**. Um BDI de 25%, rotina em obra pública, virava ERROR em massa. | O esperado passou a ser `(1 + BDI DECLARADO da obra)`, com a banda de 10% em torno dele. O chamador passa `bdiDeclarado`; a mensagem cita o valor usado. **Sem BDI declarado o achado é WARNING de conferência, nunca error.** |
 
-Testes de regressão: `server/construction/coerencia-engenharia.test.ts` — **12
-testes novos** (4 de R4-01/BDI, 3 de R1-03, 3 de R2-01, 2 de R3-03).
+Testes de regressão: `server/construction/coerencia-engenharia.test.ts` — **14
+testes novos** (4 de R4-01/BDI, 3 de R1-03, 5 de R2-01, 2 de R3-03).
 
 ## 2. Decisões de projeto (e as alternativas recusadas)
 
@@ -40,8 +40,13 @@ app para preenchê-lo** — viraria exatamente o vício de "campo declarado e nu
 alimentado" (o mesmo de `custoDireto`/`compositionUnit`, achado R6-04). A EAP é um
 dado real da obra, então ela é a fonte. Não há circularidade útil em exigir
 maioria: um item isolado contra a maioria é exatamente o que a regra deve apontar.
-**Sem descrição e com itens neutros, a regra segue silenciosa — não inventa
-sistema** (há teste para isso).
+
+**Sem descrição e com itens neutros, a regra AVISA que não pôde avaliar**
+(`eng_sistema_construtivo_nao_avaliavel`, warning) — pedido explícito do lead.
+Uma regra que não roda em silêncio é indistinguível de uma obra coerente: a
+ausência de achado seria lida como aprovação. O aviso é **warning**, nunca error:
+falta de dado não bloqueia a obra, mas também não passa por verificação. Há testes
+para os três estados: declarado na descrição, inferido dos itens, e não-avaliável.
 
 **R4-01 — WARNING, não "skip", quando o BDI não é declarado.** A leitura literal
 de "mesma lógica do CUB declarado" seria não rodar a regra sem BDI. Optei por
@@ -58,20 +63,23 @@ de todo, é uma linha.
   a própria evidência de que a métrica misturada saiu. Declarar o BDI da obra
   transforma esses achados de volta em verificação.
 - **Regra 2:** a AURORA declara `concreto armado` na descrição → a inferência **não
-  é usada** nesta obra. Sem efeito. (Só muda obra de descrição omissa.)
+  é usada** nesta obra, e o aviso de não-avaliável **também não dispara**. Sem
+  efeito. (Só muda obra de descrição omissa.)
 - **Regras 1 e 3:** só mudam se a AURORA tiver composições/itens que passem a casar
   o vocabulário ampliado. O blast radius da regra 1 é limitado por exigir radical de
   **execução no item** além do termo de escritório na composição.
 
 ## 4. Evidência
 
-- Reprodutor `scripts/auditar-coerencia-engenharia.mts`: **27/27 cenas
+- Reprodutor `scripts/auditar-coerencia-engenharia.mts`: **28/28 cenas
   CONFIRMADAS** (era 17/25 na rodada 2, com 8 defeitos ainda reproduzindo).
   As 8 cenas de defeito foram convertidas em cenas de **comportamento corrigido**
   (o flip está registrado em `docs/AUDITORIA-COERENCIA-RODADA-2.md`).
-  Cenas novas: **R4-04** (BDI declarado, desvio de 60% → continua ERROR),
-  **R4-05** (sem BDI declarado → WARNING).
-- `npx vitest run`: **76 arquivos, 651 testes passando, 8 pulados**.
+  Cenas novas: **R2-04** (regra 2 não-avaliável → WARNING), **R4-04** (BDI
+  declarado, desvio de 60% → continua ERROR), **R4-05** (sem BDI declarado →
+  WARNING).
+- `npx vitest run`: **76 arquivos, 653 testes passando, 8 pulados**. O arquivo do
+  validador foi de 38 para 52 testes (**+14**).
 - `npx tsc --noEmit`: **limpo**. Typecheck isolado do validador e do reprodutor: limpo.
 - O reprodutor ganhou o campo opcional `severidade` na cena, para travar
   "warning de conferência" como comportamento esperado e não como ausência de achado.
@@ -90,7 +98,7 @@ de todo, é uma linha.
 ## 6. Como reproduzir
 
 ```bash
-npx tsx scripts/auditar-coerencia-engenharia.mts        # 27/27
+npx tsx scripts/auditar-coerencia-engenharia.mts        # 28/28
 npx vitest run server/construction/coerencia-engenharia.test.ts
 npx tsc --noEmit
 ```
