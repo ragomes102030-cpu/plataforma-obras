@@ -889,14 +889,45 @@ describe("revisao 3 - R2-01: obra sem o sistema na descricao nao desliga mais a 
     expect(achado?.message).toContain("alvenaria estrutural");
   });
 
-  it("sem descricao e com itens neutros a regra segue silenciosa (nao inventa sistema)", () => {
+  it("sem descricao e sem itens que declarem sistema: AVISA que nao pode avaliar (nao fica silenciosa)", () => {
+    // Fechamento do R2-01: ausencia de achado nao pode ser lida como coerencia.
     const resultado = validarCoerenciaEngenharia({
       obra: obraSilenciosa,
       itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
       composicoes: [],
     });
 
-    expect(resultado.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_incompativel");
+    const codes = resultado.issues.map(i => i.code);
+    expect(codes).not.toContain("eng_sistema_construtivo_incompativel");
+    expect(codes).toContain("eng_sistema_construtivo_nao_avaliavel");
+  });
+
+  it("o aviso de nao-avaliavel e WARNING, nunca error: falta de dado nao bloqueia a obra", () => {
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraSilenciosa,
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    });
+
+    const achado = resultado.issues.find(i => i.code === "eng_sistema_construtivo_nao_avaliavel");
+    expect(achado?.severity).toBe("warning");
+    expect(resultado.valid).toBe(true);
+  });
+
+  it("nao avisa nada quando o sistema e declara na descricao ou inferivel dos itens", () => {
+    const porDescricao = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [item({ code: "1.1.1", description: "Administracao e controle da obra", unit: "vb", quantity: 1, unitPrice: 100000 })],
+      composicoes: [],
+    });
+    const porInferencia = validarCoerenciaEngenharia({
+      obra: obraSilenciosa,
+      itens: [item({ code: "1.4.1", description: "Pilares em concreto armado", unit: "m3", quantity: 10, unitPrice: 800 })],
+      composicoes: [],
+    });
+
+    expect(porDescricao.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_nao_avaliavel");
+    expect(porInferencia.issues.map(i => i.code)).not.toContain("eng_sistema_construtivo_nao_avaliavel");
   });
 });
 

@@ -55,7 +55,10 @@ import type { ValidationIssue, ValidationSeverity } from "./eap-validator";
  *      separa "o projeto" (assunto) de "projetar" (servico).
  *   2. R2-01: obra cuja DESCRICAO nao nomeia o sistema DESLIGAVA a regra 2
  *      inteira. O sistema passa a ser inferido da maioria dos itens da EAP, e a
- *      mensagem declara que a base foi inferida.
+ *      mensagem declara que a base foi inferida. Se NEM a descricao nem os itens
+ *      declaram sistema, a regra avisa que NAO PODE AVALIAR
+ *      (eng_sistema_construtivo_nao_avaliavel, warning) em vez de ficar
+ *      silenciosa: ausencia de achado nao pode ser lida como coerencia.
  *   3. R3-03: um item chamado apenas "Estrutura" nao casava com nenhum radical
  *      estrutural especifico, e a checagem de fck era PULADA nele — justamente
  *      no item mais estrutural da EAP.
@@ -525,6 +528,24 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
           `${achados.length > 8 ? ` (+${achados.length - 8})` : ""}.`,
       });
     }
+  } else if (sistemaDaObra === "indefinido") {
+    // R2-01 (fechamento): a regra NAO PODE ficar silenciosa quando nao consegue
+    // avaliar. Obra sem sistema na descricao E sem nenhum item que declare um
+    // sistema reconhecivel = a checagem nao rodou, e a AUSENCIA de achado seria
+    // lida como "obra coerente". Aqui a nao-avaliacao e declarada ao usuario,
+    // como conferencia (nunca error: nao ha dado para acusar).
+    add({
+      severity: "warning",
+      dominio: "orcamento",
+      code: "eng_sistema_construtivo_nao_avaliavel",
+      refs: [],
+      message:
+        "A regra 2 NAO PODE SER AVALIADA: a obra nao declara o sistema construtivo na descricao " +
+        "e nenhum item da EAP declara um sistema reconhecivel. Declarar o sistema da obra " +
+        "(na descricao ou na tipologia) habilita a verificacao. " +
+        "ATENCAO: nao haver achado de incompatibilidade aqui NAO significa que a obra e coerente — " +
+        "significa que ela nao foi verificada.",
+    });
   }
 
   // ---- 3. Resistencia do concreto em elemento estrutural
