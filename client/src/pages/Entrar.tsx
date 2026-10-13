@@ -1,67 +1,58 @@
 import { useEffect } from "react";
-import { Github, Layers3 } from "lucide-react";
+import { ArrowLeft, Github, Layers3, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import "@/entrada.css";
+import "../animations.css";
 
-/**
- * Login (público, rota `/login`).
- *
- * Não há formulário: a autenticação é o OAuth do GitHub, que já existe no app
- * (`startLogin()` em const.ts -> `location.href = "/api/auth/github"`). Esta tela
- * só dá um lugar próprio para o botão, em vez de pendurá-lo na tela da obra.
- *
- * Os três estados de `user` importam aqui (ver useAuth.ts): com `undefined` a
- * sessão ainda está sendo lida — botão desabilitado, "Verificando sessão…"; com
- * `null` há certeza de que não há sessão — botão ativo; com objeto a pessoa já
- * está dentro e não faz sentido ver o login, então redirecionamos.
- */
+function MarcaLogin() {
+  return (
+    <span className="arq-marca">
+      <span className="arq-marca-simbolo" aria-hidden="true"><Layers3 size={21} strokeWidth={1.8} /></span>
+      <span className="arq-marca-texto"><strong>ARQUIMEDES</strong><small>PLANEJAMENTO DE OBRAS</small></span>
+    </span>
+  );
+}
 
 export default function Entrar() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    // Só o usuário-objeto redireciona. `undefined` (lendo) e `null` (ausência)
-    // são falsy: nunca disparam o `setLocation`, e o ramo de espera não vira
-    // uma ida e volta inútil ao GitHub.
     if (user) setLocation("/obras");
   }, [user, setLocation]);
 
   const lendo = user === undefined;
 
   return (
-    <main className="entrada-tela">
-      <section className="entrada-cartao">
-        <div className="entrada-marca">
-          <span className="entrada-marca-icone" aria-hidden="true">
-            <Layers3 size={22} />
-          </span>
-          <span className="entrada-marca-nome">Plataforma Obras</span>
+    <main className="arq-login animate-fade-in">
+      <div className="arq-login-grid" aria-hidden="true" />
+      <a href="/" className="arq-login-voltar"><ArrowLeft size={16} /> Voltar à página inicial</a>
+      <section className="arq-login-layout">
+        <div className="arq-login-apresentacao">
+          <MarcaLogin />
+          <p className="arq-overline">SEU AMBIENTE DE ENGENHARIA</p>
+          <h1>Planejamento consistente.<br /><em>Obras sob controle.</em></h1>
+          <p>Entre para acessar suas obras, revisar o planejamento e acompanhar as decisões do projeto em um só lugar.</p>
+          <div className="arq-login-lista">
+            <span><ShieldCheck size={17} /> Sessão protegida</span>
+            <span><Layers3 size={17} /> Obras e dados em um único ambiente</span>
+          </div>
         </div>
-
-        <h1 className="entrada-titulo">Entrar</h1>
-        <p className="entrada-linha">
-          Acesse suas obras com a sua conta do GitHub.
-        </p>
-
-        <div className="entrada-acoes">
-          <button
-            type="button"
-            className="entrada-btn entrada-btn--bloco"
-            onClick={startLogin}
-            disabled={lendo}
-          >
-            <Github size={18} aria-hidden="true" />
-            {lendo ? "Verificando sessão…" : "Entrar com GitHub"}
+        <div className="arq-login-cartao">
+          <span className="arq-login-kicker">ACESSO À PLATAFORMA</span>
+          <h2>Bem-vindo ao Arquimedes</h2>
+          <p>Use sua conta autorizada do GitHub para continuar.</p>
+          <button type="button" className="arq-btn arq-btn--login" onClick={startLogin} disabled={lendo}>
+            <Github size={19} />
+            {lendo ? "Verificando sessão…" : "Continuar com GitHub"}
           </button>
+          <div className="arq-login-seguranca"><ShieldCheck size={15} /> Não é necessário criar uma nova senha.</div>
+          <div className="arq-login-nota">O acesso depende das permissões configuradas para sua conta.</div>
         </div>
-
-        <p className="entrada-pe">
-          Sem cadastro novo. Usamos só o necessário para identificar você.
-        </p>
       </section>
+      <footer className="arq-login-footer"><span>ARQUIMEDES</span><span>Planejamento e controle de obras</span></footer>
     </main>
   );
 }
