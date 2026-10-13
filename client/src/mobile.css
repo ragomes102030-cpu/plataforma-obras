@@ -41,7 +41,7 @@
   --campo-base: env(safe-area-inset-bottom, 0px);
   --campo-esq: env(safe-area-inset-left, 0px);
   --campo-dir: env(safe-area-inset-right, 0px);
-  --campo-fonte-min: 12.5px;
+  --campo-fonte-min: var(--texto-min); /* 12,5px; o numero mora em theme-tokens.css */
   --campo-toque: 44px;
 }
 
@@ -198,6 +198,50 @@ html body .xl-app {
     min-width: 0;
     flex: 1 1 100%;
     width: 100%;
+  }
+}
+
+/* ---- 5b. barra de titulo na faixa de 621 a 900px -------------------------- */
+
+/*
+   DEFEITO MEDIDO: a secao 5 acima foi escrita para o celular, onde a barra de
+   titulo QUEBRA em linhas (planilha.css, @media max-width 600px). La o
+   `flex: 1 1 100%` do grupo de acoes vira uma linha inteira e nao rouba nada.
+   Entre 601 e 900px a barra nao quebra, entao aquele `flex-basis: 100%` nao cria
+   linha nova: ele absorve toda a folga e espreme a tira de obras abertas.
+
+   Medido a 768x1024: `.xl-titlebar-obras` com 0px de largura (as obras abertas
+   ficavam invisiveis e inalcancaveis) e os botoes de destino cortados -- 115px
+   de conteudo em 104px de caixa. Nao e falta de ajuste: so o grupo de acoes
+   ocupava 444px dos 740px uteis, e com ele o seletor de obra (300px) e os dois
+   botoes redondos nao caberiam de forma alguma.
+
+   Solucao: os destinos passam para o menu "Mais", o mesmo caminho que o celular
+   ja usa ate 600px. Nenhuma funcao fica sem porta -- o menu tem Planejamento,
+   Catalogo, Arquimedes, Central de Comando, Lixeira e Sair.
+*/
+@media (min-width: 621px) and (max-width: 900px) {
+  /* O menu "Mais" e um dropdown ancorado no botao. A barra tem `overflow:
+     hidden` na base (planilha.css:41) e cortaria o menu inteiro. */
+  html body .xl-titlebar {
+    overflow: visible;
+  }
+
+  /* Sem a quebra de linha do celular, o grupo de acoes volta ao tamanho
+     natural: nao ha sobra de linha para ele absorver. */
+  html body .xl-titlebar .xl-titlebar-fim {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: max-content;
+  }
+
+  html body :is(.xl-tb-destino, .xl-tb-auth),
+  html body .xl-tb-user {
+    display: none !important;
+  }
+
+  html body .xl-topo-mais {
+    display: block;
   }
 }
 

@@ -11,165 +11,24 @@
 // 16px. Aqui o override usa o MESMO seletor da regra original, na mesma
 // condicao de media, e e declarado depois: especificidade igual, ultima vence.
 // Um numero grande declarado por outro seletor nao e alcancado.
+//
+// A leitura do CSS e a extracao do tamanho moram em `css-fontes-lib.mjs`,
+// compartilhadas com o gerador da camada de desktop.
 
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { listarFontes, agruparPorContexto, normalizarMediaCampo, emPx } from "./css-fontes-lib.mjs";
 
 const RAIZ = "C:/Users/Correta Engenharia/po-develop/client/src";
 const PISO = 12.5;
 const GERAR = process.argv.includes("--gerar");
 const DESTINO = path.join(RAIZ, "campo-tipografia.css");
 
-// --- 1. lê os arquivos -------------------------------------------------------
-// As camadas de campo ficam de fora: uma nao pode ler a outra (e `mobile.css`
-// tem `@media` aninhado, que este leitor simples nao interpreta).
-const IGNORAR = new Set(["mobile.css", "campo-tipografia.css"]);
-//
-// A ORDEM dos arquivos e a do bundle, e nao a alfabetica (`readdirSync`). Com
-// especificidade igual a ULTIMA declaracao vence, entao saber quem vem depois e
-// o que decide o tamanho real. Ler em ordem alfabetica punha planilha.css por
-// ultimo, e o gerador concluia que os 13px que ele declara em
-// `.xl-sidebar-brand strong` venciam -- mas quem vence sao os 11px de eap.css,
-// que vem depois. Resultado: o seletor ficava sem override e o nome da obra no
-// topo da gaveta continuava a 11px (medido).
-// Ordem real, tirada do grafo de imports: main.tsx importa `./App` ANTES de
-// `./index.css`; Home.tsx importa planilha.css antes de eap.css; e
-// theme-tokens.css e importado no topo de index.css.
-const ORDEM = ["planilha.css", "eap.css", "theme-tokens.css", "index.css", "seletor-obra.css"];
-const disponiveis = readdirSync(RAIZ).filter((f) => f.endsWith(".css") && !IGNORAR.has(f));
-const arquivos = [
-  ...ORDEM.filter((f) => disponiveis.includes(f)),
-  ...disponiveis.filter((f) => !ORDEM.includes(f)),
-];
-const declaracoes = []; // { arquivo, seletor, media, valor }
-
-// Leitor de CSS por profundidade de chaves.
-//
-// A primeira versao deste leitor procurava o proximo "{" e o proximo "}" e
-// nunca desempilhava o ambiente de `@media`: depois do primeiro `@media` do
-// arquivo, TODA regra seguinte era considerada dentro dele. O contexto saia
-// errado para quase todo o index.css (o encadeamento virava o menor `max-width`
-// visto ate ali). Aqui a pilha sobe no "{" e desce no "}".
-function lerRegras(texto) {
-  const achadas = [];
-  const pilha = [];
-  let inicioDoCabecalho = 0;
-  let i = 0;
-
-  while (i < texto.length) {
-    const c = texto[i];
-
-    if (c === "{") {
-      const cabecalho = texto.slice(inicioDoCabecalho, i).trim();
-      const semLixo = cabecalho.replace(/^[}\s;]+/, "");
-
-      if (semLixo.startsWith("@")) {
-        pilha.push(semLixo);
-        inicioDoCabecalho = i + 1;
-        i += 1;
-        continue;
-      }
-
-      const fim = texto.indexOf("}", i);
-      if (fim === -1) break;
-      achadas.push({
-        seletor: semLixo.replace(/\s+/g, " "),
-        corpo: texto.slice(i + 1, fim),
-        contexto: pilha.filter((p) => /^@(media|supports|container)/.test(p)).join(" && "),
-      });
-      i = fim + 1;
-      inicioDoCabecalho = i;
-      continue;
-    }
-
-    if (c === "}") {
-      pilha.pop();
-      inicioDoCabecalho = i + 1;
-    }
-    i += 1;
-  }
-
-  return achadas;
-}
-
-for (const arquivo of arquivos) {
-  const bruto = readFileSync(path.join(RAIZ, arquivo), "utf8");
-  const semComentario = bruto.replace(/\/\*[\s\S]*?\*\//g, "");
-
-  for (const regra of lerRegras(semComentario)) {
-    const { seletor, corpo, contexto } = regra;
-    if (!seletor || seletor.includes("{") || seletor.includes("}")) continue;
-
-    const mAtalho = /(?:^|[;\s])font\s*:\s*([^;]+)/i.exec(corpo);
-    const mTamanho = /font-size\s*:\s*([^;]+)/i.exec(corpo);
-    const posAtalho = mAtalho ? mAtalho.index : -1;
-    const posTamanho = mTamanho ? mTamanho.index : -1;
-
-    let valor = null;
-    let origem = null;
-    let importante = false;
-
-    // O app escreve tamanho de duas formas: `font-size: 9px` e o atalho
-    // `font: 800 8px/1 ui-monospace`. Ler so o `font-size` deixava de fora
-    // justamente os rotulos menores -- `.scopo-tag`, `.pl-atividade-tag`,
-    // `td.mono`, `.pl-duracao-input` entre outros.
-    if (mTamanho && posTamanho > posAtalho) {
-      importante = /!important/i.test(mTamanho[1]);
-      valor = mTamanho[1].replace(/!important/i, "").trim();
-      origem = "font-size";
-    } else if (mAtalho) {
-      importante = /!important/i.test(mAtalho[1]);
-      // De "800 8px/1 ui-monospace" interessa o "8px": o tamanho e o primeiro
-      // pedaco que termina em unidade de tamanho, ignorando peso e familia.
-      for (const pedaco of mAtalho[1].split(/[\s,]+/)) {
-        const antesDaBarra = pedaco.split("/")[0];
-        if (/^[\d.]+(px|rem|em|%|pt)$/i.test(antesDaBarra)) {
-          valor = antesDaBarra;
-          origem = "atalho font";
-          break;
-        }
-      }
-
-      // Mas o atalho pode estar INVALIDO e o navegador descarta a declaracao
-      // inteira -- e ai o tamanho que vale nao e o que esta escrito. O caso real
-      // e `font: 700 11px/1 inherit`: a familia do atalho nao aceita palavra
-      // reservada (`inherit`, `initial`, `unset`, `revert`), so `font: inherit`
-      // sozinho. O Chrome joga fora o `font:` todo, o botao herda a fonte da
-      // pagina e fica com 16px. O gerador lia "11px" e sobrescrevia para 12.5px,
-      // ENCOLHENDO o botao -- medido em 6 botoes (`.pl-atividades-btn.secondary`,
-      // `.scopo-btn.secondary`, os filtros `.ativo`). Lendo a declaracao como
-      // invalida, o seletor fica de fora e o tamanho herdado permanece.
-      const ultimaPalavra = mAtalho[1].replace(/!important/i, "").trim().split(/\s+/).pop();
-      if (ultimaPalavra && /^(inherit|initial|unset|revert|revert-layer)$/i.test(ultimaPalavra)) {
-        valor = null;
-        origem = null;
-        importante = false;
-      }
-    }
-
-    if (valor !== null) {
-      declaracoes.push({ arquivo, seletor, media: contexto, valor, origem, importante });
-    }
-  }
-}
+// --- 1. le os arquivos na ordem do bundle --------------------------------
+const { arquivos, declaracoes } = listarFontes(RAIZ);
 
 // --- 2. classifica ----------------------------------------------------------
-const emPx = (v) => {
-  const m = /^([\d.]+)px$/i.exec(v);
-  return m ? parseFloat(m[1]) : null;
-};
-
-const porContexto = new Map();
-for (const d of declaracoes) {
-  const chave = `${d.media}|||${d.seletor}`;
-  if (!porContexto.has(chave)) {
-    porContexto.set(chave, { seletor: d.seletor, media: d.media, valores: [], origens: [], importantes: [] });
-  }
-  const grupo = porContexto.get(chave);
-  grupo.valores.push(d.valor);
-  grupo.origens.push(d.origem);
-  grupo.importantes.push(d.importante);
-}
+const porContexto = agruparPorContexto(declaracoes);
 
 const porContextoDecidido = []; // pequeno NAQUELE contexto: sobrescrever so ali
 const jaPassa = []; // ja esta no piso ou acima, naquele contexto
@@ -200,31 +59,10 @@ for (const grupo of porContexto.values()) {
 // 12,5px tambem na faixa de 561 a 900px, onde ele nao e declarado e herda um
 // tamanho maior -- ou seja, encolheria. O app usa `@media` aninhado, entao a
 // cadeia e normalizada: varios `max-width` equivalem ao menor deles.
-const normalizarMedia = (cadeia) => {
-  if (!cadeia) return { contexto: "", temOutros: false };
-  const partes = cadeia.split(" && ");
-  const larguras = [];
-  const outros = [];
-  for (const parte of partes) {
-    for (const cond of parte.replace(/^@media\s*/, "").match(/\([^)]*\)/g) || []) {
-      const max = /\(\s*max-width\s*:\s*(\d+(?:\.\d+)?)px\s*\)/.exec(cond);
-      const min = /\(\s*min-width\s*:\s*(\d+(?:\.\d+)?)px\s*\)/.exec(cond);
-      if (max) larguras.push(parseFloat(max[1]));
-      else if (min) outros.push(`(min-width: ${parseFloat(min[1])}px)`);
-      else outros.push(cond);
-    }
-  }
-  const teto = larguras.length ? Math.min(...larguras) : null;
-  // Acima de 900px a camada de campo nem se aplica: o contexto resolvido vira vazio.
-  const tetoUtil = teto !== null && teto < 900 ? `(max-width: ${teto}px)` : "";
-  const condicoes = [tetoUtil, ...outros].filter(Boolean);
-  return { contexto: condicoes.join(" and "), temOutros: outros.length > 0 };
-};
-
 const grupos = new Map();
 const naoNormalizaveis = [];
 for (const grupo of porContextoDecidido) {
-  const { contexto, temOutros } = normalizarMedia(grupo.media);
+  const { contexto, temOutros } = normalizarMediaCampo(grupo.media);
   const valor = grupo.valores[grupo.valores.length - 1]; // a declaracao que vence
   // O `!important` e ESPELHADO, nao forcado. Onde o app declara o tamanho pequeno
   // sem `!important`, basta chegar depois com a mesma especificidade. Forcar

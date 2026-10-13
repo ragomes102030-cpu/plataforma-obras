@@ -11,6 +11,12 @@ import { readFileSync } from "node:fs";
 const URL_BASE = process.argv[2] || "https://plataforma-obras-api.onrender.com";
 const LARGURA = Number(process.argv[3] || 390);
 const ALTURA = Number(process.argv[4] || 844);
+// Acima de 620px a auditoria e de MESA: mede a camada tipografia-desktop.css.
+// Abaixo disso (ou com `--dedo`) emula o celular e mede a camada de campo.
+// Emular iPhone numa janela larga seria mentira: `hasTouch` faz `pointer: coarse`
+// casar e a leitura passaria a descrever a camada de campo.
+const DEDO = process.argv.includes("--dedo") || LARGURA < 621;
+const DESKTOP = !DEDO;
 const TOKEN = readFileSync("C:/Users/Correta Engenharia/obras-sessao.txt", "utf8").trim();
 
 const FONTE_MINIMA = 12.5; // px
@@ -18,11 +24,15 @@ const ALVO_MINIMO = 44; // px
 const HOST = new URL(URL_BASE).hostname;
 
 const navegador = await chromium.launch({ channel: "chrome" });
-const contexto = await navegador.newContext({
-  ...devices["iPhone 13"],
-  viewport: { width: LARGURA, height: ALTURA },
-  screen: { width: LARGURA, height: ALTURA },
-});
+const contexto = await navegador.newContext(
+  DESKTOP
+    ? { viewport: { width: LARGURA, height: ALTURA }, deviceScaleFactor: 1, hasTouch: false, isMobile: false }
+    : {
+        ...devices["iPhone 13"],
+        viewport: { width: LARGURA, height: ALTURA },
+        screen: { width: LARGURA, height: ALTURA },
+      }
+);
 await contexto.addCookies([
   {
     name: "app_session_id",
@@ -49,8 +59,8 @@ pagina.on("requestfailed", (r) => {
   }
 });
 
-console.log(`\n== Auditoria de campo ==`);
-console.log(`url=${URL_BASE}  viewport=${LARGURA}x${ALTURA}  dpr=3\n`);
+console.log(`\n== Auditoria de ${DESKTOP ? "desktop" : "campo"} ==`);
+console.log(`url=${URL_BASE}  viewport=${LARGURA}x${ALTURA}  dpr=${DESKTOP ? 1 : 3}\n`);
 
 await pagina.goto(URL_BASE, { waitUntil: "domcontentloaded", timeout: 120000 });
 // O servico gratuito hiberna: a primeira carga pode levar ~40 s.
@@ -267,7 +277,7 @@ console.log(
   `\nTOTAL: fonte<${FONTE_MINIMA}px=${total.fontes}  alvo<${ALVO_MINIMO}px=${total.alvos}  cortados=${total.cortados}  cortados-vertical=${total.cortadosV}  transbordo-vertical=${total.transbordosV}  excesso-x=${total.excesso}px  erros-console=${errosConsole.length}\n`
 );
 
-await pagina.screenshot({ path: "C:/Users/Correta Engenharia/obras-campo.png", fullPage: false });
+await pagina.screenshot({ path: `C:/Users/Correta Engenharia/obras-${DESKTOP ? "desktop" : "campo"}.png`, fullPage: false });
 await navegador.close();
 
 async function page_evaluate_medicoes(pg, fonteMin, alvoMin) {

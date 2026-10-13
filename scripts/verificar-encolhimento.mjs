@@ -7,20 +7,31 @@
 // campo (identificadas por usarem a variavel `--campo-fonte-min`); mede de novo;
 // e lista o que ficou menor.
 //
-//   node verificar-encolhimento.mjs [url]
+//   node verificar-encolhimento.mjs [url] [largura] [altura]
+//
+// A largura 621+ mede a camada de mesa (tipografia-desktop.css, `--texto-min`);
+// abaixo disso, ou com `--dedo`, mede a camada de campo (campo-tipografia.css,
+// `--campo-fonte-min`).
 
 import { chromium, devices } from "playwright";
 import { readFileSync } from "node:fs";
 
 const URL_BASE = process.argv[2] || "http://localhost:4599";
+const LARGURA = Number(process.argv[3] || 390);
+const ALTURA = Number(process.argv[4] || 844);
+const DESKTOP = !(process.argv.includes("--dedo") || LARGURA < 621);
 const TOKEN = readFileSync("C:/Users/Correta Engenharia/obras-sessao.txt", "utf8").trim();
 const HOST = new URL(URL_BASE).hostname;
 
 const navegador = await chromium.launch({ channel: "chrome" });
-const contexto = await navegador.newContext({
-  ...devices["iPhone 13"],
-  viewport: { width: 390, height: 844 },
-});
+// No desktop nao se emula iPhone: com `hasTouch` ligado, `pointer: coarse` casa e
+// o resultado mediria a camada de campo, nao a de desktop.
+const contexto = await navegador.newContext(
+  DESKTOP
+    ? { viewport: { width: LARGURA, height: ALTURA }, deviceScaleFactor: 1, hasTouch: false, isMobile: false }
+    : { ...devices["iPhone 13"], viewport: { width: LARGURA, height: ALTURA } }
+);
+console.log(`\n(verificando encolhimento em ${LARGURA}x${ALTURA} -- camada de ${DESKTOP ? "desktop" : "campo"})`);
 await contexto.addCookies([
   { name: "app_session_id", value: TOKEN, domain: HOST, path: "/", httpOnly: true, secure: true, sameSite: "Lax" },
 ]);
@@ -81,7 +92,10 @@ const desligarPiso = () =>
         // desligou zero regras e nao mediu nada. O tipo decide: 1 = estilo.
         if (regra.type === 1 && regra.style) {
           const valor = regra.style.getPropertyValue("font-size");
-          if (valor && valor.includes("--campo-fonte-min")) {
+          // As duas camadas geradas: `--campo-fonte-min` (celular) e `--texto-min`
+          // (desktop). A primeira deriva da segunda, entao casar as duas cobre o
+          // caso de `max(var(--campo-fonte-min), 0.75rem)`.
+          if (valor && (valor.includes("--campo-fonte-min") || valor.includes("--texto-min"))) {
             regra.style.removeProperty("font-size");
             removidas += 1;
           }

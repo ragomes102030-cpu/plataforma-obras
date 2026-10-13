@@ -31,6 +31,12 @@ import "@/barra-lateral.css";
 // anterior -- e nao define tamanho de fonte, entao nao interfere na camada de
 // campo.
 import "@/legibilidade-gerada.css";
+// Piso tipografico de desktop: gerado por scripts/gerar-tipografia-desktop.mjs.
+// Sobe para 12,5px os rotulos que o app declara abaixo disso NA RAIZ do CSS. Fica
+// por ultimo pelo mesmo motivo das outras camadas -- com especificidade igual,
+// vence quem vem depois -- e so age a partir de 901px, para nao cruzar com a
+// camada de campo (ate 900px, com o dedo).
+import "@/tipografia-desktop.css";
 
 const queryClient = new QueryClient();
 

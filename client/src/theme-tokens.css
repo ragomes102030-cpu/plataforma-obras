@@ -45,6 +45,17 @@ Uso: substituir cores hardcoded no projeto; respeitar AA ≥ 4.5:1 */
   --line: var(--line-claro);
 }
 
+/* Piso de leitura: nenhum texto do sistema abaixo disto.
+   E o unico lugar onde este numero e escrito. Os dois pisos sao gerados e
+   apontam para ca:
+     - celular/campo  -> client/src/campo-tipografia.css  (<=900px e dedo)
+     - desktop        -> client/src/tipografia-desktop.css (>=901px)
+   Os dois usam o mesmo valor de proposito: quem aprende a ler o sistema no
+   celular no canteiro reencontra a mesma escala na mesa. */
+:root {
+  --texto-min: 12.5px;
+}
+
 [data-theme="dark"] {
   --bg: var(--bg-escuro);
   --surf: var(--surf-escuro);
