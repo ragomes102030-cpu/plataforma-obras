@@ -520,3 +520,106 @@
 .xl-topo-menu-sair:hover {
   background: #fdecea !important;
 }
+
+/* --- escolha de obra (`/obras`): a lista antes de abrir uma obra ------------ */
+
+/* A obra passou a viver na URL (`/obra/:id`), entao `/obras` deixou de ser a
+   tela da obra e virou a ESCOLHA da obra. Esta folha ja desenha o cabecalho
+   (seletor, faixa, menu); estas classes sao so a lista que abre a obra. */
+.xl-escolha {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px 22px 40px;
+}
+
+.xl-escolha-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.xl-escolha-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #12556f;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.xl-escolha-acoes {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.xl-escolha-vazio {
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed #dbe2ea;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 14px;
+  text-align: center;
+}
+
+.xl-escolha-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xl-escolha-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xl-escolha-linha:hover {
+  border-color: #9ec7dc;
+  background: #f2f8fb;
+}
+
+.xl-escolha-linha-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.xl-escolha-linha-texto strong {
+  color: #21384d;
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.xl-escolha-linha-texto small {
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.xl-escolha-seta {
+  flex: 0 0 auto;
+  color: #94a3b8;
+}
+
+.xl-escolha-linha:hover .xl-escolha-seta {
+  color: #12556f;
+}

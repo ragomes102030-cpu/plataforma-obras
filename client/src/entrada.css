@@ -1,0 +1,193 @@
+/* Telas públicas de entrada: página inicial (/) e login (/login).
+
+   Folha importada de DENTRO das páginas (como planilha.css e eap.css), e não de
+   main.tsx: qualquer CSS importado da subárvore de App entra antes de index.css,
+   e mexer na ordem de main.tsx quebraria a camada de campo (mobile.css /
+   campo-tipografia.css têm de ser as últimas). Os seletores usam o prefixo
+   .entrada-* para não colidir com o vocabulário .xl-* / .pasta-* do app.
+
+   As cores vêm dos tokens de theme-tokens.css (--primary, --accent, --surf,
+   --text2…), que já viram sozinhos no tema escuro via [data-theme="dark"]. Texto
+   sobre --primary/--accent troca de claro para escuro pelo mesmo motivo: no
+   claro o fundo é azul-marinho (texto branco) e no escuro é azul-claro (texto
+   quase preto) — os dois passam em contraste AA. */
+
+.entrada-tela {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  /* Tinta leve no topo para o cartão não flutuar no vazio; o resto é o fundo do
+     tema. Sem color-mix: um rgba fixo evita depender de suporte novo. */
+  background:
+    linear-gradient(180deg, rgba(13, 43, 107, 0.06), transparent 42%),
+    var(--bg);
+  color: var(--text);
+}
+
+.entrada-cartao {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 28px;
+  box-shadow: 0 18px 48px -24px rgba(10, 22, 40, 0.35);
+}
+
+.entrada-cartao--larga {
+  max-width: 560px;
+}
+
+.entrada-marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.entrada-marca-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+}
+
+[data-theme="dark"] .entrada-marca-icone {
+  color: #0a1628;
+}
+
+.entrada-marca-nome {
+  font-size: var(--texto-forte);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.entrada-titulo {
+  margin: 0 0 8px;
+  font-size: var(--texto-pagina);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.entrada-linha {
+  margin: 0;
+  font-size: var(--texto-corpo);
+  line-height: 1.55;
+  color: var(--text2);
+}
+
+.entrada-lista {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.entrada-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.entrada-item-icone {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(26, 94, 200, 0.12);
+  color: var(--accent);
+}
+
+.entrada-item-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entrada-item-texto strong {
+  font-size: var(--texto-forte);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.entrada-item-texto span {
+  font-size: var(--texto-corpo);
+  line-height: 1.45;
+  color: var(--text2);
+}
+
+.entrada-acoes {
+  margin-top: 28px;
+}
+
+.entrada-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-family: inherit;
+  font-size: var(--texto-forte);
+  font-weight: 600;
+  padding: 12px 22px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--primary);
+  color: #fff;
+  transition: background 0.15s ease, transform 0.06s ease;
+}
+
+.entrada-btn:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.entrada-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.entrada-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.entrada-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.entrada-btn--bloco {
+  width: 100%;
+}
+
+[data-theme="dark"] .entrada-btn {
+  color: #0a1628;
+}
+
+.entrada-pe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 0;
+  font-size: var(--texto-min);
+  color: var(--text2);
+}
+
+@media (max-width: 480px) {
+  .entrada-cartao {
+    padding: 26px 20px;
+    border-radius: 14px;
+  }
+}

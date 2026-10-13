@@ -72,12 +72,13 @@ describe("a ausência de base é visível e diz o caminho", () => {
     expect(abaEap).toMatch(/generateEapFromCatalog/);
   });
 
-  it("o Catálogo é alcançável pela barra de título", () => {
-    // Onde o caminho é offering precisa existir. A versão anterior apontava
-    // `setActiveNav("Catálogo")`, que era o despacho de módulo; agora o
-    // destino é um botão da barra de título.
-    expect(home).toMatch(/destino === "catalogo"/);
-    expect(home).toMatch(/>\s*Catálogo\s*</);
+  it("o Catálogo é alcançável pela navegação da obra", () => {
+    // Onde o caminho é oferecido precisa existir. A tela já apontou
+    // `setActiveNav("Catálogo")` (despacho de módulo) e depois
+    // `destino === "catalogo"` (botão da barra de título). Agora o Catálogo
+    // é uma aba real da obra: entra no menu lateral e renderiza a sua view.
+    expect(home).toMatch(/aba === "catalogo"/);
+    expect(home).toMatch(/<AbaCatalogo\s*\/>/);
   });
 });
 

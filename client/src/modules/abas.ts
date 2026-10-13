@@ -111,6 +111,23 @@ export const ABAS: readonly AbaDoSistema[] = [
     rotulo: "CURVA S",
     status: "pronta",
   },
+  /*
+    Catálogo e Central de Comando não são etapas do planejamento — são
+    ferramentas. Antes viviam na linha de destinos do topo da obra; com a
+    escolha de obra fora do cabeçalho, elas vêm para dentro da obra como abas,
+    que é onde o usuário já procura o que fazer. A ordem aqui é só a de
+    `ABAS.find`; a sidebar as monta pelo grupo SISTEMA.
+  */
+  {
+    id: "catalogo",
+    rotulo: "CATÁLOGO DE INSUMOS",
+    status: "pronta",
+  },
+  {
+    id: "comando",
+    rotulo: "CENTRAL DE COMANDO",
+    status: "pronta",
+  },
 ];
 
 export type IdDaAba = string;
