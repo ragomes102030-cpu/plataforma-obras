@@ -120,10 +120,12 @@ export default function PaginaInicial() {
         <a className="arq-marca-link" href="/" aria-label="Arquimedes, página inicial"><Marca /></a>
         <div className="arq-header-acoes">
           <span className="arq-header-legenda">PLATAFORMA DE ENGENHARIA</span>
-          <button type="button" className="arq-btn arq-btn--outline" onClick={() => setLocation(autenticado ? "/obras" : "/login")}>
-            {autenticado ? "Minhas obras" : "Entrar"}
-            <ArrowRight size={16} />
-          </button>
+          {!autenticado && (
+            <button type="button" className="arq-btn arq-btn--outline" onClick={() => setLocation("/login")}>
+              Entrar
+              <ArrowRight size={16} />
+            </button>
+          )}
         </div>
       </header>
 
