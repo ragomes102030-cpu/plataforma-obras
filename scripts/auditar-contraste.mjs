@@ -138,7 +138,10 @@ async function abrir(largura, altura) {
   const contexto = await navegador.newContext({
     viewport: { width: largura, height: altura }, hasTouch: largura < 700, isMobile: largura < 700, deviceScaleFactor: 1,
   });
-  await contexto.addCookies([{ name: "app_session_id", value: SESSAO, domain: "localhost", path: "/", httpOnly: true, secure: true }]);
+  // O cookie precisa valer para o host que esta sendo medido: fixado em
+  // "localhost" ele nao autentica em producao, a tela de entrada aparece no
+  // lugar do sistema e a medicao sai com zero elementos -- parecendo aprovacao.
+  await contexto.addCookies([{ name: "app_session_id", value: SESSAO, domain: new URL(URL_BASE).hostname, path: "/", httpOnly: true, secure: true }]);
   const pagina = await contexto.newPage();
   await pagina.goto(URL_BASE, { waitUntil: "domcontentloaded" });
   await pagina.waitForSelector(".xl-app", { timeout: 60000 });
@@ -147,6 +150,7 @@ async function abrir(largura, altura) {
 }
 
 const todas = [];
+let telasSemNavegacao = 0;
 for (const [nome, largura, altura] of [["praca", 1440, 900], ["campo", 390, 844]]) {
   const { contexto, pagina } = await abrir(largura, altura);
   for (let i = 0; i < TELAS.length; i++) {
@@ -155,7 +159,11 @@ for (const [nome, largura, altura] of [["praca", 1440, 900], ["campo", 390, 844]
       if (await abridor.count()) { await abridor.click(); await pagina.waitForTimeout(350); }
     }
     const item = pagina.locator(".xl-sidebar-item").nth(i);
-    if (!(await item.count())) continue;
+    if (!(await item.count())) {
+      telasSemNavegacao++;
+      console.log(`${nome}/${TELAS[i]}: NAVEGACAO NAO ENCONTRADA (sessao sem acesso ou tela de entrada?)`);
+      continue;
+    }
     await item.click();
     await pagina.waitForTimeout(1500);
     const r = await pagina.evaluate(ROTINA);
@@ -164,6 +172,10 @@ for (const [nome, largura, altura] of [["praca", 1440, 900], ["campo", 390, 844]
     console.log(`${nome}/${TELAS[i]}: avaliados=${r.leituras.length} reprovados=${falhas.length} fundo-indefinido=${r.indefinidos.length}`);
   }
   await contexto.close();
+}
+
+if (telasSemNavegacao) {
+  console.log(`\nATENCAO: ${telasSemNavegacao} telas nao foram alcancadas. O resultado abaixo NAO vale como aprovacao.`);
 }
 
 writeFileSync(ARQUIVO, JSON.stringify(todas, null, 1), "utf8");

@@ -15,7 +15,7 @@
 //  - barra lateral, cujo tema e escrito a mao;
 //  - seletor sem nenhuma classe, que atingiria telas demais.
 //
-// Uso: node scripts/gerar-legibilidade.mjs [leitura.json] [--seco]
+// Uso: node scripts/gerar-legibilidade.mjs [leitura.json ...] [--seco]
 //
 // A leitura precisa ser a do ANTES, ou seja, medida com esta folha desligada.
 // Passo a passo para refazer do zero:
@@ -25,13 +25,19 @@
 //   4. descomentar os imports e npm run build
 //   5. node scripts/gerar-legibilidade.mjs tests/contraste/antes.json
 //   6. node scripts/auditar-contraste.mjs http://localhost:4599 tests/contraste/depois.json
+//
+// Aceita MAIS DE UMA leitura, e isso nao e capricho: ha estado que so os dados
+// de producao produzem. A faixa de validacao da EAP mostra `.ok` com os dados
+// locais e `.attention` (fundo ambar) com os de producao -- medindo so local, a
+// correcao saiu incompleta e producao reprovou 2 textos que o local aprovava.
 import { readFileSync, writeFileSync } from "fs";
 import { ajustar, paraRgb, paraHex, razao, paraHsl } from "./contraste-lib.mjs";
 
 const SECO = process.argv.includes("--seco");
-const ENTRADA = process.argv.find(a => a.endsWith(".json")) || "tests/contraste/relatorio.json";
+const ENTRADAS = process.argv.slice(2).filter(a => a.endsWith(".json"));
+if (!ENTRADAS.length) ENTRADAS.push("tests/contraste/antes.json");
 const ALVO = 4.6; // minimo 4,5 da norma com uma folga para arredondamento
-const dados = JSON.parse(readFileSync(ENTRADA, "utf8"));
+const dados = ENTRADAS.flatMap(arq => JSON.parse(readFileSync(arq, "utf8")));
 
 // Agrupa por lugar (caminho) + cor, porque o caminho e o que vira seletor.
 const porLugar = new Map();
@@ -124,23 +130,28 @@ for (const lugar of porLugar.values()) {
     continue;
   }
 
-  // A cor nova vem do mapa por cor. Se a cor nao teve saida unica (aparece em
-  // fundo claro e em fundo escuro), cai para o calculo so deste lugar.
-  const cores = [...lugar.porCor.keys()];
-  let hex, direcao, fundos, minimo, unificada;
-  const comSaida = cores.filter(c => corNova.has(c));
-  if (comSaida.length === 1 && cores.length === 1) {
-    const n = corNova.get(comSaida[0]);
-    hex = n.hex; direcao = n.direcao; fundos = n.fundos; minimo = n.minimo; unificada = n.lugares;
-  } else if (comSaida.length === 1) {
-    const n = corNova.get(comSaida[0]);
-    hex = n.hex; direcao = n.direcao; fundos = n.fundos; minimo = n.minimo; unificada = n.lugares;
+  // A cor a corrigir e a das leituras QUE REPROVARAM. Um mesmo lugar pode ter
+  // sido visto com cores diferentes (antes e depois, ou variantes que dependem
+  // dos dados), e a que interessa aqui e a reprovada.
+  const corBase = falhas[0].cor;
+  // Obriga a cor nova a passar em TODOS os fundos em que este lugar apareceu,
+  // nao so no fundo da leitura reprovada.
+  const fundos = [...new Set(todas.map(l => l.fundo))].map(paraRgb);
+  const minimo = Math.max(...falhas.map(l => l.minimo));
+  if (fundos.some(f => !f)) {
+    manuais.push({ ...lugar, motivo: "fundo ilegivel", casos: falhas.length });
+    continue;
+  }
+
+  const unificada = corNova.get(corBase);
+  const serveUnificada = unificada && fundos.every(f => razao(paraRgb(unificada.hex), f) >= Math.max(ALVO, minimo));
+  let hex, direcao, quantosLugares;
+  if (serveUnificada) {
+    hex = unificada.hex; direcao = unificada.direcao; quantosLugares = unificada.lugares;
   } else {
-    const locais = [...new Set(todas.map(l => l.fundo))].map(paraRgb);
-    if (locais.some(f => !f)) { manuais.push({ ...lugar, motivo: "fundo ilegivel", casos: falhas.length }); continue; }
-    const a = ajustar(cores[0], locais, Math.max(ALVO, Math.max(...falhas.map(l => l.minimo))));
+    const a = ajustar(corBase, fundos, Math.max(ALVO, minimo));
     if (!a) { manuais.push({ ...lugar, motivo: "nem preto nem branco atingem o minimo", casos: falhas.length }); continue; }
-    hex = a.hex; direcao = a.fundo; fundos = locais; minimo = Math.max(...falhas.map(l => l.minimo)); unificada = 1;
+    hex = a.hex; direcao = a.fundo; quantosLugares = 1;
   }
 
   const estados = [...new Set(todas.flatMap(l => l.estado || []))];
@@ -152,7 +163,7 @@ for (const lugar of porLugar.values()) {
     caminho: lugar.caminho,
     guardar,
     classe: lugar.classe,
-    corOriginal: cores[0],
+    corOriginal: corBase,
     hex,
     direcao,
     antes: Math.round(antes * 100) / 100,
@@ -162,9 +173,9 @@ for (const lugar of porLugar.values()) {
     fontes: [...new Set(falhas.map(l => l.fonte))].sort(),
     exemplo: falhas[0].texto,
     estados,
-    unificada,
-    matiz: Math.round(paraHsl(paraRgb(cores[0])).h),
-    sat: Math.round(paraHsl(paraRgb(cores[0])).s * 100),
+    unificada: quantosLugares,
+    matiz: Math.round(paraHsl(paraRgb(corBase)).h),
+    sat: Math.round(paraHsl(paraRgb(corBase)).s * 100),
   });
 }
 
@@ -187,7 +198,7 @@ const linhas = [];
 linhas.push("/*");
 linhas.push(" * legibilidade-gerada.css -- ARQUIVO GERADO. Nao editar a mao.");
 linhas.push(" *");
-linhas.push(" * Regerar: node scripts/gerar-legibilidade.mjs tests/contraste/antes.json");
+linhas.push(" * Regerar: node scripts/gerar-legibilidade.mjs tests/contraste/antes.json tests/contraste/producao.json");
 linhas.push(" * Medir:   node scripts/auditar-contraste.mjs");
 linhas.push(" *");
 linhas.push(" * Cada regra nasce de uma medicao de contraste: o lugar reprovava o minimo da");
@@ -215,6 +226,7 @@ for (const r of lista) {
 const conteudo = linhas.join("\n");
 if (!SECO) writeFileSync("client/src/legibilidade-gerada.css", conteudo, "utf8");
 
+console.log(`leituras: ${ENTRADAS.join(" + ")}`);
 console.log(`lugares medidos: ${porLugar.size} | sem falha: ${semFalha.length} | regras: ${lista.length} | para a mao: ${manuais.length}`);
 console.log(`cores antigas que reprovaram: ${[...porCor.values()].filter(g => g.falhas).length} | com cor nova unica: ${corNova.size} | sem saida unica: ${corSemSaida.length}`);
 if (corSemSaida.length) {
