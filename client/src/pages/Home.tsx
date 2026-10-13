@@ -176,7 +176,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="xl-app">
+    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}`}>
       {mostrarTituloDaObra && (
       <header className="xl-titlebar">
         {/*
