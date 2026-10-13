@@ -1,27 +1,33 @@
 /* GERADO por scripts/gerar-tipografia-desktop.mjs -- nao editar a mao.
  *
- * Piso tipografico de desktop. Ate aqui o app ia de 7px a 12px em rotulos de
- * tabela, codigos de linha e etiquetas: medido em 15 telas a 1440x900, 2.441
- * textos ficavam abaixo de 12,5px, sendo 88 a 7px (.eap-rownum,
- * .eap-grupo-label) e 306 a 8px (.xl-sidebar-label, .arquimedes-kicker,
- * .scopo-tag, .pl-atividade-tag). Nao era hierarquia, era ruido: 7px, 7,5px e
- * 9,8px nao sao degraus de escala nenhuma.
+ * Sistema tipografico da MESA: um piso e uma escala, os dois com nome em
+ * theme-tokens.css. Ate aqui o app ia de 7px a 26px em DEZENOVE valores acima
+ * do piso, com salto relativo medio de 5,4%: abaixo de ~8% o olho nao separa
+ * dois degraus, entao 13, 13,5 e 14 eram tres numeros para o mesmo tamanho.
  *
- * Como funciona: para cada seletor que declara abaixo do piso NA RAIZ do CSS
- * (sem @media), repete o mesmo seletor aqui. Especificidade igual, declaracao
- * depois -> a ultima vence. Nunca encolhe: so e tocado o seletor cuja ultima
- * declaracao de raiz ja estava abaixo do piso, e um numero grande declarado
- * por outro seletor nao e alcancado. O `!important` e espelhado, nunca forcado.
+ * 1) PISO. Medido em 15 telas a 1440x900: 2.441 textos abaixo de 12,5px, sendo
+ *    88 a 7px (.eap-rownum, .eap-grupo-label) e 306 a 8px (.xl-sidebar-label,
+ *    .arquimedes-kicker, .scopo-tag, .pl-atividade-tag). Todo seletor que
+ *    declarava abaixo do piso NA RAIZ do CSS passa a usar var(--texto-min).
  *
- * Escopo `min-width: 621px`: de 621px para cima o app so declara tamanho na
- * raiz, entao subir a raiz nao disputa com @media nenhum. A camada de campo
- * (campo-tipografia.css) cobre ate 900px com o dedo, e as duas usam o mesmo
- * piso (`--texto-min`, em theme-tokens.css). Nenhuma das duas pisa na outra.
+ * 2) ESCALA. O app tinha 15 tamanhos acima do piso; a escala tem 8. Os valores
+ *    que nao sao degrau sao encaixados NO DEGRAU DE CIMA -- encaixar para o de
+ *    baixo encolheria texto, que e justamente o defeito que o piso corrigiu.
+ *
+ * Como funciona, nos dois casos: repete o MESMO seletor da regra original.
+ * Especificidade igual, declaracao depois -> a ultima vence. Um numero grande
+ * declarado por outro seletor nao e alcancado, e o `!important` e espelhado,
+ * nunca forcado. So a raiz entra: o app nao declara nenhum font-size em @media
+ * acima de 620px, entao de 621 para cima so a raiz governa.
+ *
+ * Escopo `min-width: 621px`: a camada de campo (campo-tipografia.css) cobre ate
+ * 900px com o dedo, e as duas usam os mesmos tokens. Nenhuma pisa na outra.
  *
  * O corte em 621 e nao em 901 de proposito: um portatil do Windows a 150% de
  * escala entrega ~853px de largura CSS -- e mesa, e ficaria de fora de 901.
  *
- * 650 seletores em 16 blocos.
+ * 650 seletores no piso em 16 blocos;
+ * 50 seletores encaixados na escala em 6 blocos.
  */
 
 @media (min-width: 621px) {
@@ -754,6 +760,86 @@
   .xl-titlebar-marca strong,
   .xl-vazia span {
     font-size: var(--texto-min);
+  }
+
+  /* ---------------------------------------------------------------------
+     ESCALA: valores que nao eram degrau, encaixados no degrau DE CIMA.
+     Os degraus em si (12,5 / 14 / 16 / 18 / 20 / 22 / 24 / 26) nao entram
+     aqui: ja estao no tamanho certo, e repetir o seletor so criaria regra
+     sem efeito. Ver theme-tokens.css para o porque de cada degrau. */
+
+  /* 32 seletores: 13px -> 14, 13.5px -> 14 */
+  .admin-llm-title strong,
+  .eap-controle-card.neutro strong,
+  .eap-documentos-titulo,
+  .eap-topo h2,
+  .eap-workspace-control-grid strong,
+  .eap-workspace-review-kpis strong,
+  .module-card strong,
+  .nova-obra-header p,
+  .nova-obra-section input,
+  .nova-obra-section select,
+  .nova-obra-section textarea,
+  .panel-heading h3,
+  .pl-visual-vazio h3,
+  .portfolio-card-name,
+  .production-blocked-card strong,
+  .xl-btn-entrar,
+  .xl-cab-titulo,
+  .xl-exclusao-erro,
+  .xl-form-group input,
+  .xl-form-group select,
+  .xl-form-group textarea,
+  .xl-lixeira-item strong,
+  .xl-painel-intro p,
+  .xl-painel-vazio,
+  .xl-seletor-acao,
+  .xl-seletor-busca input,
+  .xl-seletor-cabecalho strong,
+  .xl-seletor-item-texto strong,
+  .xl-seletor-menu button,
+  .xl-seletor-nome,
+  .xl-seletor-vazio,
+  .xl-topo-menu button {
+    font-size: var(--texto-corpo);
+  }
+
+  /* 4 seletores: 15px -> 16 */
+  .arquimedes-workbar-title strong,
+  .brand-name,
+  .eap-controle-card > strong,
+  .xl-vazia-folha h3 {
+    font-size: var(--texto-forte);
+  }
+
+  /* 8 seletores: 17px -> 18 */
+  .control-summary strong,
+  .eap-ciclo-revisao-kpis strong,
+  .eap-proposta-correcao-grid strong,
+  .eap-workspace-title h1,
+  .pl-atividades-metrics strong,
+  .pl-planejamento-head h2,
+  .scopo-metrics strong,
+  .xl-status-topo strong {
+    font-size: var(--texto-sub);
+  }
+
+  /* 2 seletores: 19px -> 20 */
+  .eap-proposta-kpis strong,
+  .lob-summary strong {
+    font-size: var(--texto-secao);
+  }
+
+  /* 2 seletores: 21px -> 22 */
+  .pl-atividades-title h1,
+  .scopo-workspace-title h1 {
+    font-size: var(--texto-titulo);
+  }
+
+  /* 2 seletores: 25px -> 26 */
+  .intro-row h2,
+  .xl-cartao-valor {
+    font-size: var(--texto-heroi);
   }
 
 }

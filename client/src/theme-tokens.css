@@ -45,15 +45,35 @@ Uso: substituir cores hardcoded no projeto; respeitar AA ≥ 4.5:1 */
   --line: var(--line-claro);
 }
 
-/* Piso de leitura: nenhum texto do sistema abaixo disto.
-   E o unico lugar onde este numero e escrito. Os dois pisos sao gerados e
+/* ESCALA TIPOGRAFICA — oito degraus, cada um de 8% a 14% maior que o anterior.
+
+   O primeiro degrau e o piso de leitura: nenhum texto do sistema abaixo disto.
+   Ele e o unico lugar onde esse numero e escrito, e as duas camadas geradas
    apontam para ca:
-     - celular/campo  -> client/src/campo-tipografia.css  (<=900px e dedo)
-     - desktop        -> client/src/tipografia-desktop.css (>=901px)
-   Os dois usam o mesmo valor de proposito: quem aprende a ler o sistema no
-   celular no canteiro reencontra a mesma escala na mesa. */
+     - celular/campo -> client/src/campo-tipografia.css   (<=900px e dedo)
+     - mesa          -> client/src/tipografia-desktop.css (>=621px)
+
+   Antes disto o app tinha 15 tamanhos acima do piso (12,5 / 13 / 13,5 / 14 / 15
+   / 16 / 17 / 18 / 19 / 20 / 21 / 22 / 24 / 25 / 26) e um salto relativo medio
+   de 5,4%: abaixo de ~8% o olho nao separa dois degraus, entao era ruido dobrado
+   sobre ruido -- 13, 13,5 e 14 sao tres numeros para o mesmo tamanho aparente.
+
+   A escala nao foi escolhida de formula: foi tirada dos proprios valores do app.
+   O degrau de 22 existe so para que 21 nao precise pular para 24 (+14%). Assim o
+   maior deslocamento ao encaixar um valor fora da escala e 7,7% (13 -> 14) e
+   nenhum texto encolhe: o encaixe e sempre para o degrau de cima.
+
+   Quem consome: scripts/gerar-tipografia-desktop.mjs, que gera
+   client/src/tipografia-desktop.css. Ver tests/tipografia/LEIA-ME.md. */
 :root {
-  --texto-min: 12.5px;
+  --texto-min: 12.5px; /* piso, legenda e tabela densa */
+  --texto-corpo: 14px; /* corpo de tabela, rotulo, botao de barra */
+  --texto-forte: 16px; /* corpo em destaque, rotulo de campo */
+  --texto-sub: 18px; /* subtitulo, titulo de cartao pequeno */
+  --texto-secao: 20px; /* titulo de secao */
+  --texto-titulo: 22px; /* titulo de aba e h1 de tela */
+  --texto-pagina: 24px; /* titulo de pagina e valor de indicador */
+  --texto-heroi: 26px; /* numero em destaque, titulo de janela */
 }
 
 [data-theme="dark"] {

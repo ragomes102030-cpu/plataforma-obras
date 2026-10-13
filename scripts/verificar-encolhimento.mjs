@@ -92,10 +92,11 @@ const desligarPiso = () =>
         // desligou zero regras e nao mediu nada. O tipo decide: 1 = estilo.
         if (regra.type === 1 && regra.style) {
           const valor = regra.style.getPropertyValue("font-size");
-          // As duas camadas geradas: `--campo-fonte-min` (celular) e `--texto-min`
-          // (desktop). A primeira deriva da segunda, entao casar as duas cobre o
-          // caso de `max(var(--campo-fonte-min), 0.75rem)`.
-          if (valor && (valor.includes("--campo-fonte-min") || valor.includes("--texto-min"))) {
+          // As duas camadas geradas: o piso e a escala. Casar `--texto-` cobre
+          // todos os degraus (--texto-min, --texto-corpo, ... --texto-heroi) e
+          // `--campo-fonte-min` cobre o caso do celular, que deriva de
+          // `max(var(--campo-fonte-min), 0.75rem)`.
+          if (valor && (valor.includes("--texto-") || valor.includes("--campo-fonte-min"))) {
             regra.style.removeProperty("font-size");
             removidas += 1;
           }

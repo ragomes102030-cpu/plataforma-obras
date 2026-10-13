@@ -73,6 +73,53 @@ for (const [seletor, info] of ultimo) {
   else if (v < PISO) candidatos.push({ seletor, valor: v, valorTxt: info.valor, importante: info.importante });
 }
 
+// --- escala: encaixa os valores que nao sao degrau --------------------------
+//
+// A escala (oito degraus nomeados) mora em theme-tokens.css. Aqui so se encaixa
+// o que ficou fora dela. O encaixe e SEMPRE para o degrau de cima: encaixar para
+// o de baixo encolheria texto, e encolher texto e exatamente o defeito que o
+// piso veio corrigir.
+const ESCALA = [
+  { px: 12.5, token: "--texto-min" },
+  { px: 14, token: "--texto-corpo" },
+  { px: 16, token: "--texto-forte" },
+  { px: 18, token: "--texto-sub" },
+  { px: 20, token: "--texto-secao" },
+  { px: 22, token: "--texto-titulo" },
+  { px: 24, token: "--texto-pagina" },
+  { px: 26, token: "--texto-heroi" },
+];
+const degrauAcima = (v) => ESCALA.find((d) => d.px >= v) || null;
+
+const foraDaEscala = []; // > piso e nao e degrau
+const acimaDoTopo = []; // maior que o ultimo degrau: nao se inventa degrau
+for (const [seletor, info] of ultimo) {
+  const v = emPx(info.valor);
+  if (v === null || v <= PISO) continue;
+  if (ESCALA.some((d) => d.px === v)) continue;
+  const degrau = degrauAcima(v);
+  if (!degrau) acimaDoTopo.push({ seletor, valor: v, valorTxt: info.valor });
+  else foraDaEscala.push({ seletor, valor: v, valorTxt: info.valor, importante: info.importante, token: degrau.token, alvo: degrau.px });
+}
+
+// Quantos seletores por encaixe, para relatar o deslocamento antes de aplicar.
+const encaixes = new Map(); // "13 -> 14" -> { de, para, seletores: Set }
+for (const c of foraDaEscala) {
+  const chave = `${c.valorTxt} -> ${c.alvo}`;
+  if (!encaixes.has(chave)) encaixes.set(chave, { de: c.valor, para: c.alvo, token: c.token, seletores: new Set() });
+  encaixes.get(chave).seletores.add(c.seletor);
+}
+
+const gruposEscala = new Map(); // token -> Set(seletor)
+for (const c of foraDaEscala) {
+  const chave = `${c.token}|||${c.importante}`;
+  if (!gruposEscala.has(chave)) gruposEscala.set(chave, { token: c.token, alvo: c.alvo, importante: c.importante, origem: new Set(), seletores: new Set() });
+  const g = gruposEscala.get(chave);
+  g.origem.add(c.valorTxt);
+  g.seletores.add(c.seletor);
+}
+const escalaOrdenada = [...gruposEscala.values()].sort((a, b) => a.alvo - b.alvo);
+
 // Portao de seguranca: para cada candidato, existe algum @media em que ele fique
 // >= piso? Se existisse, a faixa estreita ficaria de fora pelo `min-width: 901px`
 // de qualquer forma, mas registrar mantem a premissa auditavel.
@@ -117,6 +164,21 @@ if (emRisco.length) {
 console.log("\nPor valor de origem:");
 for (const g of ordenados) console.log(`  ${g.valorTxt.padEnd(7)} ${String(g.seletores.size).padStart(4)} seletores${g.importante ? "  (!important)" : ""}`);
 
+const jaEmDegrau = ultimo.size - candidatos.length - relativos.length - foraDaEscala.length - acimaDoTopo.length;
+console.log(`\nEscala (${ESCALA.length} degraus, em theme-tokens.css):`);
+console.log(`  ja em um degrau             : ${jaEmDegrau}`);
+console.log(`  fora da escala, encaixados  : ${foraDaEscala.length}`);
+const maiorSalto = Math.max(0, ...[...encaixes.values()].map((e) => ((e.para - e.de) / e.de) * 100));
+for (const [, e] of [...encaixes.entries()].sort((a, b) => a[1].de - b[1].de)) {
+  const desloc = ((e.para - e.de) / e.de) * 100;
+  const marca = Math.abs(desloc - maiorSalto) < 1e-9 ? "  <- maior salto" : "";
+  console.log(`    ${String(e.de).padEnd(5)}-> ${String(e.para).padEnd(5)} +${desloc.toFixed(1)}%  ${String(e.seletores.size).padStart(3)} seletores -> var(${e.token})${marca}`);
+}
+if (acimaDoTopo.length) {
+  console.log(`  ACIMA do ultimo degrau (${ESCALA[ESCALA.length - 1].px}px), deixados como estao: ${acimaDoTopo.length}`);
+  for (const c of acimaDoTopo.slice(0, 10)) console.log(`    ${c.seletor.slice(0, 54)} = ${c.valorTxt}`);
+}
+
 if (relativos.length) {
   console.log("\nSem numero de pixels na raiz (tratados a mao, quando abaixo do piso):");
   for (const r of relativos.slice(0, 40)) console.log(`  ${r.seletor.slice(0, 62).padEnd(64)} ${r.valor}`);
@@ -131,28 +193,34 @@ const total = candidatos.length;
 const linhas = [];
 linhas.push("/* GERADO por scripts/gerar-tipografia-desktop.mjs -- nao editar a mao.");
 linhas.push(" *");
-linhas.push(" * Piso tipografico de desktop. Ate aqui o app ia de 7px a 12px em rotulos de");
-linhas.push(" * tabela, codigos de linha e etiquetas: medido em 15 telas a 1440x900, 2.441");
-linhas.push(" * textos ficavam abaixo de 12,5px, sendo 88 a 7px (.eap-rownum,");
-linhas.push(" * .eap-grupo-label) e 306 a 8px (.xl-sidebar-label, .arquimedes-kicker,");
-linhas.push(" * .scopo-tag, .pl-atividade-tag). Nao era hierarquia, era ruido: 7px, 7,5px e");
-linhas.push(" * 9,8px nao sao degraus de escala nenhuma.");
+linhas.push(" * Sistema tipografico da MESA: um piso e uma escala, os dois com nome em");
+linhas.push(" * theme-tokens.css. Ate aqui o app ia de 7px a 26px em DEZENOVE valores acima");
+linhas.push(" * do piso, com salto relativo medio de 5,4%: abaixo de ~8% o olho nao separa");
+linhas.push(" * dois degraus, entao 13, 13,5 e 14 eram tres numeros para o mesmo tamanho.");
 linhas.push(" *");
-linhas.push(" * Como funciona: para cada seletor que declara abaixo do piso NA RAIZ do CSS");
-linhas.push(" * (sem @media), repete o mesmo seletor aqui. Especificidade igual, declaracao");
-linhas.push(" * depois -> a ultima vence. Nunca encolhe: so e tocado o seletor cuja ultima");
-linhas.push(" * declaracao de raiz ja estava abaixo do piso, e um numero grande declarado");
-linhas.push(" * por outro seletor nao e alcancado. O `!important` e espelhado, nunca forcado.");
+linhas.push(" * 1) PISO. Medido em 15 telas a 1440x900: 2.441 textos abaixo de 12,5px, sendo");
+linhas.push(" *    88 a 7px (.eap-rownum, .eap-grupo-label) e 306 a 8px (.xl-sidebar-label,");
+linhas.push(" *    .arquimedes-kicker, .scopo-tag, .pl-atividade-tag). Todo seletor que");
+linhas.push(" *    declarava abaixo do piso NA RAIZ do CSS passa a usar var(--texto-min).");
 linhas.push(" *");
-linhas.push(" * Escopo `min-width: 621px`: de 621px para cima o app so declara tamanho na");
-linhas.push(" * raiz, entao subir a raiz nao disputa com @media nenhum. A camada de campo");
-linhas.push(" * (campo-tipografia.css) cobre ate 900px com o dedo, e as duas usam o mesmo");
-linhas.push(" * piso (`--texto-min`, em theme-tokens.css). Nenhuma das duas pisa na outra.");
+linhas.push(" * 2) ESCALA. O app tinha 15 tamanhos acima do piso; a escala tem 8. Os valores");
+linhas.push(" *    que nao sao degrau sao encaixados NO DEGRAU DE CIMA -- encaixar para o de");
+linhas.push(" *    baixo encolheria texto, que e justamente o defeito que o piso corrigiu.");
+linhas.push(" *");
+linhas.push(" * Como funciona, nos dois casos: repete o MESMO seletor da regra original.");
+linhas.push(" * Especificidade igual, declaracao depois -> a ultima vence. Um numero grande");
+linhas.push(" * declarado por outro seletor nao e alcancado, e o `!important` e espelhado,");
+linhas.push(" * nunca forcado. So a raiz entra: o app nao declara nenhum font-size em @media");
+linhas.push(" * acima de 620px, entao de 621 para cima so a raiz governa.");
+linhas.push(" *");
+linhas.push(" * Escopo `min-width: 621px`: a camada de campo (campo-tipografia.css) cobre ate");
+linhas.push(" * 900px com o dedo, e as duas usam os mesmos tokens. Nenhuma pisa na outra.");
 linhas.push(" *");
 linhas.push(" * O corte em 621 e nao em 901 de proposito: um portatil do Windows a 150% de");
 linhas.push(" * escala entrega ~853px de largura CSS -- e mesa, e ficaria de fora de 901.");
 linhas.push(" *");
-linhas.push(` * ${total} seletores em ${ordenados.length} blocos.`);
+linhas.push(` * ${total} seletores no piso em ${ordenados.length} blocos;`);
+linhas.push(` * ${foraDaEscala.length} seletores encaixados na escala em ${escalaOrdenada.length} blocos.`);
 linhas.push(" */");
 linhas.push("");
 linhas.push(`@media (min-width: ${PORTAO}px) {`);
@@ -180,6 +248,22 @@ for (const g of ordenados) {
   linhas.push(`  /* o app declarava ${g.valorTxt} nestes ${g.seletores.size} seletores */`);
   linhas.push(`  ${seletores} {`);
   linhas.push(`    ${declaracao}`);
+  linhas.push("  }");
+  linhas.push("");
+}
+
+linhas.push("  /* ---------------------------------------------------------------------");
+linhas.push("     ESCALA: valores que nao eram degrau, encaixados no degrau DE CIMA.");
+linhas.push("     Os degraus em si (12,5 / 14 / 16 / 18 / 20 / 22 / 24 / 26) nao entram");
+linhas.push("     aqui: ja estao no tamanho certo, e repetir o seletor so criaria regra");
+linhas.push("     sem efeito. Ver theme-tokens.css para o porque de cada degrau. */");
+linhas.push("");
+for (const g of escalaOrdenada) {
+  const seletores = [...g.seletores].sort((a, b) => a.localeCompare(b)).join(",\n  ");
+  const origem = [...g.origem].sort((a, b) => parseFloat(a) - parseFloat(b)).map((o) => `${o} -> ${g.alvo}`).join(", ");
+  linhas.push(`  /* ${g.seletores.size} seletores: ${origem} */`);
+  linhas.push(`  ${seletores} {`);
+  linhas.push(`    font-size: var(${g.token})${g.importante ? " !important" : ""};`);
   linhas.push("  }");
   linhas.push("");
 }
