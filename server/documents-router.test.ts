@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 /**
  * Contrato do router de documentos da obra.
@@ -11,12 +11,28 @@ import { describe, expect, it } from "vitest";
 type Esquema = { safeParse: (valor: unknown) => { success: boolean } };
 type Procedimento = { _def: { inputs: Esquema[] } };
 
+// Teto do setup de carga do router. Nao e o timeout do teste: e o `beforeAll`
+// abaixo, que roda uma unica vez fora do orcamento do `it`. ~6x o maior init
+// medido (5086 ms) — folga para maquina lenta/antivirus, sem mascarar um
+// travamento real (o import e init de modulo, sem I/O de rede).
+const TIMEOUT_DE_CARGA_DO_ROUTER_MS = 30_000;
+
 async function procedimentos(): Promise<Record<string, Procedimento>> {
   const { appRouter } = await import("./routers");
   return appRouter._def.procedures as unknown as Record<string, Procedimento>;
 }
 
 describe("documents router", () => {
+  // `./routers` puxa a cadeia pesada (drizzle/schema, agent/*, construction/*,
+  // price-sources) e o init SINCRONO custa ~3,6-5,1 s nesta maquina (medido em
+  // 5 execucoes isoladas: 5086/4134/3619/3612/4580 ms). Dentro do corpo de um
+  // `it`, esse custo caia no teto de 5000 ms e estourava de forma intermitente:
+  // o 1o teste carregava o modulo, os demais ja o achavam em cache (1-3 ms).
+  // Aqui a carga sai do teste e vai para o setup unico, com teto proprio.
+  beforeAll(async () => {
+    await procedimentos();
+  }, TIMEOUT_DE_CARGA_DO_ROUTER_MS);
+
   it("expõe as quatro operações previstas", async () => {
     const procs = await procedimentos();
     for (const nome of [
