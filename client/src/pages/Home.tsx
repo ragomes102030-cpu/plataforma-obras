@@ -595,39 +595,96 @@ function EscolhaDeObra({ obras, carregando, onEscolher, onNovaObra, onObraDemo, 
   onObraDemo: () => void;
   criandoDemo: boolean;
 }) {
+  const [busca, setBusca] = useState("");
+  const termo = busca.trim().toLocaleLowerCase("pt-BR");
+  const filtradas = obras.filter(o =>
+    [o.name, o.code, o.location].filter(Boolean).some(valor => String(valor).toLocaleLowerCase("pt-BR").includes(termo)),
+  );
+
   return (
-    <div className="xl-area xl-escolha">
-      <div className="xl-escolha-topo">
-        <span className="xl-escolha-marca"><Layers3 size={18} /> Escolha a obra</span>
-        <span className="xl-escolha-acoes">
-          <button type="button" className="xl-btn-neutro" onClick={onObraDemo} disabled={criandoDemo}>
-            <Sparkles size={15} /> {criandoDemo ? "Montando." : "Obra demonstrativa"}
-          </button>
-          <button type="button" className="xl-btn-entrar" onClick={onNovaObra}>
-            <Plus size={15} /> Nova obra
-          </button>
-        </span>
-      </div>
-      {carregando ? (
-        <p className="xl-escolha-vazio">Carregando obras.</p>
-      ) : obras.length === 0 ? (
-        <p className="xl-escolha-vazio">Nenhuma obra ainda. Crie a primeira em "Nova obra".</p>
-      ) : (
-        <ul className="xl-escolha-lista">
-          {obras.map(o => (
-            <li key={o.id}>
-              <button type="button" className="xl-escolha-linha" onClick={() => onEscolher(o.id)}>
-                <span className="xl-escolha-linha-texto">
-                  <strong>{o.name}</strong>
-                  <small>{[o.code, o.location].filter(Boolean).join(" · ") || "Sem código"}</small>
+    <main className="arq-obras">
+      <div className="arq-obras-fundo" aria-hidden="true" />
+      <header className="arq-obras-header">
+        <a href="/" className="arq-obras-marca" aria-label="Arquimedes — página inicial">
+          <span className="arq-obras-simbolo"><Layers3 size={20} /></span>
+          <span><strong>ARQUIMEDES</strong><small>PLANEJAMENTO DE OBRAS</small></span>
+        </a>
+        <div className="arq-obras-header-meta"><span className="arq-obras-status" /> AMBIENTE DE TRABALHO</div>
+      </header>
+
+      <section className="arq-obras-conteudo">
+        <div className="arq-obras-intro">
+          <div>
+            <p className="arq-obras-eyebrow">ESPAÇO DE TRABALHO</p>
+            <h1>Suas obras<span>.</span></h1>
+            <p className="arq-obras-subtitulo">Selecione um projeto para continuar o planejamento ou inicie uma nova obra.</p>
+          </div>
+          <div className="arq-obras-acoes">
+            <button type="button" className="arq-obras-btn-secundario" onClick={onObraDemo} disabled={criandoDemo}>
+              <Sparkles size={16} /> {criandoDemo ? "Preparando demonstração…" : "Ver obra demonstrativa"}
+            </button>
+            <button type="button" className="arq-obras-btn-primario" onClick={onNovaObra}>
+              <Plus size={17} /> Nova obra
+            </button>
+          </div>
+        </div>
+
+        <div className="arq-obras-toolbar">
+          <div className="arq-obras-contagem"><strong>{carregando ? "…" : filtradas.length}</strong><span>{filtradas.length === 1 ? "obra" : "obras"} {termo ? "encontradas" : "no seu espaço"}</span></div>
+          <label className="arq-obras-busca">
+            <Search size={17} aria-hidden="true" />
+            <input value={busca} onChange={evento => setBusca(evento.target.value)} placeholder="Buscar por nome, código ou local" aria-label="Buscar obras" />
+            {busca && <button type="button" onClick={() => setBusca("")} aria-label="Limpar busca"><X size={15} /></button>}
+          </label>
+        </div>
+
+        {carregando ? (
+          <div className="arq-obras-estado" role="status"><span className="arq-obras-spinner" /><strong>Carregando suas obras</strong><p>Estamos preparando seu espaço de trabalho.</p></div>
+        ) : filtradas.length === 0 ? (
+          <div className="arq-obras-vazio">
+            <span className="arq-obras-vazio-icone"><Layers3 size={27} /></span>
+            <h2>{termo ? "Nenhuma obra encontrada" : "Seu espaço começa aqui"}</h2>
+            <p>{termo ? "Tente outro nome, código ou local." : "Crie a primeira obra para começar a estruturar a EAP, os quantitativos e o cronograma."}</p>
+            {termo ? (
+              <button type="button" className="arq-obras-btn-secundario" onClick={() => setBusca("")}>Limpar busca</button>
+            ) : (
+              <button type="button" className="arq-obras-btn-primario" onClick={onNovaObra}><Plus size={17} /> Criar primeira obra</button>
+            )}
+          </div>
+        ) : (
+          <div className="arq-obras-grade">
+            {filtradas.map((obra, indice) => (
+              <button type="button" className={`arq-obra-card arq-obra-card--${indice % 3}`} key={obra.id} onClick={() => onEscolher(obra.id)}>
+                <span className="arq-obra-capa" aria-hidden="true">
+                  <span className="arq-obra-capa-grade" />
+                  <span className="arq-obra-capa-selo"><Layers3 size={13} /> PROJETO</span>
+                  <span className="arq-obra-ilustracao"><span /><span /><span /><span /><span /></span>
+                  <span className="arq-obra-capa-rodape">ARQ / {String(indice + 1).padStart(2, "0")}</span>
                 </span>
-                <ArrowRight size={17} className="xl-escolha-seta" />
+                <span className="arq-obra-info">
+                  <span className="arq-obra-codigo">{obra.code || "OBRA SEM CÓDIGO"}</span>
+                  <strong className="arq-obra-nome">{obra.name}</strong>
+                  <span className="arq-obra-local">{obra.location || "Local não informado"}</span>
+                  <span className="arq-obra-abrir">Abrir planejamento <ArrowRight size={15} /></span>
+                </span>
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+            ))}
+            {!termo && (
+              <button type="button" className="arq-obra-nova-card" onClick={onNovaObra}>
+                <span className="arq-obra-nova-icone"><Plus size={22} /></span>
+                <strong>Adicionar nova obra</strong>
+                <span>Comece um novo planejamento</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <footer className="arq-obras-rodape">
+          <span><ShieldAlert size={15} /> Cada obra mantém seu próprio planejamento e histórico.</span>
+          <span>ARQUIMEDES · ENGENHARIA COM MÉTODO</span>
+        </footer>
+      </section>
+    </main>
   );
 }
 
