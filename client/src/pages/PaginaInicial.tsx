@@ -9,6 +9,7 @@ import {
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import "@/entrada.css";
+import "../animations.css";
 
 /**
  * Página inicial (pública, rota `/`).
@@ -46,7 +47,7 @@ export default function PaginaInicial() {
   const autenticado = Boolean(user);
 
   return (
-    <main className="entrada-tela">
+    <main className="entrada-tela animate-fade-in-up">
       <section className="entrada-cartao entrada-cartao--larga">
         <div className="entrada-marca">
           <span className="entrada-marca-icone" aria-hidden="true">
