@@ -3,7 +3,6 @@ import {
   BarChart3,
   CalendarDays,
   Check,
-  Github,
   Layers3,
   Network,
   ShieldCheck,
@@ -16,18 +15,33 @@ import "../animations.css";
 const RECURSOS = [
   {
     icone: Layers3,
-    titulo: "Escopo rastreável",
-    texto: "EAP, pacotes de trabalho e quantitativos ligados à mesma estrutura.",
-  },
-  {
-    icone: Network,
-    titulo: "Cronograma calculado",
-    texto: "Dependências, CPM, caminho crítico e linha de base com critérios claros.",
+    titulo: "EAP e escopo",
+    texto: "Organize a obra em fases, serviços e pacotes de trabalho, com critérios de aceitação e informações rastreáveis.",
   },
   {
     icone: BarChart3,
-    titulo: "Controle integrado",
-    texto: "Medição física e financeira para entender desvios e tomar decisões.",
+    titulo: "Quantitativos e orçamento",
+    texto: "Estruture os quantitativos por serviço e conecte o escopo às informações necessárias para compor o orçamento.",
+  },
+  {
+    icone: Network,
+    titulo: "Atividades e dependências",
+    texto: "Transforme os pacotes em atividades, defina durações e relações lógicas entre os serviços.",
+  },
+  {
+    icone: CalendarDays,
+    titulo: "CPM e linha de base",
+    texto: "Calcule a rede, identifique o caminho crítico e estabeleça uma referência aprovada para acompanhar o prazo.",
+  },
+  {
+    icone: Layers3,
+    titulo: "Gantt e Linha de Balanço",
+    texto: "Visualize a programação no tempo e, em obras repetitivas, acompanhe a distribuição dos serviços por unidade ou frente.",
+  },
+  {
+    icone: BarChart3,
+    titulo: "Medição e controle",
+    texto: "Compare o avanço planejado com o realizado, observe desvios e apoie decisões com informações organizadas.",
   },
 ];
 
@@ -120,10 +134,12 @@ export default function PaginaInicial() {
         <a className="arq-marca-link" href="/" aria-label="Arquimedes, página inicial"><Marca /></a>
         <div className="arq-header-acoes">
           <span className="arq-header-legenda">PLATAFORMA DE ENGENHARIA</span>
-          <button type="button" className="arq-btn arq-btn--outline" onClick={() => setLocation(autenticado ? "/obras" : "/login")}>
-            {autenticado ? "Minhas obras" : "Entrar"}
-            <ArrowRight size={16} />
-          </button>
+          {!autenticado && (
+            <button type="button" className="arq-btn arq-btn--outline" onClick={() => setLocation("/login")}>
+              Entrar
+              <ArrowRight size={16} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -133,11 +149,11 @@ export default function PaginaInicial() {
           <p className="arq-overline">DA EAP À ENTREGA</p>
           <h1>Obras bem planejadas começam com <em>clareza.</em></h1>
           <p className="arq-hero-descricao">
-            O Arquimedes conecta escopo, quantitativos, orçamento e cronograma em um só ambiente — para o engenheiro planejar com método e acompanhar com confiança.
+            Uma plataforma de planejamento e controle de obras que organiza o escopo e conecta EAP, quantitativos, orçamento, atividades, dependências e cronograma — ajudando o engenheiro a estruturar o plano e acompanhar sua execução com mais clareza.
           </p>
           <div className="arq-hero-acoes">
             <button type="button" className="arq-btn arq-btn--primary" onClick={() => setLocation(autenticado ? "/obras" : "/login")}>
-              {autenticado ? "Acessar minhas obras" : "Entrar no Arquimedes"}
+              {autenticado ? "Acessar minhas obras" : "Acessar a plataforma"}
               <ArrowRight size={18} />
             </button>
             <span className="arq-acesso-nota"><ShieldCheck size={16} /> Acesso protegido pela sua conta</span>
@@ -169,9 +185,8 @@ export default function PaginaInicial() {
       </section>
 
       <footer className="arq-landing-footer">
-        <Marca compacta />
-        <span>Planejamento técnico. Decisões com fundamento.</span>
-        <span className="arq-footer-direitos">© Arquimedes</span>
+        <span>Planejamento e controle de obras</span>
+        <span>Do escopo ao acompanhamento, com método e rastreabilidade.</span>
       </footer>
     </main>
   );
