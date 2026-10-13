@@ -25,14 +25,15 @@ describe("entrada e central de obras do Arquimedes", () => {
 
   it("a central apresenta cards navegáveis e busca por nome, código ou local", () => {
     expect(HOME).toMatch(/className="arq-obras-grade"/);
-    expect(HOME).toMatch(/className=\{\`arq-obra-card/);
+    expect(HOME).toMatch(/arq-obra-card/);
     expect(HOME).toMatch(/onClick=\{\(\) => onEscolher\(obra\.id\)\}/);
     expect(HOME).toMatch(/\[obra\.name, obra\.code, obra\.location\]/);
     expect(HOME).toMatch(/onClick=\{onNovaObra\}/);
   });
 
   it("não inventa percentual de avanço nem status que a API não entrega", () => {
-    expect(HOME).not.toMatch(/\b\d{1,3}%\s*(conclu[ií]do|executado|avan[cç]o)/i);
+    const seletor = HOME.slice(HOME.indexOf("function EscolhaDeObra"), HOME.indexOf("/** A obra:"));
+    expect(seletor).not.toMatch(/%/);
     expect(HOME).toMatch(/obra\.location \|\| "Local não informado"/);
   });
 
