@@ -1,6 +1,7 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, Check, MoreVertical, ArchiveRestore, LogOut, LogIn } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, Check, MoreVertical, ArchiveRestore, LogOut, ArrowRight } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
 import { CentralComandoArquimedes } from "@/components/CentralComandoArquimedes";
@@ -55,13 +56,14 @@ import "@/eap.css";
  */
 
 type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
-type Destino = "obra" | "catalogo" | "config";
 
 export default function Home() {
   const { user } = useAuth();
-  const [destino, setDestino] = useState<Destino>("obra");
+  const [, setLocation] = useLocation();
+  const [rotaDaObra, parametrosDaRota] = useRoute("/obra/:id");
+  const ehRotaDeObra = Boolean(rotaDaObra);
+  const idNaUrl = ehRotaDeObra ? Number(parametrosDaRota?.id) : null;
   const [aba, setAba] = useState<IdDaAba>("dashboard");
-  const [obraId, setObraId] = useState<number | null>(null);
   const [novaObraAberta, setNovaObraAberta] = useState(false);
   const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);
   const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
@@ -74,9 +76,6 @@ export default function Home() {
   const [seletorDeObraAberto, setSeletorDeObraAberto] = useState(false);
   const [buscaDeObra, setBuscaDeObra] = useState("");
   const [menuDaObra, setMenuDaObra] = useState<number | null>(null);
-  // Menu "Mais" do celular (destinos, lixeira, sair). No computador a fileira
-  // inteira cabe, entao o botao nem aparece.
-  const [menuDoTopoAberto, setMenuDoTopoAberto] = useState(false);
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -92,8 +91,12 @@ export default function Home() {
   const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> =
     (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> | undefined) ?? [];
   const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
-  const obra = obraId == null ? lista[0] : lista.find(o => o.id === obraId);
+  const obra =
+    idNaUrl == null || Number.isNaN(idNaUrl)
+      ? undefined
+      : lista.find(o => o.id === idNaUrl);
   const projetoId = obra?.id ?? null;
+  const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
 
   // O seletor de obra lista TODAS as obras, inclusive as que estao com a aba
   // fechada -- e por ele que se reabre uma. A busca olha nome, codigo, local e
@@ -108,8 +111,7 @@ export default function Home() {
     : lista;
 
   const abrirObra = (id: number) => {
-    setObraId(id);
-    setDestino("obra");
+    setLocation(`/obra/${id}`);
     // Escolher pelo seletor tambem reabre a aba, se ela estava fechada: o
     // seletor sempre oferece todas, a faixa so mostra as abertas.
     setObrasOcultas(atuais => atuais.filter(oculta => oculta !== id));
@@ -118,14 +120,13 @@ export default function Home() {
     setMenuDaObra(null);
   };
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
-  const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setObraId(null); setDestino("obra"); } });
+  const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
   const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });
 
   const criarDemo = trpc.projects.createDemoGantt.useMutation({
     onSuccess: async created => {
       await obras.refetch();
-      setObraId(created.id);
-      setDestino("obra");
+      setLocation(`/obra/${created.id}`);
       setAba("gantt");
     },
   });
@@ -148,8 +149,7 @@ export default function Home() {
   const criarObra = trpc.projects.create.useMutation({
     onSuccess: async created => {
       await obras.refetch();
-      setObraId(created.id);
-      setDestino("obra");
+      setLocation(`/obra/${created.id}`);
       setAba("eap");
       setNovaObraAberta(false);
     },
@@ -162,9 +162,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const openConfig = () => setDestino("config");
-    const openEap = () => { setDestino("obra"); setAba("eap"); };
-    const openAtividades = () => { setDestino("obra"); setAba("atividades"); };
+    const openConfig = () => setAba("comando");
+    const openEap = () => setAba("eap");
+    const openAtividades = () => setAba("atividades");
     window.addEventListener("abrir-configuracao-llm", openConfig);
     window.addEventListener("abrir-aba-eap", openEap);
     window.addEventListener("abrir-aba-atividades", openAtividades);
@@ -177,6 +177,7 @@ export default function Home() {
 
   return (
     <div className="xl-app">
+      {mostrarTituloDaObra && (
       <header className="xl-titlebar">
         {/*
           O nome da obra no topo era um rotulo morto: a unica forma de trocar de
@@ -274,7 +275,7 @@ export default function Home() {
                     </p>
                   )}
                   {obrasBuscadas.map(o => {
-                    const ativa = o.id === obra?.id && destino === "obra";
+                    const ativa = o.id === obra?.id;
                     const abaFechada = obrasOcultas.includes(o.id);
                     return (
                       <div key={o.id} className={`xl-seletor-linha${ativa ? " ativa" : ""}`}>
@@ -406,15 +407,12 @@ export default function Home() {
           {obrasVisiveis.map(o => (
             <div
               key={o.id}
-              className={`xl-obra-chip-wrap${o.id === obra?.id && destino === "obra" ? " ativa" : ""}`}
+              className={`xl-obra-chip-wrap${o.id === obra?.id ? " ativa" : ""}`}
             >
               <button
                 type="button"
                 className="xl-obra-chip"
-                onClick={() => {
-                  setObraId(o.id);
-                  setDestino("obra");
-                }}
+                onClick={() => setLocation(`/obra/${o.id}`)}
                 title={o.name}
               >
                 {o.name}
@@ -431,9 +429,9 @@ export default function Home() {
                 className="xl-obra-chip-fechar"
                 onClick={() => {
                   setObrasOcultas(ocultas => [...ocultas, o.id]);
-                  if (obraId === o.id) {
+                  if (obra?.id === o.id) {
                     const proxima = obrasVisiveis.find(v => v.id !== o.id);
-                    if (proxima) setObraId(proxima.id);
+                    setLocation(proxima ? `/obra/${proxima.id}` : "/obras");
                   }
                 }}
                 title="Fechar esta aba (não exclui a obra)"
@@ -483,172 +481,8 @@ export default function Home() {
             <X size={13} />
           </button>
         )}
-
-        <div className="xl-titlebar-fim">
-          {/*
-            No celular estes quatro saem da barra e passam para o menu "Mais"
-            (`.xl-topo-menu`), com o rotulo escrito. Motivo medido: com os alvos
-            de 44px, os seis botoes da fileira somavam 547px num viewport de
-            390px, entao a fileira rolava de lado e deixava "Lixeira" e "Sair"
-            fora da tela (x=477 e x=508) -- acao invisivel. O menu resolve sem
-            encurtar rotulo nem encolher alvo.
-          */}
-          <button
-            type="button"
-            className={`xl-tb-btn xl-tb-destino${destino === "obra" ? " ativo" : ""}`}
-            onClick={() => setDestino("obra")}
-          >
-            Obra
-          </button>
-          <button
-            type="button"
-            className={`xl-tb-btn xl-tb-destino${destino === "catalogo" ? " ativo" : ""}`}
-            onClick={() => setDestino("catalogo")}
-          >
-            Catálogo
-          </button>
-          <button
-            type="button"
-            className="xl-tb-btn xl-tb-destino xl-tb-arquimedes"
-            onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}
-            title="Abrir o Arquimedes"
-          >
-            <Bot size={13} /> Arquimedes
-          </button>
-          {user?.role === "admin" && (
-            <button
-              type="button"
-              className={`xl-tb-btn xl-tb-destino${destino === "config" ? " ativo" : ""}`}
-              onClick={() => setDestino("config")}
-            >
-              <Sparkles size={13} /> Central de Comando
-            </button>
-          )}
-          {/*
-            A lixeira estava FORA do cabecalho, solta logo abaixo dele: media
-            1420x32 no computador, uma barra atravessando a pagina inteira, sem
-            relacao visual com as outras acoes. Aqui ela entra na fileira de
-            acoes globais, com contador, no mesmo tamanho dos vizinhos.
-          */}
-          <button
-            type="button"
-            className="xl-tb-btn xl-tb-lixeira"
-            onClick={() => setLixeiraAberta(true)}
-            title="Abrir a lixeira de obras"
-          >
-            <Trash2 size={13} /> Lixeira{lixeira.data?.length ? ` (${lixeira.data.length})` : ""}
-          </button>
-          {user ? (
-            <>
-              <span className="xl-tb-user" title={user.name || "Conta"}>
-                {(user.name || "R").charAt(0).toUpperCase()}
-              </span>
-              <button
-                type="button"
-                className="xl-tb-btn xl-tb-auth"
-                onClick={() => { window.location.href = "/api/auth/logout"; }}
-                title="Sair da conta e permitir novo login"
-              >
-                Sair
-              </button>
-            </>
-          ) : user === null ? (
-            <button
-              type="button"
-              className="xl-tb-btn xl-tb-auth"
-              onClick={startLogin}
-              title="Entrar com GitHub"
-            >
-              Entrar
-            </button>
-          ) : null}
-
-          {/*
-            Menu "Mais" do celular: guarda os destinos, a lixeira e a saida, com
-            rotulo escrito, para a barra do topo caber numa linha so.
-          */}
-          <div className="xl-topo-mais">
-            <button
-              type="button"
-              className="xl-tb-btn xl-tb-mais"
-              onClick={() => setMenuDoTopoAberto(aberto => !aberto)}
-              aria-expanded={menuDoTopoAberto}
-              aria-haspopup="menu"
-              aria-label="Mais ações"
-              title="Mais ações"
-            >
-              <MoreVertical size={16} />
-            </button>
-            {menuDoTopoAberto && (
-              <>
-                <button
-                  type="button"
-                  className="xl-seletor-fundo"
-                  aria-label="Fechar"
-                  onClick={() => setMenuDoTopoAberto(false)}
-                />
-                <div className="xl-topo-menu" role="menu">
-                  <span className="xl-topo-menu-titulo">{user?.name || "Conta"}</span>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={destino === "obra" ? "ativo" : ""}
-                    onClick={() => { setDestino("obra"); setMenuDoTopoAberto(false); }}
-                  >
-                    <Layers3 size={15} /> Planejamento da obra
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={destino === "catalogo" ? "ativo" : ""}
-                    onClick={() => { setDestino("catalogo"); setMenuDoTopoAberto(false); }}
-                  >
-                    <Package size={15} /> Catálogo de insumos
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { window.dispatchEvent(new CustomEvent("abrir-arquimedes")); setMenuDoTopoAberto(false); }}
-                  >
-                    <Bot size={15} /> Abrir o Arquimedes
-                  </button>
-                  {user?.role === "admin" && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={destino === "config" ? "ativo" : ""}
-                      onClick={() => { setDestino("config"); setMenuDoTopoAberto(false); }}
-                    >
-                      <Sparkles size={15} /> Central de Comando
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setLixeiraAberta(true); setMenuDoTopoAberto(false); }}
-                  >
-                    <Trash2 size={15} /> Lixeira de obras
-                  </button>
-                  {user ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="xl-topo-menu-sair"
-                      onClick={() => { window.location.href = "/api/auth/logout"; }}
-                    >
-                      <LogOut size={15} /> Sair da conta
-                    </button>
-                  ) : (
-                    <button type="button" role="menuitem" onClick={startLogin}>
-                      <LogIn size={15} /> Entrar com GitHub
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
       </header>
+      )}
 
       {novaObraAberta && (
         <NovaObraDialog
@@ -720,10 +554,15 @@ export default function Home() {
         </div>
       )}
 
-      {destino === "config" ? (
-        <CentralComandoArquimedes />
-      ) : destino === "catalogo" ? (
-        <AbaCatalogo />
+      {!ehRotaDeObra && user ? (
+        <EscolhaDeObra
+          obras={lista.map(o => ({ id: o.id, name: o.name, code: o.code, location: o.location ?? "" }))}
+          carregando={obras.isPending}
+          onEscolher={id => setLocation(`/obra/${id}`)}
+          onNovaObra={() => setNovaObraAberta(true)}
+          onObraDemo={() => criarDemo.mutate()}
+          criandoDemo={criarDemo.isPending}
+        />
       ) : user === undefined ? (
         // A sessão ainda está sendo lida. `undefined` é espera; `null` é
         // ausência. Confundir os dois é o que prendia a tela.
@@ -734,7 +573,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} />
+          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -743,6 +582,50 @@ export default function Home() {
           */}
           <JanelaAgente projetoId={projetoId} obra={obra!.name} abaAtual={aba} />
         </>
+      )}
+    </div>
+  );
+}
+
+function EscolhaDeObra({ obras, carregando, onEscolher, onNovaObra, onObraDemo, criandoDemo }: {
+  obras: Array<{ id: number; name: string; code: string; location: string }>;
+  carregando: boolean;
+  onEscolher: (id: number) => void;
+  onNovaObra: () => void;
+  onObraDemo: () => void;
+  criandoDemo: boolean;
+}) {
+  return (
+    <div className="xl-area xl-escolha">
+      <div className="xl-escolha-topo">
+        <span className="xl-escolha-marca"><Layers3 size={18} /> Escolha a obra</span>
+        <span className="xl-escolha-acoes">
+          <button type="button" className="xl-btn-neutro" onClick={onObraDemo} disabled={criandoDemo}>
+            <Sparkles size={15} /> {criandoDemo ? "Montando." : "Obra demonstrativa"}
+          </button>
+          <button type="button" className="xl-btn-entrar" onClick={onNovaObra}>
+            <Plus size={15} /> Nova obra
+          </button>
+        </span>
+      </div>
+      {carregando ? (
+        <p className="xl-escolha-vazio">Carregando obras.</p>
+      ) : obras.length === 0 ? (
+        <p className="xl-escolha-vazio">Nenhuma obra ainda. Crie a primeira em "Nova obra".</p>
+      ) : (
+        <ul className="xl-escolha-lista">
+          {obras.map(o => (
+            <li key={o.id}>
+              <button type="button" className="xl-escolha-linha" onClick={() => onEscolher(o.id)}>
+                <span className="xl-escolha-linha-texto">
+                  <strong>{o.name}</strong>
+                  <small>{[o.code, o.location].filter(Boolean).join(" · ") || "Sem código"}</small>
+                </span>
+                <ArrowRight size={17} className="xl-escolha-seta" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -761,6 +644,9 @@ function Obra({
   bdiDeclarado,
   aba,
   onAba,
+  usuario,
+  onLixeira,
+  lixeiraCount,
 }: {
   projetoId: number;
   obra: string;
@@ -773,6 +659,9 @@ function Obra({
   bdiDeclarado: string;
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
+  usuario: { name?: string | null; role?: string | null } | null;
+  onLixeira: () => void;
+  lixeiraCount: number;
 }) {
   const [sidebarRecolhida, setSidebarRecolhida] = useState(false);
   // No celular a sidebar vira DRAWER. Sem isto ela ocupa a largura toda em
@@ -836,6 +725,8 @@ function Obra({
     financeiro: <WalletCards size={17} />,
     riscos: <ShieldAlert size={17} />,
     "curva-s": <BarChart3 size={17} />,
+    catalogo: <Package size={17} />,
+    comando: <Sparkles size={17} />,
   };
 
   const grupos = [
@@ -843,6 +734,7 @@ function Obra({
     { titulo: "PLANEJAMENTO", ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"] },
     { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
     { titulo: "CONTROLE", ids: ["producao", "documentos", "suprimentos", "financeiro", "riscos", "curva-s"] },
+    { titulo: "SISTEMA", ids: ["catalogo", "comando"] },
   ];
 
   const etapaAtual = ({
@@ -877,6 +769,9 @@ function Obra({
               {grupo.ids.map(id => {
                 const a = ABAS.find(item => item.id === id);
                 if (!a) return null;
+                // Central de Comando é admin-only: escondida no menu, não só
+                // desabilitada. O gate vive aqui, no dono da navegação.
+                if (a.id === "comando" && usuario?.role !== "admin") return null;
                 return (
                   <button
                     key={a.id}
@@ -896,8 +791,43 @@ function Obra({
               })}
             </div>
           ))}
+          <div className="xl-sidebar-group">
+            {!sidebarRecolhida && <div className="xl-sidebar-label">AÇÕES</div>}
+            <button
+              type="button"
+              className="xl-sidebar-item"
+              onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}
+              title={sidebarRecolhida ? "Arquimedes" : "Abrir o Arquimedes"}
+            >
+              <Bot size={17} />
+              {!sidebarRecolhida && <span>Arquimedes</span>}
+            </button>
+            <button
+              type="button"
+              className="xl-sidebar-item"
+              onClick={onLixeira}
+              title={sidebarRecolhida ? "Lixeira" : "Lixeira de obras"}
+            >
+              <Trash2 size={17} />
+              {!sidebarRecolhida && <span>Lixeira{lixeiraCount ? ` (${lixeiraCount})` : ""}</span>}
+            </button>
+          </div>
         </nav>
 
+        <div className="xl-sidebar-pe">
+          <span className="xl-sidebar-user" title={usuario?.name || "Conta"}>
+            {(usuario?.name || "R").charAt(0).toUpperCase()}
+          </span>
+          {!sidebarRecolhida && <span className="xl-sidebar-user-nome">{usuario?.name || "Conta"}</span>}
+          <button
+            type="button"
+            className="xl-sidebar-sair"
+            onClick={() => { window.location.href = "/api/auth/logout"; }}
+            title="Sair da conta"
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
       </aside>
 
       <main className="xl-area xl-area-sidebar">
@@ -954,6 +884,10 @@ function Obra({
           <AbaRiscos projetoId={projetoId} />
         ) : aba === "curva-s" ? (
           <AbaCurvaS projetoId={projetoId} hoje={hoje} />
+        ) : aba === "catalogo" ? (
+          <AbaCatalogo />
+        ) : aba === "comando" ? (
+          <CentralComandoArquimedes />
         ) : (
           <AbaVazia titulo={definicao?.rotulo ?? aba} falta={definicao?.falta ?? ""} />
         )}

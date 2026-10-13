@@ -79,3 +79,66 @@ html body .xl-pasta-sidebar .xl-sidebar-item.ativa svg { color: #65d4e9; }
 
 /* --- ponto de etapa pendente --- */
 html body .xl-pasta-sidebar .xl-sidebar-status { color: #d9a441; }           /*  7,88:1 */
+
+/* --- rodape da sidebar: a conta desceu do topo para o pe ------------------- */
+
+/* O avatar, o nome e a saida eram a acao global do cabecalho; com a escolha de
+   obra saiu da obra, a conta sobrou e desceu para o pe da sidebar. Aqui so o
+   alinhamento e o contraste -- a `eap.css` ainda desenha item e cabecalho. */
+html body .xl-pasta-sidebar .xl-sidebar-pe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #263542;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-user {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #173d50;
+  color: #65d4e9;                                                            /*  6,68:1 sobre o proprio fundo */
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-user-nome {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #9eb0bf;                                                            /*  7,94:1 */
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-sair {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #33465a;
+  border-radius: 8px;
+  background: #1b2a37;
+  color: #9eb0bf;                                                            /*  5,63:1 sobre o proprio fundo */
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-sair:hover {
+  background: #223343;
+  border-color: #3d5266;
+  color: #fff;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-sair svg { color: #91a5b4; }         /*  6,96:1 */
+html body .xl-pasta-sidebar .xl-sidebar-sair:hover svg { color: #65d4e9; }
