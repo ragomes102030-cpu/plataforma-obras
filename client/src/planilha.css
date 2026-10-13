@@ -332,7 +332,7 @@
   padding: 4px 10px 6px !important;
   font-size: 11px;
   font-style: italic;
-  color: #7a848e;
+  color: #68717a;
   background: #f4f6f8;
   border-left: none;
   position: sticky;
@@ -354,7 +354,7 @@
   top: 60px;
   z-index: 5;
   background: #eef1f4;
-  color: #8b95a1;
+  color: #626c79;
   font-size: 10px;
   text-align: center;
   padding: 2px 0 !important;
@@ -378,7 +378,7 @@
 
 .xl-cab-nomes th.xl-derivada {
   background: #dde3e9;
-  color: #6b7683;
+  color: #646e7b;
 }
 
 .xl-cab-linha .xl-canto,
@@ -389,7 +389,7 @@
   min-width: 42px;
   background: #dde3e9;
   text-align: center;
-  color: #8b95a1;
+  color: #626c79;
   font-size: 10px;
 }
 
@@ -443,7 +443,7 @@ tr:hover .xl-codigo {
 }
 
 .xl-codigo {
-  color: #6b7683;
+  color: #646e7b;
   font-size: 11px;
   padding: 0 7px !important;
   font-variant-numeric: tabular-nums;
@@ -539,7 +539,7 @@ tr:hover .xl-codigo {
 
 .xl-nao-iniciado .xl-etiqueta {
   background: #e4e8ec;
-  color: #6b7683;
+  color: #646e7b;
 }
 
 .xl-concluido .xl-medidor > span {
@@ -574,7 +574,7 @@ tr:hover .xl-codigo {
 .xl-vazia {
   padding: 40px !important;
   text-align: center;
-  color: #6b7683;
+  color: #646e7b;
   height: auto !important;
 }
 
@@ -660,7 +660,7 @@ tr:hover .xl-codigo {
 .xl-rodape-info {
   flex: 0 0 auto;
   font-size: 10.5px;
-  color: #7a848e;
+  color: #68717a;
   padding-bottom: 5px;
   white-space: nowrap;
 }
@@ -720,7 +720,7 @@ tr:hover .xl-codigo {
 .xl-vazia-nota {
   margin: 0;
   font-size: 12.5px;
-  color: #8b95a1;
+  color: #626c79;
   line-height: 1.5;
 }
 
@@ -734,7 +734,7 @@ tr:hover .xl-codigo {
 }
 
 .xl-painel-vazio {
-  color: #6b7683;
+  color: #646e7b;
   font-size: 13px;
   padding: 32px 0;
 }
@@ -831,7 +831,7 @@ tr:hover .xl-codigo {
 
 .xl-status-nota {
   font-size: 11px;
-  color: #8b95a1;
+  color: #626c79;
 }
 
 /* ------------------------------------------------- janela do agente (flutuante)
@@ -988,7 +988,7 @@ tr:hover .xl-codigo {
 
 .janela-msg-pendente {
   align-self: flex-start;
-  color: #8b95a1;
+  color: #626c79;
   background: #f4f6f8;
   font-style: italic;
 }
@@ -1071,7 +1071,7 @@ tr:hover .xl-codigo {
 }
 
  .janela-agente-form textarea:disabled {
-  color: #8b95a1;
+  color: #626c79;
   background: #f4f6f8;
 }
 
@@ -1089,7 +1089,7 @@ tr:hover .xl-codigo {
 .xl-painel-nota {
   margin: 0;
   font-size: 12px;
-  color: #6b7683;
+  color: #646e7b;
   line-height: 1.5;
 }
 
@@ -1130,7 +1130,7 @@ tr:hover .xl-codigo {
 
 .pl-visual-header span {
   font-size: 10px;
-  color: #7b8990;
+  color: #657178;
 }
 
 .pl-visual-tabs {
@@ -1229,7 +1229,7 @@ tr:hover .xl-codigo {
   background: #fafcfc;
 }
 .pl-visual-vazio h3 { margin: 0 0 6px; font-size: 13px; color: #34464e; }
-.pl-visual-vazio p { margin: 0; font-size: 11px; color: #7a8991; }
+.pl-visual-vazio p { margin: 0; font-size: 11px; color: #626f76; }
 
 .xl-demo-obra {
   margin-left: 2px;
@@ -1479,7 +1479,7 @@ tr:hover .xl-codigo {
   flex: 0 0 auto;
 }
 .eap-toolbar-titulo { font-size: 13px; font-weight: 650; color: #2c3a47; }
-.eap-toolbar-subtitulo { margin-top: 1px; font-size: 10.5px; color: #7a848e; }
+.eap-toolbar-subtitulo { margin-top: 1px; font-size: 10.5px; color: #68717a; }
 .eap-toolbar-acoes { gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 
 .eap-tool-btn,
@@ -1524,7 +1524,7 @@ tr:hover .xl-codigo {
   letter-spacing: .035em;
   color: #34444e;
 }
-.eap-resumo p { margin: 3px 0 0; font-size: 10.5px; color: #7a848e; }
+.eap-resumo p { margin: 3px 0 0; font-size: 10.5px; color: #68717a; }
 .eap-status-chip {
   gap: 5px;
   white-space: nowrap;
@@ -1567,7 +1567,7 @@ tr:hover .xl-codigo {
   border: 1px solid #cfd6dd;
   border-radius: 4px;
   background: #fff;
-  color: #8b95a1;
+  color: #626c79;
 }
 .eap-busca {
   width: 100%;
@@ -1638,7 +1638,7 @@ tr:hover .xl-codigo {
 }
 .eap-rownum {
   padding: 0 7px;
-  color: #7a848e;
+  color: #68717a;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
@@ -1696,7 +1696,7 @@ tr:hover .xl-codigo {
 }
 .eap-trazer:hover { background: #e1f0f3; }
 .eap-no-crono { color: #287a4d; }
-.eap-grupo-label { color: #7a848e; }
+.eap-grupo-label { color: #68717a; }
 
 .eap-acoes-linha {
   display: inline-flex;
@@ -1717,7 +1717,7 @@ tr:hover .xl-codigo {
   color: #74818a;
 }
 .eap-acao-linha:hover { border-color: #cfd6dd; }
-.eap-nada { margin: 0; padding: 24px; color: #7a848e; font-size: 12px; }
+.eap-nada { margin: 0; padding: 24px; color: #68717a; font-size: 12px; }
 
 .eap-editor {
   margin: 10px 12px;
@@ -1735,7 +1735,7 @@ tr:hover .xl-codigo {
   background: #f3f6f7;
 }
 .eap-editor-titulo strong { display: block; font-size: 12px; color: #34464e; }
-.eap-editor-titulo span { display: block; margin-top: 2px; font-size: 10.5px; color: #7a8991; }
+.eap-editor-titulo span { display: block; margin-top: 2px; font-size: 10.5px; color: #626f76; }
 .eap-editor-fechar {
   width: 26px;
   height: 26px;
@@ -2119,7 +2119,7 @@ tr:hover .xl-codigo {
 .xl-limpar-testes:disabled { opacity: .6; cursor: wait; }
 
 .xl-lixeira-btn{display:inline-flex;align-items:center;gap:6px;margin:6px 10px;padding:6px 10px;border:1px solid #d7dee7;border-radius:7px;background:#fff;color:#475569;font-size:12px;font-weight:650;cursor:pointer}
-.xl-obra-chip-lixeira{display:flex;align-items:center;justify-content:center;width:22px;border:0;background:transparent;color:#94a3b8;cursor:pointer}
+.xl-obra-chip-lixeira{display:flex;align-items:center;justify-content:center;width:22px;border:0;background:transparent;color:#617693;cursor:pointer}
 .xl-obra-chip-lixeira:hover{color:#b42318;background:#fff1f0}
 .xl-modal-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.32);display:flex;align-items:center;justify-content:center;padding:24px}
 .xl-modal{width:min(680px,calc(100vw - 48px));background:#fff;border:1px solid #dbe2ea;border-radius:12px;box-shadow:0 24px 70px rgba(15,23,42,.2);padding:18px}
@@ -2150,7 +2150,7 @@ tr:hover .xl-codigo {
 .nova-obra-fluxo-item span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e2e8f0;color:#64748b;font-size:11px;font-weight:800}
 .nova-obra-fluxo-item.ativo span{background:#176b87;color:#fff}
 .nova-obra-fluxo-item strong{display:block;font-size:12px}
-.nova-obra-fluxo-item small{display:block;color:#94a3b8;font-size:10px;margin-top:2px}
+.nova-obra-fluxo-item small{display:block;color:#617693;font-size:10px;margin-top:2px}
 .nova-obra-fluxo-linha{height:1px;background:#d8e0e8;flex:1;margin:0 14px}
 .nova-obra-body{padding:4px 28px 12px}
 .nova-obra-section{padding:20px 0;border-bottom:1px solid #edf1f5}
@@ -2169,7 +2169,7 @@ tr:hover .xl-codigo {
 .nova-obra-section input:focus,.nova-obra-section select:focus,.nova-obra-section textarea:focus{border-color:#176b87;box-shadow:0 0 0 3px rgba(23,107,135,.09)}
 .nova-obra-tipo{margin-top:12px;max-width:390px}
 .nova-obra-escopo{background:#fbfdfe;margin:0 -28px;padding-left:28px;padding-right:28px}
-.nova-obra-contador{text-align:right;color:#94a3b8;font-size:10px;margin-top:4px}
+.nova-obra-contador{text-align:right;color:#617693;font-size:10px;margin-top:4px}
 .nova-obra-dica{display:flex;gap:10px;margin-top:12px;padding:11px 12px;border:1px solid #cfe4ea;background:#f3fafc;border-radius:9px;color:#35616d}
 .nova-obra-dica svg{flex:0 0 auto;margin-top:2px}
 .nova-obra-dica div{display:grid;gap:3px}
@@ -2464,7 +2464,7 @@ tr:hover .xl-codigo {
   display:block;
   margin:0;
   padding:7px 10px;
-  color:#94a3b8;
+  color:#617693;
   font-size:9px;
 }
 .pl-tabela-analitica .pl-bloqueio-wbs{
@@ -2564,12 +2564,12 @@ tr:hover .xl-codigo {
 .pl-cpm-tabela>small{
   display:block;
   padding:7px 10px;
-  color:#94a3b8;
+  color:#617693;
   font-size:9px;
 }
 .pl-baseline-item small,
 .pl-baseline-item>span{
-  color:#94a3b8;
+  color:#617693;
   font-size:9px;
 }
 .pl-planejamento-loading{
@@ -2721,12 +2721,12 @@ tr:hover .xl-codigo {
   box-shadow: 0 1px 8px rgba(15,31,43,.05);
 }
 .arquimedes-workbar-title { min-width: 150px; display: flex; flex-direction: column; }
-.arquimedes-kicker { color: #738696; font-size: 8px; font-weight: 800; letter-spacing: .13em; }
+.arquimedes-kicker { color: #657787; font-size: 8px; font-weight: 800; letter-spacing: .13em; }
 .arquimedes-workbar-title strong { margin-top: 3px; color: #14222d; font-size: 15px; }
 .arquimedes-trilha { display: flex; align-items: center; gap: 8px; flex: 1; overflow-x: auto; white-space: nowrap; }
-.arquimedes-trilha span { color: #8999a6; font-size: 10px; font-weight: 600; }
+.arquimedes-trilha span { color: #657786; font-size: 10px; font-weight: 600; }
 .arquimedes-trilha span.ativo { color: #167a96; }
-.arquimedes-trilha-seta { color: #c0cad1 !important; font-weight: 400 !important; }
+.arquimedes-trilha-seta { color: #627886 !important; font-weight: 400 !important; }
 .arquimedes-workbar-actions { display: flex; gap: 5px; }
 .arquimedes-workbar-actions button {
   width: 30px; height: 30px; border: 1px solid #d9e1e6; border-radius: 6px;
@@ -3173,7 +3173,7 @@ tr:hover .xl-codigo {
 .xl-sidebar-status{margin-left:auto;color:#d9a441;font-size:9px;line-height:1;cursor:help}
 .arquimedes-trilha-label{color:#9aa5b1;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
 .xl-painel-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:18px 20px;border:1px solid #dfe3e8;border-radius:6px;background:#f7f9fb}
-.xl-painel-kicker{display:block;margin-bottom:5px;color:#6b7683;font-size:10px;font-weight:700;letter-spacing:.08em}
+.xl-painel-kicker{display:block;margin-bottom:5px;color:#646e7b;font-size:10px;font-weight:700;letter-spacing:.08em}
 .xl-painel-intro h2{margin:0 0 6px;color:#1f2933;font-size:18px}.xl-painel-intro p{margin:0;max-width:780px;color:#5f6b76;font-size:13px;line-height:1.5}
 .xl-painel-status{flex:0 0 auto;padding:5px 9px;border:1px solid #d9a441;border-radius:999px;color:#6b5310;background:#fff8df;font-size:11px;font-weight:700}
 .xl-dashboard-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.xl-dashboard-cards .xl-cartao{min-height:92px}
@@ -3204,7 +3204,7 @@ tr:hover .xl-codigo {
 
 .xl-tabela-celula-valor{color:#1f2933;font-weight:500}
 
-.xl-tabela-pct{display:block;color:#7a848e;font-size:10px;margin-top:2px}
+.xl-tabela-pct{display:block;color:#68717a;font-size:10px;margin-top:2px}
 
 .xl-tabela-total{background:#f7f9fb;font-weight:600}
 
@@ -3212,7 +3212,7 @@ tr:hover .xl-codigo {
 
 .xl-tabela-pct-total{color:#1f6f8b}
 
-.xl-vazia{padding:40px 20px;text-align:center;color:#7a848e}
+.xl-vazia{padding:40px 20px;text-align:center;color:#68717a}
 
 .xl-vazia strong{display:block;margin-bottom:8px;font-size:14px;color:#3c4a57}
 

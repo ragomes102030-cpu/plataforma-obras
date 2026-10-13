@@ -9,12 +9,19 @@
 // reprovadas), porque uma classe pode aparecer em varios fundos e a correcao de
 // cor precisa valer para todos eles.
 //
-// Uso: node scripts/auditar-contraste.mjs [url] [arquivo-de-saida]
+// Uso: node scripts/auditar-contraste.mjs [url] [arquivo-de-saida] [quantas-obras]
+//
+// `quantas-obras` (padrao 1) varre as primeiras obras do seletor do topo. Vale a
+// pena usar mais de uma: varias telas mudam de conteudo conforme a obra (painel
+// inicial em planejamento x em execucao, faixa de validacao da EAP), e uma obra
+// so deixa lugar reprovado sem ser visto -- aconteceu, e producao reprovou 18
+// textos que a medicao local, de outra obra, aprovava.
 import { chromium } from "playwright";
 import { readFileSync, mkdirSync, writeFileSync } from "fs";
 
 const URL_BASE = process.argv[2] || "http://localhost:4599";
 const ARQUIVO = process.argv[3] || "tests/contraste/relatorio.json";
+const QUANTAS_OBRAS = Number(process.argv[4] ?? 1);
 const SAIDA = "tests/contraste";
 const SESSAO = readFileSync("C:\\Users\\Correta Engenharia\\obras-sessao.txt", "utf8").trim();
 
@@ -43,12 +50,33 @@ const ROTINA = () => {
     const l1 = luz(a), l2 = luz(b);
     return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
   };
-  const fundoEfetivo = el => {
+  // Fundo efetivo, compondo os fundos translucidos ate achar um opaco.
+  //
+  // Gradiente nao e "nao medivel": as paradas de cor do gradiente sao as cores
+  // de fundo possiveis, e o texto precisa passar na PIOR delas. Antes essas
+  // leituras eram descartadas, e por isso 3 textos da EAP ficavam sem medicao.
+  const fundoEfetivo = (el, corTexto) => {
     const camadas = [];
     let n = el;
     while (n && n !== document.documentElement) {
       const cs = getComputedStyle(n);
-      if (cs.backgroundImage && cs.backgroundImage !== "none") return { indefinido: cs.backgroundImage.slice(0, 40) };
+      if (cs.backgroundImage && cs.backgroundImage !== "none") {
+        const paradas = (cs.backgroundImage.match(/rgba?\([^)]*\)/g) || []).map(paraRgb).filter(Boolean);
+        if (paradas.length) {
+          // Junta o fundo de tras com cada parada e devolve a pior para o texto.
+          let atras = { r: 255, g: 255, b: 255, a: 1 };
+          let m = camadas.length ? camadas[camadas.length - 1] : null;
+          if (m) atras = m.a >= 0.999 ? m : sobre(m, atras);
+          let pior = null, piorRazao = Infinity;
+          for (const p of paradas) {
+            const cand = p.a >= 0.999 ? p : sobre(p, atras);
+            const r = corTexto ? razao(corTexto, cand) : 0;
+            if (r < piorRazao) { piorRazao = r; pior = cand; }
+          }
+          return { ...pior, gradiente: cs.backgroundImage.slice(0, 60), gradienteRazao: piorRazao };
+        }
+        return { indefinido: cs.backgroundImage.slice(0, 60) };
+      }
       const c = paraRgb(cs.backgroundColor);
       if (c && c.a > 0) { camadas.push(c); if (c.a >= 0.999) break; }
       n = n.parentElement;
@@ -105,10 +133,12 @@ const ROTINA = () => {
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) continue;
     if (el.closest("[disabled]") || el.disabled) continue;
-    const fundo = fundoEfetivo(el);
-    if (fundo.indefinido) { indefinidos.push(`${caminho(el)} fundo=${fundo.indefinido}`); continue; }
     const frente = paraRgb(cs.color);
     if (!frente) continue;
+    // A cor do texto entra na conta do fundo porque, sobre gradiente, o fundo
+    // escolhido e a parada que da a PIOR razao para este texto.
+    const fundo = fundoEfetivo(el, frente.a < 0.999 ? null : frente);
+    if (fundo.indefinido) { indefinidos.push(`${caminho(el)} fundo=${fundo.indefinido}`); continue; }
     const cor = frente.a < 0.999 ? sobre(frente, fundo) : frente;
     const tamanho = Math.round(parseFloat(cs.fontSize) * 100) / 100;
     const peso = Number(cs.fontWeight) || 400;
@@ -121,6 +151,7 @@ const ROTINA = () => {
       texto: texto.slice(0, 30),
       cor: `rgb(${Math.round(cor.r)}, ${Math.round(cor.g)}, ${Math.round(cor.b)})`,
       fundo: `rgb(${Math.round(fundo.r)}, ${Math.round(fundo.g)}, ${Math.round(fundo.b)})`,
+      gradiente: fundo.gradiente || null,
       fonte: `${peso} ${tamanho}px`,
       razao: Math.round(r_ * 100) / 100,
       minimo,
@@ -149,27 +180,62 @@ async function abrir(largura, altura) {
   return { contexto, pagina };
 }
 
+// Troca de obra pelo seletor do topo. `indice` 0 mantem a obra atual.
+// Serve porque o conteudo de varias telas muda com a obra (painel inicial,
+// faixa de validacao da EAP): medir uma obra so deixa ponto cego.
+async function trocarDeObra(pagina, indice) {
+  if (indice === 0) return null;
+  await pagina.locator(".xl-seletor-botao").first().click();
+  await pagina.waitForSelector(".xl-seletor-item", { timeout: 30000 });
+  await pagina.waitForTimeout(500);
+  await pagina.locator(".xl-seletor-item").nth(indice).click();
+  await pagina.waitForTimeout(2500);
+  return null;
+}
+
+async function quantasObras(pagina) {
+  await pagina.locator(".xl-seletor-botao").first().click();
+  await pagina.waitForSelector(".xl-seletor-item", { timeout: 30000 });
+  await pagina.waitForTimeout(500);
+  const n = await pagina.locator(".xl-seletor-item").count();
+  const nomes = await pagina.locator(".xl-seletor-item").allInnerTexts();
+  await pagina.keyboard.press("Escape");
+  await pagina.waitForTimeout(600);
+  return { n, nomes: nomes.map(t => t.replace(/\s+/g, " ").trim().slice(0, 26)) };
+}
+
 const todas = [];
 let telasSemNavegacao = 0;
 for (const [nome, largura, altura] of [["praca", 1440, 900], ["campo", 390, 844]]) {
   const { contexto, pagina } = await abrir(largura, altura);
-  for (let i = 0; i < TELAS.length; i++) {
-    if (largura < 700) {
-      const abridor = pagina.locator(".xl-menu-mobile").first();
-      if (await abridor.count()) { await abridor.click(); await pagina.waitForTimeout(350); }
+  let disponiveis = { n: 1, nomes: ["(obra atual)"] };
+  if (QUANTAS_OBRAS > 1) {
+    disponiveis = await quantasObras(pagina);
+    console.log(`${nome}: ${disponiveis.n} obras disponiveis -> ${disponiveis.nomes.slice(0, QUANTAS_OBRAS).join(" | ")}`);
+  }
+  const alvo = Math.min(QUANTAS_OBRAS, Math.max(1, disponiveis.n));
+  for (let o = 0; o < alvo; o++) {
+    const rotulo = (disponiveis.nomes[o] || `obra-${o + 1}`).replace(/[^\wÀ-ÿ -]/g, "").trim().slice(0, 20) || `obra-${o + 1}`;
+    if (o > 0) await trocarDeObra(pagina, o);
+    for (let i = 0; i < TELAS.length; i++) {
+      if (largura < 700) {
+        const abridor = pagina.locator(".xl-menu-mobile").first();
+        if (await abridor.count()) { await abridor.click(); await pagina.waitForTimeout(350); }
+      }
+      const item = pagina.locator(".xl-sidebar-item").nth(i);
+      if (!(await item.count())) {
+        telasSemNavegacao++;
+        console.log(`${nome}/${rotulo}/${TELAS[i]}: NAVEGACAO NAO ENCONTRADA (sessao sem acesso ou tela de entrada?)`);
+        continue;
+      }
+      await item.click();
+      await pagina.waitForTimeout(1500);
+      const r = await pagina.evaluate(ROTINA);
+      const falhas = r.leituras.filter(l => !l.passou);
+      const tela = `${nome}/${rotulo}/${TELAS[i]}`;
+      todas.push({ tela, avaliados: r.leituras.length, falhas: falhas.length, indefinidos: r.indefinidos.length, leituras: r.leituras, lugaresSemFundo: r.indefinidos });
+      console.log(`${tela}: avaliados=${r.leituras.length} reprovados=${falhas.length} fundo-indefinido=${r.indefinidos.length}`);
     }
-    const item = pagina.locator(".xl-sidebar-item").nth(i);
-    if (!(await item.count())) {
-      telasSemNavegacao++;
-      console.log(`${nome}/${TELAS[i]}: NAVEGACAO NAO ENCONTRADA (sessao sem acesso ou tela de entrada?)`);
-      continue;
-    }
-    await item.click();
-    await pagina.waitForTimeout(1500);
-    const r = await pagina.evaluate(ROTINA);
-    const falhas = r.leituras.filter(l => !l.passou);
-    todas.push({ tela: `${nome}/${TELAS[i]}`, avaliados: r.leituras.length, falhas: falhas.length, indefinidos: r.indefinidos.length, leituras: r.leituras, lugaresSemFundo: r.indefinidos });
-    console.log(`${nome}/${TELAS[i]}: avaliados=${r.leituras.length} reprovados=${falhas.length} fundo-indefinido=${r.indefinidos.length}`);
   }
   await contexto.close();
 }

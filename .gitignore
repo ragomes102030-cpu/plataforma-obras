@@ -115,3 +115,5 @@ build_out.txt
 tests/telas/
 tests/contraste/relatorio.json
 tests/contraste/depois.json
+tests/contraste/depois-3obras.json
+tests/contraste/gradiente.json
