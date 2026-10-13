@@ -27,7 +27,7 @@ describe("entrada e central de obras do Arquimedes", () => {
     expect(HOME).toMatch(/className="arq-obras-grade"/);
     expect(HOME).toMatch(/arq-obra-card/);
     expect(HOME).toMatch(/onClick=\{\(\) => onEscolher\(obra\.id\)\}/);
-    expect(HOME).toMatch(/[o\.name, o\.code, o\.location]/);
+    expect(HOME).toMatch(/\[o\.name, o\.code, o\.location\]/);
     expect(HOME).toMatch(/onClick=\{onNovaObra\}/);
   });
 
