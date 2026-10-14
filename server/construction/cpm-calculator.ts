@@ -28,7 +28,7 @@ export function calculateDeterministicCpm(
       activities.map(activity => ({
         id: String(activity.id),
         duration: activity.durationDays,
-        startOffset: activity.startOffset,
+        startOffsetDay: activity.startOffsetDay ?? undefined,
         mustStartOn: activity.mustStartOnDay ?? undefined,
         finishNoLaterThan: activity.finishNoLaterThanDay ?? undefined,
       })),

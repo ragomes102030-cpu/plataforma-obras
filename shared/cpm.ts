@@ -11,7 +11,7 @@ export type CpmActivity = {
   id: string;
   duration: number;
   /** Primeiro índice de dia permitido para iniciar, herdado do início planejado. */
-  startOffset?: number;
+  startOffsetDay?: number;
   /** Índice do dia útil (CPM) em que a atividade DEVE começar no mais cedo. */
   mustStartOn?: number;
   /** Índice do dia útil (CPM) mais tarde em que a atividade PODE terminar. */
@@ -54,9 +54,10 @@ export function calculateCpm(
     if (!Number.isInteger(activity.duration) || activity.duration < 0) {
       throw new Error(`Duração inválida para ${activity.id}`);
     }
-    if (activity.startOffset !== undefined &&
-        (!Number.isInteger(activity.startOffset) || activity.startOffset < 0)) {
-      throw new Error(`Início planejado inválido para ${activity.id}`);
+    if (activity.startOffsetDay !== undefined &&
+        (!Number.isInteger(activity.startOffsetDay) || activity.startOffsetDay < 0)) {
+      throw new Error(`Índice de início planejado inválido para ${activity.id}`);
+    }
     }
     for (const [field, value] of [
       ["mustStartOn", activity.mustStartOn],
@@ -116,7 +117,7 @@ export function calculateCpm(
   const early = new Map<string, { start: number; finish: number }>();
   for (const id of order) {
     const activity = byId.get(id)!;
-    let start = Math.max(0, activity.startOffset ?? 0);
+    let start = Math.max(0, activity.startOffsetDay ?? 0);
     for (const dependency of dependencies.filter(
       item => item.successorId === id
     )) {

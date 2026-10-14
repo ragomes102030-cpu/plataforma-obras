@@ -3985,8 +3985,22 @@ export const appRouter = router({
           .from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
 
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        const inicioProjeto = project?.plannedStart ?? new Date();
+        const inicioCalendario = localIso(inicioProjeto);
+        const calendarioObra = await carregarCalendarioDaObra(db, input.projectId, inicioProjeto.getFullYear());
+        const enrichedActivities = activities.map(activity => {
+          const dataInicioCivil = new Date(inicioProjeto);
+          dataInicioCivil.setDate(dataInicioCivil.getDate() + Number(activity.startOffset ?? 0));
+          return {
+            ...activity,
+            startOffsetDay: calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(dataInicioCivil)),
+            mustStartOnDay: activity.mustStartOn ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.mustStartOn))) : null,
+            finishNoLaterThanDay: activity.finishNoLaterThan ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.finishNoLaterThan))) : null,
+          };
+        });
         const result = calculateDeterministicCpm(
-          activities as ScheduleEvidenceActivity[],
+          enrichedActivities as ScheduleEvidenceActivity[],
           dependencies as ScheduleEvidenceDependency[]
         );
 
@@ -4027,11 +4041,16 @@ export const appRouter = router({
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
         const inicioCalendario = localIso(project?.plannedStart ?? new Date());
         const calendarioObra = await carregarCalendarioDaObra(db,input.projectId,ano);
-        const enrichedActivities = activities.map(activity => ({
-          ...activity,
-          mustStartOnDay: activity.mustStartOn ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.mustStartOn))) : null,
-          finishNoLaterThanDay: activity.finishNoLaterThan ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.finishNoLaterThan))) : null,
-        }));
+        const enrichedActivities = activities.map(activity => {
+          const dataInicioCivil = new Date(project?.plannedStart ?? new Date());
+          dataInicioCivil.setDate(dataInicioCivil.getDate() + Number(activity.startOffset ?? 0));
+          return {
+            ...activity,
+            startOffsetDay: calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(dataInicioCivil)),
+            mustStartOnDay: activity.mustStartOn ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.mustStartOn))) : null,
+            finishNoLaterThanDay: activity.finishNoLaterThan ? calendarIndexOf(calendarioObra.calendar, inicioCalendario, localIso(new Date(activity.finishNoLaterThan))) : null,
+          };
+        });
         const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
         const result = calculateDeterministicCpm(enrichedActivities, dependencies);
         if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };

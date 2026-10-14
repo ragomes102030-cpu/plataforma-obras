@@ -43,7 +43,9 @@ export type ScheduleEvidenceActivity = {
   wbsCode: string;
   name: string;
   phase: string;
+  /** Índice de dia útil derivado de startOffset (dias corridos) com o calendário da obra. */
   startOffset: number;
+  startOffsetDay?: number | null;
   durationDays: number;
   progress: number;
   status: string;
