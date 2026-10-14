@@ -57,6 +57,33 @@ describe("validateAndNormalizeEapProposal", () => {
     expect(result.nodes[0]?.code).toBe("1.1");
   });
 
+  it("bloqueia criação de filho abaixo de pacote de trabalho", () => {
+    const current = [
+      node(),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Fundação", nodeType: "pacote" }),
+    ];
+
+    const result = validateAndNormalizeEapProposal(current, {
+      action: "propose_eap",
+      basis: [],
+      assumptions: [],
+      missingInformation: [],
+      nodes: [{
+        operation: "create",
+        parentCode: "1.1",
+        code: "1.1.1",
+        name: "Escavação",
+        nodeType: "entrega",
+        rationale: "Teste de terminalidade do pacote.",
+      }],
+    });
+
+    expect(result.validation?.valid).toBe(false);
+    expect(result.validation?.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "proposal_child_of_work_package", severity: "error" }),
+    ]));
+  });
+
   it("reconcilia nodeId obsoleto de versão anterior pelo código EAP", () => {
     const current = [
       node(),
