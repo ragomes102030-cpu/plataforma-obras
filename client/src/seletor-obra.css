@@ -760,3 +760,123 @@
 @media (prefers-reduced-motion: reduce) {
   .arq-obras *, .arq-obras *::before { animation: none !important; transition: none !important; }
 }
+
+
+/* Contexto fixo da obra: dentro de um projeto não há seletor para saltar
+   diretamente para outro. A saída explícita retorna à tela de portfólio. */
+.xl-titlebar--contexto-fixo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+.xl-contexto-obra-identidade {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #56d1e7;
+}
+
+.xl-contexto-obra-identidade > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.xl-contexto-obra-identidade span {
+  color: #8ea4b4;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .09em;
+}
+
+.xl-contexto-obra-identidade strong {
+  color: #f5fbff;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xl-contexto-obra-identidade small {
+  color: #a7bdca;
+  font-size: 11px;
+}
+
+.xl-contexto-obra-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.xl-sair-obra,
+.xl-contexto-excluir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #385264;
+  border-radius: 7px;
+  background: #132430;
+  color: #f5fbff;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.xl-sair-obra:hover {
+  border-color: #56d1e7;
+  background: #17303f;
+}
+
+.xl-contexto-excluir {
+  border-color: #704047;
+  color: #ffd7d7;
+}
+
+.xl-contexto-excluir:hover {
+  border-color: #e07a84;
+  background: #392329;
+}
+
+@media (max-width: 620px) {
+  .xl-titlebar--contexto-fixo {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .xl-contexto-obra-acoes {
+    gap: 5px;
+  }
+
+  .xl-sair-obra,
+  .xl-contexto-excluir {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .xl-contexto-excluir {
+    width: 34px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0;
+    gap: 0;
+  }
+
+  .xl-contexto-excluir svg {
+    flex: 0 0 auto;
+  }
+}
