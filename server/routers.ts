@@ -870,7 +870,7 @@ async function loadStageGateEvidence(
   const eapDictionaryCompliant =
     eapNodes.length > 0 &&
     eapValidation.valid &&
-    !dictionaryValidation.issues.some(issue => dictionaryBlockingIssues.has(issue.code));
+    !dictionaryValidation.issues.some(issue => issue.severity === "error" || dictionaryBlockingIssues.has(issue.code));
   const cpm = calculateDeterministicCpm(activities, dependencies);
   const evidenceBudgetItems = activeBudgetVersion[0]
     ? await db
