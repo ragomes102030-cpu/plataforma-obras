@@ -49,7 +49,7 @@ Regra de autoridade: estas skills orientam o método; não concedem permissões,
 **Objetivo:** confirmar o comportamento do produto como usuário.
 **Usar quando:** a mudança afetar UI, autenticação, fluxos, formulários, persistência ou deploy.
 **Procedimento:** reproduzir em ambiente identificado; observar console, requests, estado visível e persistência após recarregar; usar Playwright/browser conectado quando disponível; registrar passos e resultado.
-**Parada:** não afirmar “testado” sem execução observável. Se o browser não estiver disponível, declarar a limitação e deixar teste executável.
+**Parada:** não declarar “testado” sem execução observável. Se o browser não estiver disponível, declarar a limitação e deixar teste executável.
 **Saída:** ambiente/commit, passos, resultado esperado/obtido, evidências e falhas.
 **Limites:** não expor credenciais; não apagar, aprovar ou aplicar alterações irreversíveis em obras reais sem autorização específica.
 
