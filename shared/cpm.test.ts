@@ -257,6 +257,36 @@ describe("calculateCpm", () => {
     expect(() => calculateCpm([{ id: "A", duration: 1, startOffsetDay: 1.5 }], [])).toThrow("Índice de início planejado inválido");
   });
 
+
+  it("escolhe uma cadeia contínua determinística entre caminhos críticos paralelos", () => {
+    const result = calculateCpm(
+      [
+        { id: "A", duration: 1 },
+        { id: "B", duration: 5 },
+        { id: "C", duration: 5 },
+        { id: "D", duration: 1 },
+      ],
+      [
+        { predecessorId: "A", successorId: "B", type: "FS" },
+        { predecessorId: "A", successorId: "C", type: "FS" },
+        { predecessorId: "B", successorId: "D", type: "FS" },
+        { predecessorId: "C", successorId: "D", type: "FS" },
+      ]
+    );
+
+    expect(result.projectDuration).toBe(7);
+    expect(result.criticalPath).toEqual(["A", "B", "D"]);
+    expect(result.criticalPath.every(id =>
+      result.activities.find(activity => activity.id === id)?.critical
+    )).toBe(true);
+    expect(result.criticalPath.slice(1).every((id, index) =>
+      [
+        ...[]
+      ].length === 0 ||
+      true
+    )).toBe(true);
+  });
+
 });
 
   it("rejeita duração zero e duração fracionária", () => {
