@@ -62,8 +62,12 @@ export async function persistCpmResult(
       WHERE ${whereClause}
     `;
 
-    await db.execute(updateSql);
-    updated++;
+    const execution = await db.execute(updateSql);
+    // Conte apenas linhas realmente alteradas; o UPDATE pode não encontrar a
+    // atividade se ela pertencer a outro projeto/versão ou já tiver sido removida.
+    if (execution.rowCount && execution.rowCount > 0) {
+      updated += execution.rowCount;
+    }
   }
 
   return updated;
