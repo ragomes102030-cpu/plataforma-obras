@@ -663,7 +663,8 @@ export async function callReadOnlyMcpTool(
 export async function callControlledMcpTool(
   domain: ConstructionMcpDomain,
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  clients: ConstructionMcpClients = createConstructionMcpClients()
 ): Promise<McpCallResult> {
   if (!CONTROLLED_MUTATION_POLICY[domain].has(toolName)) {
     throw new Error(
@@ -673,7 +674,6 @@ export async function callControlledMcpTool(
   if (JSON.stringify(args).toLowerCase().includes('"project_id":"default"')) {
     throw new Error("O project_id default é bloqueado para mutações reais.");
   }
-  const clients = createConstructionMcpClients();
   return clients[domain].callTool(toolName, args);
 }
 
