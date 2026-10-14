@@ -18,6 +18,19 @@ export function calculateDeterministicCpm(
   activities: ScheduleEvidenceActivity[],
   dependencies: ScheduleEvidenceDependency[]
 ): DeterministicCpmResult {
+  if (activities.length === 0) {
+    return {
+      valid: false,
+      schedule: null,
+      infeasible: false,
+      issues: [{
+        code: "cpm_empty_network",
+        severity: "error",
+        message: "Não é possível calcular o CPM sem atividades operacionais.",
+      }],
+    };
+  }
+
   const validation = validateDependencies(activities, dependencies);
   if (!validation.valid) {
     return { valid: false, schedule: null, issues: validation.issues, infeasible: false };

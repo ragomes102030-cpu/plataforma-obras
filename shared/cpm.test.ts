@@ -241,3 +241,8 @@ describe("calculateCpm", () => {
   });
 
 });
+
+  it("rejeita duração zero e duração fracionária", () => {
+    expect(() => calculateCpm([{ id: "A", duration: 0 }], [])).toThrow("Duração inválida");
+    expect(() => calculateCpm([{ id: "A", duration: 1.5 }], [])).toThrow("Duração inválida");
+  });

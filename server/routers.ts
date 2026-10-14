@@ -4034,9 +4034,12 @@ export const appRouter = router({
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
         const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
-        const operationalIds = new Set(activities.map(activity => activity.id));
-        const dependencies = (await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope)))
-          .filter(dependency => operationalIds.has(dependency.predecessorId) && operationalIds.has(dependency.successorId));
+        if (!activities.length) {
+          throw badRequest("Não é possível calcular o CPM: a versão atual não possui atividades operacionais.");
+        }
+        // Não descarte silenciosamente elos ligados a atividades de exemplo ou ausentes.
+        // A validação deve apontar a inconsistência em vez de calcular uma rede parcial.
+        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
         const inicioCalendario = localIso(project?.plannedStart ?? new Date());
@@ -4070,6 +4073,7 @@ export const appRouter = router({
                   lateStart: item.lateStart ?? 0,
                   lateFinish: item.lateFinish ?? 0,
                   totalFloat: item.totalFloat ?? 0,
+                  freeFloat: item.freeFloat ?? 0,
                   cpmCalculatedAt: sql`CURRENT_TIMESTAMP`,
                 })
                 .where(
