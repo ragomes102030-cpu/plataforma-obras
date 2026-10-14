@@ -1469,7 +1469,7 @@ export const appRouter = router({
           : undefined;
         if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence à versão de trabalho desta obra.");
         if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
-          throw badRequest("Entrega é terminal na EAP e não pode receber filhos.");
+          throw badRequest("Somente grupos podem receber filhos na EAP; pacotes de trabalho e entregas são terminais.");
         }
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
@@ -1523,7 +1523,7 @@ export const appRouter = router({
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
           if (resolvedParent !== null && !parent) throw badRequest("Destino inválido.");
           if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
-            throw badRequest("Entrega é terminal na EAP e não pode receber filhos.");
+            throw badRequest("Somente grupos podem receber filhos na EAP; pacotes de trabalho e entregas são terminais.");
           }
 
           const byId = new Map(all.map(item => [item.id, item]));
