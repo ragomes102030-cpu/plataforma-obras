@@ -307,6 +307,42 @@ describe("validateEapScope", () => {
     );
   });
 
+  it("exige localização e base de decomposição quando o gate usa o dicionário completo", () => {
+    const result = validateEapScope(
+      [
+        node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", description: "Obra completa", inclusions: "Todos os serviços" }),
+        node({
+          id: 2,
+          parentId: 1,
+          code: "1.1",
+          name: "Concretagem",
+          nodeType: "pacote",
+          description: "Concretagem de blocos",
+          inclusions: "Lançamento e adensamento",
+          exclusions: "Formas e armaduras",
+          acceptanceCriteria: "Resistência conforme projeto",
+          responsible: "Equipe de estrutura",
+          decompositionBasis: "deliverable",
+        }),
+      ],
+      {
+        requireDictionaryForLeaves: true,
+        requiredDictionaryFields: [
+          "description",
+          "inclusions",
+          "exclusions",
+          "acceptanceCriteria",
+          "responsible",
+          "location",
+          "decompositionBasis",
+        ],
+      }
+    );
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "eap_leaf_not_ready", message: expect.stringContaining("localização") }),
+    ]));
+  });
+
   it("avisa quando a folha ainda não está pronta para virar pacote controlável", () => {
     const result = validateEapScope(
       [node({ id: 1, code: "1", name: "Fundação", nodeType: "entrega" })],
@@ -400,7 +436,7 @@ describe("eapNodeCanHaveChildren", () => {
     expect(eapNodeCanHaveChildren("entrega")).toBe(false);
   });
 
-  it("permite decomposição abaixo de grupos e pacotes", () => {
+  it("permite decomposição somente abaixo de grupos", () => {
     expect(eapNodeCanHaveChildren("grupo")).toBe(true);
   });
 });
