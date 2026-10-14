@@ -352,6 +352,15 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   const byId = new Map<string, EapEvidenceNode>();
   const byCode = new Map<string, EapEvidenceNode>();
 
+  if (nodes.length === 0) {
+    issues.push({
+      code: "eap_empty",
+      severity: "error",
+      message: "A EAP não pode estar vazia.",
+      entityRef: "project",
+    });
+  }
+
   const roots = nodes.filter(node => node.parentId === null);
   if (nodes.length > 0 && roots.length !== 1) {
     issues.push({
@@ -396,7 +405,7 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   }
 
   for (const node of nodes) {
-    const hasChildren = nodes.some(candidate => candidate.parentId === node.id);
+    const hasChildren = nodes.some(candidate => candidate.parentId !== null && String(candidate.parentId) === String(node.id));
     if (node.nodeType === "pacote" && hasChildren) {
       issues.push({
         code: "eap_work_package_has_children",
