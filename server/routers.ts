@@ -1472,6 +1472,9 @@ export const appRouter = router({
           throw badRequest("Somente grupos podem receber filhos na EAP; pacotes de trabalho e entregas são terminais.");
         }
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
+        if (!parent && siblings.length > 0) {
+          throw badRequest("A EAP deve possuir uma única raiz; crie novos itens dentro da raiz existente.");
+        }
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
         await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
@@ -1521,6 +1524,9 @@ export const appRouter = router({
             ? null
             : all.find(item => item.id === resolvedParent.id) ?? null;
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
+          if (input.targetParentId === null && node.parentId !== null) {
+            throw badRequest("A EAP deve possuir uma única raiz; não mova um item subordinado para a raiz.");
+          }
           if (resolvedParent !== null && !parent) throw badRequest("Destino inválido.");
           if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
             throw badRequest("Somente grupos podem receber filhos na EAP; pacotes de trabalho e entregas são terminais.");
@@ -1628,6 +1634,9 @@ export const appRouter = router({
         if (!mapped) throw notFound("Item da EAP não encontrado nesta obra.");
         const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, mapped.id), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
+        if (source.parentId === null) {
+          throw badRequest("Não é possível duplicar a raiz única da EAP; duplique um nó interno.");
+        }
         const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = source.parentId
