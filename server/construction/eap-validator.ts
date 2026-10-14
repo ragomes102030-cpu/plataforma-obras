@@ -77,6 +77,15 @@ export function validateEapScope(
     }
   }
 
+  if (nodes.length === 0) {
+    issues.push({
+      code: "eap_empty",
+      severity: "error",
+      message: "A EAP não pode estar vazia.",
+      entityRef: "project",
+    });
+  }
+
   const roots = nodes.filter(node => node.parentId === null);
   if (nodes.length > 0 && roots.length !== 1) {
     issues.push({
