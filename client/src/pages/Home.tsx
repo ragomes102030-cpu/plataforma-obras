@@ -140,8 +140,9 @@ export default function Home() {
           <div className="xl-contexto-obra-identidade">
             <Layers3 size={19} aria-hidden="true" />
             <div>
-              <span>CONTEXTO ATIVO</span>
-              {obra.code && <small>{obra.code}</small>}
+              <span>OBRA ATIVA</span>
+              <strong>{obra.name}</strong>
+              {obra.code && <small>Código: {obra.code}</small>}
             </div>
           </div>
           <div className="xl-contexto-obra-acoes">
