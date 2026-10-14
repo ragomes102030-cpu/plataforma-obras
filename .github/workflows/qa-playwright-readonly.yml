@@ -1,0 +1,53 @@
+name: QA Playwright Read-Only (isolated)
+
+on:
+  push:
+    branches:
+      - qa/playwright-readonly-2026-10-14
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-playwright-readonly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readonly-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout isolated QA branch
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run project unit tests
+        run: pnpm test --run
+
+      - name: Run read-only published-app Playwright smoke test
+        run: pnpm exec playwright test tests/app-publicado-leitura.e2e.spec.ts
+
+      - name: Upload Playwright evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-readonly-qa-evidence
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
