@@ -1,2047 +1,1147 @@
-/* ==========================================================================
-   A ABA EAP
-   ==========================================================================
-
-   A estrutura da obra em árvore: grupo, folha, código oficial e unidade. A
-   folha é a linha de serviço da base oficial — é ela que carrega o código que
-   o orçamento casa para achar o preço.
-   ========================================================================== */
-
-.xl-app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  min-height: 0;
-  background: #ffffff;
-}
-
-.eap {
-  padding: 18px 24px;
-}
-
-.eap-topo {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 14px;
-  margin-bottom: 14px;
-  border-bottom: 2px solid #e4e8ec;
-  flex-wrap: wrap;
-}
-
-.eap-topo h2 {
-  margin: 0 0 3px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #1f2933;
-}
-
-.eap-topo p {
-  margin: 0;
-  font-size: 12.5px;
-  color: #646e7b;
-  font-variant-numeric: tabular-nums;
-}
-
-.eap-busca {
-  border: 1px solid #cfd6dd;
-  border-radius: 3px;
-  font: inherit;
-  font-size: 12.5px;
-  padding: 5px 9px;
-  min-width: 260px;
-}
-
-.eap-busca:focus {
-  outline: 2px solid #1f6f8b;
-  outline-offset: -1px;
-}
-
-/* ------------------------------------------------------------------ árvore */
-
-.eap-arvore {
-  border: 1px solid #e4e8ec;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.eap-linha {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 0;
-  border-bottom: 1px solid #f0f3f5;
-  font-size: 12.5px;
-  color: #2c3a47;
-  min-height: 26px;
-}
-
-.eap-linha:last-child {
-  border-bottom: none;
-}
-
-.eap-linha:hover {
-  background: #f7f9fb;
-}
-
-/* Grupo: peso e cor própria, para a hierarquia aparecer sem indentação só. */
-.eap-nivel-1 {
-  background: #f4f6f8;
-  font-weight: 600;
-  color: #1f2933;
-}
-
-.eap-nivel-1:hover {
-  background: #eef1f4;
-}
-
-/* Folha: a linha de serviço. */
-.eap-folha {
-  color: #4a5764;
-}
-
-.eap-seta {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  cursor: pointer;
-  position: relative;
-  padding: 0;
-}
-
-.eap-seta::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 0;
-  height: 0;
-  border-left: 5px solid #7a848e;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  transform: rotate(0deg);
-  transition: transform 0.12s ease;
-}
-
-.eap-seta.aberta::before {
-  transform: rotate(90deg);
-}
-
-.eap-seta-vazia::before {
-  display: none;
-}
-
-.eap-codigo {
-  flex: 0 0 auto;
-  min-width: 72px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: #626c79;
-}
-
-.eap-nome {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* O código oficial é a âncora com o catálogo de preços. */
-.eap-tipo,
-.eap-base {
-  min-width: 0;
-  padding: 0 8px;
-  color: #69777e;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .02em;
-}
-.eap-tipo {
-  font-weight: 700;
-  color: #51636c;
-}
-.eap-base {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.eap-oficial {
-  flex: 0 0 auto;
-  font-size: 10.5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #1f6f8b;
-  background: #eaf2f5;
-  border-radius: 2px;
-  padding: 1px 5px;
-}
-
-.eap-unidade {
-  flex: 0 0 auto;
-  font-size: 11px;
-  color: #626c79;
-  min-width: 34px;
-  text-align: right;
-}
-
-.eap-nada {
-  margin: 0;
-  padding: 28px;
-  text-align: center;
-  color: #626c79;
-  font-size: 12.5px;
-}
-
-/* ------------------------------------------------------ estado sem EAP */
-
-.eap-acoes {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
-
-.eap-select {
-  border: 1px solid #cfd6dd;
-  border-radius: 3px;
-  font: inherit;
-  font-size: 12.5px;
-  padding: 7px 10px;
-  background: #ffffff;
-}
-
-.eap-btn {
-  appearance: none;
-  border: 1px solid #1f6f8b;
-  background: #1f6f8b;
-  color: #ffffff;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 7px 16px;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.eap-btn:hover:not(:disabled) {
-  background: #1a5c74;
-  border-color: #1a5c74;
-}
-
-.eap-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.eap-erro {
-  margin: 12px 0 0;
-  padding: 9px 12px;
-  background: #fdf0f1;
-  border-left: 3px solid #d1495b;
-  border-radius: 0 3px 3px 0;
-  color: #8a1f2c;
-  font-size: 12.5px;
-}
-
-.eap-ok {
-  margin: 12px 0 0;
-  padding: 9px 12px;
-  background: #eaf6ee;
-  border-left: 3px solid #2e9e5b;
-  border-radius: 0 3px 3px 0;
-  color: #1c5c31;
-  font-size: 12.5px;
-}
-
-/* ------------------------------------------- acoes da aba EAP */
-
-.eap-topo-acoes {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.eap-btn-secundario {
-  appearance: none;
-  border: 1px solid #cfd6dd;
-  background: #ffffff;
-  color: #4a5764;
-  font: inherit;
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.eap-btn-secundario:hover:not(:disabled) {
-  border-color: #b0bcc6;
-  color: #2c3a47;
-}
-
-.eap-btn-secundario:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* Trazer a folha para o cronograma. */
-.eap-trazer {
-  appearance: none;
-  border: 1px solid #c2cbd4;
-  background: #ffffff;
-  color: #1f6f8b;
-  font: inherit;
-  font-size: 10.5px;
-  padding: 1px 7px;
-  border-radius: 2px;
-  cursor: pointer;
-  white-space: nowrap;
-  flex: 0 0 auto;
-  opacity: 0;
-  transition: opacity 0.1s ease;
-}
-
-/* So aparece no hover da linha: 84 folhas com botao em cada uma seria ruido
-   visual, e o que se faz com a folha e uma acao pontual. */
-.eap-linha:hover .eap-trazer {
-  opacity: 1;
-}
-
-.eap-trazer:hover {
-  background: #1f6f8b;
-  border-color: #1f6f8b;
-  color: #ffffff;
-}
-
-.eap-no-crono {
-  font-size: 10.5px;
-  color: #646e7b;
-  background: #eceff2;
-  border-radius: 2px;
-  padding: 1px 7px;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-/* ------------------------------------------------------ aviso de erro */
-
-.xl-aviso-erro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 24px 0;
-  padding: 9px 12px;
-  background: #fdf0f1;
-  border-left: 3px solid #d1495b;
-  border-radius: 0 3px 3px 0;
-  color: #8a1f2c;
-  font-size: 12.5px;
-}
-
-.xl-aviso-erro button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 11.5px;
-  text-decoration: underline;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-/* ------------------------------------------- aba PRODUCAO */
-
-.xl-nota-folha {
-  margin: 0 0 14px;
-  padding: 9px 12px;
-  background: #f4f6f8;
-  border-left: 3px solid #1f6f8b;
-  border-radius: 0 3px 3px 0;
-  font-size: 12.5px;
-  color: #4a5764;
-  line-height: 1.5;
-}
-
-.xl-nota-folha strong {
-  color: #2c3a47;
-}
-
-.prod-nome {
-  font-weight: 400;
-  font-size: 11px;
-  color: #646e7b;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.prod-data {
-  font-size: 11px;
-  font-weight: 400;
-  text-align: left;
-  padding: 0 8px !important;
-  position: static;
-  background: #f4f6f8;
-  width: auto;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.prod-celula {
-  text-align: right;
-}
-
-.prod-com-valor {
-  background: #eef4f0;
-  color: #1c5c31;
-  font-weight: 500;
-}
-
-.prod-form {
-  margin-top: 22px;
-  padding: 16px 18px;
-  border: 1px solid #e4e8ec;
-  border-radius: 4px;
-  background: #fbfcfd;
-}
-
-.prod-form h3 {
-  margin: 0 0 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #3c4a57;
-}
-
-.prod-form-linha {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.prod-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #646e7b;
-}
-
-.prod-form input,
-.prod-form select {
-  border: 1px solid #cfd6dd;
-  border-radius: 3px;
-  font: inherit;
-  font-size: 12.5px;
-  text-transform: none;
-  letter-spacing: 0;
-  color: #2c3a47;
-  padding: 6px 8px;
-  min-width: 120px;
-  background: #ffffff;
-}
-
-.prod-form-atividade {
-  flex: 1 1 260px;
-}
-
-.prod-form-atividade select {
-  width: 100%;
-}
-
-.prod-form-obs {
-  flex: 1 1 240px;
-}
-
-.prod-form-obs input {
-  width: 100%;
-}
-
-.prod-form-nota {
-  margin: 6px 0 0;
-  font-size: 11.5px;
-  color: #626c79;
-  line-height: 1.5;
-}
-
-.prod-form-nota code {
-  background: #eceff2;
-  padding: 1px 4px;
-  border-radius: 2px;
-  font-size: 11px;
-}
-
-/* --------------------------------------- dados de exemplo */
-
-.pl-exemplo-barra {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  background: #fdf6e7;
-  border-left: 3px solid #d9a441;
-  border-radius: 0 3px 3px 0;
-}
-
-.pl-exemplo-ativo {
-  background: #eef4f8;
-  border-left-color: #1f6f8b;
-}
-.pl-exemplo-texto {
-  flex: 1 1 320px;
-  min-width: 0;
-}
-
-.pl-exemplo-texto strong {
-  display: block;
-  font-size: 12.5px;
-  color: #5c4a1a;
-  margin-bottom: 2px;
-}
-
-.pl-exemplo-ativo .pl-exemplo-texto strong {
-  color: #1a5c74;
-}
-
-.pl-exemplo-texto span {
-  display: block;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: #7a6a3a;
-}
-
-.pl-exemplo-ativo .pl-exemplo-texto span {
-  color: #4a6773;
-}
-
-.pl-exemplo-erro {
-  margin: 0;
-  font-size: 11.5px;
-  color: #8a1f2c;
-  flex: 0 0 auto;
-}
-
-.pl-exemplo-aviso {
-  margin: 0;
-  font-size: 11.5px;
-  color: #1c5c31;
-  flex: 0 0 auto;
-}
-
-/* Selo na coluna Status. */
-.xl-exemplo {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 2px;
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: #1f6f8b;
-  color: #ffffff;
-  vertical-align: middle;
-}
-
-
-/* --------------------------------------------------------------------------
-   EAP 2.0 — grade profissional em linguagem de planilha
-   -------------------------------------------------------------------------- */
-
-.eap {
-  padding: 14px 18px 24px;
-  background: #f5f7f8;
-  min-height: 100%;
-}
-
-.eap-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  background: #fff;
-  border: 1px solid #d8e0e5;
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(31,41,51,.04);
-}
-
-.eap-toolbar-identidade,
-.eap-toolbar-acoes {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.eap-toolbar-icon {
-  width: 31px;
-  height: 31px;
-  display: grid;
-  place-items: center;
-  border: 1px solid #cbd9de;
-  border-radius: 5px;
-  background: #eef5f7;
-  color: #2f6f7f;
-}
-
-.eap-toolbar-titulo {
-  font-size: 12px;
-  font-weight: 700;
-  color: #24343c;
-}
-
-.eap-toolbar-subtitulo {
-  margin-top: 2px;
-  font-size: 10px;
-  color: #626f76;
-}
-
-.eap-tool-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 30px;
-  padding: 0 9px;
-  border: 1px solid #cfd8dd;
-  border-radius: 4px;
-  background: #fff;
-  color: #53636b;
-  font-size: 10.5px;
-  font-weight: 600;
-}
-
-.eap-tool-btn:hover {
-  border-color: #aebfc6;
-  background: #f7fafb;
-  color: #294e5a;
-}
-
-.eap-tool-agent {
-  border-color: #b7d1d8;
-  background: #edf6f8;
-  color: #256074;
-}
-
-.eap-resumo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.eap-status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 7px;
-  border: 1px solid #d7e5db;
-  border-radius: 999px;
-  background: #f3f8f4;
-  color: #557462;
-  font-size: 9.5px;
-  white-space: nowrap;
-}
-
-.eap-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #6d9b7a;
-}
-
-.eap-busca-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 280px;
-  padding: 0 9px;
-  border: 1px solid #cfd6dd;
-  border-radius: 4px;
-  background: #fff;
-  color: #8b98a0;
-}
-
-.eap-busca-wrap:focus-within {
-  border-color: #8eb4c0;
-  box-shadow: 0 0 0 2px rgba(47,111,127,.10);
-}
-
-.eap-busca-wrap .eap-busca {
-  border: 0;
-  outline: 0;
-  min-width: 0;
-}
-
-.eap-arvore {
-  border: 1px solid #cfd8dd;
-  border-radius: 5px;
-  overflow: auto;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(31,41,51,.04);
-}
-
-.eap-grid-head {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 104px 86px 86px 58px 150px;
-  align-items: center;
-  min-width: 980px;
-  min-height: 30px;
-  background: #edf1f3;
-  border-bottom: 1px solid #cbd5da;
-  color: #64737b;
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: .06em;
-}
-
-.eap-grid-col {
-  display: flex;
-  align-items: center;
-  height: 30px;
-  padding: 0 8px;
-  border-left: 1px solid #d9e0e4;
-}
-
-.eap-grid-canto {
-  height: 100%;
-  border-right: 1px solid #d9e0e4;
-}
-
-.eap-linha {
-  display: grid;
-  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 104px 86px 86px 58px 150px;
-  align-items: center;
-  min-width: 980px;
-  min-height: 30px;
-  padding: 0;
-  border-bottom: 1px solid #e8edef;
-  font-size: 11.5px;
-  background: #fff;
-}
-
-.eap-linha:hover {
-  background: #f5fafb;
-}
-
-.eap-rownum {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  background: #f7f9fa;
-  border-right: 1px solid #e2e8eb;
-  color: #89969d;
-  font-size: 9.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.eap-indent {
-  display: flex;
-  align-items: center;
-  min-height: 30px;
-}
-
-.eap-codigo {
-  min-width: 0;
-  padding: 0 8px;
-  font-size: 10px;
-  color: #7d8a91;
-}
-
-.eap-nome {
-  min-width: 0;
-  padding: 0 8px;
-}
-
-.eap-oficial {
-  justify-self: start;
-  margin: 0 8px;
-}
-
-.eap-unidade {
-  min-width: 0;
-  padding: 0 8px;
-  text-align: left;
-}
-
-.eap-status-cell {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  padding: 0 8px;
-}
-
-.eap-grupo-label {
-  color: #626f76;
-  font-size: 9.5px;
-}
-
-.eap-nivel-1 {
-  background: #f7f9fa;
-}
-
-.eap-nivel-1:hover {
-  background: #eef5f7;
-}
-
-.eap-seta {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #74838a;
-}
-
-.eap-seta:hover {
-  color: #2f6f7f;
-}
-
-.eap-seta-vazia {
-  cursor: default;
-}
-
-.eap-trazer {
-  opacity: 0;
-}
-
-.eap-linha:hover .eap-trazer,
-.eap-trazer:focus-visible {
-  opacity: 1;
-}
-
-@media (max-width: 900px) {
-  .eap-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
+import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, LogOut, ArrowRight, ArrowLeft, Ellipsis } from "lucide-react";
+import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation, useRoute } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { localIsoDe } from "@/lib/datas";
+import { CentralComandoArquimedes } from "@/components/CentralComandoArquimedes";
+import { JanelaAgente } from "@/components/JanelaAgente";
+import { startLogin } from "@/const";
+import { AbaCatalogo } from "@/components/AbaCatalogo";
+import { AbaEap } from "@/components/AbaEap";
+import { AbaDependencias } from "@/components/AbaDependencias";
+import { AbaCpm } from "@/components/AbaCpm";
+import { AbaBaseline } from "@/components/AbaBaseline";
+import { AbaProducao } from "@/components/AbaProducao";
+import { DocumentosDaObra } from "@/components/DocumentosDaObra";
+import { AbaCurvaS } from "@/components/AbaCurvaS";
+import { AbaRiscos } from "@/components/AbaRiscos";
+import { AbaSuprimentos } from "@/components/AbaSuprimentos";
+import { AbaOrcamento } from "@/components/AbaOrcamento";
+import { PainelPlanejamento } from "@/components/PainelPlanejamento";
+import { PainelDoCronograma } from "@/components/PainelDoCronograma";
+import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
+import { ABAS, type IdDaAba } from "@/modules/abas";
+import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
+import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
+import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
+import "@/planilha.css";
+import "@/eap.css";
+// mobile.css e campo-tipografia.css NAO sao importados aqui de proposito: eles
+// tem de ser a ultima folha do bundle, e qualquer CSS importado de dentro de App
+// entra antes de index.css. Eles sao importados no fim de main.tsx.
+
+/**
+ * A obra como planilha.
+ *
+ * POR QUE ESTE ARQUIVO É PEQUENO
+ *
+ * A versão anterior desta tela tinha 1.743 linhas e carregava o portfólio, o
+ * painel do agente, o checklist de planejamento, o despacho de módulos, o modal
+ * de nova obra e a planilha — cinco produtos num arquivo só. Qualquer coisa que
+ * se mexesse numa mexia nas outras quatro, e era isso que produzia a sequência
+ * de telas quebradas.
+ *
+ * Aqui não há menu lateral e não há despacho de módulo. A navegação da obra são
+ * as abas, embaixo, e o que não é aba fica na barra de título. O registro das
+ * abas é `modules/abas.ts`, que é dado, não código: acrescentar aba é
+ * acrescentar uma entrada na lista, sem tocar em componente.
+ *
+ * POR QUE NADA CALCULA AQUI
+ *
+ * A grade e o painel recebem do motor (`shared/cronograma-colunas.ts` via
+ * `planning.grade`) as colunas já derivadas, e a data de hoje vem no payload.
+ * Se este arquivo fizesse aritmética de data, duração ou progresso, existiriam
+ * duas verdades sobre a mesma célula.
+ */
+
+type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
+
+export default function Home() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const [rotaDaObra, parametrosDaRota] = useRoute("/obra/:id");
+  const ehRotaDeObra = Boolean(rotaDaObra);
+  const idNaUrl = ehRotaDeObra ? Number(parametrosDaRota?.id) : null;
+  const [aba, setAba] = useState<IdDaAba>("dashboard");
+  const [novaObraAberta, setNovaObraAberta] = useState(false);
+  const [lixeiraAberta, setLixeiraAberta] = useState(false);
+  const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);
+  const [menuAcoesObraAberto, setMenuAcoesObraAberto] = useState(false);
+  // Seletor de obra (o botao do topo). Antes a obra so se trocava clicando nos
+  // chips da faixa -- no celular so cabia um chip por vez. Agora ha um botao que
+  // abre a lista completa, com busca.
+
+  // `projects.list` devolve o array direto. O tipo é uma união porque o
+  // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
+  // dos dois formatos: só precisa do id, do nome e do código para a barra de
+  // título.
+  // A consulta so parte com sessao CONFIRMADA. `user === null` e ausencia, e
+  // pedir a lista nesse estado só produziria um 401 que o painel leria como obra
+  // vazia.
+  const obras = trpc.projects.list.useQuery(undefined, {
+    enabled: Boolean(user),
+    retry: false,
+  });
+  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> =
+    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> | undefined) ?? [];
+  const obra =
+    idNaUrl == null || Number.isNaN(idNaUrl)
+      ? undefined
+      : lista.find(o => o.id === idNaUrl);
+  const projetoId = obra?.id ?? null;
+  const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
+
+  const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
+  const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
+  const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });
+
+  const criarDemo = trpc.projects.createDemoGantt.useMutation({
+    onSuccess: async created => {
+      await obras.refetch();
+      setLocation(`/obra/${created.id}`);
+      setAba("gantt");
+    },
+  });
+
+  const criarObra = trpc.projects.create.useMutation({
+    onSuccess: async created => {
+      await obras.refetch();
+      setLocation(`/obra/${created.id}`);
+      setAba("eap");
+      setNovaObraAberta(false);
+    },
+  });
+
+  useEffect(() => {
+    const open = () => setNovaObraAberta(true);
+    window.addEventListener("abrir-nova-obra", open);
+    return () => window.removeEventListener("abrir-nova-obra", open);
+  }, []);
+
+  useEffect(() => {
+    const openConfig = () => setAba("comando");
+    const openEap = () => setAba("eap");
+    const openAtividades = () => setAba("atividades");
+    window.addEventListener("abrir-configuracao-llm", openConfig);
+    window.addEventListener("abrir-aba-eap", openEap);
+    window.addEventListener("abrir-aba-atividades", openAtividades);
+    return () => {
+      window.removeEventListener("abrir-configuracao-llm", openConfig);
+      window.removeEventListener("abrir-aba-eap", openEap);
+      window.removeEventListener("abrir-aba-atividades", openAtividades);
+    };
+  }, []);
+
+  return (
+    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}`}>
+      {mostrarTituloDaObra && obra && (
+        <header className="arq-context-header">
+          <div className="arq-context-top">
+            <div className="arq-context-brand">
+              <Layers3 size={20} aria-hidden="true" />
+              <strong>ARQUIMEDES</strong>
+            </div>
+            <div className="xl-contexto-obra-acoes">
+              {user?.role === "admin" && (
+                <div className="xl-contexto-menu-acoes">
+                  <button type="button" className="xl-contexto-menu-botao" aria-label="Mais ações da obra" aria-haspopup="menu" aria-expanded={menuAcoesObraAberto} title="Mais ações da obra" onClick={() => setMenuAcoesObraAberto(aberto => !aberto)}>
+                    <Ellipsis size={19} aria-hidden="true" />
+                  </button>
+                  {menuAcoesObraAberto && (
+                    <div className="xl-contexto-menu-painel" role="menu" aria-label="Ações da obra">
+                      <span className="xl-contexto-menu-titulo">Ações da obra</span>
+                      <button type="button" role="menuitem" className="xl-contexto-menu-perigo" onClick={() => { setMenuAcoesObraAberto(false); setObraParaExcluir({ id: obra.id, name: obra.name }); }}>
+                        <Trash2 size={16} aria-hidden="true" /> Enviar para a lixeira
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <button type="button" className="xl-sair-obra" onClick={() => { setAba("dashboard"); setLocation("/obras"); }} title="Sair da obra e voltar à seleção de obras">
+                <ArrowLeft size={16} /> Sair da obra
+              </button>
+            </div>
+          </div>
+          <div className="arq-context-project">
+            <div className="arq-context-project-copy">
+              <span>OBRA ATIVA</span>
+              <strong>{obra.name}</strong>
+              {obra.code && <small>Código: {obra.code}</small>}
+            </div>
+            <button type="button" className="xl-sidebar-toggle arq-context-collapse" onClick={() => window.dispatchEvent(new CustomEvent("alternar-recolhimento-sidebar"))} aria-label="Recolher ou expandir menu" title="Recolher ou expandir menu">
+              <Menu size={17} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+      )}
+
+      {novaObraAberta && (
+        <NovaObraDialog
+          busy={criarObra.isPending}
+          error={criarObra.error?.message ?? null}
+          onClose={() => {
+            if (!criarObra.isPending) {
+              setNovaObraAberta(false);
+              criarObra.reset();
+            }
+          }}
+          onSubmit={values => criarObra.mutate(values)}
+        />
+      )}
+
+      {lixeiraAberta && (
+        <div className="xl-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="xl-modal xl-lixeira">
+            <div className="xl-modal-head"><div><strong>Lixeira de obras</strong><span>As obras permanecem preservadas até serem restauradas.</span></div><button type="button" onClick={() => setLixeiraAberta(false)}><X size={16}/></button></div>
+            {(lixeira.data ?? []).length === 0 ? <div className="xl-lixeira-vazia">A lixeira está vazia.</div> : <div className="xl-lixeira-lista">{(lixeira.data ?? []).map(o => <div className="xl-lixeira-item" key={o.id}><div><strong>{o.name}</strong><small>{o.code} · {o.deletedAt ? new Date(o.deletedAt).toLocaleString("pt-BR") : "—"}</small></div><button type="button" disabled={restaurarObra.isPending} onClick={() => restaurarObra.mutate({ projectId: o.id })}>Restaurar</button></div>)}</div>}
+          </div>
+        </div>
+      )}
+      {obraParaExcluir && (
+        <div className="xl-modal-backdrop" role="dialog" aria-modal="true" aria-label="Enviar obra para a lixeira">
+          <div className="xl-modal xl-confirm-exclusao">
+            <div className="xl-modal-head">
+              <div>
+                <strong>Enviar para a lixeira</strong>
+                <span>Nada é apagado. A obra vai para a lixeira e pode ser restaurada depois.</span>
+              </div>
+              <button type="button" onClick={() => setObraParaExcluir(null)} aria-label="Fechar"><X size={16}/></button>
+            </div>
+            <p className="xl-exclusao-nome">{obraParaExcluir.name}</p>
+            {/*
+              Antes o botao so habilitava se o nome digitado fosse identico ao da
+              obra. O nome tem travessao ("Obra — Lote 1"), entao no teclado do
+              celular isso e praticamente impossivel; o botao ficava cinza e nada
+              explicava o porque. Agora e uma confirmacao explicita de dois
+              botoes, com o nome visivel, e o erro da operacao aparece aqui.
+            */}
+            {moverParaLixeira.error && (
+              <p className="xl-exclusao-erro">{moverParaLixeira.error.message}</p>
+            )}
+            <div className="xl-exclusao-acoes">
+              <button
+                type="button"
+                className="xl-btn-neutro"
+                onClick={() => setObraParaExcluir(null)}
+                disabled={moverParaLixeira.isPending}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="xl-btn-perigo"
+                disabled={moverParaLixeira.isPending}
+                onClick={() =>
+                  moverParaLixeira.mutate({
+                    projectId: obraParaExcluir.id,
+                    confirmationName: obraParaExcluir.name,
+                  })
+                }
+              >
+                {moverParaLixeira.isPending ? "Enviando…" : "Enviar para a lixeira"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!ehRotaDeObra && user ? (
+        <EscolhaDeObra
+          obras={lista.map(o => ({ id: o.id, name: o.name, code: o.code, location: o.location ?? "" }))}
+          carregando={obras.isPending}
+          onEscolher={id => setLocation(`/obra/${id}`)}
+          onNovaObra={() => setNovaObraAberta(true)}
+          onObraDemo={() => criarDemo.mutate()}
+          criandoDemo={criarDemo.isPending}
+        />
+      ) : user === undefined ? (
+        // A sessão ainda está sendo lida. `undefined` é espera; `null` é
+        // ausência. Confundir os dois é o que prendia a tela.
+        <SemSessao carregando />
+      ) : !user ? (
+        <SemSessao carregando={false} />
+      ) : !projetoId ? (
+        <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
+      ) : (
+        <>
+          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
+          {/*
+            O agente é janela flutuante sobre as abas, e não uma sétima aba: a
+            pergunta "como está a minha obra?" não pode ser mais um lugar para
+            ir. Ele recebe `aba` para saber o que está aberto, que é informação
+            que só o dono da tela tem.
+          */}
+          <JanelaAgente projetoId={projetoId} obra={obra!.name} abaAtual={aba} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function EscolhaDeObra({ obras, carregando, onEscolher, onNovaObra, onObraDemo, criandoDemo }: {
+  obras: Array<{ id: number; name: string; code: string; location: string }>;
+  carregando: boolean;
+  onEscolher: (id: number) => void;
+  onNovaObra: () => void;
+  onObraDemo: () => void;
+  criandoDemo: boolean;
+}) {
+  const [busca, setBusca] = useState("");
+  const termo = busca.trim().toLocaleLowerCase("pt-BR");
+  const filtradas = obras.filter(o =>
+    [o.name, o.code, o.location].filter(Boolean).some(valor => String(valor).toLocaleLowerCase("pt-BR").includes(termo)),
+  );
+
+  return (
+    <main className="arq-obras">
+      <div className="arq-obras-fundo" aria-hidden="true" />
+      <header className="arq-obras-header">
+        <a href="/" className="arq-obras-marca" aria-label="Arquimedes — página inicial">
+          <span className="arq-obras-simbolo"><Layers3 size={20} /></span>
+          <span><strong>ARQUIMEDES</strong><small>PLANEJAMENTO DE OBRAS</small></span>
+        </a>
+        <div className="arq-obras-header-meta"><span className="arq-obras-status" /> AMBIENTE DE TRABALHO</div>
+      </header>
+
+      <section className="arq-obras-conteudo">
+        <div className="arq-obras-intro">
+          <div>
+            <p className="arq-obras-eyebrow">ESPAÇO DE TRABALHO</p>
+            <h1>Suas obras<span>.</span></h1>
+            <p className="arq-obras-subtitulo">Selecione um projeto para continuar o planejamento ou inicie uma nova obra.</p>
+          </div>
+          <div className="arq-obras-acoes">
+            <button type="button" className="arq-obras-btn-secundario" onClick={onObraDemo} disabled={criandoDemo}>
+              <Sparkles size={16} /> {criandoDemo ? "Preparando demonstração…" : "Ver obra demonstrativa"}
+            </button>
+            <button type="button" className="arq-obras-btn-primario" onClick={onNovaObra}>
+              <Plus size={17} /> Nova obra
+            </button>
+          </div>
+        </div>
+
+        <div className="arq-obras-toolbar">
+          <div className="arq-obras-contagem"><strong>{carregando ? "…" : filtradas.length}</strong><span>{filtradas.length === 1 ? "obra" : "obras"} {termo ? "encontradas" : "no seu espaço"}</span></div>
+          <label className="arq-obras-busca">
+            <Search size={17} aria-hidden="true" />
+            <input value={busca} onChange={evento => setBusca(evento.target.value)} placeholder="Buscar por nome, código ou local" aria-label="Buscar obras" />
+            {busca && <button type="button" onClick={() => setBusca("")} aria-label="Limpar busca"><X size={15} /></button>}
+          </label>
+        </div>
+
+        {carregando ? (
+          <div className="arq-obras-estado" role="status"><span className="arq-obras-spinner" /><strong>Carregando suas obras</strong><p>Estamos preparando seu espaço de trabalho.</p></div>
+        ) : filtradas.length === 0 ? (
+          <div className="arq-obras-vazio">
+            <span className="arq-obras-vazio-icone"><Layers3 size={27} /></span>
+            <h2>{termo ? "Nenhuma obra encontrada" : "Seu espaço começa aqui"}</h2>
+            <p>{termo ? "Tente outro nome, código ou local." : "Crie a primeira obra para começar a estruturar a EAP, os quantitativos e o cronograma."}</p>
+            {termo ? (
+              <button type="button" className="arq-obras-btn-secundario" onClick={() => setBusca("")}>Limpar busca</button>
+            ) : (
+              <button type="button" className="arq-obras-btn-primario" onClick={onNovaObra}><Plus size={17} /> Criar primeira obra</button>
+            )}
+          </div>
+        ) : (
+          <div className="arq-obras-grade">
+            {filtradas.map((obra, indice) => (
+              <button type="button" className={`arq-obra-card arq-obra-card--${indice % 3}`} key={obra.id} onClick={() => onEscolher(obra.id)}>
+                <span className="arq-obra-capa" aria-hidden="true">
+                  <span className="arq-obra-capa-grade" />
+                  <span className="arq-obra-capa-selo"><Layers3 size={13} /> PROJETO</span>
+                  <span className="arq-obra-ilustracao"><span /><span /><span /><span /><span /></span>
+                  <span className="arq-obra-capa-rodape">ARQ / {String(indice + 1).padStart(2, "0")}</span>
+                </span>
+                <span className="arq-obra-info">
+                  <span className="arq-obra-codigo">{obra.code || "OBRA SEM CÓDIGO"}</span>
+                  <strong className="arq-obra-nome">{obra.name}</strong>
+                  <span className="arq-obra-local">{obra.location || "Local não informado"}</span>
+                  <span className="arq-obra-abrir">Abrir planejamento <ArrowRight size={15} /></span>
+                </span>
+              </button>
+            ))}
+            {!termo && (
+              <button type="button" className="arq-obra-nova-card" onClick={onNovaObra}>
+                <span className="arq-obra-nova-icone"><Plus size={22} /></span>
+                <strong>Adicionar nova obra</strong>
+                <span>Comece um novo planejamento</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <footer className="arq-obras-rodape">
+          <span><ShieldAlert size={15} /> Cada obra mantém seu próprio planejamento e histórico.</span>
+          <span>ARQUIMEDES · ENGENHARIA COM MÉTODO</span>
+        </footer>
+      </section>
+    </main>
+  );
+}
+
+/** A obra: navegação lateral recolhível e conteúdo central. */
+function Obra({
+  projetoId,
+  obra,
+  localizacao,
+  descricao,
+  tipoDeObra,
+  cubValor,
+  cubUf,
+  cubMes,
+  bdiDeclarado,
+  aba,
+  onAba,
+  usuario,
+  onLixeira,
+  lixeiraCount,
+}: {
+  projetoId: number;
+  obra: string;
+  localizacao: string;
+  descricao: string;
+  tipoDeObra: TipoDeObra | "";
+  cubValor: string;
+  cubUf: string;
+  cubMes: string;
+  bdiDeclarado: string;
+  aba: IdDaAba;
+  onAba: (aba: IdDaAba) => void;
+  usuario: { name?: string | null; role?: string | null } | null;
+  onLixeira: () => void;
+  lixeiraCount: number;
+}) {
+  const [sidebarRecolhida, setSidebarRecolhida] = useState(false);
+  // No celular a sidebar vira DRAWER. Sem isto ela ocupa a largura toda em
+  // `position: static` e empurra as abas para fora da tela: o engenheiro abre
+  // a obra no telefone e nao consegue navegar. O estado e separado do
+  // `sidebarRecolhida` de proposito — recolher (icone) e esconder (drawer) sao
+  // coisas diferentes, e misturar as duas quebra o desktop.
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
+
+  // Fecha o drawer ao escolher uma aba: senao ele fica por cima do conteudo.
+  // Usa o `onAba` recebido por prop — este componente nao tem o `setAba` do
+  // pai. Chamar `setAba` aqui nao compila, e foi o que o typecheck pegou.
+  const irParaAba = (id: IdDaAba) => {
+    onAba(id);
+    setMenuMobileAberto(false);
+  };
+
+  // O controle de recolher fica no cabeçalho da obra, ao lado do nome.
+  useEffect(() => {
+    const alternar = () => setSidebarRecolhida(v => !v);
+    window.addEventListener("alternar-recolhimento-sidebar", alternar);
+    return () => window.removeEventListener("alternar-recolhimento-sidebar", alternar);
+  }, []);
+
+  // Fecha com Esc — teclado em tablet/celular com teclado externo.
+  useEffect(() => {
+    if (!menuMobileAberto) return;
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuMobileAberto(false); };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [menuMobileAberto]);
+  const grade = trpc.planning.grade.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+
+  const calendario: WorkCalendar = CALENDARIO_CORRIDO;
+  const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
+  const linhas: EntradaDaLinha[] = (grade.data?.linhas ?? []).map(l => ({
+    codigo: l.codigo,
+    atividade: l.atividade,
+    frente: l.frente,
+    pavimento: l.pavimento,
+    inicio: l.inicio,
+    duracao: l.duracao,
+    quantidade: l.quantidade,
+    unidade: l.unidade,
+    executado: l.executado,
+  }));
+  const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
+  const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
+  const exemploPorCodigo = new Set(Object.keys(grade.data?.exemploPorCodigo ?? {}));
+  const definicao = ABAS.find(a => a.id === aba);
+
+  const icones: Record<string, ReactNode> = {
+    dashboard: <HomeIcon size={17} />,
+    escopo: <ClipboardList size={17} />,
+    eap: <TreePine size={17} />,
+    atividades: <ListTodo size={17} />,
+    dependencias: <GitBranch size={17} />,
+    cpm: <Network size={17} />,
+    baseline: <LockKeyhole size={17} />,
+    gantt: <BarChart3 size={17} />,
+    "linha-balanco": <Activity size={17} />,
+    producao: <Activity size={17} />,
+    documentos: <FileText size={17} />,
+    suprimentos: <Package size={17} />,
+    financeiro: <WalletCards size={17} />,
+    riscos: <ShieldAlert size={17} />,
+    "curva-s": <BarChart3 size={17} />,
+    catalogo: <Package size={17} />,
+    comando: <Sparkles size={17} />,
+  };
+
+  const grupos = [
+    { titulo: "VISÃO GERAL", ids: ["dashboard"] },
+    { titulo: "PLANEJAMENTO", ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"] },
+    { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
+    { titulo: "CONTROLE", ids: ["producao", "documentos", "suprimentos", "financeiro", "riscos", "curva-s"] },
+    { titulo: "SISTEMA", ids: ["catalogo", "comando"] },
+  ];
+
+  const etapaAtual = ({
+    dashboard: "Visão geral", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
+    dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
+    gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Produção",
+    documentos: "Documentos",
+    suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos", "curva-s": "Curva S"
+  } as Record<string, string>)[aba] ?? aba;
+
+  return (
+    <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}${menuMobileAberto ? " menu-mobile-aberto" : ""}`}>
+      {/* Backdrop do drawer: so aparece no celular com o menu aberto. */}
+      {menuMobileAberto && (
+        <div className="xl-sidebar-backdrop" onClick={() => setMenuMobileAberto(false)} aria-hidden="true" />
+      )}
+      <aside className="xl-sidebar" aria-label="Navegação da obra">
+        <nav className="xl-sidebar-nav">
+          {grupos.map(grupo => (
+            <div className="xl-sidebar-group" key={grupo.titulo}>
+              {!sidebarRecolhida && <div className="xl-sidebar-label">{grupo.titulo}</div>}
+              {grupo.ids.map(id => {
+                const a = ABAS.find(item => item.id === id);
+                if (!a) return null;
+                // Central de Comando é admin-only: escondida no menu, não só
+                // desabilitada. O gate vive aqui, no dono da navegação.
+                if (a.id === "comando" && usuario?.role !== "admin") return null;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className={`xl-sidebar-item${a.id === aba ? " ativa" : ""}`}
+                    onClick={() => irParaAba(a.id)}
+                    title={sidebarRecolhida ? a.rotulo : (a.falta ?? a.rotulo)}
+                    aria-current={a.id === aba ? "page" : undefined}
+                  >
+                    {icones[a.id] ?? <Activity size={17} />}
+                    {!sidebarRecolhida && <span>{a.rotulo}</span>}
+                    {!sidebarRecolhida && a.status === "pendente" && (
+  <span className="xl-sidebar-status" title={a.falta ?? "Etapa ainda não disponível"} aria-label="Etapa pendente">●</span>
+)}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          <div className="xl-sidebar-group">
+            {!sidebarRecolhida && <div className="xl-sidebar-label">AÇÕES</div>}
+            <button
+              type="button"
+              className="xl-sidebar-item"
+              onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}
+              title={sidebarRecolhida ? "Arquimedes" : "Abrir o Arquimedes"}
+            >
+              <Bot size={17} />
+              {!sidebarRecolhida && <span>Arquimedes</span>}
+            </button>
+            <button
+              type="button"
+              className="xl-sidebar-item"
+              onClick={onLixeira}
+              title={sidebarRecolhida ? "Lixeira" : "Lixeira de obras"}
+            >
+              <Trash2 size={17} />
+              {!sidebarRecolhida && <span>Lixeira{lixeiraCount ? ` (${lixeiraCount})` : ""}</span>}
+            </button>
+          </div>
+        </nav>
+
+        <div className="xl-sidebar-pe">
+          <span className="xl-sidebar-user" title={usuario?.name || "Conta"}>
+            {(usuario?.name || "R").charAt(0).toUpperCase()}
+          </span>
+          {!sidebarRecolhida && <span className="xl-sidebar-user-nome">{usuario?.name || "Conta"}</span>}
+          <button
+            type="button"
+            className="xl-sidebar-sair"
+            onClick={() => { window.location.href = "/api/auth/logout"; }}
+            title="Sair da conta"
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
+      </aside>
+
+      <main className="xl-area xl-area-sidebar">
+        <div className="arquimedes-workbar">
+          <div className="arquimedes-workbar-title">
+            <span className="arquimedes-kicker">PLANEJAMENTO DA OBRA</span>
+          </div>
+          <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
+            <span className="arquimedes-trilha-label">Fluxo:</span>
+            {["Escopo", "EAP", "Atividades", "Dependências", "CPM", "Baseline"].map((etapa, index) => (
+              <Fragment key={etapa}>
+                {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
+                <span className={etapaAtual === etapa ? "ativo" : ""}>{etapa}</span>
+              </Fragment>
+            ))}
+          </div>
+          <div className="arquimedes-workbar-actions">
+            <button type="button" className="xl-menu-mobile" title="Menu" aria-label="Abrir menu de navegação" aria-expanded={menuMobileAberto} onClick={() => setMenuMobileAberto(v => !v)}>
+              <Menu size={17} />
+            </button>
+            <button type="button" title="Pesquisar na obra"><Search size={15} /></button>
+            <button type="button" title="Notificações"><Bell size={15} /></button>
+            <button type="button" title="Configurações"><Settings2 size={15} /></button>
+          </div>
+        </div>
+        <div className="arquimedes-content">
+        {aba === "dashboard" ? (
+          <PainelDoCronograma agregado={agregado} projetoId={projetoId} temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0} />
+        ) : aba === "escopo" ? (
+          <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} cubValor={cubValor} cubUf={cubUf} cubMes={cubMes} bdiDeclarado={bdiDeclarado} />
+        ) : aba === "eap" ? (
+          <AbaEap projetoId={projetoId} />
+        ) : aba === "atividades" ? (
+          <PainelPlanejamento projetoId={projetoId} />
+        ) : aba === "dependencias" ? (
+          <AbaDependencias projetoId={projetoId} />
+        ) : aba === "cpm" ? (
+          <AbaCpm projetoId={projetoId} />
+        ) : aba === "baseline" ? (
+          <AbaBaseline projetoId={projetoId} />
+        ) : aba === "gantt" ? (
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" />
+        ) : aba === "linha-balanco" ? (
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
+        ) : aba === "producao" ? (
+          <AbaProducao projetoId={projetoId} />
+        ) : aba === "documentos" ? (
+          <DocumentosDaObra projetoId={projetoId} />
+        ) : aba === "suprimentos" ? (
+          <AbaSuprimentos projetoId={projetoId} />
+        ) : aba === "financeiro" ? (
+          <AbaOrcamento projetoId={projetoId} />
+        ) : aba === "riscos" ? (
+          <AbaRiscos projetoId={projetoId} />
+        ) : aba === "curva-s" ? (
+          <AbaCurvaS projetoId={projetoId} hoje={hoje} />
+        ) : aba === "catalogo" ? (
+          <AbaCatalogo />
+        ) : aba === "comando" ? (
+          <CentralComandoArquimedes />
+        ) : (
+          <AbaVazia titulo={definicao?.rotulo ?? aba} falta={definicao?.falta ?? ""} />
+        )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
+function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | ""; cubValor: string; cubUf: string; cubMes: string; bdiDeclarado: string }) {
+  const utils = trpc.useUtils();
+  const [editando, setEditando] = useState(false);
+  const [descricaoEditada, setDescricaoEditada] = useState(descricao);
+  const [localizacaoEditada, setLocalizacaoEditada] = useState(localizacao);
+  const [tipoDeObraEditado, setTipoDeObraEditado] = useState(tipoDeObra);
+  const [cubValorEditado, setCubValorEditado] = useState(cubValor);
+  const [cubUfEditada, setCubUfEditada] = useState(cubUf);
+  const [cubMesEditado, setCubMesEditado] = useState(cubMes);
+  const [bdiEditado, setBdiEditado] = useState(bdiDeclarado);
+  useEffect(() => {
+    setDescricaoEditada(descricao);
+    setLocalizacaoEditada(localizacao);
+    setTipoDeObraEditado(tipoDeObra);
+    setCubValorEditado(cubValor);
+    setCubUfEditada(cubUf);
+    setCubMesEditado(cubMes);
+    setBdiEditado(bdiDeclarado);
+  }, [descricao, localizacao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado]);
+  const salvarEscopo = trpc.projects.updateScope.useMutation({
+    onSuccess: async () => {
+      await utils.projects.list.invalidate();
+      setEditando(false);
+    },
+  });
+  // R6-02: o CUB e o BDI sao DECLARADOS pelo engenheiro — vazio significa
+  // "obra nao declarou", nao "zero". Aceita virgula como separador decimal.
+  const numeroOuNulo = (v: string): number | null | "invalido" => {
+    const t = v.trim().replace(",", ".");
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : "invalido";
+  };
+  const cubValorNum = numeroOuNulo(cubValorEditado);
+  const bdiNum = numeroOuNulo(bdiEditado);
+  const cubUfValida = cubUfEditada.trim() === "" || cubUfEditada.trim().length === 2;
+  const cubMesValido = cubMesEditado.trim() === "" || /^\d{4}-(0[1-9]|1[0-2])$/.test(cubMesEditado.trim());
+  const cubBdiValidos = cubValorNum !== "invalido" && bdiNum !== "invalido"
+    && (bdiNum === null || (bdiNum >= 0 && bdiNum <= 1));
+  const formatarReal = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v; };
+  const formatarPct = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? (n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + "%" : v; };
+  const cubCamposPreenchidos = [cubValor.trim(), cubUf.trim(), cubMes.trim()].filter(v => v !== "").length;
+  const cubCompleto = cubCamposPreenchidos === 3;
+  const grade = trpc.planning.grade.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
+  const linhas = grade.data?.linhas ?? [];
+  const atividades = linhas.filter(l => !String(l.codigo ?? "").toLowerCase().includes("exemplo"));
+  const frentes = Array.from(new Set(atividades.map(l => l.frente).filter(Boolean)));
+  const pavimentos = Array.from(new Set(atividades.map(l => l.pavimento).filter(Boolean)));
+  const unidades = atividades.reduce((sum, l) => sum + (Number(l.quantidade) || 0), 0);
+  const temPlanejamento = atividades.length > 0;
+
+  const elementos = [
+    { codigo: "E.01", nome: "Edificação / intervenção principal", categoria: "ENTREGÁVEL", detalhe: temPlanejamento ? "Rastreada no planejamento atual" : "Aguardando definição no cadastro do escopo", status: temPlanejamento ? "Identificado" : "Pendente" },
+    { codigo: "E.02", nome: "Sistemas e serviços da obra", categoria: "COMPONENTES", detalhe: frentes.length ? String(frentes.length) + " frente(s) identificada(s) no planejamento" : "Ainda não há frentes derivadas", status: frentes.length ? "Rastreado" : "A definir" },
+    { codigo: "E.03", nome: "Localização / setores de execução", categoria: "LOCAL", detalhe: pavimentos.length ? String(pavimentos.length) + " local(is)/pavimento(s) no planejamento" : "Localização executiva ainda não derivada", status: pavimentos.length ? "Rastreado" : "A definir" },
+    { codigo: "E.04", nome: "Quantidades associadas", categoria: "QUANTITATIVOS", detalhe: unidades > 0 ? String(unidades) + " unidade(s) informada(s) nas linhas atuais" : "Nenhuma quantidade disponível nas linhas atuais", status: unidades > 0 ? "Parcial" : "Pendente" },
+  ];
+
+  return (
+    <div className="scopo-workspace">
+      <header className="scopo-workspace-header">
+        <div className="scopo-workspace-title">
+          <span className="scopo-kicker">PLANEJAMENTO · ESCOPO</span>
+          <h1>O que a obra entrega</h1>
+          <p>{obra} · definição do que existe na obra, seus limites e o que será transformado em EAP.</p>
+        </div>
+        <div className="scopo-header-actions">
+          {editando ? (
+            <>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2 || !cubBdiValidos || !cubUfValida || !cubMesValido} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim(), cubValor: cubValorNum === "invalido" ? null : cubValorNum, cubUf: cubUfEditada.trim() === "" ? null : cubUfEditada.trim().toUpperCase(), cubMes: cubMesEditado.trim() === "" ? null : cubMesEditado.trim(), bdiDeclarado: bdiNum === "invalido" ? null : bdiNum })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setCubValorEditado(cubValor); setCubUfEditada(cubUf); setCubMesEditado(cubMes); setBdiEditado(bdiDeclarado); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
+            </>
+          ) : (
+            <button type="button" className="scopo-btn secondary" onClick={() => setEditando(true)}><ClipboardList size={14}/> Editar escopo</button>
+          )}
+          <button type="button" className="scopo-btn secondary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={14}/> Analisar com Arquimedes</button>
+        </div>
+      </header>
+
+      <section className="scopo-trace-grid">
+        <details open className="scopo-detail">
+          <summary>Escopo declarado da obra</summary>
+          <div className="scopo-detail-body">
+            <p><strong>Natureza:</strong> {({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? "A confirmar"}</p>
+            <p><strong>Localização cadastrada:</strong> {localizacao || "Não informada"}</p>
+            <p><strong>Descrição original:</strong></p>
+            <p>{descricao.trim() || "Ainda não há uma descrição formal cadastrada para esta obra."}</p>
+            <p><strong>CUB declarado (parâmetro de custo por m²):</strong> {cubCamposPreenchidos === 0
+              ? "Não declarado — a conferência de custo por m² não roda sem o CUB da obra."
+              : cubCompleto
+                ? `R$ ${formatarReal(cubValor)}/m² · ${cubUf.trim().toUpperCase()} · referência ${cubMes.trim()}`
+                : `Declaração incompleta (${cubCamposPreenchidos} de 3 campos) — a conferência de custo por m² só roda com valor, UF e mês de referência.`}</p>
+            <p><strong>BDI declarado (parâmetro de preço):</strong> {bdiDeclarado.trim() === ""
+              ? "Não declarado — a conferência de preço segue como aviso, não como erro."
+              : formatarPct(bdiDeclarado)}</p>
+          </div>
+        </details>
+      </section>
+      {editando && (
+        <section className="scopo-detail scopo-edit-form">
+          <div className="scopo-detail-body">
+            <label><strong>Localização da obra</strong><input value={localizacaoEditada} onChange={event => setLocalizacaoEditada(event.target.value)} minLength={2} maxLength={180} placeholder="Cidade, endereço ou região" /></label>
+            <label><strong>Natureza da obra</strong>
+              <select value={tipoDeObraEditado} onChange={event => setTipoDeObraEditado(event.target.value as TipoDeObra | "")}>
+                <option value="">A confirmar</option>
+                <option value="edificio">Edificação / construção nova</option>
+                <option value="reforma">Reforma</option>
+                <option value="pavimentacao">Pavimentação</option>
+                <option value="saneamento">Saneamento / infraestrutura</option>
+                <option value="todos">Múltiplas frentes</option>
+              </select>
+            </label>
+            <label><strong>Descrição formal do escopo</strong>
+              <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Descreva entregas, inclusões, exclusões, premissas, limites contratuais e itens ainda a confirmar. Separe fatos conhecidos de hipóteses." />
+              <small>{descricaoEditada.length}/4000 caracteres. Não informe quantidades ou sistemas que ainda não foram confirmados.</small>
+            </label>
+            <label><strong>CUB declarado — valor (R$/m²)</strong>
+              <input value={cubValorEditado} onChange={event => setCubValorEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 2850,00 — deixe vazio se a obra não declara" />
+              <small>Parâmetro de custo declarado por você. O sistema não inventa referência: sem valor, UF e mês de referência, a conferência de custo por m² não roda.</small>
+              {cubValorNum === "invalido" && <small role="alert">Informe um número (ex.: 2850,00).</small>}
+            </label>
+            <label><strong>CUB declarado — UF de referência</strong>
+              <input value={cubUfEditada} onChange={event => setCubUfEditada(event.target.value)} maxLength={2} placeholder="Ex.: SP" />
+              {!cubUfValida && <small role="alert">Informe a sigla da UF com 2 letras (ex.: SP).</small>}
+            </label>
+            <label><strong>CUB declarado — mês de referência</strong>
+              <input value={cubMesEditado} onChange={event => setCubMesEditado(event.target.value)} maxLength={7} placeholder="AAAA-MM (ex.: 2026-09)" />
+              {!cubMesValido && <small role="alert">Use o formato AAAA-MM (ex.: 2026-09).</small>}
+            </label>
+            <label><strong>BDI declarado (fração)</strong>
+              <input value={bdiEditado} onChange={event => setBdiEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 0,25 para 25% — deixe vazio se a obra não declara" />
+              <small>Com o BDI declarado, o desvio real de preço passa a ser verificado (erro). Sem ele, segue como aviso de conferência.</small>
+              {bdiNum !== "invalido" && bdiNum !== null && (bdiNum < 0 || bdiNum > 1) && <small role="alert">Informe a fração entre 0 e 1 (ex.: 0,25).</small>}
+            </label>
+            {salvarEscopo.isError && <p role="alert">{salvarEscopo.error.message}</p>}
+          </div>
+        </section>
+      )}
+
+      <div className="scopo-flow" aria-label="Fluxo do planejamento">
+        <strong>Obra</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP</span><span>→</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades</span>
+      </div>
+
+      <section className="scopo-metrics" aria-label="Indicadores do escopo">
+        <div><span>ELEMENTOS</span><strong>{elementos.length}</strong><small>camadas do escopo visíveis</small></div>
+        <div><span>FRENTES</span><strong>{frentes.length}</strong><small>derivadas do planejamento atual</small></div>
+        <div><span>LOCAIS</span><strong>{pavimentos.length}</strong><small>setores/pavimentos encontrados</small></div>
+        <div className={!temPlanejamento ? "attention" : ""}><span>RASTREABILIDADE</span><strong>{temPlanejamento ? "PARCIAL" : "AGUARDANDO"}</strong><small>{temPlanejamento ? "há dados para ligar ao planejamento" : "escopo ainda sem dados executivos"}</small></div>
+      </section>
+
+      <div className="scopo-toolbar">
+        <div className="scopo-toolbar-title"><strong>Mapa do escopo</strong><span>Fonte conceitual da EAP; não substitui a estrutura analítica.</span></div>
+        <span className="scopo-readonly">VISÃO DERIVADA · SEM INVENTAR DADOS</span>
+      </div>
+
+      <section className="scopo-table-wrap">
+        <table className="scopo-table">
+          <thead><tr><th className="codigo-col">CÓD.</th><th className="elemento-col">ELEMENTO DA OBRA</th><th>CATEGORIA</th><th>O QUE ESTÁ DEFINIDO</th><th>STATUS</th></tr></thead>
+          <tbody>
+            {elementos.map(item => (
+              <tr key={item.codigo}>
+                <td className="mono">{item.codigo}</td>
+                <td><strong>{item.nome}</strong></td>
+                <td><span className="scopo-tag">{item.categoria}</span></td>
+                <td>{item.detalhe}</td>
+                <td><span className={"scopo-status" + (item.status === "Pendente" || item.status === "A definir" ? " pendente" : "")}>{item.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="scopo-trace-grid">
+        <details open className="scopo-detail">
+          <summary>Limites e critérios do escopo</summary>
+          <div className="scopo-detail-body">
+            <p><strong>Inclusões:</strong> devem ser confirmadas pelo engenheiro antes da aprovação do escopo.</p>
+            <p><strong>Exclusões:</strong> devem ser registradas explicitamente para evitar que a EAP absorva trabalho não contratado.</p>
+            <p><strong>Premissas:</strong> ficam separadas de fatos confirmados; uma premissa não vira requisito técnico automaticamente.</p>
+          </div>
+        </details>
+        <details open className="scopo-detail">
+          <summary>Rastreabilidade para o planejamento</summary>
+          <div className="scopo-detail-body">
+            <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP</span><b>→</b><span>QUANTITATIVOS</span><b>→</b><span>ATIVIDADES</span></div>
+            <p>{temPlanejamento ? "Já existem dados de planejamento que podem receber vínculos de escopo. A aprovação deve ocorrer sem preencher informações ausentes por inferência." : "Ainda não há dados executivos suficientes para declarar cobertura do escopo. Isso não é aprovação."}</p>
+          </div>
+        </details>
+      </section>
+
+      <footer className="scopo-footer">
+        <span><strong>Regra:</strong> escopo define o que será entregue; EAP organiza e controla esse escopo.</span>
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={13}/> Pedir análise do Arquimedes</button>
+      </footer>
+    </div>
+  );
+}
+/** Aba sem conteúdo: diz o que falta e por quê. */
+function AbaVazia({ titulo, falta }: { titulo: string; falta: string }) {
+  return (
+    <div className="xl-vazia-folha">
+      <h3>{titulo} ainda não existe</h3>
+      {falta && <p className="xl-vazia-falta">{falta}</p>}
+      <p className="xl-vazia-nota">
+        A aba não desenha tela vazia que pareça funcionando. O que falta está
+        escrito acima porque é o caminho, não um prazo.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A tela de entrada. É o ramo que faltava.
+ *
+ * Sem sessão, `projects.list` roda com `enabled: false` e o React Query marca
+ * a query como `pending` para sempre — não "carregando", "nunca vai carregar".
+ * A tela lia esse `isPending` e escrevia "Carregando as obras…" para sempre, sem
+ * botão, sem erro e sem nenhuma requisição na rede. O usuário via uma página
+ * que parecia trabalhar e não tinha caminho nenhum.
+ *
+ * Aqui a espera é de `user`, que é o que realmente decide se a consulta pode
+ * partir. Enquanto `user` é `undefined` a sessão está sendo lida; quando é
+ * `null`, não há sessão, e isso é um estado, não uma espera.
+ */
+function SemSessao({ carregando }: { carregando: boolean }) {
+  return (
+    <div className="xl-area">
+      <div className="xl-vazia-folha">
+        <h3>{carregando ? "Lendo a sessão…" : "Entre para ver as obras"}</h3>
+        {!carregando && (
+          <>
+            <p className="xl-vazia-falta">
+              As obras são da sua conta. O acesso é pelo GitHub.
+            </p>
+            <button
+              type="button"
+              className="xl-btn-entrar"
+              onClick={startLogin}
+            >
+              Entrar com GitHub
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type NovaObraValues = {
+  name: string;
+  location: string;
+  plannedStart?: Date;
+  plannedFinish?: Date;
+  tipoDeObra: TipoDeObra;
+  descricao?: string;
+};
+
+function NovaObraDialog({
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (values: NovaObraValues) => void;
+}) {
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [plannedStart, setPlannedStart] = useState("");
+  const [plannedFinish, setPlannedFinish] = useState("");
+  const [tipoDeObra, setTipoDeObra] =
+    useState<NovaObraValues["tipoDeObra"]>("edificio");
+  const [descricao, setDescricao] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!name.trim() || !location.trim() || !descricao.trim()) return;
+    onSubmit({
+      name: name.trim(),
+      location: location.trim(),
+      plannedStart: plannedStart ? new Date(`${plannedStart}T12:00:00`) : undefined,
+      plannedFinish: plannedFinish ? new Date(`${plannedFinish}T12:00:00`) : undefined,
+      tipoDeObra,
+      descricao: descricao.trim(),
+    });
   }
 
-  .eap-toolbar-acoes {
-    flex-wrap: wrap;
-  }
-
-  .eap-topo {
-    align-items: stretch;
-  }
-
-  .eap-resumo {
-    flex-wrap: wrap;
-  }
-
-  .eap-busca-wrap {
-    min-width: 0;
-    width: 100%;
-  }
-}
-
-
-/* Ajuste fino das colunas da grade EAP: número, árvore, EAP, descrição, SEINFRA, unidade, status. */
-.eap-grid-head {
-  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 86px 58px 150px;
-}
-
-.eap-linha {
-  grid-template-columns: 42px 34px 58px minmax(280px,1fr) 86px 58px 150px;
-}
-
-.eap-grid-head .eap-grid-col {
-  border-left: 1px solid #d9e0e4;
-}
-
-.eap-grid-head .eap-grid-canto {
-  border-right: 1px solid #d9e0e4;
-}
-
-
-/* Intake documental do Arquimedes */
-.eap-documentos{margin:0 16px 12px;border:1px solid #d9dee7;background:#fff;border-radius:6px;overflow:hidden}
-.eap-documentos-cabecalho{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #e7eaf0}
-.eap-documentos-cabecalho>div:first-child{flex:1;min-width:0}
-.eap-documentos-titulo{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#202733}
-.eap-documentos-subtitulo{margin-top:3px;font-size:11px;color:#687386}
-.eap-documentos-lista{display:flex;flex-direction:column}
-.eap-documento{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #eef0f4}
-.eap-documento:last-child{border-bottom:0}
-.eap-documento-info{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
-.eap-documento-info strong{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.eap-documento-info span{font-size:10px;color:#6c7584}
-.eap-documento-remover{border:0;background:transparent;color:#8993a3;cursor:pointer;padding:5px;border-radius:4px}
-.eap-documento-remover:hover{background:#f3f4f7;color:#b42318}
-.eap-documento-acao{border:0;background:transparent;color:#8993a3;cursor:pointer;padding:5px;border-radius:4px}
-.eap-documento-acao:hover{background:#f3f4f7;color:#202733}
-.eap-documento-remover:disabled,.eap-documento-acao:disabled{opacity:.5;cursor:default}
-.eap-documentos-vazio{padding:11px 14px;font-size:11px;color:#6c7584}
-
-
-/* ------------------------------------------------------ editor da EAP */
-
-.eap-editor {
-  margin: 0 0 10px;
-  padding: 11px 12px;
-  border: 1px solid #cbd9de;
-  border-radius: 5px;
-  background: #fbfdfe;
-}
-
-.eap-editor-titulo {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.eap-editor-titulo strong {
-  display: block;
-  font-size: 11.5px;
-  color: #24343c;
-}
-
-.eap-editor-titulo span {
-  display: block;
-  margin-top: 3px;
-  font-size: 10px;
-  color: #626f76;
-}
-
-.eap-editor-fechar {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid #d4dde1;
-  border-radius: 4px;
-  background: #fff;
-  color: #697980;
-  cursor: pointer;
-}
-
-.eap-editor-campos {
-  display: flex;
-  align-items: flex-end;
-  gap: 9px;
-  flex-wrap: wrap;
-}
-
-.eap-editor-campos label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 150px;
-  color: #66767e;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-
-.eap-editor-campos label:first-child {
-  flex: 1 1 320px;
-}
-
-.eap-editor-campos input,
-.eap-editor-campos select {
-  min-height: 30px;
-  padding: 0 8px;
-  border: 1px solid #cfd8dd;
-  border-radius: 4px;
-  background: #fff;
-  color: #263840;
-  font: inherit;
-  font-size: 11px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.eap-editor-campos input:focus,
-.eap-editor-campos select:focus {
-  outline: 2px solid rgba(47,111,127,.14);
-  border-color: #8eb4c0;
-}
-
-.eap-editor-acoes {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.eap-editor-acoes .eap-btn,
-.eap-editor-acoes .eap-btn-secundario {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 30px;
-}
-
-.eap-editor-erro {
-  margin-top: 9px;
-  padding: 7px 9px;
-  border-left: 3px solid #d1495b;
-  background: #fdf0f1;
-  color: #8a1f2c;
-  font-size: 11px;
-}
-
-.eap-acoes-linha {
-  display: flex;  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  padding-left: 5px;
-  opacity: 0;
-  transition: opacity .1s ease;
-}
-
-.eap-linha:hover .eap-acoes-linha,
-.eap-acoes-linha:focus-within {
-  opacity: 1;
-}
-
-.eap-acao-linha {
-  display: grid;
-  place-items: center;
-  width: 23px;
-  height: 23px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: transparent;
-  color: #6f7f87;
-  cursor: pointer;
-}
-
-.eap-acao-linha:hover {
-  border-color: #cbd9de;
-  background: #edf5f7;
-  color: #2f6f7f;
-}
-
-@media (max-width: 900px) {
-  .eap-editor-campos {
-    align-items: stretch;
-  }
-
-  .eap-editor-campos label {
-    flex: 1 1 180px;
-  }
-
-  .eap-editor-acoes {
-    width: 100%;
-  }
-}
-
-@media (max-width: 600px) {
-  .eap {
-    padding: 7px 6px 14px;
-  }
-
-  .eap-toolbar,
-  .eap-topo {
-    padding: 9px;
-  }
-
-  .eap-toolbar-identidade,
-  .eap-resumo {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .eap-toolbar-acoes,
-  .eap-topo-acoes {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .eap-tool-btn,
-  .eap-btn,
-  .eap-btn-secundario {
-    min-height: 36px;
-  }
-
-  .eap-busca-wrap {
-    width: 100%;
-    min-width: 0;
-    flex-basis: 100%;
-    min-height: 36px;
-  }
-
-  .eap-arvore {
-    margin: 7px 0 12px;
-    border-radius: 4px;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* A planilha EAP permanece íntegra e ganha rolagem horizontal no telefone. */
-  .eap-grid-head,
-  .eap-linha {
-    min-width: 820px;
-  }
-
-  .eap-editor {
-    margin: 7px 0;
-  }
-
-  .eap-editor-campos {
-    grid-template-columns: 1fr;
-    padding: 9px;
-  }
-
-  .eap-editor-acoes {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .eap-editor-acoes button {
-    min-height: 38px;
-  }
-
-  .eap-acoes {
-    gap: 6px;
-  }
-}
-
-
-/* ------------------------------------------------------ controle EAP */
-.eap-controle {
-  margin: 0 0 14px;
-  border: 1px solid #dfe5ea;
-  border-radius: 6px;
-  background: #fbfcfd;
-  overflow: hidden;
-}
-.eap-controle-cabecalho,
-.eap-baseline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-}
-.eap-controle-cabecalho {
-  border-bottom: 1px solid #e7ebef;
-}
-.eap-controle-cabecalho > div,
-.eap-baseline-info {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-.eap-controle-cabecalho strong,
-.eap-baseline strong,
-.eap-parada strong {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #263440;
-  font-size: 12px;
-}
-.eap-controle-cabecalho span,
-.eap-baseline span,
-.eap-parada span {
-  display: block;
-  color: #6d7883;
-  font-size: 11px;
-  line-height: 1.45;
-}
-.eap-controle-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px 14px;
-}
-.eap-controle-card {
-  border: 1px solid #e1e6ea;
-  border-radius: 5px;
-  padding: 9px 10px;
-  background: #fff;
-}
-.eap-controle-card.ok {
-  border-left: 3px solid #3b7f5f;
-}
-.eap-controle-card.atencao {
-  border-left: 3px solid #b27a28;
-}
-.eap-controle-card span,
-.eap-controle-card small {
-  display: block;
-  color: #6d7883;
-  font-size: 10.5px;
-}
-.eap-controle-card strong {
-  display: block;
-  margin: 3px 0;
-  color: #263440;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-}
-.eap-parada {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 0 14px 10px;
-}
-.eap-parada > div {
-  padding: 9px 10px;
-  border-radius: 4px;
-  background: #f2f5f7;
-}
-.eap-baseline {
-  border-top: 1px solid #e7ebef;
-  background: #f7f9fa;
-}
-.eap-baseline-info svg {
-  color: #1f6f8b;
-  flex: 0 0 auto;
-}
-.eap-baseline-info > div {
-  min-width: 0;
-}
-.eap-baseline .eap-btn {
-  white-space: nowrap;
-}
-@media (max-width: 900px) {
-  .eap-controle-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .eap-parada { grid-template-columns: 1fr; }
-}
-@media (max-width: 560px) {
-  .eap-controle-grid { grid-template-columns: 1fr; }
-  .eap-baseline { align-items: flex-start; flex-direction: column; }
-}
-
-
-/* EAP 2.1 — densidade/zoom de planilha */
-.eap {
-  --eap-row-h: 30px;
-  --eap-head-h: 30px;
-  --eap-font: 11.5px;
-}
-.eap-densidade-compacta { --eap-row-h: 25px; --eap-head-h: 27px; --eap-font: 10.5px; }
-.eap-densidade-confortavel { --eap-row-h: 36px; --eap-head-h: 34px; --eap-font: 12px; }
-
-.eap-densidade-compacta .eap-grid-head,
-.eap-densidade-normal .eap-grid-head,
-.eap-densidade-confortavel .eap-grid-head { min-height: var(--eap-head-h); }
-
-.eap-densidade-compacta .eap-grid-col,
-.eap-densidade-normal .eap-grid-col,
-.eap-densidade-confortavel .eap-grid-col { height: var(--eap-head-h); }
-
-.eap-densidade-compacta .eap-linha,
-.eap-densidade-normal .eap-linha,
-.eap-densidade-confortavel .eap-linha { min-height: var(--eap-row-h); font-size: var(--eap-font); }
-
-.eap-densidade-compacta .eap-indent,
-.eap-densidade-normal .eap-indent,
-.eap-densidade-confortavel .eap-indent { min-height: var(--eap-row-h); }
-
-.eap-zoom {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 30px;
-  padding: 2px;
-  border: 1px solid #d3dde1;
-  border-radius: 5px;
-  background: #f7f9fa;
-}
-.eap-zoom span {
-  padding: 0 5px 0 6px;
-  color: #718087;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-.eap-zoom button {
-  min-width: 39px;
-  height: 24px;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: #65757d;
-  font-size: 9.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.eap-zoom button:hover { background: #eaf2f5; color: #285b6a; }
-.eap-zoom button.ativo { background: #2f6f7f; color: #fff; }
-
-.eap-arvore { width: 100%; }
-.eap-grid-head,
-.eap-linha {
-  grid-template-columns: 38px 30px 58px minmax(260px, 1fr) 112px 88px 88px 52px 138px;
-}
-
-@media (max-width: 1100px) {
-  .eap-toolbar { flex-wrap: wrap; }
-  .eap-toolbar-acoes { width: 100%; flex-wrap: wrap; }
-  .eap-grid-head,
-  .eap-linha {
-    grid-template-columns: 34px 28px 52px minmax(220px, 1fr) 98px 80px 80px 48px 126px;
-  }
-}
-@media (max-width: 900px) { .eap-zoom span { display: none; } }
-
-
-/* EAP 2.2 — grade de planilha profissional */
-.eap-densidade-compacta { --eap-row-h: 28px; --eap-head-h: 28px; --eap-font: 11px; }
-.eap-densidade-normal { --eap-row-h: 32px; --eap-head-h: 30px; --eap-font: 11.5px; }
-.eap-densidade-confortavel { --eap-row-h: 38px; --eap-head-h: 34px; --eap-font: 12px; }
-.eap-grid-head, .eap-linha { grid-template-columns: 42px 34px 58px minmax(300px, 1fr) 104px 86px 86px 58px 150px !important; }
-.eap-grid-head { min-height: var(--eap-head-h); }
-.eap-grid-col { height: var(--eap-head-h); }
-.eap-linha { min-height: var(--eap-row-h); height: var(--eap-row-h); font-size: var(--eap-font); }
-.eap-indent { min-height: var(--eap-row-h); }
-.eap-seta { width: 18px; height: 18px; }
-.eap-rownum { padding: 0 6px; }
-.eap-densidade { display:inline-flex; align-items:center; gap:2px; height:28px; padding:2px; border:1px solid #d3dde1; border-radius:5px; background:#f7f9fa; }
-.eap-densidade > span { padding:0 5px; color:#718087; font-size:9px; font-weight:700; text-transform:uppercase; }
-.eap-densidade button { height:22px; min-width:38px; border:0; border-radius:3px; background:transparent; color:#65757d; font-size:9px; font-weight:700; cursor:pointer; }
-.eap-densidade button:hover { background:#eaf2f5; color:#285b6a; }
-.eap-densidade button.ativo { background:#2f6f7f; color:#fff; }
-.eap-validacao-compacta { margin:0 0 8px; }
-.eap-validacao-compacta .eap-validacao-cabecalho { min-height:38px; padding:7px 10px; }
-.eap-validacao-titulo { display:flex; align-items:center; gap:7px; min-width:0; }
-.eap-validacao-titulo strong { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
-.eap-validacao-titulo span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.eap-validacao-acoes { display:inline-flex; align-items:center; gap:8px; flex:0 0 auto; }
-.eap-validacao-detalhes { border:1px solid #d5dfe3; border-radius:4px; padding:4px 7px; background:#fff; color:#52646c; font-size:10px; cursor:pointer; }
-.eap-validacao-detalhes:hover { background:#f1f6f8; color:#285b6a; }
-.eap-validacao-compacta .eap-validacao-lista { max-height:180px; overflow:auto; }
-@media (max-width:900px) { .eap-validacao-acoes { flex-wrap:wrap; } .eap-grid-head,.eap-linha { grid-template-columns:38px 30px 54px minmax(240px,1fr) 96px 78px 78px 52px 130px !important; } }
-
-
-/* EAP 2.3 — revisao visivel e contraste operacional */
-.eap {
-  background: #eef2f6;
-  color: #172b43;
-}
-.eap-toolbar,
-.eap-topo,
-.eap-controle,
-.eap-validacao,
-.eap-arvore {
-  border-color: #aebdcc;
-  box-shadow: 0 2px 8px rgba(23,43,67,.08);
-}
-.eap-toolbar {
-  background: #ffffff;
-}
-.eap-toolbar-titulo,
-.eap-topo h2,
-.eap-controle-cabecalho strong,
-.eap-validacao-titulo strong {
-  color: #0b1f33;
-}
-.eap-toolbar-subtitulo,
-.eap-controle-cabecalho span,
-.eap-baseline span,
-.eap-parada span {
-  color: #40566d;
-}
-.eap-validacao {
-  background: #ffffff;
-  border-width: 1px;
-}
-.eap-validacao-cabecalho {
-  border-bottom-color: #b9c6d3;
-}
-.eap-validacao-erro {
-  background: #fff0f0;
-  border: 1px solid #d99a9a;
-  color: #8b1e1e;
-  font-weight: 800;
-}
-.eap-validacao-ok {
-  background: #edf8f0;
-  border: 1px solid #a8cdb2;
-  color: #1d6335;
-  font-weight: 800;
-}
-.eap-revisao-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 13px;
-  border: 2px solid #0d4f8b;
-  border-radius: 5px;
-  background: #0d5ea8;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(13,79,139,.25);
-}
-.eap-revisao-btn:hover {
-  background: #0a4b86;
-  border-color: #073b6b;
-}
-.eap-revisao-btn.ativo {
-  background: #174a2a;
-  border-color: #123c21;
-}
-.eap-validacao-detalhes {
-  border-color: #8ea2b6;
-  color: #173b60;
-  font-weight: 700;
-}
-.eap-validacao-lista {
-  border-top-color: #b9c6d3;
-}
-.eap-validacao-item {
-  border-bottom-color: #d6dfe7;
-}
-.eap-validacao-item p,
-.eap-validacao-item small {
-  color: #263e56;
-}
-.eap-arvore {
-  background: #fff;
-}
-.eap-grid-head {
-  background: #dce5ee;
-  border-bottom-color: #9eafc1;
-  color: #183550;
-  font-weight: 800;
-}
-.eap-grid-col {
-  border-left-color: #c0ccd8;
-}
-.eap-linha {
-  border-bottom-color: #cbd6e0;
-  color: #172b43;
-}
-.eap-linha:hover {
-  background: #edf5ff;
-}
-.eap-linha.eap-nivel-1,
-.eap-linha.eap-nivel-2 {
-  background: #f4f7fa;
-}
-.eap-linha.eap-nivel-1 {
-  border-top: 1px solid #aebdcc;
-  background: #e7eef6;
-}
-.eap-linha.eap-nivel-1 .eap-nome {
-  color: #0a2946;
-  font-weight: 800;
-}
-.eap-nome {
-  color: #172b43;
-  font-weight: 650;
-}
-.eap-codigo {
-  color: #0d4f8b;
-  font-weight: 800;
-}
-.eap-tipo,
-.eap-base,
-.eap-oficial,
-.eap-unidade,
-.eap-status-cell {
-  color: #334e68;
-  font-weight: 600;
-}
-.eap-grupo-label {
-  color: #334e68;
-  font-weight: 700;
-}
-.eap-seta {
-  color: #123f67;
-  border: 1px solid #b1c0cf;
-  background: #edf3f8;
-  border-radius: 4px;
-}
-.eap-seta:hover,
-.eap-seta.aberta {
-  background: #d9e8f6;
-  color: #073b6b;
-}
-.eap-acoes-revisao {
-  opacity: 1 !important;
-  display: inline-flex !important;
-  gap: 5px;
-  padding-left: 7px;
-  border-left: 1px solid #aebdcc;
-}
-.eap-acao-revisao {
-  width: auto;
-  min-width: 72px;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid #7e97ae;
-  background: #eaf2fb;
-  color: #0d4f8b;
-  font-weight: 800;
-}
-.eap-acao-revisao:hover {
-  background: #d6e8fa;
-  border-color: #0d4f8b;
-}
-.eap-acao-revisao span {
-  display: inline;
-  font-size: 9px;
-  font-weight: 800;
-}
-.eap-revisao-modo {
-  margin: 0 0 8px;
-}
-.eap-controle {
-  background: #ffffff;
-}
-.eap-controle-card {
-  border-color: #b9c6d3;
-}
-.eap-controle-card span,
-.eap-controle-card small {
-  color: #40566d;
-}
-.eap-controle-card strong {
-  color: #0b1f33;
-}
-.eap-baseline {
-  background: #edf2f7;
-  border-top-color: #b9c6d3;
-}
-.eap-baseline .eap-btn {
-  border: 2px solid #8a3b12;
-  background: #c95b1a;
-  color: #fff;
-  font-weight: 800;
-}
-.eap-baseline .eap-btn:not(:disabled):hover {
-  background: #a9470e;
-}
-.eap-baseline .eap-btn:disabled {
-  background: #d8dde3;
-  border-color: #aeb8c3;
-  color: #596978;
-  opacity: 1;
-}
-.eap-busca-wrap {
-  border-color: #8ea2b6;
-  color: #334e68;
-}
-.eap-busca {
-  color: #172b43;
-}
-
-
-/* EAP 2.6 — rolagem da grade sem quebrar o módulo */
-/* O módulo ocupa o fluxo normal da obra. Somente a grade ganha uma área
-   rolável, evitando uma segunda rolagem que corta o cabeçalho/controles. */
-.eap {
-  min-height: 0;
-  max-height: none;
-  overflow: visible;
-}
-.eap-arvore {
-  width: 100%;
-  max-height: 58vh;
-  min-height: 280px;
-  overflow-x: auto !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain;
-  scrollbar-width: auto;
-  scrollbar-color: #607b95 #e7edf3;
-}
-.eap-arvore::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
-}
-.eap-arvore::-webkit-scrollbar-track {
-  background: #e7edf3;
-}
-.eap-arvore::-webkit-scrollbar-thumb {
-  background: #607b95;
-  border: 3px solid #e7edf3;
-  border-radius: 8px;
-}
-.eap-arvore::-webkit-scrollbar-thumb:hover {
-  background: #3f5e79;
-}
-.eap-baseline .eap-btn:disabled {
-  opacity: 1 !important;
-  cursor: not-allowed;
-  color: #5a6773;
-  background: #d8dee5;
-  border: 2px solid #aeb8c2;
-}
-.eap-baseline-bloqueada {
-  margin-left: 10px;
-  color: #7a4a12;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-
-/* ==========================================================================
-   Navegação principal da obra — sidebar recolhível
-   ========================================================================== */
-.xl-pasta-sidebar{
-  display:flex;
-  flex-direction:row;
-  min-height:0;
-  height:calc(100vh - 0px);
-  background:#f5f7f8;
-}
-.xl-sidebar{
-  width:236px;
-  flex:0 0 236px;
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-  background:#fff;
-  border-right:1px solid #d9e1e6;
-  transition:width .18s ease, flex-basis .18s ease;
-  z-index:5;
-}
-.xl-pasta-sidebar.sidebar-recolhida .xl-sidebar{
-  width:58px;
-  flex-basis:58px;
-}
-.xl-sidebar-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  min-height:58px;
-  padding:8px 10px 8px 13px;
-  border-bottom:1px solid #e5eaee;
-}
-.xl-sidebar-brand{
-  display:flex;
-  align-items:center;
-  gap:9px;
-  min-width:0;
-  color:#236879;
-}
-.xl-sidebar-brand>div{min-width:0;display:grid;gap:2px}
-.xl-sidebar-brand strong{
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-  color:#24343c;
-  font-size:11px;
-}
-.xl-sidebar-brand span{font-size:9px;color:#87949b}
-.xl-sidebar-toggle{
-  display:grid;
-  place-items:center;
-  width:30px;
-  height:30px;
-  flex:0 0 30px;
-  border:1px solid #d6dfe4;
-  border-radius:5px;
-  background:#fff;
-  color:#61737b;
-  cursor:pointer;
-}
-.xl-sidebar-toggle:hover{background:#f2f7f8;color:#236879;border-color:#b9ccd2}
-.xl-sidebar-nav{
-  flex:1;
-  min-height:0;
-  overflow:auto;
-  padding:10px 8px;
-}
-.xl-sidebar-group{display:grid;gap:2px;margin-bottom:13px}
-.xl-sidebar-label{
-  padding:4px 9px 6px;
-  color:#8a979d;
-  font-size:8px;
-  font-weight:800;
-  letter-spacing:.12em;
-}
-.xl-sidebar-item{
-  position:relative;
-  display:flex;
-  align-items:center;
-  gap:10px;
-  width:100%;
-  min-height:38px;
-  padding:0 10px;
-  border:0;
-  border-radius:6px;
-  background:transparent;
-  color:#53636b;
-  font:inherit;
-  font-size:11px;
-  font-weight:650;
-  text-align:left;
-  cursor:pointer;
-}
-.xl-sidebar-item svg{flex:0 0 auto;color:#7b8b92}
-.xl-sidebar-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.xl-sidebar-item small{
-  margin-left:auto;
-  color:#a17b38;
-  font-size:8px;
-  font-weight:700;
-}
-.xl-sidebar-item:hover{background:#f3f7f8;color:#244d59}
-.xl-sidebar-item:hover svg{color:#236879}
-.xl-sidebar-item.ativa{
-  background:#eaf4f6;
-  color:#1f6576;
-  box-shadow:inset 3px 0 0 #2f7c8e;
-}
-.xl-sidebar-item.ativa svg{color:#236879}
-.sidebar-recolhida .xl-sidebar-head{justify-content:center;padding:8px}
-.sidebar-recolhida .xl-sidebar-brand{display:none}
-.sidebar-recolhida .xl-sidebar-nav{padding-left:9px;padding-right:9px}
-.sidebar-recolhida .xl-sidebar-group{margin-bottom:10px}
-.sidebar-recolhida .xl-sidebar-item{justify-content:center;padding:0}
-.sidebar-recolhida .xl-sidebar-item.ativa{box-shadow:none}
-.xl-sidebar-foot{
-  padding:8px;
-  border-top:1px solid #e5eaee;
-}
-.xl-sidebar-foot button{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:9px;
-  width:100%;
-  min-height:38px;
-  border:1px solid #cfe0e5;
-  border-radius:6px;
-  background:#f2f8f9;
-  color:#236879;
-  font:inherit;
-  font-size:11px;
-  font-weight:700;
-  cursor:pointer;
-}
-.xl-sidebar-foot button:hover{background:#e7f2f4}
-.xl-area-sidebar{
-  flex:1 1 auto;
-  min-width:0;
-  min-height:0;
-  overflow:auto;
-  background:#f5f7f8;
-}
-.xl-escopo{
-  max-width:1200px;
-  margin:0 auto;
-  padding:28px;
-}
-.xl-escopo-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:18px;
-  padding-bottom:20px;
-  border-bottom:1px solid #dce4e8;
-}
-.xl-escopo-head>div:first-child{min-width:0}
-.xl-escopo-head span{
-  color:#2f7484;
-  font-size:9px;
-  font-weight:800;
-  letter-spacing:.14em;
-}
-.xl-escopo-head h1{margin:6px 0 5px;color:#24343c;font-size:24px;letter-spacing:-.025em}
-.xl-escopo-head p{margin:0;color:#718089;font-size:12px}
-.xl-escopo-status{
-  padding:7px 10px;
-  border:1px solid #cfe0d5;
-  border-radius:999px;
-  background:#f2f8f4;
-  color:#4d755c;
-  font-size:10px;
-  font-weight:700;
-  white-space:nowrap;
-}
-.xl-escopo-grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:12px;
-  margin-top:16px;
-}
-.xl-escopo-card{
-  min-height:145px;
-  padding:18px;
-  border:1px solid #dce4e8;
-  border-radius:8px;
-  background:#fff;
-}
-.xl-escopo-card small{color:#839199;font-size:8px;font-weight:800;letter-spacing:.12em}
-.xl-escopo-card h3{margin:7px 0 6px;color:#2b3d45;font-size:14px}
-.xl-escopo-card p{margin:0;color:#66767e;font-size:11px;line-height:1.55}
-.xl-escopo-arquimedes{background:#f7fbfc;border-color:#cfe1e6}
-.xl-escopo-arquimedes button{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  margin-top:14px;
-  min-height:32px;
-  padding:0 10px;
-  border:1px solid #b9d3da;
-  border-radius:5px;
-  background:#fff;
-  color:#236879;
-  font:inherit;
-  font-size:10px;
-  font-weight:700;
-  cursor:pointer;
-}
-.xl-escopo-arquimedes button:hover{background:#eef7f8}
-.xl-escopo-nota{
-  margin-top:14px;
-  padding:12px 14px;
-  border:1px solid #dce4e8;
-  border-radius:7px;
-  background:#fff;
-  color:#65757d;
-  font-size:10px;
-}
-.xl-escopo-nota strong{color:#2f5965}
-@media(max-width:760px){
-  /* A rail de 58px foi substituida pelo drawer (bloco CELULAR no fim deste
-     arquivo). Aqui fica so o ajuste de nav, que o drawer reaproveita. */
-  .xl-sidebar-nav{padding-left:9px;padding-right:9px}
-  .xl-escopo{padding:18px 14px}
-  .xl-escopo-grid{grid-template-columns:1fr}
-}
-
-/* EAP WORKSPACE — mesma linguagem visual da aba Atividades */
-.eap-workspace-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:12px 14px;margin-bottom:8px;background:#fff;border:1px solid #d8e0e5;border-radius:6px;box-shadow:0 1px 2px rgba(31,41,51,.04)}
-.eap-workspace-title{min-width:0}.eap-workspace-kicker{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:800;letter-spacing:.08em;color:#2f6f7f}.eap-workspace-title h1{margin:3px 0 2px;font-size:17px;line-height:1.2;color:#24343c}.eap-workspace-title p{margin:0;font-size:10.5px;color:#697780}
-.eap-workspace-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.eap-workspace-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:30px;padding:0 10px;border:1px solid #cfd8dd;border-radius:4px;background:#fff;color:#53636b;font-size:10.5px;font-weight:700;cursor:pointer}.eap-workspace-btn:hover:not(:disabled){border-color:#9eb5bd;background:#f6fafb;color:#294e5a}.eap-workspace-btn:disabled{opacity:.55;cursor:default}.eap-workspace-btn.principal{border-color:#2f6f7f;background:#2f6f7f;color:#fff}.eap-workspace-btn.principal:hover:not(:disabled){background:#275e6b;color:#fff}
-.eap-workspace-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 11px;margin-bottom:8px;border:1px solid #dfe5e8;border-radius:5px;background:#f8fafb;color:#626f76;font-size:9.5px;font-weight:600}.eap-workspace-flow strong{color:#2f6f7f}.eap-workspace-flow .done{display:inline-flex;align-items:center;gap:4px;color:#557462}
-.eap-workspace-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:8px}.eap-workspace-metrics>div{padding:9px 10px;background:#fff;border:1px solid #dfe5e8;border-radius:5px}.eap-workspace-metrics span,.eap-workspace-metrics small{display:block;color:#67747d;font-size:9px}.eap-workspace-metrics strong{display:block;margin:2px 0;font-size:16px;line-height:1.1;color:#263840;font-variant-numeric:tabular-nums}.eap-workspace-metrics .attention{border-color:#dfcda8;background:#fffaf0}.eap-workspace-metrics .attention strong{color:#8a6b2d}.eap-workspace-metrics .ok{border-color:#cfe0d4;background:#f7fbf8}.eap-workspace-metrics .ok strong{color:#3e6e4d}
-.eap-workspace-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 9px;margin-bottom:8px;border:1px solid #d8e0e5;border-radius:5px;background:#fff}.eap-workspace-search{display:flex;align-items:center;gap:6px;flex:1 1 280px;min-width:220px;height:31px;padding:0 9px;border:1px solid #cfd8dd;border-radius:4px;color:#8a989f;background:#fff}.eap-workspace-search:focus-within{border-color:#8eb4c0;box-shadow:0 0 0 2px rgba(47,111,127,.08)}.eap-workspace-search input{width:100%;border:0;outline:0;background:transparent;color:#263840;font:inherit;font-size:11px}
-.eap-workspace-filters{display:flex;align-items:center;gap:3px;flex-wrap:wrap}.eap-workspace-filters>span{display:inline-flex;align-items:center;gap:4px;margin-right:2px;color:#67747d;font-size:8.5px;font-weight:800;letter-spacing:.06em}.eap-workspace-filters button{height:28px;padding:0 8px;border:1px solid transparent;border-radius:4px;background:#f3f6f7;color:#637179;font-size:9.5px;font-weight:700;cursor:pointer}.eap-workspace-filters button:hover{background:#eaf1f3}.eap-workspace-filters button.ativo{border-color:#b8d0d7;background:#eaf4f6;color:#275e6b}
-.eap-workspace-alert{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;padding:7px 10px;border-radius:4px;font-size:10.5px}.eap-workspace-alert.erro{border-left:3px solid #d1495b;background:#fdf0f1;color:#8a1f2c}.eap-workspace-alert button{border:0;background:transparent;color:inherit;text-decoration:underline;cursor:pointer}
-.eap-workspace-validation{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;padding:8px 10px;border:1px solid #d8e0e5;border-radius:5px;background:#fff}.eap-workspace-validation.ok{border-color:#cfe0d4;background:#f8fbf9}.eap-workspace-validation.attention{border-color:#dfcda8;background:#fffaf0}.eap-workspace-validation>div:first-child{display:flex;align-items:center;gap:8px;min-width:0}.eap-workspace-validation strong{display:inline-flex;align-items:center;gap:5px;color:#31434b;font-size:10.5px}.eap-workspace-validation span{font-size:9.5px;color:#67747d}.eap-workspace-validation-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.eap-workspace-validation-actions button{border:0;background:transparent;color:#2f6f7f;font-size:9.5px;font-weight:700;cursor:pointer}.eap-workspace-agent{display:inline-flex!important;align-items:center;gap:4px;padding:3px 6px;border:1px solid #d7e5e9;border-radius:999px;background:#f2f8f9;color:#356673!important;font-size:8.5px!important}
-.eap-workspace-issues{display:grid;gap:4px;margin-bottom:8px;padding:7px;border:1px solid #ead7d9;border-radius:5px;background:#fffafa}.eap-workspace-issues>div{display:flex;gap:8px;padding:5px 6px;border-bottom:1px solid #f0e2e3}.eap-workspace-issues span{flex:0 0 70px;font-size:8px;font-weight:800;color:#9b4a54}.eap-workspace-issues p{margin:0;font-size:10px;color:#56656d}.eap-workspace-issues small{padding:4px 6px;color:#8b6a2e;font-size:9px}
-.eap-workspace-stage{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;padding:9px 11px;border:1px solid #cfdfe3;border-radius:5px;background:#f3f9fa}.eap-workspace-stage.review{background:#f7f9fa}.eap-workspace-stage>div{min-width:0}.eap-workspace-stage strong{display:block;font-size:10.5px;color:#294e5a}.eap-workspace-stage span{display:block;margin-top:2px;font-size:9.5px;color:#65737a}.eap-stage-status{display:inline-flex!important;align-items:center;gap:4px;white-space:nowrap;border:1px solid #d4e1e4;border-radius:999px;padding:4px 7px;background:#fff;color:#52717a!important}
-.eap-workspace-details,.eap-workspace-control{margin-bottom:8px;border:1px solid #d8e0e5;border-radius:5px;background:#fff;overflow:hidden}.eap-workspace-details summary,.eap-workspace-control summary{display:flex;align-items:center;gap:7px;min-height:34px;padding:0 10px;cursor:pointer;list-style:none;color:#40525a;font-size:10px;font-weight:750}.eap-workspace-details summary::-webkit-details-marker,.eap-workspace-control summary::-webkit-details-marker{display:none}.eap-workspace-details summary span,.eap-workspace-control summary span{margin-left:auto;color:#69777e;font-size:9px;font-weight:500}.eap-workspace-details-body,.eap-workspace-control-body{padding:9px;border-top:1px solid #e7ecee;background:#fafcfc}.eap-workspace-review-kpis,.eap-workspace-control-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.eap-workspace-control-grid{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:8px}.eap-workspace-review-kpis>div,.eap-workspace-control-grid>div{padding:7px 8px;border:1px solid #e0e6e8;border-radius:4px;background:#fff}.eap-workspace-review-kpis span,.eap-workspace-control-grid span{display:block;font-size:8.5px;color:#69777e}.eap-workspace-review-kpis strong,.eap-workspace-control-grid strong{display:block;margin-top:2px;font-size:13px;color:#30434b}.eap-workspace-control-grid small{display:block;margin-top:2px;font-size:8.5px;color:#6a777d}.eap-workspace-review-list{margin-top:7px;border:1px solid #e0e6e8;background:#fff;border-radius:4px}.eap-workspace-review-list>div{display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid #edf0f1}.eap-workspace-review-list span{flex:0 0 22px;font-size:8.5px;color:#89969d}.eap-workspace-review-list p{margin:0;font-size:9.5px;color:#58676e}.eap-workspace-pending,.eap-workspace-dictionary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:7px;padding:7px 8px;border:1px solid #e4d6b7;border-radius:4px;background:#fffaf0}.eap-workspace-pending strong,.eap-workspace-dictionary strong{display:block;font-size:9.5px;color:#755b27}.eap-workspace-pending span,.eap-workspace-dictionary span{display:block;margin-top:2px;font-size:9px;color:#7d6d4d}
-.eap-workspace-grid{border:1px solid #cfd8dd;border-radius:5px;overflow:auto;background:#fff;box-shadow:0 2px 8px rgba(31,41,51,.04)}.eap-workspace-grid-head{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:48px 30px 68px minmax(300px,1fr) 125px 150px 110px 150px;min-width:1080px;min-height:31px;align-items:center;background:#edf1f3;border-bottom:1px solid #cbd5da;color:#5f6e76;font-size:8.5px;font-weight:800;letter-spacing:.06em}.eap-workspace-grid-head>span{height:31px;display:flex;align-items:center;padding:0 8px;border-left:1px solid #d9e0e4}.eap-workspace-grid-head .rownum{justify-content:center;background:#f7f9fa;border-left:0;border-right:1px solid #e0e6e8}.eap-workspace-grid-body{min-width:1050px}.eap-workspace-grid-body .eap-linha{grid-template-columns:48px 30px 68px minmax(300px,1fr) 125px 150px 110px 150px;min-width:1080px;min-height:31px}.eap-workspace-grid-body .eap-rownum{justify-content:center}.eap-workspace-grid-body .eap-codigo{padding:0 8px}.eap-workspace-grid-body .eap-nome{font-size:11px}.eap-workspace-grid-body .eap-tipo{font-size:8.5px}.eap-workspace-grid-body .eap-responsavel,.eap-workspace-grid-body .eap-local{padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#627077;font-size:9.5px}.eap-workspace-grid-body .eap-status-cell{padding:0 8px}.eap-workspace-grid-body .eap-acoes-linha{gap:4px}.eap-workspace-grid-body .eap-acao-linha{min-height:24px}.eap-workspace-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:38px 15px;color:#6e7d85;text-align:center}.eap-workspace-empty strong{font-size:11px;color:#4b5c64}.eap-workspace-empty span{font-size:9.5px}
-.eap-workspace-baseline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:8px;border:1px solid #d8e0e5;border-radius:4px;background:#fff}.eap-workspace-baseline>div{display:flex;align-items:center;gap:7px}.eap-workspace-baseline strong{display:block;font-size:9.5px;color:#34474f}.eap-workspace-baseline span{display:block;margin-top:2px;font-size:8.5px;color:#6a777e}.eap-workspace-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px;color:#626f76;font-size:8.5px}.eap-workspace-footer span{display:inline-flex;align-items:center;gap:5px}
-@media(max-width:900px){.eap-workspace-header{align-items:flex-start;flex-direction:column}.eap-workspace-actions{width:100%}.eap-workspace-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.eap-workspace-validation{align-items:flex-start;flex-direction:column}.eap-workspace-control-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.eap-workspace-toolbar{align-items:stretch}.eap-workspace-filters{overflow:auto}}
-@media(max-width:560px){.eap-workspace-title h1{font-size:15px}.eap-workspace-metrics{grid-template-columns:1fr}.eap-workspace-control-grid,.eap-workspace-review-kpis{grid-template-columns:1fr}.eap-workspace-footer{align-items:flex-start;flex-direction:column}}
-
-
-/* ---------------------------------------- coerencia de engenharia (achados)
-   Painel que mostra o que a validacao de FORMA nao pega: composicao que nao
-   corresponde ao servico, ordem de execucao impossivel, preco sem lastro.
-   Cores na mesma familia dos alertas do workspace (erro/atencao). */
-.xl-achados{margin:10px 0;border:1px solid var(--border);border-radius:6px;background:var(--surf);overflow:hidden}
-.xl-achados-cabecalho{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:11px 13px;cursor:pointer}
-.xl-achados-cabecalho strong{display:block;font-size:12.5px;margin-top:2px}
-.xl-achados-valor{margin:3px 0 0;font-size:11px;font-weight:600}
-.xl-achados-toggle{font-size:10.5px;text-decoration:underline;white-space:nowrap;opacity:.8}
-.xl-achados-carregando,.xl-achados-erro{padding:11px 13px;font-size:11px}
-.xl-achados-erro{border-left:3px solid #d1495b;background:#fdf0f1;color:#8a1f2c}
-.xl-achados-ok{border-left:3px solid #2e7d32;background:#f1f8f2;color:#1b5e20}
-.xl-achados-ok p{margin:4px 0 0;font-size:11px}
-.xl-achados-critico{border-left:3px solid #d1495b;background:#fdf0f1}
-.xl-achados-critico .xl-achados-valor{color:#8a1f2c}
-.xl-achados-atencao{border-left:3px solid #c77700;background:#fff8ec}
-.xl-achados-atencao .xl-achados-valor{color:#8a5200}
-.xl-achados-lista{padding:0 13px 12px;border-top:1px solid var(--border)}
-.xl-achados-grupo{margin:11px 0 6px;font-size:9.5px;font-weight:700;letter-spacing:.06em;opacity:.65}
-.xl-achado{padding:8px 10px;border-radius:4px;margin-bottom:6px}
-.xl-achado-erro{border-left:3px solid #d1495b;background:#fff}
-.xl-achado-aviso{border-left:3px solid #c77700;background:#fff}
-.xl-achado-topo{display:flex;align-items:center;gap:8px;margin-bottom:3px}
-.xl-achado-ref{font-family:ui-monospace,monospace;font-size:10.5px;font-weight:700}
-.xl-achado-codigo{font-size:9px;opacity:.55;font-family:ui-monospace,monospace}
-.xl-achado p{margin:0;font-size:11px;line-height:1.45}
-
-/* Cobertura por regra: alcance, nao achado. Fica sempre no fim da lista para nao
-   competir visualmente com o que exige acao. */
-.xl-cobertura{margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)}
-.xl-cobertura-nota{margin:0 0 8px;font-size:10.5px;line-height:1.45;opacity:.72}
-.xl-cobertura-linha{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;padding:3px 0;font-size:10.5px;line-height:1.4}
-.xl-cobertura-regra{font-weight:600;min-width:170px}
-.xl-cobertura-conta{font-family:ui-monospace,monospace;font-size:10px;opacity:.8}
-.xl-cobertura-fora{opacity:.72}
-.xl-cobertura-nota-regra{width:100%;margin-left:178px;font-style:italic;opacity:.62}
-
-
-/* ============================================================ CELULAR
-   A sidebar `.xl-sidebar` nao tinha NENHUMA regra em media query: a unica que
-   existia era para `.app-sidebar`, classe que nao existe mais no codigo (0
-   ocorrencias). Resultado medido em 390px: a sidebar ocupava 390px (a tela
-   inteira) em `position: static` e empurrava as 15 abas para fora — o
-   engenheiro abria a obra no telefone e nao conseguia navegar.
-
-   Solucao: drawer deslizante. A sidebar sai do fluxo (`position: fixed`),
-   entra pela esquerda e o conteudo ocupa a largura toda. O botao de menu vive
-   na barra superior, que tambem e reorganizada (o trilha de etapas nao cabe
-   em 390px). */
-
-/* Botao de menu: existe so no celular. */
-.xl-menu-mobile { display: none; }
-
-@media (max-width: 900px) {
-  /* A pasta deixa de ser linha (sidebar | conteudo) e vira coluna. */
-  .xl-pasta-sidebar {
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
-  }
-
-  /* Sidebar vira drawer: fora do fluxo, escondida a esquerda. */
-  .xl-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: min(300px, 84vw);
-    flex: 0 0 auto;
-    transform: translateX(-102%);
-    transition: transform .2s ease;
-    z-index: 80;
-    box-shadow: 0 0 0 1px rgba(0,0,0,.04), 8px 0 28px rgba(16,40,48,.16);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar {
-    transform: translateX(0);
-  }
-
-  /* No drawer o botao de recolher nao faz sentido: ele ja esta oculto/mostrado
-     pelo hamburguer. Esconder evita dois controles para a mesma coisa. */
-  .xl-sidebar-toggle { display: none; }
-
-  /* O estado "recolhida" e do desktop. No celular o drawer e sempre largo. */
-  .xl-pasta-sidebar.sidebar-recolhida .xl-sidebar { width: min(300px, 84vw); flex-basis: auto; }
-
-  /* Backdrop: fecha ao toque fora. */
-  .xl-sidebar-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(12, 28, 34, .42);
-    z-index: 79;
-    animation: xl-fade-in .16s ease;
-  }
-  @keyframes xl-fade-in { from { opacity: 0 } to { opacity: 1 } }
-
-  /* Area de conteudo ocupa tudo. */
-  .xl-area-sidebar { width: 100%; min-width: 0; }
-
-  /* Barra superior: empilha. O trilha "Escopo -> EAP -> ..." nao cabe em 390px
-     e era o que empurrava a largura. Vira rolagem horizontal contida. */
-  .arquimedes-workbar {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px 12px;
-  }
-  .arquimedes-workbar-title { flex: 1 1 auto; min-width: 0; }
-  .arquimedes-trilha {
-    order: 3;
-    flex: 1 1 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .arquimedes-trilha::-webkit-scrollbar { display: none; }
-  .arquimedes-workbar-actions { flex: 0 0 auto; }
-
-  /* Mostra o hamburguer. */
-  .xl-menu-mobile {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Alvos de toque: minimo confortavel de 44px (Apple HIG / Material). */
-  .arquimedes-workbar-actions button { min-width: 40px; min-height: 40px; }
-  .xl-sidebar-item { min-height: 44px; }
-
-  /* Tabelas continuam rolando DENTRO do wrapper — nunca empurram a pagina. */
-  .pl-tabela-wrap, .scopo-table-wrap, .xl-tabela-container, .pl-atividades-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-}
-
-/* Celular estreito: aperta o que ainda sobrar. */
-@media (max-width: 500px) {
-  .arquimedes-workbar { padding: 7px 10px; }
-  .arquimedes-workbar-title .arquimedes-kicker { font-size: 9.5px; }
-  .xl-sidebar { width: min(286px, 88vw); }
-
-  /* Titulos grandes de painel nao podem dominar a tela. */
-  .xl-painel-intro h2 { font-size: 20px; }
-  .xl-painel { padding: 12px 11px; }
-
-  /* O painel de achados tem texto longo: respira melhor empilhado. */
-  .xl-achados-cabecalho { flex-direction: column; gap: 6px; }
-  .xl-achados-toggle { align-self: flex-start; }
-}
-
-/* Dentro do drawer o rotulo precisa aparecer. O `display:none` do <span> que
-   existia para a rail de icones foi removido, mas esta regra explicita garante
-   que o texto volte caso algum outro ponto o esconda. */
-@media (max-width: 900px) {
-  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-item span,
-  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-label,
-  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-brand > div { display: revert; }
-  .xl-pasta-sidebar.menu-mobile-aberto .xl-sidebar-item { justify-content: flex-start; padding: 0 10px; }
-}
-
-/* ------------------------------------------- alvos de toque no celular
-   Medido em 390px: os chips de obra tinham 23px de altura, os botoes de
-   fechar/lixeira do chip 22px e 11px, e os botoes da barra de titulo 26-30px.
-   Abaixo de ~40px o toque erra o alvo — em obra, com mao suja ou luva, mais
-   ainda. Estes sao os controles que o engenheiro mais usa no telefone
-   (trocar de obra, fechar, abrir o Arquimedes). */
-@media (max-width: 900px) {
-  /* Chip de obra: altura confortavel. */
-  .xl-obra-chip { min-height: 40px; padding-top: 6px; padding-bottom: 6px; }
-
-  /* Botoes embutidos no chip (lixeira, fechar): viram alvo de 40x40 sem
-     inflar o chip, usando area de toque negativa. */
-  .xl-obra-chip-lixeira,
-  .xl-obra-chip-fechar {
-    min-width: 40px;
-    min-height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Botoes da barra de titulo e da barra de ferramentas.
-     `height` explicito, nao so `min-height`: planilha.css define padding no
-     .xl-tb-btn e carrega DEPOIS deste arquivo, e a altura ficava em 30px. */
-  .xl-titlebar-collapse,
-  .xl-titlebar-fechar,
-  .xl-titlebar-fim .xl-tb-btn,
-  .xl-tb-btn {
-    height: 40px;
-    min-height: 40px;
-    min-width: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Botao de nova obra / demo. */
-  .xl-obra-nova,
-  .xl-demo-obra { min-height: 40px; }
+  return (
+    <div
+      className="nova-obra-backdrop"
+      role="presentation"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <form
+        className="nova-obra-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nova-obra-titulo"
+        onSubmit={submit}
+        onMouseDown={event => event.stopPropagation()}
+      >
+        <header className="nova-obra-header">
+          <div>
+            <div className="nova-obra-kicker"><Sparkles size={14} /> ARQUIMEDES · PLANEJAMENTO</div>
+            <h2 id="nova-obra-titulo">Nova obra</h2>
+            <p>Descreva o empreendimento. O Arquimedes usa esse contexto para propor a primeira EAP.</p>
+          </div>
+          <button
+            type="button"
+            className="nova-obra-fechar"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="nova-obra-fluxo">
+          <div className="nova-obra-fluxo-item ativo"><span>1</span><div><strong>Descrever</strong><small>escopo da obra</small></div></div>
+          <div className="nova-obra-fluxo-linha" />
+          <div className="nova-obra-fluxo-item"><span>2</span><div><strong>Propor</strong><small>Arquimedes monta a EAP</small></div></div>
+          <div className="nova-obra-fluxo-linha" />
+          <div className="nova-obra-fluxo-item"><span>3</span><div><strong>Revisar</strong><small>engenheiro valida</small></div></div>
+        </div>
+
+        <div className="nova-obra-body">
+          <section className="nova-obra-section">
+            <div className="nova-obra-section-title">
+              <span className="nova-obra-numero">01</span>
+              <div><strong>Identificação</strong><small>Dados básicos para localizar a obra.</small></div>
+            </div>
+
+            <div className="nova-obra-grid">
+              <label>
+                <span>Nome da obra <b>*</b></span>
+                <input required minLength={2} maxLength={180} value={name}
+                  onChange={event => setName(event.target.value)}
+                  placeholder="Ex.: Reservatório Elevado – Unidade Norte" autoFocus />
+              </label>
+              <label>
+                <span>Localização <b>*</b></span>
+                <input required minLength={2} maxLength={180} value={location}
+                  onChange={event => setLocation(event.target.value)}
+                  placeholder="Cidade, endereço ou região" />
+              </label>
+            </div>
+
+            <label className="nova-obra-tipo">
+              <span>Natureza da obra</span>
+              <select value={tipoDeObra}
+                onChange={event => setTipoDeObra(event.target.value as NovaObraValues["tipoDeObra"])}>
+                <option value="edificio">Edificação / construção nova</option>
+                <option value="reforma">Reforma</option>
+                <option value="pavimentacao">Pavimentação</option>
+                <option value="saneamento">Saneamento / infraestrutura</option>
+                <option value="todos">Múltiplas frentes</option>
+              </select>
+            </label>
+          </section>
+
+          <section className="nova-obra-section nova-obra-escopo">
+            <div className="nova-obra-section-title">
+              <span className="nova-obra-numero">02</span>
+              <div><strong>Escopo da obra</strong><small>É daqui que o Arquimedes vai partir para propor a EAP.</small></div>
+            </div>
+
+            <label>
+              <span>O que será construído? <b>*</b></span>
+              <textarea
+                required
+                minLength={20}
+                maxLength={8000}
+                rows={7}
+                value={descricao}
+                onChange={event => setDescricao(event.target.value)}
+                placeholder={"Descreva o empreendimento com suas próprias palavras.\n\nEx.: Construção de um reservatório elevado de concreto armado, incluindo fundações, estrutura, instalações hidráulicas e elétricas, urbanização e testes. A adutora terá aproximadamente 2 km e ligará o reservatório à rede existente."}
+              />
+              <div className="nova-obra-contador">{descricao.length}/8000</div>
+            </label>
+
+            <div className="nova-obra-dica">
+              <Sparkles size={15} />
+              <div>
+                <strong>Não precisa montar a EAP agora.</strong>
+                <span>Informe o que você sabe: sistemas, locais, trechos, unidades, quantidades, limites do contrato e entregas esperadas. O Arquimedes identifica lacunas e propõe a decomposição.</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="nova-obra-section">
+            <div className="nova-obra-section-title">
+              <span className="nova-obra-numero">03</span>
+              <div><strong>Prazo inicial</strong><small>Pode ser preenchido agora ou definido durante o planejamento.</small></div>
+            </div>
+
+            <div className="nova-obra-grid">
+              <label>
+                <span>Início previsto</span>
+                <input type="date" value={plannedStart}
+                  onChange={event => setPlannedStart(event.target.value)} />
+              </label>
+              <label>
+                <span>Término previsto</span>
+                <input type="date" value={plannedFinish}
+                  onChange={event => setPlannedFinish(event.target.value)} />
+              </label>
+            </div>
+
+            {plannedStart && plannedFinish && plannedFinish <= plannedStart && (
+              <p className="nova-obra-erro">O término deve ser posterior ao início.</p>
+            )}
+          </section>
+
+          {error && <div className="nova-obra-alert" role="alert">{error}</div>}
+        </div>
+
+        <footer className="nova-obra-footer">
+          <div className="nova-obra-footer-info">
+            <Sparkles size={15} />
+            <span>Ao criar, a obra entra em <strong>EAP proposta</strong>. Nada será aprovado ou congelado automaticamente.</span>
+          </div>
+          <div className="nova-obra-acoes">
+            <button type="button" onClick={onClose} disabled={busy} className="nova-obra-cancelar">Cancelar</button>
+            <button
+              type="submit"
+              disabled={busy || !name.trim() || !location.trim() || descricao.trim().length < 20 || (!!plannedStart && !!plannedFinish && plannedFinish <= plannedStart)}
+              className="nova-obra-criar"
+            >
+              {busy ? "Criando obra…" : "Criar e abrir EAP"}
+            </button>
+          </div>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box" as const,
+  minHeight: 40,
+  padding: "9px 11px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 7,
+  background: "#fff",
+  color: "#0f172a",
+  fontSize: 14,
+};
+
+const primaryButtonStyle = {
+  border: 0,
+  borderRadius: 7,
+  padding: "10px 16px",
+  background: "#176b87",
+  color: "#fff",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const secondaryButtonStyle = {
+  border: "1px solid #cbd5e1",
+  borderRadius: 7,
+  padding: "10px 16px",
+  background: "#fff",
+  color: "#334155",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+function SemObra({ carregando, temObras }: { carregando: boolean; temObras: boolean }) {
+  return (
+    <div className="xl-area">
+      <div className="xl-vazia-folha">
+        <h3>{carregando ? "Carregando as obras…" : "Nenhuma obra aqui"}</h3>
+        {!carregando && !temObras && (
+          <>
+            <p className="xl-vazia-falta">
+              Não há obra cadastrada. Crie a primeira obra para começar.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("abrir-nova-obra"))}
+              className="xl-btn-entrar"
+            >
+              + Criar obra
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
