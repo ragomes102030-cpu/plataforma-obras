@@ -60,7 +60,7 @@ import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-his
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
+import { validateEap, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
@@ -1409,7 +1409,10 @@ export const appRouter = router({
           name: z.string().trim().min(2).max(220),
           nodeType: z.enum(["grupo", "pacote", "entrega"]),
           unit: z.string().trim().max(32).optional(),
-          plannedQuantity: z.number().int().min(0).optional(),
+          plannedQuantity: z.number().min(0).max(99_999_999_999.999).refine(
+          value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
+          "A quantidade deve ter no máximo 3 casas decimais."
+        ).optional(),
           decompositionBasis: z.enum(["project","deliverable","system","discipline","location","phase","component","other"]).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
         })
       )
@@ -1465,6 +1468,9 @@ export const appRouter = router({
           ? await resolveWbsNodeInVersion(db, input.projectId, input.parentId, writable.id)
           : undefined;
         if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence à versão de trabalho desta obra.");
+        if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
+          throw badRequest("Entrega é terminal na EAP e não pode receber filhos.");
+        }
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
@@ -1516,6 +1522,9 @@ export const appRouter = router({
             : all.find(item => item.id === resolvedParent.id) ?? null;
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
           if (resolvedParent !== null && !parent) throw badRequest("Destino inválido.");
+          if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
+            throw badRequest("Entrega é terminal na EAP e não pode receber filhos.");
+          }
 
           const byId = new Map(all.map(item => [item.id, item]));
           let ancestor = parent;
