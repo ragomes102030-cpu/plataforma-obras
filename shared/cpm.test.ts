@@ -196,4 +196,48 @@ describe("calculateCpm", () => {
     );
     expect(result.activities[0].freeFloat).toBe(0);
   });
+
+  it("respeita o início planejado de uma atividade sem predecessoras", () => {
+    const result = calculateCpm([{ id: "A", duration: 3, startOffset: 7 }], []);
+    expect(result.projectDuration).toBe(10);
+    expect(result.activities[0]).toMatchObject({ earlyStart: 7, earlyFinish: 10 });
+  });
+
+  it("calcula folga livre SS usando início-início e lag", () => {
+    const result = calculateCpm(
+      [{ id: "A", duration: 5 }, { id: "B", duration: 2, startOffset: 6 }],
+      [{ predecessorId: "A", successorId: "B", type: "SS", lag: 2 }]
+    );
+    expect(result.activities.find(item => item.id === "A")!.freeFloat).toBe(4);
+  });
+
+  it("calcula folga livre FF usando término-término e lag", () => {
+    const result = calculateCpm(
+      [{ id: "A", duration: 5 }, { id: "B", duration: 3, startOffset: 7 }],
+      [{ predecessorId: "A", successorId: "B", type: "FF", lag: 1 }]
+    );
+    expect(result.activities.find(item => item.id === "A")!.freeFloat).toBe(4);
+  });
+
+  it("calcula folga livre SF usando início-término e lag", () => {
+    const result = calculateCpm(
+      [{ id: "A", duration: 4 }, { id: "B", duration: 3, startOffset: 5 }],
+      [{ predecessorId: "A", successorId: "B", type: "SF", lag: 1 }]
+    );
+    expect(result.activities.find(item => item.id === "A")!.freeFloat).toBe(7);
+  });
+
+  it("calcula folga livre FS descontando o lag", () => {
+    const result = calculateCpm(
+      [{ id: "A", duration: 3 }, { id: "B", duration: 2, startOffset: 6 }],
+      [{ predecessorId: "A", successorId: "B", type: "FS", lag: 2 }]
+    );
+    expect(result.activities.find(item => item.id === "A")!.freeFloat).toBe(1);
+  });
+
+  it("rejeita início planejado negativo ou não inteiro", () => {
+    expect(() => calculateCpm([{ id: "A", duration: 1, startOffset: -1 }], [])).toThrow("Início planejado inválido");
+    expect(() => calculateCpm([{ id: "A", duration: 1, startOffset: 1.5 }], [])).toThrow("Início planejado inválido");
+  });
+
 });

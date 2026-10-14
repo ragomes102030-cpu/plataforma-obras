@@ -10,6 +10,8 @@ export type Dependency = {
 export type CpmActivity = {
   id: string;
   duration: number;
+  /** Primeiro índice de dia permitido para iniciar, herdado do início planejado. */
+  startOffset?: number;
   /** Índice do dia útil (CPM) em que a atividade DEVE começar no mais cedo. */
   mustStartOn?: number;
   /** Índice do dia útil (CPM) mais tarde em que a atividade PODE terminar. */
@@ -51,6 +53,18 @@ export function calculateCpm(
   for (const activity of activities) {
     if (!Number.isInteger(activity.duration) || activity.duration < 0) {
       throw new Error(`Duração inválida para ${activity.id}`);
+    }
+    if (activity.startOffset !== undefined &&
+        (!Number.isInteger(activity.startOffset) || activity.startOffset < 0)) {
+      throw new Error(`Início planejado inválido para ${activity.id}`);
+    }
+    for (const [field, value] of [
+      ["mustStartOn", activity.mustStartOn],
+      ["finishNoLaterThan", activity.finishNoLaterThan],
+    ] as const) {
+      if (value !== undefined && !Number.isInteger(value)) {
+        throw new Error(`Restrição ${field} inválida para ${activity.id}`);
+      }
     }
   }
   for (const dependency of dependencies) {
@@ -102,7 +116,7 @@ export function calculateCpm(
   const early = new Map<string, { start: number; finish: number }>();
   for (const id of order) {
     const activity = byId.get(id)!;
-    let start = 0;
+    let start = Math.max(0, activity.startOffset ?? 0);
     for (const dependency of dependencies.filter(
       item => item.successorId === id
     )) {
@@ -155,21 +169,31 @@ export function calculateCpm(
   }
 
   // ------------------------------------------------- folga livre --------
-  // freeFloat(A) = min(earlyStart de todas as sucessoras) - earlyFinish(A).
-  // Se A não tem sucessoras, freeFloat = projectDuration - earlyFinish(A).
+  // A folga livre mede quanto a predecessora pode atrasar sem violar a
+  // relação com cada sucessora. A expressão depende do tipo de elo e do lag.
+  // Usar sempre ES(sucessora) - EF(predecessora) só é correto para FS sem lag.
   const freeFloat = new Map<string, number>();
   for (const id of order) {
+    const activityEarly = early.get(id)!;
     const successors = outgoing.get(id) ?? [];
     let ff: number;
     if (successors.length === 0) {
-      ff = projectDuration - early.get(id)!.finish;
+      ff = projectDuration - activityEarly.finish;
     } else {
-      let minSES = Infinity;
-      for (const dep of outgoing.get(id) ?? []) {
-        const ses = early.get(dep.successorId)!.start;
-        minSES = Math.min(minSES, ses);
-      }
-      ff = minSES - early.get(id)!.finish;
+      ff = Math.min(...successors.map(dependency => {
+        const successorEarly = early.get(dependency.successorId)!;
+        const lag = dependency.lag ?? 0;
+        switch (dependency.type) {
+          case "FS":
+            return successorEarly.start - activityEarly.finish - lag;
+          case "SS":
+            return successorEarly.start - activityEarly.start - lag;
+          case "FF":
+            return successorEarly.finish - activityEarly.finish - lag;
+          case "SF":
+            return successorEarly.finish - activityEarly.start - lag;
+        }
+      }));
     }
     freeFloat.set(id, Math.max(0, ff));
   }
