@@ -116,4 +116,34 @@ describe("calculateDeterministicCpm", () => {
     expect(result.issues.some(issue => issue.code === "cpm_calculation_failed")).toBe(true);
   });
 
+  it("retorna um caminho crítico contínuo quando há caminhos paralelos", () => {
+    const result = calculateDeterministicCpm(
+      [activity("A", 3), activity("B", 5), activity("C", 5), activity("D", 2)],
+      [
+        dependency("A", "B"),
+        dependency("A", "C"),
+        dependency("B", "D"),
+        dependency("C", "D"),
+      ]
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.schedule?.projectDuration).toBe(10);
+    const path = result.schedule?.criticalPath ?? [];
+    expect(path[0]).toBe("A");
+    expect(path[path.length - 1]).toBe("D");
+    expect(path.length).toBe(3);
+    expect(path).toContain("B");
+    expect(path).not.toContain("C");
+    for (let i = 0; i < path.length - 1; i++) {
+      const hasEdge = [
+        dependency("A", "B"),
+        dependency("A", "C"),
+        dependency("B", "D"),
+        dependency("C", "D"),
+      ].some(edge => edge.predecessorId === path[i] && edge.successorId === path[i + 1]);
+      expect(hasEdge).toBe(true);
+    }
+  });
+
 });
