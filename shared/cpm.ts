@@ -51,8 +51,8 @@ export function calculateCpm(
   if (byId.size !== activities.length)
     throw new Error("IDs de atividade duplicados");
   for (const activity of activities) {
-    if (!Number.isInteger(activity.duration) || activity.duration < 0) {
-      throw new Error(`Duração inválida para ${activity.id}`);
+    if (!Number.isInteger(activity.duration) || activity.duration < 1) {
+      throw new Error(`Duração inválida para ${activity.id}: deve ser um inteiro maior ou igual a 1 dia`);
     }
     if (activity.startOffsetDay !== undefined &&
         (!Number.isInteger(activity.startOffsetDay) || activity.startOffsetDay < 0)) {
