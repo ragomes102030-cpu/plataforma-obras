@@ -24,7 +24,7 @@ export type CpmResult = CpmActivity & {
   lateStart: number;
   lateFinish: number;
   totalFloat: number;
-  /** Folga livre: quanto a atividade pode atrasar sem atrasar o earlyStart de QUALQUER sucessora. */
+  /** Folga livre: atraso máximo sem violar a relação de precedência com qualquer sucessora. */
   freeFloat: number;
   /** Verdadeiro quando as restrições tornam a rede inviável (folga total negativa). */
   infeasible: boolean;
