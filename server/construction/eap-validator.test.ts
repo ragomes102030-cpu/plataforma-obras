@@ -108,6 +108,25 @@ describe("validateEap", () => {
     expect(result.issues).toEqual([]);
   });
 
+  it("rejeita uma EAP com mais de uma raiz", () => {
+    const result = validateEap([
+      node({ id: 1, code: "1", name: "Raiz A" }),
+      node({ id: 2, code: "2", name: "Raiz B" }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_root_count_invalid");
+  });
+
+  it("rejeita pacote de trabalho com filhos", () => {
+    const result = validateEap([
+      node({ id: 1, code: "1", name: "Raiz" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Pacote", nodeType: "pacote" }),
+      node({ id: 3, parentId: 2, code: "1.1.1", name: "Filho", nodeType: "entrega" }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_work_package_has_children");
+  });
+
   it("rejeita órfão e código duplicado", () => {
     const result = validateEap([
       node(),
@@ -319,12 +338,12 @@ describe("validateEapScope", () => {
 
 
 describe("eapNodeCanHaveChildren", () => {
-  it("bloqueia filhos abaixo de entregas terminais", () => {
+  it("bloqueia filhos abaixo de pacotes e entregas terminais", () => {
+    expect(eapNodeCanHaveChildren("pacote")).toBe(false);
     expect(eapNodeCanHaveChildren("entrega")).toBe(false);
   });
 
   it("permite decomposição abaixo de grupos e pacotes", () => {
     expect(eapNodeCanHaveChildren("grupo")).toBe(true);
-    expect(eapNodeCanHaveChildren("pacote")).toBe(true);
   });
 });
