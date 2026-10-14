@@ -4,6 +4,7 @@ import {
   validateEapScope,
   validateWbsCostCoverage,
   validateAndNormalizeEapProposal,
+  eapNodeCanHaveChildren,
 } from "./eap-validator";
 import type { EapEvidenceNode } from "./domain-types";
 
@@ -56,6 +57,33 @@ describe("validateAndNormalizeEapProposal", () => {
     expect(result.nodes[0]?.code).toBe("1.1");
   });
 
+  it("bloqueia criação de filho abaixo de pacote de trabalho", () => {
+    const current = [
+      node(),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Fundação", nodeType: "pacote" }),
+    ];
+
+    const result = validateAndNormalizeEapProposal(current, {
+      action: "propose_eap",
+      basis: [],
+      assumptions: [],
+      missingInformation: [],
+      nodes: [{
+        operation: "create",
+        parentCode: "1.1",
+        code: "1.1.1",
+        name: "Escavação",
+        nodeType: "entrega",
+        rationale: "Teste de terminalidade do pacote.",
+      }],
+    });
+
+    expect(result.validation?.valid).toBe(false);
+    expect(result.validation?.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "proposal_child_of_work_package", severity: "error" }),
+    ]));
+  });
+
   it("reconcilia nodeId obsoleto de versão anterior pelo código EAP", () => {
     const current = [
       node(),
@@ -91,6 +119,12 @@ describe("validateAndNormalizeEapProposal", () => {
 });
 
 describe("validateEap", () => {
+  it("rejeita uma EAP vazia", () => {
+    const result = validateEap([]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_empty");
+  });
+
   it("aceita uma árvore com pai e filho válidos", () => {
     const result = validateEap([
       node(),
@@ -105,6 +139,25 @@ describe("validateEap", () => {
 
     expect(result.valid).toBe(true);
     expect(result.issues).toEqual([]);
+  });
+
+  it("rejeita uma EAP com mais de uma raiz", () => {
+    const result = validateEap([
+      node({ id: 1, code: "1", name: "Raiz A" }),
+      node({ id: 2, code: "2", name: "Raiz B" }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_root_count_invalid");
+  });
+
+  it("rejeita pacote de trabalho com filhos", () => {
+    const result = validateEap([
+      node({ id: 1, code: "1", name: "Raiz" }),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Pacote", nodeType: "pacote" }),
+      node({ id: 3, parentId: 2, code: "1.1.1", name: "Filho", nodeType: "entrega" }),
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_work_package_has_children");
   });
 
   it("rejeita órfão e código duplicado", () => {
@@ -175,7 +228,7 @@ describe("validateWbsCostCoverage", () => {
   it("aceita quando toda folha tem custo e o pai não tem custo direto", () => {
     const result = validateWbsCostCoverage(
       [parent, leafA, leafB],
-      [{ wbsNodeId: 2 }, { wbsNodeId: 3 }]
+      [{ wbsNodeId: 2, quantity: 1, unitPrice: 100 }, { wbsNodeId: 3, quantity: 1, unitPrice: 200 }]
     );
     expect(result.valid).toBe(true);
     expect(result.issues).toEqual([]);
@@ -184,7 +237,7 @@ describe("validateWbsCostCoverage", () => {
   it("rejeita folha sem nenhum item de orçamento vinculado", () => {
     const result = validateWbsCostCoverage(
       [parent, leafA, leafB],
-      [{ wbsNodeId: 2 }]
+      [{ wbsNodeId: 2, quantity: 1, unitPrice: 100 }]
     );
     expect(result.valid).toBe(false);
     expect(result.issues.map(issue => issue.code)).toContain(
@@ -192,10 +245,34 @@ describe("validateWbsCostCoverage", () => {
     );
   });
 
+  it("rejeita item vinculado à folha quando quantidade é zero", () => {
+    const result = validateWbsCostCoverage(
+      [parent, leafA, leafB],
+      [
+        { wbsNodeId: 2, quantity: 0, unitPrice: 100 },
+        { wbsNodeId: 3, quantity: 1, unitPrice: 200 },
+      ]
+    );
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("wbs_leaf_without_cost");
+  });
+
+  it("rejeita item vinculado à folha quando preço unitário é zero", () => {
+    const result = validateWbsCostCoverage(
+      [parent, leafA, leafB],
+      [
+        { wbsNodeId: 2, quantity: 1, unitPrice: 0 },
+        { wbsNodeId: 3, quantity: 1, unitPrice: 200 },
+      ]
+    );
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("wbs_leaf_without_cost");
+  });
+
   it("rejeita custo lançado no pai e também em um descendente (dupla contagem)", () => {
     const result = validateWbsCostCoverage(
       [parent, leafA, leafB],
-      [{ wbsNodeId: 1 }, { wbsNodeId: 2 }, { wbsNodeId: 3 }]
+      [{ wbsNodeId: 1, quantity: 1, unitPrice: 300 }, { wbsNodeId: 2, quantity: 1, unitPrice: 100 }, { wbsNodeId: 3, quantity: 1, unitPrice: 200 }]
     );
     expect(result.valid).toBe(false);
     expect(result.issues.map(issue => issue.code)).toContain(
@@ -228,6 +305,42 @@ describe("validateEapScope", () => {
     expect(result.issues.map(issue => issue.code)).toEqual(
       expect.arrayContaining(["eap_delivery_has_children", "possible_scope_overlap"])
     );
+  });
+
+  it("exige localização e base de decomposição quando o gate usa o dicionário completo", () => {
+    const result = validateEapScope(
+      [
+        node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", description: "Obra completa", inclusions: "Todos os serviços" }),
+        node({
+          id: 2,
+          parentId: 1,
+          code: "1.1",
+          name: "Concretagem",
+          nodeType: "pacote",
+          description: "Concretagem de blocos",
+          inclusions: "Lançamento e adensamento",
+          exclusions: "Formas e armaduras",
+          acceptanceCriteria: "Resistência conforme projeto",
+          responsible: "Equipe de estrutura",
+          decompositionBasis: "deliverable",
+        }),
+      ],
+      {
+        requireDictionaryForLeaves: true,
+        requiredDictionaryFields: [
+          "description",
+          "inclusions",
+          "exclusions",
+          "acceptanceCriteria",
+          "responsible",
+          "location",
+          "decompositionBasis",
+        ],
+      }
+    );
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "eap_leaf_not_ready", message: expect.stringContaining("localização") }),
+    ]));
   });
 
   it("avisa quando a folha ainda não está pronta para virar pacote controlável", () => {
@@ -313,5 +426,17 @@ describe("validateEapScope", () => {
     ]);
     expect(result.valid).toBe(true);
     expect(result.issues.map(issue => issue.code)).toContain("eap_quantity_rollup_mismatch");
+  });
+});
+
+
+describe("eapNodeCanHaveChildren", () => {
+  it("bloqueia filhos abaixo de pacotes e entregas terminais", () => {
+    expect(eapNodeCanHaveChildren("pacote")).toBe(false);
+    expect(eapNodeCanHaveChildren("entrega")).toBe(false);
+  });
+
+  it("permite decomposição somente abaixo de grupos", () => {
+    expect(eapNodeCanHaveChildren("grupo")).toBe(true);
   });
 });

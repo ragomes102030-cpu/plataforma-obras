@@ -91,6 +91,18 @@ describe("stage gates", () => {
     expect(denied.allowed).toBe(false);
   });
 
+  it("bloqueia baseline quando o dicionário obrigatório da EAP está incompleto", () => {
+    const result = evaluateStageTransition({
+      currentStage: "CRONOGRAMA_PROPOSTO",
+      targetStage: "BASELINE_PROPOSTA",
+      decision: "approved",
+      evidence: { ...validEvidence, eapDictionaryCompliant: false },
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.checks.some(check => check.code === "eap_dictionary_compliant" && !check.valid)).toBe(true);
+  });
+
   it("bloqueia baseline quando a cobertura de custo (regra dos 100%) falha", () => {
     const result = evaluateStageTransition({
       currentStage: "CRONOGRAMA_PROPOSTO",

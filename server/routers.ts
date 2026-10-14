@@ -60,7 +60,7 @@ import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-his
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateWbsCostCoverage } from "./construction/eap-validator";
+import { validateEap, validateEapScope, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
@@ -849,6 +849,28 @@ async function loadStageGateEvidence(
         .limit(1),
     ]);
   const eapValidation = validateEap(eapNodes);
+  const dictionaryValidation = validateEapScope(eapNodes, {
+    requireDictionaryForLeaves: true,
+    requiredDictionaryFields: [
+      "description",
+      "inclusions",
+      "exclusions",
+      "acceptanceCriteria",
+      "responsible",
+      "location",
+      "decompositionBasis",
+    ],
+  });
+  const dictionaryBlockingIssues = new Set([
+    "eap_leaf_not_ready",
+    "eap_decomposition_basis_missing",
+    "eap_scope_coverage_not_evidenced",
+    "eap_child_scope_not_evidenced",
+  ]);
+  const eapDictionaryCompliant =
+    eapNodes.length > 0 &&
+    eapValidation.valid &&
+    !dictionaryValidation.issues.some(issue => issue.severity === "error" || dictionaryBlockingIssues.has(issue.code));
   const cpm = calculateDeterministicCpm(activities, dependencies);
   const evidenceBudgetItems = activeBudgetVersion[0]
     ? await db
@@ -889,7 +911,11 @@ async function loadStageGateEvidence(
   } as Record<import("./construction/planning-evidence").EvidenceLevel, number>);
   const budgetItemRefs = activeBudgetVersion[0]
     ? await db
-        .select({ wbsNodeId: budgetItems.wbsNodeId })
+        .select({
+          wbsNodeId: budgetItems.wbsNodeId,
+          quantity: budgetItems.quantity,
+          unitPrice: budgetItems.unitPrice,
+        })
         .from(budgetItems)
         .where(eq(budgetItems.budgetVersionId, activeBudgetVersion[0].id))
     : [];
@@ -909,7 +935,7 @@ async function loadStageGateEvidence(
     blockerCount,
     costCoverageValid: costCoverage.valid,
     eapDictionaryStandardApproved: false,
-    eapDictionaryCompliant: false,
+    eapDictionaryCompliant,
     activitiesPlanned: activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
     activitiesWithoutQuantity: activities.filter(activity => activity.plannedQuantity == null).length,
     planningEvidence: { summary: evidenceSummary, activities: planningEvidence },
@@ -1409,7 +1435,10 @@ export const appRouter = router({
           name: z.string().trim().min(2).max(220),
           nodeType: z.enum(["grupo", "pacote", "entrega"]),
           unit: z.string().trim().max(32).optional(),
-          plannedQuantity: z.number().int().min(0).optional(),
+          plannedQuantity: z.number().min(0).max(99_999_999_999.999).refine(
+          value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
+          "A quantidade deve ter no máximo 3 casas decimais."
+        ).optional(),
           decompositionBasis: z.enum(["project","deliverable","system","discipline","location","phase","component","other"]).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
         })
       )
@@ -1420,6 +1449,22 @@ export const appRouter = router({
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const node = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
         if (!node) throw notFound("Item da EAP não encontrado na versão de trabalho.");
+        if (input.code !== node.code) {
+          throw badRequest("O código da EAP é derivado da hierarquia; use a movimentação/reordenação para alterar a numeração.");
+        }
+        if (!eapNodeCanHaveChildren(input.nodeType)) {
+          const children = await db
+            .select({ id: wbsNodes.id })
+            .from(wbsNodes)
+            .where(and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id),
+              eq(wbsNodes.parentId, node.id)
+            ));
+          if (children.length > 0) {
+            throw badRequest("Não é possível transformar um nó com filhos em pacote de trabalho ou entrega; esses tipos são terminais.");
+          }
+        }
         await assertAvailableWbsCode(db, input.projectId, input.code, node.id, writable.id);
         return db.transaction(async tx => {
           await tx
@@ -1453,7 +1498,10 @@ export const appRouter = router({
         name: z.string().trim().min(2).max(220),
         nodeType: z.enum(["grupo", "pacote", "entrega"]),
         unit: z.string().trim().max(32).optional(),
-        plannedQuantity: z.number().int().min(0).optional(),
+        plannedQuantity: z.number().min(0).max(99_999_999_999.999).refine(
+          value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
+          "A quantidade deve ter no máximo 3 casas decimais."
+        ).optional(),
         decompositionBasis: z.string().trim().max(40).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1465,7 +1513,13 @@ export const appRouter = router({
           ? await resolveWbsNodeInVersion(db, input.projectId, input.parentId, writable.id)
           : undefined;
         if (input.parentId && !parent) throw forbidden("O pai selecionado não pertence à versão de trabalho desta obra.");
+        if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
+          throw badRequest("Somente grupos podem receber filhos na EAP; pacotes de trabalho e entregas são terminais.");
+        }
         const siblings = await db.select().from(wbsNodes).where(parent ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.parentId, parent.id), eq(wbsNodes.versionId, writable.id)) : and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.parentId), eq(wbsNodes.versionId, writable.id))).orderBy(wbsNodes.sortOrder);
+        if (!parent && siblings.length > 0) {
+          throw badRequest("A EAP deve possuir uma única raiz; crie novos itens dentro da raiz existente.");
+        }
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = parent ? `${parent.code}.${nextNumber}` : `${nextNumber}`;
         await assertAvailableWbsCode(db, input.projectId, code, undefined, writable.id);
@@ -1515,7 +1569,13 @@ export const appRouter = router({
             ? null
             : all.find(item => item.id === resolvedParent.id) ?? null;
           if (!node) throw notFound("Item da EAP não encontrado nesta obra.");
+          if (input.targetParentId === null && node.parentId !== null) {
+            throw badRequest("A EAP deve possuir uma única raiz; não mova um item subordinado para a raiz.");
+          }
           if (resolvedParent !== null && !parent) throw badRequest("Destino inválido.");
+          if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
+            throw badRequest("Somente grupos podem receber filhos na EAP; pacotes de trabalho e entregas são terminais.");
+          }
 
           const byId = new Map(all.map(item => [item.id, item]));
           let ancestor = parent;
@@ -1619,6 +1679,9 @@ export const appRouter = router({
         if (!mapped) throw notFound("Item da EAP não encontrado nesta obra.");
         const [source] = await db.select().from(wbsNodes).where(and(eq(wbsNodes.id, mapped.id), eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id))).limit(1);
         if (!source) throw notFound("Item da EAP não encontrado nesta obra.");
+        if (source.parentId === null) {
+          throw badRequest("Não é possível duplicar a raiz única da EAP; duplique um nó interno.");
+        }
         const siblings = await db.select().from(wbsNodes).where(source.parentId === null ? and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), isNull(wbsNodes.parentId)) : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id), eq(wbsNodes.parentId, source.parentId))).orderBy(wbsNodes.sortOrder);
         const nextNumber = siblings.reduce((max, item) => Math.max(max, Number(item.code.split(".").at(-1)) || 0), 0) + 1;
         const code = source.parentId

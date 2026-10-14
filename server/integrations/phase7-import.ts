@@ -84,9 +84,9 @@ function flattenNodes(roots: unknown[]) {
       code: externalId,
       name: stringValue(node.nome, `nome(${externalId})`),
       level,
-      nodeType: parentExternalId === null ? "grupo" : children.length ? "pacote" : "entrega",
+      nodeType: parentExternalId === null || children.length > 0 ? "grupo" : "pacote",
       unit: typeof node.unidade === "string" ? node.unidade : null,
-      plannedQuantity: typeof node.quantidade === "number" ? Math.round(node.quantidade) : null,
+      plannedQuantity: typeof node.quantidade === "number" && Number.isFinite(node.quantidade) ? node.quantidade : null,
       sortOrder,
     });
     children.forEach((child, index) => visit(child, externalId, index));

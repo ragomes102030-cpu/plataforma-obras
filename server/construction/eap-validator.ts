@@ -11,6 +11,13 @@ export type EapValidationResult = {
   issues: ValidationIssue[];
 };
 
+/** Somente grupos podem ter filhos; pacotes de trabalho e entregas são terminais. */
+export function eapNodeCanHaveChildren(nodeType: EapEvidenceNode["nodeType"]): boolean {
+  // Pela convenção adotada nesta EAP, somente grupos podem ser decompostos.
+  // Pacotes de trabalho e entregas são terminais.
+  return nodeType === "grupo";
+}
+
 export type EapDecompositionBasis =
   | "project"
   | "deliverable"
@@ -68,6 +75,15 @@ export function validateEapScope(
       const key = String(node.parentId);
       children.set(key, [...(children.get(key) ?? []), node]);
     }
+  }
+
+  if (nodes.length === 0) {
+    issues.push({
+      code: "eap_empty",
+      severity: "error",
+      message: "A EAP não pode estar vazia.",
+      entityRef: "project",
+    });
   }
 
   const roots = nodes.filter(node => node.parentId === null);
@@ -336,6 +352,25 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   const byId = new Map<string, EapEvidenceNode>();
   const byCode = new Map<string, EapEvidenceNode>();
 
+  if (nodes.length === 0) {
+    issues.push({
+      code: "eap_empty",
+      severity: "error",
+      message: "A EAP não pode estar vazia.",
+      entityRef: "project",
+    });
+  }
+
+  const roots = nodes.filter(node => node.parentId === null);
+  if (nodes.length > 0 && roots.length !== 1) {
+    issues.push({
+      code: "eap_root_count_invalid",
+      severity: "error",
+      message: `A EAP deve possuir uma única raiz; foram encontradas ${roots.length}.`,
+      entityRef: "project",
+    });
+  }
+
   for (const node of nodes) {
     const id = String(node.id);
     const code = node.code.trim();
@@ -370,6 +405,15 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   }
 
   for (const node of nodes) {
+    const hasChildren = nodes.some(candidate => candidate.parentId !== null && String(candidate.parentId) === String(node.id));
+    if (node.nodeType === "pacote" && hasChildren) {
+      issues.push({
+        code: "eap_work_package_has_children",
+        severity: "error",
+        message: `Pacote de trabalho ${node.code} (${node.name}) possui filhos. Um pacote de trabalho deve ser terminal.`,
+        entityRef: String(node.id),
+      });
+    }
     const codeDepth = node.code.trim().split(".").length;
     if (node.level !== codeDepth) {
       issues.push({
@@ -458,6 +502,8 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
  */
 export type BudgetItemCostRef = {
   wbsNodeId: number | string | null;
+  quantity: number | string | null;
+  unitPrice: number | string | null;
 };
 
 
@@ -551,13 +597,13 @@ export function validateAndNormalizeEapProposal(
         continue;
       }
 
-      if (parent?.nodeType === "entrega") {
+      if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
         issues.push({
-          code: "proposal_child_of_delivery",
+          code: parent.nodeType === "entrega" ? "proposal_child_of_delivery" : "proposal_child_of_work_package",
           severity: "error",
           message:
-            'A proposta tenta criar "' + item.name + '" abaixo da entrega ' +
-            parent.code + ". Entrega é terminal.",
+            'A proposta tenta criar "' + item.name + '" abaixo do nó terminal ' +
+            parent.code + " (" + parent.nodeType + "). Pacotes de trabalho e entregas não podem receber filhos.",
           entityRef: ref,
         });
         normalizedNodes.push({ ...item });
@@ -860,9 +906,12 @@ export function validateWbsCostCoverage(
     childrenOf.set(parentKey, [...(childrenOf.get(parentKey) ?? []), node]);
   }
 
+  // Um vínculo de orçamento sem quantidade ou preço positivo não cobre custo:
+  // itens zerados não podem liberar a regra dos 100% nem causar dupla contagem.
   const nodesWithCost = new Set<string>();
   for (const item of budgetItems) {
     if (item.wbsNodeId === null) continue;
+    if (!(Number(item.quantity) > 0 && Number(item.unitPrice) > 0)) continue;
     nodesWithCost.add(String(item.wbsNodeId));
   }
 
@@ -885,7 +934,7 @@ export function validateWbsCostCoverage(
         issues.push({
           code: "wbs_leaf_without_cost",
           severity: "error",
-          message: `Entrega ${node.code} (${node.name}) não tem nenhum item de orçamento vinculado — o escopo existe na EAP mas não tem custo, então o orçamento não cobre 100% da obra.`,
+          message: `Entrega ${node.code} (${node.name}) não tem item de orçamento com quantidade e preço positivos — o escopo existe na EAP mas ainda não possui custo orçado, então o orçamento não cobre 100% da obra.`,
           entityRef: id,
         });
       }

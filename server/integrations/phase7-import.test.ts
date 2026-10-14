@@ -14,7 +14,7 @@ const eap = {
       nivel: 2,
       nome: "Fundação",
       unidade: "m³",
-      quantidade: 10,
+      quantidade: 10.375,
       filhos: [],
     }],
   }],
@@ -47,6 +47,7 @@ describe("phase 7 import plan", () => {
       result(cpm)
     );
     expect(plan.wbsNodes.map(node => node.externalId)).toEqual(["1", "1.1"]);
+    expect(plan.wbsNodes[1]?.plannedQuantity).toBe(10.375);
     expect(plan.activities[0]).toMatchObject({
       externalId: "atv-1",
       eapRef: "1.1",
@@ -55,6 +56,37 @@ describe("phase 7 import plan", () => {
     });
     expect(plan.criticalPath).toEqual(["atv-1"]);
     expect(plan.totalDurationDays).toBe(10);
+  });
+
+  it("classifica nós intermediários como grupos e folhas como pacotes terminais", () => {
+    const nestedEap = {
+      raizes: [{
+        eap_id: "1",
+        nivel: 1,
+        nome: "Obra",
+        filhos: [{
+          eap_id: "1.1",
+          nivel: 2,
+          nome: "Estrutura",
+          filhos: [{
+            eap_id: "1.1.1",
+            nivel: 3,
+            nome: "Concretagem",
+            unidade: "m³",
+            quantidade: 10.375,
+            filhos: [],
+          }],
+        }],
+      }],
+    };
+    const plan = buildPhase7ImportPlan(
+      "obra-homologacao",
+      result(nestedEap),
+      result({ atividades: [] }),
+      result(dependencies)
+    );
+    expect(plan.wbsNodes.map(node => node.nodeType)).toEqual(["grupo", "grupo", "pacote"]);
+    expect(plan.wbsNodes[2]?.plannedQuantity).toBe(10.375);
   });
 
   it("rejeita EAP com mais de uma raiz", () => {
