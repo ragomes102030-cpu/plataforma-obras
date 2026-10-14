@@ -307,18 +307,20 @@ export default function Home() {
                         </button>
                         {menuDaObra === o.id && (
                           <div className="xl-seletor-menu" role="menu">
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="xl-seletor-menu-perigo"
-                              onClick={() => {
-                                setObraParaExcluir({ id: o.id, name: o.name });
-                                setMenuDaObra(null);
-                                setSeletorDeObraAberto(false);
-                              }}
-                            >
-                              <Trash2 size={15} /> Enviar para a lixeira
-                            </button>
+                            {user?.role === "admin" && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="xl-seletor-menu-perigo"
+                                onClick={() => {
+                                  setObraParaExcluir({ id: o.id, name: o.name });
+                                  setMenuDaObra(null);
+                                  setSeletorDeObraAberto(false);
+                                }}
+                              >
+                                <Trash2 size={15} /> Enviar para a lixeira
+                              </button>
+                            )}
                             {abaFechada ? (
                               <button
                                 type="button"
