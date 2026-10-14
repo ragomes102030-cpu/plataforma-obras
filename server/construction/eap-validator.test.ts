@@ -119,6 +119,12 @@ describe("validateAndNormalizeEapProposal", () => {
 });
 
 describe("validateEap", () => {
+  it("rejeita uma EAP vazia", () => {
+    const result = validateEap([]);
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("eap_empty");
+  });
+
   it("aceita uma árvore com pai e filho válidos", () => {
     const result = validateEap([
       node(),
