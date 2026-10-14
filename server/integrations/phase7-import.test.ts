@@ -14,7 +14,7 @@ const eap = {
       nivel: 2,
       nome: "Fundação",
       unidade: "m³",
-      quantidade: 10,
+      quantidade: 10.375,
       filhos: [],
     }],
   }],
@@ -47,6 +47,7 @@ describe("phase 7 import plan", () => {
       result(cpm)
     );
     expect(plan.wbsNodes.map(node => node.externalId)).toEqual(["1", "1.1"]);
+    expect(plan.wbsNodes[1]?.plannedQuantity).toBe(10.375);
     expect(plan.activities[0]).toMatchObject({
       externalId: "atv-1",
       eapRef: "1.1",
