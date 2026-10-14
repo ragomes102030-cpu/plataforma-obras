@@ -10,7 +10,7 @@ export function runCompleteEapQaSuite() {
   const packageCodes = new Set(packages.map(p => p.code));
   const scheduleCodes = new Set(schedule.map(a => a.wbsCode));
   const scheduleIds = new Set(schedule.map(a => a.id));
-  const costRefs = packages.map(p => ({ wbsNodeId: eap.find(n => n.code === p.code)?.id ?? null }));
+  const costRefs = packages.map(p => ({ wbsNodeId: eap.find(n => n.code === p.code)?.id ?? null, quantity: p.quantity, unitPrice: p.unitCost }));
 
   const checks = [
     { id: "project.fixture", passed: COMPLETE_EAP_QA_FIXTURE.project.lifecycle === "draft" },
