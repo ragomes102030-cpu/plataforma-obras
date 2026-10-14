@@ -13,7 +13,9 @@ export type EapValidationResult = {
 
 /** Entregas são terminais: nenhum nó pode ser criado ou movido abaixo delas. */
 export function eapNodeCanHaveChildren(nodeType: EapEvidenceNode["nodeType"]): boolean {
-  return nodeType !== "entrega";
+  // Pela convenção adotada nesta EAP, somente grupos podem ser decompostos.
+  // Pacotes de trabalho e entregas são terminais.
+  return nodeType === "grupo";
 }
 
 export type EapDecompositionBasis =
@@ -341,6 +343,16 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   const byId = new Map<string, EapEvidenceNode>();
   const byCode = new Map<string, EapEvidenceNode>();
 
+  const roots = nodes.filter(node => node.parentId === null);
+  if (nodes.length > 0 && roots.length !== 1) {
+    issues.push({
+      code: "eap_root_count_invalid",
+      severity: "error",
+      message: `A EAP deve possuir uma única raiz; foram encontradas ${roots.length}.`,
+      entityRef: "project",
+    });
+  }
+
   for (const node of nodes) {
     const id = String(node.id);
     const code = node.code.trim();
@@ -375,6 +387,15 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
   }
 
   for (const node of nodes) {
+    const hasChildren = nodes.some(candidate => candidate.parentId === node.id);
+    if (node.nodeType === "pacote" && hasChildren) {
+      issues.push({
+        code: "eap_work_package_has_children",
+        severity: "error",
+        message: `Pacote de trabalho ${node.code} (${node.name}) possui filhos. Um pacote de trabalho deve ser terminal.`,
+        entityRef: String(node.id),
+      });
+    }
     const codeDepth = node.code.trim().split(".").length;
     if (node.level !== codeDepth) {
       issues.push({
@@ -556,13 +577,13 @@ export function validateAndNormalizeEapProposal(
         continue;
       }
 
-      if (parent?.nodeType === "entrega") {
+      if (parent && !eapNodeCanHaveChildren(parent.nodeType)) {
         issues.push({
-          code: "proposal_child_of_delivery",
+          code: parent.nodeType === "entrega" ? "proposal_child_of_delivery" : "proposal_child_of_work_package",
           severity: "error",
           message:
-            'A proposta tenta criar "' + item.name + '" abaixo da entrega ' +
-            parent.code + ". Entrega é terminal.",
+            'A proposta tenta criar "' + item.name + '" abaixo do nó terminal ' +
+            parent.code + " (" + parent.nodeType + "). Pacotes de trabalho e entregas não podem receber filhos.",
           entityRef: ref,
         });
         normalizedNodes.push({ ...item });
