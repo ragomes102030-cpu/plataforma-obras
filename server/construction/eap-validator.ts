@@ -11,7 +11,7 @@ export type EapValidationResult = {
   issues: ValidationIssue[];
 };
 
-/** Entregas são terminais: nenhum nó pode ser criado ou movido abaixo delas. */
+/** Somente grupos podem ter filhos; pacotes de trabalho e entregas são terminais. */
 export function eapNodeCanHaveChildren(nodeType: EapEvidenceNode["nodeType"]): boolean {
   // Pela convenção adotada nesta EAP, somente grupos podem ser decompostos.
   // Pacotes de trabalho e entregas são terminais.
