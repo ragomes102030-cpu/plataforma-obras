@@ -902,7 +902,7 @@ export function validateWbsCostCoverage(
   const nodesWithCost = new Set<string>();
   for (const item of budgetItems) {
     if (item.wbsNodeId === null) continue;
-    if (Number(item.quantity) <= 0 || Number(item.unitPrice) <= 0) continue;
+    if (!(Number(item.quantity) > 0 && Number(item.unitPrice) > 0)) continue;
     nodesWithCost.add(String(item.wbsNodeId));
   }
 
