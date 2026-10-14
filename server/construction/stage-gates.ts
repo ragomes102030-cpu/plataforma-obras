@@ -194,6 +194,11 @@ function checksForTarget(
             "A EAP tem cobertura de custo de 100% (toda entrega tem orçamento, sem dupla contagem)",
           valid: evidence.costCoverageValid,
         },
+        {
+          code: "eap_dictionary_compliant",
+          label: "O dicionário da EAP está completo e comprova os limites do escopo antes da baseline",
+          valid: evidence.eapDictionaryCompliant,
+        },
       ];
     case "GANTT_LOB_PROPOSTO":
       return [
@@ -217,6 +222,11 @@ function checksForTarget(
           label:
             "A EAP tem cobertura de custo de 100% antes de entrar em controle",
           valid: evidence.costCoverageValid,
+        },
+        {
+          code: "eap_dictionary_compliant",
+          label: "O dicionário da EAP permanece completo durante o controle",
+          valid: evidence.eapDictionaryCompliant,
         },
       ];
     case "DESCRITIVO":
