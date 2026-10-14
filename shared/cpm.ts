@@ -58,7 +58,6 @@ export function calculateCpm(
         (!Number.isInteger(activity.startOffsetDay) || activity.startOffsetDay < 0)) {
       throw new Error(`Índice de início planejado inválido para ${activity.id}`);
     }
-    }
     for (const [field, value] of [
       ["mustStartOn", activity.mustStartOn],
       ["finishNoLaterThan", activity.finishNoLaterThan],
