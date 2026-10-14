@@ -3379,3 +3379,79 @@ tr:hover .xl-codigo {
   .xl-contexto-menu-botao { width: 34px; height: 34px; }
   .xl-contexto-menu-painel { right: -42px; min-width: 214px; }
 }
+
+
+/* Cabeçalho da obra: identidade do sistema acima e contexto da obra abaixo. */
+.arq-context-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 16px;
+  background: #1f6f8b;
+  color: #fff;
+}
+.arq-context-top,
+.arq-context-brand,
+.arq-context-project {
+  display: flex;
+  align-items: center;
+}
+.arq-context-top {
+  min-height: 48px;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.18);
+}
+.arq-context-brand { gap: 9px; min-width: 0; }
+.arq-context-brand svg { color: #b8eff8; flex: 0 0 auto; }
+.arq-context-brand strong {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  white-space: nowrap;
+}
+.arq-context-project {
+  min-height: 58px;
+  gap: 12px;
+  padding: 7px 0;
+}
+.arq-context-project-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.arq-context-project-copy > span {
+  color: rgba(255,255,255,.72);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.arq-context-project-copy > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.arq-context-project-copy > small {
+  color: rgba(255,255,255,.72);
+  font-size: 10px;
+}
+.arq-context-collapse {
+  flex: 0 0 32px;
+  border-color: rgba(255,255,255,.3);
+  color: #fff;
+}
+.arq-context-collapse:hover {
+  border-color: rgba(255,255,255,.5);
+  background: rgba(0,0,0,.12);
+  color: #fff;
+}
+@media (max-width: 600px) {
+  .arq-context-header { padding: 0 10px; }
+  .arq-context-top { min-height: 44px; }
+  .arq-context-brand strong { font-size: 12px; }
+  .arq-context-project { min-height: 56px; }
+}
