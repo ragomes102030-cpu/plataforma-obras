@@ -14,13 +14,14 @@
     "e2e:fictitious": "tsx scripts/e2e-fictitious.ts",
     "db:push": "tsx scripts/repair-wbs-identity.ts && drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node scripts/migrate-db.mjs",
-    "db:migrate:check": "node scripts/migrate-db.mjs --dry-run",
+    "db:migrate": "node scripts/migrate-pg.mjs",
+    "db:migrate:check": "node scripts/migrate-pg.mjs --dry-run",
     "db:verify:scratch": "node scripts/verify-migration-from-scratch.mjs",
     "db:migrate:integrity": "tsx scripts/repair-wbs-identity.ts && tsx scripts/migrate-wbs-integrity.ts",
     "test:contracts": "vitest run server/orchestrator.test.ts server/qa/orchestrator-regression.test.ts server/integrations/mcp-client.test.ts server/qa/mcp-client-regression.test.ts server/llm-provider-gateway.test.ts server/trpc-error-codes.test.ts",
     "test:aurora": "vitest run server/qa/aurora-eap-regression.test.ts",
-    "test:gate": "pnpm check && pnpm test --run && pnpm build"
+    "test:gate": "pnpm check && pnpm test --run && pnpm build",
+    "db:audit": "node scripts/audit-schema-pg.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
@@ -89,7 +90,8 @@
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
     "xlsx": "^0.18.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
@@ -113,7 +115,8 @@
     "typescript": "5.9.3",
     "vite": "^7.1.7",
     "vite-plugin-manus-runtime": "0.0.59",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "@types/pg": "^8.15.6"
   },
   "packageManager": "pnpm@10.4.1"
 }

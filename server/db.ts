@@ -1,32 +1,47 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { users, type InsertUser } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
+let _pool: Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
 
-/** Normalize CLI-style MySQL URL options before handing them to mysql2. */
 export function normalizeDatabaseConnection(databaseUrl: string) {
   const url = new URL(databaseUrl);
-  const sslMode = url.searchParams.get("ssl-mode")?.toLowerCase();
+  const sslMode = (
+    url.searchParams.get("sslmode") ??
+    url.searchParams.get("ssl-mode") ??
+    ""
+  ).toLowerCase();
+
+  url.searchParams.delete("sslmode");
   url.searchParams.delete("ssl-mode");
+
   return {
-    uri: url.toString(),
-    ...(sslMode && sslMode !== "disabled"
-      ? { ssl: { rejectUnauthorized: false } }
-      : {}),
+    connectionString: url.toString(),
+    ...(sslMode === "disable"
+      ? {}
+      : { ssl: { rejectUnauthorized: false } }),
   };
 }
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle({
-        connection: normalizeDatabaseConnection(process.env.DATABASE_URL),
+      const connection = normalizeDatabaseConnection(process.env.DATABASE_URL);
+      _pool = new Pool({
+        ...connection,
+        max: 10,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 10_000,
       });
+      _pool.on("error", error => {
+        console.error("[Database] PostgreSQL pool error:", error);
+      });
+      _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] Failed to initialize PostgreSQL:", error);
       _db = null;
     }
   }
@@ -44,9 +59,11 @@ function buildUserValues(user: InsertUser): InsertUser {
   for (const field of textFields) {
     if (user[field] !== undefined) values[field] = user[field] ?? null;
   }
+
   if (user.lastSignedIn !== undefined) values.lastSignedIn = user.lastSignedIn;
   if (user.role !== undefined) values.role = user.role;
   else if (user.openId === ENV.ownerOpenId) values.role = "admin";
+
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   return values;
 }
@@ -72,6 +89,7 @@ async function upsertUserWithDatabase(
 ): Promise<void> {
   const values = buildUserValues(user);
   const updateSet = buildUserUpdateSet(values);
+
   const existing = await database
     .select({ id: users.id })
     .from(users)
@@ -89,14 +107,14 @@ async function upsertUserWithDatabase(
   try {
     await database.insert(users).values(values);
   } catch (error) {
-    // A concurrent first login may insert the same openId between SELECT and INSERT.
-    // Re-read and update that row instead of returning the generic OAuth failure.
     const concurrent = await database
       .select({ id: users.id })
       .from(users)
       .where(eq(users.openId, values.openId!))
       .limit(1);
+
     if (!concurrent[0]) throw error;
+
     await database
       .update(users)
       .set(updateSet)
@@ -105,14 +123,11 @@ async function upsertUserWithDatabase(
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
+  if (!user.openId) throw new Error("User openId is required for upsert");
 
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
+    throw new Error("PostgreSQL database is not available");
   }
 
   try {
@@ -125,10 +140,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
+  if (!db) throw new Error("PostgreSQL database is not available");
 
   const result = await db
     .select()
@@ -138,5 +150,3 @@ export async function getUserByOpenId(openId: string) {
 
   return result.length > 0 ? result[0] : undefined;
 }
-
-// TODO: add feature queries here as your schema grows.
