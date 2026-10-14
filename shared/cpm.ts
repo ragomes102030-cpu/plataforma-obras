@@ -219,12 +219,15 @@ export function calculateCpm(
   // caminhos críticos paralelos, escolhe a cadeia crítica de maior duração.
   const resultById = new Map(results.map(activity => [activity.id, activity]));
   const criticalIds = new Set(results.filter(activity => activity.critical).map(activity => activity.id));
-  const bestDuration = new Map<string, number>();
+  // Com relações SS/FF/SF, atividades sobrepostas não podem ser ranqueadas
+  // somando durações. Escolhemos a cadeia crítica com maior intervalo real
+  // entre o início da primeira atividade e o término da última.
+  const chainStart = new Map<string, number>();
   const bestPrevious = new Map<string, string | null>();
   for (const id of order) {
     if (!criticalIds.has(id)) continue;
     const current = resultById.get(id)!;
-    let duration = current.duration;
+    let start = current.earlyStart;
     let previous: string | null = null;
     for (const dependency of dependencies.filter(item => item.successorId === id)) {
       if (!criticalIds.has(dependency.predecessorId)) continue;
@@ -236,21 +239,23 @@ export function calculateCpm(
         dependency.type === "FF" ? current.earlyFinish === predecessor.earlyFinish + lag :
         current.earlyFinish === predecessor.earlyStart + lag;
       if (!isTight) continue;
-      const candidate = (bestDuration.get(dependency.predecessorId) ?? predecessor.duration) + current.duration;
-      if (candidate > duration) {
-        duration = candidate;
+      const candidateStart = chainStart.get(dependency.predecessorId) ?? predecessor.earlyStart;
+      if (current.earlyFinish - candidateStart > current.earlyFinish - start) {
+        start = candidateStart;
         previous = dependency.predecessorId;
       }
     }
-    bestDuration.set(id, duration);
+    chainStart.set(id, start);
     bestPrevious.set(id, previous);
   }
   let criticalEnd: string | null = null;
   for (const id of order) {
     if (!criticalIds.has(id)) continue;
-    if (criticalEnd === null || (bestDuration.get(id) ?? 0) > (bestDuration.get(criticalEnd) ?? 0)) {
-      criticalEnd = id;
-    }
+    const current = resultById.get(id)!;
+    const span = current.earlyFinish - (chainStart.get(id) ?? current.earlyStart);
+    const bestSpan = criticalEnd === null ? -Infinity :
+      resultById.get(criticalEnd)!.earlyFinish - (chainStart.get(criticalEnd) ?? resultById.get(criticalEnd)!.earlyStart);
+    if (criticalEnd === null || span > bestSpan) criticalEnd = id;
   }
   const criticalPath: string[] = [];
   while (criticalEnd !== null) {
