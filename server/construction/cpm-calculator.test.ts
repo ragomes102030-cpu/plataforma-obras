@@ -102,4 +102,18 @@ describe("calculateDeterministicCpm", () => {
     });
   });
 
+  it("rejeita rede vazia sem declarar cálculo válido", () => {
+    const result = calculateDeterministicCpm([], []);
+    expect(result.valid).toBe(false);
+    expect(result.schedule).toBeNull();
+    expect(result.issues[0]?.code).toBe("cpm_empty_network");
+  });
+
+  it("rejeita atividade operacional com duração zero", () => {
+    const result = calculateDeterministicCpm([activity("A", 0)], []);
+    expect(result.valid).toBe(false);
+    expect(result.schedule).toBeNull();
+    expect(result.issues.some(issue => issue.code === "cpm_calculation_failed")).toBe(true);
+  });
+
 });
