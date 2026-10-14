@@ -911,7 +911,11 @@ async function loadStageGateEvidence(
   } as Record<import("./construction/planning-evidence").EvidenceLevel, number>);
   const budgetItemRefs = activeBudgetVersion[0]
     ? await db
-        .select({ wbsNodeId: budgetItems.wbsNodeId })
+        .select({
+          wbsNodeId: budgetItems.wbsNodeId,
+          quantity: budgetItems.quantity,
+          unitPrice: budgetItems.unitPrice,
+        })
         .from(budgetItems)
         .where(eq(budgetItems.budgetVersionId, activeBudgetVersion[0].id))
     : [];
