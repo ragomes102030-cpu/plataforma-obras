@@ -3275,3 +3275,107 @@ tr:hover .xl-codigo {
 .xl-badge-em-atraso{background:#fdf2f2;color:#c0392b}
 
 .xl-badge-entregue{background:#e3f2fd;color:#1565c0}
+
+
+/* Ações destrutivas ficam fora da linha principal do cabeçalho. */
+.xl-contexto-obra-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.xl-contexto-menu-acoes {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.xl-contexto-menu-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #304653;
+  border-radius: 8px;
+  background: transparent;
+  color: #a9bbc7;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.xl-contexto-menu-botao:hover,
+.xl-contexto-menu-botao[aria-expanded="true"] {
+  border-color: #456678;
+  background: #172b38;
+  color: #f5fbff;
+}
+
+.xl-contexto-menu-botao:focus-visible,
+.xl-contexto-menu-painel button:focus-visible,
+.xl-sair-obra:focus-visible {
+  outline: 2px solid #56d1e7;
+  outline-offset: 2px;
+}
+
+.xl-contexto-menu-painel {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 5px;
+  border: 1px solid #d6e0e7;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .24);
+}
+
+.xl-contexto-menu-titulo {
+  padding: 7px 9px 8px;
+  border-bottom: 1px solid #edf1f4;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.xl-contexto-menu-painel button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #21384d;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xl-contexto-menu-painel button:hover {
+  background: #f1f5f8;
+}
+
+.xl-contexto-menu-painel .xl-contexto-menu-perigo {
+  color: #b42318;
+}
+
+.xl-contexto-menu-painel .xl-contexto-menu-perigo:hover {
+  background: #fdecea;
+}
+
+@media (max-width: 560px) {
+  .xl-contexto-obra-acoes { gap: 5px; }
+  .xl-contexto-menu-botao { width: 34px; height: 34px; }
+  .xl-contexto-menu-painel { right: -42px; min-width: 214px; }
+}

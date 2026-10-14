@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, LogOut, ArrowRight, ArrowLeft } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, LogOut, ArrowRight, ArrowLeft, Ellipsis } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useRoute } from "wouter";
@@ -67,6 +67,7 @@ export default function Home() {
   const [novaObraAberta, setNovaObraAberta] = useState(false);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);
+  const [menuAcoesObraAberto, setMenuAcoesObraAberto] = useState(false);
   // Seletor de obra (o botao do topo). Antes a obra so se trocava clicando nos
   // chips da faixa -- no celular so cabia um chip por vez. Agora ha um botao que
   // abre a lista completa, com busca.
@@ -146,14 +147,36 @@ export default function Home() {
           </div>
           <div className="xl-contexto-obra-acoes">
             {user?.role === "admin" && (
-              <button
-                type="button"
-                className="xl-contexto-excluir"
-                onClick={() => setObraParaExcluir({ id: obra.id, name: obra.name })}
-                title="Enviar a obra atual para a lixeira"
-              >
-                <Trash2 size={15} /> Enviar para a lixeira
-              </button>
+              <div className="xl-contexto-menu-acoes">
+                <button
+                  type="button"
+                  className="xl-contexto-menu-botao"
+                  aria-label="Mais ações da obra"
+                  aria-haspopup="menu"
+                  aria-expanded={menuAcoesObraAberto}
+                  title="Mais ações da obra"
+                  onClick={() => setMenuAcoesObraAberto(aberto => !aberto)}
+                >
+                  <Ellipsis size={19} aria-hidden="true" />
+                </button>
+                {menuAcoesObraAberto && (
+                  <div className="xl-contexto-menu-painel" role="menu" aria-label="Ações da obra">
+                    <span className="xl-contexto-menu-titulo">Ações da obra</span>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="xl-contexto-menu-perigo"
+                      onClick={() => {
+                        setMenuAcoesObraAberto(false);
+                        setObraParaExcluir({ id: obra.id, name: obra.name });
+                      }}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                      Enviar para a lixeira
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             <button
               type="button"
