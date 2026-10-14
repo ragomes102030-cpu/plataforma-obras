@@ -136,58 +136,41 @@ export default function Home() {
   return (
     <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}`}>
       {mostrarTituloDaObra && obra && (
-        <header className="xl-titlebar xl-titlebar--contexto-fixo">
-          <div className="xl-contexto-obra-identidade">
-            <Layers3 size={19} aria-hidden="true" />
-            <div>
+        <header className="arq-context-header">
+          <div className="arq-context-top">
+            <div className="arq-context-brand">
+              <Layers3 size={20} aria-hidden="true" />
+              <strong>ARQUIMEDES</strong>
+            </div>
+            <div className="xl-contexto-obra-acoes">
+              {user?.role === "admin" && (
+                <div className="xl-contexto-menu-acoes">
+                  <button type="button" className="xl-contexto-menu-botao" aria-label="Mais ações da obra" aria-haspopup="menu" aria-expanded={menuAcoesObraAberto} title="Mais ações da obra" onClick={() => setMenuAcoesObraAberto(aberto => !aberto)}>
+                    <Ellipsis size={19} aria-hidden="true" />
+                  </button>
+                  {menuAcoesObraAberto && (
+                    <div className="xl-contexto-menu-painel" role="menu" aria-label="Ações da obra">
+                      <span className="xl-contexto-menu-titulo">Ações da obra</span>
+                      <button type="button" role="menuitem" className="xl-contexto-menu-perigo" onClick={() => { setMenuAcoesObraAberto(false); setObraParaExcluir({ id: obra.id, name: obra.name }); }}>
+                        <Trash2 size={16} aria-hidden="true" /> Enviar para a lixeira
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <button type="button" className="xl-sair-obra" onClick={() => { setAba("dashboard"); setLocation("/obras"); }} title="Sair da obra e voltar à seleção de obras">
+                <ArrowLeft size={16} /> Sair da obra
+              </button>
+            </div>
+          </div>
+          <div className="arq-context-project">
+            <div className="arq-context-project-copy">
               <span>OBRA ATIVA</span>
               <strong>{obra.name}</strong>
               {obra.code && <small>Código: {obra.code}</small>}
             </div>
-          </div>
-          <div className="xl-contexto-obra-acoes">
-            {user?.role === "admin" && (
-              <div className="xl-contexto-menu-acoes">
-                <button
-                  type="button"
-                  className="xl-contexto-menu-botao"
-                  aria-label="Mais ações da obra"
-                  aria-haspopup="menu"
-                  aria-expanded={menuAcoesObraAberto}
-                  title="Mais ações da obra"
-                  onClick={() => setMenuAcoesObraAberto(aberto => !aberto)}
-                >
-                  <Ellipsis size={19} aria-hidden="true" />
-                </button>
-                {menuAcoesObraAberto && (
-                  <div className="xl-contexto-menu-painel" role="menu" aria-label="Ações da obra">
-                    <span className="xl-contexto-menu-titulo">Ações da obra</span>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="xl-contexto-menu-perigo"
-                      onClick={() => {
-                        setMenuAcoesObraAberto(false);
-                        setObraParaExcluir({ id: obra.id, name: obra.name });
-                      }}
-                    >
-                      <Trash2 size={16} aria-hidden="true" />
-                      Enviar para a lixeira
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            <button
-              type="button"
-              className="xl-sair-obra"
-              onClick={() => {
-                setAba("dashboard");
-                setLocation("/obras");
-              }}
-              title="Sair da obra e voltar à seleção de obras"
-            >
-              <ArrowLeft size={16} /> Sair da obra
+            <button type="button" className="xl-sidebar-toggle arq-context-collapse" onClick={() => window.dispatchEvent(new CustomEvent("alternar-recolhimento-sidebar"))} aria-label="Recolher ou expandir menu" title="Recolher ou expandir menu">
+              <Menu size={17} aria-hidden="true" />
             </button>
           </div>
         </header>
@@ -445,6 +428,13 @@ function Obra({
     setMenuMobileAberto(false);
   };
 
+  // O controle de recolher fica no cabeçalho da obra, ao lado do nome.
+  useEffect(() => {
+    const alternar = () => setSidebarRecolhida(v => !v);
+    window.addEventListener("alternar-recolhimento-sidebar", alternar);
+    return () => window.removeEventListener("alternar-recolhimento-sidebar", alternar);
+  }, []);
+
   // Fecha com Esc — teclado em tablet/celular com teclado externo.
   useEffect(() => {
     if (!menuMobileAberto) return;
@@ -518,16 +508,6 @@ function Obra({
         <div className="xl-sidebar-backdrop" onClick={() => setMenuMobileAberto(false)} aria-hidden="true" />
       )}
       <aside className="xl-sidebar" aria-label="Navegação da obra">
-        <div className="xl-sidebar-head">
-          <div className="xl-sidebar-brand">
-            <Layers3 size={17} />
-            {!sidebarRecolhida && <div><strong>ARQUIMEDES</strong><span>PLANEJAMENTO DE OBRAS</span></div>}
-          </div>
-          <button type="button" className="xl-sidebar-toggle" onClick={() => setSidebarRecolhida(v => !v)} aria-label={sidebarRecolhida ? "Expandir menu" : "Recolher menu"} title={sidebarRecolhida ? "Expandir menu" : "Recolher menu"}>
-            {sidebarRecolhida ? <Menu size={17} /> : <Menu size={17} />}
-          </button>
-        </div>
-
         <nav className="xl-sidebar-nav">
           {grupos.map(grupo => (
             <div className="xl-sidebar-group" key={grupo.titulo}>
