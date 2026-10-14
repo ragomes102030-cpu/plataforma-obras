@@ -91,4 +91,15 @@ describe("calculateDeterministicCpm", () => {
       earlyFinish: 6,
     });
   });
+  it("adota o índice de início útil calculado pelo calendário", () => {
+    const planned = activity("A", 3);
+    planned.startOffsetDay = 7;
+    const result = calculateDeterministicCpm([planned], []);
+    expect(result.valid).toBe(true);
+    expect(result.schedule?.activities[0]).toMatchObject({
+      earlyStart: 7,
+      earlyFinish: 10,
+    });
+  });
+
 });
