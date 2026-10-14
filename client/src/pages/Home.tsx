@@ -521,7 +521,7 @@ function Obra({
         <div className="xl-sidebar-head">
           <div className="xl-sidebar-brand">
             <Layers3 size={17} />
-            {!sidebarRecolhida && <div><strong>{obra}</strong><span>Planejamento da obra</span></div>}
+            {!sidebarRecolhida && <div><strong>ARQUIMEDES</strong><span>PLANEJAMENTO DE OBRAS</span></div>}
           </div>
           <button type="button" className="xl-sidebar-toggle" onClick={() => setSidebarRecolhida(v => !v)} aria-label={sidebarRecolhida ? "Expandir menu" : "Recolher menu"} title={sidebarRecolhida ? "Expandir menu" : "Recolher menu"}>
             {sidebarRecolhida ? <Menu size={17} /> : <Menu size={17} />}
