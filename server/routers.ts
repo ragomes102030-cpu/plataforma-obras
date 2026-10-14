@@ -60,7 +60,7 @@ import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-his
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
+import { validateEap, validateEapScope, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
@@ -849,6 +849,28 @@ async function loadStageGateEvidence(
         .limit(1),
     ]);
   const eapValidation = validateEap(eapNodes);
+  const dictionaryValidation = validateEapScope(eapNodes, {
+    requireDictionaryForLeaves: true,
+    requiredDictionaryFields: [
+      "description",
+      "inclusions",
+      "exclusions",
+      "acceptanceCriteria",
+      "responsible",
+      "location",
+      "decompositionBasis",
+    ],
+  });
+  const dictionaryBlockingIssues = new Set([
+    "eap_leaf_not_ready",
+    "eap_decomposition_basis_missing",
+    "eap_scope_coverage_not_evidenced",
+    "eap_child_scope_not_evidenced",
+  ]);
+  const eapDictionaryCompliant =
+    eapNodes.length > 0 &&
+    eapValidation.valid &&
+    !dictionaryValidation.issues.some(issue => dictionaryBlockingIssues.has(issue.code));
   const cpm = calculateDeterministicCpm(activities, dependencies);
   const evidenceBudgetItems = activeBudgetVersion[0]
     ? await db
@@ -909,7 +931,7 @@ async function loadStageGateEvidence(
     blockerCount,
     costCoverageValid: costCoverage.valid,
     eapDictionaryStandardApproved: false,
-    eapDictionaryCompliant: false,
+    eapDictionaryCompliant,
     activitiesPlanned: activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
     activitiesWithoutQuantity: activities.filter(activity => activity.plannedQuantity == null).length,
     planningEvidence: { summary: evidenceSummary, activities: planningEvidence },
