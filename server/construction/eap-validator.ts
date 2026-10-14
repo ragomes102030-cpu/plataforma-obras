@@ -493,6 +493,8 @@ export function validateEap(nodes: EapEvidenceNode[]): EapValidationResult {
  */
 export type BudgetItemCostRef = {
   wbsNodeId: number | string | null;
+  quantity: number | string | null;
+  unitPrice: number | string | null;
 };
 
 
@@ -895,9 +897,12 @@ export function validateWbsCostCoverage(
     childrenOf.set(parentKey, [...(childrenOf.get(parentKey) ?? []), node]);
   }
 
+  // Um vínculo de orçamento sem quantidade ou preço positivo não cobre custo:
+  // itens zerados não podem liberar a regra dos 100% nem causar dupla contagem.
   const nodesWithCost = new Set<string>();
   for (const item of budgetItems) {
     if (item.wbsNodeId === null) continue;
+    if (Number(item.quantity) <= 0 || Number(item.unitPrice) <= 0) continue;
     nodesWithCost.add(String(item.wbsNodeId));
   }
 
@@ -920,7 +925,7 @@ export function validateWbsCostCoverage(
         issues.push({
           code: "wbs_leaf_without_cost",
           severity: "error",
-          message: `Entrega ${node.code} (${node.name}) não tem nenhum item de orçamento vinculado — o escopo existe na EAP mas não tem custo, então o orçamento não cobre 100% da obra.`,
+          message: `Entrega ${node.code} (${node.name}) não tem item de orçamento com quantidade e preço positivos — o escopo existe na EAP mas ainda não possui custo orçado, então o orçamento não cobre 100% da obra.`,
           entityRef: id,
         });
       }
