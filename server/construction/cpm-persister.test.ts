@@ -92,4 +92,32 @@ describe("persistCpmResult", () => {
     expect(result).toBe(0);
     expect(executeCalls).toBe(0);
   });
+  it("does not count an activity when the UPDATE matches no database row", async () => {
+    const db = {
+      execute: async () => ({ rowCount: 0 }),
+    } as unknown as CpmPersisterDb;
+
+    const result = await persistCpmResult(
+      db,
+      42,
+      7,
+      schedule([
+        {
+          id: "101",
+          duration: 5,
+          earlyStart: 0,
+          earlyFinish: 5,
+          lateStart: 0,
+          lateFinish: 5,
+          totalFloat: 0,
+          freeFloat: 0,
+          critical: true,
+          infeasible: false,
+        },
+      ])
+    );
+
+    expect(result).toBe(0);
+  });
+
 });
