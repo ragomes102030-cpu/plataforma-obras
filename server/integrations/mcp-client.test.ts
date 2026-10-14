@@ -77,8 +77,23 @@ describe("MCP_TOOL_POLICY", () => {
     await expect(
       callControlledMcpTool("eap", "deletar_projeto", {})
     ).rejects.toThrow("Mutação não liberada");
-    const activityResult = await callControlledMcpTool("cronograma", "criar_atividade", {});
+
+    // Isola a política de ferramentas de qualquer MCP externo indisponível.
+    const callTool = vi.fn(async () => ({ isError: true, content: [] }));
+    const clients = {
+      eap: { listTools: async () => [], callTool },
+      cronograma: { listTools: async () => [], callTool },
+      ganttLob: { listTools: async () => [], callTool },
+    };
+    const activityResult = await callControlledMcpTool(
+      "cronograma",
+      "criar_atividade",
+      {},
+      clients
+    );
+
     expect(activityResult.isError).toBe(true);
+    expect(callTool).toHaveBeenCalledWith("criar_atividade", {});
   });
 });
 
