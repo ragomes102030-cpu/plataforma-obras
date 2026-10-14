@@ -214,13 +214,59 @@ export function calculateCpm(
       infeasible: totalFloat < 0,
     };
   });
+  // Retorna uma sequência contínua de atividades críticas, não apenas uma
+  // lista de todas as atividades críticas ordenadas por data. Em redes com
+  // caminhos críticos paralelos, escolhe a cadeia crítica de maior duração.
+  const resultById = new Map(results.map(activity => [activity.id, activity]));
+  const criticalIds = new Set(results.filter(activity => activity.critical).map(activity => activity.id));
+  // Com relações SS/FF/SF, atividades sobrepostas não podem ser ranqueadas
+  // somando durações. Escolhemos a cadeia crítica com maior intervalo real
+  // entre o início da primeira atividade e o término da última.
+  const chainStart = new Map<string, number>();
+  const bestPrevious = new Map<string, string | null>();
+  for (const id of order) {
+    if (!criticalIds.has(id)) continue;
+    const current = resultById.get(id)!;
+    let start = current.earlyStart;
+    let previous: string | null = null;
+    for (const dependency of dependencies.filter(item => item.successorId === id)) {
+      if (!criticalIds.has(dependency.predecessorId)) continue;
+      const predecessor = resultById.get(dependency.predecessorId)!;
+      const lag = dependency.lag ?? 0;
+      const isTight =
+        dependency.type === "FS" ? current.earlyStart === predecessor.earlyFinish + lag :
+        dependency.type === "SS" ? current.earlyStart === predecessor.earlyStart + lag :
+        dependency.type === "FF" ? current.earlyFinish === predecessor.earlyFinish + lag :
+        current.earlyFinish === predecessor.earlyStart + lag;
+      if (!isTight) continue;
+      const candidateStart = chainStart.get(dependency.predecessorId) ?? predecessor.earlyStart;
+      if (current.earlyFinish - candidateStart > current.earlyFinish - start) {
+        start = candidateStart;
+        previous = dependency.predecessorId;
+      }
+    }
+    chainStart.set(id, start);
+    bestPrevious.set(id, previous);
+  }
+  let criticalEnd: string | null = null;
+  for (const id of order) {
+    if (!criticalIds.has(id)) continue;
+    const current = resultById.get(id)!;
+    const span = current.earlyFinish - (chainStart.get(id) ?? current.earlyStart);
+    const bestSpan = criticalEnd === null ? -Infinity :
+      resultById.get(criticalEnd)!.earlyFinish - (chainStart.get(criticalEnd) ?? resultById.get(criticalEnd)!.earlyStart);
+    if (criticalEnd === null || span > bestSpan) criticalEnd = id;
+  }
+  const criticalPath: string[] = [];
+  while (criticalEnd !== null) {
+    criticalPath.unshift(criticalEnd);
+    criticalEnd = bestPrevious.get(criticalEnd) ?? null;
+  }
+
   return {
     activities: results,
     projectDuration,
-    criticalPath: results
-      .filter(activity => activity.critical)
-      .sort((a, b) => a.earlyStart - b.earlyStart || a.id.localeCompare(b.id))
-      .map(activity => activity.id),
+    criticalPath,
     infeasibleActivities: results
       .filter(activity => activity.infeasible)
       .sort((a, b) => a.earlyStart - b.earlyStart || a.id.localeCompare(b.id))

@@ -45,6 +45,23 @@ describe("calculateCpm", () => {
     expect(result.projectDuration).toBe(5);
   });
 
+  it("retorna cadeia crítica contínua com atividades sobrepostas por SS", () => {
+    const result = calculateCpm(
+      [
+        { id: "A", duration: 17, startOffsetDay: 3 },
+        { id: "B", duration: 2 },
+        { id: "X", duration: 18, startOffsetDay: 3 },
+      ],
+      [{ predecessorId: "A", successorId: "B", type: "SS", lag: 16 }]
+    );
+
+    expect(result.projectDuration).toBe(21);
+    expect(result.criticalPath).toEqual(["A", "B"]);
+    expect(result.criticalPath.every(id =>
+      result.activities.find(activity => activity.id === id)?.critical
+    )).toBe(true);
+  });
+
   it("aplica SF usando o início da predecessora", () => {
     const result = calculateCpm(
       [
@@ -238,6 +255,30 @@ describe("calculateCpm", () => {
   it("rejeita início planejado negativo ou não inteiro", () => {
     expect(() => calculateCpm([{ id: "A", duration: 1, startOffsetDay: -1 }], [])).toThrow("Índice de início planejado inválido");
     expect(() => calculateCpm([{ id: "A", duration: 1, startOffsetDay: 1.5 }], [])).toThrow("Índice de início planejado inválido");
+  });
+
+
+  it("escolhe uma cadeia contínua determinística entre caminhos críticos paralelos", () => {
+    const result = calculateCpm(
+      [
+        { id: "A", duration: 1 },
+        { id: "B", duration: 5 },
+        { id: "C", duration: 5 },
+        { id: "D", duration: 1 },
+      ],
+      [
+        { predecessorId: "A", successorId: "B", type: "FS" },
+        { predecessorId: "A", successorId: "C", type: "FS" },
+        { predecessorId: "B", successorId: "D", type: "FS" },
+        { predecessorId: "C", successorId: "D", type: "FS" },
+      ]
+    );
+
+    expect(result.projectDuration).toBe(7);
+    expect(result.criticalPath).toEqual(["A", "B", "D"]);
+    expect(result.criticalPath.every(id =>
+      result.activities.find(activity => activity.id === id)?.critical
+    )).toBe(true);
   });
 
 });
