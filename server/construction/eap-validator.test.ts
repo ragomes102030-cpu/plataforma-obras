@@ -228,7 +228,7 @@ describe("validateWbsCostCoverage", () => {
   it("aceita quando toda folha tem custo e o pai não tem custo direto", () => {
     const result = validateWbsCostCoverage(
       [parent, leafA, leafB],
-      [{ wbsNodeId: 2 }, { wbsNodeId: 3 }]
+      [{ wbsNodeId: 2, quantity: 1, unitPrice: 100 }, { wbsNodeId: 3, quantity: 1, unitPrice: 200 }]
     );
     expect(result.valid).toBe(true);
     expect(result.issues).toEqual([]);
@@ -237,7 +237,7 @@ describe("validateWbsCostCoverage", () => {
   it("rejeita folha sem nenhum item de orçamento vinculado", () => {
     const result = validateWbsCostCoverage(
       [parent, leafA, leafB],
-      [{ wbsNodeId: 2 }]
+      [{ wbsNodeId: 2, quantity: 1, unitPrice: 100 }]
     );
     expect(result.valid).toBe(false);
     expect(result.issues.map(issue => issue.code)).toContain(
@@ -245,10 +245,34 @@ describe("validateWbsCostCoverage", () => {
     );
   });
 
+  it("rejeita item vinculado à folha quando quantidade é zero", () => {
+    const result = validateWbsCostCoverage(
+      [parent, leafA, leafB],
+      [
+        { wbsNodeId: 2, quantity: 0, unitPrice: 100 },
+        { wbsNodeId: 3, quantity: 1, unitPrice: 200 },
+      ]
+    );
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("wbs_leaf_without_cost");
+  });
+
+  it("rejeita item vinculado à folha quando preço unitário é zero", () => {
+    const result = validateWbsCostCoverage(
+      [parent, leafA, leafB],
+      [
+        { wbsNodeId: 2, quantity: 1, unitPrice: 0 },
+        { wbsNodeId: 3, quantity: 1, unitPrice: 200 },
+      ]
+    );
+    expect(result.valid).toBe(false);
+    expect(result.issues.map(issue => issue.code)).toContain("wbs_leaf_without_cost");
+  });
+
   it("rejeita custo lançado no pai e também em um descendente (dupla contagem)", () => {
     const result = validateWbsCostCoverage(
       [parent, leafA, leafB],
-      [{ wbsNodeId: 1 }, { wbsNodeId: 2 }, { wbsNodeId: 3 }]
+      [{ wbsNodeId: 1, quantity: 1, unitPrice: 300 }, { wbsNodeId: 2, quantity: 1, unitPrice: 100 }, { wbsNodeId: 3, quantity: 1, unitPrice: 200 }]
     );
     expect(result.valid).toBe(false);
     expect(result.issues.map(issue => issue.code)).toContain(
