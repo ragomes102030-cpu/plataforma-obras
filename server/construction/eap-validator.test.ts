@@ -4,6 +4,7 @@ import {
   validateEapScope,
   validateWbsCostCoverage,
   validateAndNormalizeEapProposal,
+  eapNodeCanHaveChildren,
 } from "./eap-validator";
 import type { EapEvidenceNode } from "./domain-types";
 
@@ -313,5 +314,17 @@ describe("validateEapScope", () => {
     ]);
     expect(result.valid).toBe(true);
     expect(result.issues.map(issue => issue.code)).toContain("eap_quantity_rollup_mismatch");
+  });
+});
+
+
+describe("eapNodeCanHaveChildren", () => {
+  it("bloqueia filhos abaixo de entregas terminais", () => {
+    expect(eapNodeCanHaveChildren("entrega")).toBe(false);
+  });
+
+  it("permite decomposição abaixo de grupos e pacotes", () => {
+    expect(eapNodeCanHaveChildren("grupo")).toBe(true);
+    expect(eapNodeCanHaveChildren("pacote")).toBe(true);
   });
 });
