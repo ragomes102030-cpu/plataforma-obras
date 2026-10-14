@@ -1449,6 +1449,22 @@ export const appRouter = router({
         const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
         const node = await resolveWbsNodeInVersion(db, input.projectId, input.nodeId, writable.id);
         if (!node) throw notFound("Item da EAP não encontrado na versão de trabalho.");
+        if (input.code !== node.code) {
+          throw badRequest("O código da EAP é derivado da hierarquia; use a movimentação/reordenação para alterar a numeração.");
+        }
+        if (!eapNodeCanHaveChildren(input.nodeType)) {
+          const children = await db
+            .select({ id: wbsNodes.id })
+            .from(wbsNodes)
+            .where(and(
+              eq(wbsNodes.projectId, input.projectId),
+              eq(wbsNodes.versionId, writable.id),
+              eq(wbsNodes.parentId, node.id)
+            ));
+          if (children.length > 0) {
+            throw badRequest("Não é possível transformar um nó com filhos em pacote de trabalho ou entrega; esses tipos são terminais.");
+          }
+        }
         await assertAvailableWbsCode(db, input.projectId, input.code, node.id, writable.id);
         return db.transaction(async tx => {
           await tx
@@ -1482,7 +1498,10 @@ export const appRouter = router({
         name: z.string().trim().min(2).max(220),
         nodeType: z.enum(["grupo", "pacote", "entrega"]),
         unit: z.string().trim().max(32).optional(),
-        plannedQuantity: z.number().int().min(0).optional(),
+        plannedQuantity: z.number().min(0).max(99_999_999_999.999).refine(
+          value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
+          "A quantidade deve ter no máximo 3 casas decimais."
+        ).optional(),
         decompositionBasis: z.string().trim().max(40).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
