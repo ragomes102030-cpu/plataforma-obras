@@ -2045,3 +2045,16 @@
   .xl-obra-nova,
   .xl-demo-obra { min-height: 40px; }
 }
+
+
+/* O controle de recolher agora acompanha a identificação da obra no cabeçalho. */
+.arq-context-collapse {
+  border: 1px solid rgba(255,255,255,.3);
+  background: transparent;
+  color: #fff;
+}
+.arq-context-collapse:hover {
+  border-color: rgba(255,255,255,.5);
+  background: rgba(0,0,0,.12);
+  color: #fff;
+}
