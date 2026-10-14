@@ -20,7 +20,10 @@
     "db:migrate:integrity": "tsx scripts/repair-wbs-identity.ts && tsx scripts/migrate-wbs-integrity.ts",
     "test:contracts": "vitest run server/orchestrator.test.ts server/qa/orchestrator-regression.test.ts server/integrations/mcp-client.test.ts server/qa/mcp-client-regression.test.ts server/llm-provider-gateway.test.ts server/trpc-error-codes.test.ts",
     "test:aurora": "vitest run server/qa/aurora-eap-regression.test.ts",
-    "test:gate": "pnpm check && pnpm test --run && pnpm build"
+    "test:gate": "pnpm check && pnpm test --run && pnpm build",
+    "e2e:playwright": "playwright test",
+    "e2e:playwright:headed": "playwright test --headed",
+    "e2e:playwright:auth": "playwright codegen --save-storage=.playwright/auth.json http://localhost:3000"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
