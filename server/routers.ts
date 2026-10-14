@@ -1668,7 +1668,7 @@ export const appRouter = router({
               : and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, versionId))
           );
       }),
-    trash: adminProcedure.query(async ({ ctx }) => {
+    trash: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(projects).where(and(eq(projects.ownerUserId, ctx.user.id), sql`${projects.deletedAt} is not null`)).orderBy(desc(projects.deletedAt));
@@ -1684,7 +1684,7 @@ export const appRouter = router({
         await db.update(projects).set({ deletedAt: new Date(), deletedAtBy: ctx.user.id }).where(eq(projects.id, input.projectId));
         return { moved: true as const };
       }),
-    restoreFromTrash: adminProcedure
+    restoreFromTrash: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
