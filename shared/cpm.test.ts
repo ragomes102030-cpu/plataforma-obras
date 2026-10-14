@@ -45,6 +45,23 @@ describe("calculateCpm", () => {
     expect(result.projectDuration).toBe(5);
   });
 
+  it("retorna cadeia crítica contínua com atividades sobrepostas por SS", () => {
+    const result = calculateCpm(
+      [
+        { id: "A", duration: 17, startOffsetDay: 3 },
+        { id: "B", duration: 2 },
+        { id: "X", duration: 18, startOffsetDay: 3 },
+      ],
+      [{ predecessorId: "A", successorId: "B", type: "SS", lag: 16 }]
+    );
+
+    expect(result.projectDuration).toBe(21);
+    expect(result.criticalPath).toEqual(["A", "B"]);
+    expect(result.criticalPath.every(id =>
+      result.activities.find(activity => activity.id === id)?.critical
+    )).toBe(true);
+  });
+
   it("aplica SF usando o início da predecessora", () => {
     const result = calculateCpm(
       [
