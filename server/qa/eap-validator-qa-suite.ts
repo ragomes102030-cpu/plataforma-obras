@@ -71,7 +71,7 @@ export function runEapValidatorQaSuite() {
     node({ id: 1, code: "1", nodeType: "pacote" }),
     node({ id: 2, parentId: 1, code: "1.1", nodeType: "entrega", name: "Escavação" }),
     node({ id: 3, parentId: 1, code: "1.2", nodeType: "entrega", name: "Concreto" }),
-  ], [{ wbsNodeId: 1 }, { wbsNodeId: 2 }, { wbsNodeId: 3 }]);
+  ], [{ wbsNodeId: 1, quantity: 1, unitPrice: 300 }, { wbsNodeId: 2, quantity: 1, unitPrice: 100 }, { wbsNodeId: 3, quantity: 1, unitPrice: 200 }]);
   check("double-cost-blocked", costs.issues.some(i => i.code === "wbs_double_counted_cost"), "dupla contagem bloqueada");
 
   const noCost = validateWbsCostCoverage([
