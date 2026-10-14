@@ -11,6 +11,11 @@ export type EapValidationResult = {
   issues: ValidationIssue[];
 };
 
+/** Entregas são terminais: nenhum nó pode ser criado ou movido abaixo delas. */
+export function eapNodeCanHaveChildren(nodeType: EapEvidenceNode["nodeType"]): boolean {
+  return nodeType !== "entrega";
+}
+
 export type EapDecompositionBasis =
   | "project"
   | "deliverable"
