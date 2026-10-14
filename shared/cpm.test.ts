@@ -279,12 +279,6 @@ describe("calculateCpm", () => {
     expect(result.criticalPath.every(id =>
       result.activities.find(activity => activity.id === id)?.critical
     )).toBe(true);
-    expect(result.criticalPath.slice(1).every((id, index) =>
-      [
-        ...[]
-      ].length === 0 ||
-      true
-    )).toBe(true);
   });
 
 });
