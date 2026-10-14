@@ -1668,12 +1668,12 @@ export const appRouter = router({
               : and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, versionId))
           );
       }),
-    trash: protectedProcedure.query(async ({ ctx }) => {
+    trash: adminProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return [];
       return db.select().from(projects).where(and(eq(projects.ownerUserId, ctx.user.id), sql`${projects.deletedAt} is not null`)).orderBy(desc(projects.deletedAt));
     }),
-    moveToTrash: protectedProcedure
+    moveToTrash: adminProcedure
       .input(z.object({ projectId: z.number().int().positive(), confirmationName: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -1684,7 +1684,7 @@ export const appRouter = router({
         await db.update(projects).set({ deletedAt: new Date(), deletedAtBy: ctx.user.id }).where(eq(projects.id, input.projectId));
         return { moved: true as const };
       }),
-    restoreFromTrash: protectedProcedure
+    restoreFromTrash: adminProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -1695,13 +1695,29 @@ export const appRouter = router({
     createDemoGantt: protectedProcedure.mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Banco de dados não configurado.");
+
+      // Idempotência: reutiliza a demonstração ativa do usuário em vez de
+      // criar uma nova obra a cada clique em "Ver obra demonstrativa".
+      const demoName = "Obra demonstrativa — Gantt e Linha de Balanço";
+      const [existingDemo] = await db
+        .select()
+        .from(projects)
+        .where(and(
+          eq(projects.ownerUserId, ctx.user.id),
+          eq(projects.name, demoName),
+          isNull(projects.deletedAt),
+        ))
+        .orderBy(desc(projects.updatedAt))
+        .limit(1);
+      if (existingDemo) return existingDemo;
+
       const plannedStart = new Date();
       const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
       const code = `DEMO-${Date.now().toString(36).slice(-6).toUpperCase()}`;
       const [createdId] = await db.insert(projects).values({
         ownerUserId: ctx.user.id,
         code,
-        name: "Obra demonstrativa — Gantt e Linha de Balanço",
+        name: demoName,
         location: "Demonstração",
         status: "Planejamento",
         progress: 0,
