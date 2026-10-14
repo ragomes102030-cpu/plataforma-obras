@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, ChevronDown, ChevronUp, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, CalendarDays, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, Check, MoreVertical, ArchiveRestore, LogOut, ArrowRight } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, LogOut, ArrowRight, ArrowLeft } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useRoute } from "wouter";
@@ -65,17 +65,11 @@ export default function Home() {
   const idNaUrl = ehRotaDeObra ? Number(parametrosDaRota?.id) : null;
   const [aba, setAba] = useState<IdDaAba>("dashboard");
   const [novaObraAberta, setNovaObraAberta] = useState(false);
-  const [obrasOcultas, setObrasOcultas] = useState<number[]>([]);
-  const [faixaObrasRecolhida, setFaixaObrasRecolhida] = useState(false);
-  const [faixaObrasFechada, setFaixaObrasFechada] = useState(false);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);
   // Seletor de obra (o botao do topo). Antes a obra so se trocava clicando nos
   // chips da faixa -- no celular so cabia um chip por vez. Agora ha um botao que
   // abre a lista completa, com busca.
-  const [seletorDeObraAberto, setSeletorDeObraAberto] = useState(false);
-  const [buscaDeObra, setBuscaDeObra] = useState("");
-  const [menuDaObra, setMenuDaObra] = useState<number | null>(null);
 
   // `projects.list` devolve o array direto. O tipo é uma união porque o
   // procedure tem um caminho sem banco, e o cliente não deve casar com nenhum
@@ -90,7 +84,6 @@ export default function Home() {
   });
   const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> =
     (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> | undefined) ?? [];
-  const obrasVisiveis = lista.filter(o => !obrasOcultas.includes(o.id));
   const obra =
     idNaUrl == null || Number.isNaN(idNaUrl)
       ? undefined
@@ -98,27 +91,6 @@ export default function Home() {
   const projetoId = obra?.id ?? null;
   const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
 
-  // O seletor de obra lista TODAS as obras, inclusive as que estao com a aba
-  // fechada -- e por ele que se reabre uma. A busca olha nome, codigo, local e
-  // descricao porque e assim que se procura obra no campo ("a UBS de Sorocaba").
-  const termoDeBusca = buscaDeObra.trim().toLowerCase();
-  const obrasBuscadas = termoDeBusca
-    ? lista.filter(o =>
-        [o.name, o.code, o.location, o.descricao]
-          .filter(Boolean)
-          .some(valor => String(valor).toLowerCase().includes(termoDeBusca)),
-      )
-    : lista;
-
-  const abrirObra = (id: number) => {
-    setLocation(`/obra/${id}`);
-    // Escolher pelo seletor tambem reabre a aba, se ela estava fechada: o
-    // seletor sempre oferece todas, a faixa so mostra as abertas.
-    setObrasOcultas(atuais => atuais.filter(oculta => oculta !== id));
-    setSeletorDeObraAberto(false);
-    setBuscaDeObra("");
-    setMenuDaObra(null);
-  };
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
   const restaurarObra = trpc.projects.restoreFromTrash.useMutation({ onSuccess: () => Promise.all([obras.refetch(), lixeira.refetch()]) });
@@ -130,21 +102,6 @@ export default function Home() {
       setAba("gantt");
     },
   });
-
-  // Esc fecha a escolha de obra e o menu de uma obra. Sem isto o painel so sai
-  // clicando fora ou de novo no botao -- no celular, com o teclado aberto na
-  // busca, isso e o caminho natural.
-  useEffect(() => {
-    if (!seletorDeObraAberto) return;
-    const aoTeclar = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") {
-        setSeletorDeObraAberto(false);
-        setMenuDaObra(null);
-      }
-    };
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [seletorDeObraAberto]);
 
   const criarObra = trpc.projects.create.useMutation({
     onSuccess: async created => {
@@ -177,313 +134,40 @@ export default function Home() {
 
   return (
     <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}`}>
-      {mostrarTituloDaObra && (
-      <header className="xl-titlebar">
-        {/*
-          O nome da obra no topo era um rotulo morto: a unica forma de trocar de
-          obra era clicar nos chips da faixa, que no celular so mostrava um por
-          vez. Virou o seletor de obra -- botao que abre a lista completa com
-          busca, marca a ativa e concentra as acoes que antes eram dois icones
-          de 11px colados dentro do chip (lixeira ao lado de fechar).
-        */}
-        <div className="xl-seletor-obra" data-aberto={seletorDeObraAberto ? "sim" : "nao"}>
-          <button
-            type="button"
-            className="xl-seletor-botao"
-            onClick={() => {
-              setSeletorDeObraAberto(anterior => !anterior);
-              setBuscaDeObra("");
-              setMenuDaObra(null);
-            }}
-            aria-expanded={seletorDeObraAberto}
-            aria-haspopup="listbox"
-            title="Escolher a obra"
-          >
-            <Layers3 size={16} className="xl-seletor-layers" />
-            <span className="xl-seletor-rotulo">
-              <span className="xl-seletor-prefixo">Obra</span>
-              {/*
-                Enquanto a lista de obras nao responde, dizer "Nenhuma obra" e
-                mentira: na instancia fria o botao passou ~5s exibindo isso antes
-                de virar o nome certo. Carregando e vazio sao estados distintos.
-              */}
-              <strong className="xl-seletor-nome">
-                {obra?.name ?? (obras.isLoading ? "Carregando…" : "Escolher obra")}
-              </strong>
-            </span>
-            {obra?.code && <span className="xl-seletor-codigo">{obra.code}</span>}
-            <ChevronDown size={16} className="xl-seletor-seta" />
-          </button>
-
-          {seletorDeObraAberto && (
-            <>
-              <button
-                type="button"
-                className="xl-seletor-fundo"
-                aria-label="Fechar a escolha de obra"
-                onClick={() => {
-                  setSeletorDeObraAberto(false);
-                  setMenuDaObra(null);
-                }}
-              />
-              <div className="xl-seletor-painel" role="listbox" aria-label="Escolher a obra">
-                <div className="xl-seletor-cabecalho">
-                  <strong>Escolher obra</strong>
-                  <button
-                    type="button"
-                    className="xl-seletor-fechar"
-                    onClick={() => setSeletorDeObraAberto(false)}
-                    aria-label="Fechar"
-                    title="Fechar"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <div className="xl-seletor-busca">
-                  <Search size={16} />
-                  <input
-                    autoFocus
-                    value={buscaDeObra}
-                    onChange={evento => setBuscaDeObra(evento.target.value)}
-                    placeholder="Buscar por nome, código ou cidade"
-                    aria-label="Buscar obra"
-                  />
-                  {buscaDeObra && (
-                    <button type="button" onClick={() => setBuscaDeObra("")} aria-label="Limpar busca" title="Limpar busca">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-
-                <div className="xl-seletor-lista">
-                  {/*
-                    Carregando e "nenhuma obra" sao estados diferentes e nao
-                    podem parecer iguais: no primeiro carregamento (ou logo depois
-                    de publicar, com a instancia fria) a consulta ainda esta em
-                    curso e o painel dizia "Nenhuma obra encontrada para """,
-                    como se o usuario nao tivesse obra nenhuma.
-                  */}
-                  {obras.isLoading && (
-                    <p className="xl-seletor-vazio">Carregando obras…</p>
-                  )}
-                  {!obras.isLoading && obrasBuscadas.length === 0 && (
-                    <p className="xl-seletor-vazio">
-                      {termoDeBusca
-                        ? `Nenhuma obra encontrada para “${buscaDeObra}”.`
-                        : "Nenhuma obra cadastrada ainda. Comece por “Nova obra”."}
-                    </p>
-                  )}
-                  {obrasBuscadas.map(o => {
-                    const ativa = o.id === obra?.id;
-                    const abaFechada = obrasOcultas.includes(o.id);
-                    return (
-                      <div key={o.id} className={`xl-seletor-linha${ativa ? " ativa" : ""}`}>
-                        <button
-                          type="button"
-                          className="xl-seletor-item"
-                          onClick={() => abrirObra(o.id)}
-                          aria-selected={ativa}
-                          role="option"
-                        >
-                          <span className="xl-seletor-item-texto">
-                            <strong>{o.name}</strong>
-                            <small>
-                              {[o.code, o.location].filter(Boolean).join(" · ") || "sem código"}
-                              {abaFechada ? " · aba fechada" : ""}
-                            </small>
-                          </span>
-                          {ativa && <Check size={17} className="xl-seletor-ativo" />}
-                        </button>
-                        <button
-                          type="button"
-                          className="xl-seletor-menu-botao"
-                          onClick={() => setMenuDaObra(menuDaObra === o.id ? null : o.id)}
-                          aria-expanded={menuDaObra === o.id}
-                          aria-label={`Ações de ${o.name}`}
-                          title="Ações da obra"
-                        >
-                          <MoreVertical size={17} />
-                        </button>
-                        {menuDaObra === o.id && (
-                          <div className="xl-seletor-menu" role="menu">
-                            {user?.role === "admin" && (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="xl-seletor-menu-perigo"
-                                onClick={() => {
-                                  setObraParaExcluir({ id: o.id, name: o.name });
-                                  setMenuDaObra(null);
-                                  setSeletorDeObraAberto(false);
-                                }}
-                              >
-                                <Trash2 size={15} /> Enviar para a lixeira
-                              </button>
-                            )}
-                            {abaFechada ? (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setObrasOcultas(atuais => atuais.filter(oculta => oculta !== o.id));
-                                  setMenuDaObra(null);
-                                }}
-                              >
-                                <ArchiveRestore size={15} /> Reabrir a aba
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                disabled={obrasVisiveis.length <= 1}
-                                onClick={() => {
-                                  setObrasOcultas(atuais => (atuais.includes(o.id) ? atuais : [...atuais, o.id]));
-                                  setMenuDaObra(null);
-                                }}
-                              >
-                                <X size={15} /> Fechar a aba
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="xl-seletor-rodape">
-                  <button
-                    type="button"
-                    className="xl-seletor-acao"
-                    onClick={() => {
-                      setSeletorDeObraAberto(false);
-                      setNovaObraAberta(true);
-                    }}
-                  >
-                    <Plus size={15} /> Nova obra
-                  </button>
-                  <button
-                    type="button"
-                    className="xl-seletor-acao"
-                    onClick={() => {
-                      setSeletorDeObraAberto(false);
-                      criarDemo.mutate();
-                    }}
-                    disabled={criarDemo.isPending}
-                    title="Criar uma obra ilustrativa, com Gantt e Linha de Balanço já preenchidos"
-                  >
-                    <Sparkles size={15} /> {criarDemo.isPending ? "Montando…" : "Obra demonstrativa"}
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {!faixaObrasFechada && (
-          <button
-            type="button"
-            className="xl-titlebar-collapse"
-            onClick={() => setFaixaObrasRecolhida(v => !v)}
-            title={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
-            aria-label={faixaObrasRecolhida ? "Expandir obras abertas" : "Recolher obras abertas"}
-          >
-            {faixaObrasRecolhida ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-          </button>
-        )}
-        {faixaObrasFechada ? (
-          <button
-            type="button"
-            className="xl-titlebar-reabrir"
-            onClick={() => {
-              setFaixaObrasFechada(false);
-              setFaixaObrasRecolhida(false);
-            }}
-            title="Abrir novamente a janela de obras"
-            aria-label="Abrir novamente a janela de obras"
-          >
-            <ChevronDown size={14} /> Obras
-          </button>
-        ) : !faixaObrasRecolhida && <div className="xl-titlebar-obras">
-          {obrasVisiveis.map(o => (
-            <div
-              key={o.id}
-              className={`xl-obra-chip-wrap${o.id === obra?.id ? " ativa" : ""}`}
-            >
-              <button
-                type="button"
-                className="xl-obra-chip"
-                onClick={() => setLocation(`/obra/${o.id}`)}
-                title={o.name}
-              >
-                {o.name}
-              </button>
-              {/*
-                A lixeira saiu daqui. Eram dois icones de 11px colados um no
-                outro, dentro de um chip de 22px de altura -- o alvo da exclusao
-                tinha 22x11 (medido) e ficava ao lado do "fechar". No celular era
-                toque errado garantido. A exclusao agora vive no menu de acoes da
-                obra, dentro do seletor, com rotulo escrito.
-              */}
-              <button
-                type="button"
-                className="xl-obra-chip-fechar"
-                onClick={() => {
-                  setObrasOcultas(ocultas => [...ocultas, o.id]);
-                  if (obra?.id === o.id) {
-                    const proxima = obrasVisiveis.find(v => v.id !== o.id);
-                    setLocation(proxima ? `/obra/${proxima.id}` : "/obras");
-                  }
-                }}
-                title="Fechar esta aba (não exclui a obra)"
-                aria-label={`Fechar ${o.name}`}
-              >
-                <X size={13} />
-              </button>
+      {mostrarTituloDaObra && obra && (
+        <header className="xl-titlebar xl-titlebar--contexto-fixo">
+          <div className="xl-contexto-obra-identidade">
+            <Layers3 size={19} aria-hidden="true" />
+            <div>
+              <span>OBRA EM CONTEXTO</span>
+              <strong>{obra.name}</strong>
+              {obra.code && <small>{obra.code}</small>}
             </div>
-          ))}
-          {obrasOcultas.length > 0 && (
+          </div>
+          <div className="xl-contexto-obra-acoes">
+            {user?.role === "admin" && (
+              <button
+                type="button"
+                className="xl-contexto-excluir"
+                onClick={() => setObraParaExcluir({ id: obra.id, name: obra.name })}
+                title="Enviar a obra atual para a lixeira"
+              >
+                <Trash2 size={15} /> Enviar para a lixeira
+              </button>
+            )}
             <button
               type="button"
-              className="xl-obra-reabrir"
-              onClick={() => setObrasOcultas([])}
-              title="Reabrir todas as obras ocultas"
+              className="xl-sair-obra"
+              onClick={() => {
+                setAba("dashboard");
+                setLocation("/obras");
+              }}
+              title="Sair da obra e voltar à seleção de obras"
             >
-              + {obrasOcultas.length} fechada{obrasOcultas.length > 1 ? "s" : ""}
+              <ArrowLeft size={16} /> Sair da obra
             </button>
-          )}
-          <button
-            type="button"
-            className="xl-obra-chip xl-obra-nova"
-            title="Nova obra"
-            aria-label="Criar nova obra"
-            onClick={() => setNovaObraAberta(true)}
-          >
-            <Plus size={12} />
-          </button>
-          {/*
-            O botao "Gantt demo" saiu da faixa de obras: ele nao e uma obra, e
-            criar uma. Ficava no meio dos chips, no mesmo peso visual, e num toque
-            errado criava uma obra de demonstracao no banco. Virou acao
-            secundaria no rodape do seletor.
-          */}
-        </div>}
-        {!faixaObrasFechada && (
-          <button
-            type="button"
-            className="xl-titlebar-fechar"
-            onClick={() => {
-              setFaixaObrasFechada(true);
-              setFaixaObrasRecolhida(false);
-            }}
-            title="Fechar a janela de obras"
-            aria-label="Fechar a janela de obras"
-          >
-            <X size={13} />
-          </button>
-        )}
-      </header>
+          </div>
+        </header>
       )}
 
       {novaObraAberta && (
