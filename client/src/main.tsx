@@ -38,13 +38,6 @@ import "@/legibilidade-gerada.css";
 // outras camadas -- com especificidade igual, vence quem vem depois -- e so age a
 // partir de 621px, para nao cruzar com a camada de campo (ate 900px, com o dedo).
 import "@/tipografia-desktop.css";
-// Camada de espacamento: gerada por scripts/gerar-espaco.mjs. Repete margem,
-// padding e gap do app inteiro com o valor encaixado nos 16 degraus de
-// theme-tokens.css, sempre para cima (nada aperta). Vem por ultimo e e a unica
-// camada que copia TODAS as declaracoes, e nao so as que mudam: uma declaracao
-// que ja esta no degrau precisa da copia para continuar vencendo as copias dos
-// outros seletores. Ver tests/espaco/LEIA-ME.md.
-import "@/espaco.css";
 
 const queryClient = new QueryClient();
 
