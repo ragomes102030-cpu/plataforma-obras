@@ -37,14 +37,20 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKHOSTING_DOCKER_USER }}
+          password: ${{ secrets.DOCKHOSTING_DOCKER_PASSWORD }}
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/ragomes102030-cpu/plataforma-obras
+          images: ${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras
           tags: |
             type=sha,format=long
             type=ref,event=branch
@@ -57,24 +63,15 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=github-actions
-          cache-to: type=github-actions,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras:buildcache,mode=max
+          platforms: linux/amd64
 
-      - name: Trigger DockHosting deploy
+      - name: Trigger DockHosting redeployment
         run: |
-          curl -X POST "${{ secrets.DOCKHOSTING_DEPLOY_URL }}" \
-            -H "Authorization: Bearer ${{ secrets.DOCKHOSTING_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "image": "ghcr.io/ragomes102030-cpu/plataforma-obras:${{ steps.meta.outputs.version }}",
-              "port": 3000,
-              "env": {
-                "NODE_ENV": "production",
-                "PORT": "3000",
-                "DATABASE_URL": "'"${{ secrets.DOCKHOSTING_DATABASE_URL }}"'",
-                "PUBLIC_APP_URL": "'"${{ secrets.DOCKHOSTING_PUBLIC_APP_URL }}"'",
-                "JWT_SECRET": "'"${{ secrets.DOCKHOSTING_JWT_SECRET }}"'",
-                "USE_SUPABASE": "1",
-                "SUPABASE_DB_URL": "'"${{ secrets.DOCKHOSTING_SUPABASE_DB_URL }}"'"
-              }
-            }'
+          # DockHosting faz pull automaticamente da tag latest
+          # O deploy acontece automaticamente quando a imagem eh atualizada
+          echo "Docker image pushed to registry"
+          echo "DockHosting will pull the new image automatically"
+          echo "Image: ${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras:${{ steps.meta.outputs.version }}"
+          echo "Configure seu container no painel do DockHosting para fazer pull desta imagem"
