@@ -229,8 +229,8 @@ async function startServer() {
 
   const preferredPort = parseInt(process.env.PORT || "3000");
 
-  server.listen(preferredPort, () => {
-    console.log(`Server running on http://localhost:${preferredPort}/`);
+  server.listen(preferredPort, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${preferredPort}/`);
     startTrashRetentionJob();
     console.log("[qa-boot] QA_RUNNER_ON_BOOT =", process.env.QA_RUNNER_ON_BOOT === "true" ? "true" : "false");
     if (process.env.QA_RUNNER_ON_BOOT === "true") {

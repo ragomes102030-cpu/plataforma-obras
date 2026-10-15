@@ -80,4 +80,6 @@ COPY scripts/migrate-core-pg.mjs ./scripts/migrate-core-pg.mjs
 COPY scripts/audit-schema-pg.mjs ./scripts/audit-schema-pg.mjs
 
 EXPOSE 3000
-CMD ["pnpm", "start"]
+# Migrações rodam antes de o servidor subir — mesmo contrato que o
+# startCommand do Render: se a migração falhar, o container não sobe.
+CMD ["sh", "-c", "node scripts/migrate-pg.mjs && pnpm start"]

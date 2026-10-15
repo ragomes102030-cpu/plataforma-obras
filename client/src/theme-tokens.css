@@ -76,6 +76,43 @@ Uso: substituir cores hardcoded no projeto; respeitar AA ≥ 4.5:1 */
   --texto-heroi: 26px; /* numero em destaque, titulo de janela */
 }
 
+/* ESCALA DE ESPACAMENTO — dezesseis degraus. O ritmo e de 2px ate 20px e de 4px
+   dai para cima: os degraus apertados servem as tabelas densas (planilha, EAP,
+   linha de balanco), onde 2px ja e uma separacao que o olho le; os degraus largos
+   servem a estrutura (cartao, secao, faixa).
+
+   Medido antes de escolher: o app usa 38 valores diferentes de margem, padding e
+   gap em 1.854 usos. Seiscentos e cinco deles (32,6%) caem fora de qualquer
+   degrau; se a grade fosse cravada em 4px, 1.114 usos (61%) teriam de mudar. Ou
+   seja, havia uma grade embaixo, com uma camada de ruido por cima -- o mesmo
+   formato do problema de fonte.
+
+   Esta escala foi tirada do ritmo que o proprio app ja tem: 1.249 usos caem
+   exatamente em um degrau e, dos 605 que mudam, 586 sobem 1px. O encaixe e
+   SEMPRE para o degrau de cima, entao nenhum espaco aperta -- apertar e o
+   defeito que se esta corrigindo.
+
+   Quem consome: scripts/gerar-espaco.mjs, que gera client/src/espaco.css.
+   Ver tests/espaco/LEIA-ME.md. */
+:root {
+  --espaco-1: 1px; /* fio, separador de linha densa */
+  --espaco-2: 2px; /* respiro minimo, celula densa */
+  --espaco-4: 4px; /* aperto de celula, icone-colado */
+  --espaco-6: 6px; /* padding de etiqueta, gap de grupo pequeno */
+  --espaco-8: 8px; /* padding de botao, gap de item */
+  --espaco-10: 10px; /* padding de campo, gap de linha */
+  --espaco-12: 12px; /* padding de cartao pequeno, gap de coluna */
+  --espaco-14: 14px; /* padding de cartao, gap de formulario */
+  --espaco-16: 16px; /* margem de bloco */
+  --espaco-18: 18px; /* respiro de secao estreita */
+  --espaco-20: 20px; /* margem de secao */
+  --espaco-24: 24px; /* respiro de pagina */
+  --espaco-28: 28px; /* afastamento de bloco grande */
+  --espaco-32: 32px; /* faixa de cabecalho */
+  --espaco-40: 40px; /* respiro de tela larga */
+  --espaco-48: 48px; /* maior afastamento do sistema */
+}
+
 [data-theme="dark"] {
   --bg: var(--bg-escuro);
   --surf: var(--surf-escuro);
