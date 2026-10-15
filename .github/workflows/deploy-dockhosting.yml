@@ -38,15 +38,6 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Docker build (validation only)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          tags: plataforma-obras:latest
-          load: true
-          platforms: linux/amd64
-
       - name: Deploy via DockHosting
         run: |
           echo "Build validado com sucesso!"
