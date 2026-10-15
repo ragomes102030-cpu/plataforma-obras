@@ -1,4 +1,4 @@
-name: Deploy to DockHosting
+name: CI - Validação para DockHosting
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -29,49 +29,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run checks
-        run: |
-          pnpm check
-          pnpm test --run
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Tests
+        run: pnpm test --run
 
       - name: Build
         run: pnpm build
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKHOSTING_DOCKER_USER }}
-          password: ${{ secrets.DOCKHOSTING_DOCKER_PASSWORD }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras
-          tags: |
-            type=sha,format=long
-            type=ref,event=branch
-            type=ref,event=pr
-
-      - name: Build and push Docker image
+      - name: Docker build (validation only)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras:buildcache,mode=max
+          push: false
+          tags: plataforma-obras:latest
+          load: true
           platforms: linux/amd64
 
-      - name: Trigger DockHosting redeployment
+      - name: Deploy via DockHosting
         run: |
-          # DockHosting faz pull automaticamente da tag latest
-          # O deploy acontece automaticamente quando a imagem eh atualizada
-          echo "Docker image pushed to registry"
-          echo "DockHosting will pull the new image automatically"
-          echo "Image: ${{ secrets.DOCKHOSTING_DOCKER_USER }}/plataforma-obras:${{ steps.meta.outputs.version }}"
-          echo "Configure seu container no painel do DockHosting para fazer pull desta imagem"
+          echo "Build validado com sucesso!"
+          echo "O DockHosting fara o deploy automaticamente ao detectar o push na branch main"
+          echo "Configure as variaveis de ambiente no painel do DockHosting"
