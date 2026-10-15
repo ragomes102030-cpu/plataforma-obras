@@ -175,6 +175,47 @@ git push  # auto-deploy via GitHub connected
 
 ---
 
+## Hospedagem no DockHosting
+
+### Configuração inicial
+
+1. Crie uma aplicação no painel do DockHosting
+2. Configure o Dockerfile (já está pronto no repositório)
+3. Adicione os secrets abaixo no GitHub (Settings → Secrets and variables → Actions):
+   - `DOCKHOSTING_API_TOKEN` — seu token de API do DockHosting
+   - `DOCKHOSTING_DEPLOY_URL` — URL de deploy do DockHosting (fornecida no painel)
+   - `DOCKHOSTING_DATABASE_URL` — URL de conexão PostgreSQL
+   - `DOCKHOSTING_PUBLIC_APP_URL` — URL pública da aplicação
+   - `DOCKHOSTING_JWT_SECRET` — secret para JWT (use `openssl rand -base64 32`)
+   - `DOCKHOSTING_SUPABASE_DB_URL` — URL do Supabase (se usando)
+
+### Deploy automático via GitHub Actions
+
+O workflow `.github/workflows/deploy-dockhosting.yml` executa automaticamente em cada push para `main`:
+
+1. **Checkout** do código
+2. **Instalação** de dependências com pnpm 10.4.1
+3. **Testes** e validação de tipos
+4. **Build** com Vite + esbuild
+5. **Build da imagem Docker** e push para GitHub Container Registry
+6. **Deploy** no DockHosting via API
+
+### Build local (Docker)
+
+```bash
+# Build da imagem
+docker build -t plataforma-obras .
+
+# Run local
+docker run -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e DATABASE_URL=postgresql://... \
+  -e PUBLIC_APP_URL=http://localhost:3000 \
+  plataforma-obras
+```
+
+---
+
 ## MCPs
 
 ### Configuração dos MCPs
