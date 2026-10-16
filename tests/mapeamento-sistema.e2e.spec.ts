@@ -7,7 +7,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 
-const BASE_URL = 'https://plataforma-obras.dockhosting.app';
+const BASE_URL = 'https://plataforma-obras.dockhosting.dev';
 const API_URL = BASE_URL;
 
 type AbaInfo = {

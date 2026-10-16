@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-const BASE = "https://plataforma-obras.dockhosting.app";
+const BASE = "https://plataforma-obras.dockhosting.dev";
 const RENDER_SVC = "srv-dandr7jbc2fs73e2qobg";
 const RENDER_KEY = process.env.RENDER_API_KEY;
 const OPEN_ID = "github:325403947";

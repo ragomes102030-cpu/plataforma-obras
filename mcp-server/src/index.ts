@@ -4,11 +4,14 @@ import { registerDatabaseTools } from "./database.js";
 import { registerCodeTools } from "./code.js";
 import { registerGitTools } from "./git.js";
 
-// Backend MCP servers (SSE protocol)
+// Backend MCP servers (SSE protocol).
+// As URLs vem do ambiente. Antes eram fixas em *.vercel.app: aqueles deployments
+// respondem 410 Gone, e host fixo aqui quebra o servidor MCP a cada troca de
+// plataforma. Vazio = servidor pulado (ver registerAllTools).
 const MCP_SERVERS = {
-  eap: { url: "https://mcp-eap-server-rafael-5864.vercel.app/mcp", name: "eap-server" },
-  cronograma: { url: "https://mcp-cronograma-server-rafael-5864.vercel.app/mcp", name: "cronograma-server" },
-  gantt: { url: "https://mcp-gantt-lob-server-rafael-5864.vercel.app/mcp", name: "mcp-gantt-lob-server" },
+  eap: { url: process.env.MCP_EAP_URL ?? "", name: "eap-server" },
+  cronograma: { url: process.env.MCP_CRONOGRAMA_URL ?? "", name: "cronograma-server" },
+  gantt: { url: process.env.MCP_GANTT_LOB_URL ?? "", name: "mcp-gantt-lob-server" },
 };
 
 type ServerKey = keyof typeof MCP_SERVERS;
@@ -117,6 +120,10 @@ const server = new McpServer({
 
 async function registerAllTools() {
   for (const key of Object.keys(MCP_SERVERS) as ServerKey[]) {
+    if (!MCP_SERVERS[key].url) {
+      console.error(`[plataforma-obra-mcp] ${key}: MCP_*_URL nao configurada, pulando`);
+      continue;
+    }
     const tools = await listTools(key);
     for (const tool of tools) {
       const toolName: string = String(tool.name);

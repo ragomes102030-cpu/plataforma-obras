@@ -2,7 +2,7 @@
   "cookies": [],
   "origins": [
     {
-      "origin": "https://plataforma-obras.dockhosting.app",
+      "origin": "https://plataforma-obras.dockhosting.dev",
       "localStorage": [
         {
           "name": "manus-runtime-user-info",

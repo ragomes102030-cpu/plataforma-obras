@@ -4,7 +4,7 @@
 import { chromium, devices } from "playwright";
 import { readFileSync } from "node:fs";
 
-const URL_BASE = "https://plataforma-obras.dockhosting.app";
+const URL_BASE = "https://plataforma-obras.dockhosting.dev";
 const TOKEN = readFileSync("C:/Users/Correta Engenharia/obras-sessao.txt", "utf8").trim();
 const HOST = new URL(URL_BASE).hostname;
 

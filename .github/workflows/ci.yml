@@ -29,3 +29,37 @@ jobs:
         run: pnpm test --run
       - name: Build
         run: pnpm build
+
+  # A auditoria de schema SO le o catalogo do PostgreSQL e compara com o DDL das
+  # migrations. Ela roda aqui de proposito: divergencia de schema tem que
+  # aparecer no CI, vermelha e legivel, e nao como container que se recusa a
+  # subir em producao — ou, pior, como deploy verde com banco fora de sincronia.
+  #
+  # `USE_SUPABASE=1` porque em producao e esse o caminho de conexao (ver
+  # scripts/audit-schema-pg.mjs:40, que troca o host direto pelo pooler). Sem o
+  # secret o job e pulado em vez de falhar.
+  schema-audit:
+    runs-on: ubuntu-latest
+    env:
+      USE_SUPABASE: "1"
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Auditar schema contra o Supabase
+        if: ${{ env.SUPABASE_DB_URL != '' }}
+        run: pnpm db:audit
+      - name: Auditoria nao executada sem o secret
+        if: ${{ env.SUPABASE_DB_URL == '' }}
+        run: echo "SUPABASE_DB_URL ausente; a auditoria de schema nao rodou."
