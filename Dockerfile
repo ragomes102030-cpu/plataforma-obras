@@ -33,7 +33,7 @@ COPY shared/ ./shared/
 # ../drizzle/schema. Sem esse diretorio o esbuild aborta o bundle do servidor.
 COPY drizzle/ ./drizzle/
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm@10.4.1
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
 
@@ -58,7 +58,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches/ ./patches/
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm@10.4.1
 RUN pnpm install --frozen-lockfile --prod
 
 # server/_core/vite.ts resolve distPath como <dirname do bundle>/public,
