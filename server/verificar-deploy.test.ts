@@ -20,10 +20,19 @@ import { describe, expect, it } from "vitest";
 
 const FONTE = readFileSync("scripts/verificar-deploy.mjs", "utf-8");
 
-/** O host que o sistema realmente usa, declarado no render.yaml. */
-const RENDER_YAML = readFileSync("render.yaml", "utf-8");
+/**
+ * O host que o sistema realmente usa: a declaracao viva em `server/_core/env.ts`.
+ *
+ * Antes isto lia o `render.yaml` (a Render saiu do projeto) e por isso o teste
+ * comparava o script com `plataforma-obras-api.onrender.com`, um host morto. O
+ * endereco real passou a ser o `publicAppUrl` do proprio app, o unico lugar em
+ * que o host e declarado junto do codigo que o consome.
+ */
+const ENV_TS = readFileSync("server/_core/env.ts", "utf-8");
 const HOST_NO_AR = (
-  RENDER_YAML.match(/PUBLIC_APP_URL\s*\n?\s*value:\s*(https:\/\/[^\s]+)/) || []
+  ENV_TS.match(
+    /publicAppUrl:\s*process\.env\.PUBLIC_APP_URL\s*\?\?\s*"(https:\/\/[^"]+)"/
+  ) || []
 )[1];
 
 describe("verificar-deploy aponta para o host que existe", () => {
@@ -37,17 +46,17 @@ describe("verificar-deploy aponta para o host que existe", () => {
     ).not.toMatch(/railway\.app|vercel\.app/);
   });
 
-  it("o host padrao e o mesmo que o PUBLIC_APP_URL do render.yaml", () => {
+  it("o host padrao e o mesmo que o publicAppUrl do app", () => {
     // Duas fontes de verdade para "qual e o endereco do sistema" e nenhuma delas
-    // checa a outra. E assim que o endereco divergiu sem ninguem perceber: o
-    // render.yaml apontava para o Render e o script para a Railway, e os dois
-    // estavam certos por conta propria.
-    expect(HOST_NO_AR, "nao achei PUBLIC_APP_URL no render.yaml").toBeTruthy();
+    // checa a outra. E assim que o endereco divergiu sem ninguem perceber: um
+    // arquivo de deploy apontava para o Render e o script para a Railway, e os
+    // dois estavam certos por conta propria.
+    expect(HOST_NO_AR, "nao achei publicAppUrl em server/_core/env.ts").toBeTruthy();
     const padrao = FONTE.match(/"(https:\/\/[^"]+\/healthz)"/);
     const hostDoScript = padrao![1].replace(/\/healthz$/, "");
     expect(
       hostDoScript,
-      "o script verifica um host diferente do que o Render publica"
+      "o script verifica um host diferente do que o app declara"
     ).toBe(HOST_NO_AR);
   });
 

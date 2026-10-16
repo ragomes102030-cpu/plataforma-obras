@@ -29,7 +29,7 @@ import { pathToFileURL } from "node:url";
 
 // A auditoria NAO se desliga em producao.
 //
-// Antes, com USE_SUPABASE=1 (o valor do render.yaml), este arquivo imprimia
+// Antes, com USE_SUPABASE=1 (o valor das variaveis do DockHosting), imprimia
 // "auditoria de startup desativada" e saia com 0 — o passo de auditoria do
 // startCommand nao auditava nada, e divergencia de schema subia como deploy
 // verde. Agora ela roda, e divergencia faz o processo sair com codigo != 0.
@@ -193,7 +193,15 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     journal = { registradas: Number(jr.rows[0].n), ultima: Number(jr.rows[0].last) };
   }
 
+  // "Tabela a mais no banco" entra como AVISO, nao como divergencia fatal. Das
+  // cinco categorias, quatro sao de OBJETO AUSENTE — e ausencia e o que quebra a
+  // aplicacao (foi a causa do incidente de 12/10: a 0012 nunca chegou ao banco).
+  // Tabela sobrando nao derruba nada. Somadas na mesma lista, uma sobra benigna
+  // de QA deixava o guard vermelho de forma cronica — e guard cronicamente
+  // vermelho e o que ensina a ignorar o guard, que foi como a auditoria sumiu
+  // da ultima vez. Removida a sobra (qa_eap_*_backup_20261014), este aviso some.
   const divergencias = [];
+  const avisos = [];
   if (faltandoTabelas.length)
     divergencias.push(
       `${faltandoTabelas.length} tabela(s) ausente(s): ${faltandoTabelas.join(", ")}`
@@ -203,7 +211,7 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
       `${colunasFaltando.length} coluna(s) ausente(s): ${colunasFaltando.slice(0, 10).join(", ")}`
     );
   if (sobrandoTabelas.length)
-    divergencias.push(
+    avisos.push(
       `${sobrandoTabelas.length} tabela(s) a mais no banco: ${sobrandoTabelas.join(", ")}`
     );
   if (tiposFaltando.length)
@@ -233,6 +241,7 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     ok: divergencias.length === 0,
     linhas,
     divergencias,
+    avisos,
     tabelasNoBanco: tabelasBanco.size,
     enumsNoBanco: tiposBanco.size,
     triggersNoBanco: triggersBanco.size,
@@ -276,6 +285,7 @@ async function main() {
 
   const r = await auditarSchema({ conn });
   for (const linha of r.linhas) console.log(`[audit] ${linha}`);
+  for (const aviso of r.avisos) console.warn(`[audit] AVISO (nao fatal): ${aviso}`);
   await conn.end();
 
   if (!r.ok) {

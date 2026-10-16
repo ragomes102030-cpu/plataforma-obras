@@ -424,35 +424,35 @@ describe("o Dockerfile encontra tudo que copia", () => {
 
 describe("o runtime recebe o que a migracao precisa", () => {
   // A Railway saiu do projeto. Este bloco lia `railway.json` e o arquivo não
-  // existe mais; o lugar de entrega hoje e o `startCommand` do `render.yaml`.
+  // existe mais; o lugar de entrega hoje e o `CMD` da imagem (Dockerfile).
   //
   // A INTENCAO dos dois testes antigos foi preservada, e ela nao era sobre a
   // Railway: era garantir que a migracao e a auditoria rodem ANTES do servico,
   // e que a falha de uma delas não impeça a aplicação de subir — porque uma
   // aplicação que não sobe não tem `/readyz` para dizer o que está errado.
-  function startCommandRender(): string {
-    const yaml = readFileSync("render.yaml", "utf-8");
-    const linha = yaml.split("\n").find(l => l.trimStart().startsWith("startCommand:"));
-    if (!linha) throw new Error("render.yaml sem startCommand");
-    return linha.split("startCommand:")[1]!.trim();
+  function cmdDaImagem(): string {
+    const dockerfile = readFileSync("Dockerfile", "utf-8");
+    const linha = dockerfile.split("\n").find(l => l.trimStart().startsWith("CMD "));
+    if (!linha) throw new Error("Dockerfile sem CMD");
+    return linha.trim();
   }
 
-  it("a migracao roda no startCommand do Render", () => {
-    expect(startCommandRender()).toMatch(/scripts\/migrate-pg\.mjs/);
+  it("a migracao roda no CMD da imagem", () => {
+    expect(cmdDaImagem()).toMatch(/scripts\/migrate-pg\.mjs/);
   });
 
   it("a migracao e a auditoria barram o deploy quando falham", () => {
-    const cmd = startCommandRender();
+    const cmd = cmdDaImagem();
     expect(cmd, "a auditoria de schema nao roda").toMatch(/scripts\/audit-schema-pg\.mjs/);
 
     // Separador `&&`, nao `;`.
     //
     // Com `;`, uma falha de migracao nao interrompia nada: a auditoria (que
     // antes se desligava sozinha com USE_SUPABASE=1) saia com 0, o `pnpm start`
-    // subia e o Render marcava o deploy como saudavel — com o banco divergente.
+    // subia e a plataforma marcava o deploy como saudavel — com o banco divergente.
     // O `&&` faz a falha interromper a cadeia e o deploy nao ser promovido.
     //
-    // Isso so e seguro porque o healthcheck do servico e `/readyz`: o Render
+    // Isso so e seguro porque o healthcheck do servico e `/readyz`: a plataforma
     // mantem o deploy ANTERIOR no ar ate o novo passar, entao nao ha crash-loop
     // sem resposta — a preocupacao que justificava o `;` deixou de valer quando
     // o healthcheck passou a olhar o banco.
@@ -504,15 +504,21 @@ describe("o runtime recebe o que a migracao precisa", () => {
     ).toEqual([]);
   });
 
-  it("o healthcheck do Render olha o banco (/readyz), nao apenas o processo", () => {
+  it("o /readyz olha o banco, nao apenas o processo", () => {
     // `/healthz` responde 200 sem consultar o banco. Com ele como healthcheck,
     // um deploy com schema divergente e promovido como saudavel. `/readyz`
-    // consulta o banco e responde 503 quando ele esta inacessivel, entao o
-    // Render nao promove o deploy ruim — e o anterior continua servindo.
-    const yaml = readFileSync("render.yaml", "utf-8");
-    const linha = yaml.split("\n").find(l => l.trimStart().startsWith("healthCheckPath:"));
-    expect(linha, "render.yaml sem healthCheckPath").toBeTruthy();
-    expect(linha).toMatch(/healthCheckPath:\s*\/readyz/);
+    // consulta o banco e responde 503 quando ele esta inacessivel, entao a
+    // plataforma nao promove o deploy ruim — e o anterior continua servindo.
+    //
+    // O caminho do healthcheck e configuracao do DockHosting e nao vive no repo;
+    // o que o repo pode garantir e que a ROTA existe, consulta o banco e falha
+    // fechado. As duas ultimas garantias sao o que um healthcheck precisa ter.
+    const src = readFileSync(join("server", "_core", "index.ts"), "utf-8");
+    const i = src.indexOf('app.get("/readyz"');
+    expect(i, "nao achei a rota /readyz em server/_core/index.ts").toBeGreaterThan(-1);
+    const trecho = src.slice(i, i + 1600);
+    expect(trecho, "o /readyz nao consulta o banco").toMatch(/SELECT 1/);
+    expect(trecho, "o /readyz nao responde 503 quando o banco cai").toMatch(/status\(503\)/);
   });
 
   it("a auditoria de schema so escreve: so executa SELECT", () => {
