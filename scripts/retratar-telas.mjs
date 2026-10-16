@@ -28,7 +28,7 @@ async function abrir(largura, altura) {
   });
   await contexto.addCookies([
     { name: "app_session_id", value: SESSAO, domain: "localhost", path: "/", httpOnly: true, secure: true },
-    { name: "app_session_id", value: SESSAO, domain: "plataforma-obras.onrender.com", path: "/", httpOnly: true, secure: true },
+    { name: "app_session_id", value: SESSAO, domain: "plataforma-obras.dockhosting.dev", path: "/", httpOnly: true, secure: true },
   ]);
   const pagina = await contexto.newPage();
   await pagina.goto(URL_BASE, { waitUntil: "domcontentloaded" });

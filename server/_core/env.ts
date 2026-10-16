@@ -35,10 +35,10 @@ export const ENV = {
   agentMaxIterations: Number(process.env.AGENT_MAX_ITERATIONS ?? "8"),
   mcpCatalogTtlMs: Number(process.env.MCP_CATALOG_TTL_MS ?? "300000"),
   // Hosts definidos via env vars. O DockHosting aponta para:
-  //   PUBLIC_APP_URL=https://plataforma-obras.dockhosting.app
+  //   PUBLIC_APP_URL=https://plataforma-obras.dockhosting.dev
   //   MCP_* configurados via variaveis de ambiente do serviço.
   // Nenhum fallback hardcodeado a Render/Vercel — MCPs vazios se nao configurados.
-  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras.dockhosting.app",
+  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras.dockhosting.dev",
   mcpEapUrl: process.env.MCP_EAP_URL ?? "",
   mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "",
   mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "",

@@ -20,7 +20,7 @@ async function main() {
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  await page.goto('https://plataforma-obras.dockhosting.app/');
+  await page.goto('https://plataforma-obras.dockhosting.dev/');
 
   // Aguardar o login ser bem-sucedido
   // Detectamos quando a página muda de "Entre para ver as obras" para algo com obras

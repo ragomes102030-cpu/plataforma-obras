@@ -664,7 +664,7 @@ export async function callControlledMcpTool(
   domain: ConstructionMcpDomain,
   toolName: string,
   args: Record<string, unknown>,
-  clients: ConstructionMcpClients = createConstructionMcpClients()
+  clients?: ConstructionMcpClients
 ): Promise<McpCallResult> {
   if (!CONTROLLED_MUTATION_POLICY[domain].has(toolName)) {
     throw new Error(
@@ -674,7 +674,13 @@ export async function callControlledMcpTool(
   if (JSON.stringify(args).toLowerCase().includes('"project_id":"default"')) {
     throw new Error("O project_id default é bloqueado para mutações reais.");
   }
-  return clients[domain].callTool(toolName, args);
+  // O client e resolvido DEPOIS da politica. Antes, `clients` era default param
+  // e o `createConstructionMcpClients()` rodava na entrada da funcao: sem
+  // MCP_*_URL configurado, a chamada estourava com "URL do MCP nao configurada"
+  // e a politica de mutacao nunca era avaliada. Uma exclusao recusada tem que
+  // dizer "nao liberada", nao mandar o operador cacar configuracao de rede.
+  const resolvidos = clients ?? createConstructionMcpClients();
+  return resolvidos[domain].callTool(toolName, args);
 }
 
 export async function callMutationMcpTool(

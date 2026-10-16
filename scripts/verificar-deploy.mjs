@@ -42,7 +42,7 @@ const intervalo = Number(process.argv[4] ?? 15000);
 // quem conferir um ambiente que nao seja producao.
 const HEALTHZ =
   process.env.PLATAFORMA_HEALTHZ ??
-  "https://plataforma-obras.dockhosting.app/healthz";
+  "https://plataforma-obras.dockhosting.dev/healthz";
 
 if (!/^[0-9a-f]{7,40}$/.test(esperado)) {
   console.error(`SHA invalido: "${esperado}". Use de 7 a 40 caracteres hex.`);
