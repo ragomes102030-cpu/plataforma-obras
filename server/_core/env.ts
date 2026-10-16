@@ -34,12 +34,14 @@ export const ENV = {
   agentTotalTimeoutMs: Number(process.env.AGENT_TOTAL_TIMEOUT_MS ?? "120000"),
   agentMaxIterations: Number(process.env.AGENT_MAX_ITERATIONS ?? "8"),
   mcpCatalogTtlMs: Number(process.env.MCP_CATALOG_TTL_MS ?? "300000"),
-  // Hosts conferidos contra a config MCP real. Ja foram *.vercel.app e
-  // estavam errados: os MCP servers nunca_publicaram na Vercel. Nao reverter.
-  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras-bice.vercel.app",
-  mcpEapUrl: process.env.MCP_EAP_URL ?? "https://mcp-eap-server.onrender.com",
-  mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "https://mcp-cronograma-server.onrender.com",
-  mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "https://mcp-gantt-lob-server.onrender.com",
+  // Hosts definidos via env vars. O DockHosting aponta para:
+  //   PUBLIC_APP_URL=https://plataforma-obras.dockhosting.app
+  //   MCP_* configurados via variaveis de ambiente do serviço.
+  // Nenhum fallback hardcodeado a Render/Vercel — MCPs vazios se nao configurados.
+  publicAppUrl: process.env.PUBLIC_APP_URL ?? "https://plataforma-obras.dockhosting.app",
+  mcpEapUrl: process.env.MCP_EAP_URL ?? "",
+  mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "",
+  mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "",
   priceVariationThresholdPct: Number(process.env.PRICE_VARIATION_THRESHOLD_PCT ?? "30"),
   arquimedesCodeRepository:
     process.env.ARQUIMEDES_CODE_REPOSITORY?.trim() || "ragomes102030-cpu/plataforma-obras",

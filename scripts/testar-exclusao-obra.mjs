@@ -33,7 +33,7 @@ const contexto = await navegador.newContext({
 });
 await contexto.addCookies([
   { name: "app_session_id", value: SESSAO, domain: "localhost", path: "/", httpOnly: true, secure: true },
-  { name: "app_session_id", value: SESSAO, domain: "plataforma-obras-api.onrender.com", path: "/", httpOnly: true, secure: true },
+  { name: "app_session_id", value: SESSAO, domain: "plataforma-obras.dockhosting.app", path: "/", httpOnly: true, secure: true },
 ]);
 const pagina = await contexto.newPage();
 const errosDeConsole = [];

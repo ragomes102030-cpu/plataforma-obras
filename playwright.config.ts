@@ -19,7 +19,7 @@ export default defineConfig({
   reporter: process.env.CI ? "line" : "list",
   outputDir: "test-results",
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "https://plataforma-obras-api.onrender.com",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "https://plataforma-obras.dockhosting.app",
     storageState: process.env.PLAYWRIGHT_STORAGE_STATE || path.join(__dirname, 'playwright-storage-state.json'),
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

@@ -2,7 +2,7 @@
   "cookies": [],
   "origins": [
     {
-      "origin": "https://plataforma-obras-api.onrender.com",
+      "origin": "https://plataforma-obras.dockhosting.app",
       "localStorage": [
         {
           "name": "manus-runtime-user-info",
