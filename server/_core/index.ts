@@ -154,7 +154,11 @@ async function startServer() {
         database: "ok",
         tabelas: names?.length ?? 0,
         jwtSecretConfigurado: ENV.cookieSecret.length > 0,
-        variaveisConfig: configVarNames(),
+        // `variaveisConfig` saiu daqui: /readyz e publico e sem autenticacao, e
+        // publicar os NOMES de GITHUB_CLIENT_SECRET / JWT_SECRET / QA_RUNNER_SECRET
+        // entrega o mapa da superficie a quem so precisava saber se o servico
+        // responde. O mesmo dado continua no log de boot (linha ~88), que e
+        // interno — diagnostico preservado, exposicao removida.
         warnings,
       });
     } catch (error) {
