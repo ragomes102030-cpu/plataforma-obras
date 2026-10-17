@@ -80,6 +80,20 @@ COPY scripts/migrate-core-pg.mjs ./scripts/migrate-core-pg.mjs
 COPY scripts/audit-schema-pg.mjs ./scripts/audit-schema-pg.mjs
 
 EXPOSE 3000
+
+# Identificacao do deploy, para o `/healthz` dizer qual commit esta no ar.
+#
+# Opcional: o `.dockerignore` exclui o `.git`, entao a imagem nao tem como
+# descobrir o commit sozinha. Se o build passar o argumento, o endpoint responde
+# o commit mesmo que a plataforma nao exponha variavel de ambiente nenhuma:
+#
+#   docker build --build-arg GIT_COMMIT=$(git rev-parse HEAD) ...
+#
+# Sem o argumento o valor fica vazio, e `server/_core/deploy-info.ts` ignora
+# valor vazio em vez de publicar uma string vazia como se fosse commit.
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=$GIT_COMMIT
+
 # Migrações rodam antes de o servidor subir — mesmo contrato que o
 # comando de start do servico: se a migração falhar, o container não sobe.
 CMD ["sh", "-c", "node scripts/migrate-pg.mjs && node scripts/audit-schema-pg.mjs && pnpm start"]
