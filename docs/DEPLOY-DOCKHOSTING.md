@@ -15,6 +15,60 @@ A fonte de verdade do endereco no repositorio e `server/_core/env.ts`
 verdade para o mesmo endereco, sem uma checando a outra, foi como o endereco
 divergiu no passado.
 
+## Como saber se o deploy que esta no ar e o codigo novo
+
+**Esta e a resposta para o incidente de 12/10.** O `/healthz` responde o commit
+que esta rodando:
+
+```bash
+curl -s https://plataforma-obras.dockhosting.dev/healthz
+# {"ok":true,"service":"plataforma-obras-api","commit":"93e33d6",
+#  "commitSource":"SOURCE_COMMIT","branch":null,"deployId":null,
+#  "environment":"production","uptimeSeconds":965,"tabelas":37}
+```
+
+Compare `commit` com:
+
+```bash
+git rev-parse --short origin/main
+```
+
+Diferente = o deploy nao valeu. Ponto.
+
+- **`commitSource`** diz de onde o dado veio. Em producao e `SOURCE_COMMIT`, que
+  e a variavel que o **DockHosting** injeta. Se vier `"nao-encontrado"`, o commit
+  nao foi informado e o valor e `"desconhecido"` — nunca `"local"`.
+- **`environment`** deve ser `production`.
+- `uptimeSeconds` baixo = container recem-trocado. E o sinal mais rapido de que um
+  deploy aconteceu.
+
+### Ler a divergencia (diagnostico)
+
+| Sintoma | Significa | O que fazer |
+| --- | --- | --- |
+| `commit` velho, **sem** 502 e **sem** restart por mais de ~30 min | a plataforma **nao agendou** o build (ela recebeu o push e parou ali) | disparar deploy manual no painel |
+| `commit` velho, **com** 502 intermitente e restart | build quebrou; o container antigo voltou | ver os logs do build no painel |
+
+Detalhes que enganam, aprendidos na pratica:
+
+- O webhook GitHub -> DockHosting responder **`200 OK`** significa **"recebi"**,
+  nao **"vou construir"**. Ja houve push com `200` e nenhum build por 47 min.
+- **Build leva de 6 a 28 minutos.** Nao concluir "nao subiu" antes de ~30 min.
+- Durante o rollout o gateway devolve **502 por 1-3 min**: dois containers atras do
+  mesmo host enquanto troca. E normal.
+- O container antigo continua servindo durante todo o build, e continua servindo
+  se o build falhar. Por isso `uptime`/`commit` e a unica evidencia real.
+
+### Webhooks
+
+O repo tem varios webhooks do DockHosting (um por projeto criado). No push, **so
+um** responde `200`; os orfaos respondem `401`. Para diagnosticar:
+
+```bash
+gh api repos/<owner>/<repo>/hooks
+gh api "repos/<owner>/<repo>/hooks/<id>/deliveries?per_page=5"
+```
+
 ## Como a imagem sobe
 
 - Build: `Dockerfile` (o DockHosting constroi a imagem; nao existe mais nenhum
