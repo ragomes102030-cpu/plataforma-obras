@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
 import { ENV } from "./env";
+import { origemDeploy } from "./deploy-info";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
 import { eq } from "drizzle-orm";
@@ -100,39 +101,27 @@ async function startServer() {
   registerStorageProxy(app);
   registerGitHubOAuthRoutes(app);
   app.get("/healthz", (_req, res) => {
-      // O Render vem PRIMEIRO, porque é onde o sistema roda. As duas casas
-      // antigas ficaram depois: sem elas, nenhuma variável existe no Render e o
-      // `/healthz` respondia `commit: "local"` — que é indistinguível de "rodei
-      // na minha máquina", e foi o que fez o deploy parecer que não acontecia.
-      //
-      // OS NOMES FORAM LIDOS DA DOCUMENTACAO, e nao deduzidos por analogia. A
-      // primeira versao escreveu `RENDER_GIT_COMMIT_SHA` e
-      // `RENDER_GIT_COMMIT_BRANCH`, por analogia com a Railway e a Vercel: os
-      // dois nomes nao existem. O `?? "local"` engolia o `undefined` e o
-      // endpoint voltava a dizer "local" com o codigo novo no ar — a mesma
-      // falha que motivou a mudanca, repetida por um nome errado.
-      const commitSha =
-        process.env.RENDER_GIT_COMMIT ??
-        process.env.RAILWAY_GIT_COMMIT_SHA ??
-        process.env.VERCEL_GIT_COMMIT_SHA;
-      const branch =
-        process.env.RENDER_GIT_BRANCH ??
-        process.env.RAILWAY_GIT_COMMIT_BRANCH ??
-        process.env.VERCEL_GIT_COMMIT_REF;
-      const deployId =
-        process.env.RENDER_INSTANCE_ID ??
-        process.env.RAILWAY_DEPLOYMENT_ID ??
-        process.env.VERCEL_DEPLOYMENT_ID;
-      res.status(200).json({
-        ok: true,
-        service: "plataforma-obras-api",
-        commit: commitSha?.slice(0, 7) ?? "local",
-        branch: branch ?? null,
-        deployId: deployId ?? null,
-        environment: process.env.RENDER_SERVICE_TYPE ?? null,
-        uptimeSeconds: Math.round(process.uptime()),
-      });
+    // A identificacao do deploy vem de `./deploy-info`: funcao pura, com testes
+    // proprios. O metodo mudou de proposito.
+    //
+    // Antes este bloco adivinhava o NOME da variavel da plataforma
+    // (`RENDER_GIT_COMMIT`, `RAILWAY_GIT_COMMIT_SHA`, `VERCEL_GIT_COMMIT_SHA`) e
+    // terminava em `?? "local"`. A plataforma de hoje e o DockHosting: nenhum
+    // dos tres nomes existe, e o `/healthz` voltou a dizer `commit: "local"` com
+    // o codigo novo no ar — a mesma falha que motivou a mudanca, repetida por um
+    // nome errado. Adivinhar nome de variavel falha em silencio.
+    //
+    // Agora a busca e por PADRAO de nome, e o valor so e aceito se PARECER o que
+    // diz ser (commit e hexadecimal de 7 a 40 digitos). `commitSource` diz qual
+    // variavel respondeu, ou `"nao-encontrado"`: entao a propria resposta do
+    // endpoint revela como o DockHosting se identifica, sem depender de doc.
+    res.status(200).json({
+      ok: true,
+      service: "plataforma-obras-api",
+      ...origemDeploy(),
+      uptimeSeconds: Math.round(process.uptime()),
     });
+  });
   app.get("/readyz", async (_req, res) => {
     const db = await getDb();
     if (!db) {
