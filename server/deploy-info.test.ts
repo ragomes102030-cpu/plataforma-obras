@@ -50,6 +50,28 @@ describe("origemDeploy", () => {
     expect(origemDeploy({ GIT_COMMIT: "" }).commitSource).toBe("nao-encontrado");
   });
 
+  it("encontra um `*_COMMIT` generico, que nao esta na lista de conhecidos", () => {
+    // O nome real do DockHosting e `SOURCE_COMMIT`, e ele so foi encontrado
+    // porque estava na lista de nomes conhecidos: o padrao da primeira versao
+    // cobria `GIT_COMMIT|COMMIT_SHA|...` e nao um `*_COMMIT` qualquer. Ou seja,
+    // teria falhado justamente no caso real. Este teste prende o formato.
+    for (const nome of ["BUILD_COMMIT", "APP_COMMIT", "DOCKHOSTING_COMMIT"]) {
+      const r = origemDeploy({ [nome]: SHA });
+      expect(r.commit, `${nome} deveria ser encontrado pelo padrao`).toBe("850b9cf");
+      expect(r.commitSource).toBe(nome);
+    }
+  });
+
+  it("nao confunde nome que casa o padrao mas nao guarda um commit", () => {
+    // Com o padrao aceitando `*_COMMIT`, uma variavel chamada `COMMIT` (ou
+    // `SOURCE_COMMIT`) que guarde outra coisa passa a ser candidata. Quem barra
+    // e a validacao de VALOR, nao a de nome — por isso as duas existem.
+    const r = origemDeploy({ COMMIT: "corrige o calculo do BDI", GIT_SHA: SHA });
+    expect(r.commitSource).toBe("GIT_SHA");
+    expect(origemDeploy({ COMMIT: "corrige o BDI" }).commit).toBe("desconhecido");
+    expect(origemDeploy({ SOURCE_COMMIT: "v1.2.3" }).commit).toBe("desconhecido");
+  });
+
   it("cai para o proximo candidato quando o primeiro esta vazio", () => {
     // `${VAR}` nao preenchida vira string vazia, nao `undefined`: e a armadilha
     // que faria o primeiro nome "vencer" com um valor vazio.
