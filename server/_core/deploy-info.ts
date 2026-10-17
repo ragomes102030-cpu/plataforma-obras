@@ -17,9 +17,15 @@
  *    endpoint voltou a dizer "local". Adivinhar o nome funciona ate mudar de
  *    plataforma, e a falha e silenciosa.
  *
- *    Aqui a busca e por PADRAO de NOME (`*_GIT_COMMIT`, `*_COMMIT_SHA`,
+ *    Aqui a busca e por PADRAO de NOME (`*_COMMIT`, `*_COMMIT_SHA`, `*_GIT_SHA`,
  *    `SOURCE_VERSION`, ...), com os nomes ja conhecidos testados primeiro. Um
  *    nome de plataforma que nunca vimos continua sendo encontrado.
+ *
+ *    O padrao cobre o FORMATO generico (`*_COMMIT`), nao uma lista de formatos
+ *    plausiveis. A primeira versao listava `GIT_COMMIT|COMMIT_SHA|...` e nao
+ *    pegava um `*_COMMIT` qualquer: o nome real do DockHosting, `SOURCE_COMMIT`,
+ *    so foi encontrado porque estava na lista de nomes conhecidos. Se tivesse
+ *    vindo de outra plataforma, teria falhado.
  *
  * 2. NAO CONFIAR EM UM VALOR SO PORQUE O NOME PARECE CERTO. So aceitamos o que
  *    PARECE o que diz ser: commit tem de ser hexadecimal de 7 a 40 digitos,
@@ -70,13 +76,18 @@ const NOMES_DE_COMMIT = [
   "GIT_COMMIT",
   "GIT_SHA",
   "COMMIT_SHA",
+  // Nome VERIFICADO em producao: e a variavel que o DockHosting injeta. Ficou
+  // aqui para nao depender do padrao no unico nome que sabemos ser real. Foi
+  // por estar nesta lista que ele foi encontrado no primeiro deploy — o padrao,
+  // na epoca, NAO cobria um `*_COMMIT` generico, ou seja, teria falhado
+  // justamente no caso real.
   "SOURCE_COMMIT",
   "SOURCE_VERSION",
   "RENDER_GIT_COMMIT",
   "RAILWAY_GIT_COMMIT_SHA",
   "VERCEL_GIT_COMMIT_SHA",
 ];
-const PADRAO_COMMIT = /(^|_)(GIT_COMMIT|GIT_SHA|COMMIT_SHA|SOURCE_VERSION|REVISION)$/i;
+const PADRAO_COMMIT = /(^|_)(COMMIT|GIT_COMMIT|GIT_SHA|COMMIT_SHA|SOURCE_VERSION|REVISION)$/i;
 
 const NOMES_DE_BRANCH = [
   "GIT_BRANCH",
