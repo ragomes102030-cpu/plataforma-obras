@@ -1,3 +1,8 @@
+> **Documento histórico.** Escrito quando a stack era outra: Render, Vercel,
+> Aiven e MySQL. Nada disso faz parte do sistema hoje — a stack atual é GitHub +
+> DockHosting + Supabase ([STACK-ATUAL.md](STACK-ATUAL.md)). Leia como registro
+> da época, não como instrução.
+
 # Auditoria de Sincronizacao GitHub -> Render -> Supabase
 
 Data: 2026-10-10 | Branch: develop | Commit auditado: 9c7ff82

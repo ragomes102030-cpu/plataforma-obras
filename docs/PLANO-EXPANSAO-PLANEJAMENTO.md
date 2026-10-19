@@ -1,8 +1,14 @@
 # Plano de Expansão do Módulo de Planejamento e Controle
 
-> Status: proposta para discussão — nada aqui foi implementado ainda.
-> Base: auditoria do código em `develop` @ `0787455`, 31 tabelas, 4.722 linhas em `server/routers.ts`.
+> Status: proposta para discussão — a maior parte não foi implementada ainda.
+> Base: auditoria do código em `main` @ `1924dd7` (out/2026), **36 tabelas**, 6.549 linhas em `server/routers.ts`.
 > Origem: pedido explícito por cobertura de escopo além do roteiro do livro *Planejamento e Controle de Obras* (Aldo Dórea Mattos).
+>
+> **Nota de leitura (19/10/2026).** Este plano foi escrito quando o sistema
+> rodava no Railway com MySQL. Várias lacunas abaixo (**G16** em especial) já
+> foram fechadas, e a infraestrutura hoje é DockHosting + Supabase
+> (`docs/STACK-ATUAL.md`). O diagnóstico de escopo continua válido; os números e
+> as notas de infraestrutura foram atualizados.
 
 ---
 
@@ -61,12 +67,12 @@ Cada linha foi verificada no código. A coluna "Impacto" diz o que quebra se nã
 | G8 | **Sem restrição (SNET/MSO/MFO/LAG)** | grep `SNET\|MSO\|MFO` → 0 hits | Não dá para fixar datas de fato (fundação pronta em tal data, entrega de material) |
 | G9 | **CPM ignorado de recursos** | `calculateCpm(activity, deps)` nunca lê `planning_resources`; `planning.leveling` (`routers.ts:3562`) é só um histograma diário de demanda, e `applyLevelShift` só empurra dentro da flutuação | O caminho crítico é **irrestrito** — errado em qualquer obra com equipe limitada |
 | G10 | **EAP não faz rollup nem sequenciamento** | `planning.generateFromEap` (`routers.ts:3123`) cria 1 atividade por nó `entrega`, todas `startOffset:0`, `duration = plannedQuantity` (`:3160`) | 500 nós viram 60 barras paralelas idênticas. EAP é um organograma, não um plano |
-| G11 | **Sem registro de riscos, sem contingência** | 31 tabelas, zero de risco. Só `"Em risco"` como enum (`schema.ts:39`). `agent_findings` é quality gate de IA, sem dono/reserva | Domínio de risco do PMBOK inteiro ausente |
+| G11 | **Sem registro de riscos, sem contingência** | 36 tabelas, zero de risco. Só `"Em risco"` como enum (`schema.ts:39`). `agent_findings` é quality gate de IA, sem dono/reserva | Domínio de risco do PMBOK inteiro ausente |
 | G12 | **Sem suprimento/contrato/medição financeira** | zero tabelas; `MedicaoView.tsx:20` anota *"depende da decisão D2"* (D1/D2 em `docs/analise-planilhas/regras-conflitantes.md`) | Fluxoorcamento→contrato→medição→pagamento quebrado |
 | G13 | **Sem local/pavimento; LOB só no cliente** | `production_units` **sem campo de sequência** (`schema.ts:436-446`); sem `planning.lob` no router; LOB desenhada em SVG no browser | Linha de balanço real (tempo × pavimento) **não é computável no servidor** |
 | G14 | **Auditoria quase vazia** | `project_audit_events` com 3 inserts (`routers.ts:1485, 2530, 2616`). Sem log de CPM, baseline, edição, medição, aprovação, transição de portão | Fluxo de aprovação não é auditável |
 | G15 | **Zero teste nos números que o usuário vê** | `planning.evm/scurve/control/leveling`, `captureBaseline`, `confirmEntry` sem teste. `vitest.config.ts:17` só `server/**` e `shared/**`; cliente nunca testado | Confiança zero nos indicadores |
-| G16 | **Migrações Drizzle nunca aplicadas — e quebradas** | 22 arquivos `drizzle/00NN_*.sql`; pre-deploy só roda `bootstrap-db.mjs` (log: *"banco já inicializado; nada a fazer"*) | **Estamos prestes a adicionar ~15 tabelas.** Sem migração real, cada onda é uma bomba |
+| G16 | ~~**Migrações Drizzle nunca aplicadas — e quebradas**~~ **RESOLVIDO** | Hoje são **13 migrações** replayáveis, aplicadas no boot (`scripts/migrate-pg.mjs`), com `audit-schema-pg.mjs` comparando `_journal.json` com `__drizzle_migrations` **por timestamp**. Migração pendente derruba o deploy em vez de passar verde | Fechado em out/2026 (PR #111). A lição virou teste: `server/migration-guard.test.ts` |
 | G17 | **Sem partes interessadas, comunicação, documentos** | grep `stakeholder\|interessado\|transmittal` → 0 hits. Só `RestrictionsView` (texto curto) | PMBOK 6parties/Communications ausente |
 
 **Nota de qualidade (contraweight honesto):** o motor CPM é correto, determinístico e testado; a lógica de mover nós da EAP trata a colisão do índice único corretamente; a regra de cobertura de custo 100% é disciplina real de PMBOK; o matching de preço recusa auto-link (decisão que a maioria erra); preview-then-apply e os 10 portões com gate de cobertura de custo é governança de verdade; os testes estáticos de access-guard e error-codes são melhores que a maioria dos projetos. O problema é o **modelo parar exatamente onde planejamento de obra fica difícil**.
@@ -75,13 +81,20 @@ Cada linha foi verificada no código. A coluna "Impacto" diz o que quebra se nã
 
 ### 3.1 Onda 0.1 — Pipeline de migração (resolvido)
 
+> **Nota (19/10/2026).** Esta seção é o registro de como o problema foi resolvido,
+> com os nomes da época (`migrate-db.mjs`, `bootstrap-db.mjs`). Na migração para
+> Supabase os scripts viraram `migrate-pg.mjs` e `audit-schema-pg.mjs`, e o
+> Railway saiu do projeto — o "pre-deploy" hoje é o `start` do `package.json`.
+> A narrativa abaixo continua útil porque explica **por que** existe guarda de
+> migração; os caminhos de arquivo é que mudaram.
+
 **O achado que mudou a recomendação:** as 22 migrações não eram apenas *não aplicadas* — eram **irreplayáveis**. Aplicadas do zero, quebravam em `0015` com `ER_TOO_LONG_IDENT`: o drizzle gera nomes de FK como
 
 ```
 activity_resource_allocations_activityId_schedule_activities_id_fk   (67 chars)
 ```
 
-e o MySQL aceita no máximo 64. Os nomes curtos (`act_res_alloc_activity_fk`) existem em `schema.ts:375-376`, mas foram escritos **depois** da geração e a migração nunca foi regenerada. Ou seja: `drizzle-kit migrate` — a recomendação original — **nunca ia funcionar**.
+e o MySQL aceitava no máximo 64 (o Postgres, 63 — o baseline foi gerado já com nomes curtos). Os nomes curtos (`act_res_alloc_activity_fk`) existem em `schema.ts:375-376`, mas foram escritos **depois** da geração e a migração nunca foi regenerada. Ou seja: `drizzle-kit migrate` — a recomendação original — **nunca ia funcionar**.
 
 **O que foi feito**
 
@@ -92,13 +105,16 @@ e o MySQL aceita no máximo 64. Os nomes curtos (`act_res_alloc_activity_fk`) ex
 | `server/migrations.test.ts` | 9 testes de regressão: identificador ≤ 64, journal × disco bidirecional, `when` estritamente crescente, e baseline × `schema.ts` nos dois sentidos. **Verificado que falha** reintroduzindo o bug original. |
 | `server/_core/index.ts` | `ensureUsersTable` e `ensurePlanVersionSchema` removidos — não há mais DDL no boot. Sobrou `logSchemaInventory()`, somente leitura. |
 | Removidos | `bootstrap-db.mjs`, `full-schema.sql`. |
-| Pre-deploy | `node scripts/migrate-db.mjs` (Railway). |
+| Pre-deploy | Hoje não existe pre-deploy: `pnpm start` roda `migrate-pg.mjs && audit-schema-pg.mjs` antes do servidor (DockHosting). |
 
 **Prova de equivalência** (o que autorizou apagar o `full-schema.sql`): schema descartável criado, migrações aplicadas do zero, comparação com o banco real — **32 tabelas, 344 colunas, 133 entradas de índice, 61 chaves estrangeiras, idênticos**. Repetível com `pnpm db:verify:scratch`.
 
 > O plano original propunha preservar as 22 migrações (opção A) e mudar para squashed (opção B) só se necessário. A evidência inverteu: histórico quebrado é pior que histórico limpo.
 
-**Ainda pendente (não bloqueia as ondas):** o `railway.json` é Config as Code, com hard stop anunciado para **2026-12-01** — depois disso o Railway deixa de lê-lo e o serviço passa a depender só do painel/API. Precisa migrar para `.railway/railway.ts`.
+> **Obsoleto (19/10/2026):** o `railway.json` não existe mais e o Railway não faz
+> parte do sistema. O hard stop de 2026-12-01 não nos atinge. Fica registrado
+> porque a lição — "config de build é código e precisa de teste" — é a mesma que
+> gerou o `nixpacks.toml` hoje.
 
 > **Correção de uma conclusão anterior.** A API do Railway reportava `builder: RAILPACK`, e eu tinha anotado "config duplicado: `railway.json` diz DOCKERFILE, o serviço roda RAILPACK". O log de build desmente: as 12 etapas `FROM node:22-slim`, `COPY patches/`, dois `pnpm install` (build e runtime) e o `[runtime 9/9] COPY drizzle/full-schema.sql` só existem no `Dockerfile`. **O `railway.json` estava certo** e a leitura da API é que era enganosa. Isso não é detalhe — foi o que matou o primeiro deploy da Onda 0.1: o Dockerfile copiava `bootstrap-db.mjs` e `full-schema.sql` **por nome**, e a remoção deles quebrou o cache de build com `"/drizzle/full-schema.sql": not found`, sinal que só existe no build de produção. Daí `server/migrations.test.ts` também validar todo `COPY` do Dockerfile, e o pre-deploy estar declarado no `railway.json` para o serviço ser recriável do zero.
 
@@ -209,7 +225,7 @@ Ordenadas por dependência, não por "interessante" ou por esforço.
 2. **Escopo do Onda 5** (contratos/medição): entra agora ou depois? Depende de D1/D2 e de compromisso com cliente.
 3. **Escopo do Onda 6** (LPS/PPC, partes interessadas, documentos): é o seu dia-a-dia de campo, ou quer evitar? LPS muda a forma como a equipe usa o sistema.
 4. **Prioridade entre Onda 3 (recursos) e Onda 4 (risco)** se não der para fazer as duas: o que dói mais hoje no seu uso?
-5. **`railway.json` vs RAILPACK.** O repo está com config duplicada e o Railway avisa: *Config as Code sai em 2026-12-01*. Como estamos adicionando ~15 tabelas, não dá para deixar o pre-deploy indefinido. Migramos para `.railway/railway.ts` nesta onda, ou só no fim?
+5. ~~**`railway.json` vs RAILPACK.**~~ **Resolvido:** o Railway saiu do projeto em out/2026. O build hoje é Nixpacks + `nixpacks.toml` no DockHosting, com `server/build-plan.test.ts` travando as decisões.
 
 ---
 

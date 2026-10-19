@@ -32,12 +32,11 @@ plataforma-obras/
 
 ## Ferramentas disponíveis
 
-### MCPs habilitados (30)
-O sistema tem 30 MCPs habilitados. Para ver a lista completa, ver `docs/README.md` → seção "MCPs configurados".
+### MCPs habilitados
+A lista completa fica na configuração do cliente (não no repositório). Estes são
+os que importam para obras:
 
-Principais MCPs para obras:
-- `aiven` — banco MySQL
-- `plataforma-obra` — próprio sistema
+- `plataforma-obra` — próprio sistema (API em `https://plataforma-obras.dockhosting.dev`)
 - `cronograma` / `mcp-cronograma-server` — cronograma
 - `eap` / `mcp-eap-server` — estrutura analítica
 - `gantt` / `mcp-gantt-lob-server` — gantt + linha de balanço
@@ -63,7 +62,6 @@ Principais skills para obras:
 - `weather-construction` — previsão de chuva
 - `eap` — EAP, cronograma, quantitativos
 - `plataforma-obras` — plataforma própria
-- `vercel-cli-with-tokens` — deploy Vercel (oficial)
 - `production-audit` — auditoria de produção
 - `production-scheduling` — scheduling de produção
 
@@ -119,9 +117,9 @@ docs: atualiza base de conhecimento com melhorias sep/2026
 | Problema | Solução |
 |---|---|
 | MCP não conecta | Verifique token e URL em docs/SETUP.md |
-| Build falha | pnpm install && pnpm build |
-| Banco não conecta | Verifique DATABASE_URL em .env.local |
-| Vercel não deploya | Verifique GH_TOKEN e vercel.json |
+| Build falha | `pnpm install --frozen-lockfile && pnpm build` (Node 22) |
+| Banco não conecta | Verifique DATABASE_URL em .env.local (Postgres, porta 5432) |
+| Deploy não publica o commit | Compare `/healthz` com `git rev-parse --short HEAD`; ver docs/DEPLOY-DOCKHOSTING.md |
 | Skill não encontrado | Verifique se SKILL.md existe em skills/<nome>/ |
 | Gateway desatualizado | Execute `hermes gateway restart` |
 

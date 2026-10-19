@@ -1,3 +1,8 @@
+> **Documento histórico.** Escrito quando a stack era outra: Render, Vercel,
+> Aiven e MySQL. Nada disso faz parte do sistema hoje — a stack atual é GitHub +
+> DockHosting + Supabase ([docs/STACK-ATUAL.md](docs/STACK-ATUAL.md)). Leia como
+> registro da época, não como instrução.
+
 # Validação MCP — Obra fictícia de 14 andares
 
 **Data da validação:** 20/09/2026 UTC  

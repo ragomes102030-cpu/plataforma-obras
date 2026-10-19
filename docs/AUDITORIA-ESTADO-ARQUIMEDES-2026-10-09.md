@@ -1,3 +1,8 @@
+> **Documento histórico.** Escrito quando a stack era outra: Render, Vercel,
+> Aiven e MySQL. Nada disso faz parte do sistema hoje — a stack atual é GitHub +
+> DockHosting + Supabase ([STACK-ATUAL.md](STACK-ATUAL.md)). Leia como registro
+> da época, não como instrução.
+
 # ARQUIMEDES — Auditoria de Estado (Hermes, 2026-10-09)
 
 > Registro vivo. Toda linha aqui tem evidencia real (comando + saida ou query).

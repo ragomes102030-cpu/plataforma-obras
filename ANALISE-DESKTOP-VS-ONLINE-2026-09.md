@@ -1,3 +1,8 @@
+> **Documento histórico.** Escrito quando a stack era outra: Render, Vercel,
+> Aiven e MySQL. Nada disso faz parte do sistema hoje — a stack atual é GitHub +
+> DockHosting + Supabase ([docs/STACK-ATUAL.md](docs/STACK-ATUAL.md)). Leia como
+> registro da época, não como instrução.
+
 # Análise desktop versus online — Plataforma Obras
 
 **Data da análise:** 21 de setembro de 2026  

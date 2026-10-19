@@ -32,8 +32,8 @@ BACKEND (Express + tRPC + Drizzle ORM)
         └── phase7-import.ts
 
 Banco:
-    MySQL 8 (Aiven)
-    → 21+ tabelas via Drizzle
+    PostgreSQL (Supabase)
+    → 36 tabelas de domínio via Drizzle (pg-core)
 ```
 
 ---
@@ -110,7 +110,7 @@ server/
 │   └── context-builder.ts         — AI context builder
 │
 ├── drizzle/
-│   └── schema.ts                  — Database schema (21+ tabelas)
+│   └── schema.ts                  — Database schema (36 tabelas)
 │
 ├── _shared/
 │   ├── construction-stages.ts     — Coordinator stages
@@ -150,7 +150,7 @@ server/
 
 ---
 
-## BANCO DE DADOS — MySQL 8 (Aiven)
+## BANCO DE DADOS — PostgreSQL (Supabase)
 
 ### TABELAS PRINCIPAIS
 
@@ -201,9 +201,14 @@ server/
 
 ## DEPLOY
 
-- **Frontend + Backend:** Vercel
-- **Banco:** Aiven (MySQL 8)
-- **MCP servers:** Rodam como processos paralelos no serverless
+- **Frontend + Backend:** mesma imagem no DockHosting (Express serve o `dist/` do
+  Vite). Build pelo Nixpacks, descrito em `nixpacks.toml`.
+- **Banco:** PostgreSQL no Supabase.
+- **MCP servers:** `mcp-server/` roda como processo do próprio serviço; os
+  integrados externamente vivem em `server/integrations/`.
+
+Detalhe de infraestrutura, variáveis e runbook: `docs/DEPLOY-DOCKHOSTING.md`.
+O histórico (Render/Vercel/Aiven/MySQL) está em `docs/DECISIONS.md`.
 
 ---
 

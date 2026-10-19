@@ -5,7 +5,7 @@
 O migrator do Drizzle decide o que aplicar comparando **só** o `created_at`:
 
 ```js
-// node_modules/drizzle-orm/mysql-core/dialect.js
+// node_modules/drizzle-orm/pg-core/dialect.js
 if (!lastDbMigration || Number(lastDbMigration.created_at) < migration.folderMillis) {
   for (const stmt of migration.sql) { await tx.execute(sql.raw(stmt)); }
   // ... registra em __drizzle_migrations
@@ -57,8 +57,9 @@ o banco, não. Nenhuma guarda olhava para isso.
   receber, não a descrição do schema em TypeScript
 - **Caminho versionado** — o `USE_SUPABASE=1` **desliga o DDL de startup** do
   migrador (`scripts/migrate-pg.mjs` — ele lista as pendentes e não aplica
-  nenhuma), e é por isso que a migração precisa ser aplicada à mão. O startCommand
-  do serviço no Render **já usa `&&`** (corrigido em 12/10): com o audit enxergando
+  nenhuma), e é por isso que a migração precisa ser aplicada à mão. O `start` do
+  serviço **já usa `&&`** (corrigido em 12/10, hoje em `scripts.start` do
+  `package.json`): com o audit enxergando
   as colunas, migração não aplicada **BARRA o deploy**. O `&&` não aplica a
   migração — só impede o deploy ruim. Se precisa aplicar, diga por qual caminho
   (SQL avulso no banco)

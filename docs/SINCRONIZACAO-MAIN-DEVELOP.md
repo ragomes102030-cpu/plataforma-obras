@@ -10,7 +10,7 @@
 
 A branch `main` estava bloqueada em commits de correção de Dockerfile (para DockHosting), enquanto a branch `develop` tinha 1258 commits à frente com todo o progresso do sistema Kanban, EPM, EAP, CPM, LOB, etc.
 
-Plataformas de deploy (DockHosting, Vercel, Render) estavam configuradas para puxar da `main`, resultando em deploys com código desatualizado.
+Plataformas de deploy estavam configuradas para puxar da `main`, resultando em deploys com código desatualizado. Hoje só o DockHosting constrói (ver `docs/STACK-ATUAL.md`).
 
 ## Solução Aplicada
 
@@ -41,9 +41,9 @@ Plataformas de deploy (DockHosting, Vercel, Render) estavam configuradas para pu
 
 | Plataforma | Branch | Configuração | Observação |
 |------------|--------|--------------|------------|
-| Render | `main` | `render.yaml` | PostgreSQL via Supabase, startCommand usa `&&` |
-| Vercel | `main` | `.vercel/project.json` | Vite framework, output: `dist/public` |
-| DockHosting | `main` | `Dockerfile` | Multi-stage build, NODE_ENV=production |
+| DockHosting | `main` | `nixpacks.toml` | **Única** plataforma de produção: Nixpacks, Node 22, start `npm start` |
+| ~~Render~~ | — | — | fora do projeto (out/2026); `render.yaml` não existe mais |
+| ~~Vercel~~ | — | — | fora do projeto (out/2026); `vercel.json` não existe mais |
 
 ## Lições Aprendidas
 

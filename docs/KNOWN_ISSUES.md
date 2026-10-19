@@ -4,9 +4,9 @@
 
 ### BUG-001: Testes de GitHub OAuth com URL desatualizada
 **Severidade:** Baixa  
-**Descrição:** O teste `server/_core/github-oauth.test.ts` ainda usa `.onrender.com` no `redirect_uri`, mas o sistema migrou para `.vercel.app`.  
+**Descrição:** O teste `server/_core/github-oauth.test.ts` usava uma URL de produção fixa no `redirect_uri` e quebrava a cada mudança de plataforma (`.onrender.com` → `.vercel.app` → domínio atual).  
 **Evidência:** Falha no teste de OAuth — `expected 'https://plataforma-obras-8uhqy3k5f-ra…' to be 'https://plataforma-obras-api.onrender…'`  
-**Status:** NÃO CORRIGIDO (não afeta funcionalidade do sistema)
+**Status:** CORRIGIDO — o teste usa hoje um domínio neutro e não depende mais do host de produção. Quem confere o domínio real é o `deploy-verify`.
 
 ---
 
@@ -129,5 +129,5 @@
 
 ---
 
-Versão: 1.0
-Data: 2026-09
+Versão: 1.1
+Data: 2026-09 (atualizado em 19/10/2026)
