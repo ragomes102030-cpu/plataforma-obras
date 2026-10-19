@@ -99,13 +99,59 @@ gh workflow run deploy-verify.yml -f sha=<commit>
 
 ## Como a imagem sobe
 
-- Build: `Dockerfile` (o DockHosting constroi a imagem; nao existe mais nenhum
-  blueprint de plataforma no repositorio).
-- Start (`Dockerfile`, `CMD`):
+**O deploy NAO usa o `Dockerfile` do repositorio.** O log do build (16/10/2026) e
+explicito:
 
-  ```
-  node scripts/migrate-pg.mjs && node scripts/audit-schema-pg.mjs && pnpm start
-  ```
+```
+Generating nixpacks configuration with: nixpacks plan ...
+Found application type: node.
+FROM ghcr.io/railwayapp/nixpacks:ubuntu-1745885067
+RUN pnpm i --frozen-lockfile
+RUN pnpm run build
+```
+
+O DockHosting roda **Nixpacks** com as configuracoes da aba *Build Configuration*
+(Install Command / Build Command / Output Directory) e sobe pelo *Start Command*
+da aba de runtime. Os comandos efetivos hoje:
+
+- Build: Nixpacks, `pnpm i --frozen-lockfile` + `pnpm run build`
+- Start: `npm start`
+- Porta: autodetectada
+
+Nao existe seletor de "Build Pack" no painel, entao nao ha como pedir Dockerfile:
+**o Nixpacks e o caminho real** e o `Dockerfile` e um caminho alternativo (build
+local, ou migracao futura). As duas pontas precisam continuar validas.
+
+### Node 22 e `engines`
+
+O Nixpacks escolhe a versao do Node por `engines.node` do `package.json` (e por
+`NIXPACKS_NODE_VERSION`, que nao chega ao planner). Sem `engines`, ele usa **Node
+18** — e o build morre:
+
+```
+You are using Node.js 18.20.5. Vite requires Node.js version 20.19+ or 22.12+.
+Error: Cannot find native binding   (em @tailwindcss/oxide)
+ELIFECYCLE Command failed with exit code 1
+```
+
+Por isso `package.json` declara `"engines": { "node": "22.x" }`. Se algum dia o
+build voltar a falar de Node 18, o `engines` foi perdido.
+
+`pnpm.onlyBuiltDependencies` (`esbuild`, `@tailwindcss/oxide`) existe pelo mesmo
+motivo: o pnpm 10 bloqueia scripts de pos-instalacao por padrao e o build perde
+os binarios nativos.
+
+### A cadeia de boot mora em `scripts.start`
+
+```
+node scripts/migrate-pg.mjs && node scripts/audit-schema-pg.mjs && NODE_ENV=production node dist/index.js
+```
+
+Ela **nao** fica no `CMD` do `Dockerfile`: o `CMD` apenas chama `pnpm start`. O
+motivo e que a plataforma sobe pelo `npm start` do painel, nao pelo `CMD` — se a
+cadeia existisse so no Dockerfile, ela nunca rodaria em producao (foi o que
+aconteceu ate 16/10/2026: a migracao e a auditoria estavam no `CMD` de uma imagem
+que a plataforma nao constroi).
 
 - Healthcheck: `/readyz`.
 

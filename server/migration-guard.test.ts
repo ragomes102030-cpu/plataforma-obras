@@ -130,16 +130,24 @@ describe("auditarSchema x controle de migrations", () => {
 });
 
 describe("o guard esta ligado no lugar certo", () => {
-  it("o Dockerfile roda migrate, depois audit, e so entao o app (com &&)", () => {
-    const dockerfile = readFileSync("Dockerfile", "utf-8");
-    const cmd = dockerfile.split("\n").find(l => l.trimStart().startsWith("CMD "));
-    expect(cmd).toBeDefined();
-    const iMigrate = cmd!.indexOf("migrate-pg.mjs");
-    const iAudit = cmd!.indexOf("audit-schema-pg.mjs");
-    const iStart = cmd!.indexOf("pnpm start");
+  it("`scripts.start` roda migrate, depois audit, e so entao o app (com &&)", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+    const cmd: string = pkg.scripts.start;
+    const iMigrate = cmd.indexOf("migrate-pg.mjs");
+    const iAudit = cmd.indexOf("audit-schema-pg.mjs");
+    const iStart = cmd.indexOf("node dist/index.js");
     expect(iMigrate).toBeGreaterThan(-1);
     expect(iAudit).toBeGreaterThan(iMigrate);
     expect(iStart).toBeGreaterThan(iAudit);
     expect(cmd).not.toContain("; ");
+  });
+
+  it("o Dockerfile nao repete a cadeia: ele chama o mesmo `start`", () => {
+    // A plataforma sobe pelo `npm start` do painel (build e Nixpacks), nao pelo
+    // CMD da imagem. Duas copias da cadeia divergem; uma so, nao.
+    const dockerfile = readFileSync("Dockerfile", "utf-8");
+    const cmd = dockerfile.split("\n").find(l => l.trimStart().startsWith("CMD "));
+    expect(cmd).toContain("pnpm start");
+    expect(cmd).not.toContain("audit-schema-pg.mjs");
   });
 });

@@ -423,13 +423,22 @@ describe("o Dockerfile encontra tudo que copia", () => {
 });
 
 describe("o runtime recebe o que a migracao precisa", () => {
-  // A Railway saiu do projeto. Este bloco lia `railway.json` e o arquivo não
-  // existe mais; o lugar de entrega hoje e o `CMD` da imagem (Dockerfile).
+  // A plataforma NAO builda a partir deste Dockerfile: o deploy do DockHosting e
+  // Nixpacks, e o processo sobe pelo `Start Command` do painel, que e `npm start`
+  // (o log do build mostra `"start": {"cmd": "exec caddy run ..."}` como default
+  // do Nixpacks e o painel sobrescrevendo com `npm start`).
   //
-  // A INTENCAO dos dois testes antigos foi preservada, e ela nao era sobre a
-  // Railway: era garantir que a migracao e a auditoria rodem ANTES do servico,
-  // e que a falha de uma delas não impeça a aplicação de subir — porque uma
-  // aplicação que não sobe não tem `/readyz` para dizer o que está errado.
+  // Por isso a cadeia de boot mora em `scripts.start`: e o unico ponto que os
+  // DOIS caminhos executam — o `npm start` da plataforma e o `pnpm start` do
+  // Dockerfile. Antes ela vivia so no `CMD` do Dockerfile, que nunca rodou em
+  // producao: a migracao e a auditoria nao eram executadas de verdade.
+  function scriptStart(): string {
+    const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+    const start = pkg?.scripts?.start;
+    if (typeof start !== "string") throw new Error("package.json sem scripts.start");
+    return start;
+  }
+
   function cmdDaImagem(): string {
     const dockerfile = readFileSync("Dockerfile", "utf-8");
     const linha = dockerfile.split("\n").find(l => l.trimStart().startsWith("CMD "));
@@ -437,18 +446,18 @@ describe("o runtime recebe o que a migracao precisa", () => {
     return linha.trim();
   }
 
-  it("a migracao roda no CMD da imagem", () => {
-    expect(cmdDaImagem()).toMatch(/scripts\/migrate-pg\.mjs/);
+  it("a migracao roda no boot do servico", () => {
+    expect(scriptStart()).toMatch(/scripts\/migrate-pg\.mjs/);
   });
 
   it("a migracao e a auditoria barram o deploy quando falham", () => {
-    const cmd = cmdDaImagem();
+    const cmd = scriptStart();
     expect(cmd, "a auditoria de schema nao roda").toMatch(/scripts\/audit-schema-pg\.mjs/);
 
     // Separador `&&`, nao `;`.
     //
     // Com `;`, uma falha de migracao nao interrompia nada: a auditoria (que
-    // antes se desligava sozinha com USE_SUPABASE=1) saia com 0, o `pnpm start`
+    // antes se desligava sozinha com USE_SUPABASE=1) saia com 0, o servidor
     // subia e a plataforma marcava o deploy como saudavel — com o banco divergente.
     // O `&&` faz a falha interromper a cadeia e o deploy nao ser promovido.
     //
@@ -459,7 +468,14 @@ describe("o runtime recebe o que a migracao precisa", () => {
     expect(cmd, "com `;`, uma falha de migracao nao impede o deploy").toMatch(
       /migrate-pg\.mjs\s*&&/
     );
-    expect(cmd).toMatch(/&&\s*node scripts\/audit-schema-pg\.mjs\s*&&\s*pnpm start/);
+    expect(cmd).toMatch(/&&\s*node scripts\/audit-schema-pg\.mjs\s*&&\s*NODE_ENV=production node dist\/index\.js/);
+  });
+
+  it("o Dockerfile delega para o mesmo `start`, em vez de repetir a cadeia", () => {
+    // Duas copias da cadeia divergem: foi assim que o `CMD` do Dockerfile e o
+    // `start` do package.json viveram diferentes por meses.
+    expect(cmdDaImagem()).toMatch(/pnpm start/);
+    expect(cmdDaImagem(), "cadeia duplicada no CMD").not.toMatch(/migrate-pg\.mjs/);
   });
 
   it("o parser do audit enxerga as colunas que o ALTER TABLE cria", async () => {
