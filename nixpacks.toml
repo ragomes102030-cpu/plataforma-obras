@@ -1,0 +1,29 @@
+# O DockHosting constroi com Nixpacks, nao com o Dockerfile (ver
+# docs/DEPLOY-DOCKHOSTING.md). Sem este arquivo o Nixpacks escolhe Node 18 e o
+# build morre no Vite 7 ("Vite requires Node.js 20.19+ or 22.12+") e, logo
+# depois, no binario nativo do @tailwindcss/oxide ("Cannot find native binding").
+#
+# `engines.node` no package.json ja pede 22.x, mas o plano do Nixpacks e gerado
+# antes de o repositorio ser interpretado dessa forma em todas as versoes. Aqui
+# a versao fica fixa, sem depender de deteccao.
+#
+# Os comandos abaixo reproduzem o plano que o proprio Nixpacks gerou no log do
+# deploy de 16/10/2026, trocando apenas nodejs_18 por nodejs_22.
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "pnpm-10_x", "openssl"]
+aptPkgs = ["curl", "wget"]
+
+[phases.install]
+cmds = ["npm install -g corepack@0.24.1 && corepack enable", "pnpm i --frozen-lockfile"]
+cacheDirectories = ["/root/.local/share/pnpm/store/v3"]
+paths = ["/app/node_modules/.bin"]
+
+[phases.build]
+cmds = ["pnpm run build"]
+
+# O padrao do Nixpacks para projetos Node com Vite e subir um Caddy servindo
+# estatico. Este e um servidor Express: o start precisa ser o `start` do
+# package.json, que roda migrate && audit && node dist/index.js.
+[start]
+cmd = "npm start"
