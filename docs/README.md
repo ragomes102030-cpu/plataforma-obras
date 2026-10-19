@@ -52,6 +52,7 @@
 | [AUDITORIA-COBERTURA-POR-REGRA.md](AUDITORIA-COBERTURA-POR-REGRA.md) | Cobertura de testes por regra de negócio |
 | [KNOWN_ISSUES.md](KNOWN_ISSUES.md) | Problemas conhecidos e contornos |
 | [ROADMAP.md](ROADMAP.md) | O que está previsto |
+| [ESTUDO-EVOLUCAO-ARQUIMEDES-2026-10-16.md](ESTUDO-EVOLUCAO-ARQUIMEDES-2026-10-16.md) | Benchmark de mercado, nota de maturidade e plano de evolução |
 
 ## Auditorias datadas
 
