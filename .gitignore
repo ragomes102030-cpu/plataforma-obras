@@ -118,3 +118,14 @@ tests/contraste/depois.json
 tests/contraste/depois-3obras.json
 tests/contraste/gradiente.json
 tests/contraste/regressao.json
+
+# Saida de execucao de scripts de validacao. Nao e codigo nem fixture: e o que o
+# script imprimiu naquele dia. Desde 19/10 os relatorios vao para o tmp do
+# sistema (os.tmpdir()); estas regras cobrem execucoes antigas e impedem que
+# voltem para o repo por engano. `playwright-storage-state.json` guarda cookie de
+# sessao: nunca pode ser versionado.
+playwright-storage-state.json
+e2e-fictitious-report.json
+phase1-readonly-battery-report.json
+scripts/aurora-abas.json
+scripts/abaurora.json

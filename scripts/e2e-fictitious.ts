@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import {
   createConstructionMcpClients,
   getConstructionMcpStatus,
@@ -340,7 +341,9 @@ async function main() {
     content: agentResult.content,
   };
 
-  const outputPath = "/home/ubuntu/plataforma-obras/e2e-fictitious-report.json";
+  // Fora do repositório: relatório de execução não é código, e o caminho antigo
+  // (/home/ubuntu/...) só existia na máquina onde o script foi escrito.
+  const outputPath = `${tmpdir()}/plataforma-obras-e2e-fictitious-report.json`;
   await writeFile(outputPath, JSON.stringify(report, null, 2) + "\n");
   console.log(JSON.stringify({ outputPath, report }, null, 2));
 }

@@ -6,7 +6,7 @@ export type HeartbeatJob = {
   /**
    * 6-field cron with seconds (`sec min hour dom mon dow`), UTC, min interval 60s.
    * Use `0` for the seconds field — e.g. `"0 0 9 * * *"` is daily 09:00 UTC.
-   * See /home/ubuntu/skills/webdev-periodic-updates/SKILL.md.
+   * Intervalo minimo de 60s. Ver `server/_core/heartbeat.ts` e o registro em `server/_core/index.ts`.
    */
   cron: string;
   /** Callback path. MUST start with `/api/scheduled/`. */
