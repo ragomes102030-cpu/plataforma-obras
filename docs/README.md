@@ -53,6 +53,7 @@
 | [KNOWN_ISSUES.md](KNOWN_ISSUES.md) | Problemas conhecidos e contornos |
 | [ROADMAP.md](ROADMAP.md) | O que está previsto |
 | [ESTUDO-EVOLUCAO-ARQUIMEDES-2026-10-16.md](ESTUDO-EVOLUCAO-ARQUIMEDES-2026-10-16.md) | Benchmark de mercado, nota de maturidade e plano de evolução |
+| [OBSERVABILIDADE.md](OBSERVABILIDADE.md) | Erros 5xx, alerta por webhook e conjunto dourado da Aurora |
 
 ## Auditorias datadas
 
