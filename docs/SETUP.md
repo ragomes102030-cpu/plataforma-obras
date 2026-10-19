@@ -22,17 +22,17 @@ pnpm install
 
 ## Banco de dados
 
-### PostgreSQL
+### PostgreSQL (Supabase)
 
-O Render só oferece PostgreSQL como banco gerenciado, e é onde o sistema roda.
+O banco é um PostgreSQL gerenciado no Supabase (ver `docs/STACK-ATUAL.md`).
 
-1. Crie o PostgreSQL na mesma conta do serviço web
-2. Copie a **Internal Database URL** da pagina do banco
-3. Configure no `.env.local`:
+1. Pegue a connection string no painel do Supabase (Project → Database →
+   Connection string; use a porta `5432`, não o pooler `6543`, para rodar migração)
+2. Configure no `.env.local`:
    ```
-   DATABASE_URL=postgresql://USUARIO:SENHA@host-interno:5432/nome
+   DATABASE_URL=postgresql://USUARIO:SENHA@host:5432/postgres
    ```
-4. Aplique o schema:
+3. Aplique o schema:
    ```bash
    node scripts/migrate-pg.mjs
    node scripts/audit-schema-pg.mjs
@@ -42,10 +42,9 @@ O `audit` confere o banco contra as migrations: contagens de tabelas, enums,
 triggers e índices, e o journal. Ele roda no boot do deploy e imprime
 `banco confere com as migracoes` quando está de acordo.
 
-**A URL do banco não pertence a este arquivo.** Este guia usava trazer a
-connection string inteira, com host, porta e usuário de um Aiven que foi
-abandonado; com o repositório público, endereço de serviço sai do README e a
-senha nunca entra nele.
+**A URL do banco não pertence a este arquivo.** Endereço de serviço sai do README
+e a senha nunca entra no repositório — ela vive nas variáveis de ambiente do
+DockHosting e, em desenvolvimento, no `.env.local` (que é ignorado pelo git).
 
 ### Estrutura de tabelas (Drizzle ORM)
 
@@ -65,7 +64,8 @@ Ver `server/db.ts` para schema. Principais tabelas:
 
 Crie `.env.local`:
 ```env
-VITE_API_URL=https://plataforma-obras-8uhqy3k5f-rafael-5864.vercel.app
+# Front e API no mesmo domínio: em dev o Vite faz proxy de /api para o Express.
+VITE_API_URL=http://localhost:3000
 VITE_ANALYTICS_ENDPOINT=...
 ```
 
@@ -86,26 +86,30 @@ pnpm build
 DATABASE_URL=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
-# Front, back e banco na MESMA conta. Uma moradia, um domínio.
-PUBLIC_APP_URL=https://plataforma-obras-api.onrender.com
+# Front, back e banco debaixo do mesmo domínio.
+PUBLIC_APP_URL=https://plataforma-obras.dockhosting.dev
 MCP_EAP_URL=https://mcp-eap-server-rafael-5864.vercel.app
 MCP_CRONOGRAMA_URL=https://mcp-cronograma-server-rafael-5864.vercel.app
 MCP_GANTT_LOB_URL=https://mcp-gantt-lob-server-rafael-5864.vercel.app
 ```
+
+As três `MCP_*_URL` apontam para servidores MCP externos que continuam no ar e
+não fazem parte do deploy principal. O resto da stack é só GitHub + DockHosting +
+Supabase (`docs/STACK-ATUAL.md`).
 
 ### Login com GitHub: o campo que trava tudo
 
 O `redirect_uri` que o servidor envia ao GitHub sai de `PUBLIC_APP_URL`
 (`server/_core/github-oauth.ts`, `getBaseUrl`), e o GitHub **recusa** qualquer
 valor que não case com uma Callback URL cadastrada no app OAuth. A recusa
-aparece como "url inválida" na tela de login, e ela NÃO é do Render nem do
+aparece como "url inválida" na tela de login, e ela NÃO é do DockHosting nem do
 código: é um campo na conta do GitHub.
 
 O que precisa estar em **Settings → Developer settings → OAuth Apps**, na
 página do app cujo `client_id` é o de `GITHUB_CLIENT_ID`:
 
 ```
-https://plataforma-obras-api.onrender.com/api/auth/github/callback
+https://plataforma-obras.dockhosting.dev/api/auth/github/callback
 ```
 
 Para desenvolvimento local, o mesmo servidor serve back e front, então a
@@ -145,58 +149,35 @@ node dist/index.js
 
 ---
 
-## Hospedagem no Vercel
-
-### Configuração inicial
-
-1. Instale Vercel CLI: `npm i -g vercel`
-2. Faça login: `vercel login`
-3. No diretório do projeto: `vercel`
-4. Configure environment variables no dashboard
-
-### vercel.json (já configurado)
-
-```json
-{
-  "buildCommand": "pnpm build",
-  "outputDirectory": "dist/public",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "framework": "vite"
-}
-```
-
-### Deploy
-
-```bash
-vercel deploy --prod
-# ou
-git push  # auto-deploy via GitHub connected
-```
-
----
-
 ## Hospedagem no DockHosting
 
 ### Configuração inicial
 
-1. Crie uma aplicação no painel do DockHosting
-2. Configure o Dockerfile (já está pronto no repositório)
-3. Adicione os secrets abaixo no GitHub (Settings → Secrets and variables → Actions):
-   - `DOCKHOSTING_DOCKER_USER` — usuário do Docker Hub para push da imagem
-   - `DOCKHOSTING_DOCKER_PASSWORD` — senha/token do Docker Hub
+1. Crie uma aplicação no painel do DockHosting e conecte o repositório
+   `ragomes102030-cpu/plataforma-obras`, branch `main`
+2. **Não** escolha Build Pack: o build é do Nixpacks e lê o `nixpacks.toml` do
+   repositório (Node 22 + `pnpm install --frozen-lockfile` + `pnpm run build`)
+3. Start Command: `npm start` (roda `migrate` → `audit` → `node dist/index.js`)
+4. Environment: as variáveis da seção acima
+5. O domínio de produção é `https://plataforma-obras.dockhosting.dev`
 
-### Deploy automático via GitHub Actions
+### O que o GitHub Actions faz (e o que não faz)
 
-O workflow `.github/workflows/deploy-dockhosting.yml` executa automaticamente em cada push para `main`:
+`.github/workflows/deploy-dockhosting.yml` roda em pull request e push:
 
 1. **Checkout** do código
-2. **Instalação** de dependências com pnpm 10.4.1
-3. **Testes** e validação de tipos
-4. **Build** com Vite + esbuild
-5. **Build da imagem Docker** e push para Docker Hub
-6. **DockHosting detecta** a nova imagem e faz redeploy automaticamente
+2. **Instalação** com pnpm 10.4.1
+3. **Testes**, validação de tipos e build
 
-### Build local (Docker)
+Ele **não** publica nada e **não** empurra imagem para o Docker Hub. Quem constrói
+e publica é o DockHosting, ao receber o push via webhook. Quem confere se o commit
+que está no ar é o da `main` é o `deploy-verify.yml`, que compara o `commit` do
+`/healthz` com o SHA e falha em 45 minutos se não bater.
+
+### Build local (Docker, opcional)
+
+O `Dockerfile` do repositório é útil para rodar local, mas **não** é o que a
+produção usa (ver `docs/DEPLOY-DOCKHOSTING.md`).
 
 ```bash
 # Build da imagem
@@ -309,16 +290,18 @@ pnpm build
 ```
 
 ### Banco não conecta
-- Verifique DATABASE_URL em .env.local
-- Verifique se Aiven está rodando
-- Verifique SSL (REQUIRED)
+- Verifique `DATABASE_URL` em `.env.local` (porta `5432`, não o pooler `6543`)
+- Confira o status do projeto no painel do Supabase
+- `node scripts/audit-schema-pg.mjs` diz exatamente o que está faltando
 
 ### MCP não conecta
 - Verifique token configurado
 - Verifique se o MCP server está rodando
 - Verifique URL no SQLite
 
-### Vercel não deploya
-- Verifique se vercel.json está correto
-- Verifique se GH_TOKEN tem scopes suficientes
-- Verifique logs no Vercel dashboard
+### Deploy não publica o commit
+- `curl -s https://plataforma-obras.dockhosting.dev/healthz` e compare o `commit`
+  com o `git rev-parse --short HEAD`
+- O `deploy-verify` do GitHub Actions acusa sozinho se em 45 min o commit não
+  estiver publicado
+- Build de 10 a 20 min é normal (Nixpacks baixa o nixpkgs a cada build)

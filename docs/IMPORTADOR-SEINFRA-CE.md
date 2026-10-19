@@ -70,7 +70,7 @@ npx tsx scripts/importar-seinfra-catalogo.mts `
 
 - **dry-run é o padrão.** Só `--execute` libera escrita.
 - `--execute` exige DSN **e** `--user-id` (senão sai com código 3).
-- DSN de produção conhecida (`…tromrvfijbtihuilvnuk…`, `…onrender.com`) é **recusado**
+- DSN de produção conhecida (`…tromrvfijbtihuilvnuk…`) é **recusada**
   (código 4) mesmo com `--execute`; exige `--allow-production` explícito.
 - O host é impresso **sem senha** (`usuario:***@host:porta/banco`).
 - Tudo em **uma transação**: `BEGIN` … `COMMIT`, com `ROLLBACK` em qualquer erro.

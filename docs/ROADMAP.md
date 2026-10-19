@@ -13,7 +13,7 @@
 
 ## AGORA — Bloqueia confiabilidade
 
-1. **Corrigir teste de OAuth** — Atualizar `github-oauth.test.ts` para usar Vercel URL
+1. ~~**Corrigir teste de OAuth**~~ — **CONCLUÍDO**: o teste usa domínio neutro e não depende mais do host de produção (`server/_core/github-oauth.test.ts`). A conferência do domínio real virou o workflow `deploy-verify`.
 2. **Validar Gantt em navegador** — Abrir sistema, criar obra, verificar Gantt funciona
 3. **Validar LOB em navegador** — Verificar Linha de Balanço renderiza corretamente
 4. **Validar Curva S em navegador** — Verificar curva atualiza com produção
@@ -58,5 +58,5 @@ Estas obras NÃO devem ser excluídas. Elas servem como base de regressão.
 
 ---
 
-Versão: 1.0
-Data: 2026-09
+Versão: 1.1
+Data: 2026-09 (atualizado em 19/10/2026)

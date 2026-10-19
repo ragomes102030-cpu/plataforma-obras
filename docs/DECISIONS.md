@@ -1,10 +1,14 @@
 # Decisões de Arquitetura
 
-Última atualização: 26/09/2026
+Última atualização: 19/10/2026
+
+> Decisões 1 e 2 estão **substituídas** pelas decisões 16 e 17 (abaixo). Elas ficam
+> registradas porque explicam o caminho, não porque valem hoje. A stack em vigor
+> está em [STACK-ATUAL.md](STACK-ATUAL.md).
 
 ---
 
-## Decisão 1: Vercel vs Render
+## Decisão 1: Vercel vs Render — **SUBSTITUÍDA pela Decisão 17**
 
 - **Decisão:** Vercel para frontend
 - **Quando:** Setembro 2026
@@ -21,7 +25,7 @@
 
 ---
 
-## Decisão 2: Aiven para banco de dados
+## Decisão 2: Aiven para banco de dados — **SUBSTITUÍDA pela Decisão 16**
 
 - **Decisão:** MySQL 8 em Aiven
 - **Quando:** Setembro 2026
@@ -201,3 +205,21 @@
 - **Gate:** EAP → Atividades somente com versão aprovada, zero bloqueios, regressão automatizada e coerência entre backend e UI.
 - **Aprendizado:** cada incidente deve gerar documentação, teste de regressão e barreira no código.
 - **Data:** 05/10/2026.
+
+## Decisão 16 — PostgreSQL no Supabase (substitui a Decisão 2)
+
+- **Decisão:** banco é PostgreSQL gerenciado no Supabase; MySQL/Aiven não fazem mais parte do sistema.
+- **Quando:** outubro de 2026.
+- **Motivo:** a Aiven cobrava por um MySQL que o próprio Render não conseguia alcançar de forma estável; o Supabase dá Postgres, auth e painel de SQL num lugar só, e o Postgres resolve modelagem de hierarquia (EAP) e séries temporais de medição sem gambiarra.
+- **Consequências:** `drizzle-orm/pg-core` + driver `pg`; 36 tabelas de domínio e 13 migrações; `mysql2` e `mysql-core` saíram do projeto.
+- **Barreira:** `scripts/audit-schema-pg.mjs` compara `_journal.json` com `__drizzle_migrations` **por timestamp** e derruba o boot se houver migração no repo que o banco não registrou. Foi a resposta ao incidente de 12/10, em que migrações novas nunca eram aplicadas em silêncio porque o app conecta como usuário somente-leitura.
+
+## Decisão 17 — DockHosting com Nixpacks (substitui a Decisão 1)
+
+- **Decisão:** build e runtime no DockHosting, a partir do repositório; nada de Vercel.
+- **Quando:** outubro de 2026.
+- **Motivo:** o sistema é um servidor Express que serve o SPA e fala com o banco — não é site estático nem função serverless. Na Vercel isso exigia contorno atrás de contorno; no DockHosting é uma imagem só.
+- **Como:** o DockHosting constrói com **Nixpacks** (não com o `Dockerfile`), lendo `nixpacks.toml`: Node 22, `pnpm install --frozen-lockfile`, `pnpm run build`, start `npm start`.
+- **Consequências:** `vercel.json` e `render.yaml` não existem mais; o `Dockerfile` fica como recurso de desenvolvimento local.
+- **Barreira:** `server/build-plan.test.ts` trava as decisões do `nixpacks.toml` (nome canônico de pacote do nixpkgs, pnpm na versão do `packageManager`, sem `corepack`, `[start] cmd = npm start`) e `deploy-verify.yml` falha se o commit publicado não for o da `main`.
+- **Erro que motivou a barreira:** um `nixPkgs = ["pnpm-10_x"]` inexistente derrubava o build no setup com um erro que não apontava para o arquivo.

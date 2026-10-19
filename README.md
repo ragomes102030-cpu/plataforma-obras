@@ -12,21 +12,21 @@ A Plataforma Obras é uma aplicação web multiobras para planejamento e control
 - Módulo **Agente IA** com contexto da obra, atividades, avanço e criticidade.
 - Agente conectado a qualquer provedor compatível com a API Chat Completions: OpenRouter, gateway OpenCode ou uma API própria.
 - Chave da IA mantida exclusivamente no backend; nunca é enviada ao navegador.
-- Endpoint de saúde `GET /healthz` para o Render.
-- CI em GitHub Actions e deploy automático configurado no blueprint do Render.
+- Endpoint de saúde `GET /healthz` (devolve o commit publicado) e `GET /readyz` (banco + schema).
+- CI em GitHub Actions e deploy automático no DockHosting a cada push em `main`.
 
 Os dados demonstrativos continuam sendo fallback para ambientes sem banco. Eles não representam medições oficiais nem devem ser usados para decisões contratuais.
 
 ## Configuração do agente de IA
 
-O backend usa um adaptador OpenAI-compatible. Configure no Render, em **Environment**, as variáveis abaixo:
+O backend usa um adaptador OpenAI-compatible. Configure no DockHosting, em **Environment**, as variáveis abaixo:
 
 | Variável | Exemplo | Finalidade |
 | --- | --- | --- |
 | `AI_API_BASE_URL` | `https://openrouter.ai/api/v1` | URL base do provedor, sem `/chat/completions` |
 | `AI_API_KEY` | `sk-or-...` | Chave secreta do provedor; não commitar |
 | `AI_MODEL` | `openai/gpt-oss-20b:free` | Modelo disponível no provedor escolhido |
-| `PUBLIC_APP_URL` | `https://plataforma-obras-api.onrender.com` | Referer opcional enviado ao OpenRouter |
+| `PUBLIC_APP_URL` | `https://plataforma-obras.dockhosting.dev` | Referer opcional enviado ao OpenRouter |
 
 Também são aceitos endpoints próprios, por exemplo `https://ia.exemplo.com/v1`, desde que respondam ao formato `POST /chat/completions` com `choices[0].message.content`. A aplicação apresenta uma mensagem operacional quando o agente ainda não foi configurado, em vez de quebrar o restante do sistema.
 
@@ -44,13 +44,26 @@ A recomendação para a evolução é conectar os MCPs em três áreas separadas
 
 ## Banco e migrações
 
-A migration `drizzle/0002_bitter_paladin.sql` adiciona `ownerUserId` em `projects`. Em uma base existente, aplique as migrações com:
+PostgreSQL no Supabase (schema `drizzle/schema.ts`, `drizzle-orm/pg-core`, driver
+`pg`). São **36 tabelas de domínio** e **13 migrações** em
+`drizzle/meta/_journal.json`; o `/readyz` mostra 37 porque conta também a
+`"__drizzle_migrations"`.
+
+Em produção nada é manual: o `start` do `package.json` roda `migrate-pg.mjs`
+antes de subir o servidor, e o `audit-schema-pg.mjs` depois. Se faltar migração
+no banco, o audit falha e o deploy não promove — em vez de servir uma aplicação
+com schema velho.
+
+Localmente:
 
 ```bash
-DATABASE_URL="mysql://..." pnpm db:push
+DATABASE_URL="postgresql://..." pnpm db:migrate   # aplica o que falta
+DATABASE_URL="postgresql://..." pnpm db:audit     # confere schema x código
+pnpm db:generate                                  # gera migração nova
 ```
 
-O Render precisa ter `DATABASE_URL` apontando para um MySQL compatível. O schema atual usa `drizzle-orm/mysql-core` e o acesso usa `mysql2`; portanto, o PostgreSQL provisionado no Render não pode ser ligado diretamente sem uma migração planejada de schema e driver. Sem um MySQL compatível configurado, o sistema continua em modo demonstrativo e não persiste novas obras.
+Detalhes de `USE_SUPABASE=1`, usuário somente-leitura e aplicação de migração
+como owner: `docs/DEPLOY-DOCKHOSTING.md`.
 
 As consultas de atividades, EAP e dependências preservam o fallback demonstrativo para visitantes, mas validam a permissão da obra quando existe sessão autenticada e banco conectado. O CI usa uma única versão explícita do pnpm (`10.4.1`) para evitar divergência entre o workflow e o `packageManager`.
 
@@ -77,7 +90,7 @@ server/       API Express + tRPC + autenticação
 server/agent.ts agente contextual por obra e provedor OpenAI-compatible
 shared/       regras determinísticas reutilizáveis
 server/db.ts  acesso Drizzle ao banco
-drizzle/      schema e migrações MySQL
+drizzle/      schema e migrações PostgreSQL (pg-core)
 ```
 
 ## Próximas etapas
@@ -97,7 +110,8 @@ A base de conhecimento do sistema está em `/docs/`:
 | Arquivo | Descrição |
 |---|---|
 | `docs/README.md` | Visão geral do sistema, arquitetura, MCPs, skills |
-| `docs/DECISIONS.md` | Decisões de arquitetura (Vercel vs Render, Aiven, etc.) |
+| `docs/STACK-ATUAL.md` | **Comece aqui**: onde o sistema roda hoje (GitHub + DockHosting + Supabase) |
+| `docs/DECISIONS.md` | Decisões de arquitetura e o porquê (inclui o que saiu: Render, Vercel, Aiven, MySQL) |
 | `docs/SETUP.md` | Como configurar e rodar (banco, frontend, backend, MCPs, tokens) |
 | `docs/IMPROVEMENTS.md` | Melhorias e mudanças feitas (Sep/2026) |
 | `docs/AGENTS.md` | Guia para agentes — como usar o sistema |
