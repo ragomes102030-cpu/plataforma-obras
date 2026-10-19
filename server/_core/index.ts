@@ -1,5 +1,8 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerGitHubOAuthRoutes } from "./github-oauth";
@@ -95,9 +98,70 @@ async function startServer() {
       `[startup] JWT_SECRET ausente, vazio ou so espacos (len=${ENV.cookieSecret.length}). O boot passa e o login GitHub quebra em createSessionToken (DataError: Zero-length key is not supported). variaveis presentes: ${configVars.join(", ") || "(nenhuma)"}`
     );
   }
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // ---- Segurança de transporte -------------------------------------------------
+  // O app roda atrás do proxy do DockHosting. Sem isto `req.ip` seria sempre o
+  // IP do proxy, e o rate limit viraria um balde único para todo mundo.
+  app.set("trust proxy", 1);
+
+  // helmet sem CSP: a política padrão bloqueia o runtime inline do Vite e os
+  // assets em data:. Os outros cabeçalhos não quebram nada.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+  );
+
+  // CORS só importa quando o navegador abre a API de outra origem. Em produção a
+  // allowlist é a URL pública; em desenvolvimento, o Vite. Requisição same-origin
+  // (o caso normal) não manda Origin e passa direto.
+  const origensPermitidas = [
+    ENV.publicAppUrl,
+    ...(process.env.NODE_ENV === "production"
+      ? []
+      : ["http://localhost:5173", "http://127.0.0.1:5173"]),
+  ].filter((origem): origem is string => Boolean(origem));
+  app.use(
+    cors({
+      origin(origem, callback) {
+        if (!origem || origensPermitidas.includes(origem)) return callback(null, true);
+        // Nega sem lançar erro: o navegador bloqueia, e a API não devolve 500.
+        return callback(null, false);
+      },
+      credentials: true,
+    })
+  );
+
+  // Teto de corpo de 1 MB. As duas únicas procedures que recebem arquivo em
+  // base64 mantêm 50 MB, e o parser grande precisa ser montado ANTES do global:
+  // `express.json` marca `req._body` e o seguinte é ignorado.
+  const CAMINHOS_DE_UPLOAD =
+    /^\/api\/trpc\/(catalog\.importPriceSheet|documents\.upload)([,?]|$)/;
+  const jsonGrande = express.json({ limit: "50mb" });
+  app.use((req, res, next) =>
+    CAMINHOS_DE_UPLOAD.test(req.originalUrl) ? jsonGrande(req, res, next) : next()
+  );
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ limit: "1mb", extended: true }));
+
+  // Rate limit só na API e no login. Health/ready ficam de fora de propósito: se
+  // o healthcheck do DockHosting tomar 429, o deploy é dado como morto.
+  // 1.000 por 15 min por IP (~66/min) cobre com folga a tela mais pesada e ainda
+  // corta laço de script. Ajustável por RATE_LIMIT_MAX sem tocar no código.
+  const limitePorJanela = Number(process.env.RATE_LIMIT_MAX ?? 1000);
+  app.use(
+    ["/api/trpc", "/api/auth"],
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: Number.isFinite(limitePorJanela) && limitePorJanela > 0 ? limitePorJanela : 1000,
+      standardHeaders: "draft-7",
+      legacyHeaders: false,
+      skip: req => req.method === "OPTIONS",
+      message: {
+        error: "Muitas requisicoes em pouco tempo. Aguarde alguns minutos e tente de novo.",
+      },
+    })
+  );
   registerStorageProxy(app);
   registerGitHubOAuthRoutes(app);
   app.get("/healthz", (_req, res) => {
