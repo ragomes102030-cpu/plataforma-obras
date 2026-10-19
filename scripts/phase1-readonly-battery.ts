@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import {
   runProjectOrchestrator,
   validateReadonlyResponse,
@@ -6,8 +7,9 @@ import {
 import type { AgentProjectContext } from "../server/agent";
 
 const projectId = "fase1-aurora-readonly";
-const outputPath =
-  "/home/ubuntu/plataforma-obras/phase1-readonly-battery-report.json";
+// Fora do repositório: relatório de execução não é código, e o caminho antigo
+// (/home/ubuntu/...) só existia na máquina onde o script foi escrito.
+const outputPath = `${tmpdir()}/plataforma-obras-phase1-readonly-battery-report.json`;
 
 const context: AgentProjectContext = {
   project: {
