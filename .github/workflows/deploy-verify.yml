@@ -1,0 +1,97 @@
+name: deploy-verify
+
+# O deploy do DockHosting nao e disparado por este workflow: ele e disparado
+# pelo webhook do GitHub, e esse webhook ja falhou em silencio mais de uma vez
+# (entrega 200 = "recebi", nao "vou buildar"). Quando isso acontece, a versao
+# antiga continua no ar e nada fica vermelho - foi assim que o `main` andou
+# na frente do que estava publicado.
+#
+# Este workflow fecha esse buraco pelo lado de fora: depois de cada push na main
+# ele consulta /healthz ate 45 min e falha se o commit publicado nao for o commit
+# do push. Se o secret DOCKHOSTING_DEPLOY_HOOK existir, ele tenta disparar o
+# build pelo proprio deploy hook antes de desistir.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit esperado (7+ caracteres). Vazio = HEAD da main."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-verify-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROD_URL: https://plataforma-obras.dockhosting.dev
+
+jobs:
+  verify:
+    name: producao serve o commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Commit esperado
+        id: alvo
+        run: |
+          alvo="${{ inputs.sha }}"
+          if [ -z "$alvo" ]; then alvo="${{ github.sha }}"; fi
+          alvo=$(printf '%s' "$alvo" | tr -d '[:space:]' | cut -c1-7)
+          echo "alvo=$alvo" >> "$GITHUB_OUTPUT"
+          echo "Esperando o commit \`$alvo\` em $PROD_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Esperar o deploy (ate 45 min)
+        id: espera
+        env:
+          ALVO: ${{ steps.alvo.outputs.alvo }}
+          HOOK: ${{ secrets.DOCKHOSTING_DEPLOY_HOOK }}
+        run: |
+          disparou=0
+          for i in $(seq 1 45); do
+            corpo=$(curl -fsS --max-time 15 "$PROD_URL/healthz" 2>/dev/null || true)
+            commit=$(printf '%s' "$corpo" | tr -d '\r' | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')
+            up=$(printf '%s' "$corpo" | tr -d '\r' | sed -n 's/.*"uptimeSeconds":\([0-9]*\).*/\1/p')
+            echo "[$i/45] publicado=${commit:-?} uptime=${up:-?}s"
+
+            case "$commit" in
+              "$ALVO"*)
+                echo "deploy_ok=true" >> "$GITHUB_OUTPUT"
+                {
+                  echo "### Deploy confirmado"
+                  echo "Produção responde \`${commit}\` (uptime ${up}s)."
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+                ;;
+            esac
+
+            # Sem deploy hook configurado nao ha como disparar: resta esperar.
+            # Com o hook, tenta uma vez depois de 8 min, caso o webhook tenha
+            # sido engolido.
+            if [ "$i" -eq 8 ] && [ "$disparou" -eq 0 ] && [ -n "$HOOK" ]; then
+              disparou=1
+              echo "Nada publicou em 8 min; disparando o deploy hook."
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$HOOK" || echo 000)
+              if [ "$code" = "405" ] || [ "$code" = "404" ]; then
+                code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$HOOK" || echo 000)
+              fi
+              echo "deploy hook respondeu HTTP $code"
+            fi
+
+            sleep 60
+          done
+
+          {
+            echo "### Deploy NAO aconteceu"
+            echo "45 min e a produção ainda responde \`${commit:-?}\`, não \`${ALVO}\`."
+            echo ""
+            echo "O webhook do DockHosting recebeu o push mas não enfileirou o build."
+            echo "Ação: painel do DockHosting → projeto → Trigger/Deploy."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Produção não serve ${ALVO} após 45 min (responde ${commit:-?}). Dispare o deploy no painel do DockHosting."
+          exit 1

@@ -69,6 +69,34 @@ gh api repos/<owner>/<repo>/hooks
 gh api "repos/<owner>/<repo>/hooks/<id>/deliveries?per_page=5"
 ```
 
+Reenviar uma entrega nao resolve o caso "recebeu e nao buildou": o payload e
+identico (mesmo commit), e a plataforma tende a ignorar como duplicata.
+
+### `deploy-verify`: o deploy nao passa mais calado
+
+`.github/workflows/deploy-verify.yml` roda **depois de cada push na `main`** e
+consulta `/healthz` de minuto em minuto por ate 45 min. Se a producao nao passar
+a servir o commit do push, o workflow **falha** e escreve no resumo o que fazer.
+Antes disso o unico sinal era a versao velha continuar respondendo - que e
+exatamente o estado normal de um deploy em andamento, por isso ninguem percebia.
+
+Para ele conseguir **disparar** o build (e nao so reclamar), cadastre o Deploy
+Hook do projeto como secret:
+
+1. Painel do DockHosting -> projeto `plataforma-obras` -> Deploy Hook / Webhook de deploy.
+2. Copie a URL.
+3. GitHub -> Settings -> Secrets and variables -> Actions -> `DOCKHOSTING_DEPLOY_HOOK`.
+
+Sem o secret o workflow continua util (detecta e avisa), mas quem dispara o build
+segue sendo o webhook ou o botao do painel. Com o secret, o unico caminho que
+depende de clique humano desaparece.
+
+Tambem da para rodar na mao, conferindo um commit especifico:
+
+```bash
+gh workflow run deploy-verify.yml -f sha=<commit>
+```
+
 ## Como a imagem sobe
 
 - Build: `Dockerfile` (o DockHosting constroi a imagem; nao existe mais nenhum
