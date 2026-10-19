@@ -124,14 +124,33 @@ migracoes** nesse modo: ele apenas sincroniza sequences de identidade e sai com
 
 Consequencia pratica: uma nova migracao (por exemplo `0013`) **nao e aplicada
 pelo deploy**. Ela precisa ser aplicada manualmente no SQL Editor do Supabase, e
-o `drizzle/meta/_journal.json` e o banco precisam continuar de acordo. A
-auditoria (`scripts/audit-schema-pg.mjs`) existe justamente para fazer essa
-divergencia aparecer — por isso ela roda no start, separada da migracao.
+o `drizzle/meta/_journal.json` e o banco precisam continuar de acordo.
+
+Isso deixou de ser um risco silencioso: a auditoria confere o **controle de
+migrations**, comparando o `when` de cada entrada de `drizzle/meta/_journal.json`
+com as linhas de `__drizzle_migrations`. Se existir migration no repo que o banco
+nao registrou, a auditoria reprova e o container nao sobe (`migrate` avisa no log
+qual e o motivo; quem barra e o `audit`). A comparacao e por **timestamp**, nao
+por contagem — o banco ja teve 20 linhas para 10 migrations (duplicatas), e o
+total "batia" justamente quando faltava uma migration de verdade.
+
+Para aplicar a migration como dono, sem depender do deploy:
+
+```sql
+-- via Management API, que conecta como `postgres`
+POST https://api.supabase.com/v1/projects/<ref>/database/query
+{ "query": "<conteudo do drizzle/0013_*.sql>" }
+```
+
+Depois insira a linha correspondente em `__drizzle_migrations`
+(`created_at` = `when` da entrada do journal), senao a auditoria continua
+reprovando — de proposito.
 
 ### Auditoria: o que reprova e o que so avisa
 
 - **Reprova** (`exit 1`, o container nao sobe): objeto **faltando** no banco
-  (tabela, coluna, enum, trigger declarados nas migracoes e ausentes no banco).
+  (tabela, coluna, enum, trigger declarados nas migracoes e ausentes no banco) e
+  **migration pendente** (entrada no journal sem linha em `__drizzle_migrations`).
   Nesse caso a aplicacao vai ler algo que nao existe.
 - **Avisa** (`AVISO (nao fatal)`): objeto **a mais** no banco (por exemplo as
   tabelas de QA `qa_eap_activity_backup_*`). Tabela extra nao quebra a

@@ -51,12 +51,35 @@ export function runtimeDatabaseUrl() {
   return u.toString();
 }
 
-/** Os arquivos de migration, na ordem do journal. */
-export function migrationsDoJournal(pasta = MIGRATIONS_FOLDER) {
+/** As entradas do journal, na ordem em que o drizzle as aplicaria. */
+export function entradasDoJournal(pasta = MIGRATIONS_FOLDER) {
   const caminho = join(pasta, "meta", "_journal.json");
   if (!existsSync(caminho)) return [];
   const journal = JSON.parse(readFileSync(caminho, "utf-8"));
-  return (journal.entries ?? []).map(e => `${e.tag}.sql`);
+  return journal.entries ?? [];
+}
+
+/** Os arquivos de migration, na ordem do journal. */
+export function migrationsDoJournal(pasta = MIGRATIONS_FOLDER) {
+  return entradasDoJournal(pasta).map(e => `${e.tag}.sql`);
+}
+
+/**
+ * Quais migrations do journal ainda não foram registradas em
+ * `__drizzle_migrations`.
+ *
+ * A comparação é por TIMESTAMP (`when` do journal == `created_at` da tabela),
+ * não por contagem. Contagem já mentiu neste projeto: havia 20 linhas para 10
+ * migrations (duplicatas), e "número de linhas" batia por acidente enquanto a
+ * `0012` nunca chegou ao banco.
+ *
+ * `registradas: null` significa "a tabela nem existe" — o que também é
+ * pendência, e não "nada a verificar".
+ */
+export function migracoesPendentes({ journalEntries = [], registradas = null } = {}) {
+  if (registradas === null) return journalEntries.map(e => e.tag);
+  const gravadas = new Set(registradas.map(Number));
+  return journalEntries.filter(e => !gravadas.has(Number(e.when))).map(e => e.tag);
 }
 
 /**
@@ -185,12 +208,29 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
   );
   const indices = [...new Set(idxRes.rows.map(r => `${r.tablename}.${r.indexname}`))].sort();
 
+  // O journal diz o que o repositorio pede; `__drizzle_migrations` diz o que o
+  // banco recebeu. Sob `USE_SUPABASE=1` o app conecta como `arquimedes_app`
+  // (read-only, sem DDL), entao uma migration nova NAO e aplicada no boot — e o
+  // `migrate-pg.mjs` sai com codigo 0 antes de tentar. Sem esta conferencia, a
+  // 0013 nasceria no repo, nao no banco, e nada reclamaria: exatamente o
+  // incidente de 12/10, so que sem sintoma.
+  // A comparacao e por timestamp, e nao por quantidade, porque contagem ja
+  // mentiu aqui (duplicatas deixavam o numero "certo").
   let journal = { registradas: 0, ultima: 0 };
+  let pendentes = [];
+  const entradas = entradasDoJournal(pasta);
   if (tabelasBanco.has("__drizzle_migrations")) {
     const jr = await conn.query(
       'SELECT COUNT(*) AS n, MAX(created_at) AS last FROM "__drizzle_migrations"'
     );
     journal = { registradas: Number(jr.rows[0].n), ultima: Number(jr.rows[0].last) };
+    const datasRes = await conn.query('SELECT created_at FROM "__drizzle_migrations"');
+    pendentes = migracoesPendentes({
+      journalEntries: entradas,
+      registradas: datasRes.rows.map(r => Number(r.created_at)),
+    });
+  } else {
+    pendentes = migracoesPendentes({ journalEntries: entradas, registradas: null });
   }
 
   // "Tabela a mais no banco" entra como AVISO, nao como divergencia fatal. Das
@@ -222,6 +262,11 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     divergencias.push(
       `${triggersFaltando.length} trigger(s) ausente(s): ${triggersFaltando.join(", ")}`
     );
+  if (pendentes.length)
+    divergencias.push(
+      `${pendentes.length} migration(oes) no repo que o banco NAO registrou: ${pendentes.join(", ")}` +
+        " — o deploy nao aplica DDL (USE_SUPABASE=1); aplique como owner antes de subir"
+    );
 
   const linhas = [
     `tabelas: ${declaradas.size} declaradas, ${tabelasBanco.size} no banco` +
@@ -233,7 +278,8 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     `triggers: ${triggers.size} declaradas, ${triggersBanco.size} no banco` +
       (triggersFaltando.length ? ` | AUSENTES: ${triggersFaltando.join(", ")}` : " | nenhuma ausente"),
     `indices: ${indices.length}`,
-    `journal: ${journal.registradas} migration(oes) registrada(s), ultima = ${journal.ultima}`,
+    `journal: ${journal.registradas} migration(oes) registrada(s), ultima = ${journal.ultima}` +
+      (pendentes.length ? ` | PENDENTES: ${pendentes.join(", ")}` : " | nenhuma pendente"),
     ...(colunasFaltando.length ? [`colunas: ${colunasFaltando.length} ausente(s)`] : []),
   ];
 
@@ -246,6 +292,7 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     enumsNoBanco: tiposBanco.size,
     triggersNoBanco: triggersBanco.size,
     journal,
+    pendentes,
   };
 }
 
