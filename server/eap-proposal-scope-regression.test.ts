@@ -54,6 +54,76 @@ describe("proposta inicial de EAP sensível ao escopo", () => {
     expect(names).not.toContain("Fundações e contenções");
   });
 
+  it("trata reforma de unidade existente como reforma, sem fundação, estrutura nova nem áreas externas", () => {
+    const proposal = buildInitialEapProposal(
+      {
+        name: "PILOTO — Reforma Apartamento Meireles 92m²",
+        descricao:
+          "Reforma de apartamento de 92 m² em edifício existente, 3 quartos, 2 banheiros, sala e cozinha. " +
+          "Inclui demolição de alvenarias internas, revisão das instalações hidráulicas e elétricas, troca de " +
+          "revestimentos de piso e parede, forro de gesso, pintura, esquadrias de alumínio e mobiliário fixo da " +
+          "cozinha. Não inclui fachada, área comum do condomínio nem estrutura. Prazo previsto de 4 meses.",
+        tipoDeObra: "reforma",
+      },
+      false
+    );
+
+    const nomes = proposal.nodes.map(node => node.name);
+    // O erro que originou este teste: "apartamento" fazia o gerador usar o
+    // modelo de construção nova e propor fundação/estrutura para uma reforma.
+    expect(nomes).not.toContain("Fundações e contenções");
+    expect(nomes).not.toContain("Estrutura de concreto");
+    expect(nomes).not.toContain("Áreas externas e urbanização");
+    expect(nomes).not.toContain("Cobertura");
+
+    expect(nomes).toEqual(
+      expect.arrayContaining([
+        "Demolições e remoções",
+        "Instalações hidrossanitárias",
+        "Instalações elétricas",
+        "Vedações, forros e gesso",
+        "Revestimentos",
+        "Esquadrias e mobiliário fixo",
+        "Pintura e acabamentos finais",
+        "Limpeza, testes e entrega",
+      ])
+    );
+
+    // A proposta de reforma desce até atividade (folha), não para em macrofase.
+    const fases = proposal.nodes.filter(node => node.parentCode === "1");
+    const atividades = proposal.nodes.filter(node => (node.code ?? "").split(".").length === 3);
+    expect(fases).toHaveLength(9);
+    expect(atividades).toHaveLength(20);
+    expect(proposal.nodes).toHaveLength(30);
+    for (const atividade of atividades) {
+      expect(proposal.nodes.some(node => node.code === atividade.parentCode)).toBe(true);
+      expect(atividade.nodeType).toBe("entrega");
+    }
+
+    expect(proposal.basis.join(" ")).toContain("reforma");
+    expect(proposal.basis.join(" ")).toContain("estrutura");
+    expect(proposal.validation?.issues.map(item => item.code)).toContain(
+      "eap_estrutura_base_por_tipologia"
+    );
+  });
+
+  it("remove a fase quando o escopo exclui explicitamente aquele serviço", () => {
+    const proposal = buildInitialEapProposal(
+      {
+        name: "Reforma de sala comercial",
+        descricao:
+          "Reforma de sala comercial com demolição de divisórias, instalações elétricas e forro. Não inclui pintura.",
+        tipoDeObra: "reforma",
+      },
+      false
+    );
+
+    const nomes = proposal.nodes.map(node => node.name);
+    expect(nomes).toContain("Demolições e remoções");
+    expect(nomes).not.toContain("Pintura e acabamentos finais");
+    expect(nomes).not.toContain("Preparação de superfícies e pintura");
+  });
+
   it("não cria proposta inicial quando a obra já possui EAP", () => {
     const proposal = buildInitialEapProposal(
       {
