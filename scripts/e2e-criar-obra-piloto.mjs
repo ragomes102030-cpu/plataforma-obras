@@ -12,6 +12,7 @@
  * Opcionais:
  *   E2E_BASE_URL   (default https://plataforma-obras.dockhosting.dev)
  *   E2E_HEADLESS=1 (default: janela visivel, para o login manual no GitHub)
+ *   E2E_PROJECT_ID=24 reaproveita uma obra existente (nao cria outra) e abre a aba EAP
  *
  * O login e manual na primeira vez; o cookie fica em .playwright/auth.json.
  */
@@ -95,9 +96,14 @@ try {
   await page.goto(`${BASE}/obras`, { waitUntil: "domcontentloaded", timeout: 60000 });
 
   const novaObra = page.getByRole("button", { name: /Nova obra/i }).first();
-  const precisaLogin = !(await novaObra.isVisible().catch(() => false));
+  // A pagina hidrata depois do domcontentloaded: espera o app aparecer antes de
+  // concluir que falta login (senao o E2E tenta logar com a sessao ja valida).
+  const appPronto = await novaObra
+    .waitFor({ timeout: 20000 })
+    .then(() => true)
+    .catch(() => false);
 
-  if (precisaLogin) {
+  if (!appPronto) {
     passo("login necessario", "aguardando login manual na janela aberta");
     await page.evaluate(() => {
       const aviso = document.createElement("div");
@@ -138,6 +144,12 @@ try {
     await page.goto(`${BASE}/obra/${projetoExistente}`, { waitUntil: "domcontentloaded" });
     relatorio.obraId = projetoExistente;
     passo("obra existente aberta", `id=${projetoExistente}`);
+
+    // A obra existente abre na Visao geral; a aba EAP fica na barra lateral.
+    const abaEap = page.getByRole("button", { name: /^EAP$/ });
+    await abaEap.waitFor({ timeout: 45000 });
+    await abaEap.click();
+    passo("aba EAP selecionada");
   } else {
     await page.getByRole("button", { name: /Nova obra/i }).first().click();
     await page.getByRole("dialog").waitFor({ timeout: 15000 });
@@ -164,17 +176,26 @@ try {
   await gerar.waitFor({ timeout: 60000 });
   passo("aba EAP aberta");
 
+  // A tela mostra a proposta ANTERIOR enquanto a nova e gerada (com um selo
+  // "Montando estrutura-base..."). Medir ali captura dado velho: espera a
+  // resposta do servidor e o fim do processamento antes de ler a tela.
+  const inicio = Date.now();
+  const resposta = page
+    .waitForResponse(r => r.url().includes("analisarEapComArquimedes"), { timeout: 240000 })
+    .catch(() => null);
   await gerar.click();
   passo("proposta solicitada", "aguardando o agente (ate 4 min)");
 
-  const inicio = Date.now();
-  await Promise.race([
-    page.getByText(/Estrutura analítica proposta/i).waitFor({ timeout: 240000 }),
-    page.getByText(/Não foi possível gerar a proposta/i).waitFor({ timeout: 240000 }),
-  ]).catch(() => passo("timeout", "nem proposta nem erro apareceram em 4 min"));
+  const respostaProposta = await resposta;
+  relatorio.httpProposta = respostaProposta?.status() ?? null;
+  await page
+    .getByText(/Montando estrutura-base/i)
+    .waitFor({ state: "hidden", timeout: 240000 })
+    .catch(() => passo("aviso", "selo de processamento nao sumiu em 4 min"));
   relatorio.duracaoPropostaMs = Date.now() - inicio;
 
-  await page.waitForTimeout(1500);
+  await page.getByText(/Estrutura analítica proposta/i).waitFor({ timeout: 60000 }).catch(() => null);
+  await page.waitForTimeout(1200);
   await screenshot("03-resultado");
 
   relatorio.textoFinal = await page.locator("body").innerText().catch(() => null);
