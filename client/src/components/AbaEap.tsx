@@ -734,7 +734,12 @@ function EapVazia({ projetoId }: { projetoId: number }) {
   const [tipo, setTipo] = useState<"edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos">("edificio");
   const [pendenciasAbertas, setPendenciasAbertas] = useState(true);
 
-  const proposal = analisar.data?.proposal ?? revisaoArquimedes.data?.proposal;
+  // Enquanto uma nova proposta é gerada, a anterior sai da tela: manter a
+  // árvore antiga visível ao lado de "Montando..." faz o engenheiro revisar
+  // um escopo que não corresponde ao que está sendo calculado agora.
+  const proposal = analisar.isPending
+    ? undefined
+    : (analisar.data?.proposal ?? revisaoArquimedes.data?.proposal);
   const proposalStats = useMemo(() => {
     if (!proposal) {
       return { creates: 0, updates: 0, moves: 0, removes: 0, roots: 0 };

@@ -56,6 +56,13 @@ describe("a EAP vazia prioriza a estrutura-base revisável", () => {
     expect(abaEap).toMatch(/Montar manualmente/);
     expect(abaEap).toMatch(/createWbsNode/);
   });
+
+  it("não exibe a proposta anterior enquanto gera a nova", () => {
+    // A proposta fica gravada no banco; se a tela continuar mostrando a versão
+    // antiga durante o processamento, o engenheiro revisa escopo vencido.
+    expect(abaEap).toMatch(/analisar\.isPending\s*\n?\s*\?\s*undefined/);
+    expect(abaEap).toMatch(/Montando a estrutura-base/);
+  });
 });
 
 describe("a ausência de base é visível e diz o caminho", () => {

@@ -1,0 +1,16 @@
+# Mantem o working tree igual ao CI (Linux) tambem no Windows.
+# Sem isso, um checkout com core.autocrlf=true grava CRLF em .mjs e o Vite
+# falha ao transformar modulos importados por testes (ex. scripts/check-node.mjs).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+*.pdf binary
+*.zip binary
