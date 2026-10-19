@@ -114,9 +114,11 @@ O DockHosting roda **Nixpacks** com as configuracoes da aba *Build Configuration
 (Install Command / Build Command / Output Directory) e sobe pelo *Start Command*
 da aba de runtime. Os comandos efetivos hoje:
 
-- Build: Nixpacks, `pnpm i --frozen-lockfile` + `pnpm run build`
-- Start: `npm start`
-- Porta: autodetectada
+- Build: Nixpacks, `nixpacks.toml` manda no setup/install/build (`pnpm install
+  --frozen-lockfile` + `pnpm run build`)
+- Start: `npm start` (duas vezes: `[start] cmd` do `nixpacks.toml` e o Start
+  Command do painel; os dois apontam para o mesmo lugar de proposito)
+- Porta: autodetectada (`PORT`, servidor em `0.0.0.0`)
 
 Nao existe seletor de "Build Pack" no painel, entao nao ha como pedir Dockerfile:
 **o Nixpacks e o caminho real** e o `Dockerfile` e um caminho alternativo (build
@@ -140,6 +142,32 @@ build voltar a falar de Node 18, o `engines` foi perdido.
 `pnpm.onlyBuiltDependencies` (`esbuild`, `@tailwindcss/oxide`) existe pelo mesmo
 motivo: o pnpm 10 bloqueia scripts de pos-instalacao por padrao e o build perde
 os binarios nativos.
+
+### `nixpacks.toml`: tres regras
+
+O arquivo assume setup/install/build/start do plano. Se ele estiver errado, o
+build morre em segundos com um erro que **nao** aponta para ele. As regras:
+
+1. **So campos que existem no schema**: `nixPkgs`, `aptPkgs`, `cmds` e
+   `[start] cmd`. Nada de `paths` ou `cacheDirectories`: campo desconhecido faz o
+   Nixpacks recusar o arquivo inteiro.
+2. **So nomes canonicos de pacote do nixpkgs** (`nodejs_22`, `openssl`, `curl`).
+   O alias antigo com hifen nao existe: `pnpm-10_x` morreu com
+   `error: attribute 'pnpm-10_x' not found` no `nix-env -iA`, **antes** de
+   instalar qualquer coisa (o nixpkgs expoe `pnpm_10`, mas nao precisamos dele —
+   ver regra 3).
+3. **O pnpm vem do npm**, na versao exata do `packageManager`
+   (`npm install -g pnpm@10.4.1`), e nao do `corepack enable`. O corepack baixava
+   o pnpm em tempo de instalacao e renovava o shim a cada release: mais uma
+   dependencia de rede no meio do build.
+
+O primeiro comando do install e `node scripts/check-node.mjs`, que falha na
+primeira linha dizendo a versao de Node que realmente chegou. Sem ele, o Node 18
+so aparecia tres minutos depois como erro do Vite/oxide.
+
+`server/build-plan.test.ts` trava essas decisoes (nome canonico, `pnpm@` igual ao
+`packageManager`, ausencia de `corepack`, `[start] cmd = "npm start"`). Se o
+build quebrar por causa deste arquivo, o teste quebrou primeiro.
 
 ### A cadeia de boot mora em `scripts.start`
 

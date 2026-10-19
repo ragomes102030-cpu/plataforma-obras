@@ -3,21 +3,33 @@
 # build morre no Vite 7 ("Vite requires Node.js 20.19+ or 22.12+") e, logo
 # depois, no binario nativo do @tailwindcss/oxide ("Cannot find native binding").
 #
-# `engines.node` no package.json ja pede 22.x, mas o plano do Nixpacks e gerado
-# antes de o repositorio ser interpretado dessa forma em todas as versoes. Aqui
-# a versao fica fixa, sem depender de deteccao.
+# Tres regras para nao quebrar o build de novo:
 #
-# Os comandos abaixo reproduzem o plano que o proprio Nixpacks gerou no log do
-# deploy de 16/10/2026, trocando apenas nodejs_18 por nodejs_22.
+#  1. So usar campos do schema do Nixpacks que existem: nixPkgs, aptPkgs, cmds e
+#     [start] cmd. Nada de "paths"/"cacheDirectories" — se o schema nao conhecer
+#     o campo, o Nixpacks recusa o arquivo e o build nem comeca.
+#  2. So usar nomes de pacote na forma canonica do nixpkgs (`nodejs_22`). O alias
+#     antigo com hifen (`pnpm-10_x`) nao existe no nixpkgs: `nix-env -iA` falha
+#     com "attribute not found" e o build morre no setup. O nixpkgs expoe
+#     `pnpm_10`, mas a versao vem do `packageManager` do package.json, nao do nix
+#     (ver item 3), entao aqui nem aparece.
+#  3. Nao depender do corepack para o pnpm: instalamos pelo npm na versao exata
+#     do `packageManager`. `corepack enable` renovava a assinatura do shim a
+#     cada release e era mais um ponto de falha na rede.
+#
+# O `engines.node: 22.x` do package.json tambem pede Node 22; aqui fica fixo para
+# nao depender da deteccao do plano.
 
 [phases.setup]
-nixPkgs = ["nodejs_22", "pnpm-10_x", "openssl"]
-aptPkgs = ["curl", "wget"]
+nixPkgs = ["nodejs_22", "openssl"]
+aptPkgs = ["curl"]
 
 [phases.install]
-cmds = ["npm install -g corepack@0.24.1 && corepack enable", "pnpm i --frozen-lockfile"]
-cacheDirectories = ["/root/.local/share/pnpm/store/v3"]
-paths = ["/app/node_modules/.bin"]
+cmds = [
+  "node scripts/check-node.mjs",
+  "npm install -g pnpm@10.4.1",
+  "pnpm install --frozen-lockfile",
+]
 
 [phases.build]
 cmds = ["pnpm run build"]
