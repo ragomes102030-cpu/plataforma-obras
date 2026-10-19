@@ -103,33 +103,62 @@ async function main() {
     }
   }
 
+  // A derivação do cronograma já aconteceu na Aurora: a versão aprovada (v3) e o
+  // fork da v4 têm atividade para cada folha. Proibir atividade, como antes,
+  // passou a contrariar o próprio produto. O que se guarda agora é a coerência
+  // da derivação: uma atividade por folha da EAP daquela versão, com duração
+  // positiva.
   const activities = await client.query(
     `
-      SELECT count(*)::int AS total,
-             count(*) FILTER (WHERE "durationDays" IS NULL OR "durationDays" <= 0)::int AS invalid_duration
-      FROM schedule_activities
-      WHERE "projectId" = $1
+      SELECT a."versionId"::int AS version_id,
+             count(*)::int AS total,
+             count(*) FILTER (WHERE a."durationDays" IS NULL OR a."durationDays" <= 0)::int AS invalid_duration,
+             (
+               SELECT count(*)::int
+               FROM wbs_nodes n
+               WHERE n."versionId" = a."versionId"
+                 AND NOT EXISTS (SELECT 1 FROM wbs_nodes f WHERE f."parentId" = n.id)
+             ) AS leaves_of_version
+      FROM schedule_activities a
+      WHERE a."projectId" = $1
+      GROUP BY a."versionId"
+      ORDER BY a."versionId"
     `,
     [projectId]
   );
 
-  assert(
-    Number(activities.rows[0].total) === 0,
-    `Aurora não deve possuir atividades antes da etapa formal de derivação; encontrou ${activities.rows[0].total}.`
-  );
+  for (const row of activities.rows) {
+    assert(
+      Number(row.invalid_duration) === 0,
+      `Versão ${row.version_id} tem ${row.invalid_duration} atividades sem duração positiva.`
+    );
+    assert(
+      Number(row.total) === Number(row.leaves_of_version),
+      `Versão ${row.version_id} tem ${row.total} atividades para ${row.leaves_of_version} folhas de EAP.`
+    );
+  }
 
+  // Dependência não pode ligar uma atividade a ela mesma nem atravessar versões.
   const dependencies = await client.query(
     `
-      SELECT count(*)::int AS total
-      FROM schedule_dependencies
-      WHERE "projectId" = $1
+      SELECT count(*)::int AS total,
+             count(*) FILTER (WHERE d."predecessorId" = d."successorId")::int AS self_loop,
+             count(*) FILTER (WHERE p."versionId" <> s."versionId")::int AS cross_version
+      FROM schedule_dependencies d
+      JOIN schedule_activities p ON p.id = d."predecessorId"
+      JOIN schedule_activities s ON s.id = d."successorId"
+      WHERE d."projectId" = $1
     `,
     [projectId]
   );
 
   assert(
-    Number(dependencies.rows[0].total) === 0,
-    `Aurora não deve possuir dependências antes da etapa formal de derivação; encontrou ${dependencies.rows[0].total}.`
+    Number(dependencies.rows[0].self_loop) === 0,
+    `Existem ${dependencies.rows[0].self_loop} dependências de uma atividade com ela mesma.`
+  );
+  assert(
+    Number(dependencies.rows[0].cross_version) === 0,
+    `Existem ${dependencies.rows[0].cross_version} dependências ligando versões diferentes da EAP.`
   );
 
   console.log(JSON.stringify({
@@ -144,8 +173,9 @@ async function main() {
     orphans: orphans.length,
     invalidLevels: invalidLevels.length,
     structuralBlockers: 0,
-    activitiesBeforeScheduling: Number(activities.rows[0].total),
-    dependenciesBeforeScheduling: Number(dependencies.rows[0].total),
+    derivedActivities: Number(activities.rows.reduce((sum, row) => sum + Number(row.total), 0)),
+    derivedDependencies: Number(dependencies.rows[0].total),
+    versionsWithSchedule: activities.rows.map(row => Number(row.version_id)),
   }, null, 2));
 }
 
