@@ -1,10 +1,9 @@
 name: Playwright Read-Only QA
 
 on:
+  # Só roda quando alguém pede ou empurra para um branch de QA. Fica fora de PR:
+  # smoke autenticado contra produção em todo PR vira check instável.
   workflow_dispatch:
-  pull_request:
-    branches:
-      - develop
   push:
     branches:
       - qa/playwright-*
@@ -26,7 +25,7 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - name: Public + authenticated read-only smoke
         env:
-          PLAYWRIGHT_BASE_URL: https://plataforma-obras-api.onrender.com
+          PLAYWRIGHT_BASE_URL: https://plataforma-obras.dockhosting.dev
           PLAYWRIGHT_STORAGE_STATE: .playwright/auth.json
           AUTH_STATE_B64: ${{ secrets.ARQUIMEDES_PLAYWRIGHT_AUTH_B64 }}
         run: |
