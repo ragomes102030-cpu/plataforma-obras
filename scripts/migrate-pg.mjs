@@ -242,6 +242,18 @@ if (isFresh) {
 
 if (supabaseOnly) {
   await sincronizarSequenciasDeIdentidade(conn);
+  // Aqui o DDL nunca e aplicado: o app conecta como `arquimedes_app` (read-only,
+  // sem permissao de DDL). Antes este caminho saia com codigo 0 em silencio, e
+  // uma migration nova ficaria no repo sem estar no banco, sem ninguem reclamar.
+  // Quem barra isso agora e o audit de schema, que roda DEPOIS deste script no
+  // CMD do Dockerfile (`migrate && audit && start`) e compara o journal com
+  // `__drizzle_migrations`. O aviso aqui existe para o log dizer o motivo.
+  console.log(
+    pending.length === 0
+      ? "[migrate] USE_SUPABASE=1: nenhuma migration pendente (DDL nao se aplica aqui)."
+      : `[migrate] USE_SUPABASE=1: ${pending.length} migration(oes) PENDENTE(S) — ` +
+          "o deploy nao aplica DDL e o audit de schema a seguir vai falhar."
+  );
   await conn.end();
   process.exit(0);
 }
