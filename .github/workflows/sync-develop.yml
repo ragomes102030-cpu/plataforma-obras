@@ -1,0 +1,65 @@
+name: sync-develop
+
+# Regra do repositório: `develop` é **espelho** de `main`, não branch de trabalho.
+#
+# O problema que isto resolve: em 15/10 a `main` estava 1.258 commits atrás da
+# `develop` e o deploy puxava da `main` — ou seja, produção rodava código velho
+# enquanto o time achava que tinha feito merge. Ver
+# docs/SINCRONIZACAO-MAIN-DEVELOP.md.
+#
+# A partir de agora, todo push em `main` ajusta a `develop` no mesmo commit, e a
+# divergência é impossível de passar despercebida: se a `develop` tiver commit
+# que a `main` não tem, este job FALHA em vez de sobrescrever. Nada aqui usa
+# `--force`: só fast-forward, então trabalho de ninguém é apagado.
+#
+# Consequência aceita: a `develop` não serve para desenvolver. PR é sempre para
+# `main`, de uma branch de feature.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-develop
+  cancel-in-progress: false
+
+jobs:
+  espelhar:
+    name: develop = main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Recusar se develop tiver commit que main nao tem
+        run: |
+          git fetch origin main develop --force
+          ADIANTE=$(git rev-list --count origin/main..origin/develop)
+          if [ "$ADIANTE" -gt 0 ]; then
+            echo "::error::develop tem $ADIANTE commit(s) que nao existem em main. Nao vou sobrescrever."
+            git log --oneline origin/main..origin/develop
+            echo "Abra um PR de develop para main, ou mova o trabalho para uma branch de feature."
+            exit 1
+          fi
+          echo "develop nao tem nada que main ja nao tenha."
+
+      - name: Fast-forward develop para main
+        run: git push origin origin/main:refs/heads/develop
+
+      - name: Confirmar que ficaram iguais
+        run: |
+          git fetch origin main develop --force
+          MAIN=$(git rev-parse origin/main)
+          DEV=$(git rev-parse origin/develop)
+          if [ "$MAIN" != "$DEV" ]; then
+            echo "::error::develop (${DEV:0:7}) != main (${MAIN:0:7})"
+            exit 1
+          fi
+          echo "develop = main = ${MAIN:0:7}"
