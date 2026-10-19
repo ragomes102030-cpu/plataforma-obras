@@ -45,6 +45,7 @@ import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rem
 import { loadArquimedesBrainBootstrap, loadArquimedesOperationalSkills } from "./agent/core/brain-context";
 import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
 import { resolveLocalEapToolFallback } from "./agent/core/local-eap-tool-fallback";
+import { searchWebEvidence } from "./web-research";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -466,6 +467,41 @@ const MEMORY_WRITE_TOOL: LlmTool = {
         confidence: { type: "string", enum: ["high", "medium", "low"] },
       },
       required: ["category", "memoryKey", "value", "sourceType"],
+      additionalProperties: false,
+    },
+  },
+};
+
+const WEB_RESEARCH_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "research_external",
+    description:
+      "Pesquisa fontes externas para reduzir lacunas técnicas da análise. Use quando o conhecimento da obra e das ferramentas locais não forem suficientes para concluir com segurança. Pode consultar boas práticas, normas e referências técnicas públicas. A pesquisa é somente leitura: nunca trate uma fonte externa como verdade da obra, não invente dados e não altere a EAP. Diferencie claramente fatos da obra, referências externas e inferências.",
+    parameters: {
+      type: "object",
+      properties: {
+        queries: {
+          type: "array",
+          minItems: 1,
+          maxItems: 4,
+          uniqueItems: true,
+          items: {
+            type: "string",
+            minLength: 8,
+            maxLength: 500,
+          },
+          description:
+            "Consultas técnicas específicas que respondem a uma lacuna identificada. Prefira consultas independentes e objetivas.",
+        },
+        maxResults: {
+          type: "integer",
+          minimum: 1,
+          maximum: 12,
+          description: "Máximo total de fontes retornadas.",
+        },
+      },
+      required: ["queries"],
       additionalProperties: false,
     },
   },
@@ -1060,7 +1096,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1124,6 +1160,9 @@ function buildSystem(
     "Responda diretamente ao que foi perguntado. Não despeje o contexto da obra, métricas ou diagnósticos que o usuário não pediu.",
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
     "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",
+    "Você pode pesquisar fontes externas quando isso ajudar a completar uma análise técnica, especialmente para boas práticas de EAP/WBS, decomposição, interfaces de escopo, métodos construtivos, critérios de aceitação e referências normativas. A pesquisa externa é uma fonte de evidência complementar, não um substituto para os dados da obra.",
+    "Não fique preso aos MCPs. Se um MCP estiver indisponível, use dados locais e, quando útil, pesquisa externa. Se uma fonte externa divergir dos dados da obra, preserve o dado da obra e apresente a divergência para decisão do engenheiro.",
+    "Ao usar pesquisa externa, cite no texto da conclusão o título/domínio da fonte quando relevante e classifique cada conclusão como fato da obra, referência externa ou inferência. Não invente conteúdo de uma fonte nem transforme recomendação genérica em requisito contratual da obra.",
     "Quando houver contagens locais da EAP, mas faltar leitura dos nomes, agrupamentos ou folhas, use consultar_eap_local antes de declarar o escopo ou a decomposição semântica como não verificáveis. Prefira consultas direcionadas e amostragem representativa; só peça muitos nós quando isso for realmente necessário para concluir a análise.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
     "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente.",
@@ -1282,6 +1321,8 @@ export async function runProjectOrchestrator(
   const gapChecksExecuted = new Set<string>();
   let gapAnalysisCalls = 0;
   const MAX_GAP_ANALYSES = 2;
+  let externalResearchCalls = 0;
+  const MAX_EXTERNAL_RESEARCH_CALLS = 3;
   const memoryContext = options.userId
     ? await buildArquimedesMemoryContext(options.userId, options.localProjectId)
     : "Memória persistente não carregada: usuário não identificado.";
@@ -1900,6 +1941,74 @@ export async function runProjectOrchestrator(
             status: "error",
           });
           return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "research_external") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+
+        if (externalResearchCalls >= MAX_EXTERNAL_RESEARCH_CALLS) {
+          const value = {
+            status: "limite_atingido",
+            mensagem:
+              "O orçamento de pesquisa externa desta análise foi atingido. Consolide as fontes já consultadas e não repita a pesquisa sem uma lacuna nova e material.",
+          };
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "success", durationMs: Date.now() - startedAt,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify(value) };
+        }
+
+        externalResearchCalls += 1;
+        const queries = Array.isArray(rawArgs.queries)
+          ? rawArgs.queries
+              .filter((value): value is string => typeof value === "string")
+              .map(value => value.trim())
+              .filter(Boolean)
+              .slice(0, 4)
+          : [];
+        const maxResults = Math.min(Math.max(Number(rawArgs.maxResults ?? 8), 1), 12);
+
+        try {
+          if (!queries.length) throw new Error("Informe pelo menos uma consulta técnica.");
+          const evidence = await searchWebEvidence(queries, maxResults);
+          const value = {
+            status: evidence.length ? "ok" : "sem_resultados",
+            consultas: queries,
+            fontes: evidence.map(item => ({
+              title: item.title,
+              url: item.url,
+              snippet: item.snippet,
+              sourceType: item.sourceType,
+              query: item.query,
+            })),
+            instrucao:
+              "Use estas fontes como evidência externa complementar. Não trate seu conteúdo como fato específico da obra sem confirmação. Se não houver resultados, prossiga com as demais evidências disponíveis e informe a limitação.",
+          };
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "success", durationMs: Date.now() - startedAt,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify(value).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({
+            taskId, iteration, event: "tool_call", domain: "runtime", toolName,
+            status: "error", durationMs: Date.now() - startedAt, error: message,
+          });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return {
+            ok: true,
+            content: JSON.stringify({
+              status: "indisponivel",
+              mensagem: message,
+              instrucao: "Continue a análise com as fontes locais e MCPs disponíveis. Não invente evidência externa.",
+            }),
+          };
         }
       }
 
