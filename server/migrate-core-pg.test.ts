@@ -218,7 +218,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
     ).toEqual([]);
   });
 
-  it("reconhece as 33 tabelas, os 32 tipos e as 23 triggers", () => {
+  it("reconhece as 37 tabelas, os 32 tipos e as 25 triggers", () => {
     const conta = { table: 0, type: 0, trigger: 0 };
     for (const arquivo of arquivos) {
       for (const stmt of statementsDe(arquivo)) {
@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 36, type: 32, trigger: 25 });
+    expect(conta).toEqual({ table: 37, type: 32, trigger: 25 });
   });
 });
 
@@ -305,7 +305,7 @@ describe("aplicarMigracoes num banco vazio", () => {
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
       // 33 do schema + a de registro.
-      expect(tabelas.rows[0]!.n).toBe(37);
+      expect(tabelas.rows[0]!.n).toBe(38);
     } finally {
       await pg.close();
     }
