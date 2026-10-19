@@ -36,8 +36,10 @@ jobs:
   # subir em producao — ou, pior, como deploy verde com banco fora de sincronia.
   #
   # `USE_SUPABASE=1` porque em producao e esse o caminho de conexao (ver
-  # scripts/audit-schema-pg.mjs:40, que troca o host direto pelo pooler). Sem o
-  # secret o job e pulado em vez de falhar.
+  # scripts/audit-schema-pg.mjs:40, que troca o host direto pelo pooler).
+  # Sem o secret o job FALHA de proposito: auditoria que passa verde sem rodar
+  # esconde divergencia de schema (foi exatamente o que aconteceu no workflow
+  # da Aurora antes do PR #125).
   schema-audit:
     runs-on: ubuntu-latest
     env:
@@ -60,6 +62,8 @@ jobs:
       - name: Auditar schema contra o Supabase
         if: ${{ env.SUPABASE_DB_URL != '' }}
         run: pnpm db:audit
-      - name: Auditoria nao executada sem o secret
+      - name: Exigir o segredo do banco
         if: ${{ env.SUPABASE_DB_URL == '' }}
-        run: echo "SUPABASE_DB_URL ausente; a auditoria de schema nao rodou."
+        run: |
+          echo "::error::SUPABASE_DB_URL ausente: a auditoria de schema nao pode ser pulada em silencio."
+          exit 1

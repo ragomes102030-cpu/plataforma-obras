@@ -1108,6 +1108,42 @@ export const calendarExceptions = pgTable(
   ]
 );
 
+/**
+ * Registro de erros de servidor (5xx) para observabilidade minima.
+ *
+ * Nao substitui um Sentry: nao tem source map, breadcrumb nem agrupamento
+ * sofisticado. Existe para responder tres perguntas que hoje ninguem responde
+ * sem abrir o painel da DockHosting: (1) o que quebrou, (2) onde quebrou e
+ * (3) desde quando. O `fingerprint` agrupa ocorrencias iguais e e o que
+ * permite alertar uma vez por janela em vez de uma vez por requisicao.
+ */
+export const errorEvents = pgTable(
+  "error_events",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+    origem: varchar("origem", { length: 16 }).notNull(),
+    rota: varchar("rota", { length: 300 }).notNull(),
+    metodo: varchar("metodo", { length: 10 }),
+    status: integer("status").notNull(),
+    codigo: varchar("codigo", { length: 80 }),
+    mensagem: text("mensagem").notNull(),
+    stack: text("stack"),
+    userId: integer("userId"),
+    commitSha: varchar("commitSha", { length: 40 }),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("error_events_createdAt_idx").on(table.createdAt),
+    index("error_events_fingerprint_createdAt_idx").on(
+      table.fingerprint,
+      table.createdAt
+    ),
+  ]
+);
+
+export type ErrorEvent = typeof errorEvents.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;

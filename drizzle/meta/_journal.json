@@ -90,6 +90,13 @@
       "when": 1790834400000,
       "tag": "0012_project_cub_bdi_declarados",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792430223034,
+      "tag": "0013_error_events",
+      "breakpoints": true
     }
   ],
   "version": "7",

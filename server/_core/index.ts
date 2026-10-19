@@ -7,7 +7,7 @@ import { createServer } from "http";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerGitHubOAuthRoutes } from "./github-oauth";
 import { registerStorageProxy } from "./storageProxy";
-import { sql } from "drizzle-orm";
+import { count, desc, gte, sql } from "drizzle-orm";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
 import { ENV } from "./env";
@@ -15,7 +15,8 @@ import { origemDeploy } from "./deploy-info";
 import { createContext } from "./context";
 import { serveStatic } from "./serve-static";
 import { eq } from "drizzle-orm";
-import { projects, projectPlanVersions, projectMcpIntegrations, users } from "../../drizzle/schema";
+import { errorEvents, projects, projectPlanVersions, projectMcpIntegrations, users } from "../../drizzle/schema";
+import { registrarErro } from "../observability/error-tracker";
 import { runEapQaSuite } from "../qa/eap-qa-suite";
 import { runEapValidatorQaSuite } from "../qa/eap-validator-qa-suite";
 import { runEapValidatorQaSuiteV2 } from "../qa/eap-validator-qa-suite-v2";
@@ -220,6 +221,49 @@ async function startServer() {
     }
   });
 
+  // Observabilidade de erros 5xx sem dependencia de SaaS. Protegido por
+  // OPS_TOKEN; sem a variavel o endpoint responde 404 (nao revela que existe).
+  app.get("/internal/ops/errors", async (req, res) => {
+    const expected = process.env.OPS_TOKEN?.trim();
+    const supplied = typeof req.query.token === "string" ? req.query.token.trim() : "";
+    if (!expected || !supplied || supplied !== expected) { res.status(404).json({ ok: false }); return; }
+    const db = await getDb();
+    if (!db) { res.status(503).json({ ok: false, error: "Banco de dados indisponivel." }); return; }
+    try {
+      const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const ultimos = await db
+        .select()
+        .from(errorEvents)
+        .orderBy(desc(errorEvents.createdAt))
+        .limit(50);
+      const grupos = await db
+        .select({
+          fingerprint: errorEvents.fingerprint,
+          rota: errorEvents.rota,
+          status: errorEvents.status,
+          codigo: errorEvents.codigo,
+          mensagem: errorEvents.mensagem,
+          ocorrencias: count(),
+          ultimaEm: sql<string>`max(${errorEvents.createdAt})`,
+        })
+        .from(errorEvents)
+        .where(gte(errorEvents.createdAt, desde))
+        .groupBy(
+          errorEvents.fingerprint,
+          errorEvents.rota,
+          errorEvents.status,
+          errorEvents.codigo,
+          errorEvents.mensagem
+        )
+        .orderBy(desc(count()))
+        .limit(20);
+      res.status(200).json({ ok: true, janelaHoras: 24, grupos, ultimos });
+    } catch (error) {
+      console.error("[ops] falha ao ler error_events:", error);
+      res.status(500).json({ ok: false, error: "Falha ao ler os erros." });
+    }
+  });
+
   app.get("/internal/qa/eap", async (req, res) => {
     const expected = process.env.QA_RUNNER_SECRET?.trim();
     const supplied = typeof req.query.token === "string" ? req.query.token.trim() : "";
@@ -270,6 +314,20 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      onError({ error, path, ctx }) {
+        // O adapter devolve erro de procedure como JSON 200; sem este gancho,
+        // uma procedure quebrada nao aparecia em lugar nenhum. So 5xx: 4xx e
+        // fluxo esperado (validacao, nao autorizado) e viraria ruido.
+        if (error.code !== "INTERNAL_SERVER_ERROR") return;
+        registrarErro({
+          origem: "trpc",
+          rota: `/api/trpc/${path ?? "desconhecido"}`,
+          codigo: error.code,
+          mensagem: error.message,
+          stack: error.stack,
+          userId: ctx?.user?.id ?? null,
+        });
+      },
     })
   );
   // development mode uses Vite, production mode uses static files
@@ -283,6 +341,48 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+
+  // Erros do Express (JSON malformado, upload, rota que chama next(err)).
+  // Fica depois de tudo para capturar o que escapou do tRPC e do estatico.
+  app.use(
+    (
+      err: unknown,
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ) => {
+      const e = err as {
+        status?: number;
+        statusCode?: number;
+        type?: string;
+        message?: string;
+        stack?: string;
+      };
+      const status = Number(e.status ?? e.statusCode ?? 500);
+      if (status >= 500) {
+        registrarErro({
+          origem: "http",
+          rota: req.originalUrl,
+          metodo: req.method,
+          status,
+          codigo: e.type ?? null,
+          mensagem: e.message ?? "Erro interno sem mensagem",
+          stack: e.stack ?? null,
+          userId: (req as express.Request & { user?: { id?: number } }).user?.id ?? null,
+        });
+      }
+      if (res.headersSent) {
+        next(err);
+        return;
+      }
+      res.status(status).json({
+        error:
+          status >= 500
+            ? "Erro interno do servidor."
+            : e.message ?? "Requisicao invalida.",
+      });
+    }
+  );
 
   const preferredPort = parseInt(process.env.PORT || "3000");
 
