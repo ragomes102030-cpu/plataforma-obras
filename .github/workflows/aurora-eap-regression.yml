@@ -1,11 +1,15 @@
 name: Aurora EAP Regression
 
 on:
+  # `main` é o branch de verdade desde #117; `develop` é só um espelho atualizado
+  # pelo sync-develop com GITHUB_TOKEN, e push feito por token não dispara
+  # workflow. Sem `main` aqui, esta regressão deixava de rodar sozinha.
   push:
-    branches: [develop]
-  pull_request:
-    branches: [develop]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   aurora-eap:
@@ -31,10 +35,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Aurora EAP regression
-        if: ${{ env.SUPABASE_DB_URL != '' }}
-        run: pnpm test:regression:aurora-eap
-
-      - name: Live regression unavailable without repository secret
+      - name: Exigir o segredo do banco
         if: ${{ env.SUPABASE_DB_URL == '' }}
-        run: echo "SUPABASE_DB_URL ausente; regressão live executada manualmente contra o Supabase no ambiente de QA."
+        run: |
+          echo "::error::SUPABASE_DB_URL ausente. Esta regressão consulta o banco real da Aurora; sem o segredo ela não pode passar em silêncio."
+          exit 1
+
+      - name: Run Aurora EAP regression
+        run: pnpm test:regression:aurora-eap
