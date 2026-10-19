@@ -763,7 +763,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           <div>
             <span className="eap-section-kicker">PLANEJAMENTO · EAP</span>
             <h2>Proposta inicial da estrutura analítica</h2>
-            <p>Pré-planejamento gerado pelo Arquimedes a partir do escopo informado. A estrutura permanece em revisão até decisão do engenheiro.</p>
+            <p>Estrutura-base gerada por regras de tipologia e pelas palavras do escopo. Não é uma análise completa do projeto e permanece em revisão até decisão do engenheiro.</p>
           </div>
         </div>
         <div className="eap-inicial-actions">
@@ -774,7 +774,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
             onClick={() => analisar.mutate({ projectId: projetoId })}
           >
             <Bot size={14} />
-            {analisar.isPending ? "Analisando escopo…" : "Gerar proposta com Arquimedes"}
+            {analisar.isPending ? "Montando estrutura-base…" : "Gerar estrutura-base (modelo)"}
           </button>
           <button
             type="button"
@@ -810,7 +810,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           <div className="eap-inicial-empty-icon"><FileCheck2 size={22} /></div>
           <div>
             <strong>Ainda não existe uma proposta para esta obra.</strong>
-            <p>O Arquimedes usa o escopo informado e o conhecimento profissional de EAP para propor uma estrutura inicial. Nenhum nó será criado até sua decisão.</p>
+            <p>O sistema usa a tipologia e o escopo informado para propor uma estrutura inicial por regras. Nenhum nó será criado até sua decisão.</p>
           </div>
         </div>
       )}
@@ -819,8 +819,8 @@ function EapVazia({ projetoId }: { projetoId: number }) {
         <div className="eap-inicial-loading">
           <div className="eap-inicial-loading-mark"><Bot size={18} /></div>
           <div>
-            <strong>Arquimedes analisando o escopo</strong>
-            <span>Definindo macroestrutura, níveis de decomposição, pacotes de trabalho e informações ainda não confirmadas.</span>
+            <strong>Montando a estrutura-base</strong>
+            <span>Organizando as etapas construtivas compatíveis com a tipologia e as palavras do escopo.</span>
           </div>
         </div>
       )}
@@ -838,9 +838,9 @@ function EapVazia({ projetoId }: { projetoId: number }) {
         <div className="eap-proposta">
           <header className="eap-proposta-head">
             <div>
-              <span className="eap-section-kicker">REVISÃO TÉCNICA · ARQUIMEDES</span>
+              <span className="eap-section-kicker">REVISÃO TÉCNICA · ESTRUTURA-BASE</span>
               <h3>Estrutura analítica proposta</h3>
-              <p>Leitura de engenharia da estrutura sugerida antes de qualquer gravação na EAP da obra.</p>
+              <p>Leitura da estrutura sugerida por regras antes de qualquer gravação na EAP da obra.</p>
             </div>
             <span className="eap-proposta-status"><span /> RASCUNHO · NÃO APLICADA</span>
           </header>
@@ -849,13 +849,13 @@ function EapVazia({ projetoId }: { projetoId: number }) {
             <div><span>NÓS PROPOSTOS</span><strong>{proposalNodes.length}</strong><small>estrutura inicial</small></div>
             <div><span>RAÍZES</span><strong>{proposalStats.roots}</strong><small>blocos principais</small></div>
             <div><span>CRIAÇÕES</span><strong>{proposalStats.creates}</strong><small>novos nós</small></div>
-            <div className={proposal.validation?.valid === false ? "attention" : "ok"}><span>ESTRUTURA</span><strong>{proposal.validation?.valid === false ? "BLOQUEADA" : "OK"}</strong><small>{proposal.validation?.valid === false ? (proposalValidationIssues.filter(item => item.severity === "error").length + " erro(s) estrutural(is)") : "Proposta validada pelo sistema"}</small></div>
+            <div className={proposal.validation?.valid === false ? "attention" : "ok"}><span>ESTRUTURA</span><strong>{proposal.validation?.valid === false ? "BLOQUEADA" : "OK"}</strong><small>{proposal.validation?.valid === false ? (proposalValidationIssues.filter(item => item.severity === "error").length + " erro(s) estrutural(is)") : "Estrutura-base — revise antes de aplicar"}</small></div>
           </div>
 
           <div className="eap-proposta-grid">
             <section className="eap-proposta-card eap-proposta-estrutura">
               <div className="eap-proposta-card-head">
-                <div><Layers3 size={15} /><div><strong>Estrutura proposta</strong><span>Visão resumida da árvore gerada pelo Arquimedes</span></div></div>
+                <div><Layers3 size={15} /><div><strong>Estrutura proposta</strong><span>Visão resumida da árvore gerada por regras</span></div></div>
                 <span>{proposalNodes.length} nós</span>
               </div>
 

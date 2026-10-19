@@ -5,8 +5,9 @@ import { join } from "node:path";
 /**
  * Contrato de criação de obra:
  * a obra nasce com a descrição do cliente e uma versão de plano em rascunho,
- * mas SEM uma EAP genérica pré-preenchida. A primeira estrutura deve ser
- * proposta pelo Arquimedes e revisada pelo engenheiro.
+ * mas SEM uma EAP genérica pré-preenchida. A primeira estrutura é uma
+ * estrutura-base gerada por regras (tipologia + palavras do escopo) e só entra
+ * na obra depois da revisão do engenheiro.
  */
 const router = readFileSync(join("server", "routers.ts"), "utf-8");
 const home = readFileSync(join("client", "src", "pages", "Home.tsx"), "utf-8");
@@ -39,10 +40,10 @@ describe("nova obra começa sem EAP genérica", () => {
   });
 });
 
-describe("a EAP vazia prioriza Arquimedes", () => {
-  it("oferece proposta do Arquimedes antes do template genérico", () => {
+describe("a EAP vazia prioriza a estrutura-base revisável", () => {
+  it("oferece a estrutura-base antes do template genérico", () => {
     expect(abaEap).toMatch(/analisarEapComArquimedes/);
-    expect(abaEap).toMatch(/Gerar proposta com Arquimedes/);
+    expect(abaEap).toMatch(/Gerar estrutura-base \(modelo\)/);
     expect(abaEap).toMatch(/Usar estrutura-base/);
   });
 
