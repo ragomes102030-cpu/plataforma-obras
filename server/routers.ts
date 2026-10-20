@@ -115,6 +115,8 @@ async function requireApprovedEapVersion(
 }
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { persistCpmResult } from "./construction/cpm-persister";
+import { coletarDadosEvms } from "./construction/evm-dados";
+import { computeEvm } from "./construction/evm";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import {
   carregarCalendarioDaObra,
@@ -4818,10 +4820,26 @@ export const appRouter = router({
     evm: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
       .query(async ({ ctx, input }) => {
-        const empty = {
+        // O EVM é um cálculo puro (`construction/evm.ts`) alimentado por uma
+        // leitura (`construction/evm-dados.ts`). Nada da aritmética mora aqui:
+        // o corpo deste procedure tinha cerca de cem linhas e continha os
+        // defeitos A2–A5, que só foram achados quando o cálculo ganhou teste.
+        //
+        // Duas coisas este procedure ainda decide:
+        //   1. `available` — o cliente distingue "sem banco" de "sem baseline",
+        //      e os dois estados têm telas diferentes.
+        //   2. `asOf` — a data de referência é passada adiante, não recalculada,
+        //      para PV e EV nascerem do MESMO instante.
+        const asOf = input.asOf ?? new Date();
+        const semBanco = {
           available: false as const,
-          asOf: input.asOf ?? new Date(),
+          asOf,
+          baselineStatus: "pendente" as const,
+          baselineVersionId: null,
           bac: 0,
+          scopeBac: 0,
+          outOfScopeItems: 0,
+          outOfScopeValue: 0,
           pv: 0,
           ev: 0,
           ac: null as number | null,
@@ -4835,87 +4853,29 @@ export const appRouter = router({
           plannedPct: 0,
           actualPct: 0,
           acLinked: false,
+          costSource: "preco_planejado" as const,
           note: "Banco de dados não configurado.",
         };
         const db = await getDb();
-        if (!db) return empty;
+        if (!db) return semBanco;
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const versions = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber));
-        const active = versions[0];
-        const items = active
-          ? await db.select().from(budgetItems).where(eq(budgetItems.budgetVersionId, active.id))
-          : [];
-        const bac = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
-        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const currentVersion = await getCurrentPlanVersion(input.projectId);
-        const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
-        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
-        const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
-        const actualByActivity = new Map<number, number>();
-        for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
-        const asOf = input.asOf ?? new Date();
-        const start = project?.plannedStart?.getTime() ?? asOf.getTime();
-        const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
-        let weightedPlanned = 0;
-        let weightedActual = 0;
-        let totalPlannedQty = 0;
-        let ac = 0;
-        let acLinked = false;
-        const budgetById = new Map(items.map(item => [item.id, item]));
-        for (const activity of activities) {
-          const plannedQuantity = Number(activity.plannedQuantity ?? 0);
-          if (plannedQuantity <= 0) continue;
-          const actualQuantity = actualByActivity.get(activity.id) ?? 0;
-          const plannedStart = activity.earlyStart ?? activity.startOffset;
-          const plannedProgress = Math.max(0, Math.min(100, ((elapsedDays - plannedStart) / Math.max(1, activity.durationDays)) * 100));
-          const actualProgress = Math.max(0, Math.min(100, (actualQuantity / plannedQuantity) * 100));
-          weightedPlanned += plannedQuantity * plannedProgress;
-          weightedActual += plannedQuantity * actualProgress;
-          totalPlannedQty += plannedQuantity;
-          if (activity.budgetItemId) {
-            const item = budgetById.get(activity.budgetItemId);
-            if (item && Number(item.quantity) > 0) {
-              const unitCost = Number(item.unitPrice) / Number(item.quantity);
-              ac += actualQuantity * unitCost;
-              acLinked = true;
-            }
-          }
-        }
-        const plannedPct = totalPlannedQty ? weightedPlanned / totalPlannedQty : 0;
-        const actualPct = totalPlannedQty ? weightedActual / totalPlannedQty : 0;
-        const pv = bac * (plannedPct / 100);
-        const ev = bac * (actualPct / 100);
-        const spi = pv > 0 ? ev / pv : null;
-        const cpi = acLinked && ac > 0 ? ev / ac : null;
-        const sv = ev - pv;
-        const cv = acLinked ? ev - ac : null;
-        const eac = cpi && cpi > 0 ? bac / cpi : bac > 0 ? bac : null;
-        const vac = eac !== null ? bac - eac : null;
-        const etc = eac !== null ? eac - (acLinked ? ac : ev) : null;
-        const note = !bac
-          ? "Orçamento sem valores — EVM físico (SPI) disponível; custos (CPI/EAC) aguardam preços."
-          : !acLinked
-            ? "CPI/EAC estimados sem custos vinculados às atividades."
-            : null;
-        return {
-          available: true as const,
+        const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const dados = await coletarDadosEvms(
+          db,
+          input.projectId,
           asOf,
-          bac,
-          pv,
-          ev,
-          ac: acLinked ? ac : null,
-          spi: spi === null ? null : Math.round(spi * 1000) / 1000,
-          cpi: cpi === null ? null : Math.round(cpi * 1000) / 1000,
-          sv: Math.round(sv * 100) / 100,
-          cv: cv === null ? null : Math.round(cv * 100) / 100,
-          eac: eac === null ? null : Math.round(eac * 100) / 100,
-          vac: vac === null ? null : Math.round(vac * 100) / 100,
-          etc: etc === null ? null : Math.round(etc * 100) / 100,
-          plannedPct: Math.round(plannedPct * 10) / 10,
-          actualPct: Math.round(actualPct * 10) / 10,
-          acLinked,
-          note,
-        };
+          currentPlanVersionId
+        );
+        const resultado = computeEvm({
+          asOfIso: dados.asOfIso,
+          plannedStartIso: dados.plannedStartIso,
+          calendar: dados.calendar,
+          baseline: dados.baseline,
+          items: dados.items,
+          activities: dados.activities,
+          actualByActivity: dados.actualByActivity,
+        });
+        return { available: true as const, asOf: dados.asOf, ...resultado };
       }),
     scurve: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))

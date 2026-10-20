@@ -114,6 +114,65 @@ export async function carregarCalendarioDaObra(
 }
 
 /**
+ * Funde calendários de vários anos num só.
+ *
+ * `carregarCalendarioDaObra` cobre um ano — os feriados do padrão brasileiro
+ * são calculados por ano. Um cronograma de 14 meses sempre cruza a virada, e
+ * sem os feriados do segundo ano o EVM conta o 1º de janeiro como dia útil:
+ * um dia a mais de PV, sem nenhum erro no caminho.
+ *
+ * O padrão semanal é o mesmo nos dois anos (vem de `work_calendars`), então se
+ * copia o do primeiro. A `origem` piora para o não-`obra`: se um dos anos caiu
+ * no padrão, é ele que a tela precisa saber.
+ */
+export function mesclarCalendarios(periodo: CalendarioDaObra[]): CalendarioDaObra {
+  const [primeiro] = periodo;
+  if (!primeiro) {
+    return {
+      calendar: { weekPattern: { workingWeekdays: [1, 2, 3, 4, 5] }, exceptions: [] },
+      origem: "padrao_br",
+      nome: null,
+      ano: new Date().getFullYear(),
+    };
+  }
+  const origem =
+    periodo.every(item => item.origem === "obra")
+      ? "obra"
+      : (periodo.find(item => item.origem !== "obra")?.origem ?? "obra");
+  return {
+    calendar: {
+      weekPattern: primeiro.calendar.weekPattern,
+      exceptions: periodo.flatMap(item => item.calendar.exceptions),
+    },
+    origem,
+    nome: primeiro.nome,
+    ano: primeiro.ano,
+  };
+}
+
+/**
+ * Calendário da obra para um período que pode cruzar a virada do ano.
+ *
+ * É o que o EVM precisa: o tempo decorrido vai do início da obra até a data de
+ * referência, e esse intervalo nem sempre cabe em um ano.
+ */
+export async function carregarCalendarioDoPeriodo(
+  db: Db,
+  projectId: number,
+  anoInicio: number,
+  anoFim: number
+): Promise<CalendarioDaObra> {
+  const anos = Array.from(
+    { length: Math.max(1, anoFim - anoInicio + 1) },
+    (_, indice) => anoInicio + indice
+  );
+  const carregados = await Promise.all(
+    anos.map(ano => carregarCalendarioDaObra(db, projectId, ano))
+  );
+  return mesclarCalendarios(carregados);
+}
+
+/**
  * `Date` → `yyyy-mm-dd` no fuso **local do servidor**.
  *
  * Deliberadamente não é `toISOString()`: esse converte para UTC e, num servidor
