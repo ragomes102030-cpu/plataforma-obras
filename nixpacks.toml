@@ -28,7 +28,7 @@ aptPkgs = ["curl"]
 cmds = [
   "node scripts/check-node.mjs",
   "npm install -g pnpm@10.4.1",
-  "pnpm install --frozen-lockfile",
+  "pnpm install --frozen-lockfile --prod=false",
 ]
 
 [phases.build]
