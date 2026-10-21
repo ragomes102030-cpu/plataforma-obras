@@ -39,7 +39,7 @@ aptPkgs = ["curl"]
 [phases.install]
 cmds = [
   "node scripts/check-node.mjs",
-  "npm install -g --prefix /opt/pnpm pnpm@10.4.1",
+  "npm install -g --prefix /opt/pnpm pnpm@10.34.5",
   "PATH=/opt/pnpm/bin:$PATH pnpm install --frozen-lockfile --prod=false",
 ]
 

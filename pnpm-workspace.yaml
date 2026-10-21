@@ -12,3 +12,21 @@ patchedDependencies:
   wouter@3.7.1: patches/wouter@3.7.1.patch
 overrides:
   tailwindcss>nanoid: 3.3.7
+  # express 4.x declara path-to-regexp ^0.1.12, mas o lockfile ficou preso na
+  # 0.1.12, que ainda é vulnerável (ReDoS em rotas ambíguas). 0.1.13 é o último
+  # patch da linha que o express 4 sabe consumir — não subir para 6.x/8.x, que
+  # mudou a API e quebraria o roteamento.
+  express>path-to-regexp: 0.1.13
+  # lodash <4.18.0 permite injeção de código em _.template e poluição de
+  # protótipo em _.zipObjectDeep; chega por recharts (gráficos) na 4.17.x.
+  lodash: 4.18.1
+  lodash-es: 4.18.1
+  # form-data <4.0.0 tem injeção de CRLF no nome do campo (chega por axios/SDK).
+  form-data: 4.0.6
+  # mysql2 entra só como peer opcional do drizzle-orm (dialeto MySQL, que este
+  # projeto não usa). Antes da 3.23.1 aceita downgrade de autenticação.
+  mysql2: 3.24.6
+  # Dev-only: rollup preso pela cópia de vite que o vitest 2 traz, e
+  # source-map-js herdado do @tailwindcss/node. Ambos corrigidos em patch.
+  rollup: 4.59.0
+  source-map-js: 1.2.2
