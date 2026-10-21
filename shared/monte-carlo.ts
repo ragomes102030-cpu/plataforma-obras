@@ -12,18 +12,18 @@
  *  - duração amostrada é inteira e >= 1, porque `calculateCpm` rejeita o resto;
  *  - rede desconectada é reportada, nunca escondida: com N cadeias isoladas o
  *    prazo é o máximo entre elas, não o caminho crítico de uma delas. É o defeito
- *    medido na AURORA TESTE (53 atividades, 64 dependências, 8 cadeias).
+ *    medido na AURORA TESTE (53 atividades, 64 dependências, 5 cadeias: 38/5/4/3/3).
  */
 import { calculateCpm, type CpmActivity, type Dependency } from "./cpm";
 
 export type DurationEstimate = {
   id: string;
   /** Menor duração plausível, em dias. */
-  optimistic: number;
-  /** Duração mais provável, em dias. */
-  mostLikely: number;
+  optimistic?: number;
+  /** Duração mais provável, em dias. Ausente = usa a duração do cronograma. */
+  mostLikely?: number;
   /** Maior duração plausível, em dias. */
-  pessimistic: number;
+  pessimistic?: number;
 };
 
 export type MonteCarloOptions = {
@@ -142,11 +142,15 @@ export function simulateMonteCarlo(
   const estimates = new Map((options.estimates ?? []).map(estimate => [estimate.id, estimate]));
   const bounds = activities.map(activity => {
     const explicit = estimates.get(activity.id);
-    const low = explicit ? explicit.optimistic : Math.max(1, Math.round(activity.duration * (1 - uncertainty)));
-    const mode = explicit ? explicit.mostLikely : activity.duration;
-    const high = explicit
-      ? explicit.pessimistic
-      : Math.max(low, Math.round(activity.duration * (1 + uncertainty)));
+    const mode = Math.max(1, Math.round(explicit?.mostLikely ?? activity.duration));
+    // Só um dos lados pode estar declarado: o outro cai no percentual geral.
+    // O clamp garante low <= mode <= high — um otimista digitado acima da moda
+    // (ou um pessimista abaixo) quebraria a triangular e o sorteio passaria a
+    // devolver sempre a moda, com cara de risco zero.
+    const derivedLow = Math.max(1, Math.round(mode * (1 - uncertainty)));
+    const derivedHigh = Math.max(derivedLow, Math.round(mode * (1 + uncertainty)));
+    const low = Math.min(Math.max(1, Math.round(explicit?.optimistic ?? derivedLow)), mode);
+    const high = Math.max(Math.round(explicit?.pessimistic ?? derivedHigh), mode);
     if (!(low <= mode && mode <= high)) {
       throw new Error(`Três pontos inválidos para ${activity.id}: ${low}/${mode}/${high}`);
     }

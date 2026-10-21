@@ -425,6 +425,21 @@ export const scheduleActivities = pgTable(
     pavimento: varchar("pavimento", { length: 80 }),
     startOffset: integer("startOffset").notNull(),
     durationDays: integer("durationDays").notNull(),
+    /**
+     * Piso e teto da duração, declarados pelo planejador.
+     *
+     * `durationDays` é o mais provável — é o que o CPM usa e o que aparece no
+     * Gantt. Estas duas colunas são o intervalo que o Monte Carlo sorteia: sem
+     * elas a simulação aplica a mesma incerteza percentual a toda atividade,
+     * tratando "assentar alvenaria" e "mobilizar canteiro" como se tivessem o
+     * mesmo risco.
+     *
+     * Nulo é "não declarado", não zero: significa que a atividade cai no
+     * percentual geral do painel. Quem sabe que a atividade é de baixo risco
+     * declara uma faixa estreita em vez de deixar o sistema adivinhar.
+     */
+    durationOptimisticDays: integer("durationOptimisticDays"),
+    durationPessimisticDays: integer("durationPessimisticDays"),
     plannedQuantity: numeric("plannedQuantity", { precision: 14, scale: 3 }),
     /**
      * Unidade de medida do quantitativo, herdada da folha da EAP. Fica na
@@ -470,6 +485,14 @@ export const scheduleActivities = pgTable(
       table.externalId
     ),
     check("schedule_activities_duration_positive", drizzleSql`"durationDays" > 0`),
+    check(
+      "schedule_activities_three_point_positive",
+      drizzleSql`("durationOptimisticDays" is null or "durationOptimisticDays" >= 1) and ("durationPessimisticDays" is null or "durationPessimisticDays" >= 1)`
+    ),
+    check(
+      "schedule_activities_three_point_window",
+      drizzleSql`"durationOptimisticDays" is null or "durationPessimisticDays" is null or ("durationOptimisticDays" <= "durationDays" and "durationDays" <= "durationPessimisticDays")`
+    ),
     index("schedule_activities_project_idx").on(table.projectId),
     index("schedule_activities_plan_version_idx").on(table.versionId),
     index("schedule_activities_wbs_node_idx").on(table.wbsNodeId),

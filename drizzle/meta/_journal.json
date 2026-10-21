@@ -97,6 +97,13 @@
       "when": 1792430223034,
       "tag": "0013_error_events",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792516623034,
+      "tag": "0014_activity_three_point_duration",
+      "breakpoints": true
     }
   ],
   "version": "7",
