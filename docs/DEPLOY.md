@@ -240,7 +240,7 @@ O `created_at` **tem** de ser igual ao `when` da entrada em
 
 ```bash
 curl -s https://plataforma-obras-3.onrender.com/healthz   # ok:true + commit = main
-curl -s https://plataforma-obras-3.onrender.com/readyz    # ok:true, tabelas:38, warnings:[]
+curl -s https://plataforma-obras-3.onrender.com/readyz    # ok:true, tabelas:39, warnings:[]
 ```
 
 `/readyz` é a prova de que a cadeia de boot inteira rodou: ele só responde `200`
