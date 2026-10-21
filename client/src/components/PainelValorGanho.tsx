@@ -70,7 +70,13 @@ export function PainelValorGanho({ projetoId }: { projetoId: number }) {
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   const evm = trpc.planning.evm.useQuery({ projectId: projetoId });
-  const custos = trpc.planning.custos.useQuery({ projectId: projetoId });
+  // `incluirCancelados: true` de propósito: filtrar o estorno esconde o rastro
+  // de que o lançamento existiu, que é o que uma auditoria de custo precisa. A
+  // linha aparece riscada e fora do AC.
+  const custos = trpc.planning.custos.useQuery({
+    projectId: projetoId,
+    incluirCancelados: true,
+  });
   const planejamento = trpc.planning.list.useQuery({ projectId: projetoId });
 
   const atividades = useMemo(
