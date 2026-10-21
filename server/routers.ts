@@ -114,6 +114,7 @@ async function requireApprovedEapVersion(
   return approved;
 }
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
+import { simulateScheduleRisk } from "./construction/monte-carlo-service";
 import { persistCpmResult } from "./construction/cpm-persister";
 import { coletarDadosEvms } from "./construction/evm-dados";
 import { computeEvm } from "./construction/evm";
@@ -4154,6 +4155,58 @@ export const appRouter = router({
           });
         }
         return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
+      }),
+    /**
+     * Risco de prazo (Monte Carlo).
+     *
+     * O `calculateCpm` responde UM prazo: o que acontece se tudo sair como
+     * planejado. Este responde a pergunta que o cliente faz de verdade — "qual a
+     * chance de terminar até a data que prometi" — devolvendo p10/p50/p80/p90,
+     * criticidade e tornado das atividades que empurram o prazo.
+     *
+     * Não grava nada: é leitura pura. Por isso recebe as atividades no payload
+     * em vez de reconsultar versão, calendário e EAP — a tela já tem esse dado do
+     * `planning.list`, e reconsultar abriria espaço para a simulação divergir do
+     * cronograma que o usuário está vendo.
+     */
+    simulateScheduleRisk: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          activities: z
+            .array(
+              z.object({
+                id: z.number().int().positive(),
+                wbsCode: z.string().default(""),
+                name: z.string().default(""),
+                durationDays: z.number(),
+              })
+            )
+            .min(1),
+          dependencies: z
+            .array(
+              z.object({
+                predecessorId: z.number().int().positive(),
+                successorId: z.number().int().positive(),
+                type: z.enum(["FS", "SS", "FF", "SF"]).default("FS"),
+                lag: z.number().int().default(0),
+              })
+            )
+            .default([]),
+          iterations: z.number().int().min(100).max(20000).default(5000),
+          uncertainty: z.number().min(0).max(1).default(0.25),
+          seed: z.number().int().positive().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return simulateScheduleRisk(input.activities, input.dependencies, {
+          iterations: input.iterations,
+          uncertainty: input.uncertainty,
+          seed: input.seed,
+        });
       }),
     /**
      * Coerencia de engenharia.

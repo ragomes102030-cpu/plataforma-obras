@@ -150,7 +150,7 @@ export function simulateMonteCarlo(
     if (!(low <= mode && mode <= high)) {
       throw new Error(`Três pontos inválidos para ${activity.id}: ${low}/${mode}/${high}`);
     }
-    return { id: activity.id, low, mode, high };
+    return { activity, id: activity.id, low, mode, high };
   });
 
   const deterministicDuration = calculateCpm(activities, dependencies).projectDuration;
@@ -163,7 +163,10 @@ export function simulateMonteCarlo(
 
   for (let index = 0; index < iterations; index += 1) {
     const sampled: CpmActivity[] = bounds.map(bound => ({
-      id: bound.id,
+      // Preserva restrições (mustStartOn, finishNoLaterThan, startOffsetDay):
+      // só a duração é amostrada. Se o simulador as descartasse, o prazo
+      // simulado ignoraria exatamente o que o cronograma real obedece.
+      ...bound.activity,
       duration: sampleTriangular(bound.low, bound.mode, bound.high, random()),
     }));
     const schedule = calculateCpm(sampled, dependencies);
