@@ -2,6 +2,7 @@ import { AlertTriangle, Calculator, CheckCircle2, Network, RefreshCw } from "luc
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { isStoredCpmCurrent } from "@shared/cpm-validity";
+import { PainelMonteCarlo } from "./PainelMonteCarlo";
 
 type Props = { projetoId: number };
 
@@ -234,6 +235,8 @@ export function AbaCpm({ projetoId }: Props) {
           <div><span>Próxima etapa</span><strong>{resumo.hasStoredCpm ? "Baseline" : "CPM"}</strong><small>baseline só depois de revisão do caminho crítico</small></div>
         </div>
       </div>
+
+      <PainelMonteCarlo projetoId={projetoId} activities={activities} dependencies={dependencies} />
     </section>
   );
 }
