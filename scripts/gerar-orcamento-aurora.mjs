@@ -6,7 +6,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://tromrvfijbtihuilvnuk.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvbXJ2ZmlqYnRpaHVpbHZudWsiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzQ2OTc5MjAwLCJleHAiOjE5MDQ3NDU2MDB9.SgKsXTX3xaNhYpjIVYkMfw_vzIcvFer';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// A chave service_role ignora RLS e da' acesso total ao banco. Nao pode morar no
+// codigo: o repositorio e' publico e o valor fica no historico do git.
+if (!SUPABASE_KEY) {
+  console.error('SUPABASE_SERVICE_ROLE_KEY nao definida.');
+  console.error('  PowerShell: $env:SUPABASE_SERVICE_ROLE_KEY = "<chave>"');
+  console.error('  bash:       SUPABASE_SERVICE_ROLE_KEY=<chave> node scripts/gerar-orcamento-aurora.mjs');
+  process.exit(1);
+}
 
 const PROJECT_ID = 7;
 const VERSION_ID = 8;
