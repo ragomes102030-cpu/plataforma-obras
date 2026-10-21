@@ -68,6 +68,7 @@ const CONTRATO: Record<string, string[]> = {
   llm_provider_settings: ["createdAt", "encryptedConfig", "id", "updatedAt", "updatedBy"],
   mcp_homologation_runs: ["createdAt", "error", "finishedAt", "id", "planJson", "projectId", "readOnlyResultJson", "reconciliationJson", "requestId", "startedAt", "status", "updatedAt", "userId"],
   mcp_mutation_operations: ["argsJson", "confirmationToken", "confirmedAt", "createdAt", "error", "executedAt", "externalProjectId", "id", "idempotencyKey", "projectId", "provider", "resultJson", "status", "toolName", "updatedAt", "userId"],
+  planning_constraints: ["activityId", "createdAt", "createdBy", "description", "id", "neededBy", "projectId", "removedAt", "removedBy", "responsible", "status", "type", "updatedAt"],
   planning_resources: ["active", "capacityPerDay", "costPerDay", "createdAt", "id", "name", "projectId", "resourceType", "unit", "updatedAt"],
   price_catalogs: ["createdAt", "createdBy", "id", "name", "notes", "referencePeriod", "sourceType", "state", "status", "updatedAt"],
   price_items: ["catalogId", "code", "createdAt", "description", "id", "itemType", "notes", "unit", "unitPrice", "updatedAt"],
@@ -87,6 +88,7 @@ const CONTRATO: Record<string, string[]> = {
   service_compositions: ["code", "createdAt", "createdBy", "description", "id", "referencePeriod", "sourceCatalogId", "status", "unit", "updatedAt"],
   users: ["createdAt", "email", "id", "lastSignedIn", "loginMethod", "name", "openId", "role", "updatedAt"],
   wbs_nodes: ["acceptanceCriteria", "code", "createdAt", "decompositionBasis", "description", "exclusions", "externalId", "externalUid", "id", "inclusions", "level", "location", "name", "nodeType", "parentId", "plannedQuantity", "projectId", "responsible", "scopeStatus", "sortOrder", "unit", "updatedAt", "versionId"],
+  weekly_commitments: ["activityId", "createdAt", "createdBy", "executedQuantity", "id", "notes", "plannedQuantity", "projectId", "reason", "responsible", "status", "updatedAt", "weekStart"],
   work_calendars: ["createdAt", "id", "name", "projectId", "updatedAt", "weekPattern"],
 };
 
@@ -118,7 +120,7 @@ function superficie(): Record<string, string[]> {
 }
 
 describe("contrato do schema", () => {
-  it("tem as 38 tabelas do contrato", () => {
+  it("tem as 40 tabelas do contrato", () => {
     const nomes = Object.keys(superficie()).sort();
     expect(nomes).toEqual(Object.keys(CONTRATO).sort());
   });
@@ -146,14 +148,15 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 438", () => {
+  it("o total de colunas continua 464", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
     // 410 -> 422 na Fase 0 (error_events, observabilidade de 5xx).
     // 422 -> 424 na duração em três pontos (otimista/pessimista por atividade).
     // 424 -> 438 no custo real (cost_entries, o AC do Valor Ganho).
+    // 438 -> 464 no Last Planner (planning_constraints + weekly_commitments).
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(438);
+    expect(total).toBe(464);
   });
 });

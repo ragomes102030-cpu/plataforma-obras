@@ -3729,3 +3729,316 @@ tr:hover .xl-codigo {
   opacity:.5;
   cursor:default;
 }
+
+/* ===== Lookahead de 4 semanas + PPC (Last Planner) =====
+
+   Mesma linguagem visual do Valor Ganho: número grande, rótulo pequeno,
+   tabela densa. A diferença é o bloco de semanas — quatro botões que são o
+   seletor principal da tela, porque a pergunta "qual semana" vem antes de
+   qualquer número. */
+.pl-look{
+  margin:14px 0 18px;
+  padding:12px 14px 14px;
+  border:1px solid #e3e9ef;
+  border-radius:6px;
+  background:#fff;
+}
+.pl-look-topo{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:10px;
+}
+.pl-look-topo h3{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:0;
+  font-size:12px;
+  font-weight:700;
+  color:#2c3a47;
+}
+.pl-look-sub{
+  margin:4px 0 0;
+  font-size:9px;
+  color:#7b8ea0;
+}
+.pl-look-mini{
+  font-size:8.5px;
+  color:#8a97a5;
+}
+.pl-look-ppc{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:1px;
+  min-width:110px;
+}
+.pl-look-ppc>span{
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+}
+.pl-look-ppc>strong{
+  font-size:20px;
+  line-height:1.05;
+  font-weight:700;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-look-aviso{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  margin:8px 0;
+  padding:7px 9px;
+  border-radius:4px;
+  background:#fff7e6;
+  border:1px solid #f3d9a4;
+  color:#8a5a00;
+  font-size:9.5px;
+  line-height:1.45;
+}
+.pl-look-semanas{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:6px;
+  margin-bottom:10px;
+}
+.pl-look-semana{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:7px 9px;
+  border:1px solid #e8eef4;
+  border-radius:4px;
+  background:#fafcfe;
+  text-align:left;
+  cursor:pointer;
+  font:inherit;
+}
+.pl-look-semana>strong{
+  font-size:10px;
+  font-weight:700;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-look-semana>span{
+  font-size:8px;
+  color:#7b8ea0;
+}
+.pl-look-semana.pl-look-ativa{
+  border-color:#2f7d5b;
+  background:#f2f9f5;
+  box-shadow:inset 0 0 0 1px #2f7d5b;
+}
+.pl-look-kpis{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(104px,1fr));
+  gap:6px;
+  margin-bottom:10px;
+}
+.pl-look-kpi{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:7px 9px;
+  border:1px solid #e8eef4;
+  border-radius:4px;
+  background:#fafcfe;
+}
+.pl-look-kpi>span{
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+}
+.pl-look-kpi>strong{
+  font-size:12px;
+  font-weight:700;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-look-kpi.pl-look-alerta>strong{
+  color:#b42318;
+}
+.pl-look-causas{
+  display:grid;
+  gap:5px;
+  margin:0 0 10px;
+  padding:8px 10px;
+  border:1px solid #f0f3f6;
+  border-radius:4px;
+  background:#fcfdfe;
+}
+.pl-look-causa{
+  display:grid;
+  grid-template-columns:96px 1fr 84px;
+  align-items:center;
+  gap:8px;
+  font-size:8.5px;
+  color:#68717a;
+}
+.pl-look-causa>strong{
+  text-align:right;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-look-trilho{
+  height:5px;
+  background:#e8eef4;
+  border-radius:999px;
+  overflow:hidden;
+}
+.pl-look-preenchido{
+  height:100%;
+  background:#d9a441;
+  border-radius:999px;
+}
+.pl-look-tabela{
+  overflow-x:auto;
+  margin-bottom:10px;
+}
+.pl-look-tabela table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:9px;
+}
+.pl-look-tabela th{
+  padding:4px 6px;
+  text-align:left;
+  font-size:7.5px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+  border-bottom:1px solid #e3e9ef;
+  white-space:nowrap;
+}
+.pl-look-tabela td{
+  padding:5px 6px;
+  border-bottom:1px solid #f0f3f6;
+  color:#334155;
+}
+.pl-look-num{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.pl-look-vazio{
+  padding:14px 8px;
+  text-align:center;
+  color:#7b8ea0;
+  font-size:9px;
+  line-height:1.5;
+}
+.pl-look-ok{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  color:#2f7d5b;
+  font-size:8.5px;
+  white-space:nowrap;
+}
+.pl-look-bloqueio{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  color:#b42318;
+  font-size:8.5px;
+  white-space:nowrap;
+}
+.pl-look-acoes{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  white-space:nowrap;
+}
+.pl-look-acoes select{
+  max-width:92px;
+  padding:1px 3px;
+  font-size:8px;
+  border:1px solid #dfe6ee;
+  border-radius:3px;
+  background:#fff;
+  color:#334155;
+}
+.pl-look-form{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:6px;
+  align-items:end;
+  padding:10px 0 4px;
+  border-top:1px solid #f0f3f6;
+  margin-bottom:8px;
+}
+.pl-look-form label{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  font-size:8.5px;
+  color:#68717a;
+}
+.pl-look-form input,
+.pl-look-form select{
+  padding:3px 5px;
+  border:1px solid #dfe6ee;
+  border-radius:3px;
+  font:inherit;
+  font-size:9px;
+  color:#2c3a47;
+  background:#fff;
+}
+.pl-look-largo{
+  grid-column:span 2;
+}
+.pl-look-botao{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 10px;
+  border:0;
+  border-radius:3px;
+  background:#2f7d5b;
+  color:#fff;
+  font:inherit;
+  font-size:9px;
+  font-weight:600;
+  cursor:pointer;
+}
+.pl-look-botao:disabled{
+  opacity:.6;
+  cursor:default;
+}
+.pl-look-link{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  padding:0;
+  border:0;
+  background:none;
+  color:#1f6feb;
+  font:inherit;
+  font-size:8.5px;
+  cursor:pointer;
+}
+.pl-look-link:disabled{
+  opacity:.5;
+  cursor:default;
+}
+@media (max-width:600px){
+  .pl-look-topo{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .pl-look-ppc{
+    align-items:flex-start;
+  }
+  .pl-look-causa{
+    grid-template-columns:80px 1fr 64px;
+  }
+  .pl-look-largo{
+    grid-column:span 1;
+  }
+}

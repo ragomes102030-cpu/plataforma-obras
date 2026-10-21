@@ -253,3 +253,19 @@
 - **Limpeza:** `drizzle-kit`, `playwright` e `@types/pg` saíram de `dependencies` para `devDependencies` (nenhum é usado no boot — `scripts/migrate-pg.mjs` usa só `pg` + `drizzle-orm/migrator`); `@aws-sdk/client-s3` e `@aws-sdk/s3-request-presigner` foram **removidos** (nenhum módulo os importa — `server/storage.ts` sobe arquivo com `fetch` na URL pré-assinada devolvida pelo Forge, então eles eram só peso morto e traziam o `fast-xml-parser` junto); o pacote `add` (nunca importado, provável sobra de `pnpm add` sem argumento) e o `streamdown` (não importado em lugar nenhum, e origem dos avisos de mermaid/katex/dompurify/uuid/mdast) também saíram.
 - **Consequências:** `pnpm audit --prod` = **0 vulnerabilidades**. O audit completo (com dev) ainda lista itens do **vitest 2** (`tinypool`, `vite@5.4.21`, `esbuild@0.21.5`), do loader antigo do `drizzle-kit` e do `postcss-selector-parser` do `@tailwindcss/typography` — nada disso entra na imagem de produção; a correção real é migrar para o vitest 4, que muda configuração e fica para um bloco próprio.
 - **Barreira:** passo “Auditoria de dependências de produção” no `ci.yml` roda `pnpm audit --prod --audit-level=high` e emite `::warning::` — **não bloqueia**: um advisory publicado hoje não pode travar o deploy de uma correção amanhã, mas também não pode passar em silêncio.
+
+## Decisão 20 — Lookahead de 4 semanas e PPC (Last Planner)
+
+- **Decisão:** o planejamento de curto prazo passa a ter modelo próprio — `planning_constraints` (o que trava) e `weekly_commitments` (o que foi assumido e o que aconteceu) —, com PPC calculado sobre compromissos **avaliados** e só isso. Migração `0016_lookahead_ppc`.
+- **Quando:** 21/10/2026.
+- **Motivo:** até aqui o sistema sabia medir progresso (EVM) mas não sabia dizer *o que fazer segunda-feira* nem *quem prometeu o que*. O `% do Gantt` responde “quanto andou”, não “por que não andou”. Sem PPC e sem causa, toda reunião de obra vira discussão de percepção.
+- **Por que duas tabelas e não uma:** restrição e compromisso têm ciclos de vida diferentes. Restrição nasce antes da semana e morre quando alguém resolve; compromisso nasce na semana e é avaliado no fim dela. Juntar as duas obrigaria a inventar um compromisso para registrar uma restrição — e aí o PPC contaria mentira.
+- **Regras que ficaram no banco (não só no código):**
+  - `week_start` tem de ser **segunda-feira** (CHECK com `at time zone 'UTC'`, porque `extract` sobre `timestamptz` usa o fuso da sessão e transformaria segunda 00:00 UTC em domingo 21:00 em São Paulo);
+  - **não cumprir exige motivo** (CHECK `status <> 'nao_concluido' or reason is not null`);
+  - **uma atividade por semana** (índice único `activity_id + week_start`), senão a mesma atividade valeria dois votos no PPC.
+- **Regras que ficaram na conta:** PPC só sobre `concluido`+`nao_concluido` (nunca sobre `planejado`); semana sem avaliação devolve `null`, não 0%; `cancelado` sai da base; restrição `em_andamento` **ainda bloqueia** (só `removida`/`cancelada` liberam); tendência só quando a diferença passa de 5 pontos percentuais.
+- **Datas:** `weekStart` trafega como `YYYY-MM-DD`, é gravado como meia-noite **UTC** e lido por comparação de instantes + `toISOString` — `localIso` deslocaria a semana em um dia em qualquer servidor a oeste de Greenwich. As datas das atividades vêm do offset em **dias úteis** sobre o calendário da obra, não de dias corridos.
+- **Aplicação:** a `0016` foi aplicada pela Management API e **registrada** em `__drizzle_migrations` com o hash do arquivo — sem esse registro o boot tentaria criar tabelas existentes e derrubaria o start.
+- **Verificação:** 22 testes novos (14 de conta pura em `lookahead.test.ts`, 8 de banco em `lookahead-dados.test.ts`, incluindo CHECK de segunda-feira, motivo obrigatório e unicidade). Suíte: **92 arquivos / 887 testes**.
+- Detalhes de uso na obra: `docs/LOOKAHEAD-PPC.md`.

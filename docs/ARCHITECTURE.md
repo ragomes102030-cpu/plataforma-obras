@@ -33,7 +33,7 @@ BACKEND (Express + tRPC + Drizzle ORM)
 
 Banco:
     PostgreSQL (Supabase)
-    → 36 tabelas de domínio via Drizzle (pg-core)
+    → 40 tabelas de domínio via Drizzle (pg-core)
 ```
 
 ---
@@ -110,7 +110,7 @@ server/
 │   └── context-builder.ts         — AI context builder
 │
 ├── drizzle/
-│   └── schema.ts                  — Database schema (36 tabelas)
+│   └── schema.ts                  — Database schema (40 tabelas)
 │
 ├── _shared/
 │   ├── construction-stages.ts     — Coordinator stages
