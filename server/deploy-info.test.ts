@@ -34,8 +34,8 @@ describe("origemDeploy", () => {
   });
 
   it("encontra por padrao um nome de plataforma que nunca vimos", () => {
-    // Este e o ponto da mudanca: nao depende de adivinhar como o DockHosting
-    // chama a variavel. Se ele usar um nome novo, ele e encontrado.
+    // Este e o ponto da mudanca: nao depende de adivinhar como a plataforma
+    // chama a variavel. Se ela usar um nome novo, ele e encontrado.
     const r = origemDeploy({ DOCKHOSTING_GIT_COMMIT: SHA });
     expect(r.commit).toBe("850b9cf");
     expect(r.commitSource).toBe("DOCKHOSTING_GIT_COMMIT");

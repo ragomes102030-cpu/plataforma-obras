@@ -110,7 +110,7 @@ npm run build
 
 # 4. medir de novo -- o alvo é zero
 node scripts/auditar-contraste.mjs http://localhost:4599 tests/contraste/depois-3obras.json 3
-node scripts/auditar-contraste.mjs https://plataforma-obras.dockhosting.dev tests/contraste/producao.json 3
+node scripts/auditar-contraste.mjs https://plataforma-obras-3.onrender.com tests/contraste/producao.json 3
 ```
 
 Ferramentas de apoio:

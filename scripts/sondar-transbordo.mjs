@@ -19,7 +19,7 @@ const contexto = await navegador.newContext({
 });
 await contexto.addCookies([
   { name: "app_session_id", value: SESSAO, domain: "localhost", path: "/", httpOnly: true, secure: true },
-  { name: "app_session_id", value: SESSAO, domain: "plataforma-obras.dockhosting.dev", path: "/", httpOnly: true, secure: true },
+  { name: "app_session_id", value: SESSAO, domain: "plataforma-obras-3.onrender.com", path: "/", httpOnly: true, secure: true },
 ]);
 const pagina = await contexto.newPage();
 await pagina.goto(URL_BASE, { waitUntil: "domcontentloaded" });

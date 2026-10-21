@@ -36,7 +36,7 @@ plataforma-obras/
 A lista completa fica na configuração do cliente (não no repositório). Estes são
 os que importam para obras:
 
-- `plataforma-obra` — próprio sistema (API em `https://plataforma-obras.dockhosting.dev`)
+- `plataforma-obra` — próprio sistema (API em `https://plataforma-obras-3.onrender.com`)
 - `cronograma` / `mcp-cronograma-server` — cronograma
 - `eap` / `mcp-eap-server` — estrutura analítica
 - `gantt` / `mcp-gantt-lob-server` — gantt + linha de balanço

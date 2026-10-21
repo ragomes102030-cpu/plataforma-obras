@@ -10,7 +10,7 @@
  *   node scripts/e2e-criar-obra-piloto.mjs
  *
  * Opcionais:
- *   E2E_BASE_URL   (default https://plataforma-obras.dockhosting.dev)
+ *   E2E_BASE_URL   (default https://plataforma-obras-3.onrender.com)
  *   E2E_HEADLESS=1 (default: janela visivel, para o login manual no GitHub)
  *   E2E_PROJECT_ID=24 reaproveita uma obra existente (nao cria outra) e abre a aba EAP
  *
@@ -19,7 +19,7 @@
 import { chromium } from "playwright";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 
-const BASE = process.env.E2E_BASE_URL ?? "https://plataforma-obras.dockhosting.dev";
+const BASE = process.env.E2E_BASE_URL ?? "https://plataforma-obras-3.onrender.com";
 const HEADLESS = process.env.E2E_HEADLESS === "1";
 const DIR = ".playwright";
 const AUTH = `${DIR}/auth.json`;

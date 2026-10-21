@@ -223,3 +223,19 @@
 - **Consequências:** `vercel.json` e `render.yaml` não existem mais; o `Dockerfile` fica como recurso de desenvolvimento local.
 - **Barreira:** `server/build-plan.test.ts` trava as decisões do `nixpacks.toml` (nome canônico de pacote do nixpkgs, pnpm na versão do `packageManager`, sem `corepack`, `[start] cmd = npm start`) e `deploy-verify.yml` falha se o commit publicado não for o da `main`.
 - **Erro que motivou a barreira:** um `nixPkgs = ["pnpm-10_x"]` inexistente derrubava o build no setup com um erro que não apontava para o arquivo.
+
+## Decisão 18 — Render com Docker, um único serviço (substitui a Decisão 17)
+
+- **Decisão:** produção é **um** serviço no Render, `plataforma-obras-3` (`srv-dbcd0gon74is7384ufag`), branch `main`, build pelo `./Dockerfile`, health check em `/readyz`, auto-deploy por commit. Um alvo, um URL, um lugar para olhar.
+- **Quando:** outubro de 2026.
+- **Motivo:** o projeto ficou com mais de uma "produção" ao mesmo tempo. Em 21/10 havia **quatro** serviços no Render apontando para o mesmo repositório e commit, e o DockHosting continuava no ar servindo um commit **dois commits atrás** (`62ca1ba`), contra o **mesmo banco Supabase**. Ou seja: dois endereços públicos, o mesmo banco, um com validação velha. Ninguém sabe qual dos dois um usuário está abrindo.
+- **O que foi feito:**
+  - três serviços Render redundantes apagados (`srv-db8cq2on74is73ekdmgg`, `srv-db8crk689jmc73d2cchg`, `srv-db8cta0m7kps73dujt2g`);
+  - health check trocado de `/healthz` (não toca no banco) para `/readyz` (consulta o banco e responde 503 quando ele cai);
+  - `autoDeployTrigger` fixado em `commit` (estava em `yes` sem gatilho, o que explicava o push que não disparava build);
+  - `deploy-verify.yml` reescrito para o Render: pergunta se já existe deploy do SHA, dispara um se não existir, e vigia `/healthz` até o commit publicado bater;
+  - `deploy-dockhosting.yml` apagado (era um **segundo** CI completo no mesmo commit, sem publicar nada);
+  - `ci.yml` deixou de rodar em `develop` e `production-stable-20261005`: como o `sync-develop.yml` empurra cada commit de `main` para `develop`, todo merge gerava três execuções completas do mesmo CI.
+- **Consequências:** docs e defaults de código que citavam DockHosting foram corrigidos (`docs/STACK-ATUAL.md`, `docs/DEPLOY.md`, `server/_core/env.ts`, `playwright.config.ts`, scripts de QA). `develop` continua existindo como espelho automático de `main`, mas não é branch de trabalho e não tem CI próprio. `nixpacks.toml` fica como plano B de build.
+- **Barreira:** `deploy-verify.yml` falha quando o `/healthz` não serve o SHA do push. A regra prática é: **se o `commit` do `/healthz` não for o último de `main`, o deploy não aconteceu — não importa o que o painel diga.**
+- **Pendência conhecida:** o DockHosting (`plataforma-obras.dockhosting.dev`) ainda pode estar no ar servindo `62ca1ba`. Desligar aquela instância é ação de painel (só o dono da conta consegue); enquanto estiver de pé, ela acessa o mesmo banco com código velho.

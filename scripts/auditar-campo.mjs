@@ -8,7 +8,7 @@
 import { chromium, devices } from "playwright";
 import { readFileSync } from "node:fs";
 
-const URL_BASE = process.argv[2] || "https://plataforma-obras.dockhosting.dev";
+const URL_BASE = process.argv[2] || "https://plataforma-obras-3.onrender.com";
 const LARGURA = Number(process.argv[3] || 390);
 const ALTURA = Number(process.argv[4] || 844);
 // Acima de 620px a auditoria e de MESA: mede a camada tipografia-desktop.css.

@@ -70,7 +70,7 @@ Registrar junto:
 
 ## QA
 Fluxo operacional obrigatório:
-GitHub -> DockHosting -> LIVE -> teste -> validação.
+GitHub -> Render -> LIVE -> teste -> validação.
 
 Nunca declarar teste funcional aprovado sem execução observável.
 Falha deve ser classificada como produto, contrato, ambiente, MCP ou fixture antes de alterar produção.

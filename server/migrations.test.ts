@@ -423,15 +423,16 @@ describe("o Dockerfile encontra tudo que copia", () => {
 });
 
 describe("o runtime recebe o que a migracao precisa", () => {
-  // A plataforma NAO builda a partir deste Dockerfile: o deploy do DockHosting e
-  // Nixpacks, e o processo sobe pelo `Start Command` do painel, que e `npm start`
-  // (o log do build mostra `"start": {"cmd": "exec caddy run ..."}` como default
-  // do Nixpacks e o painel sobrescrevendo com `npm start`).
+  // Hoje a plataforma (Render) builda a partir deste Dockerfile e sobe por
+  // `npm start` (runtime docker, ver docs/DEPLOY.md). Ja houve um periodo em que
+  // o deploy era Nixpacks e o processo subia pelo `Start Command` do painel —
+  // tambem `npm start`.
   //
   // Por isso a cadeia de boot mora em `scripts.start`: e o unico ponto que os
   // DOIS caminhos executam — o `npm start` da plataforma e o `pnpm start` do
-  // Dockerfile. Antes ela vivia so no `CMD` do Dockerfile, que nunca rodou em
-  // producao: a migracao e a auditoria nao eram executadas de verdade.
+  // Dockerfile. Antes ela vivia so no `CMD` do Dockerfile, que nao rodava quando
+  // o build era Nixpacks: a migracao e a auditoria nao eram executadas de
+  // verdade.
   function scriptStart(): string {
     const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
     const start = pkg?.scripts?.start;
@@ -526,9 +527,11 @@ describe("o runtime recebe o que a migracao precisa", () => {
     // consulta o banco e responde 503 quando ele esta inacessivel, entao a
     // plataforma nao promove o deploy ruim — e o anterior continua servindo.
     //
-    // O caminho do healthcheck e configuracao do DockHosting e nao vive no repo;
-    // o que o repo pode garantir e que a ROTA existe, consulta o banco e falha
-    // fechado. As duas ultimas garantias sao o que um healthcheck precisa ter.
+    // O caminho do healthcheck e configuracao do Render e nao vive no repo; o que
+    // o repo pode garantir e que a ROTA existe, consulta o banco e falha fechado.
+    // As duas ultimas garantias sao o que um healthcheck precisa ter — e o
+    // servico estava apontando para `/healthz`, que nao consulta o banco. Foi
+    // alinhado para `/readyz` em 2026-10-21 (ver docs/DEPLOY.md).
     const src = readFileSync(join("server", "_core", "index.ts"), "utf-8");
     const i = src.indexOf('app.get("/readyz"');
     expect(i, "nao achei a rota /readyz em server/_core/index.ts").toBeGreaterThan(-1);

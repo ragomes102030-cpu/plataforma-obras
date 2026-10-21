@@ -201,14 +201,14 @@ server/
 
 ## DEPLOY
 
-- **Frontend + Backend:** mesma imagem no DockHosting (Express serve o `dist/` do
-  Vite). Build pelo Nixpacks, descrito em `nixpacks.toml`.
+- **Frontend + Backend:** mesma imagem no **Render** (`plataforma-obras-3`); o
+  Express serve o `dist/` do Vite. Build pelo `Dockerfile`.
 - **Banco:** PostgreSQL no Supabase.
 - **MCP servers:** `mcp-server/` roda como processo do próprio serviço; os
   integrados externamente vivem em `server/integrations/`.
 
-Detalhe de infraestrutura, variáveis e runbook: `docs/DEPLOY-DOCKHOSTING.md`.
-O histórico (Render/Vercel/Aiven/MySQL) está em `docs/DECISIONS.md`.
+Detalhe de infraestrutura, variáveis e runbook: `docs/DEPLOY.md`.
+O histórico (DockHosting/Railway/Vercel/Aiven/MySQL) está em `docs/DECISIONS.md`.
 
 ---
 

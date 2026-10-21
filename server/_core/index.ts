@@ -100,8 +100,9 @@ async function startServer() {
     );
   }
   // ---- Segurança de transporte -------------------------------------------------
-  // O app roda atrás do proxy do DockHosting. Sem isto `req.ip` seria sempre o
-  // IP do proxy, e o rate limit viraria um balde único para todo mundo.
+  // O app roda atrás do proxy do Render (um hop: `X-Forwarded-For` do cliente).
+  // Sem isto `req.ip` seria sempre o IP do proxy, e o rate limit viraria um
+  // balde único para todo mundo.
   app.set("trust proxy", 1);
 
   // helmet sem CSP: a política padrão bloqueia o runtime inline do Vite e os
@@ -146,7 +147,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "1mb", extended: true }));
 
   // Rate limit só na API e no login. Health/ready ficam de fora de propósito: se
-  // o healthcheck do DockHosting tomar 429, o deploy é dado como morto.
+  // o healthcheck do Render tomar 429, o deploy é dado como morto.
   // 1.000 por 15 min por IP (~66/min) cobre com folga a tela mais pesada e ainda
   // corta laço de script. Ajustável por RATE_LIMIT_MAX sem tocar no código.
   const limitePorJanela = Number(process.env.RATE_LIMIT_MAX ?? 1000);
@@ -171,15 +172,16 @@ async function startServer() {
     //
     // Antes este bloco adivinhava o NOME da variavel da plataforma
     // (`RENDER_GIT_COMMIT`, `RAILWAY_GIT_COMMIT_SHA`, `VERCEL_GIT_COMMIT_SHA`) e
-    // terminava em `?? "local"`. A plataforma de hoje e o DockHosting: nenhum
-    // dos tres nomes existe, e o `/healthz` voltou a dizer `commit: "local"` com
+    // terminava em `?? "local"`. Quando a plataforma virou o DockHosting, nenhum
+    // dos tres nomes existia, e o `/healthz` voltou a dizer `commit: "local"` com
     // o codigo novo no ar — a mesma falha que motivou a mudanca, repetida por um
     // nome errado. Adivinhar nome de variavel falha em silencio.
     //
     // Agora a busca e por PADRAO de nome, e o valor so e aceito se PARECER o que
     // diz ser (commit e hexadecimal de 7 a 40 digitos). `commitSource` diz qual
     // variavel respondeu, ou `"nao-encontrado"`: entao a propria resposta do
-    // endpoint revela como o DockHosting se identifica, sem depender de doc.
+    // endpoint revela como a plataforma se identifica, sem depender de doc. Hoje
+    // responde `commitSource: "RENDER_GIT_COMMIT"`.
     res.status(200).json({
       ok: true,
       service: "plataforma-obras-api",

@@ -1,5 +1,7 @@
-# O DockHosting constroi com Nixpacks, nao com o Dockerfile (ver
-# docs/DEPLOY-DOCKHOSTING.md). Sem este arquivo o Nixpacks escolhe Node 18 e o
+# ATENCAO: o Render (producao hoje) constroi pelo Dockerfile, nao por este
+# arquivo (ver docs/DEPLOY.md). Isto aqui existe para build alternativo por
+# Nixpacks - foi o caminho de producao no periodo do DockHosting e continua
+# valido como plano B. Sem este arquivo o Nixpacks escolhe Node 18 e o
 # build morre no Vite 7 ("Vite requires Node.js 20.19+ or 22.12+") e, logo
 # depois, no binario nativo do @tailwindcss/oxide ("Cannot find native binding").
 #

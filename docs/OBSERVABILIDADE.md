@@ -31,12 +31,13 @@ mesmo grupo; rotas diferentes caem em grupos diferentes.
 
 Sem as duas, a captura continua gravando no banco — só não há leitura remota nem
 push. Para ligar o alerta, crie um webhook de entrada no canal de operação e
-configure a URL no DockHosting.
+configure a URL no Render (`plataforma-obras-3` → Environment). Variável nova
+exige um novo deploy para valer.
 
 ### Ler os erros
 
 ```bash
-curl "https://plataforma-obras.dockhosting.dev/internal/ops/errors?token=$OPS_TOKEN"
+curl "https://plataforma-obras-3.onrender.com/internal/ops/errors?token=$OPS_TOKEN"
 ```
 
 Resposta: `grupos` (últimas 24 h, agrupado por fingerprint, com contagem) e
@@ -62,9 +63,10 @@ select "createdAt", rota, mensagem, "commitSha"
    código.
 3. Repita a rota que falhou com o usuário afetado. Se for reproduzível e nova,
    priorize correção; se for intermitente, veja `grupos` por horário.
-4. Rollback é por commit: reverter a `main` e deixar o DockHosting reconstruir. Não
-   existe deploy azul/verde — o build leva 30–60 min, então corrija para frente
-   quando o impacto for baixo.
+4. Rollback é por commit: reverter a `main` e deixar o Render reconstruir (ou
+   disparar o deploy pela API — ver `docs/DEPLOY.md`). Não existe deploy
+   azul/verde: o build leva alguns minutos, então corrija para frente quando o
+   impacto for baixo.
 
 ### Retenção
 
