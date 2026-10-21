@@ -30,6 +30,46 @@ jobs:
       - name: Build
         run: pnpm build
 
+  # Guarda de build: reproduz a fase de install do Nixpacks/Coolify com o ambiente
+  # hostil que derrubou o deploy do #133 — NODE_ENV=production e
+  # NPM_CONFIG_PRODUCTION=true como build-arg. Nesse modo o `npm install -g` grava
+  # o binario num prefixo que nao esta no PATH, e o passo seguinte morre com
+  # "pnpm: command not found" (exit 127). Com NODE_ENV=production o pnpm tambem
+  # omite devDependencies, e vite/esbuild vivem la.
+  #
+  # Este job NAO repete os comandos de memoria: ele le o nixpacks.toml e executa
+  # exatamente os cmds de install e build que estao la. Se alguem voltar a
+  # escrever `npm install -g pnpm` sem prefixo explicito e sem PATH inline, fica
+  # vermelho aqui em ~4 min, em vez de vermelho no painel depois de 15.
+  build-guard:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production
+      NPM_CONFIG_PRODUCTION: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Preparar o prefixo global
+        run: sudo mkdir -p /opt/pnpm && sudo chown "$USER" /opt/pnpm
+      - name: Executar as fases do nixpacks.toml
+        run: |
+          set -euo pipefail
+          python3 -c "import tomllib; p=tomllib.load(open('nixpacks.toml','rb')); [print(c) for ph in ('install','build') for c in p['phases'][ph].get('cmds',[])]" > /tmp/nixpacks-cmds.txt
+          while IFS= read -r cmd; do
+            echo "::group::nixpacks -> $cmd"
+            bash -c "$cmd"
+            echo "::endgroup::"
+          done < /tmp/nixpacks-cmds.txt
+      - name: Exigir os artefatos do build
+        run: |
+          set -euo pipefail
+          test -x node_modules/.bin/vite || { echo "::error::vite ausente: o install rodou como producao ou pulou devDependencies."; exit 1; }
+          test -f dist/index.js || { echo "::error::dist/index.js nao foi gerado pelo build."; exit 1; }
+
   # A auditoria de schema SO le o catalogo do PostgreSQL e compara com o DDL das
   # migrations. Ela roda aqui de proposito: divergencia de schema tem que
   # aparecer no CI, vermelha e legivel, e nao como container que se recusa a

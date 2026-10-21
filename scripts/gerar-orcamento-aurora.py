@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Gera itens de orçamento para AURORA TESTE baseados em composições SEINFRA."""
 import json
+import os
 import urllib.request
 import urllib.error
 import sys
 from datetime import datetime
 
 SUPABASE_URL = "https://tromrvfijbtihuilvnuk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvbXJ2ZmlqYnRpaHVpbHZudWsiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzQ2OTc5MjAwLCJleHAiOjE5MDQ3NDU2MDB9.SgKsXTX3xaNhYpjIVYkMfw_vzIcvFer"
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+if not SUPABASE_KEY:
+    sys.exit(
+        "SUPABASE_SERVICE_ROLE_KEY nao definida. A chave service_role ignora RLS e "
+        "nao pode morar no codigo: exporte a variavel antes de rodar."
+    )
 
 PROJECT_ID = 7
 VERSION_ID = 8
