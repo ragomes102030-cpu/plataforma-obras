@@ -6,7 +6,7 @@
 >
 > **Nota de leitura (19/10/2026).** Este plano foi escrito quando o sistema
 > rodava no Railway com MySQL. Várias lacunas abaixo (**G16** em especial) já
-> foram fechadas, e a infraestrutura hoje é DockHosting + Supabase
+> foram fechadas, e a infraestrutura hoje é Render + Supabase
 > (`docs/STACK-ATUAL.md`). O diagnóstico de escopo continua válido; os números e
 > as notas de infraestrutura foram atualizados.
 
@@ -105,7 +105,7 @@ e o MySQL aceitava no máximo 64 (o Postgres, 63 — o baseline foi gerado já c
 | `server/migrations.test.ts` | 9 testes de regressão: identificador ≤ 64, journal × disco bidirecional, `when` estritamente crescente, e baseline × `schema.ts` nos dois sentidos. **Verificado que falha** reintroduzindo o bug original. |
 | `server/_core/index.ts` | `ensureUsersTable` e `ensurePlanVersionSchema` removidos — não há mais DDL no boot. Sobrou `logSchemaInventory()`, somente leitura. |
 | Removidos | `bootstrap-db.mjs`, `full-schema.sql`. |
-| Pre-deploy | Hoje não existe pre-deploy: `pnpm start` roda `migrate-pg.mjs && audit-schema-pg.mjs` antes do servidor (DockHosting). |
+| Pre-deploy | Hoje não existe pre-deploy: `pnpm start` roda `migrate-pg.mjs && audit-schema-pg.mjs` antes do servidor (Render). |
 
 **Prova de equivalência** (o que autorizou apagar o `full-schema.sql`): schema descartável criado, migrações aplicadas do zero, comparação com o banco real — **32 tabelas, 344 colunas, 133 entradas de índice, 61 chaves estrangeiras, idênticos**. Repetível com `pnpm db:verify:scratch`.
 
@@ -225,7 +225,7 @@ Ordenadas por dependência, não por "interessante" ou por esforço.
 2. **Escopo do Onda 5** (contratos/medição): entra agora ou depois? Depende de D1/D2 e de compromisso com cliente.
 3. **Escopo do Onda 6** (LPS/PPC, partes interessadas, documentos): é o seu dia-a-dia de campo, ou quer evitar? LPS muda a forma como a equipe usa o sistema.
 4. **Prioridade entre Onda 3 (recursos) e Onda 4 (risco)** se não der para fazer as duas: o que dói mais hoje no seu uso?
-5. ~~**`railway.json` vs RAILPACK.**~~ **Resolvido:** o Railway saiu do projeto em out/2026. O build hoje é Nixpacks + `nixpacks.toml` no DockHosting, com `server/build-plan.test.ts` travando as decisões.
+5. ~~**`railway.json` vs RAILPACK.**~~ **Resolvido:** o Railway saiu do projeto em out/2026 e o DockHosting também. O build hoje é **Docker** (`./Dockerfile`) no Render (`plataforma-obras-3`); o `nixpacks.toml` segue como plano B, com `server/build-plan.test.ts` travando as decisões. Ver `docs/DEPLOY.md`.
 
 ---
 

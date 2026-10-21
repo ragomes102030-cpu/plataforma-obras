@@ -29,7 +29,8 @@ import { pathToFileURL } from "node:url";
 
 // A auditoria NAO se desliga em producao.
 //
-// Antes, com USE_SUPABASE=1 (o valor das variaveis do DockHosting), imprimia
+// Antes, com USE_SUPABASE=1 (o modo em que a aplicacao conecta como usuario
+// read-only no Supabase), imprimia
 // "auditoria de startup desativada" e saia com 0 — o passo de auditoria do
 // startCommand nao auditava nada, e divergencia de schema subia como deploy
 // verde. Agora ela roda, e divergencia faz o processo sair com codigo != 0.

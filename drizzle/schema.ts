@@ -1113,7 +1113,7 @@ export const calendarExceptions = pgTable(
  *
  * Nao substitui um Sentry: nao tem source map, breadcrumb nem agrupamento
  * sofisticado. Existe para responder tres perguntas que hoje ninguem responde
- * sem abrir o painel da DockHosting: (1) o que quebrou, (2) onde quebrou e
+ * sem abrir o painel do Render: (1) o que quebrou, (2) onde quebrou e
  * (3) desde quando. O `fingerprint` agrupa ocorrencias iguais e e o que
  * permite alertar uma vez por janela em vez de uma vez por requisicao.
  */

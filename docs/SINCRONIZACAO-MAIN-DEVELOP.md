@@ -28,7 +28,7 @@ checagem de divergência ou trocar por `push --force` quebra a suíte.
 
 A branch `main` estava bloqueada em commits de correção de Dockerfile (para DockHosting), enquanto a branch `develop` tinha 1258 commits à frente com todo o progresso do sistema Kanban, EPM, EAP, CPM, LOB, etc.
 
-Plataformas de deploy estavam configuradas para puxar da `main`, resultando em deploys com código desatualizado. Hoje só o DockHosting constrói (ver `docs/STACK-ATUAL.md`).
+Plataformas de deploy estavam configuradas para puxar da `main`, resultando em deploys com código desatualizado. Hoje o único alvo é o Render (`plataforma-obras-3`) — ver `docs/STACK-ATUAL.md`.
 
 ## Solução aplicada em 15/10 (histórico)
 
@@ -60,8 +60,8 @@ Plataformas de deploy estavam configuradas para puxar da `main`, resultando em d
 
 | Plataforma | Branch | Configuração | Observação |
 |------------|--------|--------------|------------|
-| DockHosting | `main` | `nixpacks.toml` | **Única** plataforma de produção: Nixpacks, Node 22, start `npm start` |
-| ~~Render~~ | — | — | fora do projeto (out/2026); `render.yaml` não existe mais |
+| Render | `main` | `Dockerfile` | **Única** plataforma de produção: runtime Docker, health check `/readyz`, start `npm start` |
+| ~~DockHosting~~ | — | — | fora do projeto (out/2026); ficou no ar servindo commit antigo e deve ser desligado |
 | ~~Vercel~~ | — | — | fora do projeto (out/2026); `vercel.json` não existe mais |
 
 ## Lições aprendidas

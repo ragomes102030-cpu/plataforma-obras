@@ -7,17 +7,17 @@
 
 | Documento | Para quê |
 | --- | --- |
-| [STACK-ATUAL.md](STACK-ATUAL.md) | Onde o sistema roda hoje: GitHub + DockHosting + Supabase, URLs, banco, o que **não** usamos mais |
+| [STACK-ATUAL.md](STACK-ATUAL.md) | Onde o sistema roda hoje: GitHub + Render (`plataforma-obras-3`) + Supabase, URLs, banco, o que **não** usamos mais |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Como o código está organizado (front, API, tRPC, banco) |
 | [SETUP.md](SETUP.md) | Rodar localmente, variáveis de ambiente, primeiros passos |
-| [DEPLOY-DOCKHOSTING.md](DEPLOY-DOCKHOSTING.md) | Build, deploy, migrações em produção, runbook de incidente |
+| [DEPLOY.md](DEPLOY.md) | Build, deploy, migrações em produção, runbook de incidente |
 | [AGENTS.md](AGENTS.md) | Regras para agentes de IA trabalhando no repositório |
 
 ## Decisões e histórico técnico
 
 | Documento | Para quê |
 | --- | --- |
-| [DECISIONS.md](DECISIONS.md) | Decisões de arquitetura e o porquê, incluindo as plataformas que ficaram pelo caminho (Render, Vercel, Aiven, MySQL) |
+| [DECISIONS.md](DECISIONS.md) | Decisões de arquitetura e o porquê, incluindo as plataformas que ficaram pelo caminho (DockHosting, Railway, Vercel, Aiven, MySQL) |
 | [IMPROVEMENTS.md](IMPROVEMENTS.md) | Registro cronológico de melhorias |
 | [CHANGELOG_AI.md](CHANGELOG_AI.md) | Mudanças feitas com apoio de IA |
 | [SINCRONIZACAO-MAIN-DEVELOP.md](SINCRONIZACAO-MAIN-DEVELOP.md) | Relação entre `main` e `develop` |

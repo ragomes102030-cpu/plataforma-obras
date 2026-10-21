@@ -99,7 +99,7 @@ Conclusão: limites de resolutionSummary pertencem ao contrato do Arquimedes/orq
 
 ## 14. QA
 Existe infraestrutura de QA com runner, suites, projeto isolado, fixture E2E, logs e checkpoint.
-Regra operacional obrigatória: GitHub -> DockHosting -> confirmar LIVE -> testar -> validar.
+Regra operacional obrigatória: GitHub -> Render -> confirmar LIVE -> testar -> validar.
 Nunca declarar teste funcional como aprovado sem evidência real.
 
 ## 15. Fixture E2E atual
@@ -164,7 +164,7 @@ O registro de aprendizado guarda problema, evidências, regra proposta, escopo, 
 6. Verificar o código atual antes de afirmar que algo existe.
 7. Respeitar aprovação.
 8. Nunca inventar estado de produção.
-9. Executar mudanças pelo fluxo GitHub -> DockHosting -> LIVE -> teste -> validação.
+9. Executar mudanças pelo fluxo GitHub -> Render -> LIVE -> teste -> validação.
 10. Atualizar este cérebro quando surgir aprendizado estrutural.
 
 ## 23. Estado atual

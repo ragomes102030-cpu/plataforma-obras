@@ -3,13 +3,18 @@ import { readFileSync } from "node:fs";
 import { versaoSuficiente, MIN_NODE } from "../scripts/check-node.mjs";
 
 /**
- * O deploy de producao nao usa o Dockerfile: o DockHosting monta a imagem com
- * Nixpacks (ver docs/DEPLOY-DOCKHOSTING.md). Isso deixou dois arquivos capazes
- * de derrubar o build sem aparecer em nenhum type-check: o `nixpacks.toml` e o
- * `package.json`. Ja perdemos um deploy inteiro porque o `nixpacks.toml` pedia o
- * pacote `pnpm-10_x`, que nao existe no nixpkgs (o nome canonico e `pnpm_10`).
- * O `nix-env -iA` falha antes de instalar qualquer coisa e o log so mostra
- * "attribute not found" — nenhuma pista de que veio do nosso arquivo.
+ * ATENCAO: o deploy de producao hoje e por **Docker** (`./Dockerfile`), nao por
+ * Nixpacks (ver docs/DEPLOY.md). Este arquivo continua existindo porque ja houve
+ * um periodo em que o DockHosting montava a imagem por Nixpacks, e porque o
+ * `nixpacks.toml` segue como plano B de build.
+ *
+ * O que se perdeu naquele periodo foi caro o bastante para ficar registrado: o
+ * `nixpacks.toml` e o `package.json` sao dois arquivos capazes de derrubar o
+ * build sem aparecer em nenhum type-check. Ja perdemos um deploy inteiro porque o
+ * `nixpacks.toml` pedia o pacote `pnpm-10_x`, que nao existe no nixpkgs (o nome
+ * canonico e `pnpm_10`). O `nix-env -iA` falha antes de instalar qualquer coisa e
+ * o log so mostra "attribute not found" — nenhuma pista de que veio do nosso
+ * arquivo.
  *
  * Estes testes leem o arquivo como texto (nao temos parser de TOML no projeto)
  * e travam as decisoes que, se mudarem sem cuidado, quebram o build.

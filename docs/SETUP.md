@@ -44,7 +44,8 @@ triggers e índices, e o journal. Ele roda no boot do deploy e imprime
 
 **A URL do banco não pertence a este arquivo.** Endereço de serviço sai do README
 e a senha nunca entra no repositório — ela vive nas variáveis de ambiente do
-DockHosting e, em desenvolvimento, no `.env.local` (que é ignorado pelo git).
+Render (`plataforma-obras-3`) e, em desenvolvimento, no `.env.local` (que é
+ignorado pelo git).
 
 ### Estrutura de tabelas (Drizzle ORM)
 
@@ -87,14 +88,14 @@ DATABASE_URL=...
 GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 # Front, back e banco debaixo do mesmo domínio.
-PUBLIC_APP_URL=https://plataforma-obras.dockhosting.dev
+PUBLIC_APP_URL=https://plataforma-obras-3.onrender.com
 MCP_EAP_URL=https://mcp-eap-server-rafael-5864.vercel.app
 MCP_CRONOGRAMA_URL=https://mcp-cronograma-server-rafael-5864.vercel.app
 MCP_GANTT_LOB_URL=https://mcp-gantt-lob-server-rafael-5864.vercel.app
 ```
 
 As três `MCP_*_URL` apontam para servidores MCP externos que continuam no ar e
-não fazem parte do deploy principal. O resto da stack é só GitHub + DockHosting +
+não fazem parte do deploy principal. O resto da stack é só GitHub + Render +
 Supabase (`docs/STACK-ATUAL.md`).
 
 ### Login com GitHub: o campo que trava tudo
@@ -102,14 +103,14 @@ Supabase (`docs/STACK-ATUAL.md`).
 O `redirect_uri` que o servidor envia ao GitHub sai de `PUBLIC_APP_URL`
 (`server/_core/github-oauth.ts`, `getBaseUrl`), e o GitHub **recusa** qualquer
 valor que não case com uma Callback URL cadastrada no app OAuth. A recusa
-aparece como "url inválida" na tela de login, e ela NÃO é do DockHosting nem do
+aparece como "url inválida" na tela de login, e ela NÃO é do Render nem do
 código: é um campo na conta do GitHub.
 
 O que precisa estar em **Settings → Developer settings → OAuth Apps**, na
 página do app cujo `client_id` é o de `GITHUB_CLIENT_ID`:
 
 ```
-https://plataforma-obras.dockhosting.dev/api/auth/github/callback
+https://plataforma-obras-3.onrender.com/api/auth/github/callback
 ```
 
 Para desenvolvimento local, o mesmo servidor serve back e front, então a
@@ -149,35 +150,40 @@ node dist/index.js
 
 ---
 
-## Hospedagem no DockHosting
+## Hospedagem no Render
+
+Produção é **um** serviço: `plataforma-obras-3` (`srv-dbcd0gon74is7384ufag`),
+branch `main`, URL `https://plataforma-obras-3.onrender.com`. Detalhe completo em
+`docs/DEPLOY.md`; aqui vai só o mínimo para recriar o serviço do zero.
 
 ### Configuração inicial
 
-1. Crie uma aplicação no painel do DockHosting e conecte o repositório
+1. No painel do Render, **New → Web Service**, conecte o repositório
    `ragomes102030-cpu/plataforma-obras`, branch `main`
-2. **Não** escolha Build Pack: o build é do Nixpacks e lê o `nixpacks.toml` do
-   repositório (Node 22 + `pnpm install --frozen-lockfile` + `pnpm run build`)
-3. Start Command: `npm start` (roda `migrate` → `audit` → `node dist/index.js`)
-4. Environment: as variáveis da seção acima
-5. O domínio de produção é `https://plataforma-obras.dockhosting.dev`
+2. Runtime: **Docker**. Dockerfile path `./Dockerfile`, contexto `.`
+3. Health check path: **`/readyz`** (não `/healthz`: `/readyz` consulta o banco)
+4. Environment: as variáveis da seção acima; `PUBLIC_APP_URL` **tem** de ser a
+   URL do Render
+5. Auto-deploy: `commit` (push na `main` dispara build)
 
 ### O que o GitHub Actions faz (e o que não faz)
 
-`.github/workflows/deploy-dockhosting.yml` roda em pull request e push:
+- `ci.yml` (pull request e push na `main`): instala, roda testes, valida tipos e
+  faz o build. Não publica nada.
+- `schema-audit.yml` (pull request): reprova a promoção quando o repositório tem
+  migration que o banco não registrou.
+- `deploy-verify.yml` (push na `main`): pergunta ao Render se já existe deploy do
+  SHA, dispara um se não existir, e vigia o `/healthz` até o commit publicado
+  bater. Falha quando não bate — é o guarda que impede deploy velho passar em
+  silêncio.
+- `aurora-eap-regression.yml`: regressão da EAP numa obra de teste.
 
-1. **Checkout** do código
-2. **Instalação** com pnpm 10.4.1
-3. **Testes**, validação de tipos e build
-
-Ele **não** publica nada e **não** empurra imagem para o Docker Hub. Quem constrói
-e publica é o DockHosting, ao receber o push via webhook. Quem confere se o commit
-que está no ar é o da `main` é o `deploy-verify.yml`, que compara o `commit` do
-`/healthz` com o SHA e falha em 45 minutos se não bater.
+Quem constrói e publica a imagem é o Render, ao receber o push.
 
 ### Build local (Docker, opcional)
 
-O `Dockerfile` do repositório é útil para rodar local, mas **não** é o que a
-produção usa (ver `docs/DEPLOY-DOCKHOSTING.md`).
+O `Dockerfile` é **o mesmo** que a produção usa, então dá para reproduzir o build
+localmente.
 
 ```bash
 # Build da imagem
@@ -300,7 +306,7 @@ pnpm build
 - Verifique URL no SQLite
 
 ### Deploy não publica o commit
-- `curl -s https://plataforma-obras.dockhosting.dev/healthz` e compare o `commit`
+- `curl -s https://plataforma-obras-3.onrender.com/healthz` e compare o `commit`
   com o `git rev-parse --short HEAD`
 - O `deploy-verify` do GitHub Actions acusa sozinho se em 45 min o commit não
   estiver publicado

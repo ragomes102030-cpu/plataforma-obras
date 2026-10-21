@@ -77,6 +77,6 @@ Read-only por natureza — indexa e serve, nunca modifica código.
 
 ## Limitações
 1. Runtime nativo baixado no postinstall (requer `npm install-scripts approve`)
-2. Índice local em `~/.cache/codebase-memory-mcp/` — no container Linux (DockHosting) exige reindexar
+2. Índice local em `~/.cache/codebase-memory-mcp/` — no container Linux (Render) exige reindexar a cada build
 3. `auto_index = false` por padrão — rodar index_repository após mudanças estruturais
 4. 7 arquivos com parse parcial (SQL do drizzle), best-effort

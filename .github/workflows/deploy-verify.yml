@@ -1,97 +1,136 @@
-name: deploy-verify
+name: Deploy verify (Render)
 
-# O deploy do DockHosting nao e disparado por este workflow: ele e disparado
-# pelo webhook do GitHub, e esse webhook ja falhou em silencio mais de uma vez
-# (entrega 200 = "recebi", nao "vou buildar"). Quando isso acontece, a versao
-# antiga continua no ar e nada fica vermelho - foi assim que o `main` andou
-# na frente do que estava publicado.
+# ============================================================================
+# UM ALVO, UM URL, UM LUGAR PARA OLHAR.
 #
-# Este workflow fecha esse buraco pelo lado de fora: depois de cada push na main
-# ele consulta /healthz ate 45 min e falha se o commit publicado nao for o commit
-# do push. Se o secret DOCKHOSTING_DEPLOY_HOOK existir, ele tenta disparar o
-# build pelo proprio deploy hook antes de desistir.
+# Este workflow existe para responder UMA pergunta depois de cada push na
+# `main`: o endereco publico esta servindo o commit que acabou de ser mergeado?
+# Se a resposta for "nao", ele falha. Sim, ele falha de proposito — um deploy
+# silenciosamente velho e pior do que um deploy vermelho, porque o dono segue
+# usando o sistema achando que a correcao entrou.
+#
+# HISTORICO (para nao repetir o erro)
+#
+# 1. Railway: o host do health-check apontava para um servico que nao existia
+#    mais. O job ficava 45 min em TIMEOUT, parecendo "deploy lento".
+# 2. DockHosting (`plataforma-obras.dockhosting.dev`): virou o alvo, depois
+#    deixou de receber deploy e continuou no ar servindo um commit antigo —
+#    dois "producao" para o mesmo banco Supabase. Este workflow vigiava esse
+#    host e por isso falhava em todo push.
+# 3. Hoje o alvo e o Render, servico `plataforma-obras-3`.
+#
+# O QUE ELE FAZ
+#
+#   1. pergunta ao Render se ja existe deploy para este SHA;
+#   2. se nao existe, dispara um (o auto-deploy do Render nem sempre acorda);
+#   3. vigia `/healthz` ate o `commit` publicado bater com o SHA do push.
+#
+# SECRETS / VARS
+#
+#   secrets.RENDER_API_KEY    obrigatorio para disparar o deploy. Sem ele, o
+#                             job so vigia (e avisa no log).
+#   vars.RENDER_SERVICE_ID    opcional; o padrao esta abaixo.
+#
+# ============================================================================
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
-      sha:
-        description: "Commit esperado (7+ caracteres). Vazio = HEAD da main."
+      commit:
+        description: "SHA a confirmar (vazio = HEAD)"
         required: false
         type: string
+
+# Dois pushes seguidos nao precisam de dois vigias: o mais novo e o que importa.
+concurrency:
+  group: deploy-verify
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: deploy-verify-${{ github.ref }}
-  cancel-in-progress: false
-
-env:
-  PROD_URL: https://plataforma-obras.dockhosting.dev
-
 jobs:
-  verify:
-    name: producao serve o commit
+  confirmar:
+    name: Confirmar o SHA em producao
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 35
+
     steps:
-      - name: Commit esperado
-        id: alvo
-        run: |
-          alvo="${{ inputs.sha }}"
-          if [ -z "$alvo" ]; then alvo="${{ github.sha }}"; fi
-          alvo=$(printf '%s' "$alvo" | tr -d '[:space:]' | cut -c1-7)
-          echo "alvo=$alvo" >> "$GITHUB_OUTPUT"
-          echo "Esperando o commit \`$alvo\` em $PROD_URL" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
 
-      - name: Esperar o deploy (ate 45 min)
-        id: espera
+      - name: Disparar o deploy no Render (se ainda nao houver um para este commit)
+        if: github.event_name == 'push'
         env:
-          ALVO: ${{ steps.alvo.outputs.alvo }}
-          HOOK: ${{ secrets.DOCKHOSTING_DEPLOY_HOOK }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ vars.RENDER_SERVICE_ID || 'srv-dbcd0gon74is7384ufag' }}
+          SHA: ${{ github.sha }}
         run: |
-          disparou=0
-          for i in $(seq 1 45); do
-            corpo=$(curl -fsS --max-time 15 "$PROD_URL/healthz" 2>/dev/null || true)
-            commit=$(printf '%s' "$corpo" | tr -d '\r' | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')
-            up=$(printf '%s' "$corpo" | tr -d '\r' | sed -n 's/.*"uptimeSeconds":\([0-9]*\).*/\1/p')
-            echo "[$i/45] publicado=${commit:-?} uptime=${up:-?}s"
+          set -euo pipefail
 
-            case "$commit" in
-              "$ALVO"*)
-                echo "deploy_ok=true" >> "$GITHUB_OUTPUT"
-                {
-                  echo "### Deploy confirmado"
-                  echo "Produção responde \`${commit}\` (uptime ${up}s)."
-                } >> "$GITHUB_STEP_SUMMARY"
-                exit 0
-                ;;
-            esac
+          if [ -z "${RENDER_API_KEY:-}" ]; then
+            echo "::warning::RENDER_API_KEY nao configurado. Vou apenas vigiar o /healthz."
+            echo "::warning::Se o auto-deploy do Render nao disparar, este job falha mostrando o SHA antigo — e ai a acao e disparar o deploy pela API."
+            exit 0
+          fi
 
-            # Sem deploy hook configurado nao ha como disparar: resta esperar.
-            # Com o hook, tenta uma vez depois de 8 min, caso o webhook tenha
-            # sido engolido.
-            if [ "$i" -eq 8 ] && [ "$disparou" -eq 0 ] && [ -n "$HOOK" ]; then
-              disparou=1
-              echo "Nada publicou em 8 min; disparando o deploy hook."
-              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$HOOK" || echo 000)
-              if [ "$code" = "405" ] || [ "$code" = "404" ]; then
-                code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$HOOK" || echo 000)
-              fi
-              echo "deploy hook respondeu HTTP $code"
-            fi
+          api="https://api.render.com/v1/services/${SERVICE_ID}"
+          hdr="Authorization: Bearer ${RENDER_API_KEY}"
 
-            sleep 60
-          done
+          echo "Servico: ${SERVICE_ID}"
+          echo "Commit:  ${SHA}"
 
-          {
-            echo "### Deploy NAO aconteceu"
-            echo "45 min e a produção ainda responde \`${commit:-?}\`, não \`${ALVO}\`."
-            echo ""
-            echo "O webhook do DockHosting recebeu o push mas não enfileirou o build."
-            echo "Ação: painel do DockHosting → projeto → Trigger/Deploy."
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error::Produção não serve ${ALVO} após 45 min (responde ${commit:-?}). Dispare o deploy no painel do DockHosting."
-          exit 1
+          # O Render pagina; limit=10 cobre "ultimo deploy + os concorrentes".
+          deploys="$(curl -sS -H "${hdr}" "${api}/deploys?limit=10")"
+
+          if ! echo "${deploys}" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            echo "::warning::Resposta inesperada do Render ao listar deploys:"
+            echo "${deploys}"
+            exit 0
+          fi
+
+          # Ja existe deploy deste commit? Qual o status?
+          status="$(echo "${deploys}" \
+            | jq -r --arg sha "${SHA}" '
+                [ .[] | select((.commit.id // "") | startswith($sha[0:7])) ]
+                | sort_by(.createdAt) | last | .status // ""')"
+
+          echo "Deploy deste commit no Render: ${status:-(nenhum)}"
+
+          case "${status}" in
+            live)
+              echo "Ja esta no ar. Nada a disparar."
+              exit 0
+              ;;
+            created|build_in_progress|update_in_progress|pre_deploy_in_progress)
+              echo "Deploy em andamento. Vou so vigiar."
+              exit 0
+              ;;
+          esac
+
+          echo "Disparando deploy para ${SHA}..."
+          resp="$(curl -sS -X POST -H "${hdr}" -H 'content-type: application/json' \
+            -d "{\"commitId\": \"${SHA}\"}" "${api}/deploys")"
+          echo "${resp}" | jq -c '{deployId: .id, status: .status, commit: .commit.id}' 2>/dev/null || echo "${resp}"
+
+      - name: Confirmar o SHA em producao
+        env:
+          SHA: ${{ github.event.inputs.commit || github.sha }}
+        run: |
+          set -euo pipefail
+          export PLATAFORMA_HEALTHZ="https://plataforma-obras-3.onrender.com/healthz"
+          # 80 tentativas x 20s = ~27 min. O Render free hiberna; o primeiro
+          # request pode levar ~60s so para acordar, por isso 20s e nao 5s.
+          node scripts/verificar-deploy.mjs "${SHA}" 80 20000
+
+      - name: Registrar o estado final
+        if: always()
+        run: |
+          echo "=== /healthz ==="
+          curl -sS --max-time 20 "https://plataforma-obras-3.onrender.com/healthz" || true
+          echo
+          echo "=== /readyz ==="
+          curl -sS --max-time 20 "https://plataforma-obras-3.onrender.com/readyz" || true

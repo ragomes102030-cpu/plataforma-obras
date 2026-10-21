@@ -31,18 +31,20 @@ const esperado = (process.argv[2] ?? "").toLowerCase();
 const tentativas = Number(process.argv[3] ?? 20);
 const intervalo = Number(process.argv[4] ?? 15000);
 
-// A URL do ar.
+// A URL do ar. UM alvo so.
 //
-// Este valor era a da Railway (`plataforma-obras-staging-production.up.railway.app`),
-// de um servico que nao existe mais. O script nao accusava: ele ficava em
-// `TIMEOUT` vinte vezes, dando a impressao de que o deploy estava lento, quando
-// o que faltava era um host que responde.
+// Este valor ja foi da Railway (servico extinto) e depois do DockHosting. Os
+// dois casos deram o mesmo sintoma: o script ficava em TIMEOUT porque o host
+// nao respondia (ou respondia um commit antigo), e isso parecia "deploy lento".
 //
-// A environment `PLATAFORMA_HEALTHZ` continua valendo e tem precedencia, para
-// quem conferir um ambiente que nao seja producao.
+// Hoje o unico alvo e o Render, servico `plataforma-obras-3`. Se um dia mudar,
+// muda aqui e no `deploy-verify.yml` — os dois tem de apontar para o mesmo host.
+//
+// A environment `PLATAFORMA_HEALTHZ` tem precedencia, para quem quiser conferir
+// um ambiente que nao seja producao.
 const HEALTHZ =
   process.env.PLATAFORMA_HEALTHZ ??
-  "https://plataforma-obras.dockhosting.dev/healthz";
+  "https://plataforma-obras-3.onrender.com/healthz";
 
 if (!/^[0-9a-f]{7,40}$/.test(esperado)) {
   console.error(`SHA invalido: "${esperado}". Use de 7 a 40 caracteres hex.`);

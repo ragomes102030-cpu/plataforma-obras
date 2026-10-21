@@ -13,7 +13,7 @@
  *
  * 1. NAO ADIVINHAR O NOME DA VARIAVEL DE AMBIENTE. A versao anterior listava
  *    `RENDER_GIT_COMMIT`, `RAILWAY_GIT_COMMIT_SHA` e `VERCEL_GIT_COMMIT_SHA`.
- *    A plataforma de hoje e o DockHosting: nenhuma das tres existe, e o
+ *    Quando a plataforma virou o DockHosting, nenhuma das tres existia, e o
  *    endpoint voltou a dizer "local". Adivinhar o nome funciona ate mudar de
  *    plataforma, e a falha e silenciosa.
  *
@@ -23,7 +23,7 @@
  *
  *    O padrao cobre o FORMATO generico (`*_COMMIT`), nao uma lista de formatos
  *    plausiveis. A primeira versao listava `GIT_COMMIT|COMMIT_SHA|...` e nao
- *    pegava um `*_COMMIT` qualquer: o nome real do DockHosting, `SOURCE_COMMIT`,
+ *    pegava um `*_COMMIT` qualquer: o nome do DockHosting, `SOURCE_COMMIT`,
  *    so foi encontrado porque estava na lista de nomes conhecidos. Se tivesse
  *    vindo de outra plataforma, teria falhado.
  *
@@ -76,11 +76,13 @@ const NOMES_DE_COMMIT = [
   "GIT_COMMIT",
   "GIT_SHA",
   "COMMIT_SHA",
-  // Nome VERIFICADO em producao: e a variavel que o DockHosting injeta. Ficou
-  // aqui para nao depender do padrao no unico nome que sabemos ser real. Foi
-  // por estar nesta lista que ele foi encontrado no primeiro deploy — o padrao,
-  // na epoca, NAO cobria um `*_COMMIT` generico, ou seja, teria falhado
-  // justamente no caso real.
+  // Nome VERIFICADO em producao hoje: e a variavel que o Render injeta (o
+  // `/healthz` responde `commitSource: "RENDER_GIT_COMMIT"`). Ficou aqui para
+  // nao depender do padrao.
+  //
+  // `SOURCE_COMMIT` abaixo e o nome que o DockHosting injetava quando era a
+  // plataforma; ficou como historico para o caso de o build voltar a passar por
+  // la. Nenhum dos dois e adivinhacao: os dois foram vistos em producao.
   "SOURCE_COMMIT",
   "SOURCE_VERSION",
   "RENDER_GIT_COMMIT",

@@ -1,10 +1,23 @@
 name: CI
 
+# UM SO BRANCO DE TRABALHO: `main`.
+#
+# Antes, este workflow rodava tambem em `develop` e em
+# `production-stable-20261005`. Como o `sync-develop.yml` empurra cada commit de
+# `main` para `develop`, todo merge gerava DUAS execucoes completas do CI
+# (~15 min cada) para o mesmo SHA, e o `deploy-dockhosting.yml` gerava uma
+# terceira. Resultado pratico: tres filas verdes para uma mudanca e fila de
+# espera no runner gratuito.
+#
+# `develop` continua existindo como espelho automatico de `main`
+# (docs/SINCRONIZACAO-MAIN-DEVELOP.md), mas nao e branch de trabalho e nao
+# precisa de CI proprio: o commit dele e o mesmo de `main`, ja validado.
+# `production-stable-20261005` e ancora de rollback, congelada: nao recebe push.
 on:
   push:
-    branches: [main, develop, production-stable-20261005]
+    branches: [main]
   pull_request:
-    branches: [main, develop, production-stable-20261005]
+    branches: [main]
 
 jobs:
   validate:

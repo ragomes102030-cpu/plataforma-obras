@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "https://plataforma-obras.dockhosting.dev";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "https://plataforma-obras-3.onrender.com";
 const authState = process.env.PLAYWRIGHT_STORAGE_STATE ?? ".playwright/auth.json";
 const hasAuth = fs.existsSync(authState);
 
