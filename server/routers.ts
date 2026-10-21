@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ArquimedesEapProposal } from "./agent/core/types";
@@ -22,6 +22,7 @@ import {
   wbsNodes,
   budgetVersions,
   budgetItems,
+  costEntries,
   projectPlanVersions,
   priceCatalogs,
   priceItems,
@@ -5120,8 +5121,15 @@ export const appRouter = router({
           pv: 0,
           ev: 0,
           ac: null as number | null,
+          acOutOfScope: 0,
+          acUnallocated: 0,
+          acTotal: 0,
+          costCoveragePct: 0,
+          costEntryCount: 0,
+          custoPlanejadoDoExecutado: 0,
           spi: null as number | null,
           cpi: null as number | null,
+          tcpi: null as number | null,
           sv: 0,
           cv: null as number | null,
           eac: null as number | null,
@@ -5130,7 +5138,7 @@ export const appRouter = router({
           plannedPct: 0,
           actualPct: 0,
           acLinked: false,
-          costSource: "preco_planejado" as const,
+          costSource: "sem_custo" as const,
           note: "Banco de dados não configurado.",
         };
         const db = await getDb();
@@ -5151,9 +5159,221 @@ export const appRouter = router({
           items: dados.items,
           activities: dados.activities,
           actualByActivity: dados.actualByActivity,
+          costByActivity: dados.costByActivity,
+          costByItem: dados.costByItem,
+          costUnallocated: dados.costUnallocated,
+          costEntryCount: dados.costEntryCount,
         });
         return { available: true as const, asOf: dados.asOf, ...resultado };
       }),
+
+    /*
+     * CUSTO REAL — a fonte do AC.
+     *
+     * O EVM calculava AC como `quantidade executada × preço unitário`, que é
+     * exatamente o EV. Resultado: CPI ≡ 1,000 e nenhum estouro de custo podia
+     * aparecer. Estas três rotas são o que permite ao AC ser dinheiro gasto.
+     *
+     * O lançamento aponta para a atividade (caso ideal, porque dá para comparar
+     * custo com avanço) ou para o item de orçamento (nota de material que
+     * atende várias atividades). Nenhum dos dois = custo da obra (mobilização);
+     * fica fora do CPI e é reportado.
+     */
+    custos: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          asOf: z.coerce.date().optional(),
+          incluirCancelados: z.boolean().default(false),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db)
+          return {
+            available: false as const,
+            itens: [],
+            note: "Banco de dados não configurado.",
+          };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const filtros = [eq(costEntries.projectId, input.projectId)];
+        if (input.asOf) filtros.push(lte(costEntries.competenceDate, input.asOf));
+        if (!input.incluirCancelados) filtros.push(ne(costEntries.status, "cancelado"));
+
+        const linhas = await db
+          .select({
+            id: costEntries.id,
+            activityId: costEntries.activityId,
+            budgetItemId: costEntries.budgetItemId,
+            competenceDate: costEntries.competenceDate,
+            amount: costEntries.amount,
+            category: costEntries.category,
+            supplier: costEntries.supplier,
+            document: costEntries.document,
+            notes: costEntries.notes,
+            status: costEntries.status,
+            wbsCode: scheduleActivities.wbsCode,
+            activityName: scheduleActivities.name,
+            itemDescription: budgetItems.description,
+          })
+          .from(costEntries)
+          .leftJoin(
+            scheduleActivities,
+            eq(scheduleActivities.id, costEntries.activityId)
+          )
+          .leftJoin(budgetItems, eq(budgetItems.id, costEntries.budgetItemId))
+          .where(and(...filtros))
+          .orderBy(desc(costEntries.competenceDate), desc(costEntries.id))
+          .limit(500);
+
+        return { available: true as const, itens: linhas, note: null };
+      }),
+
+    registrarCusto: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          activityId: z.number().int().positive().nullish(),
+          budgetItemId: z.number().int().positive().nullish(),
+          competenceDate: z.coerce.date(),
+          amount: z.number().positive().max(1_000_000_000),
+          category: z
+            .enum([
+              "material",
+              "mao_de_obra",
+              "equipamento",
+              "servico",
+              "administrativo",
+              "outro",
+            ])
+            .default("material"),
+          supplier: z.string().trim().max(160).nullish(),
+          document: z.string().trim().max(64).nullish(),
+          notes: z.string().trim().max(2000).nullish(),
+          status: z.enum(["rascunho", "confirmado"]).default("confirmado"),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        // Falha de infraestrutura continua 500 (ver `server/_core/errors.ts`).
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        // Vínculo cruzado entre obras é o erro mais fácil de cometer e o mais
+        // difícil de perceber: o custo apareceria no EVM de outra obra.
+        if (input.activityId != null) {
+          const [atividade] = await db
+            .select({ id: scheduleActivities.id })
+            .from(scheduleActivities)
+            .where(
+              and(
+                eq(scheduleActivities.id, input.activityId),
+                eq(scheduleActivities.projectId, input.projectId)
+              )
+            )
+            .limit(1);
+          if (!atividade)
+            throw badRequest("Atividade não pertence a esta obra.");
+        }
+
+        if (input.budgetItemId != null) {
+          const [item] = await db
+            .select({ id: budgetItems.id })
+            .from(budgetItems)
+            .innerJoin(
+              budgetVersions,
+              eq(budgetVersions.id, budgetItems.budgetVersionId)
+            )
+            .where(
+              and(
+                eq(budgetItems.id, input.budgetItemId),
+                eq(budgetVersions.projectId, input.projectId)
+              )
+            )
+            .limit(1);
+          if (!item)
+            throw badRequest("Item de orçamento não pertence a esta obra.");
+        }
+
+        const [criado] = await db
+          .insert(costEntries)
+          .values({
+            projectId: input.projectId,
+            activityId: input.activityId ?? null,
+            budgetItemId: input.budgetItemId ?? null,
+            competenceDate: input.competenceDate,
+            amount: input.amount.toFixed(2),
+            category: input.category,
+            supplier: input.supplier ?? null,
+            document: input.document ?? null,
+            notes: input.notes ?? null,
+            status: input.status,
+            createdBy: ctx.user.id,
+          })
+          .returning({ id: costEntries.id });
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "cost_entry_created",
+          payload: {
+            costEntryId: criado.id,
+            amount: input.amount,
+            category: input.category,
+            activityId: input.activityId ?? null,
+            budgetItemId: input.budgetItemId ?? null,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { id: criado.id };
+      }),
+
+    /**
+     * Estorno, não exclusão: o lançamento errado continua visível com o status
+     * `cancelado` e sai do AC a partir daí. Apagar a linha destruiria o rastro
+     * de que ele existiu — e é justamente isso que uma auditoria de custo
+     * precisa.
+     */
+    cancelarCusto: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          costEntryId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        // Falha de infraestrutura continua 500 (ver `server/_core/errors.ts`).
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [linha] = await db
+          .update(costEntries)
+          .set({ status: "cancelado", updatedAt: new Date() })
+          .where(
+            and(
+              eq(costEntries.id, input.costEntryId),
+              eq(costEntries.projectId, input.projectId)
+            )
+          )
+          .returning({ id: costEntries.id });
+        if (!linha) throw notFound("Lançamento de custo não encontrado.");
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "cost_entry_cancelled",
+          payload: {
+            costEntryId: input.costEntryId,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { ok: true as const };
+      }),
+
     scurve: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
       .query(async ({ ctx, input }) => {

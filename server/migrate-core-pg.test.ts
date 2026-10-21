@@ -218,7 +218,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
     ).toEqual([]);
   });
 
-  it("reconhece as 37 tabelas, os 32 tipos e as 25 triggers", () => {
+  it("reconhece as 38 tabelas, os 34 tipos e as 26 triggers", () => {
     const conta = { table: 0, type: 0, trigger: 0 };
     for (const arquivo of arquivos) {
       for (const stmt of statementsDe(arquivo)) {
@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 37, type: 32, trigger: 25 });
+    expect(conta).toEqual({ table: 38, type: 34, trigger: 26 });
   });
 });
 
@@ -304,8 +304,8 @@ describe("aplicarMigracoes num banco vazio", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
-      // 33 do schema + a de registro.
-      expect(tabelas.rows[0]!.n).toBe(38);
+      // 38 do schema + a de registro.
+      expect(tabelas.rows[0]!.n).toBe(39);
     } finally {
       await pg.close();
     }
@@ -418,7 +418,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const depois = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
       );
-      expect(depois.rows[0]!.n).toBe(25);
+      expect(depois.rows[0]!.n).toBe(26);
 
       // E o que o Render derrubou duas vezes: ao reaplicar a 0000 inteira, o
       // `CREATE TYPE "users_role"` que JA EXISTIA rodava de novo e o banco
@@ -430,7 +430,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const enums = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM pg_type WHERE typtype = 'e'"
       );
-      expect(enums.rows[0]!.n).toBe(32);
+      expect(enums.rows[0]!.n).toBe(34);
 
       const registros = await pg.query<{ n: number }>(
         'SELECT COUNT(*)::int AS n FROM "__drizzle_migrations"'

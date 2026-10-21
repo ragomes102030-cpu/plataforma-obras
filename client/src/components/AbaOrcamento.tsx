@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
+import { PainelValorGanho } from "./PainelValorGanho";
 
 type Props = {
   projetoId: number;
@@ -69,6 +70,10 @@ export function AbaOrcamento({ projetoId }: Props) {
       </div>
 
       <PainelCoerenciaEngenharia projetoId={projetoId} />
+
+      {/* Valor Ganho: fica junto do orçamento porque o AC é custo, e o custo
+          é lançado aqui. Ver `PainelValorGanho.tsx`. */}
+      <PainelValorGanho projetoId={projetoId} />
 
       <PainelConciliacao projetoId={projetoId} />
 

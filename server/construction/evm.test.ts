@@ -45,12 +45,23 @@ import { computeEvm, type EvmActivity, type EvmBudgetItem } from "./evm";
  *       fator igual à quantidade do item — e como o seed usa `vb` com
  *       quantidade 1, o defeito ficou invisível nos dados de exemplo.
  *
- * O QUE ESTE ARQUIVO NÃO PROVA
+ *   A19 O AC era DEDUZIDO do orçamento: `quantidade executada × preço unitário`.
+ *       Como `ev = peso × progresso`, `peso = quantidade planejada × preço` e
+ *       `progresso = executado / planejado`, os dois lados davam exatamente o
+ *       mesmo número. Logo `AC ≡ EV` e `CPI ≡ 1,000` — para toda obra, sempre.
+ *       O índice não podia acusar estouro porque numerador e denominador eram o
+ *       mesmo dado lido duas vezes. Não aparecia como erro: aparecia como "obra
+ *       sempre dentro do orçamento", que é a pior forma de errar.
  *
- * Não prova que o AC vem de despesa real: isso exige a tabela de custo real
- * (Bloco 1b). Aqui o AC continua nascendo do preço planejado — o teste trava a
- * ARITMÉTICA e o UNIVERSO, não a origem do dinheiro. Por isso `costSource` é
- * um campo de saída e não um detalhe de implementação.
+ * O QUE ESTE ARQUIVO PROVA DEPOIS DA CORREÇÃO
+ *
+ * O AC passou a vir de `cost_entries`: custo real, confirmado, cortado por data
+ * de competência. Sem lançamento de custo, `ac` é `null` e CPI/EAC/VAC/ETC/TCPI
+ * ficam `null` — um traço honesto em vez de um 1,000 inventado.
+ *
+ * É por isso que `costSource` deixou de ter `"preco_planejado"`: essa origem não
+ * existe mais. Sobraram `"custo_real"` e `"sem_custo"`, e a segunda é uma
+ * resposta legítima.
  */
 
 /** Segunda-feira. O índice 0 do CPM é o primeiro dia útil >= o início da obra. */
@@ -229,68 +240,117 @@ describe("computeEvm — universo BAC ↔ atividades (A4)", () => {
   });
 });
 
-describe("computeEvm — EAC sem custo é null (A5)", () => {
-  it("prevê EAC quando existe custo vinculado", () => {
+describe("computeEvm — AC é dinheiro gasto, não preço de tabela", () => {
+  it("sem lançamento de custo, AC/CPI/EAC/VAC são null (não 1,000)", () => {
     const resultado = computeEvm(cenario());
 
-    expect(resultado.acLinked).toBe(true);
-    expect(resultado.ac).toBe(120_000);
-    expect(resultado.cpi).toBe(0.833);
-    expect(resultado.eac).toBe(240_000);
-    expect(resultado.vac).toBe(-40_000);
-    expect(resultado.etc).toBe(120_000);
-  });
-
-  it("não prevê EAC quando nenhuma atividade tem item vinculado", () => {
-    const resultado = computeEvm({
-      ...cenario(),
-      activities: [
-        atividadeA({ budgetItemId: null }),
-        atividadeB({ budgetItemId: null }),
-        atividadeCZerada(),
-      ],
-    });
-
-    expect(resultado.acLinked).toBe(false);
     expect(resultado.ac).toBeNull();
     expect(resultado.cpi).toBeNull();
     expect(resultado.eac).toBeNull();
     expect(resultado.vac).toBeNull();
     expect(resultado.etc).toBeNull();
-    expect(resultado.note).toMatch(/vinculado/);
+    expect(resultado.tcpi).toBeNull();
+    expect(resultado.cv).toBeNull();
+    expect(resultado.acLinked).toBe(false);
+    expect(resultado.costSource).toBe("sem_custo");
+
+    // O EV continua medido: falta custo, não falta avanço. Um painel que zera
+    // o EV junto esconde o problema na direção errada.
+    expect(resultado.ev).toBe(100_000);
+    expect(resultado.note).toMatch(/Nenhum custo real/);
   });
-});
 
-describe("computeEvm — o indicador acusa desvio", () => {
-  it("CPI sai de 1 quando a quantidade executada passa do planejado", () => {
-    // A executou 120% do planejado: EV = 100.000, AC = 120.000.
-    const estourou = computeEvm(cenario());
-    expect(estourou.cpi).toBeLessThan(1);
-    expect(estourou.eac).toBeGreaterThan(estourou.scopeBac);
-    expect(estourou.cv).toBe(-20_000);
-
-    // Executou exatamente o planejado: EV = AC, CPI = 1.
-    const noPlano = computeEvm({
+  it("usa o custo real por atividade e acusa estouro", () => {
+    // EV 100.000 contra 125.000 gastos: CPI 0,800 — o número que o AC antigo
+    // nunca poderia produzir, porque ele era o próprio EV.
+    const resultado = computeEvm({
       ...cenario(),
-      actualByActivity: new Map([[1, 100]]),
+      costByActivity: new Map([[1, 125_000]]),
+      costEntryCount: 1,
     });
-    expect(noPlano.cpi).toBe(1);
-    expect(noPlano.eac).toBe(noPlano.scopeBac);
+
+    expect(resultado.ac).toBe(125_000);
+    expect(resultado.cpi).toBe(0.8);
+    expect(resultado.eac).toBe(250_000);
+    expect(resultado.vac).toBe(-50_000);
+    expect(resultado.etc).toBe(125_000);
+    expect(resultado.cv).toBe(-25_000);
+    expect(resultado.costSource).toBe("custo_real");
   });
 
-  it("limita o EV de uma atividade ao custo planejado dela", () => {
-    // 300 m³ executados de 100 planejados: EV não passa do orçado da atividade.
+  it("custo abaixo do orçado dá CPI acima de 1", () => {
+    const resultado = computeEvm({
+      ...cenario(),
+      costByActivity: new Map([[1, 80_000]]),
+      costEntryCount: 1,
+    });
+
+    expect(resultado.cpi).toBe(1.25);
+    expect(resultado.vac).toBeGreaterThan(0);
+  });
+
+  it("aceita custo lançado contra o item de orçamento", () => {
+    // Nota de material que atende a atividade sem apontar para ela.
+    const resultado = computeEvm({
+      ...cenario(),
+      costByItem: new Map([[1, 60_000]]),
+      costEntryCount: 1,
+    });
+
+    expect(resultado.ac).toBe(60_000);
+    expect(resultado.cpi).toBe(1.667);
+  });
+
+  it("custo sem vínculo não entra no CPI, mas aparece no total", () => {
+    // Mobilização não pode "melhorar" o índice: ela não mede avanço.
+    const resultado = computeEvm({
+      ...cenario(),
+      costUnallocated: 30_000,
+      costEntryCount: 1,
+    });
+
+    expect(resultado.ac).toBeNull();
+    expect(resultado.acUnallocated).toBe(30_000);
+    expect(resultado.acTotal).toBe(30_000);
+    expect(resultado.note).toMatch(/sem vínculo/);
+  });
+
+  it("custo de item fora do escopo também fica fora do CPI", () => {
+    const resultado = computeEvm({
+      ...cenario(),
+      costByItem: new Map([[3, 99_000]]),
+      costEntryCount: 1,
+    });
+
+    expect(resultado.ac).toBeNull();
+    expect(resultado.acOutOfScope).toBe(99_000);
+  });
+
+  it("avisa quando o custo cobre pouco do escopo", () => {
+    // Só a atividade A tem custo: 100.000 de 200.000 de escopo = 50%.
+    const resultado = computeEvm({
+      ...cenario(),
+      costByActivity: new Map([[1, 50_000]]),
+      costEntryCount: 1,
+    });
+
+    expect(resultado.costCoveragePct).toBe(50);
+    expect(resultado.note).toMatch(/50/);
+  });
+
+  it("limita o EV ao custo planejado, mas o AC é o que saiu", () => {
+    // 300 m³ executados de 100 planejados: o EV para no orçado da atividade,
+    // e o AC continua sendo 300.000 realmente gastos. Antes da correção os
+    // dois eram o mesmo número.
     const resultado = computeEvm({
       ...cenario(),
       actualByActivity: new Map([[1, 300]]),
+      costByActivity: new Map([[1, 300_000]]),
+      costEntryCount: 1,
     });
 
     expect(resultado.ev).toBe(100_000);
     expect(resultado.ac).toBe(300_000);
     expect(resultado.cpi).toBe(0.333);
-  });
-
-  it("declara de onde vem o custo, em vez de esconder a origem", () => {
-    expect(computeEvm(cenario()).costSource).toBe("preco_planejado");
   });
 });
