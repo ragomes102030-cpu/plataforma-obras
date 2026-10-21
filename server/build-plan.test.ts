@@ -88,12 +88,41 @@ describe("o plano do Nixpacks", () => {
     expect(codigo.toLowerCase()).not.toContain("corepack");
   });
 
-  it("instala com lockfile congelado", () => {
-    expect(instalar.at(-1)).toBe("pnpm install --frozen-lockfile");
+  it("instala com lockfile congelado e forca as devDependencies", () => {
+    // Com NODE_ENV=production (build-arg do Coolify) o pnpm omite as
+    // devDependencies por padrao, e vite/esbuild vivem la: sem `--prod=false`
+    // o install passa e o build morre logo depois.
+    expect(instalar.at(-1)).toBe(
+      "PATH=/opt/pnpm/bin:$PATH pnpm install --frozen-lockfile --prod=false",
+    );
   });
 
   it("constroi com o script de build do repositorio", () => {
-    expect(construir).toEqual(["pnpm run build"]);
+    expect(construir).toEqual(["PATH=/opt/pnpm/bin:$PATH pnpm run build"]);
+  });
+
+  it("nao confia no prefixo global do npm", () => {
+    // O Coolify passa NPM_CONFIG_PRODUCTION=true como build-arg. Nesse modo o
+    // `npm install -g` instala o pacote mas grava o binario num prefixo que nao
+    // esta no PATH, e o comando seguinte morre com "pnpm: command not found"
+    // (exit 127) — foi o que travou o deploy do #133.
+    const globais = instalar.filter((c) => c.includes("npm install -g"));
+    expect(globais.length).toBeGreaterThan(0);
+    for (const comando of globais) {
+      expect(comando, "npm install -g precisa de --prefix explicito").toContain(
+        "--prefix /opt/pnpm",
+      );
+    }
+  });
+
+  it("passa o PATH do pnpm na mesma linha de cada comando", () => {
+    // Variavel de ambiente nao atravessa camada de Docker: exportar num RUN e
+    // usar no seguinte nao funciona. O PATH tem que ir na propria linha.
+    const comPnpm = [...instalar, ...construir].filter((c) => /(^|\s)pnpm /.test(c));
+    expect(comPnpm.length).toBeGreaterThan(0);
+    for (const comando of comPnpm) {
+      expect(comando.startsWith("PATH=/opt/pnpm/bin:$PATH ")).toBe(true);
+    }
   });
 
   it("sobe o servidor Express, nao o Caddy estatico do Nixpacks", () => {
