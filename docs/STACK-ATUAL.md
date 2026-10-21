@@ -42,14 +42,14 @@ pergunta depois de cada push e falha quando a resposta é "não".
 
 ## Banco
 
-- **37 tabelas de domínio** declaradas em `drizzle/schema.ts` (`pgTable(...)`).
-- **38** é o número que o `/readyz` devolve: as 37 + `"__drizzle_migrations"`.
-- **14 migrações** em `drizzle/meta/_journal.json` (da `0000_baseline` à
-  `0013_error_events`).
+- **38 tabelas de domínio** declaradas em `drizzle/schema.ts` (`pgTable(...)`).
+- **39** é o número que o `/readyz` devolve: as 38 + `"__drizzle_migrations"`.
+- **15 migrações** em `drizzle/meta/_journal.json` (da `0000_baseline` à
+  `0015_cost_entries`).
 
 ```bash
 curl -s https://plataforma-obras-3.onrender.com/readyz
-# {"ok":true,"database":"ok","tabelas":38,"jwtSecretConfigurado":true,"warnings":[]}
+# {"ok":true,"database":"ok","tabelas":39,"jwtSecretConfigurado":true,"warnings":[]}
 ```
 
 `/readyz` é a prova de que a cadeia de boot inteira rodou: ele só responde `200`
