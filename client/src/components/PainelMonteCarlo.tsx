@@ -1,4 +1,4 @@
-import { Activity, Dices, TriangleAlert } from "lucide-react";
+import { Activity, CircleHelp, Dices, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
@@ -18,6 +18,9 @@ type Props = {
     wbsCode?: string | null;
     name?: string | null;
     durationDays: number | string | null;
+    /** Faixa declarada na tabela de atividades. Ausente = incerteza do painel. */
+    durationOptimisticDays?: number | null;
+    durationPessimisticDays?: number | null;
   }[];
   dependencies: {
     predecessorId: number;
@@ -53,6 +56,8 @@ export function PainelMonteCarlo({ projetoId, activities, dependencies }: Props)
         wbsCode: String(activity.wbsCode ?? ""),
         name: String(activity.name ?? ""),
         durationDays: Number(activity.durationDays ?? 0),
+        durationOptimisticDays: activity.durationOptimisticDays ?? null,
+        durationPessimisticDays: activity.durationPessimisticDays ?? null,
       })),
       dependencies: dependencies.map(dependency => ({
         predecessorId: dependency.predecessorId,
@@ -115,6 +120,13 @@ export function PainelMonteCarlo({ projetoId, activities, dependencies }: Props)
               <TriangleAlert size={13} /> {alerta}
             </div>
           ))}
+
+          <div className="pl-planejamento-alerta">
+            <CircleHelp size={13} />{" "}
+            {resultado.threePointCoverage.declared === resultado.threePointCoverage.total
+              ? "Todas as atividades têm faixa otimista/pessimista declarada — a simulação usa o risco que você estudou."
+              : `${resultado.threePointCoverage.declared} de ${resultado.threePointCoverage.total} atividades têm faixa declarada. As demais usam a incerteza de 25% do painel; declarar a faixa de cada uma muda o P80.`}
+          </div>
 
           <div className="pl-planejamento-cards">
             <div>

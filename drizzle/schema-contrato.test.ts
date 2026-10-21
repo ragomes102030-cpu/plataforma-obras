@@ -64,7 +64,7 @@ const CONTRATO: Record<string, string[]> = {
   project_mcp_integrations: ["createdAt", "endpointUrl", "externalProjectId", "id", "lastError", "lastSyncedAt", "projectId", "provider", "syncState", "updatedAt"],
   project_plan_versions: ["approvedAt", "baseVersionId", "createdAt", "createdBy", "decisionId", "id", "notes", "projectId", "status", "updatedAt", "versionNumber"],
   projects: ["baseReferencia", "baseReferenciaRef", "bdiDeclarado", "code", "createdAt", "cubMes", "cubUf", "cubValor", "deletedAt", "deletedAtBy", "descricao", "id", "location", "name", "ownerUserId", "plannedFinish", "plannedStart", "progress", "status", "tipoDeObra", "updatedAt"],
-  schedule_activities: ["budgetItemId", "cpmCalculatedAt", "createdAt", "critical", "durationDays", "eapRef", "earlyFinish", "earlyStart", "exemplo", "externalId", "finishNoLaterThan", "freeFloat", "id", "lateFinish", "lateStart", "mustStartOn", "name", "pavimento", "phase", "plannedQuantity", "productivity", "progress", "projectId", "sortOrder", "startOffset", "status", "totalFloat", "unit", "updatedAt", "versionId", "wbsCode", "wbsNodeId"],
+  schedule_activities: ["budgetItemId", "cpmCalculatedAt", "createdAt", "critical", "durationDays", "durationOptimisticDays", "durationPessimisticDays", "eapRef", "earlyFinish", "earlyStart", "exemplo", "externalId", "finishNoLaterThan", "freeFloat", "id", "lateFinish", "lateStart", "mustStartOn", "name", "pavimento", "phase", "plannedQuantity", "productivity", "progress", "projectId", "sortOrder", "startOffset", "status", "totalFloat", "unit", "updatedAt", "versionId", "wbsCode", "wbsNodeId"],
   schedule_baseline_items: ["activityId", "baselineId", "durationDays", "earlyFinish", "earlyStart", "id", "startOffset"],
   schedule_baselines: ["createdAt", "createdBy", "id", "name", "projectId", "status", "versionId"],
   schedule_dependencies: ["createdAt", "externalId", "id", "lag", "predecessorId", "projectId", "successorId", "type", "versionId"],
@@ -130,12 +130,13 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 422", () => {
+  it("o total de colunas continua 424", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
     // 410 -> 422 na Fase 0 (error_events, observabilidade de 5xx).
+    // 422 -> 424 na duração em três pontos (otimista/pessimista por atividade).
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(422);
+    expect(total).toBe(424);
   });
 });

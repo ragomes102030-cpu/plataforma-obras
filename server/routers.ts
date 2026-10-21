@@ -3837,7 +3837,7 @@ export const appRouter = router({
       .input(z.object({
         projectId: z.number().int().positive(),
         atividadeId: z.number().int().positive(),
-        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","quantidade","produtividade","unidade"]),
+        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","otimista","pessimista","quantidade","produtividade","unidade"]),
         valor: z.string().max(500),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3858,6 +3858,23 @@ export const appRouter = router({
           throw conflict("A versão aprovada/histórica está congelada. Abra uma nova versão de trabalho antes de editar a atividade.");
         }
         const patch: Record<string, unknown> = {};
+        /**
+         * A faixa otimista/pessimista tem de conter a duração mais provável —
+         * é o que o CHECK do banco e a triangular da simulação exigem.
+         *
+         * Quando o planejador muda a duração para fora da faixa, alargar o lado
+         * curto é a única saída que não mente: recusar a edição travaria quem
+         * só queria corrigir a duração, e apagar a faixa jogaria fora o risco já
+         * estudado. O valor digitado permanece; o lado que ficou curto acompanha.
+         */
+        const alargarFaixaPara = (duration: number) => {
+          if (activity.durationOptimisticDays != null && activity.durationOptimisticDays > duration) {
+            patch.durationOptimisticDays = duration;
+          }
+          if (activity.durationPessimisticDays != null && activity.durationPessimisticDays < duration) {
+            patch.durationPessimisticDays = duration;
+          }
+        };
         if (input.campo === "atividade") patch.name = input.valor.trim();
         if (input.campo === "frente") patch.phase = input.valor.trim();
         if (input.campo === "pavimento") patch.pavimento = input.valor.trim() || null;
@@ -3865,6 +3882,30 @@ export const appRouter = router({
           const duration = Number(input.valor);
           if (!Number.isInteger(duration) || duration < 1) throw badRequest("A duração deve ser um número inteiro maior que zero.");
           patch.durationDays = duration;
+          alargarFaixaPara(duration);
+        }
+        if (input.campo === "otimista" || input.campo === "pessimista") {
+          const otimista = input.campo === "otimista";
+          const coluna = otimista ? "durationOptimisticDays" : "durationPessimisticDays";
+          const rotulo = otimista ? "otimista" : "pessimista";
+          const texto = input.valor.trim();
+          if (!texto) {
+            // Vazio = "não declarado", que devolve a atividade ao percentual de
+            // incerteza do painel. Não é o mesmo que zero.
+            patch[coluna] = null;
+          } else {
+            const days = Number(texto);
+            if (!Number.isInteger(days) || days < 1) {
+              throw badRequest(`O prazo ${rotulo} deve ser um número inteiro de dias maior que zero.`);
+            }
+            if (otimista && days > activity.durationDays) {
+              throw badRequest(`O prazo otimista (${days} dias) não pode ser maior que a duração mais provável (${activity.durationDays} dias). Ajuste a duração antes de mexer na faixa.`);
+            }
+            if (!otimista && days < activity.durationDays) {
+              throw badRequest(`O prazo pessimista (${days} dias) não pode ser menor que a duração mais provável (${activity.durationDays} dias). Ajuste a duração antes de mexer na faixa.`);
+            }
+            patch[coluna] = days;
+          }
         }
         if (input.campo === "quantidade") {
           if (input.valor.trim() && (!Number.isFinite(Number(input.valor)) || Number(input.valor) < 0)) {
@@ -3879,6 +3920,7 @@ export const appRouter = router({
           const quantity = Number(activity.plannedQuantity ?? 0);
           if (quantity > 0) {
             patch.durationDays = Math.max(1, Math.ceil(quantity / productivity));
+            alargarFaixaPara(patch.durationDays as number);
           }
         }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
@@ -3895,6 +3937,8 @@ export const appRouter = router({
           phase: activity.phase,
           startOffset: activity.startOffset,
           durationDays: activity.durationDays,
+          durationOptimisticDays: activity.durationOptimisticDays,
+          durationPessimisticDays: activity.durationPessimisticDays,
           plannedQuantity: activity.plannedQuantity,
           unit: activity.unit,
           cpmCalculatedAt: activity.cpmCalculatedAt,
@@ -4193,6 +4237,10 @@ export const appRouter = router({
                 wbsCode: z.string().default(""),
                 name: z.string().default(""),
                 durationDays: z.number(),
+                // Faixa declarada na obra. Opcional: sem ela vale a incerteza
+                // percentual do painel.
+                durationOptimisticDays: z.number().int().positive().nullish(),
+                durationPessimisticDays: z.number().int().positive().nullish(),
               })
             )
             .min(1),

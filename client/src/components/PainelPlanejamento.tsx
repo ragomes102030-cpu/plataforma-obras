@@ -18,6 +18,17 @@ type ProposalItem = {
 
 type Filtro = "todos" | "pendentes" | "criadas";
 
+/** Campos editáveis célula a célula na tabela de atividades. */
+type CampoEditavel =
+  | "frente"
+  | "pavimento"
+  | "duracao"
+  | "otimista"
+  | "pessimista"
+  | "quantidade"
+  | "produtividade"
+  | "unidade";
+
 export function PainelPlanejamento({ projetoId }: Props) {
   const utils = trpc.useUtils();
   const plano = trpc.planning.list.useQuery(
@@ -61,6 +72,19 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const atualizarAtividade = trpc.planning.atualizarAtividade.useMutation({
     onSuccess: async result => {
+      // Solta só a célula salva. O servidor pode ter ajustado o valor (ao mudar
+      // a duração para fora da faixa otimista/pessimista ele alarga o lado
+      // curto), e o texto digitado mascararia o valor real vindo do banco.
+      const vars = atualizarAtividade.variables;
+      if (vars) {
+        const key = vars.atividadeId + "|" + vars.campo;
+        setEdicoes(atual => {
+          if (!(key in atual)) return atual;
+          const next = { ...atual };
+          delete next[key];
+          return next;
+        });
+      }
       setMensagem(result.cpmInvalidated ? "Atividade atualizada. O CPM ficou desatualizado e precisa ser recalculado antes da baseline." : "Atividade atualizada.");
       await Promise.all([
         utils.planning.list.invalidate({ projectId: projetoId }),
@@ -72,18 +96,20 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
   const activities = plano.data?.activities ?? [];
 
-  const valorEdicao = (activity: any, campo: "frente" | "pavimento" | "duracao" | "quantidade" | "produtividade" | "unidade") => {
+  const valorEdicao = (activity: any, campo: CampoEditavel) => {
     const key = activity.id + "|" + campo;
     if (key in edicoes) return edicoes[key];
     if (campo === "frente") return activity.phase ?? "";
     if (campo === "pavimento") return activity.pavimento ?? "";
     if (campo === "duracao") return String(activity.durationDays ?? "");
+    if (campo === "otimista") return activity.durationOptimisticDays == null ? "" : String(activity.durationOptimisticDays);
+    if (campo === "pessimista") return activity.durationPessimisticDays == null ? "" : String(activity.durationPessimisticDays);
     if (campo === "quantidade") return activity.plannedQuantity == null ? "" : String(activity.plannedQuantity);
     if (campo === "produtividade") return activity.productivity == null ? "" : String(activity.productivity);
     return activity.unit ?? "";
   };
 
-  const salvarEdicao = (activityId: number, campo: "frente" | "pavimento" | "duracao" | "quantidade" | "produtividade" | "unidade") => {
+  const salvarEdicao = (activityId: number, campo: CampoEditavel) => {
     const key = activityId + "|" + campo;
     if (!(key in edicoes)) return;
     atualizarAtividade.mutate({ projectId: projetoId, atividadeId: activityId, campo, valor: edicoes[key] });
@@ -297,7 +323,36 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|duracao"]: event.target.value }))}
                     onBlur={() => salvarEdicao(activity.id, "duracao")}
                     aria-label={"Duração de " + activity.name}
+                    title="Duração mais provável (a que o CPM usa)"
                   />
+                  {/* Faixa do Monte Carlo. Vazia = a atividade cai na incerteza
+                      percentual do painel; preenchida, é ela que manda. */}
+                  <div className="pl-faixa-inputs">
+                    <input
+                      className="pl-faixa-input"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={valorEdicao(activity, "otimista")}
+                      onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|otimista"]: event.target.value }))}
+                      onBlur={() => salvarEdicao(activity.id, "otimista")}
+                      aria-label={`Duração otimista de ${activity.name}`}
+                      placeholder="otim."
+                      title="Duração otimista: se tudo correr bem"
+                    />
+                    <input
+                      className="pl-faixa-input"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={valorEdicao(activity, "pessimista")}
+                      onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|pessimista"]: event.target.value }))}
+                      onBlur={() => salvarEdicao(activity.id, "pessimista")}
+                      aria-label={`Duração pessimista de ${activity.name}`}
+                      placeholder="pess."
+                      title="Duração pessimista: se o pior plausível acontecer"
+                    />
+                  </div>
                 </td>
                 <td className="unit-col">
                   <input

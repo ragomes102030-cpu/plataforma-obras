@@ -14,6 +14,12 @@ export type RiskActivityInput = {
   wbsCode: string;
   name: string;
   durationDays: number;
+  /**
+   * Faixa declarada pelo planejador. Nulo/vazio = a atividade não tem estimativa
+   * própria e a simulação aplica o percentual de incerteza do painel.
+   */
+  durationOptimisticDays?: number | null;
+  durationPessimisticDays?: number | null;
 };
 
 export type RiskDependencyInput = {
@@ -34,6 +40,8 @@ export type ScheduleRiskResult = {
   p90: number;
   histogram: { days: number; count: number }[];
   network: { components: number; disconnected: boolean; isolatedCount: number };
+  /** Quantas atividades trazem faixa otimista/pessimista própria, e de quantas. */
+  threePointCoverage: { declared: number; total: number };
   criticality: { id: string; label: string; index: number }[];
   sensitivity: { id: string; label: string; correlation: number }[];
   /** O que o painel precisa dizer em voz alta antes de alguém prometer uma data. */
@@ -68,7 +76,23 @@ export function simulateScheduleRisk(
     lag: dependency.lag,
   }));
 
-  const result = simulateMonteCarlo(cpmActivities, cpmDependencies, options);
+  // Faixa declarada vence o percentual genérico. Atividade sem faixa continua
+  // sendo simulada — só que com a incerteza do painel aplicada à duração.
+  const estimates = activities.flatMap(activity => {
+    const optimistic = activity.durationOptimisticDays ?? null;
+    const pessimistic = activity.durationPessimisticDays ?? null;
+    if (optimistic === null && pessimistic === null) return [];
+    return [
+      {
+        id: String(activity.id),
+        mostLikely: Math.max(1, Math.round(activity.durationDays)),
+        ...(optimistic === null ? {} : { optimistic }),
+        ...(pessimistic === null ? {} : { pessimistic }),
+      },
+    ];
+  });
+
+  const result = simulateMonteCarlo(cpmActivities, cpmDependencies, { ...options, estimates });
   const label = (id: string) => labels.get(id) ?? id;
 
   const alerts: string[] = [];
@@ -106,6 +130,7 @@ export function simulateScheduleRisk(
       disconnected: result.network.disconnected,
       isolatedCount: result.network.isolatedActivities.length,
     },
+    threePointCoverage: { declared: estimates.length, total: activities.length },
     criticality: Object.entries(result.criticalityIndex)
       .map(([id, index]) => ({ id, label: label(id), index }))
       .sort((a, b) => b.index - a.index)
