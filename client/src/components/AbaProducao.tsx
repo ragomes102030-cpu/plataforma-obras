@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
+import { PainelLookahead } from "./PainelLookahead";
 
 /**
  * A aba PRODUÇÃO: a fonte do `% Real`.
@@ -125,6 +126,11 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           <p>Avanço médio: <strong>{avancoMedio.toFixed(1)}%</strong> · Total geral: <strong>{totalGeral}</strong></p>
         </div>
       </div>
+
+      {/* O lookahead vem antes da grade diária de propósito: a reunião de
+          segunda decide o que vai acontecer, e a grade conta o que aconteceu.
+          Invertido, o painel vira relatório de fim de semana. */}
+      <PainelLookahead projetoId={projetoId} />
 
       <div className="xl-cartoes">
         <div className="xl-cartao">

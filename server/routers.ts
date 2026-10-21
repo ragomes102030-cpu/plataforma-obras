@@ -23,6 +23,8 @@ import {
   budgetVersions,
   budgetItems,
   costEntries,
+  planningConstraints,
+  weeklyCommitments,
   projectPlanVersions,
   priceCatalogs,
   priceItems,
@@ -120,6 +122,8 @@ import { resumirCobertura, sugerirVinculos } from "./construction/conciliacao";
 import type { AtividadeConciliacao, ItemOrcamento } from "./construction/conciliacao";
 import { persistCpmResult } from "./construction/cpm-persister";
 import { coletarDadosEvms } from "./construction/evm-dados";
+import { coletarDadosLookahead } from "./construction/lookahead-dados";
+import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import {
@@ -5367,6 +5371,446 @@ export const appRouter = router({
           action: "cost_entry_cancelled",
           payload: {
             costEntryId: input.costEntryId,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { ok: true as const };
+      }),
+
+    /*
+     * LOOKAHEAD DE 4 SEMANAS + PPC (Last Planner).
+     *
+     * O EVM diz se a obra está indo bem; o lookahead diz o que fazer segunda de
+     * manhã. São perguntas diferentes e por isso são telas diferentes:
+     *
+     *   - `lookahead` (leitura) monta as 4 semanas, marca o que está pronto
+     *     (sem restrição aberta) e calcula o PPC das semanas já avaliadas;
+     *   - `restricoes` / `criarRestricao` / `removerRestricao` controlam o que
+     *     trava a frente;
+     *   - `salvarCompromisso` / `avaliarCompromisso` registram o que foi
+     *     assumido e o que aconteceu.
+     *
+     * A conta mora em `construction/lookahead.ts` (puro, testado). Aqui só
+     * ficam validação de vínculo com a obra, data e auditoria.
+     *
+     * Todas as datas trafegam como `YYYY-MM-DD` e são convertidas para meia-noite
+     * UTC. Texto, não `Date`: `new Date("2026-10-19")` é UTC, mas
+     * `new Date("2026-10-19T00:00:00")` é local — misturar os dois muda a semana
+     * de lugar dependendo de quem chama.
+     */
+    lookahead: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          semanaBase: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, "Data no formato AAAA-MM-DD.")
+            .optional(),
+          hoje: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, "Data no formato AAAA-MM-DD.")
+            .optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        // O navegador manda `hoje` no fuso do usuário. Se não mandar, cai no
+        // fuso do servidor — e no Render isso é UTC, três horas à frente do
+        // Brasil: às 22h daqui já é "amanhã" lá.
+        const hojeIso = input.hoje ?? localIso(new Date());
+        const semanaBaseIso = input.semanaBase ?? hojeIso;
+
+        const db = await getDb();
+        if (!db) {
+          return {
+            available: false as const,
+            note: "Banco de dados não configurado.",
+            restricoes: [],
+            atividadesSemData: 0,
+            ...computeLookahead({
+              atividades: [],
+              compromissos: [],
+              semanaBaseIso,
+              hojeIso,
+            }),
+          };
+        }
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const dados = await coletarDadosLookahead(
+          db,
+          input.projectId,
+          semanaBaseIso,
+          hojeIso,
+          currentPlanVersionId
+        );
+
+        return {
+          available: true as const,
+          note: null,
+          ...computeLookahead(dados.input),
+          restricoes: dados.restricoesAbertas,
+          atividadesSemData: dados.atividadesSemData,
+        };
+      }),
+
+    restricoes: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          incluirResolvidas: z.boolean().default(false),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db)
+          return {
+            available: false as const,
+            itens: [],
+            note: "Banco de dados não configurado.",
+          };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const filtros = [eq(planningConstraints.projectId, input.projectId)];
+        if (!input.incluirResolvidas) {
+          filtros.push(
+            inArray(planningConstraints.status, ["aberta", "em_andamento"])
+          );
+        }
+
+        const linhas = await db
+          .select({
+            id: planningConstraints.id,
+            activityId: planningConstraints.activityId,
+            type: planningConstraints.type,
+            description: planningConstraints.description,
+            responsible: planningConstraints.responsible,
+            neededBy: planningConstraints.neededBy,
+            status: planningConstraints.status,
+            removedAt: planningConstraints.removedAt,
+            createdAt: planningConstraints.createdAt,
+            wbsCode: scheduleActivities.wbsCode,
+            activityName: scheduleActivities.name,
+          })
+          .from(planningConstraints)
+          .leftJoin(
+            scheduleActivities,
+            eq(scheduleActivities.id, planningConstraints.activityId)
+          )
+          .where(and(...filtros))
+          .orderBy(desc(planningConstraints.createdAt))
+          .limit(500);
+
+        return { available: true as const, itens: linhas, note: null };
+      }),
+
+    criarRestricao: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          activityId: z.number().int().positive(),
+          type: z
+            .enum([
+              "material",
+              "mao_de_obra",
+              "equipamento",
+              "projeto",
+              "permissao",
+              "frente_trabalho",
+              "seguranca",
+              "outro",
+            ])
+            .default("material"),
+          description: z.string().trim().min(3).max(400),
+          responsible: z.string().trim().max(160).nullish(),
+          neededBy: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, "Data no formato AAAA-MM-DD.")
+            .nullish(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [atividade] = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.id, input.activityId),
+              eq(scheduleActivities.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!atividade) throw badRequest("Atividade não pertence a esta obra.");
+
+        const [criada] = await db
+          .insert(planningConstraints)
+          .values({
+            projectId: input.projectId,
+            activityId: input.activityId,
+            type: input.type,
+            description: input.description,
+            responsible: input.responsible ?? null,
+            neededBy: input.neededBy ? new Date(`${input.neededBy}T00:00:00Z`) : null,
+            createdBy: ctx.user.id,
+          })
+          .returning({ id: planningConstraints.id });
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "planning_constraint_created",
+          payload: {
+            constraintId: criada.id,
+            activityId: input.activityId,
+            type: input.type,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { id: criada.id };
+      }),
+
+    /**
+     * Remover restrição é marcar como resolvida, não apagar. O histórico de
+     * "esta frente já ficou travada por isto" é o que alimenta a reunião de
+     * planejamento seguinte.
+     */
+    removerRestricao: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          constraintId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [linha] = await db
+          .update(planningConstraints)
+          .set({
+            status: "removida",
+            removedAt: new Date(),
+            removedBy: ctx.user.id,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(planningConstraints.id, input.constraintId),
+              eq(planningConstraints.projectId, input.projectId)
+            )
+          )
+          .returning({ id: planningConstraints.id });
+        if (!linha) throw notFound("Restrição não encontrada.");
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "planning_constraint_removed",
+          payload: {
+            constraintId: input.constraintId,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { ok: true as const };
+      }),
+
+    /**
+     * Compromisso semanal — "eu entrego isto nesta semana".
+     *
+     * A mesma atividade é comprometida uma vez por semana (índice único no
+     * banco). Salvar de novo ATUALIZA o compromisso, mas só enquanto ele não
+     * foi avaliado: sobrescrever um resultado já medido apagaria histórico de
+     * PPC, e histórico apagado é PPC inventado.
+     */
+    salvarCompromisso: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          activityId: z.number().int().positive(),
+          weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data no formato AAAA-MM-DD."),
+          plannedQuantity: z.number().min(0).max(1_000_000_000).nullish(),
+          responsible: z.string().trim().max(160).nullish(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        // O CHECK do banco exige segunda-feira; recusar aqui dá mensagem clara
+        // em vez de erro de constraint.
+        const semanaNormalizada = segundaFeira(input.weekStart);
+        if (semanaNormalizada !== input.weekStart)
+          throw badRequest(
+            `A semana começa na segunda-feira (${semanaNormalizada}), não em ${input.weekStart}.`
+          );
+
+        const [atividade] = await db
+          .select({ id: scheduleActivities.id })
+          .from(scheduleActivities)
+          .where(
+            and(
+              eq(scheduleActivities.id, input.activityId),
+              eq(scheduleActivities.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!atividade) throw badRequest("Atividade não pertence a esta obra.");
+
+        const weekStart = new Date(`${input.weekStart}T00:00:00Z`);
+        const [existente] = await db
+          .select({
+            id: weeklyCommitments.id,
+            status: weeklyCommitments.status,
+          })
+          .from(weeklyCommitments)
+          .where(
+            and(
+              eq(weeklyCommitments.activityId, input.activityId),
+              eq(weeklyCommitments.weekStart, weekStart)
+            )
+          )
+          .limit(1);
+
+        if (existente && ["concluido", "nao_concluido"].includes(existente.status))
+          throw conflict(
+            "Este compromisso já foi avaliado. Use a avaliação para corrigir o resultado."
+          );
+
+        const [salvo] = await db
+          .insert(weeklyCommitments)
+          .values({
+            projectId: input.projectId,
+            activityId: input.activityId,
+            weekStart,
+            plannedQuantity:
+              input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
+            responsible: input.responsible ?? null,
+            createdBy: ctx.user.id,
+          })
+          .onConflictDoUpdate({
+            target: [weeklyCommitments.activityId, weeklyCommitments.weekStart],
+            set: {
+              plannedQuantity:
+                input.plannedQuantity == null ? null : input.plannedQuantity.toFixed(3),
+              responsible: input.responsible ?? null,
+              status: "planejado",
+              reason: null,
+              executedQuantity: null,
+              updatedAt: new Date(),
+            },
+          })
+          .returning({ id: weeklyCommitments.id });
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: existente
+            ? "weekly_commitment_updated"
+            : "weekly_commitment_created",
+          payload: {
+            commitmentId: salvo.id,
+            activityId: input.activityId,
+            weekStart: input.weekStart,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { id: salvo.id };
+      }),
+
+    /**
+     * Avaliação do compromisso — é aqui que o PPC nasce.
+     *
+     * `nao_concluido` sem motivo é recusado tanto aqui quanto no CHECK do banco.
+     * Um indicador que só diz "não deu" não muda nada na semana seguinte; o
+     * motivo é o que vira ação (comprar o material, cobrar o projeto, liberar a
+     * frente).
+     */
+    avaliarCompromisso: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          commitmentId: z.number().int().positive(),
+          status: z.enum(["planejado", "concluido", "nao_concluido", "cancelado"]),
+          reason: z
+            .enum([
+              "material",
+              "mao_de_obra",
+              "equipamento",
+              "projeto",
+              "permissao",
+              "clima",
+              "cliente",
+              "fornecedor",
+              "retrabalho",
+              "frente_trabalho",
+              "seguranca",
+              "outro",
+            ])
+            .nullish(),
+          executedQuantity: z.number().min(0).max(1_000_000_000).nullish(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        if (input.status === "nao_concluido" && !input.reason)
+          throw badRequest("Informe o motivo de não ter cumprido o compromisso.");
+
+        const [anterior] = await db
+          .select({ status: weeklyCommitments.status })
+          .from(weeklyCommitments)
+          .where(
+            and(
+              eq(weeklyCommitments.id, input.commitmentId),
+              eq(weeklyCommitments.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!anterior) throw notFound("Compromisso não encontrado.");
+
+        const [linha] = await db
+          .update(weeklyCommitments)
+          .set({
+            status: input.status,
+            // Motivo só existe em não conformidade. Guardar um motivo antigo
+            // num compromisso cumprido contaminaria a leitura das causas.
+            reason: input.status === "nao_concluido" ? (input.reason ?? null) : null,
+            executedQuantity:
+              input.executedQuantity == null
+                ? null
+                : input.executedQuantity.toFixed(3),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(weeklyCommitments.id, input.commitmentId),
+              eq(weeklyCommitments.projectId, input.projectId)
+            )
+          )
+          .returning({ id: weeklyCommitments.id });
+        if (!linha) throw notFound("Compromisso não encontrado.");
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "weekly_commitment_evaluated",
+          payload: {
+            commitmentId: input.commitmentId,
+            from: anterior.status,
+            to: input.status,
+            reason: input.status === "nao_concluido" ? (input.reason ?? null) : null,
             at: new Date().toISOString(),
           },
         });

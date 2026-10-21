@@ -870,6 +870,164 @@ export const costEntries = pgTable(
   ]
 );
 
+const enumPlanningConstraintsType = pgEnum("planning_constraints_type", [
+  "material",
+  "mao_de_obra",
+  "equipamento",
+  "projeto",
+  "permissao",
+  "frente_trabalho",
+  "seguranca",
+  "outro",
+]);
+
+const enumPlanningConstraintsStatus = pgEnum("planning_constraints_status", [
+  "aberta",
+  "em_andamento",
+  "removida",
+  "cancelada",
+]);
+
+const enumWeeklyCommitmentsStatus = pgEnum("weekly_commitments_status", [
+  "planejado",
+  "concluido",
+  "nao_concluido",
+  "cancelado",
+]);
+
+/**
+ * Por que o compromisso NÃO foi cumprido.
+ *
+ * A lista é a do Last Planner, não uma taxonomia genérica: cada motivo aponta
+ * para um setor que pode agir. "Outro" existe, mas é o último recurso — um PPC
+ * em que quase tudo é "outro" não ensina nada e não muda nada.
+ */
+const enumWeeklyCommitmentsReason = pgEnum("weekly_commitments_reason", [
+  "material",
+  "mao_de_obra",
+  "equipamento",
+  "projeto",
+  "permissao",
+  "clima",
+  "cliente",
+  "fornecedor",
+  "retrabalho",
+  "frente_trabalho",
+  "seguranca",
+  "outro",
+]);
+
+/**
+ * Restrição que impede uma atividade de ser executada.
+ *
+ * É a peça que separa "está no cronograma" de "está pronto para começar". Um
+ * lookahead que só repete as barras do Gantt não serve para nada: a pergunta da
+ * obra é *o que ainda trava esta frente*. Restrição aberta bloqueia; removida e
+ * cancelada não.
+ *
+ * `neededBy` é o prazo de remoção — a data em que a restrição precisa estar
+ * resolvida para a atividade não atrasar. Não é data de início da atividade.
+ */
+export const planningConstraints = pgTable(
+  "planning_constraints",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    projectId: integer("projectId")
+      .notNull()
+      .references(() => projects.id),
+    activityId: integer("activityId")
+      .notNull()
+      .references(() => scheduleActivities.id),
+    type: enumPlanningConstraintsType("type").default("material").notNull(),
+    description: varchar("description", { length: 400 }).notNull(),
+    /** Quem tem de resolver — pessoa ou setor. Texto livre, não é FK. */
+    responsible: varchar("responsible", { length: 160 }),
+    neededBy: timestamp("neededBy", { withTimezone: true }),
+    status: enumPlanningConstraintsStatus("status").default("aberta").notNull(),
+    removedAt: timestamp("removedAt", { withTimezone: true }),
+    removedBy: integer("removedBy").references(() => users.id),
+    createdBy: integer("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("planning_constraints_project_status_idx").on(table.projectId, table.status),
+    index("planning_constraints_activity_idx").on(table.activityId),
+    // Restrição sem descrição é um botão apertado sem motivo. Não entra.
+    check(
+      "planning_constraints_description_not_blank",
+      drizzleSql`length(btrim(${table.description})) > 0`
+    ),
+  ]
+);
+
+/**
+ * Compromisso semanal — a unidade do PPC.
+ *
+ * "Comprometido" é diferente de "planejado": é aquilo que alguém da obra
+ * assumiu entregar naquela semana. O PPC é a razão entre o que foi assumido e o
+ * que foi cumprido, e só pode ser medido sobre os compromissos JÁ AVALIADOS
+ * (`concluido` ou `nao_concluido`) — daí `pendentes` existir no relatório. Uma
+ * semana em andamento com 10 compromissos e 2 avaliados tem PPC de 2, não de
+ * 20%: zero por não ter acontecido ainda seria mentira, e 100% por enquanto
+ * também.
+ *
+ * `weekStart` é sempre segunda-feira, garantido por CHECK: sem isso a mesma
+ * semana entraria duas vezes no relatório com dois nomes.
+ */
+export const weeklyCommitments = pgTable(
+  "weekly_commitments",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    projectId: integer("projectId")
+      .notNull()
+      .references(() => projects.id),
+    activityId: integer("activityId")
+      .notNull()
+      .references(() => scheduleActivities.id),
+    weekStart: timestamp("weekStart", { withTimezone: true }).notNull(),
+    /** Quanto se comprometeu entregar, na unidade da atividade. Opcional. */
+    plannedQuantity: numeric("plannedQuantity", { precision: 14, scale: 3 }),
+    /** Quanto foi entregue. Preenchido na avaliação da semana. */
+    executedQuantity: numeric("executedQuantity", { precision: 14, scale: 3 }),
+    responsible: varchar("responsible", { length: 160 }),
+    status: enumWeeklyCommitmentsStatus("status").default("planejado").notNull(),
+    reason: enumWeeklyCommitmentsReason("reason"),
+    notes: text("notes"),
+    createdBy: integer("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("weekly_commitments_project_week_idx").on(table.projectId, table.weekStart),
+    index("weekly_commitments_activity_idx").on(table.activityId),
+    // A mesma atividade é comprometida uma vez por semana. Duas linhas seriam
+    // dois votos no PPC.
+    uniqueIndex("weekly_commitments_activity_week_uq").on(
+      table.activityId,
+      table.weekStart
+    ),
+    check(
+      "weekly_commitments_week_starts_monday",
+      // `at time zone 'UTC'` é obrigatório: `extract` sobre `timestamptz` usa o
+      // fuso da sessão, e uma segunda-feira 00:00 UTC vira domingo 21:00 em
+      // São Paulo. Com o fuso fixado, a chave da semana é a mesma em qualquer
+      // servidor.
+      drizzleSql`extract(isodow from (${table.weekStart} at time zone 'UTC')) = 1`
+    ),
+    // Não cumprir sem dizer o motivo é justamente o que faz o indicador não
+    // mudar nada. O banco recusa.
+    check(
+      "weekly_commitments_reason_required",
+      drizzleSql`${table.status} <> 'nao_concluido' or ${table.reason} is not null`
+    ),
+    check(
+      "weekly_commitments_executed_not_negative",
+      drizzleSql`${table.executedQuantity} is null or ${table.executedQuantity} >= 0`
+    ),
+  ]
+);
+
 export const priceCatalogs = pgTable(
   "price_catalogs",
   {
