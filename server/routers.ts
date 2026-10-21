@@ -115,6 +115,8 @@ async function requireApprovedEapVersion(
 }
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { simulateScheduleRisk } from "./construction/monte-carlo-service";
+import { resumirCobertura, sugerirVinculos } from "./construction/conciliacao";
+import type { AtividadeConciliacao, ItemOrcamento } from "./construction/conciliacao";
 import { persistCpmResult } from "./construction/cpm-persister";
 import { coletarDadosEvms } from "./construction/evm-dados";
 import { computeEvm } from "./construction/evm";
@@ -3135,6 +3137,11 @@ export const appRouter = router({
             suggested.unitPrice,
             thresholdPct
           );
+          // O match de composição também é o vínculo que faltava: sem gravar
+          // `compositionId` o item volta para a próxima conciliação como "sem
+          // composição", e o custo unitário fica gravado sem origem — foi
+          // exatamente assim que a AURORA TESTE acumulou 35 itens compostos no
+          // preço e vazios na composição.
           await db
             .update(budgetItems)
             .set({
@@ -3142,6 +3149,12 @@ export const appRouter = router({
               source: `SEINFRA ${suggested.code}`,
               referencePeriod: projectBaseRef,
               isPriceException: false,
+              ...(decision.matchKind === "composition"
+                ? {
+                    compositionId: decision.matchId!,
+                    compositionUnitCost: suggested.unitPrice.toFixed(2),
+                  }
+                : {}),
             })
             .where(eq(budgetItems.id, item.id));
           await db.insert(projectAuditEvents).values({
@@ -4207,6 +4220,169 @@ export const appRouter = router({
           uncertainty: input.uncertainty,
           seed: input.seed,
         });
+      }),
+    /**
+     * Conciliação cronograma ↔ orçamento.
+     *
+     * Responde "quanto do orçamento já está preso a uma atividade". Sem esse
+     * vínculo não existe valor planejado por atividade, e sem valor planejado
+     * não existe curva S física, SPI nem CPI — o EVM fica no papel.
+     *
+     * Devolve, para cada atividade solta, os itens candidatos com o motivo da
+     * sugestão. Não grava nada.
+     */
+    conciliacao: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        limite: z.number().int().min(1).max(5).default(3),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        // Mesma versão que o orçamento mostra na tela: a mais recente.
+        const [versao] = await db
+          .select({ id: budgetVersions.id, numero: budgetVersions.versionNumber })
+          .from(budgetVersions)
+          .where(eq(budgetVersions.projectId, input.projectId))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+
+        const itensDb = versao
+          ? await db
+              .select({
+                id: budgetItems.id,
+                code: budgetItems.code,
+                description: budgetItems.description,
+                unit: budgetItems.unit,
+                quantity: budgetItems.quantity,
+                unitPrice: budgetItems.unitPrice,
+                compositionId: budgetItems.compositionId,
+              })
+              .from(budgetItems)
+              .where(eq(budgetItems.budgetVersionId, versao.id))
+          : [];
+
+        const atividadesDb = await db
+          .select({
+            id: scheduleActivities.id,
+            wbsCode: scheduleActivities.wbsCode,
+            name: scheduleActivities.name,
+            unit: scheduleActivities.unit,
+            plannedQuantity: scheduleActivities.plannedQuantity,
+            budgetItemId: scheduleActivities.budgetItemId,
+          })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId));
+
+        const itens: ItemOrcamento[] = itensDb.map(item => ({
+          id: item.id,
+          code: item.code ?? "",
+          description: item.description ?? "",
+          unit: item.unit ?? "",
+          quantity: Number(item.quantity ?? 0),
+          unitPrice: Number(item.unitPrice ?? 0),
+          compositionId: item.compositionId ?? null,
+        }));
+
+        const atividades: AtividadeConciliacao[] = atividadesDb.map(atividade => ({
+          id: atividade.id,
+          wbsCode: atividade.wbsCode ?? "",
+          name: atividade.name ?? "",
+          unit: atividade.unit ?? null,
+          plannedQuantity: atividade.plannedQuantity == null ? null : Number(atividade.plannedQuantity),
+          budgetItemId: atividade.budgetItemId ?? null,
+        }));
+
+        return {
+          versao: versao ?? null,
+          cobertura: resumirCobertura(atividades, itens),
+          pendencias: atividades
+            .filter(atividade => atividade.budgetItemId == null)
+            .map(atividade => ({
+              ...atividade,
+              sugestoes: sugerirVinculos(atividade, itens, input.limite),
+            })),
+        };
+      }),
+    /**
+     * Aplica vínculos escolhidos na tela de conciliação.
+     *
+     * A quantidade prevista é a da atividade: quando o usuário não informa,
+     * assume-se a quantidade inteira do item. É a leitura padrão — a atividade
+     * "Pilares" executa os 100 m3 dos pilares — e evita que o vínculo nasça sem
+     * peso no EVM.
+     */
+    aplicarConciliacao: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        vinculos: z.array(z.object({
+          activityId: z.number().int().positive(),
+          budgetItemId: z.number().int().positive(),
+          plannedQuantity: z.number().positive().nullish(),
+        })).min(1).max(500),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [versao] = await db
+          .select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(eq(budgetVersions.projectId, input.projectId))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (!versao) throw badRequest("Esta obra não tem orçamento para vincular.");
+
+        // Um item de OUTRA obra não pode entrar por payload forjado.
+        const itens = await db
+          .select({ id: budgetItems.id, quantity: budgetItems.quantity })
+          .from(budgetItems)
+          .where(eq(budgetItems.budgetVersionId, versao.id));
+        const porId = new Map(itens.map(item => [item.id, item]));
+
+        const atividades = await db
+          .select({ id: scheduleActivities.id, name: scheduleActivities.name })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId));
+        const atividadesPorId = new Map(atividades.map(atividade => [atividade.id, atividade]));
+
+        let aplicados = 0;
+        for (const vinculo of input.vinculos) {
+          const item = porId.get(vinculo.budgetItemId);
+          if (!item) throw badRequest("Item de orçamento não pertence a esta obra.");
+          if (!atividadesPorId.has(vinculo.activityId)) {
+            throw badRequest("Atividade não pertence a esta obra.");
+          }
+          const quantidade = vinculo.plannedQuantity ?? Number(item.quantity ?? 0);
+          await db
+            .update(scheduleActivities)
+            .set({ budgetItemId: vinculo.budgetItemId, plannedQuantity: quantidade.toFixed(3) })
+            .where(and(
+              eq(scheduleActivities.id, vinculo.activityId),
+              eq(scheduleActivities.projectId, input.projectId),
+            ));
+          aplicados += 1;
+        }
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "schedule_budget_linked",
+          payload: {
+            versaoId: versao.id,
+            aplicados,
+            vinculos: input.vinculos.map(vinculo => ({
+              activityId: vinculo.activityId,
+              budgetItemId: vinculo.budgetItemId,
+            })),
+            at: new Date().toISOString(),
+          },
+        });
+
+        return { aplicados };
       }),
     /**
      * Coerencia de engenharia.

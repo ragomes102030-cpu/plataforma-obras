@@ -1,6 +1,13 @@
 packages:
   - '.'
 
+# pnpm 10 não lê mais o campo "pnpm" do package.json. Enquanto ficava lá, o
+# esbuild e o @tailwindcss/oxide não rodavam postinstall, e o build do Vite
+# quebrava sem mensagem óbvia.
+onlyBuiltDependencies:
+  - esbuild
+  - '@tailwindcss/oxide'
+
 patchedDependencies:
   wouter@3.7.1: patches/wouter@3.7.1.patch
 overrides:

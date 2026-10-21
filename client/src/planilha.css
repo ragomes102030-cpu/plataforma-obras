@@ -3116,6 +3116,67 @@ tr:hover .xl-codigo {
   font-size:10px;
   font-weight:750;
 }
+/* Conciliação cronograma ↔ orçamento.
+   Cinco colunas, com a atividade e o item elásticos: em tela estreita a tabela
+   rola em vez de esmagar o nome do serviço a três letras. */
+.pl-conciliacao-barra{
+  height:6px;
+  margin:8px 0 10px;
+  background:#e8eef4;
+  border-radius:999px;
+  overflow:hidden;
+}
+.pl-conciliacao-barra>span{
+  display:block;
+  height:100%;
+  background:#2f7d5b;
+  border-radius:999px;
+  transition:width .2s ease;
+}
+.pl-conciliacao-linha{
+  display:grid;
+  grid-template-columns:22px minmax(170px,1.2fr) minmax(200px,1.7fr) 84px 96px;
+  gap:6px;
+  align-items:center;
+  min-width:600px;
+  padding:6px 10px;
+  border-bottom:1px solid #f0f3f6;
+  font-size:9px;
+}
+.pl-conciliacao-linha select,
+.pl-conciliacao-linha input[type="number"]{
+  width:100%;
+  min-width:0;
+  height:24px;
+  padding:0 4px;
+  border:1px solid #d5dee6;
+  background:#fff;
+  color:#334155;
+  font-size:9px;
+}
+.pl-conciliacao-marca{
+  display:flex;
+  justify-content:center;
+}
+.pl-conciliacao-atividade{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#334155;
+}
+.pl-conciliacao-atividade small{
+  color:#7b8ea0;
+  font-size:8px;
+}
+.pl-conciliacao-motivo{
+  color:#7b8ea0;
+  font-size:8px;
+  text-align:right;
+}
+.pl-conciliacao-motivo em{
+  font-style:normal;
+  color:#b45309;
+}
 .eap-btn{
   padding:0 12px;
 }
