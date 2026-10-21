@@ -9,9 +9,10 @@
 FROM node:22-slim AS build
 WORKDIR /app
 
-# `playwright` esta em dependencies (so por causa dos scripts de e2e) e o
-# postinstall dele baixa o Chromium inteiro. Nem server/ nem shared/ usam
-# playwright, entao nao ha motivo para pagar esse download no build.
+# O Chromium do playwright nunca é baixado: o playwright é devDependency desde a
+# reorganização de dependências (docs/DECISIONS.md, Decisão 19) e nem server/ nem
+# shared/ o importam — só os scripts de e2e. A variável fica como cinto e
+# suspensório para um `pnpm install` que ainda traga devDeps (stage 1).
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # pnpm-workspace.yaml declara `patchedDependencies` apontando para
@@ -33,7 +34,7 @@ COPY shared/ ./shared/
 # ../drizzle/schema. Sem esse diretorio o esbuild aborta o bundle do servidor.
 COPY drizzle/ ./drizzle/
 
-RUN npm install -g pnpm@10.4.1
+RUN npm install -g pnpm@10.34.5
 RUN pnpm install --frozen-lockfile
 RUN pnpm build
 
@@ -58,7 +59,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches/ ./patches/
-RUN npm install -g pnpm@10.4.1
+RUN npm install -g pnpm@10.34.5
 RUN pnpm install --frozen-lockfile --prod
 
 # server/_core/vite.ts resolve distPath como <dirname do bundle>/public,

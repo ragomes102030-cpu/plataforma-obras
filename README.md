@@ -65,7 +65,7 @@ pnpm db:generate                                  # gera migração nova
 Detalhes de `USE_SUPABASE=1`, usuário somente-leitura e aplicação de migração
 como owner: `docs/DEPLOY.md`.
 
-As consultas de atividades, EAP e dependências preservam o fallback demonstrativo para visitantes, mas validam a permissão da obra quando existe sessão autenticada e banco conectado. O CI usa uma única versão explícita do pnpm (`10.4.1`) para evitar divergência entre o workflow e o `packageManager`.
+As consultas de atividades, EAP e dependências preservam o fallback demonstrativo para visitantes, mas validam a permissão da obra quando existe sessão autenticada e banco conectado. O CI usa uma única versão explícita do pnpm (`10.34.5`) para evitar divergência entre o workflow e o `packageManager`.
 
 ## Executar localmente
 

@@ -21,6 +21,8 @@ Supabase (PostgreSQL). Nada além disso.**
 | Serviço Render | `srv-dbcd0gon74is7384ufag` | Render |
 | Banco | PostgreSQL gerenciado (projeto `tromrvfijbtihuilvnuk`) | Supabase |
 | Front-end | React + Vite 7, buildado e servido pelo próprio Express | mesma imagem |
+| Toolchain | Node 22, **pnpm 10.34.5** (mesmo valor em `packageManager`, `Dockerfile`, `nixpacks.toml` e workflows) | build |
+| Dependências | `pnpm audit --prod` = 0 vulnerabilidade conhecida | build |
 | API | Express + tRPC em `/api/trpc`; OAuth em `/api/auth/github` | mesma imagem |
 | CI | `CI` + `schema-audit` (por PR) e `Deploy verify (Render)` (por push) | GitHub Actions |
 
