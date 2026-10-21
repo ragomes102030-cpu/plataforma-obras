@@ -111,6 +111,38 @@ const enumProductionFrontsStatus = pgEnum("production_fronts_status", ["ativa", 
 /** `production_entries_status` — o enum de `production_entries.status`. */
 const enumProductionEntriesStatus = pgEnum("production_entries_status", ["rascunho", "confirmada"]);
 
+/*
+ * Custo REAL (o "AC" do Valor Ganho).
+ *
+ * `production_entries` mede QUANTIDADE; não mede dinheiro. Até aqui o AC era
+ * deduzido do orçamento (`quantidade executada x preço unitário`), o que faz
+ * `AC = EV` por construção e trava o CPI em 1,000: o índice nunca podia acusar
+ * nada porque numerador e denominador eram o mesmo número.
+ *
+ * Esta tabela existe para o AC ser o que foi efetivamente gasto.
+ *
+ * `competenceDate` é o fato gerador (emissão da nota, medição do fornecedor),
+ * não a data de pagamento: o EVM compara custo com avanço físico, e o avanço
+ * acontece quando o serviço é feito. `asOf` corta por esta data.
+ *
+ * `status`: só `confirmado` entra no AC. `rascunho` é o que a pessoa digitou e
+ * ainda vai conferir; `cancelado` é o estorno. Sem isso, corrigir um lançamento
+ * exigiria apagar a linha e perder o rastro.
+ */
+const enumCostEntriesCategory = pgEnum("cost_entries_category", [
+  "material",
+  "mao_de_obra",
+  "equipamento",
+  "servico",
+  "administrativo",
+  "outro",
+]);
+const enumCostEntriesStatus = pgEnum("cost_entries_status", [
+  "rascunho",
+  "confirmado",
+  "cancelado",
+]);
+
 /** `budget_versions_status` — o enum de `budget_versions.status`. */
 const enumBudgetVersionsStatus = pgEnum("budget_versions_status", ["rascunho", "em_revisao", "aprovado", "arquivado"]);
 
@@ -784,6 +816,57 @@ export const budgetItems = pgTable(
       table.code
     ),
     index("budget_items_version_idx").on(table.budgetVersionId),
+  ]
+);
+
+/**
+ * Custo real lançado na obra — a fonte do AC do Valor Ganho.
+ *
+ * O vínculo é OPCIONAL em cada ponta, e isso é decisão, não descuido:
+ *
+ *   - `activityId` preenchido: custo daquela atividade (o caso ideal, porque
+ *     permite comparar custo com avanço físico);
+ *   - `budgetItemId` preenchido: custo do item, típico de nota fiscal de
+ *     material que atende várias atividades;
+ *   - ambos nulos: custo da obra que não pertence a nenhum item (mobilização,
+ *     canteiro). O EVM **não** joga isso no CPI — reporta em `acNaoAlocado`,
+ *     senão um gasto administrativo grande "melhoraria" o índice sem que
+ *     ninguém tivesse produzido nada.
+ *
+ * Quando as duas pontas estão preenchidas, o valor conta UMA vez, na atividade.
+ */
+export const costEntries = pgTable(
+  "cost_entries",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    projectId: integer("projectId")
+      .notNull()
+      .references(() => projects.id),
+    activityId: integer("activityId").references(() => scheduleActivities.id),
+    budgetItemId: integer("budgetItemId").references(() => budgetItems.id),
+    /** Fato gerador (nota, medição). `asOf` corta o AC por esta data. */
+    competenceDate: timestamp("competenceDate", { withTimezone: true }).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    category: enumCostEntriesCategory("category").default("material").notNull(),
+    supplier: varchar("supplier", { length: 160 }),
+    /** Nota fiscal, contrato, medição. Texto livre: não é chave. */
+    document: varchar("document", { length: 64 }),
+    notes: text("notes"),
+    status: enumCostEntriesStatus("status").default("confirmado").notNull(),
+    createdBy: integer("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    index("cost_entries_project_competence_idx").on(
+      table.projectId,
+      table.competenceDate
+    ),
+    index("cost_entries_activity_idx").on(table.activityId),
+    index("cost_entries_item_idx").on(table.budgetItemId),
+    // Custo zero ou negativo não é custo: é lançamento incompleto. Estorno se
+    // faz com `status = 'cancelado'`, que preserva a linha e o motivo.
+    check("cost_entries_amount_positive", drizzleSql`${table.amount} > 0`),
   ]
 );
 

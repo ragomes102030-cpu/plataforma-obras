@@ -104,6 +104,13 @@
       "when": 1792516623034,
       "tag": "0014_activity_three_point_duration",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792605384095,
+      "tag": "0015_cost_entries",
+      "breakpoints": true
     }
   ],
   "version": "7",

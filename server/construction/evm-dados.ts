@@ -1,7 +1,8 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import {
   budgetItems,
   budgetVersions,
+  costEntries,
   productionEntries,
   projects,
   scheduleActivities,
@@ -50,9 +51,33 @@ export type DadosEvms = {
   items: EvmBudgetItem[];
   activities: EvmActivity[];
   actualByActivity: Map<number, number>;
+  /**
+   * Custo real confirmado com competência até `asOf`, por atividade.
+   *
+   * Sem este mapa o AC era deduzido do orçamento (`executado x preço`), o que
+   * faz `AC = EV` por construção e trava o CPI em 1,000.
+   */
+  costByActivity: Map<number, number>;
+  /** Custo real confirmado com competência até `asOf`, por item de orçamento. */
+  costByItem: Map<number, number>;
+  /**
+   * Custo real sem vínculo com atividade nem item (mobilização, canteiro).
+   * Fica FORA do CPI de propósito — ver `computeEvm`.
+   */
+  costUnallocated: number;
+  /** Quantos lançamentos de custo entraram na conta. */
+  costEntryCount: number;
 };
 
-/** Quanto do tempo decorrido entra no EVM, em dias úteis — não corridos. */
+/**
+ * Quanto do tempo decorrido entra no EVM, em dias úteis — não corridos.
+ *
+ * ATENÇÃO ÀS DATAS DE CORTE. Tudo o que é "até `asOf`" precisa ser cortado
+ * AQUI, na consulta. Antes, `production_entries` era somado inteiro, sem olhar
+ * `productionDate`: pedir o EVM de 30/09 devolvia o avanço de outubro, e o EV
+ * do passado mudava sozinho a cada lançamento novo. Um relatório que se
+ * reescreve retroativo não serve para decidir nada.
+ */
 export async function coletarDadosEvms(
   db: DbConexao,
   projectId: number,
@@ -144,7 +169,10 @@ export async function coletarDadosEvms(
     .where(
       and(
         eq(productionEntries.projectId, projectId),
-        eq(productionEntries.status, "confirmada")
+        eq(productionEntries.status, "confirmada"),
+        // Corte por data. Sem isto o EVM de uma data passada inclui produção
+        // futura, e o EV de setembro muda quando alguém lança outubro.
+        lte(productionEntries.productionDate, asOf)
       )
     );
   const actualByActivity = new Map<number, number>();
@@ -156,6 +184,45 @@ export async function coletarDadosEvms(
     );
   }
 
+  // AC: dinheiro que saiu. Só `confirmado` conta; `rascunho` ainda vai ser
+  // conferido e `cancelado` é estorno. O corte é por competência.
+  const costs = await db
+    .select({
+      activityId: costEntries.activityId,
+      budgetItemId: costEntries.budgetItemId,
+      amount: costEntries.amount,
+    })
+    .from(costEntries)
+    .where(
+      and(
+        eq(costEntries.projectId, projectId),
+        eq(costEntries.status, "confirmado"),
+        lte(costEntries.competenceDate, asOf)
+      )
+    );
+
+  const costByActivity = new Map<number, number>();
+  const costByItem = new Map<number, number>();
+  let costUnallocated = 0;
+  for (const cost of costs) {
+    const valor = Number(cost.amount);
+    if (!Number.isFinite(valor)) continue;
+    // Atividade manda: um lançamento com as duas pontas conta UMA vez.
+    if (cost.activityId != null) {
+      costByActivity.set(
+        cost.activityId,
+        (costByActivity.get(cost.activityId) ?? 0) + valor
+      );
+    } else if (cost.budgetItemId != null) {
+      costByItem.set(
+        cost.budgetItemId,
+        (costByItem.get(cost.budgetItemId) ?? 0) + valor
+      );
+    } else {
+      costUnallocated += valor;
+    }
+  }
+
   return {
     asOf,
     asOfIso: localIso(asOf),
@@ -165,6 +232,10 @@ export async function coletarDadosEvms(
     items,
     activities,
     actualByActivity,
+    costByActivity,
+    costByItem,
+    costUnallocated,
+    costEntryCount: costs.length,
   };
 }
 

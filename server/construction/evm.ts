@@ -35,9 +35,24 @@ import {
  *   S do cliente) trata a linha como `quantity × unitPrice`, ou seja,
  *   `unitPrice` já é o preço de uma unidade.
  *
- *   AC continua nascendo do preço planejado até existir a tabela de custo real
- *   (Bloco 1b). Enquanto isso o campo `costSource` diz a origem em vez de
- *   deixá-la implícita — e o EAC só é calculado quando há custo vinculado.
+ *   AC É DINHEIRO QUE SAIU — não preço de tabela.
+ *
+ *     Antes, `ac = quantidade executada × preço unitário`. Como
+ *     `ev = peso × progresso` e `progresso = executado / planejado`, os dois
+ *     davam o MESMO número: `AC ≡ EV`, logo `CPI = EV/AC ≡ 1,000`, para sempre.
+ *     O índice não podia acusar estouro porque numerador e denominador eram o
+ *     mesmo dado lido duas vezes. Isso não aparecia como erro — aparecia como
+ *     "obra sempre dentro do orçamento".
+ *
+ *     Agora o AC vem de `cost_entries` (ver `evm-dados.ts`). Sem lançamento de
+ *     custo, `ac` é `null` e o CPI/EAC ficam `null` também: um "—" honesto é
+ *     melhor que um 1,000 inventado. `custoPlanejadoDoExecutado` continua sendo
+ *     devolvido como REFERÊNCIA (é o antigo AC), mas nunca entra em índice.
+ *
+ *   CPI sobre escopo parcialmente custeado engana. Se só 10% do escopo tem
+ *   custo lançado, `EV/AC` compara obra inteira com um décimo do gasto e
+ *   devolve um CPI alto que não significa nada. Por isso `costCoveragePct` sai
+ *   junto, e abaixo de 80% o resultado vem com aviso.
  */
 
 export type EvmBudgetItem = {
@@ -68,6 +83,19 @@ export type EvmInput = {
   activities: EvmActivity[];
   /** Quantidade executada e confirmada, por atividade. */
   actualByActivity: ReadonlyMap<number, number>;
+  /**
+   * Custo real confirmado (competência até `asOf`), por atividade.
+   *
+   * Opcional para o módulo continuar sendo um cálculo puro: quem chamar sem
+   * custo recebe `ac = null`, e não um AC deduzido do orçamento.
+   */
+  costByActivity?: ReadonlyMap<number, number>;
+  /** Custo real confirmado, por item de orçamento (nota de material). */
+  costByItem?: ReadonlyMap<number, number>;
+  /** Custo real sem vínculo (mobilização, canteiro). Fora do CPI. */
+  costUnallocated?: number;
+  /** Quantos lançamentos de custo entraram, para o painel explicar o "—". */
+  costEntryCount?: number;
 };
 
 export type EvmResult = {
@@ -81,9 +109,22 @@ export type EvmResult = {
   outOfScopeValue: number;
   pv: number;
   ev: number;
+  /** Custo real do escopo medido. `null` quando não há custo lançado. */
   ac: number | null;
+  /** Custo real de itens fora do escopo. Não entra no CPI. */
+  acOutOfScope: number;
+  /** Custo sem atividade nem item. Não entra no CPI. */
+  acUnallocated: number;
+  /** `ac + acOutOfScope + acUnallocated`: todo o dinheiro lançado no projeto. */
+  acTotal: number;
+  /** % do peso do escopo que tem ao menos um lançamento de custo. */
+  costCoveragePct: number;
+  costEntryCount: number;
+  /** O antigo AC (preço planejado do executado). Referência, não índice. */
+  custoPlanejadoDoExecutado: number;
   spi: number | null;
   cpi: number | null;
+  tcpi: number | null;
   sv: number;
   cv: number | null;
   eac: number | null;
@@ -91,9 +132,10 @@ export type EvmResult = {
   etc: number | null;
   plannedPct: number;
   actualPct: number;
+  /** `true` só quando existe custo real; antes significava "tem item". */
   acLinked: boolean;
-  /** Origem do AC. Diz "planejado" até o custo real existir. */
-  costSource: "preco_planejado" | "custo_real";
+  /** Origem do AC. Deixou de existir "preço planejado" como origem. */
+  costSource: "custo_real" | "sem_custo";
   note: string | null;
 };
 
@@ -104,8 +146,15 @@ const percentual = (valor: number): number => Math.round(valor * 10) / 10;
 const limitado = (valor: number, minimo: number, maximo: number): number =>
   Math.max(minimo, Math.min(maximo, valor));
 
+const somarMapa = (mapa: ReadonlyMap<number, number> | undefined): number =>
+  mapa ? [...mapa.values()].reduce((soma, valor) => soma + valor, 0) : 0;
+
 export function computeEvm(input: EvmInput): EvmResult {
   const { baseline, items, activities, actualByActivity } = input;
+  const costByActivity = input.costByActivity;
+  const costByItem = input.costByItem;
+  const costUnallocated = input.costUnallocated ?? 0;
+  const costEntryCount = input.costEntryCount ?? 0;
 
   // BAC É a baseline. Sem versão aprovada não existe BAC — e não é o caso de
   // somar os itens que o chamador passou, porque esses itens pertencem a uma
@@ -125,8 +174,15 @@ export function computeEvm(input: EvmInput): EvmResult {
     pv: 0,
     ev: 0,
     ac: null,
+    acOutOfScope: 0,
+    acUnallocated: dinheiro(costUnallocated),
+    acTotal: dinheiro(costUnallocated),
+    costCoveragePct: 0,
+    costEntryCount,
+    custoPlanejadoDoExecutado: 0,
     spi: null,
     cpi: null,
+    tcpi: null,
     sv: 0,
     cv: null,
     eac: null,
@@ -135,7 +191,7 @@ export function computeEvm(input: EvmInput): EvmResult {
     plannedPct: 0,
     actualPct: 0,
     acLinked: false,
-    costSource: "preco_planejado",
+    costSource: "sem_custo",
     note: null,
   };
 
@@ -166,11 +222,14 @@ export function computeEvm(input: EvmInput): EvmResult {
   );
 
   const escopo = new Set<number>();
+  /** Peso de cada item que o cronograma mede, para calcular cobertura. */
+  const pesoPorItem = new Map<number, number>();
   let scopeBac = 0;
   let pv = 0;
   let ev = 0;
-  let ac = 0;
-  let acLinked = false;
+  let custoPlanejadoDoExecutado = 0;
+  let acNoEscopo = 0;
+  let acAtividadesNoEscopo = 0;
 
   for (const atividade of activities) {
     const planejado = atividade.plannedQuantity;
@@ -184,6 +243,7 @@ export function computeEvm(input: EvmInput): EvmResult {
     escopo.add(item.id);
     const peso = planejado * item.unitPrice;
     scopeBac += peso;
+    pesoPorItem.set(item.id, (pesoPorItem.get(item.id) ?? 0) + peso);
 
     const inicio = atividade.earlyStart ?? atividade.startOffset ?? 0;
     // Tempo em dia útil ÷ duração em dia útil. As duas pontas na mesma régua.
@@ -197,8 +257,23 @@ export function computeEvm(input: EvmInput): EvmResult {
 
     pv += peso * progressoPlanejado;
     ev += peso * progressoReal;
-    ac += executado * item.unitPrice;
-    acLinked = true;
+    // Referência apenas: é exatamente o EV, e era este número que fazia o CPI
+    // valer 1,000 quando ocupava o lugar do AC.
+    custoPlanejadoDoExecutado += executado * item.unitPrice;
+
+    const custoDaAtividade = costByActivity?.get(atividade.id) ?? 0;
+    acAtividadesNoEscopo += custoDaAtividade;
+    acNoEscopo += custoDaAtividade;
+  }
+
+  // Custo lançado por item (nota de material que atende várias atividades).
+  // Só entra o que pertence a um item do escopo.
+  let acItensNoEscopo = 0;
+  for (const [itemId, valor] of costByItem ?? []) {
+    if (escopo.has(itemId)) {
+      acNoEscopo += valor;
+      acItensNoEscopo += valor;
+    }
   }
 
   const foraDoEscopo = items.filter(item => !escopo.has(item.id));
@@ -207,18 +282,63 @@ export function computeEvm(input: EvmInput): EvmResult {
     0
   );
 
+  // Tudo o que foi lançado e NÃO é do escopo medido. Reportado, não somado ao
+  // CPI: custo administrativo grande não deve "melhorar" o índice.
+  const acForaDoEscopo =
+    somarMapa(costByActivity) -
+    acAtividadesNoEscopo +
+    (somarMapa(costByItem) - acItensNoEscopo);
+
+  const ac = acNoEscopo > 0 ? acNoEscopo : null;
+  const acTotal = acNoEscopo + acForaDoEscopo + costUnallocated;
+
+  // Cobertura: quanto do PESO do escopo tem algum custo lançado, seja por
+  // atividade daquele item, seja por lançamento direto no item.
+  const itensComCusto = new Set<number>();
+  for (const atividade of activities) {
+    if (atividade.budgetItemId == null) continue;
+    const temCusto = (costByActivity?.get(atividade.id) ?? 0) > 0;
+    if (temCusto) itensComCusto.add(atividade.budgetItemId);
+  }
+  for (const itemId of costByItem?.keys() ?? []) itensComCusto.add(itemId);
+  let pesoCoberto = 0;
+  for (const [itemId, peso] of pesoPorItem) {
+    if (itensComCusto.has(itemId)) pesoCoberto += peso;
+  }
+  const costCoveragePct = scopeBac > 0 ? (pesoCoberto / scopeBac) * 100 : 0;
+
   const spi = pv > 0 ? ev / pv : null;
-  // AC é o custo do que foi executado. Sem item vinculado não existe AC, sem
-  // AC não existe CPI — e sem CPI não existe previsão (defeito A5: o código
+  // Sem AC não existe CPI — e sem CPI não existe previsão (defeito A5: o código
   // previa `bac` no lugar do EAC, ou seja, inventava a conclusão no orçamento).
-  const cpi = acLinked && ac > 0 ? ev / ac : null;
+  const cpi = ac !== null && ac > 0 ? ev / ac : null;
   const sv = ev - pv;
-  const cv = acLinked ? ev - ac : null;
+  const cv = ac !== null ? ev - ac : null;
   // `cpi` sem arredondar: arredondar antes dividir BAC por 0,833 daria
   // 240.096 em vez de 240.000, e o erro entraria disfarçado de precisão.
   const eac = cpi && cpi > 0 ? scopeBac / cpi : null;
   const vac = eac === null ? null : scopeBac - eac;
-  const etc = eac === null ? null : eac - (acLinked ? ac : ev);
+  const etc = eac === null || ac === null ? null : eac - ac;
+  // TCPI: desempenho de custo necessário para terminar no BAC.
+  const tcpi =
+    ac !== null && scopeBac - ac > 0 ? (scopeBac - ev) / (scopeBac - ac) : null;
+
+  const avisos: string[] = [];
+  if (ac === null) {
+    avisos.push(
+      costEntryCount > 0
+        ? "Há lançamentos de custo, mas nenhum vinculado ao escopo medido — o CPI não pode ser calculado."
+        : "Nenhum custo real lançado — CPI, EAC e VAC ficam indisponíveis até existir lançamento."
+    );
+  } else if (costCoveragePct < 80) {
+    avisos.push(
+      `CPI calculado sobre ${percentual(costCoveragePct)}% do escopo com custo lançado — pode estar otimista.`
+    );
+  }
+  if (costUnallocated > 0) {
+    avisos.push(
+      `${dinheiro(costUnallocated).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} em custos sem vínculo (não entram no CPI).`
+    );
+  }
 
   return {
     baselineStatus: "aprovada",
@@ -229,9 +349,16 @@ export function computeEvm(input: EvmInput): EvmResult {
     outOfScopeValue: dinheiro(valorForaDoEscopo),
     pv: dinheiro(pv),
     ev: dinheiro(ev),
-    ac: acLinked ? dinheiro(ac) : null,
+    ac: ac === null ? null : dinheiro(ac),
+    acOutOfScope: dinheiro(acForaDoEscopo),
+    acUnallocated: dinheiro(costUnallocated),
+    acTotal: dinheiro(acTotal),
+    costCoveragePct: percentual(costCoveragePct),
+    costEntryCount,
+    custoPlanejadoDoExecutado: dinheiro(custoPlanejadoDoExecutado),
     spi: spi === null ? null : taxa(spi),
     cpi: cpi === null ? null : taxa(cpi),
+    tcpi: tcpi === null ? null : taxa(tcpi),
     sv: dinheiro(sv),
     cv: cv === null ? null : dinheiro(cv),
     eac: eac === null ? null : dinheiro(eac),
@@ -239,10 +366,8 @@ export function computeEvm(input: EvmInput): EvmResult {
     etc: etc === null ? null : dinheiro(etc),
     plannedPct: percentual((scopeBac > 0 ? pv / scopeBac : 0) * 100),
     actualPct: percentual((scopeBac > 0 ? ev / scopeBac : 0) * 100),
-    acLinked,
-    costSource: "preco_planejado",
-    note: acLinked
-      ? null
-      : "CPI/EAC sem custos vinculados às atividades — vincule um item de orçamento para estimar.",
+    acLinked: ac !== null,
+    costSource: ac !== null ? "custo_real" : "sem_custo",
+    note: avisos.length > 0 ? avisos.join(" ") : null,
   };
 }

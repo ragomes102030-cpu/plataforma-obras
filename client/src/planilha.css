@@ -3516,3 +3516,216 @@ tr:hover .xl-codigo {
   .arq-context-brand strong { font-size: 12px; }
   .arq-context-project { min-height: 56px; }
 }
+
+/* Valor Ganho (EVM) — custo REAL.
+   Oito cartões em grade elástica: em tela estreita caem para duas colunas em
+   vez de encolher o número até virar ilegível. O número é a informação; o
+   rótulo é secundário. */
+.pl-evm{
+  margin:14px 0 18px;
+  padding:12px 14px 14px;
+  border:1px solid #e3e9ef;
+  border-radius:6px;
+  background:#fff;
+}
+.pl-evm-topo{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:10px;
+}
+.pl-evm-topo h3{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:0;
+  font-size:12px;
+  font-weight:700;
+  color:#2c3a47;
+}
+.pl-evm-sub{
+  margin:4px 0 0;
+  font-size:9px;
+  color:#7b8ea0;
+}
+.pl-evm-aviso{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  margin:8px 0;
+  padding:7px 9px;
+  border-radius:4px;
+  background:#fff7e6;
+  border:1px solid #f3d9a4;
+  color:#8a5a00;
+  font-size:9.5px;
+  line-height:1.45;
+}
+.pl-evm-cartoes{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
+  gap:6px;
+  margin-bottom:10px;
+}
+.pl-evm-cartao{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:7px 9px;
+  border:1px solid #e8eef4;
+  border-radius:4px;
+  background:#fafcfe;
+}
+.pl-evm-cartao>span{
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+}
+.pl-evm-cartao>strong{
+  font-size:12px;
+  font-weight:700;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-evm-vazio-cartao>strong{
+  color:#9aa5b1;
+}
+.pl-evm-alerta>strong,
+.pl-evm-cartao.pl-evm-alerta>strong{
+  color:#b42318;
+}
+.pl-evm-barras{
+  display:grid;
+  gap:5px;
+  margin:0 0 8px;
+}
+.pl-evm-barra>span{
+  display:flex;
+  justify-content:space-between;
+  font-size:8.5px;
+  color:#68717a;
+}
+.pl-evm-trilho{
+  height:5px;
+  margin-top:3px;
+  background:#e8eef4;
+  border-radius:999px;
+  overflow:hidden;
+}
+.pl-evm-preenchido{
+  height:100%;
+  background:#2f7d5b;
+  border-radius:999px;
+  transition:width .2s ease;
+}
+.pl-evm-preenchido.pl-evm-alerta{
+  background:#d9a441;
+}
+.pl-evm-form{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:6px;
+  align-items:end;
+  padding:10px 0 4px;
+  border-top:1px solid #f0f3f6;
+}
+.pl-evm-form label{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  font-size:8.5px;
+  color:#68717a;
+}
+.pl-evm-form input,
+.pl-evm-form select{
+  height:26px;
+  min-width:0;
+  padding:0 6px;
+  border:1px solid #d5dee6;
+  border-radius:3px;
+  background:#fff;
+  color:#334155;
+  font:inherit;
+  font-size:10px;
+}
+.pl-evm-largo{
+  grid-column:span 2;
+}
+.pl-evm-botao{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  height:26px;
+  padding:0 12px;
+  margin-bottom:1px;
+  border:1px solid #1e2a35;
+  border-radius:3px;
+  background:#2c3a47;
+  color:#fff;
+  font:inherit;
+  font-size:9.5px;
+  font-weight:600;
+  cursor:pointer;
+}
+.pl-evm-botao:disabled{
+  opacity:.6;
+  cursor:default;
+}
+.pl-evm-tabela{
+  margin-top:8px;
+  overflow-x:auto;
+}
+.pl-evm-tabela table{
+  width:100%;
+  min-width:640px;
+  border-collapse:collapse;
+  font-size:9px;
+}
+.pl-evm-tabela th{
+  padding:5px 6px;
+  text-align:left;
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+  border-bottom:1px solid #e3e9ef;
+  white-space:nowrap;
+}
+.pl-evm-tabela td{
+  padding:5px 6px;
+  border-bottom:1px solid #f0f3f6;
+  color:#334155;
+}
+.pl-evm-num{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.pl-evm-vazio{
+  padding:14px 8px;
+  text-align:center;
+  color:#7b8ea0;
+  font-size:9px;
+  line-height:1.5;
+}
+.pl-evm-cancelado td{
+  color:#9aa5b1;
+  text-decoration:line-through;
+}
+.pl-evm-link{
+  padding:0;
+  border:0;
+  background:none;
+  color:#b42318;
+  font:inherit;
+  font-size:9px;
+  text-decoration:underline;
+  cursor:pointer;
+}
+.pl-evm-link:disabled{
+  opacity:.5;
+  cursor:default;
+}
