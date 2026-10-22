@@ -1,0 +1,254 @@
+name: Backup diario do banco
+
+# ============================================================================
+# POR QUE ESTE WORKFLOW EXISTE
+#
+# Ate 22/10/2026 o projeto Supabase estava no plano gratuito, que NAO tem
+# backup automatico: `GET /v1/projects/{ref}/database/backups` respondia `[]`
+# e o PITR estava desligado. Ou seja, um `DELETE` errado (ou um bug) apagaria
+# dado de obra sem volta. Este workflow e a rede de seguranca enquanto o plano
+# nao for o Pro.
+#
+# O QUE ELE FAZ, TODOS OS DIAS
+#
+#   1. tira um dump logico do schema `public` (pg_dump 17, formato custom);
+#   2. confere que o dump tem as 40+ tabelas esperadas — dump truncado falha
+#      aqui, e nao na hora de restaurar;
+#   3. RESTAURA o dump num Postgres 17 descartavel e compara contagem de linhas
+#      com o banco de origem (`backup que nao restaura nao e backup`);
+#   4. criptografa o arquivo (AES256) e publica como artifact por 90 dias.
+#
+# POR QUE CRIPTOGRAFADO
+#
+# O repositorio e PUBLICO. Um artifact de repositorio publico nao pode conter
+# dado de obra (cliente, valor, contrato). O dump sai daqui cifrado com GPG
+# simetrico; sem a senha o arquivo e ruido.
+#
+# SECRETS NECESSARIOS
+#
+#   secrets.SUPABASE_DB_URL        conexao de LEITURA do banco (usuario
+#                                  arquimedes_app — o mesmo do runtime).
+#   secrets.BACKUP_GPG_PASSPHRASE  senha do backup. Sem ela ninguem restaura.
+#                                  Precisa estar tambem no gerenciador de
+#                                  senhas do dono do sistema.
+#
+# RESTAURAR (procedimento completo em docs/BACKUP-RESTORE.md)
+#
+#   gpg --decrypt --batch --passphrase "$SENHA" backup.dump.gpg > backup.dump
+#   pg_restore --no-owner --no-acl -d <banco_vazio> backup.dump
+#
+# ============================================================================
+
+on:
+  schedule:
+    # 06:00 UTC = 03:00 em Brasilia. Fora do horario de obra.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      verificar_restauracao:
+        description: "Restaurar o dump num Postgres descartavel antes de publicar"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: backup-diario
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Dump + verificacao + artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      PGCONN: ${{ secrets.SUPABASE_DB_URL }}
+      PGIMAGE: postgres:17-alpine
+
+    steps:
+      - name: Conferir os secrets
+        run: |
+          set -euo pipefail
+          faltando=0
+          if [ -z "${PGCONN:-}" ]; then
+            echo "::error::Secret SUPABASE_DB_URL nao configurado."
+            faltando=1
+          fi
+          if [ -z "${{ secrets.BACKUP_GPG_PASSPHRASE }}" ]; then
+            echo "::error::Secret BACKUP_GPG_PASSPHRASE nao configurado. Sem ele o dump nao pode ser cifrado."
+            faltando=1
+          fi
+          exit "${faltando}"
+
+      - name: Baixar a imagem do Postgres 17
+        run: docker pull "${PGIMAGE}"
+
+      - name: Tirar o dump
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          DIA="$(date -u +%Y-%m-%d)"
+          echo "DIA=${DIA}" >> "${GITHUB_ENV}"
+          ARQ="backup/plataforma-obras-${DIA}.dump"
+          echo "ARQ=${ARQ}" >> "${GITHUB_ENV}"
+
+          inicio="$(date +%s)"
+          # A conninfo vai por variavel de ambiente (nao por argumento) para nao
+          # aparecer em logs do processo. O `--file` e um caminho, nao a conexao.
+          docker run --rm \
+            -e "CONN=${PGCONN}" \
+            -e "OUT=$(basename "${ARQ}")" \
+            -v "${PWD}/backup:/backup" \
+            "${PGIMAGE}" \
+            sh -c 'pg_dump --no-owner --no-acl --schema=public --format=custom --compress=9 --file="/backup/${OUT}" "${CONN}"'
+          fim="$(date +%s)"
+
+          test -s "${ARQ}"
+          echo "Dump: ${ARQ} ($(du -h "${ARQ}" | cut -f1)) em $((fim - inicio))s"
+          echo "SEGUNDOS_DUMP=$((fim - inicio))" >> "${GITHUB_ENV}"
+
+      - name: Conferir o conteudo do dump (tabelas e dados)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${PWD}/backup:/backup" "${PGIMAGE}" \
+            pg_restore --list "/backup/$(basename "${ARQ}")" > backup/toc.txt
+
+          # O indice do pg_restore escreve `TABLE <schema> <nome> <dono>`, sem
+          # ponto entre schema e nome. A primeira versao desta checagem usava
+          # ` TABLE public\.` e por isso lia zero em um dump perfeito.
+          tabelas="$(grep -c ' TABLE public ' backup/toc.txt || true)"
+          dados="$(grep -c ' TABLE DATA public ' backup/toc.txt || true)"
+          echo "Objetos TABLE: ${tabelas} | TABLE DATA: ${dados} | linhas no indice: $(wc -l < backup/toc.txt)"
+
+          # 42 tabelas de dominio + __drizzle_migrations. Abaixo de 40 e dump quebrado.
+          if [ "${tabelas}" -lt 40 ]; then
+            echo "::error::O dump tem apenas ${tabelas} tabelas. Esperado 40+. Backup descartado."
+            exit 1
+          fi
+          if [ "${dados}" -lt 40 ]; then
+            echo "::error::O dump tem apenas ${dados} blocos de dados. Esquema sem dados nao serve para recuperacao."
+            exit 1
+          fi
+
+      - name: Restaurar num Postgres descartavel e comparar
+        if: github.event_name != 'workflow_dispatch' || inputs.verificar_restauracao
+        run: |
+          set -euo pipefail
+
+          # A consulta de contagem vai por ARQUIVO: ela tem aspas simples e
+          # aspas duplas, e passá-la por `sh -c` vira um exercicio de escape
+          # que ja quebrou em silencio mais de uma vez neste projeto.
+          cat > backup/linhas.sql <<'SQL'
+          select table_name,
+                 (xpath('/row/c/text()',
+                        query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text::int
+          from information_schema.tables
+          where table_schema = 'public' and table_type = 'BASE TABLE'
+          order by 1
+          SQL
+
+          docker rm -f alvo > /dev/null 2>&1 || true
+          docker run -d --name alvo -e POSTGRES_PASSWORD=alvo "${PGIMAGE}"
+
+          # `pg_isready` responde antes de o banco aceitar consulta. A espera
+          # aqui e por uma consulta de verdade, senao a restauracao corre
+          # contra a inicializacao do cluster.
+          pronto=0
+          for i in $(seq 1 30); do
+            if docker exec alvo psql -U postgres -d postgres -c 'select 1' >/dev/null 2>&1; then
+              pronto=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "${pronto}" -ne 1 ]; then
+            echo "::error::O Postgres descartavel nao subiu em 60 s."
+            docker logs alvo 2>&1 | tail -20
+            exit 1
+          fi
+
+          # Todo banco novo ja nasce com o schema `public`, e o dump tambem
+          # traz o `CREATE SCHEMA public`. Derrubar o schema antes evita o
+          # unico erro esperado da restauracao — e deixa o `pg_restore` sair
+          # com zero de verdade, em vez de "zero com erro ignorado".
+          # (o dump recria o schema, entao aqui so se derruba)
+          docker exec alvo psql -U postgres -d postgres -q -c 'drop schema public cascade'
+
+          inicio="$(date +%s)"
+          # `set +e` para o erro aparecer no log ANTES de o job morrer: sem
+          # isso o `set -e` aborta e o stderr fica preso dentro do arquivo.
+          set +e
+          docker exec -i alvo pg_restore --no-owner --no-acl \
+            -d "host=127.0.0.1 port=5432 user=postgres dbname=postgres" \
+            < "${ARQ}" 2> backup/restore.err
+          codigo=$?
+          set -e
+          fim="$(date +%s)"
+
+          echo "pg_restore saiu com codigo ${codigo}"
+          if [ -s backup/restore.err ]; then
+            echo "--- stderr do pg_restore ---"
+            cat backup/restore.err
+            echo "----------------------------"
+          fi
+
+          # `schema "public" already exists` e esperado: todo banco novo ja tem
+          # esse schema. Qualquer OUTRO erro invalida a restauracao.
+          if [ "${codigo}" -ne 0 ] || grep -qE '^pg_restore: error' backup/restore.err; then
+            echo "::error::O dump nao restaurou limpo (codigo ${codigo})."
+            exit 1
+          fi
+
+          echo "RTO medido (restauracao pura): $((fim - inicio))s"
+          echo "SEGUNDOS_RESTORE=$((fim - inicio))" >> "${GITHUB_ENV}"
+
+          docker cp backup/linhas.sql alvo:/tmp/linhas.sql
+          docker exec alvo psql -U postgres -d postgres -t -A -F'|' -f /tmp/linhas.sql \
+            | sort > backup/linhas-restaurado.txt
+
+          docker run --rm -e "CONN=${PGCONN}" -v "${PWD}/backup:/backup" "${PGIMAGE}" \
+            sh -c 'psql "${CONN}" -t -A -F"|" -f /backup/linhas.sql' \
+            | sort > backup/linhas-origem.txt
+
+          if ! diff -q backup/linhas-origem.txt backup/linhas-restaurado.txt > /dev/null; then
+            echo "::error::Contagem de linhas diverge entre origem e restaurado:"
+            diff backup/linhas-origem.txt backup/linhas-restaurado.txt || true
+            exit 1
+          fi
+          echo "Contagem de linhas identica em $(wc -l < backup/linhas-origem.txt) tabelas."
+          docker rm -f alvo > /dev/null
+
+      - name: Criptografar
+        env:
+          SENHA: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase "${SENHA}" --output "${ARQ}.gpg" "${ARQ}"
+          # O dump em claro nunca sai da maquina do runner. `sudo` porque o
+          # arquivo foi criado DENTRO do container (dono postgres), e o usuario
+          # do runner nao pode apagar o que nao e dele.
+          sudo shred -u "${ARQ}" || sudo rm -f "${ARQ}"
+          ls -l "${ARQ}.gpg"
+
+      - name: Publicar o artifact cifrado (90 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ env.DIA }}
+          path: ${{ env.ARQ }}.gpg
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Resumo no job
+        if: always()
+        run: |
+          {
+            echo "### Backup $(date -u +%d/%m/%Y)"
+            echo
+            echo "- dump: ${SEGUNDOS_DUMP:-erro}s"
+            echo "- restauracao: ${SEGUNDOS_RESTORE:-nao verificada}s"
+            echo "- artifact: backup-${DIA:-?}"
+          } >> "${GITHUB_STEP_SUMMARY}"

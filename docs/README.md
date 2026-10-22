@@ -27,6 +27,7 @@
 | Documento | Para quê |
 | --- | --- |
 | [DATA_MODEL.md](DATA_MODEL.md) | Modelo de dados (42 tabelas de domínio) |
+| [BACKUP-RESTORE.md](BACKUP-RESTORE.md) | Backup diário cifrado, ensaio de restauração medido (RTO < 1 min) e como recuperar o sistema |
 | [INCIDENTE-2026-10-12-MIGRACOES-NAO-APLICADAS.md](INCIDENTE-2026-10-12-MIGRACOES-NAO-APLICADAS.md) | O incidente que originou a guarda de migração pendente |
 
 ## Planejamento, EAP e motor de cálculo
