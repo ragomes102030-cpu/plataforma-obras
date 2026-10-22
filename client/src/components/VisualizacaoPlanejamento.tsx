@@ -136,7 +136,9 @@ function Gantt({
 
   return (
     <div className="pl-gantt-scroll pl-planejamento-scroll">
-      <svg className="pl-gantt pl-gantt-large" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de Gantt da obra">
+      {/* `width` explícito para a obra de 27 meses ROLAR em vez de ser espremida:
+          com `width:100%` a barra de 18px virava 1,4px e a linha, 2,6px. */}
+      <svg className="pl-gantt pl-gantt-large" style={{ width, maxWidth: "none" }} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de Gantt da obra">
         <rect x="0" y="0" width={width} height={height} className="pl-gantt-bg" />
         <rect x="0" y="0" width={left} height={height} className="pl-gantt-left" />
         <text x="14" y="22" className="pl-gantt-title">ATIVIDADE / LOCALIZAÇÃO</text>
