@@ -4528,7 +4528,7 @@ tr:hover .xl-codigo {
   }
 }
 
-/* Catálogo: busca no servidor e páginas de 60 (a base tem 12.077 itens) */
+/* Catï¿½logo: busca no servidor e pï¿½ginas de 60 (a base tem 12.077 itens) */
 .catalog-selector-row {
   gap: 8px;
   align-items: center;
@@ -4640,7 +4640,7 @@ tr:hover .xl-codigo {
   line-height:1.45;
 }
 .pd *{box-sizing:border-box}
-.pd p{margin:0;font-size:13px;color:inherit}
+.pd p{margin:0;color:inherit}
 
 .pd-cabecalho{
   display:flex;
