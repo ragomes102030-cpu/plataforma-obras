@@ -23,12 +23,43 @@ export function CatalogView() {
   const [compositionId, setCompositionId] = useState<number | undefined>();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [groupQuery, setGroupQuery] = useState("");
+  const [compositionQuery, setCompositionQuery] = useState("");
+  const [limiteItens, setLimiteItens] = useState(60);
+  const [componenteBusca, setComponenteBusca] = useState("");
   const toggleGroup = (key: string) => setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
-  const catalogQuery = trpc.catalog.list.useQuery({ catalogId, compositionId });
-  // A consulta devolve a base inteira (12 mil itens em 22/10/2026). Enquanto ela
-  // não chega, a tela mostrava "0 catálogos / 0 itens" E o cartão "Como começar
-  // o catálogo", mandando importar uma base que já existia. Carregando ≠ vazio.
+
+  // A busca é feita no servidor (antes o navegador filtrava 12 mil linhas já
+  // baixadas). 350 ms de espera evita uma consulta por tecla.
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(groupQuery.trim()), 350);
+    return () => clearTimeout(t);
+  }, [groupQuery]);
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaComposicaoDebounced(compositionQuery.trim()), 350);
+    return () => clearTimeout(t);
+  }, [compositionQuery]);
+
+  const catalogQuery = trpc.catalog.list.useQuery({
+    catalogId,
+    compositionId,
+    q: buscaDebounced || undefined,
+    qCompositions: buscaComposicaoDebounced || undefined,
+    limitItems: limiteItens,
+  });
+  // A consulta devolve a base paginada (12.077 itens e 4.436 composições em
+  // 22/10/2026). Enquanto ela não chega, a tela mostrava "0 catálogos / 0 itens"
+  // E o cartão "Como começar o catálogo", mandando importar uma base que já
+  // existia. Carregando ≠ vazio.
   const carregandoCatalogo = catalogQuery.isPending;
+  const buscandoItens = catalogQuery.isFetching && !catalogQuery.isPending;
+  const totalItens = catalogQuery.data?.totalItems ?? 0;
+  const totalComposicoes = catalogQuery.data?.totalCompositions ?? 0;
+  const componentesSugeridos = trpc.catalog.searchPrices.useQuery(
+    { query: componenteBusca.trim(), sourceType: "SEINFRA", limit: 25 },
+    { enabled: componenteBusca.trim().length >= 2 }
+  );
 
   const [catalogName, setCatalogName] = useState("");
   const [sourceType, setSourceType] = useState<"propria" | "SINAPI" | "SEINFRA" | "fornecedor">("propria");
@@ -163,14 +194,14 @@ export function CatalogView() {
 
       <div className="catalog-summary-grid">
         <div className="module-card budget-summary-card"><span className="eyebrow">CATÁLOGOS</span><strong>{carregandoCatalogo ? "…" : (catalogQuery.data?.catalogs.length ?? 0)}</strong><p>SINAPI, SEINFRA, própria ou fornecedor.</p></div>
-        <div className="module-card budget-summary-card"><span className="eyebrow">ITENS DE PREÇO</span><strong>{carregandoCatalogo ? "…" : (catalogQuery.data?.priceItems.length ?? 0)}</strong><p>{carregandoCatalogo ? "Carregando o catálogo…" : (selectedCatalog?.name ?? "Selecione um catálogo")}.</p></div>
+        <div className="module-card budget-summary-card"><span className="eyebrow">ITENS DE PREÇO</span><strong>{carregandoCatalogo ? "…" : totalItens.toLocaleString("pt-BR")}</strong><p>{carregandoCatalogo ? "Carregando o catálogo…" : `${selectedCatalog?.name ?? "Selecione um catálogo"}${buscaDebounced ? " · filtrado pela busca" : ""}.`}</p></div>
         <div className="module-card budget-summary-card budget-total-card"><span className="eyebrow">CUSTO UNITÁRIO</span><strong>{carregandoCatalogo ? "…" : money(catalogQuery.data?.total ?? 0)}</strong><p>Coeficiente × preço congelado na composição.</p></div>
       </div>
 
       {carregandoCatalogo && (
         <EstadoCarregando
           rotulo="Carregando o catálogo e os itens de preço…"
-          detalhe="A base tem mais de doze mil itens e vem inteira nesta consulta. Em conexão lenta isso leva alguns segundos."
+          detalhe="A base tem mais de doze mil itens; ela vem por páginas de 60 e a busca é feita no servidor."
           linhas={4}
         />
       )}
@@ -238,22 +269,26 @@ export function CatalogView() {
             <button className="outline-button" disabled={!selectedCatalog || createItem.isPending}><Plus size={13} /> Adicionar</button>
           </form>
           {createItem.error && <p className="form-error">{createItem.error.message}</p>}
-          <input
-            value={groupQuery}
-            onChange={event => setGroupQuery(event.target.value)}
-            placeholder="Filtrar itens por código ou descrição"
-            style={{ width: "100%", marginBottom: 8 }}
-          />
+          <div className="catalog-selector-row">
+            <input
+              value={groupQuery}
+              onChange={event => setGroupQuery(event.target.value)}
+              placeholder="Buscar item por código ou descrição (toda a base)"
+            />
+            {buscandoItens && <span className="catalog-busca-status">buscando…</span>}
+          </div>
           <div className="catalog-list">
             {(() => {
-              const q = groupQuery.trim().toLowerCase();
-              const items = (catalogQuery.data?.priceItems ?? []).filter(
-                item =>
-                  !q ||
-                  item.code.toLowerCase().includes(q) ||
-                  item.description.toLowerCase().includes(q)
-              );
-              if (!items.length) return <div className="module-empty">Nenhum item nesta fonte.</div>;
+              const items = catalogQuery.data?.priceItems ?? [];
+              if (!items.length) {
+                return (
+                  <div className="module-empty">
+                    {buscaDebounced
+                      ? `Nenhum item encontrado para "${buscaDebounced}" nesta fonte.`
+                      : "Nenhum item nesta fonte."}
+                  </div>
+                );
+              }
               const order = ["material", "mao_de_obra", "equipamento", "servico"] as const;
               const groups = order
                 .map(key => ({ key, label: typeLabels[key], list: items.filter(item => item.itemType === key) }))
@@ -262,7 +297,6 @@ export function CatalogView() {
                 <>
                   {groups.map(group => {
                     const collapsed = collapsedGroups[group.key];
-                    const total = group.list.reduce((sum, item) => sum + Number(item.unitPrice), 0);
                     return (
                       <div className="catalog-group" key={group.key}>
                         <button
@@ -273,8 +307,7 @@ export function CatalogView() {
                         >
                           <span className="catalog-group-chevron">{collapsed ? "▸" : "▾"}</span>
                           <strong>{group.label}</strong>
-                          <span className="catalog-group-count">{group.list.length} itens</span>
-                          <b>{money(total)}</b>
+                          <span className="catalog-group-count">{group.list.length} nesta página</span>
                         </button>
                         {!collapsed &&
                           group.list.map(item => (
@@ -293,6 +326,20 @@ export function CatalogView() {
               );
             })()}
           </div>
+          <p className="catalog-paginacao">
+            {(catalogQuery.data?.priceItems.length ?? 0).toLocaleString("pt-BR")} de{" "}
+            {totalItens.toLocaleString("pt-BR")} itens
+            {totalItens > (catalogQuery.data?.priceItems.length ?? 0) && (
+              <button
+                type="button"
+                className="outline-button"
+                disabled={catalogQuery.isFetching}
+                onClick={() => setLimiteItens(prev => Math.min(prev + 60, 500))}
+              >
+                {catalogQuery.isFetching ? "Carregando…" : "Mostrar mais 60"}
+              </button>
+            )}
+          </p>
         </section>
 
         <section className="module-card">
@@ -304,11 +351,35 @@ export function CatalogView() {
             <button className="outline-button" disabled={createComposition.isPending}><Plus size={13} /> Nova composição</button>
           </form>
           {createComposition.error && <p className="form-error">{createComposition.error.message}</p>}
-          <div className="catalog-selector-row"><select value={selectedComposition?.id ?? ""} onChange={event => setCompositionId(event.target.value ? Number(event.target.value) : undefined)}><option value="">Selecione uma composição</option>{(catalogQuery.data?.compositions ?? []).map(item => <option key={item.id} value={item.id}>{item.code} · {item.description}</option>)}</select></div>
+          <div className="catalog-selector-row">
+            <input
+              value={compositionQuery}
+              onChange={event => setCompositionQuery(event.target.value)}
+              placeholder="Buscar composição por código ou serviço (toda a base)"
+            />
+            <select value={selectedComposition?.id ?? ""} onChange={event => setCompositionId(event.target.value ? Number(event.target.value) : undefined)}><option value="">Selecione uma composição</option>{(catalogQuery.data?.compositions ?? []).map(item => <option key={item.id} value={item.id}>{item.code} · {item.description}</option>)}</select>
+          </div>
+          <p className="catalog-paginacao">
+            {(catalogQuery.data?.compositions.length ?? 0).toLocaleString("pt-BR")} de{" "}
+            {totalComposicoes.toLocaleString("pt-BR")} composições
+            {!buscaComposicaoDebounced && totalComposicoes > (catalogQuery.data?.compositions.length ?? 0) && (
+              <span> · use a busca para achar as demais</span>
+            )}
+          </p>
           {selectedComposition ? <>
             <div className="composition-head"><strong>{selectedComposition.code} · {selectedComposition.description}</strong><span>{selectedComposition.unit} · {selectedComposition.status}</span></div>
             <form className="catalog-component-form" onSubmit={event => { event.preventDefault(); if (priceItemId && coefficient) addComponent.mutate({ compositionId: selectedComposition.id, priceItemId: Number(priceItemId), componentType, coefficient: Number(coefficient) }); }}>
-              <select value={priceItemId} onChange={event => setPriceItemId(event.target.value)}><option value="">Item do catálogo</option>{(catalogQuery.data?.priceItems ?? []).map(item => <option key={item.id} value={item.id}>{item.code} · {item.description}</option>)}</select>
+              <input
+                value={componenteBusca}
+                onChange={event => setComponenteBusca(event.target.value)}
+                placeholder="Buscar item para o componente"
+              />
+              <select value={priceItemId} onChange={event => setPriceItemId(event.target.value)}>
+                <option value="">Item do catálogo</option>
+                {(componentesSugeridos.data?.candidates ?? []).map(candidato => (
+                  <option key={candidato.id} value={candidato.id}>{candidato.code} · {candidato.description}</option>
+                ))}
+              </select>
               <select value={componentType} onChange={event => setComponentType(event.target.value as typeof componentType)}><option value="material">Material</option><option value="mao_de_obra">Mão de obra</option><option value="equipamento">Equipamento</option></select>
               <input type="number" min="0.000001" step="0.000001" value={coefficient} onChange={event => setCoefficient(event.target.value)} placeholder="Coeficiente" required />
               <button className="outline-button" disabled={!priceItemId || addComponent.isPending}><Plus size={13} /> Componente</button>
