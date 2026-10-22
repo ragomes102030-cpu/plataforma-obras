@@ -147,11 +147,10 @@ export function PainelDoCronograma({
       planejadoPorValor += valorDaAtividade * (planejadoPorCodigo.get(atividade.wbsCode ?? "") ?? 0);
     }
 
-    // Somar m³ com m² e kg não existe. O avanço da obra é ponderado pelo valor
-    // do orçamento — a mesma régua da Curva S, para não haver dois vereditos.
+    // Frações 0..1: `pctReal` e `pctPlanejado` já vêm assim da grade.
     const avancoPorValor = {
-      real: pesoComOrcamento > 0 ? (executado / pesoComOrcamento) * 100 : 0,
-      planejado: pesoComOrcamento > 0 ? (planejadoPorValor / pesoComOrcamento) * 100 : 0,
+      real: pesoComOrcamento > 0 ? executado / pesoComOrcamento : 0,
+      planejado: pesoComOrcamento > 0 ? planejadoPorValor / pesoComOrcamento : 0,
     };
 
     const total = Number(orcamento.data?.total ?? 0);
