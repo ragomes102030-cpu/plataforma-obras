@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, Bell, Settings2, FileText, LogOut, ArrowRight, ArrowLeft, Ellipsis } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, FileText, LogOut, ArrowRight, ArrowLeft, Ellipsis } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useRoute } from "wouter";
@@ -56,6 +56,22 @@ import "@/eap.css";
  */
 
 type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
+
+/**
+ * O fluxo do planejamento, na ordem em que ele acontece.
+ *
+ * Serve para duas coisas: mostrar em que etapa a obra está e deixar pular direto
+ * para a etapa anterior ou seguinte sem caçar no menu. Fora dessas abas a trilha
+ * não aparece — num painel de custos "Escopo → EAP" só ocupa espaço.
+ */
+const etapasDoPlanejamento: { etapa: string; aba: IdDaAba }[] = [
+  { etapa: "Escopo", aba: "escopo" },
+  { etapa: "EAP", aba: "eap" },
+  { etapa: "Atividades", aba: "atividades" },
+  { etapa: "Dependências", aba: "dependencias" },
+  { etapa: "CPM", aba: "cpm" },
+  { etapa: "Baseline", aba: "baseline" },
+];
 
 export default function Home() {
   const { user } = useAuth();
@@ -533,11 +549,12 @@ function Obra({
   ];
 
   const etapaAtual = ({
-    dashboard: "Visão geral", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
+    dashboard: "Painel da obra", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
     dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
-    gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Produção",
+    gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Controle",
     documentos: "Documentos",
-    suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos", "curva-s": "Curva S"
+    suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos",
+    "curva-s": "Curva S", catalogo: "Catálogo de Insumos", comando: "Central de Comando"
   } as Record<string, string>)[aba] ?? aba;
 
   return (
@@ -616,28 +633,38 @@ function Obra({
       </aside>
 
       <main className="xl-area xl-area-sidebar">
-        <div className="arquimedes-workbar">
-          <div className="arquimedes-workbar-title">
-            <span className="arquimedes-kicker">PLANEJAMENTO DA OBRA</span>
+        {/* O painel já tem cabeçalho próprio: a barra aqui só repetia o nome. */}
+        {aba !== "dashboard" && (
+          <div className="arquimedes-workbar">
+            <div className="arquimedes-workbar-title">
+              <span className="arquimedes-kicker">{etapaAtual}</span>
+              {obra && <span className="arquimedes-workbar-obra">{obra}</span>}
+            </div>
+            {etapasDoPlanejamento.some((passo) => passo.aba === aba) && (
+              <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
+                <span className="arquimedes-trilha-label">Fluxo:</span>
+                {etapasDoPlanejamento.map((passo, index) => (
+                  <Fragment key={passo.etapa}>
+                    {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
+                    <button
+                      type="button"
+                      className={etapaAtual === passo.etapa ? "ativo" : ""}
+                      onClick={() => irParaAba(passo.aba)}
+                      title={`Ir para ${passo.etapa}`}
+                    >
+                      {passo.etapa}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+            )}
+            <div className="arquimedes-workbar-actions">
+              <button type="button" className="xl-menu-mobile" title="Menu" aria-label="Abrir menu de navegação" aria-expanded={menuMobileAberto} onClick={() => setMenuMobileAberto(v => !v)}>
+                <Menu size={17} />
+              </button>
+            </div>
           </div>
-          <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
-            <span className="arquimedes-trilha-label">Fluxo:</span>
-            {["Escopo", "EAP", "Atividades", "Dependências", "CPM", "Baseline"].map((etapa, index) => (
-              <Fragment key={etapa}>
-                {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
-                <span className={etapaAtual === etapa ? "ativo" : ""}>{etapa}</span>
-              </Fragment>
-            ))}
-          </div>
-          <div className="arquimedes-workbar-actions">
-            <button type="button" className="xl-menu-mobile" title="Menu" aria-label="Abrir menu de navegação" aria-expanded={menuMobileAberto} onClick={() => setMenuMobileAberto(v => !v)}>
-              <Menu size={17} />
-            </button>
-            <button type="button" title="Pesquisar na obra"><Search size={15} /></button>
-            <button type="button" title="Notificações"><Bell size={15} /></button>
-            <button type="button" title="Configurações"><Settings2 size={15} /></button>
-          </div>
-        </div>
+        )}
         <div className="arquimedes-content">
         {aba === "dashboard" ? (
           <PainelDoCronograma
