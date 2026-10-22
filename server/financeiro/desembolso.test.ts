@@ -111,7 +111,24 @@ describe("computeDesembolso", () => {
 
     expect(r.meses).toEqual([]);
     expect(r.bac).toBe(0);
+    expect(r.desvioProjetado).toBeNull();
     expect(r.alertas).toHaveLength(1);
+    expect(r.alertas[0]).toContain("Sem atividades no plano");
+  });
+
+  it("com atividades sem valor, aponta o vínculo com o orçamento", () => {
+    const r = computeDesembolso({
+      plannedStartIso: "2026-02-02",
+      calendar: cal,
+      atividades: [{ id: 1, peso: 0, startOffset: 0, durationDays: 5 }],
+      custoRealPorMes: [],
+      hojeMes: "2026-02",
+      cpi: null,
+    });
+
+    expect(r.meses).toEqual([]);
+    expect(r.alertas[0]).toContain("vínculo com os itens do orçamento");
+    expect(r.alertas[0]).not.toContain("Sem atividades");
   });
 
   it("no mês corrente mostra o que saiu, não a projeção", () => {
@@ -181,6 +198,8 @@ describe("computeDesembolso", () => {
     expect(marco.projetado).toBe(1000);
     expect(r.alertas.join(" ")).toContain("não existe CPI");
     expect(r.alertas.join(" ")).toContain("só planejamento");
+    // Sem custo lançado não há desvio projetado: null, não zero nem "economia".
+    expect(r.desvioProjetado).toBeNull();
   });
 
   it("não deixa um CPI quebrado explodir a projeção", () => {

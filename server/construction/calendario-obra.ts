@@ -191,6 +191,26 @@ export function isoToLocalDate(iso: IsoDate): Date {
   return new Date(ano, mes - 1, dia);
 }
 
+/**
+ * "Hoje" no fuso da obra (`America/Sao_Paulo`), não no fuso do servidor.
+ *
+ * O Render roda em UTC. Às 22h de Brasília já é o dia seguinte lá, então
+ * `localIso(new Date())` devolvia a data de amanhã: o painel dizia "custo até
+ * 22/10" no dia 21, e uma nota lançada hoje caía fora do corte de "hoje".
+ * Data de obra é data do canteiro.
+ */
+export function hojeNoBrasil(agora: Date = new Date()): IsoDate {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(agora);
+  const parte = (tipo: "year" | "month" | "day") =>
+    partes.find(p => p.type === tipo)?.value ?? "";
+  return `${parte("year")}-${parte("month")}-${parte("day")}`;
+}
+
 // ============================================================ escrita
 //
 // Toda a escrita do calendário vive AQUI, junto da leitura.

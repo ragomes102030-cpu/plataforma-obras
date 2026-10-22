@@ -24,6 +24,9 @@ const brl = (valor: number | null | undefined): string =>
     ? "—"
     : valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const formatarQuantidade = (valor: number): string =>
+  valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+
 const dataBr = (iso: string | null | undefined): string => {
   if (!iso) return "—";
   const data = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
@@ -241,7 +244,7 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
 
       {mensagem && <p className="pl-med-sub">{mensagem}</p>}
 
-      {previa && (
+      {conferido && previa && (
         <div className="pl-med-previa">
           <div className="pl-med-kpis">
             <Kpi titulo="Bruto do período" valor={brl(previa.bruto)} />
@@ -256,11 +259,28 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
             />
           </div>
 
-          {previa.avisos.map(aviso => (
-            <p key={aviso} className="pl-med-aviso">
-              <TriangleAlert size={14} /> {aviso}
+          {previa.produzidoSemItem > 0 && (
+            <p className="pl-med-aviso">
+              <TriangleAlert size={14} />
+              {previa.itens.length === 0
+                ? `Há ${formatarQuantidade(previa.produzidoSemItem)} unidade(s) produzidas no período em atividades sem item de orçamento, e por isso não entram na medição. Vincule as atividades na Conciliação com o orçamento (logo abaixo).`
+                : `${formatarQuantidade(previa.produzidoSemItem)} unidade(s) produzidas no período ficaram fora por falta de vínculo com o orçamento.`}
             </p>
-          ))}
+          )}
+
+          {previa.avisos
+            // Com produção não vinculada, "nada novo produzido" é falso e manda
+            // o engenheiro procurar produção que existe. O aviso acima já diz o
+            // que realmente aconteceu.
+            .filter(
+              aviso =>
+                !(previa.produzidoSemItem > 0 && aviso.includes("Nada novo produzido"))
+            )
+            .map(aviso => (
+              <p key={aviso} className="pl-med-aviso">
+                <TriangleAlert size={14} /> {aviso}
+              </p>
+            ))}
 
           {previa.itens.length > 0 && (
             <div className="pl-med-tabela">
@@ -403,8 +423,8 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
             <Kpi titulo="Projetado total" valor={brl(fluxo.projetadoTotal)} />
             <Kpi
               titulo="Desvio projetado"
-              valor={brl(fluxo.desvioProjetado)}
-              alerta={fluxo.desvioProjetado > 0}
+              valor={fluxo.desvioProjetado == null ? "—" : brl(fluxo.desvioProjetado)}
+              alerta={(fluxo.desvioProjetado ?? 0) > 0}
             />
           </div>
 
@@ -445,7 +465,14 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
                       titulo="projetado"
                     />
                   </div>
-                  <span className="pl-med-mes-num">{brl(mes.projetado)}</span>
+                  <span className="pl-med-mes-num">
+                    {/* Mês passado/corrente mostra o que SAIU; só o futuro
+                        mostra projeção. Rotular a projeção (que nesses meses é
+                        zero) faz parecer que nada foi planejado para o mês. */}
+                    {mes.situacao === "futuro"
+                      ? brl(mes.projetado)
+                      : brl(mes.realizado)}
+                  </span>
                 </div>
               ))}
             </div>

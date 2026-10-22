@@ -140,6 +140,7 @@ import { computeDesembolso } from "./financeiro/desembolso";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import {
   carregarCalendarioDaObra,
+  hojeNoBrasil,
   idDoCalendarioDaObra,
   localIso,
   removerExcecaoDoCalendario,
@@ -5426,10 +5427,9 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        // O navegador manda `hoje` no fuso do usuário. Se não mandar, cai no
-        // fuso do servidor — e no Render isso é UTC, três horas à frente do
-        // Brasil: às 22h daqui já é "amanhã" lá.
-        const hojeIso = input.hoje ?? localIso(new Date());
+        // O navegador manda `hoje` no fuso do usuário. Se não mandar, usa o
+        // fuso de Brasília — no Render o servidor é UTC, três horas à frente.
+        const hojeIso = input.hoje ?? hojeNoBrasil();
         const semanaBaseIso = input.semanaBase ?? hojeIso;
 
         const db = await getDb();
@@ -7163,7 +7163,7 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
 
-        const asOfIso = input.asOf ?? localIso(new Date());
+        const asOfIso = input.asOf ?? hojeNoBrasil();
         const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
 
         const dados = await coletarDadosDesembolso(
