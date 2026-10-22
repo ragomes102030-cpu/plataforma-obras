@@ -187,6 +187,23 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
   );
   const realizadoHoje = realizadoNoDia(pontosRealizado, hojeNum);
 
+  // A linha verde só existe até onde há lançamento; estendê-la com o último valor
+  // até hoje evita a impressão de que a execução "parou" no último apontamento.
+  //
+  // ATENÇÃO: este hook precisa ficar ANTES dos returns de carregamento. Movê-lo
+  // para depois deles quebra a ordem dos hooks (React #310) e a aba inteira cai
+  // com "Ocorreu um erro inesperado" — foi o que aconteceu na 1ª versão.
+  const serieRealizado = useMemo(() => {
+    const pontos = [...pontosRealizado];
+    const ultimo = pontos[pontos.length - 1];
+    const duracao = curve?.duration ?? 0;
+    const limite = Math.min(Math.max(hojeNum, 0), Math.max(duracao, 1));
+    if (ultimo && limite > ultimo.dia) {
+      pontos.push({ dia: limite, percentual: ultimo.percentual });
+    }
+    return pontos;
+  }, [pontosRealizado, hojeNum, curve?.duration]);
+
   // Carregando ≠ vazio. As duas consultas desta aba são pesadas (atividades +
   // itens de orçamento) e, no plano gratuito, a tela ficava 10-30 s dizendo
   // "sem dados" para uma obra que tem os dois.
@@ -256,18 +273,6 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         : "no_prazo";
   // Eixo comum às três curvas: a baseline pode ser mais longa (ou mais curta)
   // que o plano de hoje, e escalas diferentes fariam a comparação mentir.
-  // A linha verde só existe até onde há lançamento; estendê-la com o último valor
-  // até hoje evita a impressão de que a execução "parou" no último apontamento.
-  const serieRealizado = useMemo(() => {
-    const pontos = [...pontosRealizado];
-    const ultimo = pontos[pontos.length - 1];
-    const limite = Math.min(Math.max(hojeNum, 0), Math.max(curve.duration, 1));
-    if (ultimo && limite > ultimo.dia) {
-      pontos.push({ dia: limite, percentual: ultimo.percentual });
-    }
-    return pontos;
-  }, [pontosRealizado, hojeNum, curve.duration]);
-
   const eixoDias = Math.max(curve.duration, curvaBaseline?.duration ?? 0) || curve.duration;
   const x = (dia: number) => 50 + (dia / eixoDias) * 530;
 
