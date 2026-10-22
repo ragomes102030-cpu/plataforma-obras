@@ -79,7 +79,12 @@ export function AbaBaseline({ projetoId }: Props) {
     };
   }, [activities]);
 
-  const podeCapturar = resumo.cpmOk && !capturar.isPending;
+  // O servidor só aceita baseline da versão APROVADA. Sem isto o botão ficava
+  // habilitado, o engenheiro clicava e recebia a recusa depois — quando o
+  // problema já era conhecido antes do clique.
+  const versaoAprovada = plano.data?.eapApproved ?? false;
+  const numeroVersao = plano.data?.currentVersionNumber ?? null;
+  const podeCapturar = resumo.cpmOk && versaoAprovada && !capturar.isPending;
 
   if (plano.isPending) {
     return (
@@ -113,6 +118,25 @@ export function AbaBaseline({ projetoId }: Props) {
       </header>
 
       {mensagem && <div className="pl-planejamento-alerta">{mensagem}</div>}
+
+      {!versaoAprovada && (
+        <div className="pl-planejamento-box">
+          <div className="pl-planejamento-box-head">
+            <div>
+              <strong>Aprovação da EAP pendente</strong>
+              <span>
+                {numeroVersao ? `A versão de trabalho v${numeroVersao} está em rascunho. ` : ""}
+                A baseline é uma fotografia do planejamento aprovado, então o servidor só a aceita
+                quando a EAP da versão de trabalho está aprovada. Nada é gravado enquanto isso.
+              </span>
+            </div>
+          </div>
+          <p className="pl-tabela-legenda">
+            Para liberar: aba <strong>EAP</strong> → <strong>Governança da EAP</strong> →{" "}
+            <strong>Aprovar EAP</strong>. Depois volte aqui; o gate abre sozinho.
+          </p>
+        </div>
+      )}
 
       <div className="pl-planejamento-cards">
         <div><span>Atividades</span><strong>{activities.length}</strong><small>{resumo.validas} com duração válida</small></div>
@@ -203,7 +227,13 @@ export function AbaBaseline({ projetoId }: Props) {
                 capturar.mutate({ projectId: projetoId, name: valor });
               }}
               disabled={!podeCapturar}
-              title={!podeCapturar ? "Calcule e mantenha o CPM atualizado antes de capturar a baseline." : undefined}
+              title={
+                !podeCapturar
+                  ? !versaoAprovada
+                    ? "Aprove a EAP da versão de trabalho antes de capturar a baseline."
+                    : "Calcule e mantenha o CPM atualizado antes de capturar a baseline."
+                  : undefined
+              }
             >
               {capturar.isPending ? "Congelando…" : "Capturar baseline"}
             </button>

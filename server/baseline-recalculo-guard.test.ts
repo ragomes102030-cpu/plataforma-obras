@@ -50,6 +50,14 @@ describe("baseline: gate de CPM resolve na própria tela", () => {
     );
   });
 
+  it("não deixa capturar baseline de versão em rascunho", () => {
+    // O servidor recusa ("Só uma versão aprovada pode virar baseline"), então a
+    // tela tem de dizer isso ANTES do clique, com o botão travado.
+    expect(FONTE).toContain("plano.data?.eapApproved");
+    expect(FONTE).toContain("const podeCapturar = resumo.cpmOk && versaoAprovada");
+    expect(FONTE).toContain("Aprovação da EAP pendente");
+  });
+
   it("invalida o planejamento inteiro para baseline e curva S verem o CPM novo", () => {
     const trecho = FONTE.slice(FONTE.indexOf("const recalcular"));
     expect(trecho).toContain("utils.planning.invalidate()");

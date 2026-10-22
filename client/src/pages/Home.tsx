@@ -520,7 +520,9 @@ function Obra({
     { titulo: "VISÃO GERAL", ids: ["dashboard"] },
     { titulo: "PLANEJAMENTO", ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"] },
     { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
-    { titulo: "CONTROLE", ids: ["producao", "documentos", "suprimentos", "financeiro", "riscos", "curva-s"] },
+    // O grupo se chamava "CONTROLE" e continha o item "CONTROLE": o menu
+    // mostrava a mesma palavra duas vezes seguidas e parecia item duplicado.
+    { titulo: "EXECUÇÃO E CONTROLE", ids: ["producao", "documentos", "suprimentos", "financeiro", "riscos", "curva-s"] },
     { titulo: "SISTEMA", ids: ["catalogo", "comando"] },
   ];
 
