@@ -139,6 +139,7 @@ import { coletarDadosDesembolso } from "./financeiro/desembolso-dados";
 import { computeDesembolso } from "./financeiro/desembolso";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import { compararComBaseline } from "@shared/desvios-baseline";
+import { escaparCuringaLike } from "@shared/busca";
 import {
   carregarCalendarioDaObra,
   hojeNoBrasil,
@@ -3210,15 +3211,30 @@ export const appRouter = router({
       }),
   }),
   catalog: router({
+    // A base SEINFRA-CE tem 12.077 itens e 4.436 composições. Até 22/10/2026 esta
+    // consulta devolvia as duas tabelas inteiras (5,29 MB, ~11 s por abertura): o
+    // navegador montava 12 mil linhas e dois <select> com 12 mil e 4,4 mil <option>.
+    // Agora `q` busca no servidor e as listas voltam paginadas, com o total ao lado.
     list: protectedProcedure
       .input(
         z.object({
           catalogId: z.number().int().positive().optional(),
           compositionId: z.number().int().positive().optional(),
+          q: z.string().trim().max(120).optional(),
+          qCompositions: z.string().trim().max(120).optional(),
+          limitItems: z.number().int().min(1).max(500).optional(),
+          limitCompositions: z.number().int().min(1).max(500).optional(),
         })
       )
       .query(async ({ input }) => {
-        const cacheKey = `catalog.list:${input.catalogId ?? "auto"}:${input.compositionId ?? "auto"}`;
+        const termo = (input.q ?? "").trim();
+        const termoComposicoes = (input.qCompositions ?? "").trim();
+        const limiteItens = input.limitItems ?? 60;
+        const limiteComposicoes = input.limitCompositions ?? 60;
+        // `%` e `_` digitados pelo usuário valem como texto, não como curinga.
+        const padrao = escaparCuringaLike(termo);
+        const padraoComposicoes = escaparCuringaLike(termoComposicoes);
+        const cacheKey = `catalog.list:${input.catalogId ?? "auto"}:${input.compositionId ?? "auto"}:${termo.toLowerCase()}:${termoComposicoes.toLowerCase()}:${limiteItens}:${limiteComposicoes}`;
         const cached = cacheGet<{
           catalogs: typeof priceCatalogs.$inferSelect[];
           priceItems: typeof priceItems.$inferSelect[];
@@ -3229,17 +3245,68 @@ export const appRouter = router({
             itemUnit: string;
           })[];
           total: number;
+          totalItems: number;
+          totalCompositions: number;
+          search: string;
+          limitItems: number;
+          limitCompositions: number;
         }>(cacheKey);
         if (cached) return cached;
         const db = await getDb();
-        if (!db) return { catalogs: [], priceItems: [], compositions: [], components: [], total: 0 };
+        if (!db)
+          return {
+            catalogs: [],
+            priceItems: [],
+            compositions: [],
+            components: [],
+            total: 0,
+            totalItems: 0,
+            totalCompositions: 0,
+            search: termo,
+            limitItems: limiteItens,
+            limitCompositions: limiteComposicoes,
+          };
         const catalogs = await db.select().from(priceCatalogs).orderBy(desc(priceCatalogs.createdAt));
         const selectedCatalogId = input.catalogId ?? catalogs[0]?.id;
+        const filtroItens = selectedCatalogId
+          ? termo
+            ? and(
+                eq(priceItems.catalogId, selectedCatalogId),
+                or(sql`${priceItems.code} ILIKE ${padrao}`, sql`${priceItems.description} ILIKE ${padrao}`)
+              )
+            : eq(priceItems.catalogId, selectedCatalogId)
+          : undefined;
         const items = selectedCatalogId
-          ? await db.select().from(priceItems).where(eq(priceItems.catalogId, selectedCatalogId)).orderBy(priceItems.code)
+          ? await db
+              .select()
+              .from(priceItems)
+              .where(filtroItens)
+              .orderBy(priceItems.code)
+              .limit(limiteItens)
           : [];
-        const compositions = await db.select().from(serviceCompositions).orderBy(desc(serviceCompositions.updatedAt));
-        const selectedCompositionId = input.compositionId ?? compositions[0]?.id;
+        const [contagemItens] = selectedCatalogId
+          ? await db.select({ total: sql<number>`count(*)::int` }).from(priceItems).where(filtroItens)
+          : [{ total: 0 }];
+        const filtroComposicoes = termoComposicoes
+          ? or(
+              sql`${serviceCompositions.code} ILIKE ${padraoComposicoes}`,
+              sql`${serviceCompositions.description} ILIKE ${padraoComposicoes}`
+            )
+          : undefined;
+        const compositions = await db
+          .select()
+          .from(serviceCompositions)
+          .where(filtroComposicoes)
+          .orderBy(desc(serviceCompositions.updatedAt))
+          .limit(limiteComposicoes);
+        const [contagemComposicoes] = await db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(serviceCompositions)
+          .where(filtroComposicoes);
+        // Com busca ativa não auto-seleciona: a primeira linha da busca mudaria a
+        // composição aberta a cada tecla digitada.
+        const selectedCompositionId =
+          input.compositionId ?? (termoComposicoes ? undefined : compositions[0]?.id);
         const components = selectedCompositionId
           ? await db.select({
               id: compositionComponents.id,
@@ -3262,8 +3329,21 @@ export const appRouter = router({
           (sum, component) => sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
           0
         );
-        const result = { catalogs, priceItems: items, compositions, components, total };
-        cacheSet(cacheKey, result);
+        const result = {
+          catalogs,
+          priceItems: items,
+          compositions,
+          components,
+          total,
+          totalItems: contagemItens?.total ?? items.length,
+          totalCompositions: contagemComposicoes?.total ?? compositions.length,
+          search: termo,
+          limitItems: limiteItens,
+          limitCompositions: limiteComposicoes,
+        };
+        // Busca livre geraria uma chave por termo digitado; o cache fica só para a
+        // listagem padrão (sem busca), que é o que abre com a tela.
+        if (!termo && !termoComposicoes) cacheSet(cacheKey, result);
         return result;
       }),
     createCatalog: protectedProcedure

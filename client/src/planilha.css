@@ -4527,3 +4527,43 @@ tr:hover .xl-codigo {
     animation: none;
   }
 }
+
+/* Catálogo: busca no servidor e páginas de 60 (a base tem 12.077 itens) */
+.catalog-selector-row {
+  gap: 8px;
+  align-items: center;
+}
+.catalog-selector-row input {
+  flex: 1 1 220px;
+  min-width: 0;
+  border: 1px solid #dce6e8;
+  border-radius: 6px;
+  background: var(--card);
+  color: #506873;
+  outline: none;
+  font: inherit;
+  font-size: 10px;
+  padding: 9px 10px;
+}
+.catalog-selector-row select {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.catalog-busca-status {
+  color: #96a3a8;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.catalog-paginacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: #96a3a8;
+  font-size: 9px;
+}
+.catalog-paginacao .outline-button {
+  padding: 5px 9px;
+  font-size: 9px;
+}
