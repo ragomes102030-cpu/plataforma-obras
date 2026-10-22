@@ -267,7 +267,7 @@ export function montarAlertas(entrada: EntradaDosAlertas): AlertaDoPainel[] {
       nivel: "critico",
       titulo: `${entrada.foraDoPlano} lançamento(s) fora do plano atual`,
       detalhe:
-        "Apontam para uma versão antiga do cronograma: o avanço deles não chega às atividades de hoje.",
+        "Foram digitados numa versão antiga do cronograma. O avanço é aproveitado pelo código da EAP, mas o vínculo precisa ser refeito.",
       aba: "producao",
       acao: "Revisar lançamentos",
     });
