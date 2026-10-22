@@ -5134,3 +5134,9 @@ tr:hover .xl-codigo {
   font-weight:600;
   white-space:nowrap;
 }
+
+/* Correcao de legibilidade do lookahead (a regra anterior perdia para outra) */
+.pl-look-kpis .pl-look-kpi span{
+  font-size:10px;
+  line-height:1.25;
+}
