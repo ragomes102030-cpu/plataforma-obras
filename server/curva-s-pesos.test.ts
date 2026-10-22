@@ -92,9 +92,23 @@ describe("pesos da curva S", () => {
 describe("cabeçalho da curva S", () => {
   const FONTE = readFileSync("client/src/components/AbaCurvaS.tsx", "utf-8");
 
-  it("calcula o desvio a partir do ponto de hoje", () => {
-    expect(FONTE).toContain("pontoHoje.actual - pontoHoje.planned");
+  it("calcula o desvio a partir de hoje: realizado pela produção − planejado", () => {
+    expect(FONTE).toContain("const desvio = realizadoHoje - planejadoHoje.planned");
     expect(FONTE).not.toContain("const desvio = curve.deviation");
+  });
+
+  it("trata earlyStart como dia de trabalho, não como data", () => {
+    // `new Date(earlyStart)` dava 1970 e, com a primeira atividade no dia 0
+    // (falsy), o cabeçalho travava no dia 0: "0,0% / 0,0%" com 10 atividades
+    // em 100%. A ponte dia↔data agora vem do calendário da obra.
+    expect(FONTE).not.toContain("new Date(inicioPlanejado)");
+    expect(FONTE).toContain("indexOf(calendario, inicioObra, hoje)");
+  });
+
+  it("o realizado é datado pelos lançamentos confirmados", () => {
+    expect(FONTE).toContain("acumularRealizado(");
+    expect(FONTE).toContain('entrada.status === "confirmada"');
+    expect(FONTE).toContain("realizadoNoDia(pontosRealizado, hojeNum)");
   });
 
   it("não chama de atrasada uma obra que ainda não começou", () => {

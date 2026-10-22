@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildSCurve, type SCurveResult } from "@shared/s-curve";
+import { acumularRealizado, realizadoNoDia, type PontoRealizado } from "@shared/curva-realizado";
+import { brazilianHolidays, defaultCalendar, indexOf } from "@shared/work-calendar";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { EstadoCarregando } from "./EstadoCarregando";
 
@@ -79,6 +81,12 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
   // Ver as três curvas juntas é o que separa "a obra está atrasada" de "a obra
   // está atrasada em relação ao que eu aprovei, por causa destas atividades" —
   // e é assim que a reunião de obra começa em qualquer software de mercado.
+  // Datas de referência da obra (início e hoje) para converter dia ↔ data.
+  const grade = trpc.planning.grade.useQuery(
+    { projectId: Number(projetoId) },
+    { enabled: Number(projetoId) > 0 }
+  );
+
   const comparacao = trpc.planning.compararComBaseline.useQuery(
     { projectId: Number(projetoId) },
     {
@@ -113,6 +121,71 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     if (atividades.length === 0) return null;
     return buildSCurve(atividades);
   }, [comparacao.data, pesos]);
+
+  // `earlyStart` é DIA DE TRABALHO (0, 1, 2…), não data. A versão anterior fazia
+  // new Date(earlyStart) e new Date(0) = 1970; como a primeira atividade começa no
+  // dia 0 (falsy), o cálculo desabava e o cabeçalho mostrava o dia 0 para sempre:
+  // "Planejado até hoje 0,0% — Realizado 0,0%" mesmo com 10 atividades em 100%.
+  // A ponte dia↔data vem do calendário da obra (`planning.grade`).
+  const inicioObra = grade.data?.inicioObra ?? null;
+  const calendario = useMemo(() => {
+    if (!inicioObra) return null;
+    const ano = Number(inicioObra.slice(0, 4));
+    const base = defaultCalendar(ano);
+    // Uma obra de 580 dias atravessa dois ou três anos; sem os feriados do ano
+    // seguinte o "hoje" cairia alguns dias fora do eixo.
+    return {
+      ...base,
+      exceptions: [ano, ano + 1, ano + 2].flatMap(y => brazilianHolidays(y)),
+    };
+  }, [inicioObra]);
+  const hojeNum = hoje && inicioObra && calendario ? indexOf(calendario, inicioObra, hoje) : 0;
+  const aindaNaoComecou = hoje != null && inicioObra != null && hojeNum < 0;
+  const dataDeInicio = inicioObra
+    ? new Date(`${inicioObra}T00:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+    : null;
+
+  // Peso e quantidade planejada por código da EAP — a mesma chave do lançamento
+  // de produção, que sobrevive à troca de versão do plano.
+  const pesosPorCodigo = useMemo(() => {
+    const mapa = new Map<string, { peso: number; planejado: number }>();
+    if (pesos.total <= 0) return mapa;
+    for (const atividade of planejamento.data?.activities ?? []) {
+      const custo = pesos.custoPorAtividade.get(atividade.id) ?? 0;
+      if (custo <= 0) continue;
+      mapa.set(atividade.wbsCode, {
+        peso: (custo / pesos.total) * 100,
+        planejado: Number(atividade.plannedQuantity ?? 0),
+      });
+    }
+    return mapa;
+  }, [planejamento.data, pesos]);
+
+  const producao = trpc.production.entries.useQuery(
+    { projectId: Number(projetoId) },
+    { enabled: Number(projetoId) > 0 }
+  );
+
+  // REALIZADO DATADO PELA PRODUÇÃO: o que foi confirmado até cada dia. Antes o
+  // realizado era "planejado × % concluído" espalhado dentro da janela PLANEJADA
+  // — atividade feita fora do prazo não aparecia e o realizado podia "voltar no
+  // tempo" quando alguém lançava atrasado.
+  const pontosRealizado: PontoRealizado[] = useMemo(
+    () =>
+      acumularRealizado(
+        (producao.data ?? [])
+          .filter(entrada => entrada.status === "confirmada")
+          .map(entrada => ({
+            codigo: entrada.codigoEap ?? null,
+            quantidade: Number(entrada.quantity ?? 0),
+            data: new Date(entrada.productionDate).toISOString().slice(0, 10),
+          })),
+        pesosPorCodigo,
+        data => (calendario && inicioObra ? indexOf(calendario, inicioObra, data) : 0)
+      ),
+    [producao.data, pesosPorCodigo, calendario, inicioObra]
+  );
+  const realizadoHoje = realizadoNoDia(pontosRealizado, hojeNum);
 
   // Carregando ≠ vazio. As duas consultas desta aba são pesadas (atividades +
   // itens de orçamento) e, no plano gratuito, a tela ficava 10-30 s dizendo
@@ -168,22 +241,12 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     );
   }
 
-  const inicioPlanejado = planejamento.data?.activities?.[0]?.earlyStart ?? null;
-  const hojeNum =
-    hoje && inicioPlanejado
-      ? Math.floor((new Date(hoje).getTime() - new Date(inicioPlanejado).getTime()) / 86400000)
-      : 0;
-  const aindaNaoComecou = hoje != null && inicioPlanejado != null && hojeNum < 0;
-  // O ponto de referência é HOJE, não o fim da obra. Antes, o desvio vinha do
-  // último ponto (`finalActual - finalPlanned`): qualquer obra sem execução
-  // lançada aparecia como "Obra atrasada" com -100% de desvio, no primeiro dia
-  // e mesmo antes da data de início. Agora compara o realizado com o planejado
-  // até hoje, e antes do início a resposta honesta é "ainda não começou".
-  const pontoHoje = aindaNaoComecou
-    ? { day: 0, planned: 0, actual: 0 }
-    : [...curve.points].reverse().find(p => p.day <= Math.min(hojeNum, curve.duration)) ??
-      curve.points[0];
-  const desvio = pontoHoje.actual - pontoHoje.planned;
+  const planejadoHoje =
+    [...curve.points].reverse().find(p => p.day <= Math.min(hojeNum, curve.duration)) ??
+    curve.points[0];
+  // Desvio = realizado (pela produção) menos planejado (até hoje), em pontos
+  // percentuais da obra.
+  const desvio = realizadoHoje - planejadoHoje.planned;
   const statusHoje = aindaNaoComecou
     ? "indeterminado"
     : desvio > 0.5
@@ -191,11 +254,20 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
       : desvio < -0.5
         ? "atrasado"
         : "no_prazo";
-  const dataDeInicio = inicioPlanejado
-    ? new Date(inicioPlanejado).toLocaleDateString("pt-BR", { timeZone: "UTC" })
-    : null;
   // Eixo comum às três curvas: a baseline pode ser mais longa (ou mais curta)
   // que o plano de hoje, e escalas diferentes fariam a comparação mentir.
+  // A linha verde só existe até onde há lançamento; estendê-la com o último valor
+  // até hoje evita a impressão de que a execução "parou" no último apontamento.
+  const serieRealizado = useMemo(() => {
+    const pontos = [...pontosRealizado];
+    const ultimo = pontos[pontos.length - 1];
+    const limite = Math.min(Math.max(hojeNum, 0), Math.max(curve.duration, 1));
+    if (ultimo && limite > ultimo.dia) {
+      pontos.push({ dia: limite, percentual: ultimo.percentual });
+    }
+    return pontos;
+  }, [pontosRealizado, hojeNum, curve.duration]);
+
   const eixoDias = Math.max(curve.duration, curvaBaseline?.duration ?? 0) || curve.duration;
   const x = (dia: number) => 50 + (dia / eixoDias) * 530;
 
@@ -213,7 +285,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           <p>
             {aindaNaoComecou
               ? `Início planejado em ${dataDeInicio ?? "data não definida"} — não existe atraso antes de a obra começar.`
-              : `Planejado até hoje: ${pontoHoje.planned.toFixed(1)}% — Realizado acumulado: ${pontoHoje.actual.toFixed(1)}% — Desvio: ${desvio.toFixed(1)} p.p.`}
+              : `Planejado até hoje: ${planejadoHoje.planned.toFixed(1)}% — Realizado acumulado: ${realizadoHoje.toFixed(1)}% — Desvio: ${desvio.toFixed(1)} p.p.`}
           </p>
         </div>
         <button
@@ -277,12 +349,12 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
             points={curve.points.map(p => `${x(p.day)},${260 - p.planned * 2.4}`).join(" ")}
           />
 
-          {/* Curva real */}
+          {/* Curva real — datada pela produção confirmada, não pelo planejado */}
           <polyline
             fill="none"
             stroke={desvio < 0 ? "#ef4444" : "#22c55e"}
             strokeWidth="2"
-            points={curve.points.map(p => `${x(p.day)},${260 - p.actual * 2.4}`).join(" ")}
+            points={serieRealizado.map(p => `${x(p.dia)},${260 - p.percentual * 2.4}`).join(" ")}
           />
 
           {/* Legenda */}
@@ -318,11 +390,11 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         </div>
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Planejado acumulado</span>
-          <strong className="xl-cartao-valor">{pontoHoje.planned.toFixed(1)}%</strong>
+          <strong className="xl-cartao-valor">{planejadoHoje.planned.toFixed(1)}%</strong>
         </div>
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Realizado acumulado</span>
-          <strong className="xl-cartao-valor">{pontoHoje.actual.toFixed(1)}%</strong>
+          <strong className="xl-cartao-valor">{realizadoHoje.toFixed(1)}%</strong>
         </div>
         <div className={`xl-cartao ${desvio < 0 ? "xl-cartao-ruim" : "xl-cartao-bom"}`}>
           <span className="xl-cartao-titulo">Desvio até hoje</span>
