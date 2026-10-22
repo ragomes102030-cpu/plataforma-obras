@@ -55,6 +55,18 @@ function dataBr(iso: string | null | undefined): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 }
 
+/**
+ * A data chega como `Date` em alguns endpoints e como `AAAA-MM-DD` em outros.
+ * `String(date).slice(0, 10)` devolvia "Wed Sep 30" e a tabela imprimia
+ * "30/ep/Wed".
+ */
+function isoDoValor(valor: unknown): string {
+  if (valor instanceof Date) return valor.toISOString().slice(0, 10);
+  const texto = String(valor ?? "");
+  const achado = /^(\d{4}-\d{2}-\d{2})/.exec(texto);
+  return achado ? achado[1] : "";
+}
+
 function dataLonga(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("pt-BR", {
     weekday: "long",
@@ -171,7 +183,7 @@ export function PainelDoCronograma({
       resumo,
       valorSemDestino: custo.valorSemDestino,
       ultimos: [...lancamentos]
-        .sort((a, b) => String(b.productionDate).localeCompare(String(a.productionDate)))
+        .sort((a, b) => isoDoValor(b.productionDate).localeCompare(isoDoValor(a.productionDate)))
         .slice(0, 5),
       semana: lookahead.data?.semanas?.find((s) => s.situacao === "corrente") ?? lookahead.data?.semanas?.[0],
     };
@@ -480,7 +492,7 @@ export function PainelDoCronograma({
             <tbody>
               {ultimos.map((l) => (
                 <tr key={l.id}>
-                  <td>{dataBr(String(l.productionDate).slice(0, 10))}</td>
+                  <td>{dataBr(isoDoValor(l.productionDate))}</td>
                   <td>
                     <span className="pd-tabela-codigo">{l.codigoEap ?? "—"}</span>
                     {l.atividadeNome ?? "atividade removida do plano"}
