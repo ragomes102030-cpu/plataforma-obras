@@ -135,7 +135,9 @@ describe("o plano do Nixpacks", () => {
     // apareceria sem API, /healthz sem JSON e o banco nunca migraria.
     expect(start).toBe("npm start");
     expect(start).not.toContain("caddy");
-    expect(pkg.scripts?.start).toContain("migrate-pg.mjs");
+    // O `start` nao carrega mais passo de banco (Decisao 23), mas continua
+    // sendo o unico ponto de entrada do processo.
+    expect(pkg.scripts?.start).toContain("node dist/index.js");
   });
 
   it("nao usa campos fora do schema do Nixpacks", () => {

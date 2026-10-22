@@ -447,29 +447,28 @@ describe("o runtime recebe o que a migracao precisa", () => {
     return linha.trim();
   }
 
-  it("a migracao roda no boot do servico", () => {
-    expect(scriptStart()).toMatch(/scripts\/migrate-pg\.mjs/);
+  it("o boot nao faz trabalho de banco", () => {
+    // Ate 22/10/2026 `start` era `migrate && audit && node dist/index.js` e
+    // aplicava DDL a cada start de container. Isso foi tirado do caminho
+    // critico: quem aplica DDL e a Management API do Supabase, fora do
+    // container, com a credencial de administrador.
+    //
+    // O que se ganha: um deploy nao pode mais falhar por causa de um script de
+    // banco, e o servico nao abre conexao de escrita para subir.
+    const cmd = scriptStart();
+    expect(cmd).not.toMatch(/migrate-pg\.mjs/);
+    expect(cmd).not.toMatch(/audit-schema-pg\.mjs/);
+    expect(cmd).toMatch(/node dist\/index\.js/);
   });
 
-  it("a migracao e a auditoria barram o deploy quando falham", () => {
-    const cmd = scriptStart();
-    expect(cmd, "a auditoria de schema nao roda").toMatch(/scripts\/audit-schema-pg\.mjs/);
-
-    // Separador `&&`, nao `;`.
-    //
-    // Com `;`, uma falha de migracao nao interrompia nada: a auditoria (que
-    // antes se desligava sozinha com USE_SUPABASE=1) saia com 0, o servidor
-    // subia e a plataforma marcava o deploy como saudavel — com o banco divergente.
-    // O `&&` faz a falha interromper a cadeia e o deploy nao ser promovido.
-    //
-    // Isso so e seguro porque o healthcheck do servico e `/readyz`: a plataforma
-    // mantem o deploy ANTERIOR no ar ate o novo passar, entao nao ha crash-loop
-    // sem resposta — a preocupacao que justificava o `;` deixou de valer quando
-    // o healthcheck passou a olhar o banco.
-    expect(cmd, "com `;`, uma falha de migracao nao impede o deploy").toMatch(
-      /migrate-pg\.mjs\s*&&/
-    );
-    expect(cmd).toMatch(/&&\s*node scripts\/audit-schema-pg\.mjs\s*&&\s*NODE_ENV=production node dist\/index\.js/);
+  it("a guarda de schema roda no CI, contra o banco de producao", () => {
+    // Tirar a auditoria do boot so e seguro se ela continuar rodando ANTES do
+    // merge. O job `schema-audit` do ci.yml roda `pnpm db:audit` a cada PR e a
+    // cada push na main, com `SUPABASE_DB_URL` real.
+    const ci = readFileSync(join(".github", "workflows", "ci.yml"), "utf-8");
+    expect(ci).toMatch(/schema-audit:/);
+    expect(ci).toMatch(/run:\s*pnpm db:audit/);
+    expect(ci).toMatch(/secrets\.SUPABASE_DB_URL/);
   });
 
   it("o Dockerfile delega para o mesmo `start`, em vez de repetir a cadeia", () => {
@@ -573,41 +572,26 @@ describe("o runtime recebe o que a migracao precisa", () => {
     ).toEqual([]);
   });
 
-  it("o script de migracao e tudo que ele importa estao na imagem de runtime", () => {
-    // O entrypoint importa ./migrate-core-pg.mjs e ./audit-schema-pg.mjs. Se o
-    // Dockerfile copiar so o entrypoint, a migracao morre com
-    // ERR_MODULE_NOT_FOUND - e o unico sinal estaria no log do deploy.
-    const dockerfile = readFileSync("Dockerfile", "utf-8");
-    expect(dockerfile).toMatch(/COPY\s+scripts\/migrate-pg\.mjs\s/);
-
-    // Reusa o mesmo parser de COPY do describe acima: comparar com `toMatch`
-    // sobre a string inteira e frouxo demais e ja deixou passar esse bug.
-    const copiados = new Set(
-      sourcesDeCopy()
-        .map(s => s.fonte.replace(/\/+$/, ""))
-        .filter(f => !/[*?[]/.test(f))
-    );
-
-    const entrypoint = readFileSync(join("scripts", "migrate-pg.mjs"), "utf-8");
-    const importsLocais = [...entrypoint.matchAll(/from\s+"\.\/([^"/]+)"/g)].map(m => m[1]);
-    expect(importsLocais.length, "nenhum import local encontrado no entrypoint").toBeGreaterThan(0);
-
-    for (const mod of importsLocais) {
-      expect(
-        copiados,
-        `Dockerfile nao copia scripts/${mod}, que scripts/migrate-pg.mjs importa. ` +
-          `A migracao morre com ERR_MODULE_NOT_FOUND e so o log do deploy acusa.`
-      ).toContain(`scripts/${mod}`);
-    }
+  it("a imagem de runtime nao carrega o que o boot nao executa", () => {
+    // Ate 22/10/2026 a imagem carregava migrate-pg.mjs, migrate-core-pg.mjs,
+    // audit-schema-pg.mjs e drizzle/ porque o `start` os executava. Com o boot
+    // sem passo de banco, carregar isso so engorda a imagem e sugere que existe
+    // DDL automatico — o que nao existe mais (o runtime usa o usuario
+    // arquimedes_app, que nao tem permissao de DDL).
+    const runtime =
+      readFileSync("Dockerfile", "utf-8").split(/FROM\s+node:22-slim\s+AS\s+runtime/)[1] ?? "";
+    expect(runtime).not.toMatch(/COPY\s+scripts\/migrate-pg\.mjs/);
+    expect(runtime).not.toMatch(/COPY\s+scripts\/audit-schema-pg\.mjs/);
+    expect(runtime).not.toMatch(/COPY\s+drizzle\//);
   });
 
-  it("o runtime recebe o journal que o script le", () => {
-    // O estagio de build copia `drizzle/` para compilar o bundle, mas a
-    // migracao roda no estagio de runtime. Se `drizzle/meta/` faltar la,
-    // `migrate-pg.mjs` aborta - o que e o comportamento desejado, desde que
-    // o Dockerfile realmente entregue o arquivo.
-    const runtime = readFileSync("Dockerfile", "utf-8").split(/FROM\s+node:22-slim\s+AS\s+runtime/)[1] ?? "";
-    expect(runtime).toMatch(/COPY\s+drizzle\/\s+\.\/drizzle\//);
+  it("as ferramentas de banco continuam existindo como comando explicito", () => {
+    // Tirar do boot nao pode significar perder a ferramenta: aplicar migracao e
+    // auditar schema continuam sendo operacoes de uma linha, so que agora
+    // conscientes (alguem digitou) em vez de escondidas no start.
+    const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+    expect(pkg.scripts["db:migrate"]).toMatch(/scripts\/migrate-pg\.mjs/);
+    expect(pkg.scripts["db:audit"]).toMatch(/scripts\/audit-schema-pg\.mjs/);
   });
 
   it("nao ha bootstrap em DDL no boot do servidor", () => {

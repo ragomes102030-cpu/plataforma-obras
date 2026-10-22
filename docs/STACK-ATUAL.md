@@ -16,7 +16,7 @@ Supabase (PostgreSQL). Nada além disso.**
 | --- | --- | --- |
 | Código | repo `ragomes102030-cpu/plataforma-obras`, branch `main` | GitHub |
 | Build | **Dockerfile** (o serviço está configurado com `env: docker` no Render) | Render |
-| Runtime | `npm start` → `migrate && audit && node dist/index.js` | Render |
+| Runtime | `npm start` → `node dist/index.js` (sem passo de banco no boot — Decisão 23) | Render |
 | URL de produção | `https://plataforma-obras-3.onrender.com` | Render |
 | Serviço Render | `srv-dbcd0gon74is7384ufag` | Render |
 | Banco | PostgreSQL gerenciado (projeto `tromrvfijbtihuilvnuk`) | Supabase |
@@ -54,8 +54,14 @@ curl -s https://plataforma-obras-3.onrender.com/readyz
 # {"ok":true,"database":"ok","tabelas":43,"jwtSecretConfigurado":true,"warnings":[]}
 ```
 
-`/readyz` é a prova de que a cadeia de boot inteira rodou: ele só responde `200`
-se o banco responde e o schema foi migrado. `warnings` vazio é o esperado.
+`/readyz` só responde `200` se o banco responde e o schema está na versão que o
+código espera (compara a tabela `__drizzle_migrations` com o que foi compilado).
+`warnings` vazio é o esperado.
+
+Ele **não** é mais a prova de "a cadeia de boot rodou" — desde 22/10/2026 o boot
+não executa migração nem auditoria (Decisão 23). Quem garante schema em dia é o
+CI: o job `schema-audit` roda `pnpm db:audit` contra o banco de produção em todo
+PR, antes do merge.
 
 ## O que **não** faz parte do sistema
 
