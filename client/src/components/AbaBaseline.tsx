@@ -50,6 +50,22 @@ export function AbaBaseline({ projetoId }: Props) {
     onError: error => setMensagem(error.message),
   });
 
+  // Aprovar a versão de trabalho aqui evita o beco sem saída: quando o agente já
+  // avançou da etapa EAP_REVISAO, o botão da aba EAP fica desabilitado e a
+  // baseline responde "só uma versão aprovada pode virar baseline" — sem
+  // nenhum caminho na interface para resolver.
+  const aprovar = trpc.planning.aprovarVersaoDeTrabalho.useMutation({
+    onSuccess: async resultado => {
+      setMensagem(
+        resultado.jaEstavaAprovada
+          ? `A versão v${resultado.versionNumber} já estava aprovada.`
+          : `Versão v${resultado.versionNumber} aprovada. A captura da baseline está liberada.`
+      );
+      await utils.planning.invalidate();
+    },
+    onError: error => setMensagem(error.message),
+  });
+
   const activities = plano.data?.activities ?? [];
   const baselines = plano.data?.baselines ?? [];
 
@@ -132,9 +148,20 @@ export function AbaBaseline({ projetoId }: Props) {
             </div>
           </div>
           <p className="pl-tabela-legenda">
-            Para liberar: aba <strong>EAP</strong> → <strong>Governança da EAP</strong> →{" "}
-            <strong>Aprovar EAP</strong>. Depois volte aqui; o gate abre sozinho.
+            Aprovar aqui aplica as mesmas checagens da aba EAP (dicionário aprovado e EAP sem
+            bloqueios) e fica registrado com autor e motivo — a versão congelada precisa saber
+            quem a aprovou. Depois o botão de captura libera sozinho.
           </p>
+          <button
+            type="button"
+            className="pl-planejamento-secondary"
+            onClick={() => aprovar.mutate({ projectId: projetoId })}
+            disabled={aprovar.isPending}
+          >
+            {aprovar.isPending
+              ? "Aprovando…"
+              : `Aprovar versão ${numeroVersao ? `v${numeroVersao}` : "de trabalho"} e liberar a baseline`}
+          </button>
         </div>
       )}
 

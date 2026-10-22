@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { projectPlanVersions, projects, scheduleActivities, scheduleBaselines, users, wbsNodes } from "../drizzle/schema";
+import { agentDecisions, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
 import { pgliteComSchema } from "./test-helpers/pglite";
 
@@ -77,6 +77,53 @@ describe("versão aprovada x versão de trabalho", () => {
   afterEach(async () => {
     await pg.close();
     estado.db = null;
+  });
+
+  it("não deixa aprovar a versão sem o padrão do dicionário aprovado", async () => {
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+
+    await expect(dono.planning.aprovarVersaoDeTrabalho({ projectId: obraId })).rejects.toThrow(
+      /padrão do dicionário de escopo/i
+    );
+  });
+
+  it("não aprova versão cuja EAP tem bloqueio", async () => {
+    const db = drizzlePglite(pg);
+    const [versao] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+
+    await db.insert(agentDecisions).values({
+      projectId: obraId,
+      userId: donoId,
+      stage: "EAP_DICIONARIO",
+      decision: "approved",
+      scopeJson: "{}",
+      reason: "Padrão aprovado no teste",
+    });
+    // Quantidade negativa é bloqueio determinístico da EAP.
+    await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      code: "1",
+      name: "Pacote com quantidade inválida",
+      level: 2,
+      nodeType: "pacote",
+      plannedQuantity: "-5",
+    });
+
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    await expect(dono.planning.aprovarVersaoDeTrabalho({ projectId: obraId })).rejects.toThrow(
+      /bloqueio/i
+    );
+
+    // A versão continua em rascunho: recusa não pode deixar efeito colateral.
+    const [depois] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+    expect(depois.status).toBe("draft");
   });
 
   it("não anuncia EAP aprovada quando a versão de trabalho é rascunho", async () => {

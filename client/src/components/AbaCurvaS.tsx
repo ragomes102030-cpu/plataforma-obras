@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildSCurve, type SCurveResult } from "@shared/s-curve";
+import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { EstadoCarregando } from "./EstadoCarregando";
 
 /**
@@ -33,25 +34,27 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     { enabled: Number(projetoId) > 0 }
   );
 
+  // O diagnóstico de pesos serve tanto para desenhar a curva quanto para
+  // explicar o vazio ("sobraram R$ X sem atividade nesta versão da EAP").
+  const pesos = useMemo(
+    () =>
+      calcularPesosDaCurva(
+        planejamento.data?.activities ?? [],
+        budget.data?.items ?? []
+      ),
+    [planejamento.data, budget.data]
+  );
+
   const curve: SCurveResult | null = useMemo(() => {
     const activities = planejamento.data?.activities ?? [];
     const budgetItems = budget.data?.items ?? [];
     if (activities.length === 0 || budgetItems.length === 0) return null;
 
-    // Calcula custo total dos itens de orçamento
-    const totalCost = budgetItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
+    // Mapeia custo por atividade: primeiro pelo nó da EAP, depois pelo código
+    // (o orçamento pode estar apontando para os nós de uma versão anterior).
+    const totalCost = pesos.total;
     if (totalCost <= 0) return null;
-
-    // Mapeia custo por atividade (via wbsNodeId -> atividade)
-    const costByActivityId = new Map<number, number>();
-    for (const item of budgetItems) {
-      if (item.wbsNodeId) {
-        const act = activities.find(a => a.wbsNodeId === item.wbsNodeId);
-        if (act) {
-          costByActivityId.set(act.id, (costByActivityId.get(act.id) ?? 0) + Number(item.quantity) * Number(item.unitPrice));
-        }
-      }
-    }
+    const costByActivityId = pesos.custoPorAtividade;
 
     const curveActivities = activities
       .filter(a => a.cpmCalculatedAt && a.durationDays > 0)
@@ -70,7 +73,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
 
     if (curveActivities.length === 0) return null;
     return buildSCurve(curveActivities);
-  }, [planejamento.data, budget.data]);
+  }, [planejamento.data, budget.data, pesos]);
 
   // Carregando ≠ vazio. As duas consultas desta aba são pesadas (atividades +
   // itens de orçamento) e, no plano gratuito, a tela ficava 10-30 s dizendo
@@ -99,6 +102,15 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     else if (!atividades.some(a => a.cpmCalculatedAt && a.durationDays > 0)) motivos.push("as atividades estão com duração zero");
     if (itens.length === 0) motivos.push("a obra não tem itens de orçamento aprovados");
     else if (!itens.some(i => i.wbsNodeId)) motivos.push("os itens de orçamento não estão ligados à EAP");
+    else if (pesos.custoPorAtividade.size === 0 && pesos.valorSemDestino > 0) {
+      // O valor existe, mas não encontra atividade nesta versão da EAP. Dizer
+      // "o orçamento não chegou às atividades" deixava o engenheiro procurando
+      // um problema de orçamento quando o problema era de vínculo entre versões.
+      motivos.push(
+        `R$ ${pesos.valorSemDestino.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} em ` +
+          `${pesos.itensSemDestino} item(ns) de orçamento estão ligados a pacotes que não existem na versão atual da EAP`
+      );
+    }
 
     return (
       <div className="xl-painel">
