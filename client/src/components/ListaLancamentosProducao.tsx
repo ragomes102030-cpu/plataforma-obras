@@ -38,6 +38,21 @@ type Props = {
 
 const dataIso = (valor: Date | string) => new Date(valor).toISOString().slice(0, 10);
 
+/**
+ * `productionDate` é uma DATA (meia-noite UTC), não um instante. Formatar com
+ * `toLocaleDateString` converte para o fuso do escritório (UTC-3) e mostra o dia
+ * anterior: a grade dizia 25/10 e a lista dizia 24/10 para o mesmo lançamento.
+ * Aqui a data é lida como texto, sem conversão.
+ */
+function dataBr(valor: Date | string): string {
+  const [ano, mes, dia] = dataIso(valor).split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+function quantidadeBr(valor: string | number): string {
+  return Number(valor).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+}
+
 export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   const utils = trpc.useUtils();
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -216,7 +231,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           onChange={e => setDataEdicao(e.target.value)}
                         />
                       ) : (
-                        new Date(l.productionDate).toLocaleDateString("pt-BR")
+                        dataBr(l.productionDate)
                       )}
                     </td>
                     <td className="xl-tabela-celula">
@@ -231,7 +246,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           onChange={e => setQuantidadeEdicao(e.target.value)}
                         />
                       ) : (
-                        `${l.quantity} ${l.measurementUnit}`
+                        `${quantidadeBr(l.quantity)} ${l.measurementUnit}`
                       )}
                     </td>
                     <td className="xl-tabela-celula">
@@ -309,7 +324,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                                 className="outline-button"
                                 disabled={ocupado}
                                 onClick={() => {
-                                  if (window.confirm(`Excluir a medição de ${number(l.quantity)} ${l.measurementUnit} em ${new Date(l.productionDate).toLocaleDateString("pt-BR")}?`))
+                                  if (window.confirm(`Excluir a medição de ${quantidadeBr(l.quantity)} ${l.measurementUnit} em ${dataBr(l.productionDate)}?`))
                                     excluir.mutate({ projectId: projetoId, entryId: l.id });
                                 }}
                               >
@@ -331,6 +346,3 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   );
 }
 
-function number(valor: string | number): string {
-  return Number(valor).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
-}
