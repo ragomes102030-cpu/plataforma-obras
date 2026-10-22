@@ -3276,33 +3276,42 @@ export const appRouter = router({
               )
             : eq(priceItems.catalogId, selectedCatalogId)
           : undefined;
-        const items = selectedCatalogId
-          ? await db
-              .select()
-              .from(priceItems)
-              .where(filtroItens)
-              .orderBy(priceItems.code)
-              .limit(limiteItens)
-          : [];
-        const [contagemItens] = selectedCatalogId
-          ? await db.select({ total: sql<number>`count(*)::int` }).from(priceItems).where(filtroItens)
-          : [{ total: 0 }];
         const filtroComposicoes = termoComposicoes
           ? or(
               sql`${serviceCompositions.code} ILIKE ${padraoComposicoes}`,
               sql`${serviceCompositions.description} ILIKE ${padraoComposicoes}`
             )
           : undefined;
-        const compositions = await db
-          .select()
-          .from(serviceCompositions)
-          .where(filtroComposicoes)
-          .orderBy(desc(serviceCompositions.updatedAt))
-          .limit(limiteComposicoes);
-        const [contagemComposicoes] = await db
-          .select({ total: sql<number>`count(*)::int` })
-          .from(serviceCompositions)
-          .where(filtroComposicoes);
+        // As quatro consultas vão juntas: cada ida ao Supabase custa ~200 ms e em
+        // série isso somava ~1 s antes da primeira linha aparecer na tela.
+        const [items, contagemItens, compositions, contagemComposicoes] = await Promise.all([
+          selectedCatalogId
+            ? db
+                .select()
+                .from(priceItems)
+                .where(filtroItens)
+                .orderBy(priceItems.code)
+                .limit(limiteItens)
+            : Promise.resolve([]),
+          selectedCatalogId
+            ? db
+                .select({ total: sql<number>`count(*)::int` })
+                .from(priceItems)
+                .where(filtroItens)
+                .then(([linha]) => linha)
+            : Promise.resolve({ total: 0 }),
+          db
+            .select()
+            .from(serviceCompositions)
+            .where(filtroComposicoes)
+            .orderBy(desc(serviceCompositions.updatedAt))
+            .limit(limiteComposicoes),
+          db
+            .select({ total: sql<number>`count(*)::int` })
+            .from(serviceCompositions)
+            .where(filtroComposicoes)
+            .then(([linha]) => linha),
+        ]);
         // Com busca ativa não auto-seleciona: a primeira linha da busca mudaria a
         // composição aberta a cada tecla digitada.
         const selectedCompositionId =
