@@ -3822,11 +3822,11 @@ tr:hover .xl-codigo {
 }
 .pl-look-sub{
   margin:4px 0 0;
-  font-size:9px;
+  font-size:11px;
   color:#7b8ea0;
 }
 .pl-look-mini{
-  font-size:8.5px;
+  font-size:10.5px;
   color:#8a97a5;
 }
 .pl-look-ppc{
@@ -3911,7 +3911,7 @@ tr:hover .xl-codigo {
   background:#fafcfe;
 }
 .pl-look-kpi>span{
-  font-size:8px;
+  font-size:10px;
   text-transform:uppercase;
   letter-spacing:.04em;
   color:#7b8ea0;
@@ -3965,12 +3965,12 @@ tr:hover .xl-codigo {
 .pl-look-tabela table{
   width:100%;
   border-collapse:collapse;
-  font-size:9px;
+  font-size:12px;
 }
 .pl-look-tabela th{
-  padding:4px 6px;
+  padding:5px 7px;
   text-align:left;
-  font-size:7.5px;
+  font-size:10.5px;
   text-transform:uppercase;
   letter-spacing:.04em;
   color:#7b8ea0;
@@ -3978,7 +3978,7 @@ tr:hover .xl-codigo {
   white-space:nowrap;
 }
 .pl-look-tabela td{
-  padding:5px 6px;
+  padding:6px 7px;
   border-bottom:1px solid #f0f3f6;
   color:#334155;
 }
@@ -5101,3 +5101,36 @@ tr:hover .xl-codigo {
 }
 .arquimedes-trilha button:hover{color:#167a96;text-decoration:underline;text-underline-offset:2px}
 .arquimedes-trilha button.ativo{color:#167a96;font-weight:700}
+
+/* Regua da Curva S */
+.xl-curva-regua{
+  margin-top:4px !important;
+  font-size:11.5px;
+  color:#6b7c88;
+  max-width:760px;
+}
+.xl-regua{
+  font-size:11px;
+  font-weight:500;
+  color:#6b7c88;
+}
+.xl-campo-busca{
+  min-width:260px;
+  padding:7px 10px;
+  border:1px solid #dbe3e8;
+  border-radius:8px;
+  font-size:12.5px;
+  color:#172a35;
+  background:#fff;
+}
+.xl-campo-busca:focus{outline:2px solid #bcd9e4;outline-offset:1px}
+.xl-badge{
+  display:inline-block;
+  padding:1px 8px;
+  border-radius:999px;
+  background:#eef2f4;
+  color:#5c6b73;
+  font-size:11px;
+  font-weight:600;
+  white-space:nowrap;
+}

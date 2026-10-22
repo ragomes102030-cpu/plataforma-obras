@@ -6,6 +6,16 @@ import { brazilianHolidays, defaultCalendar, indexOf } from "@shared/work-calend
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { EstadoCarregando } from "./EstadoCarregando";
 
+/** Percentual em pt-BR, com vírgula. `toFixed` imprimia "29.0%". */
+function pctBr(valor: number): string {
+  return `${valor.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+function ppBr(valor: number): string {
+  const sinal = valor > 0 ? "+" : "";
+  return `${sinal}${valor.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.`;
+}
+
 /**
  * Aba CURVA S — valor planejado acumulado × valor realizado acumulado.
  *
@@ -290,7 +300,11 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           <p>
             {aindaNaoComecou
               ? `Início planejado em ${dataDeInicio ?? "data não definida"} — não existe atraso antes de a obra começar.`
-              : `Planejado até hoje: ${planejadoHoje.planned.toFixed(1)}% — Realizado acumulado: ${realizadoHoje.toFixed(1)}% — Desvio: ${desvio.toFixed(1)} p.p.`}
+              : `Planejado até hoje: ${pctBr(planejadoHoje.planned)} — Realizado: ${pctBr(realizadoHoje)} — Desvio: ${ppBr(desvio)}`}
+          </p>
+          <p className="xl-curva-regua">
+            Tudo nesta tela é ponderado pelo valor do orçamento. O painel da obra pondera pela
+            quantidade — por isso os percentuais são diferentes, e os dois estão certos.
           </p>
         </div>
         <button
@@ -385,25 +399,27 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
       {/* Cards de resumo */}
       <div className="xl-cartoes">
         <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Duração total</span>
-          <strong className="xl-cartao-valor">{curve.duration} dias</strong>
+          <span className="xl-cartao-titulo">Duração do plano</span>
+          <strong className="xl-cartao-valor">{curve.duration} dias úteis</strong>
           {curvaBaseline && curvaBaseline.duration !== curve.duration && (
             <span className="xl-cartao-nota">
-              aprovado: {curvaBaseline.duration} dias
+              aprovado: {curvaBaseline.duration} dias úteis
             </span>
           )}
         </div>
         <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Planejado acumulado</span>
-          <strong className="xl-cartao-valor">{planejadoHoje.planned.toFixed(1)}%</strong>
+          <span className="xl-cartao-titulo">Planejado até hoje</span>
+          <strong className="xl-cartao-valor">{pctBr(planejadoHoje.planned)}</strong>
+          <span className="xl-cartao-nota">por valor do orçamento</span>
         </div>
         <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Realizado acumulado</span>
-          <strong className="xl-cartao-valor">{realizadoHoje.toFixed(1)}%</strong>
+          <span className="xl-cartao-titulo">Realizado até hoje</span>
+          <strong className="xl-cartao-valor">{pctBr(realizadoHoje)}</strong>
+          <span className="xl-cartao-nota">por valor lançado na produção</span>
         </div>
         <div className={`xl-cartao ${desvio < 0 ? "xl-cartao-ruim" : "xl-cartao-bom"}`}>
           <span className="xl-cartao-titulo">Desvio até hoje</span>
-          <strong className="xl-cartao-valor">{desvio.toFixed(1)} p.p.</strong>
+          <strong className="xl-cartao-valor">{ppBr(desvio)}</strong>
           <span className="xl-cartao-nota">
             {aindaNaoComecou
               ? "obra ainda não começou"
@@ -444,7 +460,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
                       <td>{a.name}</td>
                       <td>{a.earlyStart}d</td>
                       <td>{a.durationDays}d</td>
-                      <td>{weight.toFixed(1)}%</td>
+                      <td>{pctBr(weight)}</td>
                       <td>{a.progress ?? 0}%</td>
                       <td>{(a.progress ?? 0) >= 100 ? "Concluído" : (a.progress ?? 0) > 0 ? "Em andamento" : "Não iniciado"}</td>
                     </tr>

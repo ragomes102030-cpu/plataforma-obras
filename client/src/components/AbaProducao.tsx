@@ -38,6 +38,18 @@ type Linha = {
   atividadeId: number;
 };
 
+/**
+ * Data do dia na grade, lida como texto.
+ *
+ * `new Date("2026-10-03").toLocaleDateString()` roda em UTC-3 e devolve 02/10:
+ * a coluna inteira andava um dia para trás.
+ */
+function diaBr(dia: string): string {
+  const achado = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dia));
+  if (!achado) return String(dia);
+  return `${achado[3]}/${achado[2]}/${achado[1]}`;
+}
+
 export function AbaProducao({ projetoId }: { projetoId: number }) {
   const [data, setData] = useState(() => localIsoDe(new Date()));
   const [selecionada, setSelecionada] = useState<number | null>(null);
@@ -123,7 +135,8 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
     grade_[dia][chave] = String((Number(grade_[dia][chave] ?? 0) + Number(l.quantity)).toFixed(3));
     porAtividade[chave] = String((Number(porAtividade[chave] ?? 0) + Number(l.quantity)).toFixed(3));
   }
-  const totalGeral = lancamentos.reduce((sum, l) => sum + Number(l.quantity), 0).toFixed(3);
+  // Não existe "total geral" de produção: somar m³ com m² e kg não significa
+  // nada. O avanço é sempre por atividade, contra a própria quantidade.
 
   const atividadesComQuantidade = linhas.filter(l => {
     const totalPlanejado = gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity;
@@ -149,7 +162,10 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
         <div>
           <span className="xl-painel-kicker">CONTROLE DE PRODUÇÃO</span>
           <h2>{linhas.length} atividades · {datas.length} {datas.length === 1 ? "dia lançado" : "dias lançados"}</h2>
-          <p>Avanço médio: <strong>{avancoMedio.toFixed(1)}%</strong> · Total geral: <strong>{totalGeral}</strong></p>
+          <p>
+            Avanço médio <strong>{avancoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</strong>{" "}
+            <span className="xl-regua">média simples entre as atividades com quantidade</span>
+          </p>
         </div>
       </div>
 
@@ -169,7 +185,9 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
         </div>
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Avanço médio</span>
-          <strong className="xl-cartao-valor">{avancoMedio.toFixed(1)}%</strong>
+          <strong className="xl-cartao-valor">
+            {avancoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+          </strong>
         </div>
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Lançamentos</span>
@@ -178,9 +196,9 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
       </div>
 
       <p className="xl-nota-folha">
-        <strong>% Real = Executado ÷ Quantidade.</strong> A soma do que foi
-        lançado por atividade é o que aparece na coluna L do CRONOGRAMA. Linha
-        em branco é dia sem produção — e isso é informação, não falta.
+        <strong>% Real = Executado ÷ Quantidade.</strong> O que é lançado por
+        atividade aparece no painel da obra e na Curva S. Linha em branco é dia
+        sem produção — e isso é informação, não falta.
       </p>
 
       <div className="xl-tabela-container">
@@ -208,7 +226,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
                   <strong>Nenhum lançamento ainda</strong>
                   <span>
                     Registre a primeira produção no formulário abaixo. O que não é
-                    lançado aparece como 0% no CRONOGRAMA.
+                    lançado aparece como 0% no painel e na Curva S.
                   </span>
                 </td>
               </tr>
@@ -216,7 +234,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
               datas.map(dia => (
                 <tr key={dia}>
                   <th className="xl-tabela-data" scope="row">
-                    {new Date(dia).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                    {diaBr(dia)}
                   </th>
                   {linhas.map(l => {
                     const v = grade_[dia]?.[l.codigo];
