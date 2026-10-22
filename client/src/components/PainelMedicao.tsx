@@ -410,7 +410,7 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
             {fluxo?.cpi != null
               ? ` (CPI ${fluxo.cpi.toFixed(3).replace(".", ",")})`
               : " (sem CPI — projeção sem correção)"}
-            .
+            .{fluxo?.asOf ? ` Realizado até ${dataBr(fluxo.asOf)}.` : ""}
           </p>
         </div>
       </header>
