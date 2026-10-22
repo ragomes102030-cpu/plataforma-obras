@@ -236,8 +236,13 @@ export function PainelDoCronograma({
     { chave: "naoIniciadas", rotulo: "Não iniciadas", valor: status.naoIniciadas, classe: "neutro" },
   ].filter((s) => s.valor > 0);
 
-  const atividadesDaSemana = (semana?.atividades ?? []).filter((a) => !a.pronta).slice(0, 7);
-  const restantesDaSemana = (semana?.atividades ?? []).filter((a) => !a.pronta).length - atividadesDaSemana.length;
+  // `pronta` significa "sem restrição aberta", não "concluída". A semana lista
+  // tudo o que está em aberto, com as bloqueadas marcadas.
+  const abertasNaSemana = (semana?.atividades ?? [])
+    .filter((a) => (a.percentualExecutado ?? 0) < 1)
+    .sort((a, b) => String(a.startIso).localeCompare(String(b.startIso)));
+  const atividadesDaSemana = abertasNaSemana.slice(0, 7);
+  const restantesDaSemana = abertasNaSemana.length - atividadesDaSemana.length;
 
   return (
     <div className="pd">
@@ -326,11 +331,19 @@ export function PainelDoCronograma({
           <p className="pd-rotulo">
             Compromissos <span className="pd-regua">semana corrente</span>
           </p>
-          <p className={`pd-numero ${(lookahead.data?.ppcCorrente ?? 100) < 70 ? "pd-numero-atencao" : ""}`}>
-            {lookahead.data?.ppcCorrente != null ? `${Math.round(lookahead.data.ppcCorrente)}%` : "—"}
+          <p
+            className={`pd-numero ${
+              lookahead.data?.ppcCorrente == null
+                ? "pd-numero-fraco"
+                : lookahead.data.ppcCorrente < 70
+                  ? "pd-numero-atencao"
+                  : ""
+            }`}
+          >
+            {lookahead.data?.ppcCorrente != null ? `${Math.round(lookahead.data.ppcCorrente)}%` : "Sem registro"}
           </p>
           <p className="pd-legenda pd-legenda-alta">
-            PPC da semana
+            {lookahead.data?.ppcCorrente != null ? "PPC da semana" : "Nenhum compromisso assumido"}
             <br />
             <strong>{lookahead.data?.totalBloqueadas ?? 0}</strong> bloqueadas ·{" "}
             <strong>{lookahead.data?.compromissosPendentes ?? 0}</strong> pendentes
