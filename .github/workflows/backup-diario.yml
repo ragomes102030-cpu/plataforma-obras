@@ -40,6 +40,8 @@ name: Backup diario do banco
 # ============================================================================
 
 on:
+  push:
+    branches: [feat/backup-diario]
   schedule:
     # 06:00 UTC = 03:00 em Brasilia. Fora do horario de obra.
     - cron: "0 6 * * *"
