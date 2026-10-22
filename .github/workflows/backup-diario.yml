@@ -172,6 +172,13 @@ jobs:
             exit 1
           fi
 
+          # Todo banco novo ja nasce com o schema `public`, e o dump tambem
+          # traz o `CREATE SCHEMA public`. Derrubar o schema antes evita o
+          # unico erro esperado da restauracao — e deixa o `pg_restore` sair
+          # com zero de verdade, em vez de "zero com erro ignorado".
+          docker exec alvo psql -U postgres -d postgres -q \
+            -c 'drop schema public cascade' -c 'create schema public'
+
           inicio="$(date +%s)"
           # `set +e` para o erro aparecer no log ANTES de o job morrer: sem
           # isso o `set -e` aborta e o stderr fica preso dentro do arquivo.
@@ -192,10 +199,8 @@ jobs:
 
           # `schema "public" already exists` e esperado: todo banco novo ja tem
           # esse schema. Qualquer OUTRO erro invalida a restauracao.
-          reais="$(grep -iE 'error|erro' backup/restore.err | grep -v 'already exists' || true)"
-          if [ -n "${reais}" ]; then
-            echo "::error::O dump nao restaurou limpo:"
-            echo "${reais}"
+          if [ "${codigo}" -ne 0 ] || grep -qE '^pg_restore: error' backup/restore.err; then
+            echo "::error::O dump nao restaurou limpo (codigo ${codigo})."
             exit 1
           fi
 
