@@ -111,6 +111,18 @@ describe("cabeçalho da curva S", () => {
     expect(FONTE).toContain("realizadoNoDia(pontosRealizado, hojeNum)");
   });
 
+  it("nenhum hook depois do return de carregamento (React #310)", () => {
+    // A 1ª versão de `serieRealizado` foi escrita depois dos `return` de
+    // carregamento: no primeiro render rodavam menos hooks que no segundo e a
+    // aba caía com "Ocorreu um erro inesperado" (página em branco).
+    const posicaoDoReturn = FONTE.indexOf("if (Number(projetoId) > 0 && (planejamento.isPending");
+    expect(posicaoDoReturn).toBeGreaterThan(-1);
+    const depoisDoReturn = FONTE.slice(posicaoDoReturn);
+    for (const hook of ["useMemo(", "useQuery(", "useState(", "useEffect("]) {
+      expect(depoisDoReturn).not.toContain(hook);
+    }
+  });
+
   it("não chama de atrasada uma obra que ainda não começou", () => {
     expect(FONTE).toContain("aindaNaoComecou");
     expect(FONTE).toContain("Obra ainda não começou");
