@@ -63,7 +63,12 @@ export type DesembolsoResultado = {
   realizadoTotal: number;
   projetadoTotal: number;
   /** Projetado − BAC. Positivo = tendência de estouro. */
-  desvioProjetado: number;
+  /**
+   * Projeção − BAC. `null` quando não há custo lançado: sem CPI, "projetado" é
+   * o próprio planejado e a diferença contra o BAC só mede o que ainda não
+   * saiu — apresentar isso como "economia" mentiria na cara do usuário.
+   */
+  desvioProjetado: number | null;
   cpi: number | null;
   alertas: string[];
 };
@@ -140,9 +145,16 @@ export function computeDesembolso(entrada: DesembolsoEntrada): DesembolsoResulta
       bac: 0,
       realizadoTotal: 0,
       projetadoTotal: 0,
-      desvioProjetado: 0,
+      desvioProjetado: null,
       cpi: entrada.cpi,
-      alertas: ["Sem custo planejado nem custo lançado: não há curva para desenhar."],
+      alertas: [
+        entrada.atividades.length > 0
+          ? // Há atividades, então a curva não está vazia por falta de plano: está
+            // vazia porque nenhuma delas tem valor. Dizer "sem planejamento" aqui
+            // manda o usuário procurar um plano que existe.
+            "As atividades do plano não têm valor planejado — confira o vínculo com os itens do orçamento."
+          : "Sem atividades no plano nem custo lançado: não há curva para desenhar.",
+      ],
     };
   }
 
@@ -229,7 +241,7 @@ export function computeDesembolso(entrada: DesembolsoEntrada): DesembolsoResulta
     bac,
     realizadoTotal,
     projetadoTotal,
-    desvioProjetado: dinheiro(projetadoTotal - bac),
+    desvioProjetado: entrada.cpi === null ? null : dinheiro(projetadoTotal - bac),
     cpi: entrada.cpi,
     alertas,
   };

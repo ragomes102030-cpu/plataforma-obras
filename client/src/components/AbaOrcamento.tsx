@@ -74,13 +74,16 @@ export function AbaOrcamento({ projetoId }: Props) {
 
       {/* Valor Ganho: fica junto do orçamento porque o AC é custo, e o custo
           é lançado aqui. Ver `PainelValorGanho.tsx`. */}
+      {/* A conciliação vem PRIMEIRO de propósito: sem vínculo atividade↔item,
+          o EVM, a medição e a curva de desembolso aparecem zerados e o usuário
+          só descobre o motivo no fim da página. */}
+      <PainelConciliacao projetoId={projetoId} />
+
       <PainelValorGanho projetoId={projetoId} />
 
       {/* Medição fecha o ciclo: o que foi executado vira receita, e o custo
           lançado vira curva de caixa. Ver `PainelMedicao.tsx`. */}
       <PainelMedicao projetoId={projetoId} />
-
-      <PainelConciliacao projetoId={projetoId} />
 
       <div className="xl-cartoes">
         <div className="xl-cartao">
