@@ -28,6 +28,13 @@ function fmt(iso: string): string {
   return `${d}/${m}${y !== undefined ? "" : ""}`;
 }
 
+/** Marca o ano no primeiro rótulo e em toda virada de ano — sem isso, numa obra
+ *  de 27 meses todas as datas parecem do mesmo ano. */
+function fmtComAno(iso: string, comAno: boolean): string {
+  const [ano, mes, dia] = iso.split("-");
+  return comAno ? `${dia}/${mes}/${ano}` : `${dia}/${mes}`;
+}
+
 export type PlanejamentoView = "gantt" | "lob";
 
 export function VisualizacaoPlanejamento({
@@ -137,16 +144,16 @@ function Gantt({
         <text x={width - 12} y="22" textAnchor="end" className="pl-gantt-critical-note">
           {Array.from(atividades.values()).filter(item => item.critical === 1).length} críticas
         </text>
-        {ticks.map(t => {
+        {ticks.map((t, indice) => {
           const xx = x(t);
           return (
             <g key={t}>
               <line x1={xx} x2={xx} y1="34" y2={height - 14} className="pl-gantt-grid" />
-              <text x={xx + 3} y="48" className="pl-gantt-date">{fmt(t)}</text>
+              <text x={xx + 3} y="48" className="pl-gantt-date">{fmtComAno(t, indice === 0 || t.slice(5, 7) === "01")}</text>
             </g>
           );
         })}
-        {inicioObra && <text x={left + 10} y={height - 6} className="pl-gantt-note">Início da obra: {fmt(inicioObra)}</text>}
+        {inicioObra && <text x={left + 10} y={height - 6} className="pl-gantt-note">Início da obra: {fmtComAno(inicioObra, true)}</text>}
         <line x1={hojeX} x2={hojeX} y1="30" y2={height - 14} className="pl-gantt-hoje" />
         <text x={hojeX + 4} y="22" className="pl-gantt-hoje-label">HOJE</text>
 

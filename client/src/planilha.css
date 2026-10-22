@@ -1177,21 +1177,21 @@ tr:hover .xl-codigo {
 .pl-gantt-bg,
 .pl-lob-bg { fill: #fff; }
 .pl-gantt-left { fill: #f7f9fa; }
-.pl-gantt-title { font-size: 9px; font-weight: 700; fill: #62737b; letter-spacing: .07em; }
-.pl-gantt-date { font-size: 8px; fill: #75858d; }
+.pl-gantt-title { font-size: 10.5px; font-weight: 700; fill: #62737b; letter-spacing: .07em; }
+.pl-gantt-date { font-size: 10px; fill: #5d6f78; }
 .pl-gantt-grid { stroke: #e4eaed; stroke-width: 1; }
 .pl-gantt-hoje { stroke: #c66b4d; stroke-width: 1.5; stroke-dasharray: 4 3; }
-.pl-gantt-hoje-label { font-size: 8px; font-weight: 700; fill: #a65b43; }
+.pl-gantt-hoje-label { font-size: 10px; font-weight: 700; fill: #a65b43; }
 .pl-gantt-row { fill: #fff; }
 .pl-gantt-row.alt { fill: #fbfcfc; }
-.pl-gantt-code { font-size: 8px; fill: #7b8990; }
-.pl-gantt-name { font-size: 9.5px; fill: #34464e; }
-.pl-gantt-front { font-size: 8px; fill: #718088; }
+.pl-gantt-code { font-size: 10px; fill: #6d7c84; }
+.pl-gantt-name { font-size: 11px; fill: #34464e; }
+.pl-gantt-front { font-size: 10px; fill: #64757d; }
 .pl-gantt-bar { fill: #6f9eaa; }
 .pl-gantt-bar.critical { fill: #557d89; }
 .pl-gantt-progress { fill: #315d68; opacity: .9; }
-.pl-gantt-duration { font-size: 8px; fill: #64757d; }
-.pl-gantt-note { font-size: 8px; fill: #87949a; }
+.pl-gantt-duration { font-size: 10px; fill: #5d6f78; }
+.pl-gantt-note { font-size: 10px; fill: #7b8990; }
 
 .pl-lob-grid { stroke: #e2e8eb; stroke-width: 1; }
 .pl-lob-axis { stroke: #9baab0; stroke-width: 1; }

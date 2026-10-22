@@ -303,8 +303,9 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
               : `Planejado até hoje: ${pctBr(planejadoHoje.planned)} — Realizado: ${pctBr(realizadoHoje)} — Desvio: ${ppBr(desvio)}`}
           </p>
           <p className="xl-curva-regua">
-            Tudo nesta tela é ponderado pelo valor do orçamento. O painel da obra pondera pela
-            quantidade — por isso os percentuais são diferentes, e os dois estão certos.
+            Tudo nesta tela é ponderado pelo valor do orçamento — a mesma régua do painel da obra.
+            Os dois percentuais batem. A diferença de 0,1 p.p. entre esta tela e o painel vem só do
+            arredondamento da curva.
           </p>
         </div>
         <button
