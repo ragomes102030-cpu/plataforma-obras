@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
 import { PainelLookahead } from "./PainelLookahead";
+import { ListaLancamentosProducao } from "./ListaLancamentosProducao";
 import { EstadoCarregando } from "./EstadoCarregando";
 
 /**
@@ -108,13 +109,19 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
 
   const lancamentos = grade.data ?? [];
   const datas = Array.from(new Set(lancamentos.map(l => new Date(l.productionDate).toISOString().slice(0, 10)))).sort();
+  // A chave é o CÓDIGO da EAP, não o id da linha: lançamento antigo aponta para a
+  // atividade de uma versão anterior do plano e nunca casava com a coluna de hoje
+  // — a grade mostrava tudo em branco e o avanço médio zerado.
+  const chaveDoLancamento = (l: { activityId: number; codigoEap?: string | null }) =>
+    l.codigoEap ?? String(l.activityId);
   const grade_: Record<string, Record<string, string>> = {};
   const porAtividade: Record<string, string> = {};
   for (const l of lancamentos) {
     const dia = new Date(l.productionDate).toISOString().slice(0, 10);
+    const chave = chaveDoLancamento(l);
     grade_[dia] ??= {};
-    grade_[dia][String(l.activityId)] = String((Number(grade_[dia][String(l.activityId)] ?? 0) + Number(l.quantity)).toFixed(3));
-    porAtividade[String(l.activityId)] = String((Number(porAtividade[String(l.activityId)] ?? 0) + Number(l.quantity)).toFixed(3));
+    grade_[dia][chave] = String((Number(grade_[dia][chave] ?? 0) + Number(l.quantity)).toFixed(3));
+    porAtividade[chave] = String((Number(porAtividade[chave] ?? 0) + Number(l.quantity)).toFixed(3));
   }
   const totalGeral = lancamentos.reduce((sum, l) => sum + Number(l.quantity), 0).toFixed(3);
 
@@ -124,7 +131,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   });
   const avancoMedio = atividadesComQuantidade.length > 0
     ? atividadesComQuantidade.reduce((sum, l) => {
-        const realizado = Number(porAtividade[String(l.atividadeId)] ?? 0);
+        const realizado = Number(porAtividade[l.codigo] ?? 0);
         const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
         return sum + (realizado / planejado) * 100;
       }, 0) / atividadesComQuantidade.length
@@ -212,7 +219,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
                     {new Date(dia).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                   </th>
                   {linhas.map(l => {
-                    const v = grade_[dia]?.[String(l.atividadeId)];
+                    const v = grade_[dia]?.[l.codigo];
                     const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
                     const realizado = v ? Number(v) : 0;
                     const pct = planejado > 0 ? (realizado / planejado) * 100 : 0;
@@ -234,7 +241,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
             <tr className="xl-tabela-total">
               <th scope="row">TOTAL</th>
               {linhas.map(l => {
-                const v = porAtividade[String(l.atividadeId)];
+                const v = porAtividade[l.codigo];
                 const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
                 const realizado = v ? Number(v) : 0;
                 const pct = planejado > 0 ? (realizado / planejado) * 100 : 0;
@@ -312,13 +319,15 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           <button
             type="button"
             className="eap-btn"
-            disabled={!selecionada || registrar.isPending || !quantidade.trim() || !frentes.data?.length || !equipes.data?.length || !unidades.data?.length}
+            disabled={!selecionada || registrar.isPending || !quantidade.trim()}
             onClick={() => {
               if (!selecionada) return;
+              // Frente/equipe/unidade são opcionais (o schema já as aceita nulas).
+              // Antes, obra sem organograma cadastrado tinha o botão travado para
+              // sempre, sem explicar o motivo.
               const frontId = frentes.data?.[0]?.id;
               const teamId = equipes.data?.[0]?.id;
               const unitId = unidades.data?.find(u => u.name === (unidade || ""))?.id ?? unidades.data?.[0]?.id;
-              if (!frontId || !teamId || !unitId) return;
               registrar.mutate({
                 projectId: projetoId,
                 frontId,
@@ -338,11 +347,13 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
         </div>
         <p className="prod-form-nota">
           O lançamento entra como <strong>confirmado</strong> e já conta no{" "}
-          <code>% Real</code>. Para corrigir um lançamento errado, apague o dia na
-          grade abaixo e registre de novo — editar o valor deixaria o histórico
-          mentindo.
+          <code>% Real</code>. Para corrigir, use a lista de lançamentos abaixo:
+          clique em <strong>Desfazer</strong> (a medição volta para rascunho, o que
+          foi enviado continua no histórico), depois <strong>Editar</strong> e
+          confirme de novo.
         </p>
       </div>
+      <ListaLancamentosProducao projetoId={projetoId} lancamentos={lancamentos} />
     </div>
   );
 }

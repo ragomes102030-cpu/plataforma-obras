@@ -141,6 +141,12 @@ import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@sh
 import { compararComBaseline } from "@shared/desvios-baseline";
 import { escaparCuringaLike } from "@shared/busca";
 import {
+  classificarLancamento,
+  ehDataFutura,
+  ehDaVersaoAtual,
+  recalcularAvancoReal,
+} from "./producao-progresso";
+import {
   carregarCalendarioDaObra,
   hojeNoBrasil,
   idDoCalendarioDaObra,
@@ -391,13 +397,20 @@ async function recomputeProjectProgress(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
 ): Promise<number> {
+  // Escopo = versão atual do plano. Sem isto, as atividades de versões antigas
+  // (que continuam na tabela) entravam na média e diluíam o avanço da obra:
+  // o % do projeto não batia com a soma do que aparece no cronograma.
+  const versaoAtual = await getCurrentPlanVersion(projectId);
+  const escopoVersao = versaoAtual
+    ? eq(scheduleActivities.versionId, versaoAtual.id)
+    : isNull(scheduleActivities.versionId);
   const rows = await db
     .select({
       progress: scheduleActivities.progress,
       durationDays: scheduleActivities.durationDays,
     })
     .from(scheduleActivities)
-    .where(eq(scheduleActivities.projectId, projectId));
+    .where(and(eq(scheduleActivities.projectId, projectId), escopoVersao));
   const progress = deriveProjectProgress(
     rows.map(row => ({
       progress: Number(row.progress ?? 0),
@@ -2161,22 +2174,58 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return [];
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        return db
-          .select()
-          .from(productionEntries)
-          .where(eq(productionEntries.projectId, input.projectId))
-          .orderBy(
-            desc(productionEntries.productionDate),
-            desc(productionEntries.id)
-          );
+        const [lancamentos, atividades, versaoAtual] = await Promise.all([
+          db
+            .select()
+            .from(productionEntries)
+            .where(eq(productionEntries.projectId, input.projectId))
+            .orderBy(desc(productionEntries.productionDate), desc(productionEntries.id)),
+          db
+            .select({
+              id: scheduleActivities.id,
+              versionId: scheduleActivities.versionId,
+              wbsCode: scheduleActivities.wbsCode,
+              name: scheduleActivities.name,
+              unit: scheduleActivities.unit,
+              plannedQuantity: scheduleActivities.plannedQuantity,
+            })
+            .from(scheduleActivities)
+            .where(eq(scheduleActivities.projectId, input.projectId)),
+          getCurrentPlanVersion(input.projectId),
+        ]);
+        const versaoAtualId = versaoAtual?.id ?? null;
+        const porId = new Map(atividades.map(atividade => [atividade.id, atividade]));
+        const atualPorCodigo = new Map(
+          atividades
+            .filter(atividade => ehDaVersaoAtual(atividade, versaoAtualId))
+            .map(atividade => [atividade.wbsCode, atividade])
+        );
+        // Cada lançamento carrega o código da EAP e o nome da atividade de HOJE,
+        // para a tela não mostrar um lançamento "solto" quando a versão do plano
+        // muda. `vinculo` diz se ele ainda fecha com o cronograma atual.
+        return lancamentos.map(lancamento => {
+          const origem = porId.get(lancamento.activityId);
+          const atual = origem ? atualPorCodigo.get(origem.wbsCode) : undefined;
+          return {
+            ...lancamento,
+            codigoEap: origem?.wbsCode ?? null,
+            atividadeNome: atual?.name ?? origem?.name ?? null,
+            unidade: atual?.unit ?? origem?.unit ?? null,
+            vinculo: classificarLancamento(lancamento.activityId, atividades, versaoAtualId),
+          };
+        });
       }),
     createEntry: protectedProcedure
       .input(
         z.object({
           projectId: z.number().int().positive(),
-          frontId: z.number().int().positive(),
-          teamId: z.number().int().positive(),
-          unitId: z.number().int().positive(),
+          // Frente, equipe e unidade são opcionais no schema desde a migração do
+          // organograma, mas a rota continuava exigindo as três: obra gerada do
+          // catálogo (sem gente cadastrada) recebia "Frente, equipe, unidade e
+          // atividade devem pertencer à mesma obra" e não registrava produção.
+          frontId: z.number().int().positive().optional(),
+          teamId: z.number().int().positive().optional(),
+          unitId: z.number().int().positive().optional(),
           activityId: z.number().int().positive(),
           productionDate: z.coerce.date(),
           quantity: z.number().positive().max(999999),
@@ -2195,37 +2244,47 @@ export const appRouter = router({
           .limit(1);
         if (!project)
           throw forbidden("Obra não encontrada ou sem permissão de acesso.");
+        if (ehDataFutura(input.productionDate))
+          throw badRequest(
+            `A data do lançamento (${input.productionDate.toLocaleDateString("pt-BR", { timeZone: "UTC" })}) está no futuro. Produção registra o que já aconteceu.`
+          );
         const [front, team, unit, activity] = await Promise.all([
-          db
-            .select({ id: productionFronts.id })
-            .from(productionFronts)
-            .where(
-              and(
-                eq(productionFronts.id, input.frontId),
-                eq(productionFronts.projectId, input.projectId)
-              )
-            )
-            .limit(1),
-          db
-            .select({ id: productionTeams.id })
-            .from(productionTeams)
-            .where(
-              and(
-                eq(productionTeams.id, input.teamId),
-                eq(productionTeams.projectId, input.projectId)
-              )
-            )
-            .limit(1),
-          db
-            .select({ id: productionUnits.id })
-            .from(productionUnits)
-            .where(
-              and(
-                eq(productionUnits.id, input.unitId),
-                eq(productionUnits.projectId, input.projectId)
-              )
-            )
-            .limit(1),
+          input.frontId
+            ? db
+                .select({ id: productionFronts.id })
+                .from(productionFronts)
+                .where(
+                  and(
+                    eq(productionFronts.id, input.frontId),
+                    eq(productionFronts.projectId, input.projectId)
+                  )
+                )
+                .limit(1)
+            : Promise.resolve([{ id: 0 }]),
+          input.teamId
+            ? db
+                .select({ id: productionTeams.id })
+                .from(productionTeams)
+                .where(
+                  and(
+                    eq(productionTeams.id, input.teamId),
+                    eq(productionTeams.projectId, input.projectId)
+                  )
+                )
+                .limit(1)
+            : Promise.resolve([{ id: 0 }]),
+          input.unitId
+            ? db
+                .select({ id: productionUnits.id })
+                .from(productionUnits)
+                .where(
+                  and(
+                    eq(productionUnits.id, input.unitId),
+                    eq(productionUnits.projectId, input.projectId)
+                  )
+                )
+                .limit(1)
+            : Promise.resolve([{ id: 0 }]),
           db
             .select({ id: scheduleActivities.id })
             .from(scheduleActivities)
@@ -2245,18 +2304,19 @@ export const appRouter = router({
         if (!planningNodes.length) {
           throw badRequest("Monte e valide a EAP antes de lançar produção.");
         }
-        if (!front.length || !team.length || !unit.length || !activity.length) {
-          throw badRequest(
-            "Frente, equipe, unidade e atividade devem pertencer à mesma obra."
-          );
+        if (!activity.length) {
+          throw badRequest("A atividade do lançamento não pertence a esta obra.");
         }
+        if (input.frontId && !front.length) throw badRequest("A frente informada não pertence a esta obra.");
+        if (input.teamId && !team.length) throw badRequest("A equipe informada não pertence a esta obra.");
+        if (input.unitId && !unit.length) throw badRequest("A unidade informada não pertence a esta obra.");
         const [createdId] = await db
           .insert(productionEntries)
           .values({
             projectId: input.projectId,
-            frontId: input.frontId,
-            teamId: input.teamId,
-            unitId: input.unitId,
+            frontId: input.frontId ?? null,
+            teamId: input.teamId ?? null,
+            unitId: input.unitId ?? null,
             activityId: input.activityId,
             productionDate: input.productionDate,
             quantity: input.quantity.toFixed(3),
@@ -2274,9 +2334,9 @@ export const appRouter = router({
           projectId: z.number().int().positive(),
           entries: z.array(
             z.object({
-              frontId: z.number().int().positive(),
-              teamId: z.number().int().positive(),
-              unitId: z.number().int().positive(),
+              frontId: z.number().int().positive().optional(),
+              teamId: z.number().int().positive().optional(),
+              unitId: z.number().int().positive().optional(),
               activityId: z.number().int().positive(),
               productionDate: z.coerce.date(),
               quantity: z.number().positive().max(999999),
@@ -2291,14 +2351,21 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const frontIds = Array.from(new Set(input.entries.map(item => item.frontId)));
-        const teamIds = Array.from(new Set(input.entries.map(item => item.teamId)));
-        const unitIds = Array.from(new Set(input.entries.map(item => item.unitId)));
-        const activityIds = Array.from(new Set(input.entries.map(item => item.activityId)));
+        const futura = input.entries.find(item => ehDataFutura(item.productionDate));
+        if (futura)
+          throw badRequest(
+            `A data do lançamento (${futura.productionDate.toLocaleDateString("pt-BR", { timeZone: "UTC" })}) está no futuro. Produção registra o que já aconteceu.`
+          );
+        const ids = (valores: (number | undefined)[]) =>
+          Array.from(new Set(valores.filter((valor): valor is number => typeof valor === "number")));
+        const frontIds = ids(input.entries.map(item => item.frontId));
+        const teamIds = ids(input.entries.map(item => item.teamId));
+        const unitIds = ids(input.entries.map(item => item.unitId));
+        const activityIds = ids(input.entries.map(item => item.activityId));
         const [fronts, teams, units, activitiesFound] = await Promise.all([
-          db.select({ id: productionFronts.id }).from(productionFronts).where(and(eq(productionFronts.projectId, input.projectId), inArray(productionFronts.id, frontIds))),
-          db.select({ id: productionTeams.id }).from(productionTeams).where(and(eq(productionTeams.projectId, input.projectId), inArray(productionTeams.id, teamIds))),
-          db.select({ id: productionUnits.id }).from(productionUnits).where(and(eq(productionUnits.projectId, input.projectId), inArray(productionUnits.id, unitIds))),
+          frontIds.length ? db.select({ id: productionFronts.id }).from(productionFronts).where(and(eq(productionFronts.projectId, input.projectId), inArray(productionFronts.id, frontIds))) : Promise.resolve([]),
+          teamIds.length ? db.select({ id: productionTeams.id }).from(productionTeams).where(and(eq(productionTeams.projectId, input.projectId), inArray(productionTeams.id, teamIds))) : Promise.resolve([]),
+          unitIds.length ? db.select({ id: productionUnits.id }).from(productionUnits).where(and(eq(productionUnits.projectId, input.projectId), inArray(productionUnits.id, unitIds))) : Promise.resolve([]),
           db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, activityIds))),
         ]);
         if (
@@ -2311,9 +2378,9 @@ export const appRouter = router({
         await db.insert(productionEntries).values(
           input.entries.map(item => ({
             projectId: input.projectId,
-            frontId: item.frontId,
-            teamId: item.teamId,
-            unitId: item.unitId,
+            frontId: item.frontId ?? null,
+            teamId: item.teamId ?? null,
+            unitId: item.unitId ?? null,
             activityId: item.activityId,
             productionDate: item.productionDate,
             quantity: item.quantity.toFixed(3),
@@ -2333,15 +2400,119 @@ export const appRouter = router({
         const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
         if (!entry) throw notFound("Medição não encontrada nesta obra.");
         await db.update(productionEntries).set({ status: "confirmada" }).where(eq(productionEntries.id, input.entryId));
-        const [activity] = await db.select({ id: scheduleActivities.id, plannedQuantity: scheduleActivities.plannedQuantity }).from(scheduleActivities).where(eq(scheduleActivities.id, entry.activityId)).limit(1);
-        if (activity) {
-          const confirmed = await db.select({ quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.activityId, entry.activityId), eq(productionEntries.status, "confirmada")));
-          const plannedQuantity = Number(activity.plannedQuantity ?? 0);
-          const progress = plannedQuantity ? Math.min(100, Math.round((confirmed.reduce((sum, item) => sum + Number(item.quantity), 0) / plannedQuantity) * 100)) : 0;
-          await db.update(scheduleActivities).set({ progress, status: progress >= 100 ? "Concluído" : progress > 0 ? "Em andamento" : "Não iniciado" }).where(eq(scheduleActivities.id, entry.activityId));
-        }
+        // Antes a conta era feita aqui, somando só `entry.activityId`: lançamento
+        // preso a uma versão antiga da EAP não mexia em atividade nenhuma. Agora
+        // o avanço real é recalculado por código da EAP (ver producao-progresso).
+        const avanco = await recalcularAvancoReal(db, input.projectId);
         await recomputeProjectProgress(db, input.projectId);
-        return { confirmed: true as const };
+        return {
+          confirmed: true as const,
+          atividadesAtualizadas: avanco.atualizadas,
+          lancamentosSemVinculo: avanco.lancamentosPerdidos,
+        };
+      }),
+    unconfirmEntry: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), entryId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
+        if (!entry) throw notFound("Medição não encontrada nesta obra.");
+        if (entry.status !== "confirmada") return { unconfirmed: false as const };
+        // Desfazer a confirmação é o caminho para corrigir um número já enviado,
+        // sem apagar o histórico: a medição volta para rascunho e o avanço real é
+        // recalculado sem ela.
+        await db.update(productionEntries).set({ status: "rascunho" }).where(eq(productionEntries.id, input.entryId));
+        await recalcularAvancoReal(db, input.projectId);
+        await recomputeProjectProgress(db, input.projectId);
+        return { unconfirmed: true as const };
+      }),
+    updateEntry: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          entryId: z.number().int().positive(),
+          productionDate: z.coerce.date().optional(),
+          quantity: z.number().positive().max(999999).optional(),
+          measurementUnit: z.string().trim().min(1).max(32).optional(),
+          notes: z.string().trim().max(2000).optional(),
+          frontId: z.number().int().positive().optional(),
+          teamId: z.number().int().positive().optional(),
+          unitId: z.number().int().positive().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
+        if (!entry) throw notFound("Medição não encontrada nesta obra.");
+        if (entry.status === "confirmada")
+          throw conflict("Esta medição já foi confirmada. Desfaça a confirmação para corrigir.");
+        if (input.productionDate && ehDataFutura(input.productionDate))
+          throw badRequest(
+            `A data do lançamento (${input.productionDate.toLocaleDateString("pt-BR", { timeZone: "UTC" })}) está no futuro. Produção registra o que já aconteceu.`
+          );
+        const [atualizado] = await db
+          .update(productionEntries)
+          .set({
+            ...(input.productionDate ? { productionDate: input.productionDate } : {}),
+            ...(input.quantity !== undefined ? { quantity: input.quantity.toFixed(3) } : {}),
+            ...(input.measurementUnit ? { measurementUnit: input.measurementUnit } : {}),
+            ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+            ...(input.frontId ? { frontId: input.frontId } : {}),
+            ...(input.teamId ? { teamId: input.teamId } : {}),
+            ...(input.unitId ? { unitId: input.unitId } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(productionEntries.id, input.entryId))
+          .returning();
+        return atualizado;
+      }),
+    deleteEntry: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), entryId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
+        if (!entry) throw notFound("Medição não encontrada nesta obra.");
+        if (entry.status === "confirmada")
+          throw conflict("Esta medição já foi confirmada. Desfaça a confirmação para excluir.");
+        await db.delete(productionEntries).where(eq(productionEntries.id, input.entryId));
+        await recalcularAvancoReal(db, input.projectId);
+        await recomputeProjectProgress(db, input.projectId);
+        return { deleted: true as const };
+      }),
+    recalcularAvanco: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const antes = await db
+          .select({ id: scheduleActivities.id, progress: scheduleActivities.progress })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId))
+          .orderBy(scheduleActivities.id);
+        const avanco = await recalcularAvancoReal(db, input.projectId);
+        await recomputeProjectProgress(db, input.projectId);
+        const depois = await db
+          .select({ id: scheduleActivities.id, progress: scheduleActivities.progress })
+          .from(scheduleActivities)
+          .where(eq(scheduleActivities.projectId, input.projectId))
+          .orderBy(scheduleActivities.id);
+        // Devolve quantas linhas mudaram para a tela poder dizer "14 atividades
+        // saíram de 0%" em vez de um "feito" sem informação.
+        const mudaram = depois.filter(
+          (linha, indice) => Number(linha.progress ?? 0) !== Number(antes[indice]?.progress ?? 0)
+        ).length;
+        return {
+          atividadesAtualizadas: avanco.atualizadas,
+          atividadesQueMudaram: mudaram,
+          lancamentosSemVinculo: avanco.lancamentosPerdidos,
+        };
       }),
   }),
   budgets: router({
