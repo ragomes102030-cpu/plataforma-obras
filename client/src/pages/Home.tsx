@@ -123,13 +123,19 @@ export default function Home() {
     const openConfig = () => setAba("comando");
     const openEap = () => setAba("eap");
     const openAtividades = () => setAba("atividades");
+    const openAba = (evento: Event) => {
+      const alvo = (evento as CustomEvent<{ aba?: string }>).detail?.aba;
+      if (alvo) setAba(alvo as Parameters<typeof setAba>[0]);
+    };
     window.addEventListener("abrir-configuracao-llm", openConfig);
     window.addEventListener("abrir-aba-eap", openEap);
     window.addEventListener("abrir-aba-atividades", openAtividades);
+    window.addEventListener("abrir-aba", openAba);
     return () => {
       window.removeEventListener("abrir-configuracao-llm", openConfig);
       window.removeEventListener("abrir-aba-eap", openEap);
       window.removeEventListener("abrir-aba-atividades", openAtividades);
+      window.removeEventListener("abrir-aba", openAba);
     };
   }, []);
 
@@ -636,8 +642,9 @@ function Obra({
         {aba === "dashboard" ? (
           <PainelDoCronograma
             agregado={agregado}
+            linhas={grade.data?.linhas}
             projetoId={projetoId}
-            temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0}
+            nomeObra={obra}
             carregandoGrade={grade.isPending}
           />
         ) : aba === "escopo" ? (
