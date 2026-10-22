@@ -1,210 +1,149 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
 /**
- * Aba SUPRIMENTOS — controle de requisição, aprovação e entrega de materiais.
+ * Aba SUPRIMENTOS — materiais que o orçamento manda comprar.
  *
- * Material tem prazo antes de existir na obra: requisição, aprovação, fabricação,
- * inspeção, expedição, entrega. Esta aba controla cada etapa.
+ * Antes esta aba mostrava seis materiais inventados ("Concreteira ABC",
+ * "Siderúrgica XYZ") com prazo e status de entrega, ao lado do orçamento real.
+ * Numa obra de verdade isso é pior do que tela vazia: o engenheiro não sabe o
+ * que é dado e o que é exemplo.
+ *
+ * Agora ela lê a versão ativa do orçamento e lista o que existe de fato. O
+ * controle de requisição, aprovação e entrega entra quando houver onde gravar —
+ * até lá cada linha diz, com todas as letras, "sem requisição".
  */
 
 type Props = {
   projetoId: number;
 };
 
-type Suprimento = {
-  id: string;
-  material: string;
-  quantidade: number;
-  unidade: string;
-  etapa: "Requisição" | "Aprovação" | "Fabricação" | "Inspeção" | "Expedição" | "Entrega";
-  dataNecessidade: string;
-  fornecedor: string;
-  status: "No prazo" | "Em atraso" | "Entregue";
-};
+function moeda(valor: number): string {
+  return `R$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export function AbaSuprimentos({ projetoId }: Props) {
-  const [filtro, setFiltro] = useState<string>("todos");
+  const [busca, setBusca] = useState("");
 
   const budget = trpc.budgets.list.useQuery(
     { projectId: Number(projetoId) },
     { enabled: Number(projetoId) > 0 }
   );
 
-  // Suprimentos derivados do orçamento real
-  const suprimentos: Suprimento[] = [
-    {
-      id: "1",
-      material: "Concreto usinado FCK 25MPa",
-      quantidade: 220,
-      unidade: "m³",
-      etapa: "Requisição",
-      dataNecessidade: "2026-10-15",
-      fornecedor: "Concreteira ABC",
-      status: "No prazo",
-    },
-    {
-      id: "2",
-      material: "Aço CA-50 10mm",
-      quantidade: 8500,
-      unidade: "kg",
-      etapa: "Aprovação",
-      dataNecessidade: "2026-10-12",
-      fornecedor: "Siderúrgica XYZ",
-      status: "Em atraso",
-    },
-    {
-      id: "3",
-      material: "Bloco cerâmico 19x19x39",
-      quantidade: 45000,
-      unidade: "un",
-      etapa: "Fabricação",
-      dataNecessidade: "2026-11-01",
-      fornecedor: "Cerâmica Regional",
-      status: "No prazo",
-    },
-    {
-      id: "4",
-      material: "Areia média lavada",
-      quantidade: 150,
-      unidade: "m³",
-      etapa: "Expedição",
-      dataNecessidade: "2026-10-10",
-      fornecedor: "Extração Local",
-      status: "No prazo",
-    },
-    {
-      id: "5",
-      material: "Cimento CP-II 50kg",
-      quantidade: 1200,
-      unidade: "sc",
-      etapa: "Entrega",
-      dataNecessidade: "2026-10-08",
-      fornecedor: "Distribuidor Central",
-      status: "Entregue",
-    },
-    {
-      id: "6",
-      material: "Telha fibrocimento 6mm",
-      quantidade: 280,
-      unidade: "m²",
-      etapa: "Inspeção",
-      dataNecessidade: "2026-11-15",
-      fornecedor: "Telhas do Norte",
-      status: "No prazo",
-    },
-  ];
+  const itens = budget.data?.items ?? [];
+  const total = budget.data?.total ?? 0;
 
-  const suprimentosFiltrados = filtro === "todos" ? suprimentos : suprimentos.filter(s => s.status === filtro);
+  const lista = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return itens
+      .map((item) => ({
+        ...item,
+        valorTotal: Number(item.quantity) * Number(item.unitPrice),
+      }))
+      .filter((item) => {
+        if (!termo) return true;
+        return `${item.code} ${item.description}`.toLowerCase().includes(termo);
+      })
+      .sort((a, b) => b.valorTotal - a.valorTotal);
+  }, [busca, itens]);
 
-  const porEtapa = suprimentos.reduce((acc, s) => {
-    acc[s.etapa] = (acc[s.etapa] ?? 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const porStatus = suprimentos.reduce((acc, s) => {
-    acc[s.status] = (acc[s.status] ?? 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const carregando = budget.isPending;
+  const erro = budget.isError;
 
   return (
     <div className="xl-painel">
       <div className="xl-painel-intro">
         <div>
           <span className="xl-painel-kicker">SUPRIMENTOS</span>
-          <h2>{suprimentos.length} materiais em controle</h2>
+          <h2>
+            {carregando
+              ? "Lendo orçamento…"
+              : erro
+                ? "Orçamento indisponível"
+                : `${itens.length} materiais no orçamento`}
+          </h2>
           <p>
-            {porStatus["No prazo"] ?? 0} no prazo, {porStatus["Em atraso"] ?? 0} em atraso, {porStatus["Entregue"] ?? 0} entregues
+            {carregando
+              ? "Buscando os itens da versão ativa…"
+              : erro
+                ? "Não foi possível ler os itens. Tente novamente."
+                : `${moeda(total)} em materiais e serviços previstos`}
           </p>
         </div>
         <div className="xl-filtros">
-          <button
-            type="button"
-            className={`xl-btn ${filtro === "todos" ? "xl-btn-primary" : ""}`}
-            onClick={() => setFiltro("todos")}
-          >
-            Todos
-          </button>
-          <button
-            type="button"
-            className={`xl-btn ${filtro === "No prazo" ? "xl-btn-primary" : ""}`}
-            onClick={() => setFiltro("No prazo")}
-          >
-            No prazo
-          </button>
-          <button
-            type="button"
-            className={`xl-btn ${filtro === "Em atraso" ? "xl-btn-primary" : ""}`}
-            onClick={() => setFiltro("Em atraso")}
-          >
-            Em atraso
-          </button>
-          <button
-            type="button"
-            className={`xl-btn ${filtro === "Entregue" ? "xl-btn-primary" : ""}`}
-            onClick={() => setFiltro("Entregue")}
-          >
-            Entregues
-          </button>
+          <input
+            type="search"
+            className="xl-campo-busca"
+            placeholder="Buscar material ou código"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            disabled={carregando || erro}
+            aria-label="Buscar material ou código"
+          />
         </div>
       </div>
 
-      {/* Cards de resumo */}
-      <div className="xl-cartoes">
-        <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Requisição</span>
-          <strong className="xl-cartao-valor">{porEtapa["Requisição"] ?? 0}</strong>
-        </div>
-        <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Aprovação</span>
-          <strong className="xl-cartao-valor">{porEtapa["Aprovação"] ?? 0}</strong>
-        </div>
-        <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Fabricação</span>
-          <strong className="xl-cartao-valor">{porEtapa["Fabricação"] ?? 0}</strong>
-        </div>
-        <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Expedição</span>
-          <strong className="xl-cartao-valor">{porEtapa["Expedição"] ?? 0}</strong>
-        </div>
-        <div className="xl-cartao">
-          <span className="xl-cartao-titulo">Entrega</span>
-          <strong className="xl-cartao-valor">{porEtapa["Entrega"] ?? 0}</strong>
-        </div>
+      <div className="xl-aviso">
+        <strong>O que já está pronto e o que falta.</strong>
+        <p>
+          A lista abaixo é real: vem do orçamento. Requisição, aprovação, fabricação e entrega
+          ainda não têm onde ser gravadas — quando tiverem, cada linha ganha prazo e fornecedor.
+          Até lá, toda linha aparece como <em>sem requisição</em>.
+        </p>
       </div>
 
-      {/* Tabela de suprimentos */}
+      {erro && (
+        <div className="xl-aviso xl-aviso-erro">
+          <strong>Os itens não carregaram.</strong>
+          <button type="button" className="xl-btn xl-btn-primary" onClick={() => void budget.refetch()}>
+            Tentar de novo
+          </button>
+        </div>
+      )}
+
       <div className="xl-tabela-container">
         <table className="xl-tabela">
           <thead>
             <tr>
+              <th>Código</th>
               <th>Material</th>
+              <th>Unidade</th>
               <th>Quantidade</th>
-              <th>Etapa</th>
-              <th>Data necessidade</th>
-              <th>Fornecedor</th>
-              <th>Status</th>
+              <th>Valor unit.</th>
+              <th>Valor total</th>
+              <th>Situação</th>
             </tr>
           </thead>
           <tbody>
-            {suprimentosFiltrados.map(s => (
-              <tr key={s.id}>
-                <td>{s.material}</td>
-                <td>{s.quantidade.toLocaleString("pt-BR")} {s.unidade}</td>
-                <td>
-                  <span className={`xl-badge xl-badge-${s.etapa.toLowerCase().replace(/[ãáà]/g, "a")}`}>
-                    {s.etapa}
-                  </span>
-                </td>
-                <td>{s.dataNecessidade}</td>
-                <td>{s.fornecedor}</td>
-                <td>
-                  <span className={`xl-badge xl-badge-${s.status.toLowerCase().replace(/[ãáà]/g, "a").replace(/\s/g, "-")}`}>
-                    {s.status}
-                  </span>
+            {carregando ? (
+              <tr>
+                <td colSpan={7} className="xl-tabela-vazia">
+                  Carregando materiais…
                 </td>
               </tr>
-            ))}
+            ) : lista.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="xl-tabela-vazia">
+                  {itens.length === 0
+                    ? "O orçamento desta obra ainda não tem itens. Importe o orçamento para ver os materiais aqui."
+                    : "Nenhum material com esse termo."}
+                </td>
+              </tr>
+            ) : (
+              lista.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.code}</td>
+                  <td>{item.description}</td>
+                  <td>{item.unit}</td>
+                  <td>{Number(item.quantity).toLocaleString("pt-BR")}</td>
+                  <td>{moeda(Number(item.unitPrice))}</td>
+                  <td>{moeda(item.valorTotal)}</td>
+                  <td>
+                    <span className="xl-badge">sem requisição</span>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
