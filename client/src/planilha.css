@@ -1166,6 +1166,9 @@ tr:hover .xl-codigo {
   background: #fff;
 }
 
+/* 53 atividades em 520px mostravam 15 linhas; a obra inteira precisa caber na leitura. */
+.pl-gantt-scroll { max-height: 72vh; }
+
 .pl-gantt,
 .pl-lob {
   display: block;
