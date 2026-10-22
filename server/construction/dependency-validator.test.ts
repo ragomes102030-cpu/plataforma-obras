@@ -101,6 +101,25 @@ describe("validateDependencies", () => {
     );
     expect(result.issues[0].severity).toBe("error");
     expect(result.issues[0].message).toContain("2");
+    // A mensagem tem de dizer ONDE mexer. "5 componentes separados" não ajuda
+    // ninguém a achar o elo que falta; o nome da atividade em que cada bloco
+    // começa, sim.
+    expect(result.issues[0].message).toContain("A (3 atividades)");
+    expect(result.issues[0].message).toContain("D (3 atividades)");
+    expect(result.issues[0].message).not.toContain("Atividades isoladas: .");
+  });
+
+  it("descreve os blocos na mesma ordem, mesmo com a entrada embaralhada", () => {
+    // O engenheiro corrige um elo por vez e recalcula. Se a numeração dos
+    // blocos dançar entre um recálculo e outro, ele perde a referência do que
+    // já arrumou.
+    const ordenadas = [activity("A"), activity("B"), activity("C"), activity("D")];
+    const ligacoes = [dependency("A", "B"), dependency("C", "D")];
+    const primeira = validateDependencies(ordenadas, ligacoes).issues[0].message;
+    const segunda = validateDependencies([...ordenadas].reverse(), ligacoes).issues[0]
+      .message;
+
+    expect(segunda).toBe(primeira);
   });
 
   it("rejeita atividade isolada sem nenhuma ligação", () => {
@@ -113,6 +132,10 @@ describe("validateDependencies", () => {
     expect(result.issues.map(issue => issue.code)).toContain(
       "disconnected_network"
     );
+    // Atividade avulsa tem de ser nomeada: é o caso mais fácil de corrigir e o
+    // mais fácil de passar despercebido num total de "3 componentes".
+    expect(result.issues[0].message).toContain("ORFA");
+    expect(result.issues[0].message).toContain("não têm nenhuma ligação");
   });
 
   it("aceita rede única a partir de uma raiz, com TTIs paralelas legítimas", () => {
