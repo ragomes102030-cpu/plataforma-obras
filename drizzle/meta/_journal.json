@@ -125,6 +125,13 @@
       "when": 1792612584095,
       "tag": "0017_medicoes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792700000000,
+      "tag": "0018_baseline_version_id",
+      "breakpoints": true
     }
   ],
   "version": "7",

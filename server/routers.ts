@@ -3669,7 +3669,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, approvedVersionId: null as number | null };
+        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -3689,7 +3689,22 @@ export const appRouter = router({
           .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
           .orderBy(desc(projectPlanVersions.versionNumber))
           .limit(1);
-        return { activities, dependencies, resources, baselines, eapApproved: Boolean(approved), approvedVersionId: approved?.id ?? null };
+        // `eapApproved` responde sobre a versão de TRABALHO, não sobre "existe
+        // alguma versão aprovada no histórico". Com a v3 aprovada e a v4 em
+        // rascunho, a tela de baseline liberava a captura e o servidor recusava
+        // depois ("Só uma versão aprovada pode virar baseline"): o engenheiro
+        // gastava um clique — e uma dúvida — para descobrir um gate que já
+        // estava fechado antes de ele começar.
+        return {
+          activities,
+          dependencies,
+          resources,
+          baselines,
+          eapApproved: currentVersion?.status === "approved",
+          approvedVersionId: approved?.id ?? null,
+          currentVersionNumber: currentVersion?.versionNumber ?? null,
+          currentVersionStatus: currentVersion?.status ?? null,
+        };
       }),
     grade: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -4056,9 +4071,7 @@ export const appRouter = router({
         }
         // Uma baseline congela uma decisão de prazo. Congelar a versão errada é
         // pior que não congelar: o registro fica ativo, o Gantt o usa como
-        // referência, e ninguém consegue dizer depois qual versão ele mede —
-        // `schedule_baselines` não tem `versionId`, então a pergunta fica sem
-        // resposta no banco.
+        // referência, e ninguém consegue dizer depois qual versão ele mede.
         //
         // `getCurrentPlanVersion` devolve a versão de MAIOR número sem filtrar
         // status (plan-versions.ts:398-404). Aprovação e baseline são etapas
