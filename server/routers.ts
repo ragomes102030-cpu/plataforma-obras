@@ -137,8 +137,9 @@ import {
 } from "./financeiro/medicao";
 import { coletarDadosDesembolso } from "./financeiro/desembolso-dados";
 import { computeDesembolso } from "./financeiro/desembolso";
-import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
+import { gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import { compararComBaseline } from "@shared/desvios-baseline";
+import { deslocamentoEmDiasUteis, duracaoEmDiasUteis, fimDoPlanoEmDias, planejadoNoDia } from "@shared/posicao-no-plano";
 import { escaparCuringaLike } from "@shared/busca";
 import {
   classificarLancamento,
@@ -156,7 +157,7 @@ import {
   salvarExcecaoDoCalendario,
   semearCalendarioPadrao,
 } from "./construction/calendario-obra";
-import { indexOf as calendarIndexOf } from "../shared/work-calendar";
+import { dateAt, indexOf as calendarIndexOf } from "../shared/work-calendar";
 import {
   allowedSourcesFor,
   canTransitionFinding,
@@ -3985,7 +3986,9 @@ export const appRouter = router({
           db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
-        const hoje = new Date().toISOString().slice(0,10);
+        const inicioIso = localIso(inicio);
+        const calendarioDaGrade = (await carregarCalendarioDaObra(db, input.projectId, inicio.getFullYear())).calendar;
+        const hoje = localIso(new Date());
         // Produção é somada pelo CÓDIGO da EAP (1.2.3), que sobrevive à regeração
         // do plano; o id da linha, não.
         const codigoPorAtividade = new Map<number,string>();
@@ -3997,10 +4000,12 @@ export const appRouter = router({
           executadoPorCodigo.set(codigo,(executadoPorCodigo.get(codigo)??0)+Number(entry.quantity));
         }
         const entradas = activities.map(a => {
-          const d = new Date(inicio); d.setUTCDate(d.getUTCDate()+Number(a.startOffset??0));
-          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:d.toISOString().slice(0,10), duracao:Number(a.durationDays??0), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0 };
+          // A régua é o CPM (dias úteis). Antes, `startOffset` zerado em todas as
+          // atividades empilhava as 53 barras no primeiro dia e fazia o painel
+          // anunciar 120 dias de prazo enquanto a Curva S mostrava 580.
+          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0 };
         });
-        const linhasDerivadas = gradeDoCronograma(CALENDARIO_CORRIDO,hoje,entradas);
+        const linhasDerivadas = gradeDoCronograma(calendarioDaGrade,hoje,entradas);
         const linhas = linhasDerivadas.map((l,i)=>({ ...l, atividadeId: activities.find(a=>a.wbsCode===l.codigo)?.id ?? 0 }));
         const idsPorCodigo = Object.fromEntries(linhas.map(l=>[l.codigo,l.atividadeId]));
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
@@ -6274,70 +6279,51 @@ export const appRouter = router({
         const entries = await db.select({ productionDate: productionEntries.productionDate, quantity: productionEntries.quantity, activityId: productionEntries.activityId }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
         if (!activities.length) return { available: true as const, points: [] as { date: string; plannedPct: number; actualPct: number }[], note: "Sem atividades no cronograma." };
         const asOf = input.asOf ?? new Date();
-        const startMs = project?.plannedStart?.getTime() ?? asOf.getTime();
-        const start = new Date(startMs);
-        const endOffset = Math.max(1, ...activities.map(a => (a.earlyStart ?? a.startOffset) + a.durationDays));
-        const end = new Date(startMs + (endOffset - 1) * 86400000);
-        const endMs = Math.max(end.getTime(), asOf.getTime(), ...entries.map(e => new Date(e.productionDate).getTime()));
-        const totalDays = Math.max(1, Math.ceil((endMs - startMs) / 86400000));
-        const step = Math.max(1, Math.ceil(totalDays / 90));
+        const inicioProjeto = project?.plannedStart ?? asOf;
+        const inicioIso = localIso(inicioProjeto);
+        const calendario = (await carregarCalendarioDaObra(db, input.projectId, inicioProjeto.getFullYear())).calendar;
+        const ultimoDiaDoPlano = fimDoPlanoEmDias(activities);
+        const hojeNoEixo = Math.max(0, calendarIndexOf(calendario, inicioIso, localIso(asOf)));
+        const ultimoLancamento = entries.reduce(
+          (maior, e) => Math.max(maior, calendarIndexOf(calendario, inicioIso, localIso(new Date(e.productionDate)))),
+          0
+        );
+        const ultimoOffset = Math.max(ultimoDiaDoPlano, hojeNoEixo, ultimoLancamento);
+        const step = Math.max(1, Math.ceil((ultimoOffset + 1) / 90));
         const totalPlannedQty = activities.reduce((sum, a) => sum + Number(a.plannedQuantity ?? 0), 0);
         const actualByDay = new Map<string, number>();
         for (const entry of entries) {
-          const key = new Date(entry.productionDate).toISOString().slice(0, 10);
+          const key = localIso(new Date(entry.productionDate));
           actualByDay.set(key, (actualByDay.get(key) ?? 0) + Number(entry.quantity));
         }
         const sortedActualDays = [...actualByDay.keys()].sort();
         const points: { date: string; plannedPct: number; actualPct: number }[] = [];
         let cumActual = 0;
-        let dayIndex = 0;
         let actualCursor = 0;
-        for (let offset = 0; offset <= totalDays; offset += step) {
-          const dayMs = startMs + offset * 86400000;
-          const dayDate = new Date(dayMs);
-          const dayKey = dayDate.toISOString().slice(0, 10);
+        // Eixo em DIAS ÚTEIS, convertido pelo calendário da obra. O `earlyStart`
+        // do CPM é um índice de dia útil; somá-lo a uma duração de calendário
+        // esticava a obra de 120 para 580 dias e derrubava o planejado de 67%
+        // para 29%. Agora painel, Curva S e Gantt contam a mesma obra.
+        const registrar = (offset: number) => {
+          const dayKey = dateAt(calendario, inicioIso, offset);
           while (actualCursor < sortedActualDays.length && sortedActualDays[actualCursor]! <= dayKey) {
             cumActual += actualByDay.get(sortedActualDays[actualCursor]!) ?? 0;
             actualCursor += 1;
           }
-          let weightedPlanned = 0;
-          for (const activity of activities) {
-            const plannedQuantity = Number(activity.plannedQuantity ?? 0);
-            if (plannedQuantity <= 0) continue;
-            const plannedStart = activity.earlyStart ?? activity.startOffset;
-            const progress = Math.max(0, Math.min(100, ((offset - plannedStart) / Math.max(1, activity.durationDays)) * 100));
-            weightedPlanned += plannedQuantity * progress;
-          }
-          const plannedPct = totalPlannedQty ? weightedPlanned / totalPlannedQty : 0;
           const actualPct = totalPlannedQty ? Math.min(100, (cumActual / totalPlannedQty) * 100) : 0;
           points.push({
             date: dayKey,
-            plannedPct: Math.round(plannedPct * 10) / 10,
+            plannedPct: planejadoNoDia(activities, offset),
             actualPct: Math.round(actualPct * 10) / 10,
           });
-          dayIndex += 1;
+        };
+        for (let offset = 0; offset <= ultimoOffset; offset += step) {
+          registrar(offset);
         }
-        if (points.length && points[points.length - 1]!.date < dayKeyAt(endMs)) {
-          const dayKey = dayKeyAt(endMs);
-          while (actualCursor < sortedActualDays.length && sortedActualDays[actualCursor]! <= dayKey) {
-            cumActual += actualByDay.get(sortedActualDays[actualCursor]!) ?? 0;
-            actualCursor += 1;
-          }
-          let weightedPlanned = 0;
-          for (const activity of activities) {
-            const plannedQuantity = Number(activity.plannedQuantity ?? 0);
-            if (plannedQuantity <= 0) continue;
-            const plannedStart = activity.earlyStart ?? activity.startOffset;
-            const progress = Math.max(0, Math.min(100, ((endOffset - plannedStart) / Math.max(1, activity.durationDays)) * 100));
-            weightedPlanned += plannedQuantity * progress;
-          }
-          points.push({
-            date: dayKey,
-            plannedPct: Math.round((totalPlannedQty ? weightedPlanned / totalPlannedQty : 0) * 10) / 10,
-            actualPct: Math.round(Math.min(100, totalPlannedQty ? (cumActual / totalPlannedQty) * 100 : 0) * 10) / 10,
-          });
+        const dataFinal = dateAt(calendario, inicioIso, ultimoOffset);
+        if (points[points.length - 1]!.date !== dataFinal) {
+          registrar(ultimoOffset);
         }
-        void dayIndex;
         return { available: true as const, points, note: null as string | null };
       }),
     leveling: protectedProcedure

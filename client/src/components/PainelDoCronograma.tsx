@@ -264,7 +264,7 @@ export function PainelDoCronograma({
           <h2 className="pd-titulo">{nomeObra ?? "Obra"}</h2>
           <p className="pd-sub">
             {dataLonga(hoje)} · {status.total} atividades
-            {agregado.prazoDias ? ` · plano de ${agregado.prazoDias} dias` : ""}
+            {agregado.prazoDias ? ` · plano de ${agregado.prazoDias} dias corridos` : ""}
           </p>
         </div>
         <span className={`pd-selo pd-selo-${selo.tipo}`}>{selo.rotulo}</span>
