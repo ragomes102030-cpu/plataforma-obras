@@ -118,9 +118,12 @@ jobs:
           docker run --rm -v "${PWD}/backup:/backup" "${PGIMAGE}" \
             pg_restore --list "/backup/$(basename "${ARQ}")" > backup/toc.txt
 
-          tabelas="$(grep -c ' TABLE public\.' backup/toc.txt || true)"
-          dados="$(grep -c ' TABLE DATA public\.' backup/toc.txt || true)"
-          echo "Objetos TABLE: ${tabelas} | TABLE DATA: ${dados}"
+          # O indice do pg_restore escreve `TABLE <schema> <nome> <dono>`, sem
+          # ponto entre schema e nome. A primeira versao desta checagem usava
+          # ` TABLE public\.` e por isso lia zero em um dump perfeito.
+          tabelas="$(grep -c ' TABLE public ' backup/toc.txt || true)"
+          dados="$(grep -c ' TABLE DATA public ' backup/toc.txt || true)"
+          echo "Objetos TABLE: ${tabelas} | TABLE DATA: ${dados} | linhas no indice: $(wc -l < backup/toc.txt)"
 
           # 42 tabelas de dominio + __drizzle_migrations. Abaixo de 40 e dump quebrado.
           if [ "${tabelas}" -lt 40 ]; then
