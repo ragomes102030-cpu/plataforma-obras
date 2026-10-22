@@ -230,8 +230,10 @@ jobs:
           set -euo pipefail
           gpg --batch --yes --symmetric --cipher-algo AES256 \
               --passphrase "${SENHA}" --output "${ARQ}.gpg" "${ARQ}"
-          # O dump em claro nunca sai da maquina do runner.
-          shred -u "${ARQ}"
+          # O dump em claro nunca sai da maquina do runner. `sudo` porque o
+          # arquivo foi criado DENTRO do container (dono postgres), e o usuario
+          # do runner nao pode apagar o que nao e dele.
+          sudo shred -u "${ARQ}" || sudo rm -f "${ARQ}"
           ls -l "${ARQ}.gpg"
 
       - name: Publicar o artifact cifrado (90 dias)
