@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { localIsoDe } from "@/lib/datas";
 import { PainelLookahead } from "./PainelLookahead";
+import { EstadoCarregando } from "./EstadoCarregando";
 
 /**
  * A aba PRODUÇÃO: a fonte do `% Real`.
@@ -73,6 +74,24 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   }, [gradeCrono.data]);
 
   const erro = registrar.isError ? registrar.error.message : null;
+
+  // Carregando ≠ "não há atividades para medir". Esta aba dizia isso com 10-30 s
+  // de espera pela frente, numa obra que tem 53 atividades.
+  const carregando =
+    projetoId > 0 &&
+    (gradeCrono.isPending || grade.isPending || frentes.isPending || equipes.isPending || unidades.isPending);
+
+  if (carregando) {
+    return (
+      <div className="xl-painel">
+        <EstadoCarregando
+          rotulo="Carregando o controle de produção…"
+          detalhe="Atividades, apontamentos, frentes de serviço e equipes vêm de consultas separadas."
+          linhas={5}
+        />
+      </div>
+    );
+  }
 
   if (linhas.length === 0) {
     return (

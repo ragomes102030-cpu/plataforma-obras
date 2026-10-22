@@ -4386,3 +4386,83 @@ tr:hover .xl-codigo {
     grid-template-columns:46px 1fr 78px;
   }
 }
+
+/* ==========================================================================
+   Carregamento honesto (Fase 1 — 22/10/2026)
+
+   Antes: enquanto a consulta estava em voo, os paineis renderizavam o estado
+   vazio — "Planejamento ainda nao entrou no cronograma", "0 catalogos",
+   "Sem dados". Com 10-30 s de espera no plano gratuito, isso le como "perdi
+   os dados". Agora o painel mostra este bloco enquanto `isPending`.
+   ========================================================================== */
+.xl-carregando {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.xl-carregando-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1f2933;
+  font-size: 14px;
+}
+
+.xl-carregando-topo strong {
+  font-weight: 700;
+}
+
+.xl-carregando-spinner {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cfd6dd;
+  border-top-color: #2f6f8f;
+  border-radius: 50%;
+  animation: xl-carregando-girar 0.8s linear infinite;
+}
+
+@keyframes xl-carregando-girar {
+  to { transform: rotate(360deg); }
+}
+
+.xl-carregando-detalhe {
+  margin: 0;
+  max-width: 820px;
+  color: #5f6b76;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.xl-carregando-esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.xl-carregando-barra {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #eef1f4, #e3e8ed, #eef1f4);
+  background-size: 200% 100%;
+  animation: xl-carregando-brilho 1.4s ease-in-out infinite;
+}
+
+@keyframes xl-carregando-brilho {
+  0% { background-position: 0% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xl-carregando-spinner,
+  .xl-carregando-barra {
+    animation: none;
+  }
+}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildSCurve, type SCurveResult } from "@shared/s-curve";
+import { EstadoCarregando } from "./EstadoCarregando";
 
 /**
  * Aba CURVA S — valor planejado acumulado × valor realizado acumulado.
@@ -71,14 +72,45 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     return buildSCurve(curveActivities);
   }, [planejamento.data, budget.data]);
 
+  // Carregando ≠ vazio. As duas consultas desta aba são pesadas (atividades +
+  // itens de orçamento) e, no plano gratuito, a tela ficava 10-30 s dizendo
+  // "sem dados" para uma obra que tem os dois.
+  if (Number(projetoId) > 0 && (planejamento.isPending || budget.isPending)) {
+    return (
+      <div className="xl-painel">
+        <EstadoCarregando
+          rotulo="Carregando atividades e orçamento…"
+          detalhe="A curva S cruza o caminho crítico com o valor de cada item de orçamento."
+          linhas={4}
+        />
+      </div>
+    );
+  }
+
   if (!curve) {
+    // Dizer o motivo certo importa: antes a tela mandava "calcular CPM E
+    // definir orçamento" mesmo quando só um dos dois faltava, e o engenheiro
+    // ia procurar defeito no lugar errado.
+    const atividades = planejamento.data?.activities ?? [];
+    const itens = budget.data?.items ?? [];
+    const motivos: string[] = [];
+    if (atividades.length === 0) motivos.push("a obra não tem atividades no planejamento");
+    else if (!atividades.some(a => a.cpmCalculatedAt)) motivos.push("o CPM nunca foi calculado (aba BASELINE ou GANTT → Calcular CPM)");
+    else if (!atividades.some(a => a.cpmCalculatedAt && a.durationDays > 0)) motivos.push("as atividades estão com duração zero");
+    if (itens.length === 0) motivos.push("a obra não tem itens de orçamento aprovados");
+    else if (!itens.some(i => i.wbsNodeId)) motivos.push("os itens de orçamento não estão ligados à EAP");
+
     return (
       <div className="xl-painel">
         <div className="xl-painel-intro">
           <div>
             <span className="xl-painel-kicker">CURVA S</span>
             <h2>Sem dados para curva S</h2>
-            <p>A curva S precisa de atividades com CPM calculado e orçamento definido.</p>
+            <p>
+              {motivos.length > 0
+                ? `Falta: ${motivos.join("; ")}.`
+                : "Nenhuma atividade ficou com peso de custo — o valor do orçamento não chegou às atividades."}
+            </p>
           </div>
         </div>
       </div>

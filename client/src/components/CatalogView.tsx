@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { BookOpen, Calculator, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { EstadoCarregando } from "./EstadoCarregando";
 
 const typeLabels = {
   material: "Material",
@@ -24,6 +25,10 @@ export function CatalogView() {
   const [groupQuery, setGroupQuery] = useState("");
   const toggleGroup = (key: string) => setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   const catalogQuery = trpc.catalog.list.useQuery({ catalogId, compositionId });
+  // A consulta devolve a base inteira (12 mil itens em 22/10/2026). Enquanto ela
+  // não chega, a tela mostrava "0 catálogos / 0 itens" E o cartão "Como começar
+  // o catálogo", mandando importar uma base que já existia. Carregando ≠ vazio.
+  const carregandoCatalogo = catalogQuery.isPending;
 
   const [catalogName, setCatalogName] = useState("");
   const [sourceType, setSourceType] = useState<"propria" | "SINAPI" | "SEINFRA" | "fornecedor">("propria");
@@ -157,12 +162,20 @@ export function CatalogView() {
       </div>
 
       <div className="catalog-summary-grid">
-        <div className="module-card budget-summary-card"><span className="eyebrow">CATÁLOGOS</span><strong>{catalogQuery.data?.catalogs.length ?? 0}</strong><p>SINAPI, SEINFRA, própria ou fornecedor.</p></div>
-        <div className="module-card budget-summary-card"><span className="eyebrow">ITENS DE PREÇO</span><strong>{catalogQuery.data?.priceItems.length ?? 0}</strong><p>{selectedCatalog?.name ?? "Selecione um catálogo"}.</p></div>
-        <div className="module-card budget-summary-card budget-total-card"><span className="eyebrow">CUSTO UNITÁRIO</span><strong>{money(catalogQuery.data?.total ?? 0)}</strong><p>Coeficiente × preço congelado na composição.</p></div>
+        <div className="module-card budget-summary-card"><span className="eyebrow">CATÁLOGOS</span><strong>{carregandoCatalogo ? "…" : (catalogQuery.data?.catalogs.length ?? 0)}</strong><p>SINAPI, SEINFRA, própria ou fornecedor.</p></div>
+        <div className="module-card budget-summary-card"><span className="eyebrow">ITENS DE PREÇO</span><strong>{carregandoCatalogo ? "…" : (catalogQuery.data?.priceItems.length ?? 0)}</strong><p>{carregandoCatalogo ? "Carregando o catálogo…" : (selectedCatalog?.name ?? "Selecione um catálogo")}.</p></div>
+        <div className="module-card budget-summary-card budget-total-card"><span className="eyebrow">CUSTO UNITÁRIO</span><strong>{carregandoCatalogo ? "…" : money(catalogQuery.data?.total ?? 0)}</strong><p>Coeficiente × preço congelado na composição.</p></div>
       </div>
 
-      {!(catalogQuery.data?.catalogs.length) && (
+      {carregandoCatalogo && (
+        <EstadoCarregando
+          rotulo="Carregando o catálogo e os itens de preço…"
+          detalhe="A base tem mais de doze mil itens e vem inteira nesta consulta. Em conexão lenta isso leva alguns segundos."
+          linhas={4}
+        />
+      )}
+
+      {!carregandoCatalogo && !(catalogQuery.data?.catalogs.length) && (
         <section className="module-card catalog-onboarding-card">
           <div className="panel-heading"><div><h3>Como começar o catálogo</h3><p>Importe a base oficial abaixo. Ela é a fonte da estrutura (EAP) das novas obras — sem ela, a obra é criada sem EAP.</p></div><BookOpen size={18} className="sparkle" /></div>
           <div className="focus-list"><div className="focus-item"><div className="focus-icon blue"><span>1</span></div><div><strong>Baixe a planilha da SEINFRA no site oficial</strong><span>Tabela de Insumos (I...) ou Planos de Serviços (C...), em .xls ou .xlsx. O download é manual, de propósito: mantém a auditoria de origem do preço.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>2</span></div><div><strong>Importe no formulário abaixo</strong><span>Informe o período de referência (ex.: 09/2026) e a UF. Cada importação vira um catálogo versionado; meses anteriores não são sobrescritos.</span></div></div><div className="focus-item"><div className="focus-icon blue"><span>3</span></div><div><strong>Crie a obra</strong><span>A EAP é montada a partir dos serviços (C...) importados, e cada item carrega o código oficial. Por isso o orçamento encontra o preço sem você digitá-lo.</span></div></div></div>
