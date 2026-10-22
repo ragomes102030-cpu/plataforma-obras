@@ -48,7 +48,7 @@ describe("as migrations constroem um schema utilizavel", () => {
     }
   });
 
-  it("cria as 40 tabelas e os 38 tipos de enum", async () => {
+  it("cria as 42 tabelas e os 39 tipos de enum", async () => {
     const pg = await PGlite.create();
     try {
       for (const sql of migrationsEmDisco()) await aplicarMigrations(pg, sql);
@@ -57,23 +57,23 @@ describe("as migrations constroem um schema utilizavel", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
-      // 40, e nao 41. A tabela `__drizzle_migrations` NAO vem de migration: e o
+      // 42, e nao 43. A tabela `__drizzle_migrations` NAO vem de migration: e o
       // migrador que a cria, para registrar o que ja aplicou. Contar ela aqui
       // seria esperar que o arquivo criasse a propria ficha de controle.
-      expect(tabelas.rows[0]!.n).toBe(40);
+      expect(tabelas.rows[0]!.n).toBe(42);
 
       const enums = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM pg_type t" +
           " JOIN pg_namespace n ON n.oid = t.typnamespace" +
           " WHERE n.nspname = 'public' AND t.typtype = 'e'"
       );
-      expect(enums.rows[0]!.n).toBe(38);
+      expect(enums.rows[0]!.n).toBe(39);
     } finally {
       await pg.close();
     }
   });
 
-  it("as 28 triggers de updatedAt existem e NAO sao decorativas", async () => {
+  it("as 29 triggers de updatedAt existem e NAO sao decorativas", async () => {
     // Este e o teste que a migracao nao podia provar sozinha. Uma trigger
     // `CREATE TRIGGER ... EXECUTE FUNCTION` que aponta para uma funcao ausente
     // e aceita na criacao e so falha quando alguém faz UPDATE. A coluna ficaria
@@ -86,7 +86,7 @@ describe("as migrations constroem um schema utilizavel", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers" +
           " WHERE trigger_schema = 'public'"
       );
-      expect(triggers.rows[0]!.n).toBe(28);
+      expect(triggers.rows[0]!.n).toBe(29);
 
       // Insere, altera, e confere que o updatedAt andou. Uma trigger que nao
       // dispara e uma trigger que nao existe, com a desvantagem de existir.

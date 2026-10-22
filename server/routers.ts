@@ -25,6 +25,8 @@ import {
   costEntries,
   planningConstraints,
   weeklyCommitments,
+  measurements,
+  measurementItems,
   projectPlanVersions,
   priceCatalogs,
   priceItems,
@@ -125,6 +127,16 @@ import { coletarDadosEvms } from "./construction/evm-dados";
 import { coletarDadosLookahead } from "./construction/lookahead-dados";
 import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
+import { coletarDadosMedicao } from "./financeiro/medicao-dados";
+import {
+  calcularMedicao,
+  periodosSobrepostos,
+  podeTransicionar,
+  validarPeriodo,
+  type MedicaoStatus,
+} from "./financeiro/medicao";
+import { coletarDadosDesembolso } from "./financeiro/desembolso-dados";
+import { computeDesembolso } from "./financeiro/desembolso";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
 import {
   carregarCalendarioDaObra,
@@ -6817,6 +6829,398 @@ export const appRouter = router({
           mcpProjectIds: input.mcpProjectIds ?? {},
           requestId: requestIdFrom(ctx),
         });
+      }),
+  }),
+
+  /**
+   * MEDIÇÃO E DESEMBOLSO — o fim do ciclo: planeja → executa → mede → recebe.
+   *
+   * Duas perguntas distintas, que o mercado trata em telas distintas e que aqui
+   * ficam no mesmo router porque nascem do mesmo dado:
+   *
+   *   - MEDIÇÃO: quanto da obra executada pode ser cobrado neste período, e
+   *     quanto disso já foi cobrado antes. É receita contratual.
+   *   - DESEMBOLSO: quando o dinheiro efetivamente sai, mês a mês, e para onde
+   *     ele vai se o CPI continuar no ritmo atual. É caixa.
+   *
+   * A conta da medição NÃO usa peso nem curva S. Ela usa quantidade executada
+   * confirmada menos quantidade já medida — que é como o contrato fala. Curva
+   * de avanço é para prever; medição é para cobrar.
+   *
+   * Números são sempre derivados, nunca digitados: o único dado humano na nota
+   * é o período e a retenção. Se o engenheiro digitar um valor que não fecha com
+   * a produção, em três semanas ninguém sabe qual dos dois está certo.
+   */
+  financeiro: router({
+    /** Notas de medição da obra, da mais recente para a mais antiga. */
+    medicoes: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db)
+          return {
+            available: false as const,
+            itens: [],
+            note: "Banco de dados não configurado.",
+          };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const notas = await db
+          .select({
+            id: measurements.id,
+            number: measurements.number,
+            periodStart: measurements.periodStart,
+            periodEnd: measurements.periodEnd,
+            status: measurements.status,
+            retentionPercent: measurements.retentionPercent,
+            notes: measurements.notes,
+            approvedAt: measurements.approvedAt,
+            invoicedAt: measurements.invoicedAt,
+            paidAt: measurements.paidAt,
+            createdAt: measurements.createdAt,
+          })
+          .from(measurements)
+          .where(eq(measurements.projectId, input.projectId))
+          .orderBy(desc(measurements.number));
+
+        const totais = await db
+          .select({
+            measurementId: measurementItems.measurementId,
+            bruto: sql<number>`coalesce(sum(${measurementItems.amount}), 0)::float8`,
+          })
+          .from(measurementItems)
+          .innerJoin(measurements, eq(measurements.id, measurementItems.measurementId))
+          .where(eq(measurements.projectId, input.projectId))
+          .groupBy(measurementItems.measurementId);
+
+        const brutoPorNota = new Map(totais.map(t => [t.measurementId, t.bruto]));
+        const dia = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+
+        return {
+          available: true as const,
+          note: null,
+          itens: notas.map(nota => {
+            const bruto = brutoPorNota.get(nota.id) ?? 0;
+            const retencao = (bruto * Number(nota.retentionPercent)) / 100;
+            return {
+              ...nota,
+              periodStart: dia(nota.periodStart),
+              periodEnd: dia(nota.periodEnd),
+              bruto,
+              retencao,
+              liquido: bruto - retencao,
+            };
+          }),
+        };
+      }),
+
+    /**
+     * Prévia da medição sem gravar nada — é o número que o engenheiro confere
+     * antes de assumir compromisso com o cliente.
+     */
+    simularMedicao: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          retentionPercent: z.number().min(0).max(100).default(0),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const periodoInvalido = validarPeriodo(input.periodStart, input.periodEnd);
+        if (periodoInvalido) throw badRequest(periodoInvalido);
+
+        const dados = await coletarDadosMedicao(
+          db,
+          input.projectId,
+          new Date(`${input.periodStart}T00:00:00Z`),
+          new Date(`${input.periodEnd}T23:59:59.999Z`)
+        );
+
+        return {
+          ...calcularMedicao({ ...dados, retentionPercent: input.retentionPercent }),
+          baseline: dados.baseline,
+          produzidoSemItem: dados.produzidoSemItem,
+        };
+      }),
+
+    /** Grava a medição com os itens calculados no período. */
+    criarMedicao: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          retentionPercent: z.number().min(0).max(100).default(0),
+          notes: z.string().max(2000).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const periodoInvalido = validarPeriodo(input.periodStart, input.periodEnd);
+        if (periodoInvalido) throw badRequest(periodoInvalido);
+
+        const existentes = await db
+          .select({
+            number: measurements.number,
+            periodStart: measurements.periodStart,
+            periodEnd: measurements.periodEnd,
+            status: measurements.status,
+          })
+          .from(measurements)
+          .where(eq(measurements.projectId, input.projectId));
+
+        // Período repetido é o erro mais fácil de cometer e o mais caro: cobra
+        // duas vezes a mesma produção e a conferência só aparece na auditoria.
+        const sobreposta = existentes.find(
+          nota =>
+            nota.status !== "cancelada" &&
+            periodosSobrepostos(
+              input.periodStart,
+              input.periodEnd,
+              nota.periodStart.toISOString().slice(0, 10),
+              nota.periodEnd.toISOString().slice(0, 10)
+            )
+        );
+        if (sobreposta) {
+          throw conflict(
+            `O período se sobrepõe à medição ${sobreposta.number} ` +
+              `(${sobreposta.periodStart.toISOString().slice(0, 10)} a ` +
+              `${sobreposta.periodEnd.toISOString().slice(0, 10)}).`
+          );
+        }
+
+        const dados = await coletarDadosMedicao(
+          db,
+          input.projectId,
+          new Date(`${input.periodStart}T00:00:00Z`),
+          new Date(`${input.periodEnd}T23:59:59.999Z`)
+        );
+        const medicao = calcularMedicao({ ...dados, retentionPercent: input.retentionPercent });
+
+        if (medicao.itens.length === 0) {
+          throw badRequest(
+            medicao.avisos[0] ?? "Não há produção a medir neste período."
+          );
+        }
+
+        // O número da nota é sequencial por obra e nunca reaproveita: se uma
+        // nota é cancelada, o número fica com o histórico.
+        const proximoNumero =
+          existentes.reduce((maior, nota) => Math.max(maior, nota.number), 0) + 1;
+
+        const [salva] = await db
+          .insert(measurements)
+          .values({
+            projectId: input.projectId,
+            number: proximoNumero,
+            periodStart: new Date(`${input.periodStart}T00:00:00Z`),
+            periodEnd: new Date(`${input.periodEnd}T00:00:00Z`),
+            status: "rascunho",
+            retentionPercent: input.retentionPercent.toFixed(2),
+            notes: input.notes ?? null,
+            createdBy: ctx.user.id,
+          })
+          .returning({ id: measurements.id });
+
+        await db.insert(measurementItems).values(
+          medicao.itens.map(item => ({
+            measurementId: salva.id,
+            budgetItemId: item.budgetItemId,
+            description: item.description,
+            unit: item.unit,
+            quantity: item.quantidadeNoPeriodo.toFixed(3),
+            unitPrice: item.unitPrice.toFixed(2),
+            amount: item.valorNoPeriodo.toFixed(2),
+          }))
+        );
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "measurement_created",
+          payload: {
+            measurementId: salva.id,
+            number: proximoNumero,
+            periodStart: input.periodStart,
+            periodEnd: input.periodEnd,
+            bruto: medicao.bruto,
+            liquido: medicao.liquido,
+            itens: medicao.itens.length,
+            at: new Date().toISOString(),
+          },
+        });
+
+        return {
+          id: salva.id,
+          number: proximoNumero,
+          ...medicao,
+        };
+      }),
+
+    /**
+     * Avança (ou volta) o status da nota.
+     *
+     * Transição inválida é conflito, não erro de validação: o pedido faz
+     * sentido, o estado é que não permite. `paga` e `cancelada` são terminais —
+     * dinheiro que entrou ou nota que morreu não se "descancela".
+     */
+    avancarStatus: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          measurementId: z.number().int().positive(),
+          status: z.enum([
+            "rascunho",
+            "em_aprovacao",
+            "aprovada",
+            "faturada",
+            "paga",
+            "cancelada",
+          ]),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [nota] = await db
+          .select()
+          .from(measurements)
+          .where(
+            and(
+              eq(measurements.id, input.measurementId),
+              eq(measurements.projectId, input.projectId)
+            )
+          )
+          .limit(1);
+        if (!nota) throw notFound("Medição não encontrada.");
+
+        if (nota.status === input.status) {
+          return { id: nota.id, status: nota.status };
+        }
+
+        const de = nota.status as MedicaoStatus;
+        const para = input.status as MedicaoStatus;
+        if (!podeTransicionar(de, para)) {
+          throw conflict(`Não é possível passar de "${de}" para "${para}".`);
+        }
+
+        const agora = new Date();
+        await db
+          .update(measurements)
+          .set({
+            status: para,
+            updatedAt: agora,
+            approvedAt: para === "aprovada" ? agora : nota.approvedAt,
+            approvedBy: para === "aprovada" ? ctx.user.id : nota.approvedBy,
+            invoicedAt: para === "faturada" ? agora : nota.invoicedAt,
+            paidAt: para === "paga" ? agora : nota.paidAt,
+          })
+          .where(eq(measurements.id, nota.id));
+
+        await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: `measurement_${para}`,
+          payload: {
+            measurementId: nota.id,
+            number: nota.number,
+            de,
+            para,
+            at: agora.toISOString(),
+          },
+        });
+
+        return { id: nota.id, status: para };
+      }),
+
+    /**
+     * Curva de desembolso: o que já saiu, o que está planejado e o que deve sair
+     * se o custo continuar no ritmo medido pelo CPI.
+     *
+     * O CPI vem do EVM de propósito — duas contas de CPI na mesma obra é a
+     * receita para o painel de custo e o painel de caixa discordarem.
+     */
+    desembolso: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const asOfIso = input.asOf ?? localIso(new Date());
+        const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
+
+        const dados = await coletarDadosDesembolso(
+          db,
+          input.projectId,
+          asOfIso,
+          currentPlanVersionId
+        );
+
+        const evmDados = await coletarDadosEvms(
+          db,
+          input.projectId,
+          new Date(`${asOfIso}T23:59:59.999Z`),
+          currentPlanVersionId
+        );
+        const evm = computeEvm({
+          asOfIso: evmDados.asOfIso,
+          plannedStartIso: evmDados.plannedStartIso,
+          calendar: evmDados.calendar,
+          baseline: evmDados.baseline,
+          items: evmDados.items,
+          activities: evmDados.activities,
+          actualByActivity: evmDados.actualByActivity,
+          costByActivity: evmDados.costByActivity,
+          costByItem: evmDados.costByItem,
+          costUnallocated: evmDados.costUnallocated,
+          costEntryCount: evmDados.costEntryCount,
+        });
+
+        // CPI sem arredondar: `evm.cpi` é exibido com 2 casas, e usar o valor
+        // exibido para projetar dinheiro real espalha o erro por todo o futuro.
+        const cpi = evm.ac && evm.ac > 0 ? evm.ev / evm.ac : null;
+
+        const resultado = computeDesembolso({
+          plannedStartIso: dados.plannedStartIso,
+          calendar: dados.calendar,
+          atividades: dados.atividades,
+          custoRealPorMes: dados.custoRealPorMes,
+          hojeMes: asOfIso.slice(0, 7),
+          cpi,
+        });
+
+        const alertas = [...resultado.alertas];
+        if (dados.atividadesSemItem > 0) {
+          alertas.push(
+            `${dados.atividadesSemItem} atividade(s) sem item de orçamento não entram na curva planejada — o desembolso previsto está subestimado.`
+          );
+        }
+
+        return {
+          available: true as const,
+          asOf: asOfIso,
+          ...resultado,
+          alertas,
+          cpi,
+          atividadesSemItem: dados.atividadesSemItem,
+        };
       }),
   }),
 

@@ -26,7 +26,7 @@
 
 | Documento | Para quê |
 | --- | --- |
-| [DATA_MODEL.md](DATA_MODEL.md) | Modelo de dados (40 tabelas de domínio) |
+| [DATA_MODEL.md](DATA_MODEL.md) | Modelo de dados (42 tabelas de domínio) |
 | [INCIDENTE-2026-10-12-MIGRACOES-NAO-APLICADAS.md](INCIDENTE-2026-10-12-MIGRACOES-NAO-APLICADAS.md) | O incidente que originou a guarda de migração pendente |
 
 ## Planejamento, EAP e motor de cálculo
@@ -37,6 +37,7 @@
 | [PLANNING_ENGINE.md](PLANNING_ENGINE.md) | Como o motor de planejamento funciona |
 | [CPM-NATIVO.md](CPM-NATIVO.md) | Caminho crítico nativo |
 | [LOOKAHEAD-PPC.md](LOOKAHEAD-PPC.md) | Lookahead de 4 semanas, restrições e PPC (Last Planner) |
+| [MEDICAO-FATURAMENTO.md](MEDICAO-FATURAMENTO.md) | Medição, faturamento e curva de desembolso (ciclo planeja → executa → mede → recebe) |
 | [BUSINESS_RULES.md](BUSINESS_RULES.md) | Regras de negócio da obra |
 | [EAP-POLITICA-DECOMPOSICAO.md](EAP-POLITICA-DECOMPOSICAO.md) | Política de decomposição da EAP |
 | [EAP-INTEGRIDADE-E-APRENDIZADO.md](EAP-INTEGRIDADE-E-APRENDIZADO.md) | Integridade e aprendizado da EAP |
