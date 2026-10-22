@@ -9,9 +9,16 @@ export type DependencyValidationResult = {
   issues: ValidationIssue[];
 };
 
+type NetworkBlock = {
+  ids: string[];
+  /** Nome da primeira atividade do bloco, para o engenheiro reconhecer onde ele começa. */
+  label: string;
+};
+
 type NetworkShape = {
   components: number;
   isolated: string[];
+  blocks: NetworkBlock[];
 };
 
 /**
@@ -25,7 +32,15 @@ function networkComponents(
   activities: ScheduleEvidenceActivity[],
   edges: Map<string, string[]>
 ): NetworkShape {
-  const ids = activities.map(activity => String(activity.id));
+  // Ordena por id numérico para que a mesma rede produza sempre os mesmos
+  // blocos na mesma ordem — mensagem de erro que muda a cada recálculo não
+  // serve para o engenheiro acompanhar o que já corrigiu.
+  const ids = activities
+    .map(activity => String(activity.id))
+    .sort((a, b) => (Number(a) || 0) - (Number(b) || 0) || a.localeCompare(b));
+  const nomes = new Map(
+    activities.map(activity => [String(activity.id), activity.name?.trim() || String(activity.id)])
+  );
   const undirected = new Map<string, string[]>();
   for (const id of ids) undirected.set(id, []);
   for (const [from, targets] of edges) {
@@ -39,15 +54,16 @@ function networkComponents(
   const seen = new Set<string>();
   let components = 0;
   const isolated: string[] = [];
+  const blocks: NetworkBlock[] = [];
   for (const id of ids) {
     if (seen.has(id)) continue;
     components += 1;
     const stack = [id];
     seen.add(id);
-    let size = 0;
+    const ids2 = new Set<string>();
     while (stack.length) {
       const current = stack.pop()!;
-      size += 1;
+      ids2.add(current);
       for (const neighbour of undirected.get(current) ?? []) {
         if (seen.has(neighbour)) continue;
         seen.add(neighbour);
@@ -57,10 +73,14 @@ function networkComponents(
     // Componente com uma única atividade é uma atividade sem nenhuma ligação:
     // o caso mais grave, porque não é nem cadeia truncada — é atividade avulsa
     // que entra no CPM como se começasse no dia zero da obra.
-    if (size === 1) isolated.push(id);
+    if (ids2.size === 1) isolated.push(id);
+    const ordenado = Array.from(ids2).sort(
+      (a, b) => (Number(a) || 0) - (Number(b) || 0) || a.localeCompare(b)
+    );
+    blocks.push({ ids: ordenado, label: nomes.get(ordenado[0]) ?? ordenado[0] });
   }
 
-  return { components, isolated };
+  return { components, isolated, blocks };
 }
 
 export function validateDependencies(
@@ -172,15 +192,39 @@ export function validateDependencies(
   if (!issues.some(issue => issue.code === "dependency_cycle")) {
     const connected = networkComponents(activities, edges);
     if (connected.components > 1) {
+      // A mensagem anterior dizia só "5 componentes" e, quando nenhum bloco era
+      // de uma atividade só, imprimia "Atividades isoladas: ." — o engenheiro
+      // lia um erro que não lhe dizia nada sobre onde mexer. Agora cada bloco
+      // aparece com o nome da atividade em que começa e o tamanho.
+      const blocos = [...connected.blocks].sort(
+        (a, b) => b.ids.length - a.ids.length || a.label.localeCompare(b.label)
+      );
+      const amostra = blocos
+        .slice(0, 4)
+        .map(
+          (bloco, indice) =>
+            `${indice + 1}) ${bloco.label} (${bloco.ids.length} ` +
+            `${bloco.ids.length === 1 ? "atividade" : "atividades"})`
+        )
+        .join("; ");
+      const restantes = blocos.length > 4 ? ` e mais ${blocos.length - 4}` : "";
+      const avulsas =
+        connected.isolated.length > 0
+          ? ` Além disso, ${connected.isolated.length} atividade(s) não têm nenhuma ligação: ` +
+            `${connected.isolated
+              .slice(0, 5)
+              .map(id => blocos.find(bloco => bloco.ids.includes(id))?.label ?? id)
+              .join(", ")}.`
+          : "";
       issues.push({
         code: "disconnected_network",
         severity: "error",
         message:
-          `A rede de dependências está desconectada em ${connected.components} ` +
-          `componentes separados; o caminho crítico reflete apenas um deles. ` +
-          `Atividades isoladas: ${connected.isolated.join(", ")}. ` +
-          `Vincule as frentes na ordem da EAP antes de aprovar o cronograma.`,
-        entityRef: connected.isolated[0],
+          `A rede de dependências está desconectada em ${connected.components} blocos separados: ` +
+          `${amostra}${restantes}. Cada bloco calcula o CPM como se começasse no dia zero da obra, ` +
+          `então o caminho crítico reflete apenas um deles.${avulsas} ` +
+          `Vincule o último item de um bloco ao primeiro do seguinte, na ordem da EAP, e recalcule.`,
+        entityRef: blocos[0]?.ids[0],
       });
     }
   }

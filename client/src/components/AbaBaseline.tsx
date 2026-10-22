@@ -28,9 +28,16 @@ export function AbaBaseline({ projetoId }: Props) {
   const recalcular = trpc.planning.calculateCpm.useMutation({
     onSuccess: async result => {
       if (result.valid === false) {
-        const primeiro = result.issues?.[0];
+        // `issues` são objetos ({ code, severity, message }), não texto: usar o
+        // objeto direto na string imprimia "[object Object]" no lugar do motivo.
+        const problemas = result.issues ?? [];
+        const primeiro = problemas[0]?.message;
+        const extras =
+          problemas.length > 1 ? ` (e mais ${problemas.length - 1} ponto(s) a corrigir)` : "";
         setMensagem(
-          `O CPM não fechou${primeiro ? `: ${primeiro}` : ""}. Corrija as dependências e tente de novo.`
+          primeiro
+            ? `O CPM não fechou: ${primeiro}${extras}`
+            : "O CPM não fechou. Revise as dependências da rede e tente de novo."
         );
         return;
       }

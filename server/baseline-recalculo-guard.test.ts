@@ -33,6 +33,14 @@ describe("baseline: gate de CPM resolve na própria tela", () => {
     expect(FONTE).toContain("disabled={recalcular.isPending}");
   });
 
+  it("mostra o motivo do erro, não o objeto do motivo", () => {
+    // `issues` são objetos ({ code, severity, message }); interpolar o objeto
+    // direto na mensagem imprimiu "[object Object]" em produção em 22/10/2026,
+    // escondendo justamente o motivo do CPM não ter fechado.
+    expect(FONTE).toContain("const primeiro = problemas[0]?.message");
+    expect(FONTE).not.toMatch(/\$\{result\.issues/);
+  });
+
   it("trata o CPM que não fecha sem dizer que deu certo", () => {
     const trecho = FONTE.slice(FONTE.indexOf("const recalcular"));
     expect(trecho).toContain("result.valid === false");
