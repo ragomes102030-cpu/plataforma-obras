@@ -3975,24 +3975,36 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
-        const [project, activities, entries] = await Promise.all([
+        const [project, activities, todasAtividades, entries] = await Promise.all([
           db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1),
           db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder),
+          // Todas as versões: o lançamento de produção aponta para a linha do dia
+          // em que foi digitado. Sem isso, medição de versão anterior virava
+          // "executado 0" no cronograma (o caso dos 10 lançamentos da AURORA).
+          db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
           db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
         const hoje = new Date().toISOString().slice(0,10);
-        const executadoPorAtividade = new Map<number,number>();
-        for (const entry of entries) executadoPorAtividade.set(entry.activityId,(executadoPorAtividade.get(entry.activityId)??0)+Number(entry.quantity));
+        // Produção é somada pelo CÓDIGO da EAP (1.2.3), que sobrevive à regeração
+        // do plano; o id da linha, não.
+        const codigoPorAtividade = new Map<number,string>();
+        for (const atividade of todasAtividades) codigoPorAtividade.set(atividade.id, atividade.wbsCode);
+        const executadoPorCodigo = new Map<string,number>();
+        for (const entry of entries) {
+          const codigo = codigoPorAtividade.get(entry.activityId);
+          if (!codigo) continue;
+          executadoPorCodigo.set(codigo,(executadoPorCodigo.get(codigo)??0)+Number(entry.quantity));
+        }
         const entradas = activities.map(a => {
           const d = new Date(inicio); d.setUTCDate(d.getUTCDate()+Number(a.startOffset??0));
-          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:d.toISOString().slice(0,10), duracao:Number(a.durationDays??0), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorAtividade.get(a.id)??0 };
+          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:d.toISOString().slice(0,10), duracao:Number(a.durationDays??0), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0 };
         });
         const linhasDerivadas = gradeDoCronograma(CALENDARIO_CORRIDO,hoje,entradas);
         const linhas = linhasDerivadas.map((l,i)=>({ ...l, atividadeId: activities.find(a=>a.wbsCode===l.codigo)?.id ?? 0 }));
         const idsPorCodigo = Object.fromEntries(linhas.map(l=>[l.codigo,l.atividadeId]));
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
-        for(const entry of entries){const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; const key=String(entry.activityId); grade[day][key]=(Number(grade[day][key]??0)+Number(entry.quantity)).toFixed(3); porAtividade[key]=(Number(porAtividade[key]??0)+Number(entry.quantity)).toFixed(3);}
+        for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
         const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
         return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo:{} };
       }),
