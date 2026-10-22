@@ -138,6 +138,7 @@ import {
 import { coletarDadosDesembolso } from "./financeiro/desembolso-dados";
 import { computeDesembolso } from "./financeiro/desembolso";
 import { CALENDARIO_CORRIDO, gradeDoCronograma, agregadoDoCronograma } from "@shared/cronograma-colunas";
+import { compararComBaseline } from "@shared/desvios-baseline";
 import {
   carregarCalendarioDaObra,
   hojeNoBrasil,
@@ -4179,6 +4180,88 @@ export const appRouter = router({
         const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, versionId: currentVersion.id, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
         await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
         return { id: created.id, activityCount: activities.length, versionId: currentVersion.id, versionNumber: currentVersion.versionNumber };
+      }),
+    // "O que mudou desde que eu aprovei isto?" — a pergunta que justifica a
+    // baseline existir. Sem isto a captura é só um arquivo morto: o engenheiro
+    // guarda a fotografia e continua sem saber quanto do atraso de hoje é
+    // desvio do que foi aprovado e quanto é trabalho novo que entrou depois.
+    compararComBaseline: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          baselineId: z.number().int().positive().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const [baseline] = input.baselineId
+          ? await db
+              .select()
+              .from(scheduleBaselines)
+              .where(
+                and(
+                  eq(scheduleBaselines.id, input.baselineId),
+                  eq(scheduleBaselines.projectId, input.projectId)
+                )
+              )
+              .limit(1)
+          : await db
+              .select()
+              .from(scheduleBaselines)
+              .where(eq(scheduleBaselines.projectId, input.projectId))
+              .orderBy(desc(scheduleBaselines.createdAt), desc(scheduleBaselines.id))
+              .limit(1);
+        if (!baseline) return null;
+
+        const versao = await getCurrentPlanVersion(input.projectId);
+        const atuais = versao
+          ? await db
+              .select({
+                id: scheduleActivities.id,
+                wbsCode: scheduleActivities.wbsCode,
+                name: scheduleActivities.name,
+                earlyStart: scheduleActivities.earlyStart,
+                earlyFinish: scheduleActivities.earlyFinish,
+                durationDays: scheduleActivities.durationDays,
+              })
+              .from(scheduleActivities)
+              .where(
+                and(
+                  eq(scheduleActivities.projectId, input.projectId),
+                  eq(scheduleActivities.versionId, versao.id)
+                )
+              )
+              .orderBy(scheduleActivities.sortOrder, scheduleActivities.id)
+          : [];
+
+        // O código da EAP vem da atividade fotografada, não do item: é ele que
+        // sobrevive ao refazer da EAP (os ids não sobrevivem).
+        const itens = await db
+          .select({
+            activityId: scheduleBaselineItems.activityId,
+            wbsCode: scheduleActivities.wbsCode,
+            name: scheduleActivities.name,
+            earlyStart: scheduleBaselineItems.earlyStart,
+            earlyFinish: scheduleBaselineItems.earlyFinish,
+            durationDays: scheduleBaselineItems.durationDays,
+          })
+          .from(scheduleBaselineItems)
+          .innerJoin(scheduleActivities, eq(scheduleActivities.id, scheduleBaselineItems.activityId))
+          .where(eq(scheduleBaselineItems.baselineId, baseline.id));
+
+        const comparacao = compararComBaseline(itens, atuais);
+        return {
+          baseline: {
+            id: baseline.id,
+            name: baseline.name,
+            createdAt: baseline.createdAt,
+            versionId: baseline.versionId ?? null,
+          },
+          ...comparacao,
+        };
       }),
     calculateCpmLocal: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))

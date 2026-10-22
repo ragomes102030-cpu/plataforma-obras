@@ -1,6 +1,7 @@
 import { Camera, CheckCircle2, LockKeyhole, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { PainelDesviosBaseline } from "./PainelDesviosBaseline";
 
 type Props = { projetoId: number };
 
@@ -291,6 +292,8 @@ export function AbaBaseline({ projetoId }: Props) {
           )}
         </div>
       </div>
+
+      <PainelDesviosBaseline projetoId={projetoId} baselines={baselines} />
 
       <div className="pl-planejamento-box">
         <div className="pl-planejamento-box-head">

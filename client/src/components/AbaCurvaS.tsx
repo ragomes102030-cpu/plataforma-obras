@@ -75,6 +75,45 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     return buildSCurve(curveActivities);
   }, [planejamento.data, budget.data, pesos]);
 
+  // Linha do PLANO APROVADO: as mesmas atividades, com as datas da baseline.
+  // Ver as três curvas juntas é o que separa "a obra está atrasada" de "a obra
+  // está atrasada em relação ao que eu aprovei, por causa destas atividades" —
+  // e é assim que a reunião de obra começa em qualquer software de mercado.
+  const comparacao = trpc.planning.compararComBaseline.useQuery(
+    { projectId: Number(projetoId) },
+    {
+      enabled:
+        Number(projetoId) > 0 && (planejamento.data?.baselines?.length ?? 0) > 0,
+    }
+  );
+
+  const curvaBaseline = useMemo(() => {
+    if (!comparacao.data || pesos.total <= 0) return null;
+    const atividades = (comparacao.data.linhas ?? [])
+      .filter(
+        linha =>
+          linha.atividadeId != null &&
+          linha.baselineInicio != null &&
+          linha.baselineFim != null
+      )
+      .map(linha => {
+        const custo = pesos.custoPorAtividade.get(linha.atividadeId!) ?? 0;
+        return {
+          id: String(linha.atividadeId),
+          // O snapshot guarda início e fim; a duração sai da diferença para não
+          // depender de a duração ter mudado depois.
+          duration: Math.max(1, linha.baselineFim! - linha.baselineInicio!),
+          plannedPercent: (custo / pesos.total) * 100,
+          actualPercent: 0,
+          earlyStart: linha.baselineInicio!,
+        };
+      })
+      .filter(atividade => atividade.plannedPercent > 0);
+
+    if (atividades.length === 0) return null;
+    return buildSCurve(atividades);
+  }, [comparacao.data, pesos]);
+
   // Carregando ≠ vazio. As duas consultas desta aba são pesadas (atividades +
   // itens de orçamento) e, no plano gratuito, a tela ficava 10-30 s dizendo
   // "sem dados" para uma obra que tem os dois.
@@ -155,6 +194,10 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
   const dataDeInicio = inicioPlanejado
     ? new Date(inicioPlanejado).toLocaleDateString("pt-BR", { timeZone: "UTC" })
     : null;
+  // Eixo comum às três curvas: a baseline pode ser mais longa (ou mais curta)
+  // que o plano de hoje, e escalas diferentes fariam a comparação mentir.
+  const eixoDias = Math.max(curve.duration, curvaBaseline?.duration ?? 0) || curve.duration;
+  const x = (dia: number) => 50 + (dia / eixoDias) * 530;
 
   return (
     <div className="xl-painel">
@@ -198,20 +241,31 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           ))}
 
           {/* Grid vertical (a cada 50 dias) */}
-          {Array.from({ length: Math.floor(curve.duration / 50) + 1 }, (_, i) => i * 50).map(day => (
-            <text key={day} x={50 + (day / curve.duration) * 530} y="275" textAnchor="middle" fontSize="10" fill="#94a3b8">{day}d</text>
+          {Array.from({ length: Math.floor(eixoDias / 50) + 1 }, (_, i) => i * 50).map(day => (
+            <text key={day} x={x(day)} y="275" textAnchor="middle" fontSize="10" fill="#94a3b8">{day}d</text>
           ))}
 
           {/* Linha do hoje */}
-          {hojeNum > 0 && hojeNum <= curve.duration && (
+          {hojeNum > 0 && hojeNum <= eixoDias && (
             <line
-              x1={50 + (hojeNum / curve.duration) * 530}
+              x1={x(hojeNum)}
               y1="20"
-              x2={50 + (hojeNum / curve.duration) * 530}
+              x2={x(hojeNum)}
               y2="260"
               stroke="#f59e0b"
               strokeWidth="1"
               strokeDasharray="4,4"
+            />
+          )}
+
+          {/* Plano aprovado (baseline) */}
+          {curvaBaseline && (
+            <polyline
+              fill="none"
+              stroke="#64748b"
+              strokeWidth="1.5"
+              strokeDasharray="5,3"
+              points={curvaBaseline.points.map(p => `${x(p.day)},${260 - p.planned * 2.4}`).join(" ")}
             />
           )}
 
@@ -220,7 +274,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
             fill="none"
             stroke="#3b82f6"
             strokeWidth="2"
-            points={curve.points.map(p => `${50 + (p.day / curve.duration) * 530},${260 - p.planned * 2.4}`).join(" ")}
+            points={curve.points.map(p => `${x(p.day)},${260 - p.planned * 2.4}`).join(" ")}
           />
 
           {/* Curva real */}
@@ -228,7 +282,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
             fill="none"
             stroke={desvio < 0 ? "#ef4444" : "#22c55e"}
             strokeWidth="2"
-            points={curve.points.map(p => `${50 + (p.day / curve.duration) * 530},${260 - p.actual * 2.4}`).join(" ")}
+            points={curve.points.map(p => `${x(p.day)},${260 - p.actual * 2.4}`).join(" ")}
           />
 
           {/* Legenda */}
@@ -236,10 +290,16 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           <text x="396" y="15" fontSize="10" fill="#94a3b8">Planejado</text>
           <rect x="380" y="25" width="12" height="3" fill={desvio < 0 ? "#ef4444" : "#22c55e"} />
           <text x="396" y="30" fontSize="10" fill="#94a3b8">Realizado</text>
-          {hojeNum > 0 && hojeNum <= curve.duration && (
+          {hojeNum > 0 && hojeNum <= eixoDias && (
             <>
               <rect x="380" y="40" width="12" height="3" fill="#f59e0b" />
               <text x="396" y="45" fontSize="10" fill="#94a3b8">Hoje</text>
+            </>
+          )}
+          {curvaBaseline && (
+            <>
+              <rect x="380" y="55" width="12" height="3" fill="#64748b" />
+              <text x="396" y="60" fontSize="10" fill="#94a3b8">Plano aprovado</text>
             </>
           )}
         </svg>
@@ -250,6 +310,11 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Duração total</span>
           <strong className="xl-cartao-valor">{curve.duration} dias</strong>
+          {curvaBaseline && curvaBaseline.duration !== curve.duration && (
+            <span className="xl-cartao-nota">
+              aprovado: {curvaBaseline.duration} dias
+            </span>
+          )}
         </div>
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Planejado acumulado</span>
@@ -292,12 +357,11 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
               {(planejamento.data?.activities ?? [])
                 .filter(a => a.cpmCalculatedAt && a.durationDays > 0)
                 .map(a => {
-                  const budgetItems = budget.data?.items ?? [];
-                  const totalCost = budgetItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
-                  const cost = budgetItems
-                    .filter(item => item.wbsNodeId === a.wbsNodeId)
-                    .reduce((sum, item) => sum + Number(item.quantity) * Number(item.unitPrice), 0);
-                  const weight = totalCost > 0 ? (cost / totalCost) * 100 : 0;
+                  // Mesmo cálculo de peso da curva (nó e, se falhar, código da
+                  // EAP). Antes esta tabela casava só por `wbsNodeId` e mostrava
+                  // 0,0% para todo mundo enquanto o gráfico desenhava a curva.
+                  const cost = pesos.custoPorAtividade.get(a.id) ?? 0;
+                  const weight = pesos.total > 0 ? (cost / pesos.total) * 100 : 0;
                   return (
                     <tr key={a.id}>
                       <td>{a.name}</td>
