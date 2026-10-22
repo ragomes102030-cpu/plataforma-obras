@@ -279,7 +279,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
       </div>
 
-      {plano.data && !plano.data.eapApproved && (
+      {plano.data && !plano.data.eapApproved && resumo.total === 0 && (
         <div className="pl-atividades-alerta">
           A EAP desta obra ainda não foi aprovada. Aprove a EAP na aba{" "}
           <strong>EAP</strong> para liberar a proposta de atividades — a etapa
