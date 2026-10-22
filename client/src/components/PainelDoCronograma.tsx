@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import type { AgregadoDoCronograma } from "@shared/cronograma-colunas";
+import { EstadoCarregando } from "./EstadoCarregando";
 
 /**
  * O DASHBOARD: o painel de cima da planilha.
@@ -18,13 +19,19 @@ type Props = {
   projetoId: number;
   /** Há quantitativo de exemplo na obra? Decide mostrar "Limpar" ou "Carregar". */
   temExemplo?: boolean;
+  /**
+   * `grade.isPending` da página. Sem isto, o painel não distingue "ainda estou
+   * carregando" de "esta obra não tem planejamento" — e dizia o segundo
+   * enquanto acontecia o primeiro.
+   */
+  carregandoGrade?: boolean;
 };
 
 function pct(n: number): string {
   return `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
-export function PainelDoCronograma({ agregado, projetoId, temExemplo }: Props) {
+export function PainelDoCronograma({ agregado, projetoId, temExemplo, carregandoGrade }: Props) {
   const semQuantidade = (agregado?.linhasSemQuantidade ?? 0) > 0;
   const wbs = trpc.projects.wbs.useQuery(
     { projectId: projetoId },
@@ -38,6 +45,25 @@ export function PainelDoCronograma({ agregado, projetoId, temExemplo }: Props) {
   const atividades = plano.data?.activities?.length ?? agregado?.totalAtividades ?? 0;
   const dependencias = plano.data?.dependencies?.length ?? 0;
   const baselines = plano.data?.baselines?.length ?? 0;
+
+  // Enquanto a grade (pesada: EAP + atividades + CPM) não responde, o painel
+  // NÃO pode dizer que a obra não tem planejamento. `projetoId > 0` porque
+  // consulta desabilitada fica `isPending` para sempre.
+  const aindaCarregando =
+    projetoId > 0 &&
+    (plano.isPending || wbs.isPending || (carregandoGrade === true && !agregado));
+
+  if (aindaCarregando) {
+    return (
+      <div className="xl-painel">
+        <EstadoCarregando
+          rotulo="Carregando o planejamento da obra…"
+          detalhe="EAP, atividades, dependências e caminho crítico são lidos de uma vez. Em conexão lenta esta etapa leva alguns segundos."
+          linhas={5}
+        />
+      </div>
+    );
+  }
 
   if (!agregado || agregado.totalAtividades === 0) {
     return (

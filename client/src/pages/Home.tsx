@@ -632,7 +632,12 @@ function Obra({
         </div>
         <div className="arquimedes-content">
         {aba === "dashboard" ? (
-          <PainelDoCronograma agregado={agregado} projetoId={projetoId} temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0} />
+          <PainelDoCronograma
+            agregado={agregado}
+            projetoId={projetoId}
+            temExemplo={Object.keys(grade.data?.exemploPorCodigo ?? {}).length > 0}
+            carregandoGrade={grade.isPending}
+          />
         ) : aba === "escopo" ? (
           <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} cubValor={cubValor} cubUf={cubUf} cubMes={cubMes} bdiDeclarado={bdiDeclarado} />
         ) : aba === "eap" ? (
