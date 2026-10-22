@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { calcularPesosDaCurva } from "../client/src/lib/curva-s-pesos";
 
@@ -77,5 +78,28 @@ describe("pesos da curva S", () => {
 
     expect(resultado.custoPorAtividade.size).toBe(0);
     expect(resultado.valorSemDestino).toBe(10);
+  });
+});
+
+/**
+ * O CABEÇALHO DA CURVA S COMPARA COM HOJE, NÃO COM O FIM DA OBRA.
+ *
+ * `curve.deviation` é o desvio no último dia do cronograma. Usá-lo no cartão
+ * fazia toda obra sem execução nascer "Obra atrasada" com -100% — inclusive
+ * antes da data de início. Visto na AURORA em 22/10/2026: planejado 0%,
+ * realizado 0%, desvio -89,3%, "Obra atrasada".
+ */
+describe("cabeçalho da curva S", () => {
+  const FONTE = readFileSync("client/src/components/AbaCurvaS.tsx", "utf-8");
+
+  it("calcula o desvio a partir do ponto de hoje", () => {
+    expect(FONTE).toContain("pontoHoje.actual - pontoHoje.planned");
+    expect(FONTE).not.toContain("const desvio = curve.deviation");
+  });
+
+  it("não chama de atrasada uma obra que ainda não começou", () => {
+    expect(FONTE).toContain("aindaNaoComecou");
+    expect(FONTE).toContain("Obra ainda não começou");
+    expect(FONTE).toContain("não existe atraso antes de a obra começar");
   });
 });
