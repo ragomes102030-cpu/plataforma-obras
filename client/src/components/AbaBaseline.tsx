@@ -22,6 +22,27 @@ export function AbaBaseline({ projetoId }: Props) {
     onError: error => setMensagem(error.message),
   });
 
+  // Recalcular aqui, e não "volte à etapa CPM", porque o gate desta tela é o
+  // único lugar onde o engenheiro descobre que o CPM está velho. Mandar navegar
+  // para outra aba para apertar um botão é onde a tarefa morre.
+  const recalcular = trpc.planning.calculateCpm.useMutation({
+    onSuccess: async result => {
+      if (result.valid === false) {
+        const primeiro = result.issues?.[0];
+        setMensagem(
+          `O CPM não fechou${primeiro ? `: ${primeiro}` : ""}. Corrija as dependências e tente de novo.`
+        );
+        return;
+      }
+      setMensagem("CPM recalculado. O gate de captura foi liberado.");
+      // Invalida o router inteiro: baseline, grade (dashboard) e CPM leem os
+      // mesmos dados, e deixar um deles com cache velho foi o que produziu a
+      // tela dizendo "CPM pendente" com CPM calculado.
+      await utils.planning.invalidate();
+    },
+    onError: error => setMensagem(error.message),
+  });
+
   const activities = plano.data?.activities ?? [];
   const baselines = plano.data?.baselines ?? [];
 
@@ -105,7 +126,21 @@ export function AbaBaseline({ projetoId }: Props) {
             <div><span>Duração inválida</span><strong>{resumo.semDuracao}</strong><small>atividades sem duração positiva</small></div>
             <div><span>Sem CPM</span><strong>{resumo.semCpm}</strong><small>atividades ainda não calculadas</small></div>
             <div><span>CPM desatualizado</span><strong>{resumo.desatualizadas}</strong><small>foram alteradas depois do último cálculo</small></div>
-            <div><span>Ação</span><strong>CPM</strong><small>volte à etapa CPM e recalcule</small></div>
+            <div>
+              <span>Ação</span>
+              <strong>
+                <button
+                  type="button"
+                  className="pl-planejamento-secondary"
+                  onClick={() => recalcular.mutate({ projectId: projetoId })}
+                  disabled={recalcular.isPending}
+                >
+                  <RefreshCw size={13} className={recalcular.isPending ? "pl-spin" : undefined} />
+                  {recalcular.isPending ? " Recalculando…" : " Recalcular CPM agora"}
+                </button>
+              </strong>
+              <small>recalcula e libera o gate sem sair da tela</small>
+            </div>
           </div>
           {resumo.bloqueios.length > 0 && (
             <div className="pl-tabela-wrap">
