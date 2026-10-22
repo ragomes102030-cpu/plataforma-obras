@@ -4042,6 +4042,71 @@ export const appRouter = router({
         const actualProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.actualProgress, 0) / plannedQuantity : 0;
         return { asOf, activities: rows, totals: { plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10 } };
       }),
+    // Aprovar a versão de trabalho é um ato de governança, não um efeito
+    // colateral de uma etapa do agente. Enquanto isso morava só dentro do
+    // `agent.recordDecision` de EAP_REVISAO, quem já tinha avançado de etapa
+    // ficava sem saída: o botão da EAP desabilitava (stage !== EAP_REVISAO) e a
+    // baseline recusava ("Só uma versão aprovada pode virar baseline") — o
+    // planejamento existia, passava em todas as validações, e não podia ser
+    // congelado. Descoberto na AURORA TESTE em 22/10/2026.
+    aprovarVersaoDeTrabalho: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const versao = await getCurrentPlanVersion(input.projectId);
+        if (!versao) throw badRequest("Este projeto ainda não tem versão de planejamento para aprovar.");
+        if (versao.status === "approved") {
+          return { versionNumber: versao.versionNumber, jaEstavaAprovada: true as const };
+        }
+
+        // Mesmas condições que a tela da EAP exige, checadas no servidor.
+        const [padrao] = await db
+          .select({ decision: agentDecisions.decision })
+          .from(agentDecisions)
+          .where(and(eq(agentDecisions.projectId, input.projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
+          .orderBy(desc(agentDecisions.createdAt))
+          .limit(1);
+        if (!padrao || padrao.decision === "rejected") {
+          throw conflict(
+            "Aprove o padrão do dicionário de escopo antes de aprovar a versão de trabalho."
+          );
+        }
+
+        const nos = await db
+          .select()
+          .from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, versao.id)))
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        const bloqueios = validateEap(nos).issues.filter(issue => issue.severity === "error");
+        if (bloqueios.length > 0) {
+          throw badRequest(
+            `A EAP ainda tem ${bloqueios.length} bloqueio(s) e não pode ser aprovada: ${bloqueios[0].message}`
+          );
+        }
+
+        // A aprovação fica registrada com autor e motivo: congelar prazo sem
+        // rastro de quem aprovou é o tipo de registro que não serve depois.
+        const [decisao] = await db
+          .insert(agentDecisions)
+          .values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            stage: "EAP_REVISAO",
+            decision: "approved",
+            scopeJson: JSON.stringify({
+              origem: "aba_baseline",
+              versionNumber: versao.versionNumber,
+              nosNaEap: nos.length,
+            }),
+            reason: `Versão v${versao.versionNumber} aprovada pela tela de baseline (${nos.length} nós na EAP).`,
+          })
+          .returning({ id: agentDecisions.id });
+        const aprovada = await approveCurrentPlanVersion(input.projectId, decisao.id, ctx.user.id);
+        return { versionNumber: aprovada.versionNumber, jaEstavaAprovada: false as const };
+      }),
     captureBaseline: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), name: z.string().trim().min(2).max(160) }))
       .mutation(async ({ ctx, input }) => {
