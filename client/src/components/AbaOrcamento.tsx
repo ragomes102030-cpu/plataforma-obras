@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
+import { PainelMedicao } from "./PainelMedicao";
 
 type Props = {
   projetoId: number;
@@ -74,6 +75,10 @@ export function AbaOrcamento({ projetoId }: Props) {
       {/* Valor Ganho: fica junto do orçamento porque o AC é custo, e o custo
           é lançado aqui. Ver `PainelValorGanho.tsx`. */}
       <PainelValorGanho projetoId={projetoId} />
+
+      {/* Medição fecha o ciclo: o que foi executado vira receita, e o custo
+          lançado vira curva de caixa. Ver `PainelMedicao.tsx`. */}
+      <PainelMedicao projetoId={projetoId} />
 
       <PainelConciliacao projetoId={projetoId} />
 

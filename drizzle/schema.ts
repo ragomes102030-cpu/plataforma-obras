@@ -1028,6 +1028,108 @@ export const weeklyCommitments = pgTable(
   ]
 );
 
+const enumMeasurementsStatus = pgEnum("measurements_status", [
+  "rascunho",
+  "em_aprovacao",
+  "aprovada",
+  "faturada",
+  "paga",
+  "cancelada",
+]);
+
+/**
+ * Medição — o documento comercial que transforma serviço executado em receita.
+ *
+ * É o outro lado do Valor Ganho. O EVM diz quanto a obra *valeu* (EV); a
+ * medição diz quanto a obra **cobra**. Os dois números não são iguais e não
+ * devem ser: existe serviço executado que ainda não foi medido, existe medição
+ * retida e existe medição aprovada que o cliente não pagou.
+ *
+ * Decisões que estão no modelo:
+ *
+ *   - `periodStart`/`periodEnd` são o PERÍODO medido, não a data do documento.
+ *     Medição é acumulada por período; sem período não há como saber o que já
+ *     foi cobrado.
+ *   - `retentionPercent` fica na medição, não no item: retenção técnica é
+ *     contratual e vale para o documento inteiro.
+ *   - Os itens guardam **cópia** de descrição, unidade e preço unitário. Se o
+ *     orçamento mudar depois, a medição já emitida não pode mudar junto — isso
+ *     é documento assinado, não relatório.
+ *   - `number` é sequencial por obra (índice único com `projectId`). Duas
+ *     medições com o mesmo número é erro de digitação que quebra a conciliação
+ *     com o financeiro.
+ */
+export const measurements = pgTable(
+  "measurements",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    projectId: integer("projectId")
+      .notNull()
+      .references(() => projects.id),
+    number: integer("number").notNull(),
+    periodStart: timestamp("periodStart", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("periodEnd", { withTimezone: true }).notNull(),
+    status: enumMeasurementsStatus("status").default("rascunho").notNull(),
+    /** Retenção técnica, em %. 5 = 5% do valor bruto fica retido. */
+    retentionPercent: numeric("retentionPercent", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
+    notes: text("notes"),
+    approvedAt: timestamp("approvedAt", { withTimezone: true }),
+    invoicedAt: timestamp("invoicedAt", { withTimezone: true }),
+    paidAt: timestamp("paidAt", { withTimezone: true }),
+    approvedBy: integer("approvedBy").references(() => users.id),
+    createdBy: integer("createdBy").references(() => users.id),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("measurements_project_number_uq").on(table.projectId, table.number),
+    index("measurements_project_period_idx").on(table.projectId, table.periodEnd),
+    check(
+      "measurements_period_ordered",
+      drizzleSql`${table.periodEnd} > ${table.periodStart}`
+    ),
+    check(
+      "measurements_retention_range",
+      drizzleSql`${table.retentionPercent} >= 0 and ${table.retentionPercent} <= 100`
+    ),
+  ]
+);
+
+export const measurementItems = pgTable(
+  "measurement_items",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    measurementId: integer("measurementId")
+      .notNull()
+      .references(() => measurements.id),
+    budgetItemId: integer("budgetItemId")
+      .notNull()
+      .references(() => budgetItems.id),
+    /** Cópia do item no momento da emissão (o orçamento pode mudar depois). */
+    description: varchar("description", { length: 240 }).notNull(),
+    unit: varchar("unit", { length: 32 }).notNull(),
+    /** Quantidade medida NO PERÍODO, não acumulada. */
+    quantity: numeric("quantity", { precision: 14, scale: 3 }).notNull(),
+    unitPrice: numeric("unitPrice", { precision: 14, scale: 2 }).notNull(),
+    /** `quantity * unitPrice`, gravado para o documento não depender de cálculo. */
+    amount: numeric("amount", { precision: 16, scale: 2 }).notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    // O mesmo item não aparece duas vezes na mesma medição: seria medir duas
+    // vezes o mesmo serviço dentro do mesmo documento.
+    uniqueIndex("measurement_items_measurement_item_uq").on(
+      table.measurementId,
+      table.budgetItemId
+    ),
+    index("measurement_items_measurement_idx").on(table.measurementId),
+    check("measurement_items_quantity_positive", drizzleSql`${table.quantity} > 0`),
+    check("measurement_items_amount_not_negative", drizzleSql`${table.amount} >= 0`),
+  ]
+);
+
 export const priceCatalogs = pgTable(
   "price_catalogs",
   {

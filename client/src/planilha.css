@@ -4042,3 +4042,347 @@ tr:hover .xl-codigo {
     grid-column:span 1;
   }
 }
+
+/* ── Medição e curva de desembolso ─────────────────────────────────────────
+   Mesma linguagem visual do EVM/lookahead: texto pequeno, números tabulares,
+   verde = dinheiro fechado, âmbar = atenção, vermelho = estourou. O painel
+   é denso de propósito — quem abre esta tela já está conferindo conta. */
+.pl-med{
+  margin:14px 0 18px;
+  padding:12px 14px 14px;
+  border:1px solid #e3e9ef;
+  border-radius:6px;
+  background:#fff;
+}
+.pl-med-topo{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:10px;
+}
+.pl-med-topo-fluxo{
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px solid #eef2f6;
+}
+.pl-med-topo h3{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:0;
+  font-size:12px;
+  font-weight:700;
+  color:#2c3a47;
+}
+.pl-med-sub{
+  margin:4px 0 0;
+  font-size:9px;
+  color:#7b8ea0;
+}
+.pl-med-mini{
+  font-size:8.5px;
+  color:#8a97a5;
+}
+.pl-med-total{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:1px;
+  min-width:140px;
+}
+.pl-med-total>span:first-child{
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+}
+.pl-med-total>strong{
+  font-size:20px;
+  line-height:1.05;
+  font-weight:700;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-med-aviso{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  margin:8px 0;
+  padding:7px 9px;
+  border-radius:4px;
+  background:#fff7e6;
+  border:1px solid #f3d9a4;
+  color:#8a5a00;
+  font-size:9.5px;
+  line-height:1.45;
+}
+.pl-med-form{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:6px;
+  align-items:end;
+  padding:10px 0 6px;
+  border-top:1px solid #f0f3f6;
+  margin-bottom:8px;
+}
+.pl-med-form label{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  font-size:8.5px;
+  color:#68717a;
+}
+.pl-med-form input{
+  padding:3px 5px;
+  border:1px solid #dfe6ee;
+  border-radius:3px;
+  font:inherit;
+  font-size:9px;
+  color:#2c3a47;
+  background:#fff;
+}
+.pl-med-previa{
+  margin:10px 0 14px;
+  padding:10px;
+  border:1px solid #d8e8de;
+  border-radius:4px;
+  background:#fbfefc;
+}
+.pl-med-kpis{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(104px,1fr));
+  gap:6px;
+  margin-bottom:10px;
+}
+.pl-med-cartao{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:7px 9px;
+  border:1px solid #e8eef4;
+  border-radius:4px;
+  background:#fafcfe;
+}
+.pl-med-cartao>span{
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+}
+.pl-med-cartao>strong{
+  font-size:12px;
+  font-weight:700;
+  color:#2c3a47;
+  font-variant-numeric:tabular-nums;
+}
+.pl-med-cartao-alerta>strong{
+  color:#b42318;
+}
+.pl-med-tabela{
+  overflow-x:auto;
+  margin-bottom:10px;
+}
+.pl-med-tabela table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:9px;
+}
+.pl-med-tabela th{
+  padding:4px 6px;
+  text-align:left;
+  font-size:7.5px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:#7b8ea0;
+  border-bottom:1px solid #e3e9ef;
+  white-space:nowrap;
+}
+.pl-med-tabela td{
+  padding:5px 6px;
+  border-bottom:1px solid #f0f3f6;
+  color:#334155;
+}
+.pl-med-num{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.pl-med-vazio{
+  padding:14px 8px;
+  text-align:center;
+  color:#7b8ea0;
+  font-size:9px;
+  line-height:1.5;
+}
+.pl-med-cancelada td{
+  color:#9aa7b4;
+  text-decoration:line-through;
+}
+.pl-med-status{
+  display:inline-block;
+  padding:1px 6px;
+  border-radius:999px;
+  font-size:8px;
+  font-weight:600;
+  white-space:nowrap;
+  background:#eef2f6;
+  color:#5b6b7b;
+}
+.pl-med-status-rascunho{
+  background:#eef2f6;
+  color:#5b6b7b;
+}
+.pl-med-status-em_aprovacao{
+  background:#fff4dc;
+  color:#8a5a00;
+}
+.pl-med-status-aprovada{
+  background:#e7f4ec;
+  color:#2f7d5b;
+}
+.pl-med-status-faturada{
+  background:#e6effb;
+  color:#1f56b0;
+}
+.pl-med-status-paga{
+  background:#dff0e6;
+  color:#1d6b48;
+}
+.pl-med-status-cancelada{
+  background:#f7e8e8;
+  color:#b42318;
+}
+.pl-med-acoes{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:4px;
+}
+.pl-med-acoes-celula{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  white-space:nowrap;
+}
+.pl-med-botao{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 10px;
+  border:1px solid #dfe6ee;
+  border-radius:3px;
+  background:#fff;
+  color:#334155;
+  font:inherit;
+  font-size:9px;
+  font-weight:600;
+  cursor:pointer;
+}
+.pl-med-botao:disabled{
+  opacity:.6;
+  cursor:default;
+}
+.pl-med-primario{
+  border-color:#2f7d5b;
+  background:#2f7d5b;
+  color:#fff;
+}
+.pl-med-link{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  padding:0;
+  border:0;
+  background:none;
+  color:#1f6feb;
+  font:inherit;
+  font-size:8.5px;
+  cursor:pointer;
+}
+.pl-med-link:disabled{
+  opacity:.5;
+  cursor:default;
+}
+.pl-med-link-primaria{
+  font-weight:700;
+  color:#2f7d5b;
+}
+.pl-med-link-cancela{
+  color:#b42318;
+}
+.pl-med-grafico{
+  display:grid;
+  gap:5px;
+  margin:10px 0 6px;
+}
+.pl-med-mes{
+  display:grid;
+  grid-template-columns:52px 1fr 96px;
+  align-items:center;
+  gap:8px;
+}
+.pl-med-mes-rotulo{
+  font-size:8.5px;
+  color:#7b8ea0;
+  font-variant-numeric:tabular-nums;
+}
+.pl-med-mes-num{
+  font-size:8.5px;
+  color:#334155;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.pl-med-barras{
+  display:grid;
+  gap:1px;
+}
+.pl-med-barra{
+  height:5px;
+  border-radius:2px;
+  min-width:0;
+}
+.pl-med-barra-planejado{
+  background:#cbd7e3;
+}
+.pl-med-barra-realizado{
+  background:#2f7d5b;
+}
+.pl-med-barra-projetado{
+  background:#d9a441;
+}
+.pl-med-legenda{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:6px 0 0;
+  font-size:8px;
+  color:#7b8ea0;
+}
+.pl-med-chip{
+  display:inline-block;
+  width:9px;
+  height:5px;
+  border-radius:2px;
+}
+.pl-med-chip-planejado{
+  background:#cbd7e3;
+}
+.pl-med-chip-realizado{
+  background:#2f7d5b;
+}
+.pl-med-chip-projetado{
+  background:#d9a441;
+}
+@media (max-width:600px){
+  .pl-med-topo{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .pl-med-total{
+    align-items:flex-start;
+  }
+  .pl-med-mes{
+    grid-template-columns:46px 1fr 78px;
+  }
+}
