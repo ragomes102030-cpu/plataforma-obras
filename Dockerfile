@@ -66,19 +66,19 @@ RUN pnpm install --frozen-lockfile --prod
 # e o bundle vive em dist/ — entao o front precisa estar em dist/public.
 COPY --from=build /app/dist ./dist
 
-# Migracoes do Drizzle, aplicadas antes de o servico subir
-# (`node scripts/migrate-pg.mjs`). O script precisa do journal e dos .sql;
-# `schema.ts` e os snapshots viajam junto e sao inertes em runtime.
+# Desde 22/10/2026 a imagem NAO carrega drizzle/ nem os scripts de migracao.
 #
-# Isto substitui o antigo par bootstrap-db.mjs + full-schema.sql, que criava
-# o schema a partir de um arquivo achatado e nunca acompanhava as migracoes.
-# Manter a aplicacao como unico ponto de escrita no schema: DDL no boot
-# mascarava divergencia entre codigo e banco em vez de revela-la.
-COPY drizzle/ ./drizzle/
-COPY scripts/migrate-pg.mjs ./scripts/migrate-pg.mjs
-COPY scripts/migrate-core-pg.mjs ./scripts/migrate-core-pg.mjs
-# Auditoria de schema: le o catalogo do PostgreSQL e compara com as migracoes.
-COPY scripts/audit-schema-pg.mjs ./scripts/audit-schema-pg.mjs
+# Por que: o boot nao escreve mais no banco. Ate aqui o `start` era
+# `migrate-pg.mjs && audit-schema-pg.mjs && node dist/index.js`, o que fazia
+# todo start de container abrir conexao de escrita, sincronizar sequences e
+# auditar o schema — e derrubar o servico se qualquer um dos tres falhasse.
+# Com o usuario de runtime (arquimedes_app) quem aplica DDL e a Management API
+# do Supabase, fora do container, essa cadeia era peso morto no caminho critico.
+#
+# A guarda de schema nao foi embora: ela roda no CI (job `schema-audit` em
+# .github/workflows/ci.yml), contra o banco de producao, em todo PR. Um PR com
+# migracao nao aplicada fica vermelho antes do merge — em vez de derrubar o
+# deploy depois dele. Ver docs/DECISIONS.md, Decisao 23.
 
 EXPOSE 3000
 
@@ -95,6 +95,8 @@ EXPOSE 3000
 ARG GIT_COMMIT=""
 ENV GIT_COMMIT=$GIT_COMMIT
 
-# Migrações rodam antes de o servidor subir — mesmo contrato que o
-# comando de start do servico: se a migração falhar, o container não sobe.
+# Só sobe o servidor. Nenhum passo de banco no boot: o que falha em producao
+# agora é o que a aplicacao faz, nao um script de deploy. `pnpm start` continua
+# sendo o unico ponto da cadeia, para o `npm start` da plataforma e este CMD nao
+# divergirem.
 CMD ["sh", "-c", "pnpm start"]

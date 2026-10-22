@@ -49,10 +49,14 @@ PostgreSQL no Supabase (schema `drizzle/schema.ts`, `drizzle-orm/pg-core`, drive
 `drizzle/meta/_journal.json`; o `/readyz` mostra 37 porque conta também a
 `"__drizzle_migrations"`.
 
-Em produção nada é manual: o `start` do `package.json` roda `migrate-pg.mjs`
-antes de subir o servidor, e o `audit-schema-pg.mjs` depois. Se faltar migração
-no banco, o audit falha e o deploy não promove — em vez de servir uma aplicação
-com schema velho.
+Em produção **o boot não toca no banco**: `pnpm start` é só `node dist/index.js`.
+Até 22/10/2026 ele rodava `migrate-pg.mjs && audit-schema-pg.mjs` antes de subir,
+o que fazia todo start de container abrir conexão de escrita e derrubar o serviço
+se o script falhasse. A migração passou a ser aplicada fora do container (Management
+API do Supabase, com a credencial de administrador) e a **guarda de schema mora no
+CI**: o job `schema-audit` roda `pnpm db:audit` contra produção em todo PR, então
+um PR com migração não aplicada fica vermelho **antes** do merge. Ver Decisão 23
+em `docs/DECISIONS.md`.
 
 Localmente:
 

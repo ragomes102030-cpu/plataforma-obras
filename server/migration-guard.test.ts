@@ -92,6 +92,9 @@ function bancoEmDia(overrides: { registradas?: number[] | null } = {}) {
           }),
         };
       }
+      // Conferencia das sequences de identidade (Decisao 23). O fake devolve
+      // nenhuma coluna identity, que e o mesmo que "nada atrasado".
+      if (sql.includes("pg_sequences")) return { rows: [] };
       if (sql.includes("pg_indexes")) return { rows: [] };
       if (sql.includes("COUNT(*)")) {
         const n = registradas === null ? 0 : registradas.length;
@@ -130,16 +133,15 @@ describe("auditarSchema x controle de migrations", () => {
 });
 
 describe("o guard esta ligado no lugar certo", () => {
-  it("`scripts.start` roda migrate, depois audit, e so entao o app (com &&)", () => {
+  it("`scripts.start` sobe o app e mais nada", () => {
+    // Ate 22/10/2026 este teste exigia `migrate && audit && app`. O contrato
+    // mudou de lado: o boot nao toca no banco. O guard continua existindo, so
+    // que invertido, para que a cadeia nao volte por descuido.
     const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
     const cmd: string = pkg.scripts.start;
-    const iMigrate = cmd.indexOf("migrate-pg.mjs");
-    const iAudit = cmd.indexOf("audit-schema-pg.mjs");
-    const iStart = cmd.indexOf("node dist/index.js");
-    expect(iMigrate).toBeGreaterThan(-1);
-    expect(iAudit).toBeGreaterThan(iMigrate);
-    expect(iStart).toBeGreaterThan(iAudit);
-    expect(cmd).not.toContain("; ");
+    expect(cmd).not.toContain("migrate-pg.mjs");
+    expect(cmd).not.toContain("audit-schema-pg.mjs");
+    expect(cmd).toContain("node dist/index.js");
   });
 
   it("o Dockerfile nao repete a cadeia: ele chama o mesmo `start`", () => {

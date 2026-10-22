@@ -204,6 +204,40 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
   );
   const triggersFaltando = [...triggers].filter(t => !triggersBanco.has(t)).sort();
 
+  // As 40 sequences de identidade. Até 22/10/2026 esta conferência rodava no
+  // BOOT: `scripts/migrate-pg.mjs` executava um bloco DO com `setval` a cada
+  // start do container. Com o migrate fora do boot, ela passa a morar aqui — o
+  // CI roda esta auditoria em todo PR, então uma sequence atrás do MAX(id) vira
+  // erro legível no PR em vez de `duplicate key` no primeiro INSERT do cliente.
+  // O risco real é carga/transferência de dados com id explícito: o Postgres
+  // avança a sequence no INSERT com DEFAULT, nunca no INSERT com id.
+  const seqRes = await conn.query(`
+    SELECT c.relname AS tabela,
+           a.attname AS coluna,
+           COALESCE(s.last_value, 0) AS last_value,
+           (xpath('/row/m/text()',
+                  query_to_xml(
+                    format('select coalesce(max(%I),0) as m from %I.%I', a.attname, n.nspname, c.relname),
+                    false, true, '')))[1]::text::bigint AS max_id
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_sequences s
+      ON s.schemaname = n.nspname
+     AND s.sequencename = regexp_replace(
+           pg_get_serial_sequence(format('%I.%I', n.nspname, c.relname), a.attname),
+           '^.*\\.', '')
+    WHERE n.nspname = current_schema()
+      AND c.relkind = 'r'
+      AND a.attidentity IN ('a', 'd')
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+    ORDER BY 1, 2
+  `);
+  const sequencesAtrasadas = seqRes.rows
+    .filter(r => Number(r.max_id) > Number(r.last_value))
+    .map(r => `${r.tabela}.${r.coluna} (sequence ${r.last_value} < max ${r.max_id})`);
+
   const idxRes = await conn.query(
     "SELECT tablename, indexname FROM pg_indexes WHERE schemaname = current_schema()"
   );
@@ -263,6 +297,11 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
     divergencias.push(
       `${triggersFaltando.length} trigger(s) ausente(s): ${triggersFaltando.join(", ")}`
     );
+  if (sequencesAtrasadas.length)
+    divergencias.push(
+      `${sequencesAtrasadas.length} sequence(s) de identidade atrasada(s): ${sequencesAtrasadas.slice(0, 10).join(", ")}` +
+        " — o proximo INSERT com DEFAULT vai colidir; sincronize com `pnpm db:migrate`"
+    );
   if (pendentes.length)
     divergencias.push(
       `${pendentes.length} migration(oes) no repo que o banco NAO registrou: ${pendentes.join(", ")}` +
@@ -278,6 +317,10 @@ export async function auditarSchema({ conn, pasta = MIGRATIONS_FOLDER }) {
       (tiposFaltando.length ? ` | AUSENTES: ${tiposFaltando.join(", ")}` : " | nenhum ausente"),
     `triggers: ${triggers.size} declaradas, ${triggersBanco.size} no banco` +
       (triggersFaltando.length ? ` | AUSENTES: ${triggersFaltando.join(", ")}` : " | nenhuma ausente"),
+    `sequences: ${seqRes.rows.length} de identidade` +
+      (sequencesAtrasadas.length
+        ? ` | ATRASADAS: ${sequencesAtrasadas.length}`
+        : " | nenhuma atrasada"),
     `indices: ${indices.length}`,
     `journal: ${journal.registradas} migration(oes) registrada(s), ultima = ${journal.ultima}` +
       (pendentes.length ? ` | PENDENTES: ${pendentes.join(", ")}` : " | nenhuma pendente"),
