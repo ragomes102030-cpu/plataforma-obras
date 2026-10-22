@@ -25,7 +25,7 @@ import { EstadoCarregando } from "./EstadoCarregando";
  *
  * POR QUE EQUIPE E FRENTE NÃO ESTÃO AQUI
  *
- * A frente é \`activity.phase\`, que a aba CRONOGRAMA já mostra. Criar uma
+ * A frente é \`activity.phase\`, que a aba ATIVIDADES já mostra. Criar uma
  * segunda dimensão de frente aqui seria o mesmo dado com dois nomes — que foi o
  * defeito da casca de abas. A equipe entra quando a Linha de Balanço precisar
  * balancear ritmo.
@@ -99,9 +99,9 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
       <div className="xl-vazia-folha">
         <h3>Não há atividades para medir</h3>
         <p className="xl-vazia-falta">
-          A produção é medida por atividade, e a aba CRONOGRAMA está vazia. Vá até
-          lá e traga as folhas da EAP — cada folha vira uma linha que aceita
-          quantidade.
+          A produção é medida por atividade, e ainda não há atividades na obra. Abra
+          a aba ATIVIDADES e traga as folhas da EAP — cada folha vira uma linha que
+          aceita quantidade.
         </p>
       </div>
     );
