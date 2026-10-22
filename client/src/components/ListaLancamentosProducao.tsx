@@ -77,6 +77,17 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
     onError: aoFalhar,
   });
 
+  // Sem este botão, "Desfazer" seria uma porta só de ida: o rascunho podia ser
+  // editado ou excluído, mas nunca voltava a contar no avanço.
+  const confirmar = trpc.production.confirmEntry.useMutation({
+    onSuccess: async () => {
+      setErro(null);
+      setMensagem("Medição confirmada: voltou a contar no avanço real.");
+      await atualizarTelas();
+    },
+    onError: aoFalhar,
+  });
+
   const desfazer = trpc.production.unconfirmEntry.useMutation({
     onSuccess: async () => {
       setErro(null);
@@ -118,7 +129,11 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   );
 
   const ocupado =
-    recalcular.isPending || desfazer.isPending || editar.isPending || excluir.isPending;
+    recalcular.isPending ||
+    confirmar.isPending ||
+    desfazer.isPending ||
+    editar.isPending ||
+    excluir.isPending;
 
   if (!lancamentos.length) return null;
 
@@ -268,6 +283,15 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           )}
                           {!confirmada && (
                             <>
+                              <button
+                                type="button"
+                                className="eap-btn"
+                                disabled={ocupado}
+                                title="Volta a contar no avanço real."
+                                onClick={() => confirmar.mutate({ projectId: projetoId, entryId: l.id })}
+                              >
+                                Confirmar
+                              </button>
                               <button
                                 type="button"
                                 className="outline-button"
