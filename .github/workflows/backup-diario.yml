@@ -152,21 +152,47 @@ jobs:
           order by 1
           SQL
 
+          docker rm -f alvo > /dev/null 2>&1 || true
           docker run -d --name alvo -e POSTGRES_PASSWORD=alvo "${PGIMAGE}"
+
+          # `pg_isready` responde antes de o banco aceitar consulta. A espera
+          # aqui e por uma consulta de verdade, senao a restauracao corre
+          # contra a inicializacao do cluster.
+          pronto=0
           for i in $(seq 1 30); do
-            if docker exec alvo pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            if docker exec alvo psql -U postgres -d postgres -c 'select 1' >/dev/null 2>&1; then
+              pronto=1
+              break
+            fi
             sleep 2
           done
+          if [ "${pronto}" -ne 1 ]; then
+            echo "::error::O Postgres descartavel nao subiu em 60 s."
+            docker logs alvo 2>&1 | tail -20
+            exit 1
+          fi
 
           inicio="$(date +%s)"
+          # `set +e` para o erro aparecer no log ANTES de o job morrer: sem
+          # isso o `set -e` aborta e o stderr fica preso dentro do arquivo.
+          set +e
           docker exec -i alvo pg_restore --no-owner --no-acl \
             -d "host=127.0.0.1 port=5432 user=postgres dbname=postgres" \
             < "${ARQ}" 2> backup/restore.err
+          codigo=$?
+          set -e
           fim="$(date +%s)"
+
+          echo "pg_restore saiu com codigo ${codigo}"
+          if [ -s backup/restore.err ]; then
+            echo "--- stderr do pg_restore ---"
+            cat backup/restore.err
+            echo "----------------------------"
+          fi
 
           # `schema "public" already exists` e esperado: todo banco novo ja tem
           # esse schema. Qualquer OUTRO erro invalida a restauracao.
-          reais="$(grep -E '^pg_restore: error' backup/restore.err | grep -v 'already exists' || true)"
+          reais="$(grep -iE 'error|erro' backup/restore.err | grep -v 'already exists' || true)"
           if [ -n "${reais}" ]; then
             echo "::error::O dump nao restaurou limpo:"
             echo "${reais}"
