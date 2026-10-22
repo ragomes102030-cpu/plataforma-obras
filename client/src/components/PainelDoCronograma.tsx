@@ -8,9 +8,10 @@ import { EstadoCarregando } from "@/components/EstadoCarregando";
 /**
  * Painel da obra.
  *
- * Regra que vale para todo o painel: número sem régua é ruído. Avanço físico é
- * ponderado pela quantidade; valor é ponderado pelo orçamento; contagem é por
- * atividade. Cada um aparece com o nome da sua régua e com o desvio assinado.
+ * Regra que vale para todo o painel: número sem régua é ruído. Avanço é
+ * ponderado pelo valor do orçamento (a mesma régua da Curva S); valor executado
+ * só conta o que tem atividade; contagem é por atividade. Cada um aparece com o
+ * nome da sua régua e com o desvio assinado.
  */
 
 type Props = {
@@ -126,16 +127,32 @@ export function PainelDoCronograma({
     const custo = calcularPesosDaCurva(atividades, orcamento.data?.items ?? []);
 
     const pctPorCodigo = new Map<string, number>();
+    const planejadoPorCodigo = new Map<string, number>();
     for (const linha of linhas ?? []) {
-      if (linha.codigo) pctPorCodigo.set(linha.codigo, linha.pctReal);
+      if (linha.codigo) {
+        pctPorCodigo.set(linha.codigo, linha.pctReal);
+        planejadoPorCodigo.set(linha.codigo, linha.pctPlanejado);
+      }
     }
 
     let executado = 0;
+    let planejadoPorValor = 0;
+    let pesoComOrcamento = 0;
     for (const atividade of atividades) {
       const valorDaAtividade = custo.custoPorAtividade.get(atividade.id) ?? 0;
+      if (valorDaAtividade <= 0) continue;
       const avanco = pctPorCodigo.get(atividade.wbsCode ?? "") ?? 0;
       executado += valorDaAtividade * avanco;
+      pesoComOrcamento += valorDaAtividade;
+      planejadoPorValor += valorDaAtividade * (planejadoPorCodigo.get(atividade.wbsCode ?? "") ?? 0);
     }
+
+    // Somar m³ com m² e kg não existe. O avanço da obra é ponderado pelo valor
+    // do orçamento — a mesma régua da Curva S, para não haver dois vereditos.
+    const avancoPorValor = {
+      real: pesoComOrcamento > 0 ? (executado / pesoComOrcamento) * 100 : 0,
+      planejado: pesoComOrcamento > 0 ? (planejadoPorValor / pesoComOrcamento) * 100 : 0,
+    };
 
     const total = Number(orcamento.data?.total ?? 0);
     const distribuido = Math.max(0, total - custo.valorSemDestino);
@@ -155,10 +172,12 @@ export function PainelDoCronograma({
       hoje,
       inicio: agregado?.inicio ?? null,
       fim: agregado?.fim ?? null,
-      fisico: {
-        real: agregado?.avancoFisico ?? 0,
-        planejado: agregado?.avancoPlanejado ?? 0,
-      },
+      fisico: pesoComOrcamento > 0
+        ? avancoPorValor
+        : {
+            real: agregado?.avancoFisico ?? 0,
+            planejado: agregado?.avancoPlanejado ?? 0,
+          },
       status: {
         total: agregado?.totalAtividades ?? 0,
         concluidas: agregado?.contagemPorStatus.Concluido ?? 0,
@@ -273,7 +292,7 @@ export function PainelDoCronograma({
       <section className="pd-kpis" aria-label="Indicadores principais">
         <article className="pd-kpi">
           <p className="pd-rotulo">
-            Avanço físico <span className="pd-regua">ponderado por quantidade</span>
+            Avanço da obra <span className="pd-regua">ponderado pelo valor do orçamento</span>
           </p>
           <p className={`pd-numero pd-numero-${fisico.rotulo.replace(/\s/g, "-")}`}>{pct(fisico.real)}</p>
           <div className="pd-barra" role="img" aria-label={`Avanço ${pct(fisico.real)} contra planejado ${pct(fisico.planejado)}`}>
@@ -528,10 +547,11 @@ export function PainelDoCronograma({
       <footer className="pd-nota">
         <strong>Como este painel calcula</strong>
         <p>
-          Avanço físico pondera pela quantidade planejada de cada atividade. Valor pondera pelo
-          orçamento e só conta o que está ligado a uma atividade. Prazo conta dias de calendário do
-          primeiro início ao último fim. A contagem de atividades é simples e serve para achar o
-          serviço, não para medir avanço.
+          Avanço da obra pondera pelo valor de orçamento de cada atividade — somar m³ com m² e
+          kg não mede nada. É a mesma régua da Curva S, então os dois números batem. Valor
+          executado só conta o que está ligado a uma atividade. Prazo conta dias de calendário do
+          primeiro início ao último fim; a Curva S mostra a mesma obra em dias úteis. A contagem
+          de atividades é simples e serve para achar o serviço, não para medir avanço.
         </p>
       </footer>
     </div>
