@@ -129,9 +129,32 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     );
   }
 
-  const hojeNum = hoje ? Math.floor((new Date(hoje).getTime() - new Date(planejamento.data?.activities?.[0]?.earlyStart ?? 0).getTime()) / 86400000) : 0;
-  const pontoHoje = curve.points.find(p => p.day === hojeNum) ?? curve.points[0];
-  const desvio = curve.deviation;
+  const inicioPlanejado = planejamento.data?.activities?.[0]?.earlyStart ?? null;
+  const hojeNum =
+    hoje && inicioPlanejado
+      ? Math.floor((new Date(hoje).getTime() - new Date(inicioPlanejado).getTime()) / 86400000)
+      : 0;
+  const aindaNaoComecou = hoje != null && inicioPlanejado != null && hojeNum < 0;
+  // O ponto de referência é HOJE, não o fim da obra. Antes, o desvio vinha do
+  // último ponto (`finalActual - finalPlanned`): qualquer obra sem execução
+  // lançada aparecia como "Obra atrasada" com -100% de desvio, no primeiro dia
+  // e mesmo antes da data de início. Agora compara o realizado com o planejado
+  // até hoje, e antes do início a resposta honesta é "ainda não começou".
+  const pontoHoje = aindaNaoComecou
+    ? { day: 0, planned: 0, actual: 0 }
+    : [...curve.points].reverse().find(p => p.day <= Math.min(hojeNum, curve.duration)) ??
+      curve.points[0];
+  const desvio = pontoHoje.actual - pontoHoje.planned;
+  const statusHoje = aindaNaoComecou
+    ? "indeterminado"
+    : desvio > 0.5
+      ? "adiantado"
+      : desvio < -0.5
+        ? "atrasado"
+        : "no_prazo";
+  const dataDeInicio = inicioPlanejado
+    ? new Date(inicioPlanejado).toLocaleDateString("pt-BR", { timeZone: "UTC" })
+    : null;
 
   return (
     <div className="xl-painel">
@@ -139,13 +162,15 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         <div>
           <span className="xl-painel-kicker">CURVA S — CONTROLE DE PRAZO</span>
           <h2>
-            {curve.status === "adiantado" && "Obra adiantada"}
-            {curve.status === "no_prazo" && "Obra no prazo"}
-            {curve.status === "atrasado" && "Obra atrasada"}
-            {curve.status === "indeterminado" && "Indeterminado"}
+            {aindaNaoComecou && "Obra ainda não começou"}
+            {!aindaNaoComecou && statusHoje === "adiantado" && "Obra adiantada"}
+            {!aindaNaoComecou && statusHoje === "no_prazo" && "Obra no prazo"}
+            {!aindaNaoComecou && statusHoje === "atrasado" && "Obra atrasada"}
           </h2>
           <p>
-            Planejado acumulado: {pontoHoje.planned.toFixed(1)}% — Realizado acumulado: {pontoHoje.actual.toFixed(1)}% — Desvio: {desvio.toFixed(1)}%
+            {aindaNaoComecou
+              ? `Início planejado em ${dataDeInicio ?? "data não definida"} — não existe atraso antes de a obra começar.`
+              : `Planejado até hoje: ${pontoHoje.planned.toFixed(1)}% — Realizado acumulado: ${pontoHoje.actual.toFixed(1)}% — Desvio: ${desvio.toFixed(1)} p.p.`}
           </p>
         </div>
         <button
@@ -235,9 +260,17 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           <strong className="xl-cartao-valor">{pontoHoje.actual.toFixed(1)}%</strong>
         </div>
         <div className={`xl-cartao ${desvio < 0 ? "xl-cartao-ruim" : "xl-cartao-bom"}`}>
-          <span className="xl-cartao-titulo">Desvio</span>
-          <strong className="xl-cartao-valor">{desvio.toFixed(1)}%</strong>
-          <span className="xl-cartao-nota">{desvio < 0 ? "atrasado" : "adiantado"}</span>
+          <span className="xl-cartao-titulo">Desvio até hoje</span>
+          <strong className="xl-cartao-valor">{desvio.toFixed(1)} p.p.</strong>
+          <span className="xl-cartao-nota">
+            {aindaNaoComecou
+              ? "obra ainda não começou"
+              : desvio < 0
+                ? "atrasado"
+                : desvio > 0
+                  ? "adiantado"
+                  : "em cima do planejado"}
+          </span>
         </div>
       </div>
 
