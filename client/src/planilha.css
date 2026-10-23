@@ -3575,10 +3575,35 @@ tr:hover .xl-codigo {
   color: #fff;
 }
 @media (max-width: 600px) {
-  .arq-context-header { padding: 0 10px; }
-  .arq-context-top { min-height: 44px; }
-  .arq-context-brand strong { font-size: 12px; }
-  .arq-context-project { min-height: 56px; }
+  /* Cabeçalho da obra em UMA linha no celular: nome à esquerda, sair à direita.
+     Eram 109px de uma tela de 664px — 16% do aparelho gastos antes de qualquer
+     número. O "ARQUIMEDES" e o botão de recolher menu não têm função no celular
+     (a navegação é a barra de campo), então saem da conta. */
+  .arq-context-header {
+    flex-direction: row-reverse;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+  }
+  .arq-context-top {
+    flex: 0 0 auto;
+    min-height: 0;
+    border-bottom: 0;
+  }
+  .arq-context-brand,
+  .arq-context-collapse,
+  .arq-context-project-copy > span { display: none; }
+  .arq-context-project {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 52px;
+    padding: 0;
+    gap: 8px;
+  }
+  .arq-context-project-copy { gap: 0; }
+  .arq-context-project-copy > strong { font-size: 14px; }
+  .arq-context-project-copy > small { font-size: 12px; }
+  .xl-sair-obra { font-size: 12.5px; }
 }
 
 /* Valor Ganho (EVM) — custo REAL.
@@ -5044,6 +5069,9 @@ tr:hover .xl-codigo {
   .pd-bloco-titulo{font-size:14px}
   .pd-bloco-nota,.pd-contador{font-size:12.5px}
   .pd-etiqueta{font-size:12px;padding:2px 8px}
+  .pd-status-fatia{font-size:12.5px;padding:2px 6px}
+  .pd-alerta{gap:8px;flex-wrap:wrap}
+  .pd-alerta-acao{font-size:12.5px;padding:6px 10px;min-height:40px}
   .pd-semana-codigo,.pd-semana-meta{font-size:12.5px}
   .pd-semana-nome{font-size:13px}
 }
