@@ -455,6 +455,16 @@ export const scheduleActivities = pgTable(
      * vários pavimentos.
      */
     pavimento: varchar("pavimento", { length: 80 }),
+    /**
+     * Marco: atividade de data única — entrega de projeto, aprovação, virada de
+     * fase, cura concluída. Não ocupa dias no cronograma: é um ponto.
+     *
+     * A duração continua sendo >= 1 no banco (`schedule_activities_duration_positive`
+     * e o CPM trabalham em dias úteis). Quem traduz "marco" em ponto sem barra é
+     * a leitura — Gantt (losango), planilha e Linha de Balanço —, para não mexer
+     * na conta de datas nem nos caminhos.
+     */
+    isMilestone: boolean("is_milestone").default(false).notNull(),
     startOffset: integer("startOffset").notNull(),
     durationDays: integer("durationDays").notNull(),
     /**

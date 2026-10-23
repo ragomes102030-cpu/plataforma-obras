@@ -73,6 +73,14 @@ describe("Fim = Início + Duração − 1", () => {
     expect(l.fim).toBe(linha01.inicio);
   });
 
+  it("repasse do marco chega na linha da planilha", () => {
+    // A planilha não muda de conta com marco; ela só precisa saber que é marco
+    // para o Gantt e a Linha de Balanço desenharem um ponto em vez de barra.
+    const l = linhaDoCronograma(CAL, "2026-07-15", { ...linha01, marco: true });
+    expect(l.marco).toBe(true);
+    expect(linhaDoCronograma(CAL, "2026-07-15", linha01).marco).toBeUndefined();
+  });
+
   it("com calendário de obra, o fim pula fim de semana", () => {
     // Mesma entrada, agora no calendário brasileiro: 05/01/2026 é segunda.
     // 15 dias úteis terminam antes de 15 dias corridos.

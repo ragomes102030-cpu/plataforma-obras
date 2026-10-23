@@ -83,7 +83,7 @@ const CONTRATO: Record<string, string[]> = {
   project_mcp_integrations: ["createdAt", "endpointUrl", "externalProjectId", "id", "lastError", "lastSyncedAt", "projectId", "provider", "syncState", "updatedAt"],
   project_plan_versions: ["approvedAt", "baseVersionId", "createdAt", "createdBy", "decisionId", "id", "notes", "projectId", "status", "updatedAt", "versionNumber"],
   projects: ["baseReferencia", "baseReferenciaRef", "bdiDeclarado", "code", "createdAt", "cubMes", "cubUf", "cubValor", "deletedAt", "deletedAtBy", "descricao", "id", "location", "name", "ownerUserId", "plannedFinish", "plannedStart", "progress", "status", "tipoDeObra", "updatedAt"],
-  schedule_activities: ["budgetItemId", "cpmCalculatedAt", "createdAt", "critical", "durationDays", "durationOptimisticDays", "durationPessimisticDays", "eapRef", "earlyFinish", "earlyStart", "exemplo", "externalId", "finishNoLaterThan", "freeFloat", "id", "lateFinish", "lateStart", "mustStartOn", "name", "pavimento", "phase", "plannedQuantity", "productivity", "progress", "projectId", "sortOrder", "startOffset", "status", "totalFloat", "unit", "updatedAt", "versionId", "wbsCode", "wbsNodeId"],
+  schedule_activities: ["budgetItemId", "cpmCalculatedAt", "createdAt", "critical", "durationDays", "durationOptimisticDays", "durationPessimisticDays", "eapRef", "earlyFinish", "earlyStart", "exemplo", "externalId", "finishNoLaterThan", "freeFloat", "id", "is_milestone", "lateFinish", "lateStart", "mustStartOn", "name", "pavimento", "phase", "plannedQuantity", "productivity", "progress", "projectId", "sortOrder", "startOffset", "status", "totalFloat", "unit", "updatedAt", "versionId", "wbsCode", "wbsNodeId"],
   schedule_baseline_items: ["activityId", "baselineId", "durationDays", "earlyFinish", "earlyStart", "id", "startOffset"],
   schedule_baselines: ["createdAt", "createdBy", "id", "name", "projectId", "status", "versionId"],
   schedule_dependencies: ["createdAt", "externalId", "id", "lag", "predecessorId", "projectId", "successorId", "type", "versionId"],
@@ -150,7 +150,7 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 488", () => {
+  it("o total de colunas continua 489", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
@@ -159,7 +159,8 @@ describe("contrato do schema", () => {
     // 424 -> 438 no custo real (cost_entries, o AC do Valor Ganho).
     // 438 -> 464 no Last Planner (planning_constraints + weekly_commitments).
     // 464 -> 488 na medição (measurements + measurement_items).
+    // 488 -> 489 no marco do cronograma (is_milestone em schedule_activities).
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(488);
+    expect(total).toBe(489);
   });
 });

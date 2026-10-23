@@ -4003,7 +4003,7 @@ export const appRouter = router({
           // A régua é o CPM (dias úteis). Antes, `startOffset` zerado em todas as
           // atividades empilhava as 53 barras no primeiro dia e fazia o painel
           // anunciar 120 dias de prazo enquanto a Curva S mostrava 580.
-          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0 };
+          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0, marco:a.isMilestone };
         });
         const linhasDerivadas = gradeDoCronograma(calendarioDaGrade,hoje,entradas);
         const linhas = linhasDerivadas.map((l,i)=>({ ...l, atividadeId: activities.find(a=>a.wbsCode===l.codigo)?.id ?? 0 }));
@@ -4148,7 +4148,7 @@ export const appRouter = router({
       .input(z.object({
         projectId: z.number().int().positive(),
         atividadeId: z.number().int().positive(),
-        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","otimista","pessimista","quantidade","produtividade","unidade"]),
+        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","otimista","pessimista","quantidade","produtividade","unidade","marco"]),
         valor: z.string().max(500),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -4235,6 +4235,14 @@ export const appRouter = router({
           }
         }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
+        if (input.campo === "marco") {
+          // Marco não mexe na duração no banco (o CHECK e o CPM exigem >= 1 dia);
+          // quem achata é a leitura do Gantt e da Linha de Balanço.
+          if (!["0", "1", "true", "false", "sim", "não", "nao"].includes(input.valor.trim().toLowerCase())) {
+            throw badRequest('Marco aceita apenas "1" (é marco) ou "0" (atividade normal).');
+          }
+          patch.isMilestone = ["1", "true", "sim"].includes(input.valor.trim().toLowerCase());
+        }
         if (input.campo === "inicio") {
           const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
           const startDate = new Date(input.valor);
@@ -4252,6 +4260,7 @@ export const appRouter = router({
           durationPessimisticDays: activity.durationPessimisticDays,
           plannedQuantity: activity.plannedQuantity,
           unit: activity.unit,
+          isMilestone: activity.isMilestone,
           cpmCalculatedAt: activity.cpmCalculatedAt,
         };
 

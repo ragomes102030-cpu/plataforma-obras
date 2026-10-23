@@ -1666,6 +1666,57 @@ tr:hover .xl-codigo {
   grid-column: span 3;
 }
 
+.pg-detalhe-marco {
+  margin-top: 2px;
+  padding: 5px 10px;
+  border: 1px solid #cfdfe4;
+  border-radius: 7px;
+  background: #fff;
+  color: #2c525f;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pg-detalhe-marco:hover:not(:disabled) {
+  background: #eef6f8;
+}
+
+.pg-detalhe-marco:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.pg-detalhe-marco.ativo {
+  border-color: #b98a2a;
+  background: #fdf7e7;
+  color: #7a5814;
+}
+
+/* ---- Marco no Gantt ---- */
+.pg-marco {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  background: #b98a2a;
+  box-shadow: 0 0 0 1.5px #fff;
+  transform: rotate(45deg);
+  z-index: 2;
+  pointer-events: auto;
+  cursor: help;
+}
+
+.pg-marco.critica {
+  background: #a63a2c;
+}
+
+.pg-marco.concluido {
+  background: #2f7d5b;
+}
+
 /* ---- Visão geral recolhível ---- */
 .pg-visao {
   margin-bottom: 10px;
@@ -2320,6 +2371,13 @@ tr:hover .xl-codigo {
 
 .pg-amostra.normal { background: #4d8291; }
 .pg-amostra.critica { background: #a63a2c; }
+.pg-amostra.marco {
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  background: #b98a2a;
+  transform: rotate(45deg);
+}
 .pg-amostra.hoje { width: 2px; height: 12px; background: #b3261e; }
 .pg-amostra.semana { background: #eef1f3; border: 1px solid #dfe6ea; }
 .pg-amostra.ligacao {
