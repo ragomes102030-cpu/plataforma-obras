@@ -47,6 +47,11 @@ export type ScheduleEvidenceActivity = {
   startOffset: number;
   startOffsetDay?: number | null;
   durationDays: number;
+  /**
+   * Marco: data única. O CPM recebe duração 0 e as sucessoras FS começam no
+   * mesmo dia do marco — sem isso o marco ocuparia dias que não existem.
+   */
+  isMilestone?: boolean;
   progress: number;
   status: string;
   critical: number;

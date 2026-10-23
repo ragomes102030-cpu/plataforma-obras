@@ -283,7 +283,27 @@ describe("calculateCpm", () => {
 
 });
 
-  it("rejeita duração zero e duração fracionária", () => {
-    expect(() => calculateCpm([{ id: "A", duration: 0 }], [])).toThrow("Duração inválida");
+  it("rejeita duração negativa, duração fracionária e atividade operacional com 0 dia", () => {
+    expect(() => calculateCpm([{ id: "A", duration: -1 }], [])).toThrow("Duração inválida");
     expect(() => calculateCpm([{ id: "A", duration: 1.5 }], [])).toThrow("Duração inválida");
+    expect(() => calculateCpm([{ id: "A", duration: 0 }], [])).toThrow("atividade operacional precisa");
+  });
+
+  it("marco (duração 0) termina no mesmo dia e não empurra a sucessora", () => {
+    const resultado = calculateCpm(
+      [
+        { id: "A", duration: 5 },
+        { id: "M", duration: 0, isMilestone: true },
+        { id: "B", duration: 2 },
+      ],
+      [
+        { predecessorId: "A", successorId: "M", type: "FS", lag: 0 },
+        { predecessorId: "M", successorId: "B", type: "FS", lag: 0 },
+      ]
+    );
+    const marco = resultado.activities.find(a => a.id === "M")!;
+    const sucessora = resultado.activities.find(a => a.id === "B")!;
+    expect(marco.earlyStart).toBe(5);
+    expect(marco.earlyFinish).toBe(5);
+    expect(sucessora.earlyStart).toBe(5);
   });

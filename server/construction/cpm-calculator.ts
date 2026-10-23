@@ -40,7 +40,9 @@ export function calculateDeterministicCpm(
     const schedule = calculateCpm(
       activities.map(activity => ({
         id: String(activity.id),
-        duration: activity.durationDays,
+        // Marco entra na rede com duração 0 (fim = início).
+        duration: activity.isMilestone ? 0 : activity.durationDays,
+        isMilestone: activity.isMilestone,
         startOffsetDay: activity.startOffsetDay ?? undefined,
         mustStartOn: activity.mustStartOnDay ?? undefined,
         finishNoLaterThan: activity.finishNoLaterThanDay ?? undefined,

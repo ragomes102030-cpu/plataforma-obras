@@ -78,6 +78,27 @@ describe("calculateDeterministicCpm", () => {
     expect(result.issues[0]?.code).toBe("dependency_cycle");
   });
 
+  it("marco entra com duração zero e a sucessora começa no mesmo dia", () => {
+    // No banco a duração continua 5 (CHECK exige >= 1); o que manda no CPM é a marca.
+    const marco = { ...activity("M", 5), isMilestone: true };
+    const result = calculateDeterministicCpm(
+      [activity("A", 5), marco, activity("B", 2)],
+      [dependency("A", "M"), dependency("M", "B")]
+    );
+
+    expect(result.valid).toBe(true);
+    const calculado = result.schedule?.activities.find(item => item.id === "M");
+    expect(calculado?.earlyStart).toBe(5);
+    expect(calculado?.earlyFinish).toBe(5);
+    expect(result.schedule?.activities.find(item => item.id === "B")?.earlyStart).toBe(5);
+    expect(result.schedule?.projectDuration).toBe(7);
+  });
+
+  it("atividade comum com duração zero continua inválida", () => {
+    const result = calculateDeterministicCpm([activity("A", 0)], []);
+    expect(result.valid).toBe(false);
+  });
+
   it("aplica FF com lag", () => {
     const result = calculateDeterministicCpm(
       [activity("A", 4), activity("B", 3)],
