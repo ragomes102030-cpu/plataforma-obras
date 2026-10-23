@@ -525,7 +525,10 @@ export function PainelDoCronograma({
         {ultimos.length === 0 ? (
           <p className="pd-tranquilo">Nenhum lançamento registrado ainda.</p>
         ) : (
-          <table className="pd-tabela">
+          /* No celular a tabela rola na horizontal em vez de perder colunas:
+             quantidade e situação são justamente o que se confere no campo. */
+          <div className="pd-tabela-rolagem" tabIndex={0} role="region" aria-label="Últimos lançamentos">
+            <table className="pd-tabela">
             <thead>
               <tr>
                 <th scope="col">Data</th>
@@ -569,6 +572,7 @@ export function PainelDoCronograma({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
