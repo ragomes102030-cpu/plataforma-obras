@@ -1382,7 +1382,8 @@ tr:hover .xl-codigo {
   flex: none;
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  /* Mesmo padding da coluna de linhas: cabeçalho e células alinham na coluna. */
+  padding: 0 8px;
   background: #f3f6f8;
   border-right: 1px solid #d3dde3;
 }
@@ -1526,9 +1527,7 @@ tr:hover .xl-codigo {
   z-index: 2;
   flex: none;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
+  align-items: center;
   padding: 0 8px;
   background: #fff;
   border-right: 1px solid #dbe3e8;
@@ -1539,11 +1538,125 @@ tr:hover .xl-codigo {
   background: #fafcfc;
 }
 
-.pg-esquerda-principal {
+/* A coluna da esquerda é uma planilha de verdade: colunas fixas alinhadas com o
+   cabeçalho e o nome ocupando o resto, como no Project. */
+.pg-celulas,
+.pg-cab-celulas {
+  display: grid;
+  align-items: center;
+  column-gap: 6px;
+  width: 100%;
+}
+
+.pg-celula-atividade {
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
+}
+
+.pg-celula-num {
+  font-size: 10.5px;
+  color: #5f7180;
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-celula-pct {
+  font-weight: 700;
+  color: #33505c;
+}
+
+.pg-cab-num {
+  text-align: right;
+}
+
+.pg-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  padding: 0;
+  border: 1px solid #c8d5dc;
+  border-radius: 3px;
+  background: #fff;
+  color: #2f4a55;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pg-toggle:hover {
+  border-color: #8fb0bd;
+  background: #eef5f7;
+}
+
+.pg-toggle-vazio {
+  flex: none;
+  display: inline-block;
+  width: 18px;
+}
+
+/* Linha de resumo (etapa): fundo próprio e nome em negrito, como no Project. */
+.pg-linha.resumo {
+  background: #eef3f5;
+}
+
+.pg-linha.resumo .pg-esquerda {
+  background: #eef3f5;
+}
+
+.pg-linha.resumo .pg-nome {
+  font-weight: 700;
+  color: #172a35;
+}
+
+.pg-resumo {
+  position: absolute;
+  top: 50%;
+  height: 9px;
+  margin-top: -4.5px;
+  background: #2f4a55;
+}
+
+.pg-resumo::before,
+.pg-resumo::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-bottom: 9px solid #2f4a55;
+}
+
+.pg-resumo::before {
+  left: -1px;
+  border-left: 6px solid transparent;
+}
+
+.pg-resumo::after {
+  right: -1px;
+  border-right: 6px solid transparent;
+}
+
+.pg-resumo.critica {
+  background: #a63a2c;
+}
+
+.pg-resumo.critica::before,
+.pg-resumo.critica::after {
+  border-bottom-color: #a63a2c;
+}
+
+.pg-resumo-avanco {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .pg-ponto-critico {
@@ -1568,23 +1681,6 @@ tr:hover .xl-codigo {
   white-space: nowrap;
   font-size: 12px;
   color: #172a35;
-}
-
-.pg-esquerda-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10.5px;
-  color: #6c7d87;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.pg-frente {
-  margin-left: auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 96px;
 }
 
 .pg-trilho {
@@ -1683,6 +1779,21 @@ tr:hover .xl-codigo {
   .pg-zoom button {
     min-height: 40px;
     padding: 0 10px;
+  }
+  /* Botão de abrir/fechar etapa com 26px: o texto continua com 12px e o alvo
+     fica dentro da linha de 46px, sem crescer a tabela. */
+  .pg-toggle {
+    width: 26px !important;
+    height: 26px !important;
+    min-height: 26px !important;
+    font-size: 15px;
+  }
+  .pg-toggle-vazio {
+    width: 26px;
+  }
+  .pg-celula-num,
+  .pg-celula-pct {
+    font-size: 12px;
   }
   .pg-rolagem {
     max-height: 60vh;
