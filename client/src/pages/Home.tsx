@@ -814,6 +814,13 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     comQuantidade > 0,
   ].filter(Boolean).length;
 
+  // O campo descrição desta obra guarda o pedido feito ao assistente ("não
+  // invente informações", "proponha uma EAP"). Isso não é declaração de escopo e
+  // não pode passar como se fosse: o painel avisa e o gate não fecha.
+  const instrucoesNoTexto = /(n[ãa]o invente|proponha uma eap|ser[áa] revisada pelo engenheiro|com base nessa descri[çc][ãa]o)/i.test(descricao);
+  const plural = (quantidade: number, singular: string, varios: string) =>
+    `${quantidade} ${quantidade === 1 ? singular : varios}`;
+
   // Cada linha é uma dimensão do escopo com a situação real, apurada no
   // cronograma e no cadastro — não uma lista de caixas para o engenheiro
   // preencher. O que não está declarado aparece como pendência, com o número.
@@ -832,7 +839,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       nome: "Frentes de execução",
       categoria: "ORGANIZAÇÃO",
       detalhe: frentes.length
-        ? `${frentes.length} frentes no cronograma: ${frentes.slice(0, 3).join(", ")}${frentes.length > 3 ? "…" : ""}`
+        ? `${plural(frentes.length, "frente", "frentes")} no cronograma: ${frentes.slice(0, 3).join(", ")}${frentes.length > 3 ? "…" : ""}`
         : "Nenhuma frente identificada no cronograma",
       status: frentes.length ? "Identificado" : "Pendente",
     },
@@ -841,7 +848,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       nome: "Locais de execução",
       categoria: "ORGANIZAÇÃO",
       detalhe: pavimentos.length
-        ? `${pavimentos.length} locais no cronograma: ${pavimentos.slice(0, 3).join(", ")}${pavimentos.length > 3 ? "…" : ""}`
+        ? `${plural(pavimentos.length, "local no cronograma", "locais no cronograma")}: ${pavimentos.slice(0, 3).join(", ")}${pavimentos.length > 3 ? "…" : ""}`
         : "Nenhum pavimento ou setor identificado no cronograma",
       status: pavimentos.length ? "Identificado" : "Pendente",
     },
@@ -849,7 +856,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       codigo: "ESC-04",
       nome: "Quantitativos",
       categoria: "MEDIÇÃO",
-      detalhe: `${comQuantidade} de ${atividades.length} atividades com quantidade informada${unidades > 0 ? ` · ${unidades.toLocaleString("pt-BR")} unidades no total` : ""}`,
+      detalhe: `${plural(atividades.length, "atividade no cronograma", "atividades no cronograma")}, ${comQuantidade} com quantidade${unidades > 0 ? ` · ${unidades.toLocaleString("pt-BR")} unidades no total` : ""}`,
       status: comQuantidade === atividades.length && atividades.length > 0 ? "Completo" : comQuantidade > 0 ? "Parcial" : "Pendente",
     },
   ];
@@ -882,7 +889,23 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
             <p><strong>Natureza:</strong> {({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? "Não declarada"}</p>
             <p><strong>Localização:</strong> {localizacao || "Não informada"}</p>
             <p><strong>Descrição do escopo:</strong></p>
-            <p>{descricao.trim() || "Não declarada. A descrição deve registrar inclusões, exclusões e premissas do contrato."}</p>
+            {descricao.trim() ? (
+              descricao.length > 700 ? (
+                <details className="scopo-descricao">
+                  <summary>{descricao.slice(0, 700).trim()}… <em>ver texto completo ({descricao.length} caracteres)</em></summary>
+                  <p>{descricao}</p>
+                </details>
+              ) : (
+                <p>{descricao}</p>
+              )
+            ) : (
+              <p>Não declarada. A descrição deve registrar inclusões, exclusões e premissas do contrato.</p>
+            )}
+            {instrucoesNoTexto && (
+              <p className="scopo-alerta" role="alert">
+                <strong>Atenção:</strong> o texto registrado contém instruções de geração de EAP (pedido ao assistente), não uma declaração de escopo. Revise antes de aprovar.
+              </p>
+            )}
             <p><strong>CUB de referência (R$/m²):</strong> {cubCamposPreenchidos === 0
               ? "Não declarado. Sem valor, UF e mês não há conferência de custo por m²."
               : cubCompleto
@@ -973,9 +996,13 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
           <summary>Critérios para aprovação do escopo</summary>
           <div className="scopo-detail-body">
             <p><strong>{naturezaDoObjeto && localizacao ? "✓" : "○"} Objeto e local declarados</strong> — natureza {naturezaDoObjeto ? naturezaDoObjeto.toLowerCase() : "não informada"}; local {localizacao || "não informado"}.</p>
-            <p><strong>{descricao.trim() ? "✓" : "○"} Descrição formal registrada</strong> — {descricao.trim() ? "contém inclusões, exclusões e premissas." : "falta registrar inclusões, exclusões e premissas."}</p>
-            <p><strong>{frentes.length && pavimentos.length ? "✓" : "○"} Organização da execução</strong> — {frentes.length} frente(s) e {pavimentos.length} local(is) no cronograma.</p>
-            <p><strong>{atividades.length > 0 && comQuantidade === atividades.length ? "✓" : "○"} Quantitativos completos</strong> — {comQuantidade} de {atividades.length} atividades com quantidade informada.</p>
+            <p><strong>{descricao.trim() && !instrucoesNoTexto ? "✓" : "○"} Descrição formal registrada</strong> — {!descricao.trim()
+              ? "falta registrar inclusões, exclusões e premissas."
+              : instrucoesNoTexto
+                ? "o texto atual é um pedido ao assistente, não uma declaração de escopo."
+                : "contém inclusões, exclusões e premissas."}</p>
+            <p><strong>{frentes.length && pavimentos.length ? "✓" : "○"} Organização da execução</strong> — {plural(frentes.length, "frente", "frentes")} e {plural(pavimentos.length, "local", "locais")} no cronograma.</p>
+            <p><strong>{atividades.length > 0 && comQuantidade === atividades.length ? "✓" : "○"} Quantitativos completos</strong> — {comQuantidade} de {plural(atividades.length, "atividade", "atividades")} com quantidade informada.</p>
           </div>
         </details>
         <details open className="scopo-detail">
@@ -983,7 +1010,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
           <div className="scopo-detail-body">
             <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP</span><b>→</b><span>QUANTITATIVOS</span><b>→</b><span>ATIVIDADES</span></div>
             <p>{temPlanejamento
-              ? `${atividades.length} atividades no cronograma, ${frentes.length} frentes e ${pavimentos.length} locais. ${comQuantidade} atividades têm quantidade informada — é a quantidade que liga a atividade ao orçamento e permite medir avanço.`
+              ? `${plural(atividades.length, "atividade", "atividades")} no cronograma, ${plural(frentes.length, "frente", "frentes")} e ${plural(pavimentos.length, "local", "locais")}. ${comQuantidade} têm quantidade informada — é a quantidade que liga a atividade ao orçamento e permite medir avanço.`
               : "O cronograma ainda não tem atividades. Sem atividade não há quantidade, e sem quantidade a cadeia escopo → EAP → orçamento não fecha."}</p>
           </div>
         </details>

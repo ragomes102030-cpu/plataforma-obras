@@ -6530,6 +6530,28 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 }
 .scopo-footer button:hover { background:#edf4f9; }
 
+/* Descricao longa: abre resumida, com o tamanho declarado no proprio resumo.
+   Sem isso, um texto de 2.700 caracteres empurrava o resto da tela para baixo. */
+.scopo-descricao summary {
+  cursor:pointer; list-style:none; color:#31505f; font-size:12.5px; line-height:1.6;
+}
+.scopo-descricao summary::-webkit-details-marker { display:none; }
+.scopo-descricao summary em { font-style:normal; color:#1f6f8b; font-weight:700; }
+.scopo-descricao > p {
+  margin:8px 0 0; padding:10px 12px; border-left:2px solid #d3dee7; background:#f7fafb;
+  color:#42596a; font-size:12.5px; line-height:1.6; white-space:pre-wrap;
+}
+.scopo-alerta {
+  margin:10px 0 0; padding:9px 11px; border-left:3px solid #a9691a; background:#fdf6ea;
+  color:#6b4a12; font-size:12.5px; line-height:1.5;
+}
+
+@media (max-width:900px) {
+  .scopo-descricao summary { font-size:13px; }
+  .scopo-descricao > p { font-size:13px; }
+  .scopo-alerta { font-size:13px; }
+}
+
 @media (max-width:900px) {
   .scopo-workspace { padding:10px; }
   .scopo-workspace-header { align-items:flex-start; flex-direction:column; }

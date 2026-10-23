@@ -503,7 +503,7 @@ function LinhaDeBalanco({
         })}
 
         <text x={left - 12} y="45" textAnchor="end" className="pl-lob-axis-title">
-          LOCALIZAÇÃO
+          FRENTE / LOCAL
         </text>
 
         {locationOrder.map((location, i) => {
@@ -604,6 +604,7 @@ function LinhaDeBalanco({
         <span><i className="pg-amostra normal" /> serviço executado no local</span>
         <span><i className="pg-amostra" style={{ background: "#b3261e", width: 2, height: 12 }} /> hoje</span>
         <span>As linhas ligam o mesmo serviço entre locais: a inclinação é o ritmo da equipe.</span>
+        <span>Eixo vertical: pavimento ou frente informada em cada atividade.</span>
       </div>
     </div>
   );
