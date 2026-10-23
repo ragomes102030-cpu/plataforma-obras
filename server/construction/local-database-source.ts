@@ -156,6 +156,7 @@ export class DrizzleLocalDatabaseReader implements LocalDatabaseReader {
       phase: row.phase,
       startOffset: row.startOffset,
       durationDays: row.durationDays,
+      isMilestone: row.isMilestone,
       progress: row.progress,
       status: row.status,
       critical: row.critical,

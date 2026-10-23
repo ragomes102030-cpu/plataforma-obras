@@ -9,7 +9,13 @@ export type Dependency = {
 
 export type CpmActivity = {
   id: string;
+  /** Dias úteis. Zero só é aceito em marco (ver `isMilestone`). */
   duration: number;
+  /**
+   * Marco: entrega de data única. Duração 0 é legítima só aqui; atividade
+   * operacional com duração 0 continua sendo erro de cadastro.
+   */
+  isMilestone?: boolean;
   /** Primeiro índice de dia permitido para iniciar, herdado do início planejado. */
   startOffsetDay?: number;
   /** Índice do dia útil (CPM) em que a atividade DEVE começar no mais cedo. */
@@ -51,8 +57,12 @@ export function calculateCpm(
   if (byId.size !== activities.length)
     throw new Error("IDs de atividade duplicados");
   for (const activity of activities) {
-    if (!Number.isInteger(activity.duration) || activity.duration < 1) {
-      throw new Error(`Duração inválida para ${activity.id}: deve ser um inteiro maior ou igual a 1 dia`);
+    // 0 dia é válido só em marco (fim = início), como no Primavera/Project.
+    if (!Number.isInteger(activity.duration) || activity.duration < 0) {
+      throw new Error(`Duração inválida para ${activity.id}: deve ser um inteiro maior ou igual a 0 dia (0 = marco)`);
+    }
+    if (activity.duration === 0 && !activity.isMilestone) {
+      throw new Error(`Duração inválida para ${activity.id}: atividade operacional precisa de pelo menos 1 dia`);
     }
     if (activity.startOffsetDay !== undefined &&
         (!Number.isInteger(activity.startOffsetDay) || activity.startOffsetDay < 0)) {

@@ -4236,8 +4236,9 @@ export const appRouter = router({
         }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
         if (input.campo === "marco") {
-          // Marco não mexe na duração no banco (o CHECK e o CPM exigem >= 1 dia);
-          // quem achata é a leitura do Gantt e da Linha de Balanço.
+          // O banco continua com duração >= 1 (CHECK), mas o CPM passa a receber
+          // 0 dia para marco — por isso a marcação invalida o CPM (abaixo) e o
+          // cronograma precisa ser recalculado para as sucessoras andarem.
           if (!["0", "1", "true", "false", "sim", "não", "nao"].includes(input.valor.trim().toLowerCase())) {
             throw badRequest('Marco aceita apenas "1" (é marco) ou "0" (atividade normal).');
           }
@@ -4250,7 +4251,7 @@ export const appRouter = router({
           patch.startOffset = Math.max(0, Math.floor((startDate.getTime() - project.plannedStart.getTime()) / 86400000));
         }
 
-        const invalidatesCpm = ["duracao", "inicio", "produtividade"].includes(input.campo);
+        const invalidatesCpm = ["duracao", "inicio", "produtividade", "marco"].includes(input.campo);
         const before = {
           name: activity.name,
           phase: activity.phase,
