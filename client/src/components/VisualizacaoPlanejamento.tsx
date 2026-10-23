@@ -153,7 +153,10 @@ function Gantt({
 }) {
   const referencia = useRef<HTMLDivElement | null>(null);
   const [larguraVisivel, setLarguraVisivel] = useState(1200);
-  const [pxManual, setPxManual] = useState<number | null>(null);
+  // Abre na escala semanal (7px por dia), como o Project: uma obra de 820 dias
+  // "ajustada" na tela vira 6px de barra e não comunica nada. O botão Ajustar
+  // continua ali para quem quer a visão do todo.
+  const [pxManual, setPxManual] = useState<number | null>(7);
   const estreita = useTelaEstreita();
 
   // No celular a coluna de atividade fica estreita e a linha, alta (dedo);
