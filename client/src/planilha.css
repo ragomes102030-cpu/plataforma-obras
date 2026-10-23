@@ -5007,11 +5007,49 @@ tr:hover .xl-codigo {
   .pd-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .pd-duas-colunas{grid-template-columns:minmax(0,1fr)}
 }
-@media (max-width:720px){
-  .pd{padding:16px 14px 24px}
+/* Painel da obra no celular. A regra antiga escondia a coluna de quantidade —
+   justamente a que se confere no campo — e empilhava os quatro indicadores numa
+   coluna só, o que dava quatro telas de rolagem antes de chegar em qualquer
+   coisa. Agora: dois indicadores por linha (cabe em 360px) e tabela rolando na
+   horizontal, sem perder nenhuma coluna. */
+@media (max-width:760px){
+  .pd{padding:14px 12px 24px;gap:12px}
+  .pd-cabecalho{flex-direction:column;align-items:flex-start;gap:8px;padding-bottom:12px}
+  .pd-sobretitulo{font-size:12px}
+  .pd-titulo{font-size:19px}
+  .pd-selo{font-size:12.5px;padding:4px 10px}
+  .pd-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .pd-kpi{padding:11px 11px 10px;gap:6px}
+  .pd-rotulo{font-size:12.5px;gap:4px}
+  /* A régua ("ponderado pelo valor do orçamento") ganha linha própria: em 165px
+     de cartão ela quebrava palavra por palavra ao lado do título. */
+  .pd-regua{display:block;flex-basis:100%;font-size:12.5px;line-height:1.3}
+  .pd-numero{font-size:23px}
+  .pd-numero-fraco{font-size:17px}
+  .pd-legenda{font-size:12.5px}
+  .pd-tabela-rolagem{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    /* Sombra na borda direita: avisa que há coluna fora da tela. */
+    box-shadow:inset -12px 0 12px -12px rgba(23,42,53,.28);
+    border-radius:6px;
+  }
+  .pd-tabela{min-width:520px}
+  .pd-tabela th{font-size:12px;padding:0 8px 7px}
+  .pd-tabela td{font-size:12.5px;padding:9px 8px}
+  .pd-tabela-codigo,.pd-unidade{font-size:12.5px}
+  .pd-link{font-size:13px;min-height:44px;display:inline-flex;align-items:center}
+  .pd-nota strong,.pd-nota p{font-size:12.5px}
+  .pd-bloco{padding:12px 12px 14px}
+  .pd-bloco-titulo{font-size:14px}
+  .pd-bloco-nota,.pd-contador{font-size:12.5px}
+  .pd-etiqueta{font-size:12px;padding:2px 8px}
+  .pd-semana-codigo,.pd-semana-meta{font-size:12.5px}
+  .pd-semana-nome{font-size:13px}
+}
+@media (max-width:380px){
   .pd-kpis{grid-template-columns:minmax(0,1fr)}
-  .pd-cabecalho{flex-direction:column;align-items:flex-start}
-  .pd-tabela th:nth-child(3),.pd-tabela td:nth-child(3){display:none}
+  .pd-regua{display:inline;flex-basis:auto}
 }
 
 /* Analises sob demanda da aba de orcamento */

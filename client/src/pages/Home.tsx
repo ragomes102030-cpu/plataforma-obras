@@ -557,6 +557,18 @@ function Obra({
     "curva-s": "Curva S", catalogo: "Catálogo de Insumos", comando: "Central de Comando"
   } as Record<string, string>)[aba] ?? aba;
 
+  // Barra de campo (so no celular). Sao as quatro telas que se usa de pe, na
+  // obra, mais o "Mais" que abre o menu completo. Existe porque o painel nao
+  // tinha botao de menu nenhum: o unico hamburguer morava na barra de trabalho,
+  // e a barra de trabalho nao aparece no painel — ou seja, no celular o painel
+  // era um beco sem saida.
+  const atalhosDeCampo: { id: IdDaAba; rotulo: string; icone: ReactNode }[] = [
+    { id: "dashboard", rotulo: "Painel", icone: <HomeIcon size={22} aria-hidden="true" /> },
+    { id: "producao", rotulo: "Produção", icone: <ClipboardList size={22} aria-hidden="true" /> },
+    { id: "gantt", rotulo: "Gantt", icone: <BarChart3 size={22} aria-hidden="true" /> },
+    { id: "financeiro", rotulo: "Custos", icone: <WalletCards size={22} aria-hidden="true" /> },
+  ];
+
   return (
     <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}${menuMobileAberto ? " menu-mobile-aberto" : ""}`}>
       {/* Backdrop do drawer: so aparece no celular com o menu aberto. */}
@@ -658,11 +670,9 @@ function Obra({
                 ))}
               </div>
             )}
-            <div className="arquimedes-workbar-actions">
-              <button type="button" className="xl-menu-mobile" title="Menu" aria-label="Abrir menu de navegação" aria-expanded={menuMobileAberto} onClick={() => setMenuMobileAberto(v => !v)}>
-                <Menu size={17} />
-              </button>
-            </div>
+            {/* O menu do celular saiu daqui e virou a barra de campo, no fim da
+                pagina: era o unico caminho de navegacao e desaparecia justamente
+                no painel. A barra de trabalho ficou so com o "proximo passo". */}
           </div>
         )}
         <div className="arquimedes-content">
@@ -711,6 +721,32 @@ function Obra({
         )}
         </div>
       </main>
+      {/* `<nav>` de verdade: leitor de tela anuncia, e o teclado externo tabula.
+          Z-index fica abaixo do backdrop do drawer para o menu cobrir a barra. */}
+      <nav className="xl-barra-campo" aria-label="Atalhos de campo">
+        {atalhosDeCampo.map((atalho) => (
+          <button
+            key={atalho.id}
+            type="button"
+            className={`xl-barra-campo-item${aba === atalho.id ? " ativa" : ""}`}
+            aria-current={aba === atalho.id ? "page" : undefined}
+            onClick={() => irParaAba(atalho.id)}
+          >
+            {atalho.icone}
+            <span>{atalho.rotulo}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className={`xl-barra-campo-item${menuMobileAberto ? " ativa" : ""}`}
+          aria-label="Todas as abas da obra"
+          aria-expanded={menuMobileAberto}
+          onClick={() => setMenuMobileAberto(true)}
+        >
+          <Menu size={22} aria-hidden="true" />
+          <span>Mais</span>
+        </button>
+      </nav>
     </div>
   );
 }
