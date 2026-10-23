@@ -482,6 +482,14 @@ export async function getConstructionMcpStatus(
   requestId: string,
   clients?: ConstructionMcpReadClients
 ): Promise<ConstructionMcpStatus> {
+  const offlineEntry = (motivo: string): ConstructionMcpServerStatus => ({
+    status: "offline",
+    latencyMs: 0,
+    attempts: 0,
+    toolCount: 0,
+    tools: [],
+    lastError: motivo,
+  });
   const useSharedCache = clients === undefined;
 
   if (
@@ -498,8 +506,28 @@ export async function getConstructionMcpStatus(
   }
 
   const runStatusCheck = async (): Promise<ConstructionMcpStatus> => {
-    const effectiveClients = clients ?? createConstructionMcpClients();
     const startedAt = Date.now();
+    let effectiveClients: ConstructionMcpReadClients;
+    try {
+      effectiveClients = clients ?? createConstructionMcpClients();
+    } catch (error) {
+      // Sem `MCP_*_URL` no ambiente o cliente nem é construído. Isso derrubava a
+      // consulta inteira com HTTP 500 e a Central de Comando anunciava "0 de 0"
+      // sem explicar nada. Agora cada domínio volta offline com o motivo escrito.
+      const message = errorMessage(error);
+      const servers = {
+        eap: offlineEntry(message),
+        cronograma: offlineEntry(message),
+        ganttLob: offlineEntry(message),
+      };
+      return {
+        status: "offline",
+        requestId,
+        checkedAt: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        servers,
+      };
+    }
     const entries = await Promise.all(
       (
         Object.entries(effectiveClients) as Array<
