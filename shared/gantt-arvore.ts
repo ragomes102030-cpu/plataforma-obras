@@ -24,6 +24,8 @@ export type NoDoGantt = {
   progresso: number;
   critica: boolean;
   temFilhos: boolean;
+  /** Marco: data única. Desenha losango, não barra. */
+  marco: boolean;
 };
 
 function somarDias(iso: IsoDate, dias: number): IsoDate {
@@ -63,6 +65,7 @@ export function montarArvore(
     progresso: 0,
     critica: false,
     temFilhos: false,
+    marco: false,
   });
 
   for (const linha of linhas) {
@@ -100,8 +103,11 @@ export function montarArvore(
     const linha = no.linha;
     if (!linha) return;
     no.inicio = linha.inicio;
-    no.fim = somarDias(linha.inicio, Math.max(1, linha.duracao) - 1);
-    no.duracao = Math.max(1, linha.duracao);
+    // Marco é ponto: começa e termina no mesmo dia, mesmo que a planilha tenha
+    // lançado duração (o banco exige >= 1).
+    no.marco = Boolean(linha.marco);
+    no.fim = no.marco ? linha.inicio : somarDias(linha.inicio, Math.max(1, linha.duracao) - 1);
+    no.duracao = no.marco ? 1 : Math.max(1, linha.duracao);
     const quantidade = Number(linha.quantidade) || 0;
     const executado = Number(linha.executado) || 0;
     no.progresso = quantidade > 0 ? Math.max(0, Math.min(100, (executado / quantidade) * 100)) : 0;

@@ -58,6 +58,12 @@ export type EntradaDaLinha = {
   unidade: string | null;
   /** Quantidade já executada, somada da aba PRODUCAO. */
   executado: number;
+  /**
+   * Marco: data única, sem duração de verdade. A planilha continua mostrando os
+   * dias lançados (a duração no banco é >= 1), mas o Gantt e a Linha de Balanço
+   * desenham um ponto em vez de uma barra.
+   */
+  marco?: boolean;
 };
 
 /** Uma linha da grade, com as cinco colunas derivadas. */

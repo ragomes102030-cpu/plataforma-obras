@@ -161,7 +161,17 @@ function Gantt({
   inicioObra,
 }: {
   linhas: EntradaDaLinha[];
-  atividades: Map<string, { critical: number; totalFloat: number | null; cpmCalculatedAt: Date | string | null }>;
+  atividades: Map<
+    string,
+    {
+      id: number;
+      projectId: number;
+      isMilestone: boolean;
+      critical: number;
+      totalFloat: number | null;
+      cpmCalculatedAt: Date | string | null;
+    }
+  >;
   dependencias: { de: string; para: string; tipo: string }[];
   dados: { start: string; end: string; total: number };
   hoje: IsoDate;
@@ -169,6 +179,14 @@ function Gantt({
 }) {
   const referencia = useRef<HTMLDivElement | null>(null);
   const [larguraVisivel, setLarguraVisivel] = useState(1200);
+  const utils = trpc.useUtils();
+  const [alternandoMarco, setAlternandoMarco] = useState(false);
+  const marcarMarco = trpc.planning.atualizarAtividade.useMutation({
+    onSuccess: async () => {
+      await utils.planning.list.invalidate();
+      await utils.planning.grade.invalidate();
+    },
+  });
   // Abre na escala semanal (7px por dia), como o Project: uma obra de 820 dias
   // "ajustada" na tela vira 6px de barra e não comunica nada. O botão Ajustar
   // continua ali para quem quer a visão do todo.
@@ -411,6 +429,8 @@ function Gantt({
         : lista.map(dependencia => `${dependencia.tipo.toUpperCase()} ${dependencia[chave]}`).join(" · ");
     return {
       no,
+      atividadeId: atividade?.id ?? null,
+      projetoId: atividade?.projectId ?? null,
       folga: typeof atividade?.totalFloat === "number" ? atividade.totalFloat : null,
       predecessoras: resumo(listaPred, "de"),
       sucessoras: resumo(listaSuces, "para"),
@@ -672,7 +692,13 @@ function Gantt({
               const inicioBarra = Math.max(0, posicao(no.inicio));
               const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, Math.max(1, no.duracao) * px));
               const resumo = no.temFilhos;
-              const descricao = `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${Math.round(no.progresso)}% executado${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}`;
+              // Marco não tem barra: é um losango na data. O rótulo e o ponto de
+              // avanço passam a nascer do losango, não do fim de uma barra.
+              const marco = !resumo && no.marco;
+              const fimVisual = marco ? inicioBarra : inicioBarra + larguraBarra;
+              const descricao = marco
+                ? `${no.codigo} ${no.nome} · marco em ${fmt(no.inicio)} · ${no.progresso >= 100 ? "concluído" : "não concluído"}${no.critica ? " · caminho crítico" : ""}`
+                : `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${Math.round(no.progresso)}% executado${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}`;
               return (
                 <div
                   key={no.chave}
@@ -717,7 +743,7 @@ function Gantt({
                       </span>
                       {!estreita && (
                         <>
-                          <span className="pg-celula-num">{no.duracao}d</span>
+                          <span className="pg-celula-num">{no.marco ? "marco" : `${no.duracao}d`}</span>
                           <span className="pg-celula-num">{fmt(no.inicio)}</span>
                           <span className="pg-celula-num">{fmt(no.fim)}</span>
                         </>
@@ -730,6 +756,13 @@ function Gantt({
                       <div className={`pg-resumo${no.critica ? " critica" : ""}`} style={{ left: inicioBarra, width: larguraBarra }} title={descricao}>
                         <i className="pg-resumo-avanco" style={{ width: `${no.progresso}%` }} />
                       </div>
+                    ) : marco ? (
+                      <span
+                        className={`pg-marco${no.critica ? " critica" : ""}${no.progresso >= 100 ? " concluido" : ""}`}
+                        style={{ left: inicioBarra }}
+                        title={descricao}
+                        aria-label={descricao}
+                      />
                     ) : (
                       <>
                         <div
@@ -750,14 +783,14 @@ function Gantt({
                         // Rótulo fora da barra só entra se houver espaço; se não
                         // couber o nome inteiro, encurta o código ou some — do
                         // mesmo jeito que o Project evita sobreposição.
-                        const sobra = larguraDoTempo - (inicioBarra + larguraBarra) - 8;
+                        const sobra = larguraDoTempo - fimVisual - 8;
                         if (sobra < 30) return null;
                         const curto = sobra < 96;
-                        const comDatas = sobra >= 240 && !resumo;
+                        const comDatas = sobra >= 240 && !resumo && !marco;
                         return (
                           <span
                             className={`pg-rotulo-barra${resumo ? " resumo" : ""}${no.critica ? " critica" : ""}`}
-                            style={{ left: inicioBarra + larguraBarra + 6, maxWidth: sobra }}
+                            style={{ left: fimVisual + (marco ? 10 : 6), maxWidth: sobra }}
                           >
                             {curto ? no.codigo : `${no.codigo} ${no.nome}`}
                             {comDatas && (
@@ -766,6 +799,7 @@ function Gantt({
                                 {fmt(no.inicio)} – {fmt(no.fim)}
                               </em>
                             )}
+                            {marco && <em> {fmt(no.inicio)}</em>}
                           </span>
                         );
                       })()}
@@ -805,7 +839,7 @@ function Gantt({
             </div>
             <div>
               <dt>Duração</dt>
-              <dd>{detalhe.no.duracao} dias</dd>
+              <dd>{detalhe.no.marco ? "marco (data única)" : `${detalhe.no.duracao} dias`}</dd>
             </div>
             <div>
               <dt>Executado</dt>
@@ -823,8 +857,40 @@ function Gantt({
             </div>
             <div>
               <dt>Situação</dt>
-              <dd>{detalhe.no.temFilhos ? "etapa (resumo)" : detalhe.no.critica ? "caminho crítico" : "com folga"}</dd>
+              <dd>{detalhe.no.temFilhos ? "etapa (resumo)" : detalhe.no.marco ? "marco" : detalhe.no.critica ? "caminho crítico" : "com folga"}</dd>
             </div>
+            {!detalhe.no.temFilhos && detalhe.atividadeId != null && detalhe.projetoId != null && (
+              <div className="pg-detalhe-larga">
+                <dt>Marco</dt>
+                <dd>
+                  <button
+                    type="button"
+                    className={`pg-detalhe-marco${detalhe.no.marco ? " ativo" : ""}`}
+                    disabled={marcarMarco.isPending}
+                    onClick={async () => {
+                      if (detalhe.atividadeId == null || detalhe.projetoId == null) return;
+                      setAlternandoMarco(true);
+                      try {
+                        await marcarMarco.mutateAsync({
+                          projectId: detalhe.projetoId,
+                          atividadeId: detalhe.atividadeId,
+                          campo: "marco",
+                          valor: detalhe.no.marco ? "0" : "1",
+                        });
+                      } finally {
+                        setAlternandoMarco(false);
+                      }
+                    }}
+                  >
+                    {marcarMarco.isPending || alternandoMarco
+                      ? "salvando…"
+                      : detalhe.no.marco
+                        ? "Voltar a ser atividade normal"
+                        : "Transformar em marco (data única)"}
+                  </button>
+                </dd>
+              </div>
+            )}
             <div className="pg-detalhe-larga">
               <dt>Predecessoras</dt>
               <dd>{detalhe.predecessoras}</dd>
@@ -840,6 +906,7 @@ function Gantt({
       <div className="pg-legenda">
         <span><i className="pg-amostra normal" /> executada</span>
         <span><i className="pg-amostra critica" /> caminho crítico</span>
+        <span><i className="pg-amostra marco" /> marco</span>
         <span><i className="pg-amostra hoje" /> hoje</span>
         <span><i className="pg-amostra semana" /> fim de semana</span>
         {mostrarSetas && <span><i className="pg-amostra ligacao" /> dependência</span>}
@@ -863,8 +930,12 @@ function LinhaDeBalanco({
   // Modelo Prevision: tempo no eixo X, localizações no eixo Y.
   // Cada serviço repetitivo vira uma faixa colorida por localização e uma
   // linha de ritmo que conecta o início do serviço entre os pavimentos.
+  //
+  // Marco fica de fora: ele é um ponto de entrega, não uma frente de serviço —
+  // se entrasse, viraria uma bolinha solta e quebraria a linha de ritmo.
+  const linhasDeServico = useMemo(() => linhas.filter(l => !l.marco), [linhas]);
   const locations = Array.from(
-    new Set(linhas.map(l => l.pavimento || l.frente).filter(Boolean))
+    new Set(linhasDeServico.map(l => l.pavimento || l.frente).filter(Boolean))
   );
   const locationOrder = [...locations].sort((a, b) => {
     const na = Number(String(a).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
@@ -875,7 +946,7 @@ function LinhaDeBalanco({
 
   const servicos = Array.from(
     new Map(
-      linhas.map(l => {
+      linhasDeServico.map(l => {
         const key = l.atividade.trim().toLocaleLowerCase("pt-BR");
         return [key, l.atividade.trim()];
       })
@@ -1049,7 +1120,7 @@ function LinhaDeBalanco({
         })}
 
         {servicos.map((servico, serviceIndex) => {
-          const pontos = linhas
+          const pontos = linhasDeServico
             .filter(l => l.atividade.trim().toLocaleLowerCase("pt-BR") === servico.key)
             .filter(l => Boolean(l.pavimento || l.frente))
             .map(l => {
@@ -1084,7 +1155,7 @@ function LinhaDeBalanco({
               )}
               {pontos.map(p => (
                 <g key={`${servico.key}-${p.location}-${p.codigo}`}>
-                  <title>{`${servico.label} · ${p.location} · ${p.duracao} dias · início ${fmt(pontos.length ? linhas.find(l => l.codigo === p.codigo)?.inicio || dados.start : dados.start)}`}</title>
+                  <title>{`${servico.label} · ${p.location} · ${p.duracao} dias · início ${fmt(pontos.length ? linhasDeServico.find(l => l.codigo === p.codigo)?.inicio || dados.start : dados.start)}`}</title>
                   <rect
                     x={p.x}
                     y={p.y - 10}

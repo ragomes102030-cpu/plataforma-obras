@@ -88,6 +88,24 @@ describe("montarArvore", () => {
     expect(arvore[0]!.temFilhos).toBe(true);
     expect(arvore[0]!.filhos[0]!.linha).not.toBeNull();
   });
+
+  it("trata marco como ponto: começa e termina no mesmo dia", () => {
+    const arvore = montarArvore([entrada("1.1", "2026-10-10", 5, { marco: true })]);
+    const marco = arvore[0]!.filhos[0]!;
+    expect(marco.marco).toBe(true);
+    expect(marco.inicio).toBe("2026-10-10");
+    expect(marco.fim).toBe("2026-10-10");
+    // A duração continua 1 (mínimo do banco/CPM); quem achata é o desenho.
+    expect(marco.duracao).toBe(1);
+  });
+
+  it("não estica a etapa por causa da duração lançada de um marco", () => {
+    const arvore = montarArvore([
+      entrada("1.1", "2026-10-01", 2),
+      entrada("1.2", "2026-10-10", 30, { marco: true }),
+    ]);
+    expect(arvore[0]!.fim).toBe("2026-10-10");
+  });
 });
 
 describe("linhasVisiveis", () => {
