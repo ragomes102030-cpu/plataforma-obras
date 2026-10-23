@@ -403,16 +403,20 @@ function Gantt({
   return (
     <div className={`pg${telaCheia ? " tela-cheia" : ""}${visaoAberta ? "" : " pg-visao-fechada"}`}>
       <section className={`pg-visao${visaoAberta ? "" : " recolhida"}`} aria-label="Visão geral do cronograma">
-        <button type="button" className="pg-visao-cabeca" onClick={alternarVisao} aria-expanded={visaoAberta}>
+        <button type="button" className="pg-visao-cabeca" onClick={alternarVisao} aria-expanded={visaoAberta} aria-controls="pg-visao-kpis">
+          <span className={`pg-visao-seta${visaoAberta ? "" : " girada"}`} aria-hidden="true">
+            <ChevronDown size={14} />
+          </span>
           <span className="pg-visao-titulo">Visão geral</span>
           <span className="pg-visao-resumo">
-            {resumoDoPlano.atividades} atividades · {resumoDoPlano.etapas} etapas · término {fmt(dados.end)} ·{" "}
-            {Math.round(resumoDoPlano.executado)}% executado
+            <span>{resumoDoPlano.atividades} atividades</span>
+            <span>{resumoDoPlano.etapas} etapas</span>
+            <span>término {fmtComAno(dados.end, true)}</span>
+            <span className="pg-visao-destaque">{Math.round(resumoDoPlano.executado)}% executado</span>
           </span>
-          <ChevronDown size={16} className={`pg-visao-seta${visaoAberta ? "" : " girada"}`} aria-hidden="true" />
         </button>
         {visaoAberta && (
-          <dl className="pg-visao-kpis">
+          <dl className="pg-visao-kpis" id="pg-visao-kpis">
             <div>
               <dt>Período do plano</dt>
               <dd>
@@ -825,6 +829,7 @@ function LinhaDeBalanco({
   const rolagem = useRef<HTMLDivElement | null>(null);
   const [larguraVisivel, setLarguraVisivel] = useState(1100);
   const [pxManual, setPxManual] = useState<number | null>(4.5);
+  const [scrollTop, setScrollTop] = useState(0);
 
   useEffect(() => {
     const elemento = rolagem.current;
@@ -837,9 +842,11 @@ function LinhaDeBalanco({
     return () => observador.disconnect();
   }, []);
 
-  const left = 172;
+  // O eixo de locais fica congelado à esquerda (como no Prevision): rolar o
+  // tempo não pode esconder em que pavimento a equipe está.
+  const left = larguraVisivel < 560 ? 118 : 172;
   const right = 56;
-  const top = 82;
+  const top = 96;
   const bottom = 46;
   const rowH = 44;
   // Escala de leitura padrão: 4,5px por dia (~135px por mês). "Ajustar" espreme a
@@ -902,7 +909,12 @@ function LinhaDeBalanco({
         </div>
       </div>
 
-      <div className="pg-rolagem" ref={rolagem}>
+      <div className="pg-lob-janela">
+        <div
+          className="pg-rolagem"
+          ref={rolagem}
+          onScroll={evento => setScrollTop(evento.currentTarget.scrollTop)}
+        >
         <svg
           className="pl-lob pl-lob-prevision"
           style={{ width, maxWidth: "none" }}
@@ -917,13 +929,13 @@ function LinhaDeBalanco({
             RITMO DAS EQUIPES POR LOCAL
           </text>
 
-        <rect x={left} y="28" width={width - left - right} height="28" className="pl-lob-header" />
+        <rect x={left} y="28" width={width - left - right} height="22" className="pl-lob-header" />
         {monthTicks.map(month => {
           const xx = x(month);
           return (
             <g key={month}>
               <line x1={xx} x2={xx} y1="28" y2={height - bottom} className="pl-lob-month-grid" />
-              <text x={xx + 6} y="45" className="pl-lob-month">{fmtMes(month)}</text>
+              <text x={xx + 6} y="44" className="pl-lob-month">{fmtMes(month)}</text>
             </g>
           );
         })}
@@ -932,8 +944,15 @@ function LinhaDeBalanco({
           const xx = x(d);
           return (
             <g key={d}>
-              <line x1={xx} x2={xx} y1={56} y2={height - bottom} className="pl-lob-week-grid" />
-              <text x={xx + 2} y="68" className="pl-lob-date">{fmt(d)}</text>
+              <line x1={xx} x2={xx} y1="50" y2={height - bottom} className="pl-lob-week-grid" />
+              <text
+                x={xx + 3}
+                y={54}
+                className="pl-lob-date"
+                transform={`rotate(90 ${xx + 3} 54)`}
+              >
+                {fmt(d)}
+              </text>
             </g>
           );
         })}
@@ -1026,15 +1045,43 @@ function LinhaDeBalanco({
           );
         })}
 
-        <line x1={left} x2={width - right} y1={56} y2={56} className="pl-lob-axis" />
-        <line x1={left} x2={left} y1={56} y2={height - bottom} className="pl-lob-axis" />
+        <line x1={left} x2={width - right} y1={50} y2={50} className="pl-lob-axis" />
+        <line x1={left} x2={left} y1={50} y2={height - bottom} className="pl-lob-axis" />
         <line x1={hojeX} x2={hojeX} y1="28" y2={height - bottom} className="pg-hoje-linha" />
         <text x={hojeX + 4} y="22" className="pl-gantt-hoje-label">HOJE</text>
         <text x={width / 2} y={height - 12} textAnchor="middle" className="pl-lob-caption">
           TEMPO →
         </text>
         </svg>
+        </div>
+
+        <div className="pl-lob-eixo" style={{ width: left, height }} aria-hidden="true">
+          <div className="pl-lob-eixo-interno" style={{ height, transform: `translateY(${-scrollTop}px)` }}>
+            <strong className="pl-lob-eixo-titulo">LINHA DE BALANÇO</strong>
+            <span className="pl-lob-eixo-sub">RITMO DAS EQUIPES POR LOCAL</span>
+            <span className="pl-lob-eixo-cabeca" style={{ top: 44 }}>
+              FRENTE / LOCAL
+            </span>
+            {locationOrder.map((location, i) => (
+              <span
+                key={location}
+                className={`pl-lob-eixo-nome${i % 2 ? " alt" : ""}`}
+                style={{ top: top + i * rowH }}
+                title={location}
+              >
+                {location}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {locationOrder.length === 0 && (
+        <p className="pl-lob-vazio">
+          A linha de balanço precisa de <strong>pavimento</strong> ou <strong>frente</strong> nas atividades. Preencha o
+          local na planilha do cronograma para o gráfico aparecer.
+        </p>
+      )}
 
       <div className="pg-legenda">
         <span><i className="pg-amostra normal" /> serviço executado no local</span>

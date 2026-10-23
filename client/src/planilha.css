@@ -1203,8 +1203,96 @@ tr:hover .xl-codigo {
 .pl-lob-month-grid { stroke: #cfd8dc; stroke-width: 1.1; }
 .pl-lob-week-grid { stroke: #e7ecef; stroke-width: 1; }
 .pl-lob-month { font-size: 12px; font-weight: 700; fill: #53656d; }
-.pl-lob-date { font-size: 10px; fill: #8a979d; }
+.pl-lob-date { font-size: 10px; fill: #7d8b91; }
 .pl-lob-axis-title { font-size: 10.5px; font-weight: 700; fill: #65767e; letter-spacing: .05em; }
+
+/* Eixo de locais congelado: rolar o tempo não esconde o pavimento. */
+.pg-lob-janela {
+  position: relative;
+}
+
+.pl-lob-eixo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  overflow: hidden;
+  max-height: 100%;
+  border-right: 1px solid #cfd8dc;
+  background: #fff;
+  box-shadow: 6px 0 10px -8px rgba(23, 42, 53, 0.35);
+}
+
+.pl-lob-eixo-interno {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.pl-lob-eixo-titulo {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  color: #62737b;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.pl-lob-eixo-sub {
+  position: absolute;
+  top: 32px;
+  left: 14px;
+  overflow: hidden;
+  max-width: calc(100% - 20px);
+  color: #7a8991;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pl-lob-eixo-cabeca {
+  position: absolute;
+  right: 12px;
+  color: #65767e;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.pl-lob-eixo-nome {
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  height: 44px;
+  border-bottom: 1px solid #e4e9ec;
+  color: #53656d;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pl-lob-eixo-nome.alt {
+  background: #fafcfc;
+}
+
+.pl-lob-vazio {
+  margin: 10px 12px 0;
+  padding: 16px;
+  border: 1px dashed #c7d8e0;
+  border-radius: 8px;
+  background: #f8fbfc;
+  color: #52646f;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 .pl-lob-row { fill: #fff; }
 .pl-lob-row.alt { fill: #fafcfc; }
 .pl-lob-row-grid { stroke: #e4e9ec; stroke-width: 1; }
@@ -1526,9 +1614,10 @@ tr:hover .xl-codigo {
 .pg-visao-cabeca {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  padding: 8px 12px;
+  min-height: 42px;
+  padding: 0 12px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -1538,7 +1627,38 @@ tr:hover .xl-codigo {
 }
 
 .pg-visao-cabeca:hover {
-  background: #f2f7f9;
+  background: #f4f9fa;
+}
+
+.pg-visao-cabeca:focus-visible {
+  outline: 2px solid #4d8291;
+  outline-offset: -2px;
+}
+
+.pg-visao.recolhida .pg-visao-cabeca {
+  background: #f7fafb;
+}
+
+.pg-visao-seta {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: #eaf1f4;
+  color: #4a6572;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.pg-visao-cabeca:hover .pg-visao-seta {
+  background: #dbe9ed;
+}
+
+.pg-visao-seta.girada {
+  transform: rotate(-90deg);
 }
 
 .pg-visao-titulo {
@@ -1552,23 +1672,36 @@ tr:hover .xl-codigo {
 }
 
 .pg-visao-resumo {
+  display: flex;
   flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
   min-width: 0;
   overflow: hidden;
-  color: #52646f;
+  color: #5b707c;
   font-size: 12px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pg-visao-seta {
+.pg-visao-resumo > span {
   flex: none;
-  color: #6c7d87;
-  transition: transform 0.18s ease;
 }
 
-.pg-visao-seta.girada {
-  transform: rotate(-90deg);
+.pg-visao-resumo > span + span::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 9px;
+  border-radius: 50%;
+  background: #b9c8ce;
+  vertical-align: middle;
+}
+
+.pg-visao-destaque {
+  color: #2f4a55;
+  font-weight: 600;
 }
 
 .pg-visao-kpis {
@@ -2223,7 +2356,14 @@ tr:hover .xl-codigo {
     font-size: 11.5px;
   }
   .pg-visao-cabeca {
-    min-height: 44px;
+    min-height: 46px;
+  }
+  /* No celular a barra recolhida mostra só o essencial, sem texto cortado. */
+  .pg-visao-resumo > span:not(.pg-visao-destaque) {
+    display: none;
+  }
+  .pg-visao-resumo > span + span::before {
+    display: none;
   }
   .pg.tela-cheia {
     padding: 6px;
