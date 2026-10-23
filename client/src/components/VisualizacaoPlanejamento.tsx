@@ -267,10 +267,29 @@ function Gantt({
   const visiveis = useMemo(() => linhasVisiveis(arvore, colapsados), [arvore, colapsados]);
 
   const resumoDoPlano = useMemo(() => {
-    const folhas = arvore.filter(no => !no.temFilhos);
-    const peso = folhas.reduce((soma, no) => soma + Math.max(1, no.duracao), 0);
-    const executado = peso === 0 ? 0 : folhas.reduce((soma, no) => soma + no.progresso * Math.max(1, no.duracao), 0) / peso;
-    return { atividades: folhas.length, etapas: arvore.length - folhas.length, executado };
+    let total = 0;
+    let atividades = 0;
+    let peso = 0;
+    let ponderado = 0;
+    const andar = (nos: typeof arvore) => {
+      for (const no of nos) {
+        total += 1;
+        if (no.filhos.length) {
+          andar(no.filhos);
+          continue;
+        }
+        atividades += 1;
+        const dias = Math.max(1, no.duracao);
+        peso += dias;
+        ponderado += no.progresso * dias;
+      }
+    };
+    andar(arvore);
+    return {
+      atividades,
+      etapas: total - atividades,
+      executado: peso === 0 ? 0 : ponderado / peso,
+    };
   }, [arvore]);
 
   // Filtro de visão (não de edição): esconde linhas, nunca altera o plano.
@@ -382,7 +401,7 @@ function Gantt({
   };
 
   return (
-    <div className={`pg${telaCheia ? " tela-cheia" : ""}`}>
+    <div className={`pg${telaCheia ? " tela-cheia" : ""}${visaoAberta ? "" : " pg-visao-fechada"}`}>
       <section className={`pg-visao${visaoAberta ? "" : " recolhida"}`} aria-label="Visão geral do cronograma">
         <button type="button" className="pg-visao-cabeca" onClick={alternarVisao} aria-expanded={visaoAberta}>
           <span className="pg-visao-titulo">Visão geral</span>
