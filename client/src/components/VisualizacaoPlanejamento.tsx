@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Maximize2, Minimize2, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Maximize2, Minimize2, Printer, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
@@ -10,6 +11,10 @@ type Props = {
   inicioObra: IsoDate | null;
   hoje: IsoDate;
   projetoId: number;
+  /** Cabeçalho impresso: nome, código e local da obra. */
+  titulo?: string;
+  codigoObra?: string | null;
+  localObra?: string | null;
 };
 
 type View = "gantt" | "lob";
@@ -44,6 +49,9 @@ export function VisualizacaoPlanejamento({
   hoje,
   projetoId,
   view = "gantt",
+  titulo,
+  codigoObra,
+  localObra,
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
@@ -115,7 +123,7 @@ export function VisualizacaoPlanejamento({
         </div>
       )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} />
+        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} />
       ) : (
         <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
       )}
@@ -159,6 +167,9 @@ function Gantt({
   dados,
   hoje,
   inicioObra,
+  titulo,
+  codigoObra,
+  localObra,
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<
@@ -176,6 +187,10 @@ function Gantt({
   dados: { start: string; end: string; total: number };
   hoje: IsoDate;
   inicioObra: IsoDate | null;
+  /** Cabeçalho da impressão: nome, código e local da obra. */
+  titulo?: string;
+  codigoObra?: string | null;
+  localObra?: string | null;
 }) {
   const referencia = useRef<HTMLDivElement | null>(null);
   const [larguraVisivel, setLarguraVisivel] = useState(1200);
@@ -355,6 +370,26 @@ function Gantt({
       ),
     [visiveis, soCritico, termo]
   );
+
+  // ---- Impressão / PDF -----------------------------------------------------
+  // A tabela de impressão mede o tempo em porcentagem (não em pixel), então cabe
+  // na largura da folha em qualquer escala. Ela é um portal no <body> e só existe
+  // na impressão: o CSS esconde o app e mostra esta tabela, com <thead> repetido
+  // a cada página, como o Primavera faz.
+  const impressao = useMemo(() => {
+    const total = Math.max(1, larguraDoTempo);
+    const pct = (valor: number) => Math.max(0, Math.min(100, (valor / total) * 100));
+    const doDia = (iso: string) => ((dateMs(iso) - dateMs(dados.start)) / 86400000) * px;
+    return {
+      hoje: pct(Math.max(0, doDia(hoje))),
+      meses: meses.map(mes => ({ rotulo: mes.rotulo, esquerda: pct(mes.x), largura: pct(mes.largura) })),
+      linhas: filtradas.map(no => {
+        const inicio = Math.max(0, doDia(no.inicio));
+        const largura = Math.max(6, Math.min(larguraDoTempo - inicio, Math.max(1, no.duracao) * px));
+        return { no, esquerda: pct(inicio), largura: pct(largura) };
+      }),
+    };
+  }, [filtradas, larguraDoTempo, meses, px, dados.start, hoje]);
 
   // Geometria de cada linha filtrada, em coordenadas do trilho de tempo. É o que
   // permite desenhar as setas de dependência como no Project.
@@ -590,6 +625,10 @@ function Gantt({
           >
             {telaCheia ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
             <span>{telaCheia ? "Sair" : "Tela cheia"}</span>
+          </button>
+          <button type="button" onClick={() => window.print()} aria-label="Imprimir ou salvar o cronograma em PDF" title="Imprimir / PDF (paisagem)">
+            <Printer size={16} aria-hidden="true" />
+            <span>Imprimir / PDF</span>
           </button>
         </div>
       </div>
@@ -916,6 +955,98 @@ function Gantt({
         <span>Clique numa linha para ver datas, folga e ligações.</span>
         {inicioObra && <span>Início da obra: {fmtComAno(inicioObra, true)}</span>}
       </div>
+
+      {/* Impressão / PDF: portal no body, escondido na tela e visível só no papel. */}
+      {createPortal(
+        <div className="pg-impressao">
+          <table className="pgp">
+            <colgroup>
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "21%" }} />
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "4%" }} />
+              <col style={{ width: "51%" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th colSpan={6} className="pgp-titulo">
+                  <strong>{titulo || "Cronograma"}</strong>
+                  <span className="pgp-sub">
+                    {[codigoObra, localObra].filter(Boolean).join(" · ")}
+                    {[codigoObra, localObra].filter(Boolean).length ?  " · " : ""}
+                    Planejamento · emitido em {fmtComAno(hoje, true)}
+                  </span>
+                </th>
+                <th className="pgp-titulo pgp-titulo-tempo">
+                  <span className="pgp-escala">
+                    Escala {unidadeDaEscala(px)} · {fmtComAno(dados.start, true)} a {fmtComAno(dados.end, true)}
+                  </span>
+                  <span className="pgp-sub">
+                    {impressao.linhas.length} linha{impressao.linhas.length === 1 ? "" : "s"}
+                    {termo ? ` · busca “${termo}”` : ""}
+                    {soCritico ? " · só caminho crítico" : ""}
+                  </span>
+                </th>
+              </tr>
+              <tr className="pgp-cab">
+                <th className="pgp-cod">EAP</th>
+                <th className="pgp-nome">Atividade</th>
+                <th className="pgp-num">Dur.</th>
+                <th className="pgp-num">Início</th>
+                <th className="pgp-num">Fim</th>
+                <th className="pgp-num">%</th>
+                <th className="pgp-tempo">
+                  <span className="pgp-meses">
+                    {impressao.meses.map(mes => (
+                      <span key={`${mes.rotulo}-${mes.esquerda}`} style={{ left: `${mes.esquerda}%`, width: `${mes.largura}%` }}>
+                        {mes.rotulo}
+                      </span>
+                    ))}
+                    <i className="pgp-hoje" style={{ left: `${impressao.hoje}%` }} />
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {impressao.linhas.map(({ no, esquerda, largura }) => (
+                <tr key={no.chave} className={no.temFilhos ? "pgp-etapa" : undefined}>
+                  <td className="pgp-cod">{no.codigo}</td>
+                  <td className="pgp-nome" style={{ paddingLeft: 3 + (no.codigo.split(".").length - 1) * 9 }}>{no.nome}</td>
+                  <td className="pgp-num">{no.marco ? "marco" : `${no.duracao}d`}</td>
+                  <td className="pgp-num">{fmt(no.inicio)}</td>
+                  <td className="pgp-num">{no.marco ? fmt(no.inicio) : fmt(no.fim)}</td>
+                  <td className="pgp-num">{Math.round(no.progresso)}%</td>
+                  <td className="pgp-trilho" style={{ ["--pgp-hoje" as string]: `${impressao.hoje}%` } as React.CSSProperties}>
+                    {no.temFilhos ? (
+                      <span className="pgp-resumo" style={{ left: `${esquerda}%`, width: `${largura}%` }} />
+                    ) : no.marco ? (
+                      <span className={`pgp-losango${no.critica ? " critica" : ""}`} style={{ left: `${esquerda}%` }} />
+                    ) : (
+                      <span className={`pgp-barra${no.critica ? " critica" : ""}`} style={{ left: `${esquerda}%`, width: `${largura}%` }}>
+                        <b style={{ width: `${Math.max(0, Math.min(100, no.progresso))}%` }} />
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={7} className="pgp-pe">
+                  <span><i className="pgp-amostra barra" /> atividade</span>
+                  <span><i className="pgp-amostra resumo" /> etapa</span>
+                  <span><i className="pgp-amostra critica" /> caminho crítico</span>
+                  <span><i className="pgp-amostra losango" /> marco</span>
+                  <span><i className="pgp-amostra hoje" /> hoje</span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

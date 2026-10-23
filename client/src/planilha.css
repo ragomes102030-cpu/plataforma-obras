@@ -5924,6 +5924,196 @@ tr:hover .xl-codigo {
   text-transform:uppercase;
   color:var(--pd-suave);
 }
+
+/* ============================================================
+   IMPRESSÃO / PDF DO CRONOGRAMA
+   A tabela .pgp é um portal no <body>: fica escondida na tela e
+   só aparece no papel. Tempo em porcentagem — cabe na folha em
+   qualquer escala, e o <thead> se repete em cada página.
+   ============================================================ */
+.pg-impressao { display: none; }
+
+@media print {
+  @page { size: A4 landscape; margin: 8mm; }
+
+  html, body { background: #fff !important; }
+  body > #root { display: none !important; }
+  .pg-impressao { display: block !important; }
+
+  .pgp {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    color: #172a35;
+    font-family: "Inter", "Segoe UI", Arial, sans-serif;
+    font-size: 7.6pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .pgp thead { display: table-header-group; }
+  .pgp tfoot { display: table-footer-group; }
+  .pgp tr { page-break-inside: avoid; break-inside: avoid; }
+
+  .pgp th, .pgp td {
+    padding: 1.6pt 3pt;
+    vertical-align: middle;
+    text-align: left;
+    border-bottom: 0.5pt solid #dbe6ea;
+  }
+
+  .pgp-titulo {
+    padding: 0 3pt 3pt;
+    border-bottom: 0;
+    line-height: 1.25;
+  }
+  .pgp-titulo strong {
+    display: block;
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .pgp-sub {
+    display: block;
+    margin-top: 1pt;
+    color: #5f747c;
+    font-size: 7pt;
+  }
+  .pgp-titulo-tempo { text-align: right; }
+
+  .pgp-cab th {
+    border-top: 0.9pt solid #9fb6bf;
+    border-bottom: 0.9pt solid #9fb6bf;
+    background: #f2f7f8;
+    color: #2c525f;
+    font-size: 6.8pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .pgp-num, .pgp-cod { white-space: nowrap; }
+  .pgp-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pgp-cod { color: #4a6b78; font-size: 7pt; }
+
+  .pgp-nome {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pgp-etapa .pgp-nome { font-weight: 700; }
+  .pgp-etapa td { background: #f6fafb; }
+
+  .pgp-tempo { padding: 0; }
+  .pgp-meses {
+    position: relative;
+    display: block;
+    height: 12pt;
+  }
+  .pgp-meses > span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
+    padding-left: 2pt;
+    border-left: 0.5pt solid #cfdee3;
+    color: #2c525f;
+    font-size: 6.4pt;
+    font-weight: 600;
+    line-height: 12pt;
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+  .pgp-hoje {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 0.9pt solid #c0392b;
+  }
+
+  .pgp-trilho {
+    position: relative;
+    height: 13pt;
+    padding: 0 !important;
+  }
+  .pgp-trilho::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--pgp-hoje, 0%);
+    width: 0;
+    border-left: 0.5pt dashed #c0392b;
+  }
+
+  .pgp-barra {
+    position: absolute;
+    top: 50%;
+    height: 6.5pt;
+    margin-top: -3.25pt;
+    border-radius: 1pt;
+    background: #89a9b4;
+  }
+  .pgp-barra > b {
+    display: block;
+    height: 100%;
+    border-radius: 1pt;
+    background: #2f7d5b;
+  }
+  .pgp-barra.critica { background: #d8b3ad; }
+  .pgp-barra.critica > b { background: #a63a2c; }
+
+  .pgp-resumo {
+    position: absolute;
+    top: 50%;
+    height: 3.5pt;
+    margin-top: -1.75pt;
+    background: #2c525f;
+  }
+  .pgp-losango {
+    position: absolute;
+    top: 50%;
+    width: 6pt;
+    height: 6pt;
+    margin: -3pt 0 0 -3pt;
+    background: #b98a2a;
+    transform: rotate(45deg);
+  }
+  .pgp-losango.critica { background: #a63a2c; }
+
+  .pgp-pe {
+    padding-top: 4pt;
+    border-top: 0.5pt solid #dbe6ea;
+    color: #5f747c;
+    font-size: 6.6pt;
+  }
+  .pgp-pe span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3pt;
+    margin-right: 10pt;
+  }
+  .pgp-amostra {
+    display: inline-block;
+    width: 12pt;
+    height: 3.5pt;
+    background: #89a9b4;
+  }
+  .pgp-amostra.resumo { background: #2c525f; height: 2.5pt; }
+  .pgp-amostra.critica { background: #a63a2c; }
+  .pgp-amostra.losango {
+    width: 5pt;
+    height: 5pt;
+    background: #b98a2a;
+    transform: rotate(45deg);
+  }
+  .pgp-amostra.hoje {
+    width: 0;
+    border-left: 0.9pt dashed #c0392b;
+    background: none;
+  }
+}
+
 .pd-titulo{
   margin:0;
   font-size:22px;
