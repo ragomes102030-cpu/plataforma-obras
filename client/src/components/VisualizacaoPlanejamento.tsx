@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Scan, Search, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Maximize2, Minimize2, Scan, Search, Tags, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
@@ -224,16 +224,21 @@ function Gantt({
     return lista;
   }, [dados.start, dados.end, px, larguraDoTempo]);
 
+  // Datas na vertical: com pouco espaço por dia, o rótulo girado cabe onde o
+  // horizontal não cabe — é o mesmo recurso do Project quando a escala aperta.
+  const datasNaVertical = px < 12;
   const ticks = useMemo(() => {
-    const passo = px >= 22 ? 1 : px >= 8 ? 7 : px >= 3.2 ? 14 : 30;
-    const comRotulo = passo * px >= 38;
+    const degraus = [1, 2, 3, 7, 14, 28];
+    const passo = datasNaVertical
+      ? (degraus.find(degrau => degrau * px >= 13) ?? 28)
+      : Math.max(1, Math.ceil(34 / px));
     const lista: { iso: string; x: number; rotulo: string | null }[] = [];
     for (let d = 0; d <= dados.total; d += passo) {
       const iso = addDays(dados.start, d);
-      lista.push({ iso, x: d * px, rotulo: comRotulo ? fmtComAno(iso, false) : null });
+      lista.push({ iso, x: d * px, rotulo: passo * px >= 10 ? fmtComAno(iso, false) : null });
     }
     return lista;
-  }, [dados.start, dados.total, px]);
+  }, [dados.start, dados.total, px, datasNaVertical]);
 
   const finsDeSemana = useMemo(() => {
     const faixas: { x: number; largura: number }[] = [];
@@ -261,11 +266,39 @@ function Gantt({
   const temEtapas = arvore.some(no => no.temFilhos);
   const visiveis = useMemo(() => linhasVisiveis(arvore, colapsados), [arvore, colapsados]);
 
+  const resumoDoPlano = useMemo(() => {
+    const folhas = arvore.filter(no => !no.temFilhos);
+    const peso = folhas.reduce((soma, no) => soma + Math.max(1, no.duracao), 0);
+    const executado = peso === 0 ? 0 : folhas.reduce((soma, no) => soma + no.progresso * Math.max(1, no.duracao), 0) / peso;
+    return { atividades: folhas.length, etapas: arvore.length - folhas.length, executado };
+  }, [arvore]);
+
   // Filtro de visão (não de edição): esconde linhas, nunca altera o plano.
   const [busca, setBusca] = useState("");
   const [soCritico, setSoCritico] = useState(false);
   const [mostrarSetas, setMostrarSetas] = useState(true);
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  const [rotulos, setRotulos] = useState(true);
+  const [telaCheia, setTelaCheia] = useState(false);
+  // A visão geral é lembrada entre visitas: quem trabalha no campo recolhe uma
+  // vez e o gráfico abre com a altura toda nas próximas vezes.
+  const [visaoAberta, setVisaoAberta] = useState(() => {
+    try {
+      return window.localStorage.getItem("plataforma-obras:gantt-visao") !== "fechada";
+    } catch {
+      return true;
+    }
+  });
+  const alternarVisao = () => {
+    setVisaoAberta(aberta => {
+      try {
+        window.localStorage.setItem("plataforma-obras:gantt-visao", aberta ? "fechada" : "aberta");
+      } catch {
+        /* navegador sem armazenamento local: segue só na sessão */
+      }
+      return !aberta;
+    });
+  };
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const filtradas = useMemo(
     () =>
@@ -349,7 +382,48 @@ function Gantt({
   };
 
   return (
-    <div className="pg">
+    <div className={`pg${telaCheia ? " tela-cheia" : ""}`}>
+      <section className={`pg-visao${visaoAberta ? "" : " recolhida"}`} aria-label="Visão geral do cronograma">
+        <button type="button" className="pg-visao-cabeca" onClick={alternarVisao} aria-expanded={visaoAberta}>
+          <span className="pg-visao-titulo">Visão geral</span>
+          <span className="pg-visao-resumo">
+            {resumoDoPlano.atividades} atividades · {resumoDoPlano.etapas} etapas · término {fmt(dados.end)} ·{" "}
+            {Math.round(resumoDoPlano.executado)}% executado
+          </span>
+          <ChevronDown size={16} className={`pg-visao-seta${visaoAberta ? "" : " girada"}`} aria-hidden="true" />
+        </button>
+        {visaoAberta && (
+          <dl className="pg-visao-kpis">
+            <div>
+              <dt>Período do plano</dt>
+              <dd>
+                {fmt(dados.start)} a {fmt(dados.end)}
+              </dd>
+            </div>
+            <div>
+              <dt>Atividades</dt>
+              <dd>{resumoDoPlano.atividades}</dd>
+            </div>
+            <div>
+              <dt>Etapas</dt>
+              <dd>{resumoDoPlano.etapas}</dd>
+            </div>
+            <div>
+              <dt>Caminho crítico</dt>
+              <dd>{totalCriticas}</dd>
+            </div>
+            <div>
+              <dt>Executado</dt>
+              <dd>{Math.round(resumoDoPlano.executado)}%</dd>
+            </div>
+            <div>
+              <dt>Escala atual</dt>
+              <dd>{unidadeDaEscala(px)}</dd>
+            </div>
+          </dl>
+        )}
+      </section>
+
       <div className="pg-ferramentas">
         <div className="pg-escala">
           Escala: <strong>{unidadeDaEscala(px)}</strong>
@@ -386,6 +460,16 @@ function Gantt({
             <GitBranch size={14} aria-hidden="true" />
             Dependências
           </button>
+          <button
+            type="button"
+            className={`pg-chip${rotulos ? " ativo" : ""}`}
+            onClick={() => setRotulos(valor => !valor)}
+            aria-pressed={rotulos}
+            title="Mostrar nome, código e datas junto das barras"
+          >
+            <Tags size={14} aria-hidden="true" />
+            Rótulos
+          </button>
         </div>
         <div className="pg-zoom" role="group" aria-label="Zoom do gráfico de Gantt">
           {temEtapas && (
@@ -417,12 +501,23 @@ function Gantt({
             <Crosshair size={16} aria-hidden="true" />
             <span>Hoje</span>
           </button>
+          <button
+            type="button"
+            className={telaCheia ? "ativo" : undefined}
+            onClick={() => setTelaCheia(valor => !valor)}
+            aria-pressed={telaCheia}
+            aria-label={telaCheia ? "Sair da tela cheia" : "Ver o Gantt em tela cheia"}
+            title={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
+          >
+            {telaCheia ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+            <span>{telaCheia ? "Sair" : "Tela cheia"}</span>
+          </button>
         </div>
       </div>
 
       <div className="pg-rolagem" ref={referencia}>
         <div className="pg-conteudo" style={{ width: esquerda + larguraDoTempo }}>
-          <div className="pg-cabecalho">
+          <div className={`pg-cabecalho${datasNaVertical ? " vertical" : ""}`}>
             <div className="pg-cab-esquerda" style={{ width: esquerda }}>
               <div className="pg-cab-celulas" style={{ gridTemplateColumns: colunas }}>
                 <span className="pg-cab-titulo">{estreita ? "Atividade" : "EAP · Atividade"}</span>
@@ -440,14 +535,14 @@ function Gantt({
               <div className="pg-faixa-meses">
                 {meses.map(mes => (
                   <div key={mes.iso} className="pg-mes" style={{ left: mes.x, width: mes.largura }}>
-                    <span>{mes.rotulo}</span>
+                    {mes.largura >= 34 && <span>{mes.rotulo}</span>}
                   </div>
                 ))}
               </div>
               <div className="pg-faixa-ticks">
                 {ticks.map(tick => (
                   <div key={tick.iso} className="pg-tick" style={{ left: tick.x }}>
-                    {tick.rotulo && <span>{tick.rotulo}</span>}
+                    {tick.rotulo && <span className={datasNaVertical ? "vertical" : undefined}>{tick.rotulo}</span>}
                   </div>
                 ))}
               </div>
@@ -579,6 +674,30 @@ function Gantt({
                         )}
                       </>
                     )}
+                    {rotulos &&
+                      (() => {
+                        // Rótulo fora da barra só entra se houver espaço; se não
+                        // couber o nome inteiro, encurta o código ou some — do
+                        // mesmo jeito que o Project evita sobreposição.
+                        const sobra = larguraDoTempo - (inicioBarra + larguraBarra) - 8;
+                        if (sobra < 30) return null;
+                        const curto = sobra < 96;
+                        const comDatas = sobra >= 240 && !resumo;
+                        return (
+                          <span
+                            className={`pg-rotulo-barra${resumo ? " resumo" : ""}${no.critica ? " critica" : ""}`}
+                            style={{ left: inicioBarra + larguraBarra + 6, maxWidth: sobra }}
+                          >
+                            {curto ? no.codigo : `${no.codigo} ${no.nome}`}
+                            {comDatas && (
+                              <em>
+                                {" "}
+                                {fmt(no.inicio)} – {fmt(no.fim)}
+                              </em>
+                            )}
+                          </span>
+                        );
+                      })()}
                   </div>
                 </div>
               );
@@ -600,11 +719,11 @@ function Gantt({
           <dl>
             <div>
               <dt>Início</dt>
-              <dd>{fmt(detalhe.no.inicio)}</dd>
+              <dd>{fmtComAno(detalhe.no.inicio, true)}</dd>
             </div>
             <div>
               <dt>Término</dt>
-              <dd>{fmt(detalhe.no.fim)}</dd>
+              <dd>{fmtComAno(detalhe.no.fim, true)}</dd>
             </div>
             <div>
               <dt>Duração</dt>
