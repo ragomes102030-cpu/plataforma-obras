@@ -1698,6 +1698,11 @@ tr:hover .xl-codigo {
   overscroll-behavior: contain;
 }
 
+/* Recolher a visão geral devolve a altura da faixa ao gráfico. */
+.pg.pg-visao-fechada .pg-rolagem {
+  max-height: calc(68vh + 46px);
+}
+
 .pg-conteudo {
   position: relative;
   min-width: 100%;
@@ -2148,6 +2153,9 @@ tr:hover .xl-codigo {
   }
   .pg-rolagem {
     max-height: 60vh;
+  }
+  .pg.pg-visao-fechada .pg-rolagem {
+    max-height: calc(60vh + 44px);
   }
   .pg-cab-titulo {
     font-size: 10.5px;
