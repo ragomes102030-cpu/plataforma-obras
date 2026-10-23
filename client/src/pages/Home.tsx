@@ -805,12 +805,53 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const pavimentos = Array.from(new Set(atividades.map(l => l.pavimento).filter(Boolean)));
   const unidades = atividades.reduce((sum, l) => sum + (Number(l.quantidade) || 0), 0);
   const temPlanejamento = atividades.length > 0;
+  const comQuantidade = atividades.filter(l => (Number(l.quantidade) || 0) > 0).length;
+  const naturezaDoObjeto = ({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? null;
+  const dimensoesComDados = [
+    Boolean(descricao.trim() && naturezaDoObjeto),
+    frentes.length > 0,
+    pavimentos.length > 0,
+    comQuantidade > 0,
+  ].filter(Boolean).length;
 
+  // Cada linha é uma dimensão do escopo com a situação real, apurada no
+  // cronograma e no cadastro — não uma lista de caixas para o engenheiro
+  // preencher. O que não está declarado aparece como pendência, com o número.
   const elementos = [
-    { codigo: "E.01", nome: "Edificação / intervenção principal", categoria: "ENTREGÁVEL", detalhe: temPlanejamento ? "Rastreada no planejamento atual" : "Aguardando definição no cadastro do escopo", status: temPlanejamento ? "Identificado" : "Pendente" },
-    { codigo: "E.02", nome: "Sistemas e serviços da obra", categoria: "COMPONENTES", detalhe: frentes.length ? String(frentes.length) + " frente(s) identificada(s) no planejamento" : "Ainda não há frentes derivadas", status: frentes.length ? "Rastreado" : "A definir" },
-    { codigo: "E.03", nome: "Localização / setores de execução", categoria: "LOCAL", detalhe: pavimentos.length ? String(pavimentos.length) + " local(is)/pavimento(s) no planejamento" : "Localização executiva ainda não derivada", status: pavimentos.length ? "Rastreado" : "A definir" },
-    { codigo: "E.04", nome: "Quantidades associadas", categoria: "QUANTITATIVOS", detalhe: unidades > 0 ? String(unidades) + " unidade(s) informada(s) nas linhas atuais" : "Nenhuma quantidade disponível nas linhas atuais", status: unidades > 0 ? "Parcial" : "Pendente" },
+    {
+      codigo: "ESC-01",
+      nome: "Objeto contratado",
+      categoria: "DEFINIÇÃO",
+      detalhe: naturezaDoObjeto
+        ? `${naturezaDoObjeto}${localizacao ? ` · ${localizacao}` : " · localização não informada"}`
+        : "Natureza da obra não declarada no cadastro",
+      status: naturezaDoObjeto ? "Declarado" : "Pendente",
+    },
+    {
+      codigo: "ESC-02",
+      nome: "Frentes de execução",
+      categoria: "ORGANIZAÇÃO",
+      detalhe: frentes.length
+        ? `${frentes.length} frentes no cronograma: ${frentes.slice(0, 3).join(", ")}${frentes.length > 3 ? "…" : ""}`
+        : "Nenhuma frente identificada no cronograma",
+      status: frentes.length ? "Identificado" : "Pendente",
+    },
+    {
+      codigo: "ESC-03",
+      nome: "Locais de execução",
+      categoria: "ORGANIZAÇÃO",
+      detalhe: pavimentos.length
+        ? `${pavimentos.length} locais no cronograma: ${pavimentos.slice(0, 3).join(", ")}${pavimentos.length > 3 ? "…" : ""}`
+        : "Nenhum pavimento ou setor identificado no cronograma",
+      status: pavimentos.length ? "Identificado" : "Pendente",
+    },
+    {
+      codigo: "ESC-04",
+      nome: "Quantitativos",
+      categoria: "MEDIÇÃO",
+      detalhe: `${comQuantidade} de ${atividades.length} atividades com quantidade informada${unidades > 0 ? ` · ${unidades.toLocaleString("pt-BR")} unidades no total` : ""}`,
+      status: comQuantidade === atividades.length && atividades.length > 0 ? "Completo" : comQuantidade > 0 ? "Parcial" : "Pendente",
+    },
   ];
 
   return (
@@ -818,8 +859,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       <header className="scopo-workspace-header">
         <div className="scopo-workspace-title">
           <span className="scopo-kicker">PLANEJAMENTO · ESCOPO</span>
-          <h1>O que a obra entrega</h1>
-          <p>{obra} · definição do que existe na obra, seus limites e o que será transformado em EAP.</p>
+          <h1>Escopo da obra</h1>
+          <p>{obra} · objeto contratado, limites de execução e base da estrutura analítica do projeto.</p>
         </div>
         <div className="scopo-header-actions">
           {editando ? (
@@ -838,17 +879,17 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         <details open className="scopo-detail">
           <summary>Escopo declarado da obra</summary>
           <div className="scopo-detail-body">
-            <p><strong>Natureza:</strong> {({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? "A confirmar"}</p>
-            <p><strong>Localização cadastrada:</strong> {localizacao || "Não informada"}</p>
-            <p><strong>Descrição original:</strong></p>
-            <p>{descricao.trim() || "Ainda não há uma descrição formal cadastrada para esta obra."}</p>
-            <p><strong>CUB declarado (parâmetro de custo por m²):</strong> {cubCamposPreenchidos === 0
-              ? "Não declarado — a conferência de custo por m² não roda sem o CUB da obra."
+            <p><strong>Natureza:</strong> {({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? "Não declarada"}</p>
+            <p><strong>Localização:</strong> {localizacao || "Não informada"}</p>
+            <p><strong>Descrição do escopo:</strong></p>
+            <p>{descricao.trim() || "Não declarada. A descrição deve registrar inclusões, exclusões e premissas do contrato."}</p>
+            <p><strong>CUB de referência (R$/m²):</strong> {cubCamposPreenchidos === 0
+              ? "Não declarado. Sem valor, UF e mês não há conferência de custo por m²."
               : cubCompleto
                 ? `R$ ${formatarReal(cubValor)}/m² · ${cubUf.trim().toUpperCase()} · referência ${cubMes.trim()}`
-                : `Declaração incompleta (${cubCamposPreenchidos} de 3 campos) — a conferência de custo por m² só roda com valor, UF e mês de referência.`}</p>
-            <p><strong>BDI declarado (parâmetro de preço):</strong> {bdiDeclarado.trim() === ""
-              ? "Não declarado — a conferência de preço segue como aviso, não como erro."
+                : `Declaração incompleta (${cubCamposPreenchidos} de 3 campos) — a conferência exige valor, UF e mês de referência.`}</p>
+            <p><strong>BDI:</strong> {bdiDeclarado.trim() === ""
+              ? "Não declarado. O desvio de preço é tratado como aviso."
               : formatarPct(bdiDeclarado)}</p>
           </div>
         </details>
@@ -868,26 +909,26 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
               </select>
             </label>
             <label><strong>Descrição formal do escopo</strong>
-              <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Descreva entregas, inclusões, exclusões, premissas, limites contratuais e itens ainda a confirmar. Separe fatos conhecidos de hipóteses." />
-              <small>{descricaoEditada.length}/4000 caracteres. Não informe quantidades ou sistemas que ainda não foram confirmados.</small>
+              <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Inclusões, exclusões, premissas, limites contratuais e pendências." />
+              <small>{descricaoEditada.length}/4000 caracteres. Separe o que está confirmado do que é premissa.</small>
             </label>
-            <label><strong>CUB declarado — valor (R$/m²)</strong>
-              <input value={cubValorEditado} onChange={event => setCubValorEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 2850,00 — deixe vazio se a obra não declara" />
-              <small>Parâmetro de custo declarado por você. O sistema não inventa referência: sem valor, UF e mês de referência, a conferência de custo por m² não roda.</small>
+            <label><strong>CUB de referência — valor (R$/m²)</strong>
+              <input value={cubValorEditado} onChange={event => setCubValorEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 2850,00" />
+              <small>Opcional. A conferência de custo por m² só roda com valor, UF e mês.</small>
               {cubValorNum === "invalido" && <small role="alert">Informe um número (ex.: 2850,00).</small>}
             </label>
-            <label><strong>CUB declarado — UF de referência</strong>
+            <label><strong>CUB de referência — UF</strong>
               <input value={cubUfEditada} onChange={event => setCubUfEditada(event.target.value)} maxLength={2} placeholder="Ex.: SP" />
               {!cubUfValida && <small role="alert">Informe a sigla da UF com 2 letras (ex.: SP).</small>}
             </label>
-            <label><strong>CUB declarado — mês de referência</strong>
-              <input value={cubMesEditado} onChange={event => setCubMesEditado(event.target.value)} maxLength={7} placeholder="AAAA-MM (ex.: 2026-09)" />
+            <label><strong>CUB de referência — mês (AAAA-MM)</strong>
+              <input value={cubMesEditado} onChange={event => setCubMesEditado(event.target.value)} maxLength={7} placeholder="Ex.: 2026-09" />
               {!cubMesValido && <small role="alert">Use o formato AAAA-MM (ex.: 2026-09).</small>}
             </label>
-            <label><strong>BDI declarado (fração)</strong>
-              <input value={bdiEditado} onChange={event => setBdiEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 0,25 para 25% — deixe vazio se a obra não declara" />
-              <small>Com o BDI declarado, o desvio real de preço passa a ser verificado (erro). Sem ele, segue como aviso de conferência.</small>
-              {bdiNum !== "invalido" && bdiNum !== null && (bdiNum < 0 || bdiNum > 1) && <small role="alert">Informe a fração entre 0 e 1 (ex.: 0,25).</small>}
+            <label><strong>BDI (fração sobre o custo)</strong>
+              <input value={bdiEditado} onChange={event => setBdiEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 0,25 para 25%" />
+              <small>Com BDI declarado, desvio de preço é erro; sem BDI, é aviso.</small>
+              {bdiNum !== "invalido" && bdiNum !== null && (bdiNum < 0 || bdiNum > 1) && <small role="alert">Informe a fração entre 0 e 1 (ex.: 0,25 para 25%).</small>}
             </label>
             {salvarEscopo.isError && <p role="alert">{salvarEscopo.error.message}</p>}
           </div>
@@ -899,20 +940,20 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       </div>
 
       <section className="scopo-metrics" aria-label="Indicadores do escopo">
-        <div><span>ELEMENTOS</span><strong>{elementos.length}</strong><small>camadas do escopo visíveis</small></div>
-        <div><span>FRENTES</span><strong>{frentes.length}</strong><small>derivadas do planejamento atual</small></div>
-        <div><span>LOCAIS</span><strong>{pavimentos.length}</strong><small>setores/pavimentos encontrados</small></div>
-        <div className={!temPlanejamento ? "attention" : ""}><span>RASTREABILIDADE</span><strong>{temPlanejamento ? "PARCIAL" : "AGUARDANDO"}</strong><small>{temPlanejamento ? "há dados para ligar ao planejamento" : "escopo ainda sem dados executivos"}</small></div>
+        <div><span>DIMENSÕES</span><strong>{elementos.length}</strong><small>dimensões avaliadas</small></div>
+        <div><span>FRENTES</span><strong>{frentes.length}</strong><small>no cronograma</small></div>
+        <div><span>LOCAIS</span><strong>{pavimentos.length}</strong><small>no cronograma</small></div>
+        <div className={dimensoesComDados < elementos.length ? "attention" : ""}><span>RASTREABILIDADE</span><strong>{dimensoesComDados === elementos.length ? "COMPLETA" : dimensoesComDados > 0 ? "PARCIAL" : "PENDENTE"}</strong><small>{dimensoesComDados} de {elementos.length} dimensões com dados</small></div>
       </section>
 
       <div className="scopo-toolbar">
-        <div className="scopo-toolbar-title"><strong>Mapa do escopo</strong><span>Fonte conceitual da EAP; não substitui a estrutura analítica.</span></div>
-        <span className="scopo-readonly">VISÃO DERIVADA · SEM INVENTAR DADOS</span>
+        <div className="scopo-toolbar-title"><strong>Dimensões do escopo</strong><span>Situação apurada no cadastro da obra e no cronograma vigente.</span></div>
+        <span className="scopo-readonly">BASE: CADASTRO + CRONOGRAMA</span>
       </div>
 
       <section className="scopo-table-wrap">
         <table className="scopo-table">
-          <thead><tr><th className="codigo-col">CÓD.</th><th className="elemento-col">ELEMENTO DA OBRA</th><th>CATEGORIA</th><th>O QUE ESTÁ DEFINIDO</th><th>STATUS</th></tr></thead>
+          <thead><tr><th className="codigo-col">CÓD.</th><th className="elemento-col">DIMENSÃO</th><th>CATEGORIA</th><th>SITUAÇÃO</th><th>STATUS</th></tr></thead>
           <tbody>
             {elementos.map(item => (
               <tr key={item.codigo}>
@@ -929,24 +970,27 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
 
       <section className="scopo-trace-grid">
         <details open className="scopo-detail">
-          <summary>Limites e critérios do escopo</summary>
+          <summary>Critérios para aprovação do escopo</summary>
           <div className="scopo-detail-body">
-            <p><strong>Inclusões:</strong> devem ser confirmadas pelo engenheiro antes da aprovação do escopo.</p>
-            <p><strong>Exclusões:</strong> devem ser registradas explicitamente para evitar que a EAP absorva trabalho não contratado.</p>
-            <p><strong>Premissas:</strong> ficam separadas de fatos confirmados; uma premissa não vira requisito técnico automaticamente.</p>
+            <p><strong>{naturezaDoObjeto && localizacao ? "✓" : "○"} Objeto e local declarados</strong> — natureza {naturezaDoObjeto ? naturezaDoObjeto.toLowerCase() : "não informada"}; local {localizacao || "não informado"}.</p>
+            <p><strong>{descricao.trim() ? "✓" : "○"} Descrição formal registrada</strong> — {descricao.trim() ? "contém inclusões, exclusões e premissas." : "falta registrar inclusões, exclusões e premissas."}</p>
+            <p><strong>{frentes.length && pavimentos.length ? "✓" : "○"} Organização da execução</strong> — {frentes.length} frente(s) e {pavimentos.length} local(is) no cronograma.</p>
+            <p><strong>{atividades.length > 0 && comQuantidade === atividades.length ? "✓" : "○"} Quantitativos completos</strong> — {comQuantidade} de {atividades.length} atividades com quantidade informada.</p>
           </div>
         </details>
         <details open className="scopo-detail">
-          <summary>Rastreabilidade para o planejamento</summary>
+          <summary>Rastreabilidade até o orçamento</summary>
           <div className="scopo-detail-body">
             <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP</span><b>→</b><span>QUANTITATIVOS</span><b>→</b><span>ATIVIDADES</span></div>
-            <p>{temPlanejamento ? "Já existem dados de planejamento que podem receber vínculos de escopo. A aprovação deve ocorrer sem preencher informações ausentes por inferência." : "Ainda não há dados executivos suficientes para declarar cobertura do escopo. Isso não é aprovação."}</p>
+            <p>{temPlanejamento
+              ? `${atividades.length} atividades no cronograma, ${frentes.length} frentes e ${pavimentos.length} locais. ${comQuantidade} atividades têm quantidade informada — é a quantidade que liga a atividade ao orçamento e permite medir avanço.`
+              : "O cronograma ainda não tem atividades. Sem atividade não há quantidade, e sem quantidade a cadeia escopo → EAP → orçamento não fecha."}</p>
           </div>
         </details>
       </section>
 
       <footer className="scopo-footer">
-        <span><strong>Regra:</strong> escopo define o que será entregue; EAP organiza e controla esse escopo.</span>
+        <span><strong>Regra:</strong> o escopo define o que é entregue; a EAP organiza e controla a execução.</span>
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={13}/> Pedir análise do Arquimedes</button>
       </footer>
     </div>

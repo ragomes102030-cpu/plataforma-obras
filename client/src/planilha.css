@@ -1198,21 +1198,21 @@ tr:hover .xl-codigo {
 
 .pl-lob-grid { stroke: #e2e8eb; stroke-width: 1; }
 .pl-lob-axis { stroke: #9baab0; stroke-width: 1; }
-.pl-lob-subtitle { font-size: 8px; fill: #7a8991; letter-spacing: .05em; }
+.pl-lob-subtitle { font-size: 10.5px; fill: #7a8991; letter-spacing: .05em; }
 .pl-lob-header { fill: #f3f5f6; }
 .pl-lob-month-grid { stroke: #cfd8dc; stroke-width: 1.1; }
 .pl-lob-week-grid { stroke: #e7ecef; stroke-width: 1; }
-.pl-lob-month { font-size: 9px; font-weight: 700; fill: #53656d; }
-.pl-lob-date { font-size: 7px; fill: #8a979d; }
-.pl-lob-axis-title { font-size: 8px; font-weight: 700; fill: #65767e; letter-spacing: .05em; }
+.pl-lob-month { font-size: 12px; font-weight: 700; fill: #53656d; }
+.pl-lob-date { font-size: 10px; fill: #8a979d; }
+.pl-lob-axis-title { font-size: 10.5px; font-weight: 700; fill: #65767e; letter-spacing: .05em; }
 .pl-lob-row { fill: #fff; }
 .pl-lob-row.alt { fill: #fafcfc; }
 .pl-lob-row-grid { stroke: #e4e9ec; stroke-width: 1; }
-.pl-lob-location { font-size: 10px; font-weight: 600; fill: #53656d; }
+.pl-lob-location { font-size: 12px; font-weight: 600; fill: #53656d; }
 .pl-lob-service { opacity: .96; }
-.pl-lob-service-label { font-size: 7px; font-weight: 700; fill: #fff; pointer-events: none; }
+.pl-lob-service-label { font-size: 10px; font-weight: 700; fill: #fff; pointer-events: none; }
 .pl-lob-rhythm { fill: none; stroke-width: 2; stroke-dasharray: 4 2; opacity: .7; }
-.pl-lob-rhythm-label { font-size: 8px; font-weight: 700; }
+.pl-lob-rhythm-label { font-size: 11px; font-weight: 700; }
 .pl-lob-service.lob-service-0, .pl-lob-rhythm.lob-service-0, .pl-lob-rhythm-label.lob-service-0 { fill: #477b89; stroke: #477b89; }
 .pl-lob-service.lob-service-1, .pl-lob-rhythm.lob-service-1, .pl-lob-rhythm-label.lob-service-1 { fill: #7b9a62; stroke: #7b9a62; }
 .pl-lob-service.lob-service-2, .pl-lob-rhythm.lob-service-2, .pl-lob-rhythm-label.lob-service-2 { fill: #b57c57; stroke: #b57c57; }
@@ -1221,7 +1221,7 @@ tr:hover .xl-codigo {
 .pl-lob-service.lob-service-5, .pl-lob-rhythm.lob-service-5, .pl-lob-rhythm-label.lob-service-5 { fill: #9a6f4d; stroke: #9a6f4d; }
 .pl-lob-service.lob-service-6, .pl-lob-rhythm.lob-service-6, .pl-lob-rhythm-label.lob-service-6 { fill: #5676a1; stroke: #5676a1; }
 .pl-lob-service.lob-service-7, .pl-lob-rhythm.lob-service-7, .pl-lob-rhythm-label.lob-service-7 { fill: #9a5d78; stroke: #9a5d78; }
-.pl-lob-caption { font-size: 9px; fill: #7d8b91; }
+.pl-lob-caption { font-size: 11px; fill: #7d8b91; }
 
 
 .pl-visual-vazio {
@@ -1279,6 +1279,439 @@ tr:hover .xl-codigo {
     height: calc(100vh - 112px);
   }
 }
+
+/* ==========================================================================
+   GANTT PROFISSIONAL (HTML) — zoom, coluna fixa, escala por unidade
+   ==========================================================================
+   A versão anterior era um SVG único: a coluna de atividades rolava para fora da
+   tela e a escala era fixa em 22px/dia, sem zoom. Aqui a tabela fica presa à
+   esquerda (`position:sticky`), o cabeçalho fica preso no topo, e o zoom troca a
+   unidade da régua (dia/semana/quinzena/mês) como no Primavera. */
+
+.pg {
+  border: 1px solid #dbe3e8;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.pg-ferramentas {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #dbe3e8;
+  background: #f7f9fa;
+  flex-wrap: wrap;
+}
+
+.pg-escala {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #5f7180;
+}
+
+.pg-escala strong {
+  font-size: 13px;
+  color: #172a35;
+  text-transform: capitalize;
+}
+
+.pg-escala-nota {
+  padding-left: 8px;
+  border-left: 1px solid #d3dde3;
+  font-size: 12px;
+  color: #6c7d87;
+}
+
+.pg-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pg-zoom button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #cfdae0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2f4a55;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pg-zoom button:hover {
+  border-color: #8fb0bd;
+  background: #f0f6f8;
+}
+
+.pg-rolagem {
+  overflow: auto;
+  max-height: 68vh;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.pg-conteudo {
+  position: relative;
+  min-width: 100%;
+}
+
+.pg-cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  background: #f3f6f8;
+  border-bottom: 1px solid #d3dde3;
+}
+
+.pg-cab-esquerda {
+  position: sticky;
+  left: 0;
+  z-index: 7;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #f3f6f8;
+  border-right: 1px solid #d3dde3;
+}
+
+.pg-cab-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5f7180;
+}
+
+.pg-cab-tempo {
+  position: relative;
+  flex: none;
+  height: 44px;
+}
+
+.pg-faixa-meses,
+.pg-faixa-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+}
+
+.pg-faixa-meses {
+  top: 0;
+  border-bottom: 1px solid #e1e8ec;
+}
+
+.pg-mes {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 5px;
+  border-left: 1px solid #dde5ea;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pg-mes > span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #3f5661;
+}
+
+.pg-faixa-ticks {
+  top: 22px;
+}
+
+.pg-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid #e7edf0;
+}
+
+.pg-tick > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  font-size: 10.5px;
+  color: #6c7d87;
+  white-space: nowrap;
+}
+
+.pg-hoje-rotulo {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  border-radius: 0 0 4px 4px;
+  background: #b3261e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pg-corpo {
+  position: relative;
+}
+
+.pg-fundo {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.pg-fim-de-semana {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #f4f6f7;
+}
+
+.pg-mes-linha {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid #e7edf0;
+}
+
+.pg-hoje-linha {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: #b3261e;
+}
+
+.pg-inicio-obra {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px dashed #1f6f8b;
+}
+
+.pg-linha {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+}
+
+.pg-linha.alternada {
+  background: rgba(247, 249, 250, 0.6);
+}
+
+.pg-esquerda {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 8px;
+  background: #fff;
+  border-right: 1px solid #dbe3e8;
+  overflow: hidden;
+}
+
+.pg-linha.alternada .pg-esquerda {
+  background: #fafcfc;
+}
+
+.pg-esquerda-principal {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pg-ponto-critico {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b3261e;
+}
+
+.pg-codigo {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #5f7180;
+}
+
+.pg-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #172a35;
+}
+
+.pg-esquerda-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: #6c7d87;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.pg-frente {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+}
+
+.pg-trilho {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.pg-barra {
+  position: absolute;
+  top: 50%;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 3px;
+  background: #4d8291;
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.15);
+}
+
+.pg-barra.critica {
+  background: #a63a2c;
+}
+
+.pg-barra.concluida {
+  background: #2e7d54;
+}
+
+.pg-barra-avanco {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px 0 0 3px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.pg-barra-texto {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding-left: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  color: #0f2d38;
+}
+
+.pg-barra-dias {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  color: #5f7180;
+  white-space: nowrap;
+}
+
+.pg-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 7px 12px;
+  border-top: 1px solid #dbe3e8;
+  background: #fbfcfc;
+  font-size: 11.5px;
+  color: #5f7180;
+}
+
+.pg-legenda > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pg-amostra {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.pg-amostra.normal { background: #4d8291; }
+.pg-amostra.critica { background: #a63a2c; }
+.pg-amostra.hoje { width: 2px; height: 12px; background: #b3261e; }
+.pg-amostra.semana { background: #eef1f3; border: 1px solid #dfe6ea; }
+
+@media (max-width: 760px) {
+  .pg-ferramentas {
+    padding: 8px;
+    gap: 8px;
+  }
+  .pg-escala {
+    font-size: 12px;
+  }
+  .pg-escala-nota {
+    display: none;
+  }
+  .pg-zoom button {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+  .pg-rolagem {
+    max-height: 60vh;
+  }
+  .pg-cab-titulo {
+    font-size: 10.5px;
+  }
+  .pg-tick > span {
+    font-size: 11px;
+  }
+  .pg-codigo {
+    font-size: 10.5px;
+  }
+  .pg-nome {
+    font-size: 12.5px;
+  }
+  .pg-barra {
+    height: 20px;
+    margin-top: -10px;
+  }
+  .pg-barra-texto {
+    font-size: 11px;
+    line-height: 20px;
+  }
+  .pg-legenda {
+    font-size: 12px;
+  }
+}
+
 
 
 /* Validação profissional da EAP: separa bloqueios de alertas sem transformar a árvore em formulário. */
