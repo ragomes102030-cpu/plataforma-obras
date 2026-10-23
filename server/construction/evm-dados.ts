@@ -14,6 +14,7 @@ import {
   type CalendarioDaObra,
 } from "./calendario-obra";
 import type { EvmActivity, EvmBaseline, EvmBudgetItem } from "./evm";
+import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../../shared/producao-vinculo";
 import type { IsoDate, WorkCalendar } from "../../shared/work-calendar";
 
 /**
@@ -139,19 +140,20 @@ export async function coletarDadosEvms(
     currentPlanVersionId == null
       ? isNull(scheduleActivities.versionId)
       : eq(scheduleActivities.versionId, currentPlanVersionId);
-  const activities: EvmActivity[] = (
-    await db
-      .select({
-        id: scheduleActivities.id,
-        plannedQuantity: scheduleActivities.plannedQuantity,
-        durationDays: scheduleActivities.durationDays,
-        earlyStart: scheduleActivities.earlyStart,
-        startOffset: scheduleActivities.startOffset,
-        budgetItemId: scheduleActivities.budgetItemId,
-      })
-      .from(scheduleActivities)
-      .where(and(eq(scheduleActivities.projectId, projectId), versionScope))
-  ).map(activity => ({
+  const linhasDeAtividade = await db
+    .select({
+      id: scheduleActivities.id,
+      wbsCode: scheduleActivities.wbsCode,
+      plannedQuantity: scheduleActivities.plannedQuantity,
+      durationDays: scheduleActivities.durationDays,
+      earlyStart: scheduleActivities.earlyStart,
+      startOffset: scheduleActivities.startOffset,
+      budgetItemId: scheduleActivities.budgetItemId,
+    })
+    .from(scheduleActivities)
+    .where(and(eq(scheduleActivities.projectId, projectId), versionScope));
+
+  const activities: EvmActivity[] = linhasDeAtividade.map(activity => ({
     id: activity.id,
     plannedQuantity: Number(activity.plannedQuantity ?? 0),
     durationDays: activity.durationDays,
@@ -159,13 +161,17 @@ export async function coletarDadosEvms(
     startOffset: activity.startOffset,
     budgetItemId: activity.budgetItemId,
   }));
+  const idsAtuais = new Set(linhasDeAtividade.map(a => a.id));
+  const idPorCodigo = indexarAtividadesPorCodigo(linhasDeAtividade);
 
   const entries = await db
     .select({
       activityId: productionEntries.activityId,
       quantity: productionEntries.quantity,
+      codigoEap: scheduleActivities.wbsCode,
     })
     .from(productionEntries)
+    .leftJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
     .where(
       and(
         eq(productionEntries.projectId, projectId),
@@ -177,11 +183,11 @@ export async function coletarDadosEvms(
     );
   const actualByActivity = new Map<number, number>();
   for (const entry of entries) {
-    if (entry.activityId == null) continue;
-    actualByActivity.set(
-      entry.activityId,
-      (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity)
-    );
+    // Lançamento de versão anterior da EAP: o id não existe mais, mas o código
+    // reencontra a atividade. Sem isto o EVM lia 0% enquanto o painel lia 15,1%.
+    const activityId = resolverAtividadeDaProducao(entry.activityId, entry.codigoEap, idsAtuais, idPorCodigo);
+    if (activityId == null) continue;
+    actualByActivity.set(activityId, (actualByActivity.get(activityId) ?? 0) + Number(entry.quantity));
   }
 
   // AC: dinheiro que saiu. Só `confirmado` conta; `rascunho` ainda vai ser

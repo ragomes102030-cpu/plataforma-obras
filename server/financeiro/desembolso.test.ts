@@ -131,7 +131,7 @@ describe("computeDesembolso", () => {
     expect(r.alertas[0]).not.toContain("Sem atividades");
   });
 
-  it("no mês corrente mostra o que saiu, não a projeção", () => {
+  it("no mês corrente projeta o compromisso assumido, nunca menos que o planejado", () => {
     const r = computeDesembolso({
       plannedStartIso: "2026-02-02",
       calendar: cal,
@@ -142,16 +142,20 @@ describe("computeDesembolso", () => {
     });
 
     expect(r.meses).toHaveLength(1);
+    // O desvio continua mostrando o que não saiu (-400), mas a PROJEÇÃO não pode
+    // fingir que o serviço planejado para o mês deixou de existir: sem CPI, a
+    // projeção da obra é o próprio orçamento.
     expect(r.meses[0]).toMatchObject({
       mes: "2026-02",
       situacao: "corrente",
       planejado: 1000,
       realizado: 600,
-      projetado: 600,
+      projetado: 1000,
       desvio: -400,
     });
     expect(r.bac).toBe(1000);
     expect(r.realizadoTotal).toBe(600);
+    expect(r.projetadoTotal).toBe(1000);
   });
 
   it("projeta o futuro dividindo pelo CPI — CPI abaixo de 1 encarece, não barateia", () => {

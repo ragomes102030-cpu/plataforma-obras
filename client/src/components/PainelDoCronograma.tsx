@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import type { AgregadoDoCronograma, LinhaDoCronograma } from "@shared/cronograma-colunas";
-import { diasEntre, montarResumo } from "@shared/painel-obra";
+import { diasEntre, montarResumo, type AlertaDoPainel } from "@shared/painel-obra";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 
@@ -116,6 +116,14 @@ export function PainelDoCronograma({
   const baseline = trpc.planning.compararComBaseline.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0, retry: false }
+  );
+  // A coerência do orçamento existia só dentro do orçamento, atrás de um clique.
+  // Na AURORA ela acusa R$ 2,34 mi (45% do orçamento) em itens com composição
+  // incompatível — e o painel anunciava "29,1% planejado" sem dizer que o
+  // orçamento está sob suspeita. Aqui ela vira decisão, não detalhe.
+  const coerencia = trpc.planning.validateEngineeringCoherence.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0, retry: false, staleTime: 5 * 60_000 }
   );
 
   const dados = useMemo(() => {
@@ -259,6 +267,27 @@ export function PainelDoCronograma({
 
   const { resumo, valorSemDestino, ultimos, semana } = dados;
   const { prazo, fisico, valor, status, selo, alertas } = resumo;
+
+  // Coerência: só entra quando há item que IMPEDE execução e valor em risco.
+  // Percentual é sempre sobre o valor do orçamento, a mesma régua do painel.
+  const alertaDeOrcamento: AlertaDoPainel | null = (() => {
+    const analise = coerencia.data;
+    if (!analise) return null;
+    const impedem = (analise.issues ?? []).filter((i) => i.severity === "error");
+    const emRisco = Number(analise.resumo?.valorEmRisco ?? 0);
+    if (impedem.length === 0 || !(emRisco > 0)) return null;
+    const participacao = valor.total > 0 ? emRisco / valor.total : 0;
+    return {
+      id: "orcamento-incoerente",
+      nivel: "critico",
+      titulo: `${impedem.length} item(ns) do orçamento impedem execução`,
+      detalhe: `${brl(emRisco)} (${pct(participacao)} do orçamento) com composição incompatível com a atividade — o avanço planejado pode estar inflado por eles.`,
+      aba: "financeiro",
+      acao: "Ver no orçamento",
+    };
+  })();
+
+  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...alertas].slice(0, 6);
   const segmentos = [
     { chave: "concluidas", rotulo: "Concluídas", valor: status.concluidas, classe: "ok" },
     { chave: "andamento", rotulo: "Em andamento", valor: status.emAndamento, classe: "andamento" },
@@ -418,15 +447,15 @@ export function PainelDoCronograma({
         <section className="pd-bloco" aria-label="Precisa de decisão">
           <div className="pd-bloco-topo">
             <h3 className="pd-bloco-titulo">Precisa de decisão</h3>
-            <span className="pd-contador">{alertas.length}</span>
+            <span className="pd-contador">{alertasVisiveis.length}</span>
           </div>
-          {alertas.length === 0 ? (
+          {alertasVisiveis.length === 0 ? (
             <p className="pd-tranquilo">
               Nada crítico: prazo, avanço, valor e compromissos dentro do esperado.
             </p>
           ) : (
             <ul className="pd-alertas">
-              {alertas.map((a) => (
+              {alertasVisiveis.map((a) => (
                 <li key={a.id} className={`pd-alerta pd-alerta-${a.nivel}`}>
                   <span className="pd-alerta-marca" aria-hidden />
                   <div className="pd-alerta-texto">
