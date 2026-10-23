@@ -1670,18 +1670,19 @@ tr:hover .xl-codigo {
 .pg-visao {
   margin-bottom: 10px;
   border: 1px solid #d7e2e7;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
+  box-shadow: 0 1px 2px rgba(23, 42, 53, 0.05);
   overflow: hidden;
 }
 
 .pg-visao-cabeca {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 46px;
+  padding: 0 14px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -1700,7 +1701,7 @@ tr:hover .xl-codigo {
 }
 
 .pg-visao.recolhida .pg-visao-cabeca {
-  background: #f7fafb;
+  background: linear-gradient(180deg, #fbfdfe 0%, #f5f9fa 100%);
 }
 
 .pg-visao-seta {
@@ -1770,10 +1771,23 @@ tr:hover .xl-codigo {
 
 .pg-visao-kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 0;
   margin: 0;
-  padding: 0 12px 10px;
+  padding: 11px 14px 12px;
+  border-top: 1px solid #e8f0f2;
+  background: #f8fbfc;
+}
+
+.pg-visao-kpis > div {
+  min-width: 0;
+  padding: 0 16px;
+  border-left: 1px solid #e2ecef;
+}
+
+.pg-visao-kpis > div:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .pg-visao-kpis dt {
@@ -1782,13 +1796,18 @@ tr:hover .xl-codigo {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .pg-visao-kpis dd {
-  margin: 1px 0 0;
+  margin: 2px 0 0;
+  overflow: hidden;
   color: #172a35;
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- Rótulos das barras ---- */
@@ -2415,6 +2434,12 @@ tr:hover .xl-codigo {
   }
   .pg-visao-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    padding: 10px 12px 12px;
+  }
+  .pg-visao-kpis > div {
+    padding: 0;
+    border-left: 0;
   }
   .pg-visao-resumo {
     font-size: 11.5px;

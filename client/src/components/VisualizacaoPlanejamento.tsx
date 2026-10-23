@@ -454,16 +454,10 @@ function Gantt({
               </dd>
             </div>
             <div>
-              <dt>Atividades</dt>
-              <dd>{resumoDoPlano.atividades}</dd>
-            </div>
-            <div>
-              <dt>Etapas</dt>
-              <dd>{resumoDoPlano.etapas}</dd>
-            </div>
-            <div>
               <dt>Caminho crítico</dt>
-              <dd>{totalCriticas}</dd>
+              <dd>
+                {totalCriticas} atividades
+              </dd>
             </div>
             <div>
               <dt>Executado</dt>
