@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { GitBranch, GanttChartSquare } from "lucide-react";
+import { Crosshair, GitBranch, GanttChartSquare, Scan, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 
@@ -87,7 +87,7 @@ export function VisualizacaoPlanejamento({
       <header className="pl-visual-header">
         <div>
           <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
-          <span>{view === "gantt" ? "Sequência, duração, avanço e caminho crítico" : "Tempo na vertical · localização/frentes na horizontal"}</span>
+          <span>{view === "gantt" ? "Sequência, duração, avanço e caminho crítico" : "Tempo no eixo horizontal · locais no eixo vertical · ritmo das equipes"}</span>
         </div>
       </header>
       {view === "gantt" && !cpmCalculado && atividades.length > 0 && (
@@ -103,10 +103,39 @@ export function VisualizacaoPlanejamento({
       {view === "gantt" ? (
         <Gantt linhas={linhas} atividades={atividadePorCodigo} dados={dados} hoje={hoje} inicioObra={inicioObra} />
       ) : (
-        <LinhaDeBalanco linhas={linhas} dados={dados} />
+        <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
       )}
     </section>
   );
+}
+
+/** Unidade da escala, como no Primavera/Project: o rótulo diz o que cada coluna
+ *  significa, não "4 px". */
+function unidadeDaEscala(px: number): string {
+  if (px >= 18) return "dia";
+  if (px >= 7) return "semana";
+  if (px >= 3.2) return "quinzena";
+  return "mês";
+}
+
+function mesCurto(iso: string): string {
+  const [ano, mes] = iso.split("-");
+  return `${mes}/${ano.slice(2)}`;
+}
+
+/** 760px é o mesmo corte do resto do layout de campo. */
+function useTelaEstreita(): boolean {
+  const [estreita, setEstreita] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches
+  );
+  useEffect(() => {
+    const consulta = window.matchMedia("(max-width: 760px)");
+    const ouvir = () => setEstreita(consulta.matches);
+    ouvir();
+    consulta.addEventListener("change", ouvir);
+    return () => consulta.removeEventListener("change", ouvir);
+  }, []);
+  return estreita;
 }
 
 function Gantt({
@@ -122,71 +151,206 @@ function Gantt({
   hoje: IsoDate;
   inicioObra: IsoDate | null;
 }) {
-  const width = Math.max(1400, dados.total * 22);
-  const rowH = 34;
-  const left = 430;
-  const top = 58;
-  const height = top + linhas.length * rowH + 30;
-  const x = (iso: string) =>
-    left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * (width - left) / dados.total;
-  const hojeX = x(hoje);
-  const tickStep = dados.total > 180 ? 30 : dados.total > 90 ? 14 : 7;
-  const ticks: string[] = [];
-  for (let d = 0; d <= dados.total; d += tickStep) ticks.push(addDays(dados.start, d));
+  const referencia = useRef<HTMLDivElement | null>(null);
+  const [larguraVisivel, setLarguraVisivel] = useState(1200);
+  const [pxManual, setPxManual] = useState<number | null>(null);
+  const estreita = useTelaEstreita();
+
+  // No celular a coluna de atividade fica estreita e a linha, alta (dedo);
+  // no desktop cabe o resumo (início, fim, duração, %).
+  const esquerda = estreita ? 126 : 320;
+  const alturaLinha = estreita ? 46 : 30;
+
+  useEffect(() => {
+    const elemento = referencia.current;
+    if (!elemento) return;
+    const medir = () => setLarguraVisivel(elemento.clientWidth || 1200);
+    medir();
+    if (typeof ResizeObserver === "undefined") return;
+    const observador = new ResizeObserver(medir);
+    observador.observe(elemento);
+    return () => observador.disconnect();
+  }, []);
+
+  // "Ajustar" é o padrão: a obra inteira cabe na tela. Quem quiser detalhe usa
+  // os botões de zoom; o valor manual vale até clicar em Ajustar de novo.
+  const pxAjustado = Math.max(0.8, (larguraVisivel - esquerda - 14) / Math.max(1, dados.total));
+  const px = pxManual ?? pxAjustado;
+  const larguraDoTempo = Math.max(1, Math.round(dados.total * px));
+
+  const posicao = (iso: string) => ((dateMs(iso) - dateMs(dados.start)) / 86400000) * px;
+  const hojeX = Math.max(0, Math.min(larguraDoTempo, posicao(hoje)));
+  const inicioX = inicioObra ? posicao(inicioObra) : null;
+
+  const meses = useMemo(() => {
+    const lista: { iso: string; x: number; largura: number; rotulo: string }[] = [];
+    let cursor = new Date(`${dados.start}T12:00:00Z`);
+    cursor.setUTCDate(1);
+    while (cursor.getTime() <= dateMs(dados.end)) {
+      const ini = cursor.toISOString().slice(0, 10);
+      const proximo = new Date(cursor);
+      proximo.setUTCMonth(proximo.getUTCMonth() + 1);
+      const x0 = ((dateMs(ini) - dateMs(dados.start)) / 86400000) * px;
+      const x1 = ((dateMs(proximo.toISOString().slice(0, 10)) - dateMs(dados.start)) / 86400000) * px;
+      const inicioVisivel = Math.max(0, x0);
+      const fimVisivel = Math.min(larguraDoTempo, x1);
+      if (fimVisivel > inicioVisivel) {
+        const [ano] = ini.split("-");
+        const viradaDeAno = ini.slice(5, 7) === "01" || lista.length === 0;
+        lista.push({ iso: ini, x: inicioVisivel, largura: fimVisivel - inicioVisivel, rotulo: viradaDeAno ? `${mesCurto(ini)}/${ano}` : mesCurto(ini) });
+      }
+      cursor = proximo;
+    }
+    return lista;
+  }, [dados.start, dados.end, px, larguraDoTempo]);
+
+  const ticks = useMemo(() => {
+    const passo = px >= 22 ? 1 : px >= 8 ? 7 : px >= 3.2 ? 14 : 30;
+    const comRotulo = passo * px >= 38;
+    const lista: { iso: string; x: number; rotulo: string | null }[] = [];
+    for (let d = 0; d <= dados.total; d += passo) {
+      const iso = addDays(dados.start, d);
+      lista.push({ iso, x: d * px, rotulo: comRotulo ? fmtComAno(iso, false) : null });
+    }
+    return lista;
+  }, [dados.start, dados.total, px]);
+
+  const finsDeSemana = useMemo(() => {
+    const faixas: { x: number; largura: number }[] = [];
+    for (let d = 0; d < dados.total; d++) {
+      const dia = new Date(`${addDays(dados.start, d)}T12:00:00Z`).getUTCDay();
+      if (dia === 0 || dia === 6) faixas.push({ x: d * px, largura: px });
+    }
+    return faixas;
+  }, [dados.start, dados.total, px]);
+
+  const totalCriticas = Array.from(atividades.values()).filter(item => item.critical === 1).length;
+  const zoom = (fator: number) => setPxManual(Math.min(48, Math.max(0.6, px * fator)));
+  const irParaHoje = () => {
+    const elemento = referencia.current;
+    if (!elemento) return;
+    elemento.scrollTo({ left: Math.max(0, posicao(hoje) - elemento.clientWidth / 2), behavior: "smooth" });
+  };
 
   return (
-    <div className="pl-gantt-scroll pl-planejamento-scroll">
-      {/* `width` explícito para a obra de 27 meses ROLAR em vez de ser espremida:
-          com `width:100%` a barra de 18px virava 1,4px e a linha, 2,6px. */}
-      <svg className="pl-gantt pl-gantt-large" style={{ width, maxWidth: "none" }} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Gráfico de Gantt da obra">
-        <rect x="0" y="0" width={width} height={height} className="pl-gantt-bg" />
-        <rect x="0" y="0" width={left} height={height} className="pl-gantt-left" />
-        <text x="14" y="22" className="pl-gantt-title">ATIVIDADE / LOCALIZAÇÃO</text>
-        <text x={left + 10} y="22" className="pl-gantt-title">LINHA DO TEMPO</text>
-        <text x={width - 12} y="22" textAnchor="end" className="pl-gantt-critical-note">
-          {Array.from(atividades.values()).filter(item => item.critical === 1).length} críticas
-        </text>
-        {ticks.map((t, indice) => {
-          const xx = x(t);
-          return (
-            <g key={t}>
-              <line x1={xx} x2={xx} y1="34" y2={height - 14} className="pl-gantt-grid" />
-              <text x={xx + 3} y="48" className="pl-gantt-date">{fmtComAno(t, indice === 0 || t.slice(5, 7) === "01")}</text>
-            </g>
-          );
-        })}
-        {inicioObra && <text x={left + 10} y={height - 6} className="pl-gantt-note">Início da obra: {fmtComAno(inicioObra, true)}</text>}
-        <line x1={hojeX} x2={hojeX} y1="30" y2={height - 14} className="pl-gantt-hoje" />
-        <text x={hojeX + 4} y="22" className="pl-gantt-hoje-label">HOJE</text>
+    <div className="pg">
+      <div className="pg-ferramentas">
+        <div className="pg-escala">
+          Escala: <strong>{unidadeDaEscala(px)}</strong>
+          <span className="pg-escala-nota">
+            {totalCriticas > 0 ? `${totalCriticas} atividades no caminho crítico` : "CPM não calculado"}
+          </span>
+        </div>
+        <div className="pg-zoom" role="group" aria-label="Zoom do gráfico de Gantt">
+          <button type="button" onClick={() => zoom(1 / 1.6)} aria-label="Diminuir zoom" title="Diminuir zoom">
+            <ZoomOut size={16} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => zoom(1.6)} aria-label="Aumentar zoom" title="Aumentar zoom">
+            <ZoomIn size={16} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => setPxManual(null)} aria-label="Ajustar a obra inteira à tela" title="Ajustar à tela">
+            <Scan size={16} aria-hidden="true" />
+            <span>Ajustar</span>
+          </button>
+          <button type="button" onClick={irParaHoje} aria-label="Ir para a data de hoje" title="Ir para hoje">
+            <Crosshair size={16} aria-hidden="true" />
+            <span>Hoje</span>
+          </button>
+        </div>
+      </div>
 
-        {linhas.map((l, i) => {
-          const y = top + i * rowH;
-          const start = x(l.inicio);
-          const end = x(addDays(l.inicio, Math.max(1, l.duracao) - 1));
-          const w = Math.max(8, end - start);
-          const progresso = l.executado && l.quantidade ? (l.executado / l.quantidade) * 100 : 0;
-          const atividade = atividades.get(l.codigo);
-          const critica = atividade?.critical === 1;
-          const classeBarra = critica ? "pl-gantt-bar critical" : "pl-gantt-bar";
-          const progressW =
-            w * Math.max(0, Math.min(100, progresso)) / 100;
-          return (
-            <g key={`${l.codigo}-${i}`}>
-              <rect x="0" y={y - 1} width={width} height={rowH} className={i % 2 ? "pl-gantt-row alt" : "pl-gantt-row"} />
-              <text x="14" y={y + 20} className="pl-gantt-code">{l.codigo}</text>
-              <text x="70" y={y + 20} className="pl-gantt-name">{l.atividade.slice(0, 46)}</text>
-              <text x={left - 8} y={y + 20} textAnchor="end" className="pl-gantt-front">{l.pavimento || l.frente}</text>
-              <rect x={start} y={y + 8} width={w} height="18" rx="3" className={classeBarra} />
-              {progressW > 0 && <rect x={start} y={y + 8} width={progressW} height="18" rx="3" className="pl-gantt-progress" />}
-              {l.duracao > 0 && (
-                <text x={start + w + 5} y={y + 21} className={critica ? "pl-gantt-duration critical" : "pl-gantt-duration"}>
-                  {l.duracao}d{critica ? " · CRÍTICA" : ""}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
+      <div className="pg-rolagem" ref={referencia}>
+        <div className="pg-conteudo" style={{ width: esquerda + larguraDoTempo }}>
+          <div className="pg-cabecalho">
+            <div className="pg-cab-esquerda" style={{ width: esquerda }}>
+              <span className="pg-cab-titulo">Atividade</span>
+            </div>
+            <div className="pg-cab-tempo" style={{ width: larguraDoTempo }}>
+              <div className="pg-faixa-meses">
+                {meses.map(mes => (
+                  <div key={mes.iso} className="pg-mes" style={{ left: mes.x, width: mes.largura }}>
+                    <span>{mes.rotulo}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pg-faixa-ticks">
+                {ticks.map(tick => (
+                  <div key={tick.iso} className="pg-tick" style={{ left: tick.x }}>
+                    {tick.rotulo && <span>{tick.rotulo}</span>}
+                  </div>
+                ))}
+              </div>
+              <div className="pg-hoje-rotulo" style={{ left: hojeX }}>
+                hoje
+              </div>
+            </div>
+          </div>
+
+          <div className="pg-corpo">
+            <div className="pg-fundo" style={{ left: esquerda, width: larguraDoTempo }} aria-hidden="true">
+              {finsDeSemana.map(faixa => (
+                <div key={faixa.x} className="pg-fim-de-semana" style={{ left: faixa.x, width: faixa.largura }} />
+              ))}
+              {meses.map(mes => (
+                <div key={mes.iso} className="pg-mes-linha" style={{ left: mes.x }} />
+              ))}
+              <div className="pg-hoje-linha" style={{ left: hojeX }} />
+              {inicioX != null && <div className="pg-inicio-obra" style={{ left: inicioX }} title="Início da obra" />}
+            </div>
+
+            {linhas.map((linha, indice) => {
+              const fim = addDays(linha.inicio, Math.max(1, linha.duracao) - 1);
+              const inicioBarra = Math.max(0, posicao(linha.inicio));
+              const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, Math.max(1, linha.duracao) * px));
+              const progresso = linha.executado && linha.quantidade
+                ? Math.max(0, Math.min(100, (linha.executado / linha.quantidade) * 100))
+                : 0;
+              const critica = atividades.get(linha.codigo)?.critical === 1;
+              const descricao = `${linha.codigo} ${linha.atividade} · ${fmt(linha.inicio)} a ${fmt(fim)} · ${linha.duracao} dias · ${Math.round(progresso)}% executado${critica ? " · caminho crítico" : ""}`;
+              return (
+                <div key={`${linha.codigo}-${indice}`} className={`pg-linha${indice % 2 ? " alternada" : ""}`} style={{ height: alturaLinha }}>
+                  <div className="pg-esquerda" style={{ width: esquerda }}>
+                    <div className="pg-esquerda-principal">
+                      {critica && <i className="pg-ponto-critico" title="Caminho crítico" aria-hidden="true" />}
+                      <span className="pg-codigo">{linha.codigo}</span>
+                      <span className="pg-nome" title={linha.atividade}>{linha.atividade}</span>
+                    </div>
+                    {!estreita && (
+                      <div className="pg-esquerda-meta">
+                        <span>{fmt(linha.inicio)} → {fmt(fim)}</span>
+                        <span>{linha.duracao}d</span>
+                        <span>{Math.round(progresso)}%</span>
+                        <span className="pg-frente">{linha.pavimento || linha.frente}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="pg-trilho" style={{ width: larguraDoTempo }}>
+                    <div
+                      className={`pg-barra${critica ? " critica" : ""}${progresso >= 100 ? " concluida" : ""}`}
+                      style={{ left: inicioBarra, width: larguraBarra }}
+                      title={descricao}
+                    >
+                      {progresso > 0 && <i className="pg-barra-avanco" style={{ width: `${progresso}%` }} />}
+                      {larguraBarra >= 52 && <span className="pg-barra-texto">{Math.round(progresso)}%</span>}
+                    </div>
+                    {larguraBarra < 18 && (
+                      <span className="pg-barra-dias" style={{ left: inicioBarra + larguraBarra + 4 }}>{linha.duracao}d</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="pg-legenda">
+        <span><i className="pg-amostra normal" /> executada</span>
+        <span><i className="pg-amostra critica" /> caminho crítico</span>
+        <span><i className="pg-amostra hoje" /> hoje</span>
+        <span><i className="pg-amostra semana" /> fim de semana</span>
+        {inicioObra && <span>Início da obra: {fmtComAno(inicioObra, true)}</span>}
+      </div>
     </div>
   );
 }
@@ -194,9 +358,11 @@ function Gantt({
 function LinhaDeBalanco({
   linhas,
   dados,
+  hoje,
 }: {
   linhas: EntradaDaLinha[];
   dados: { start: string; end: string; total: number };
+  hoje: IsoDate;
 }) {
   // Modelo Prevision: tempo no eixo X, localizações no eixo Y.
   // Cada serviço repetitivo vira uma faixa colorida por localização e uma
@@ -220,13 +386,31 @@ function LinhaDeBalanco({
     ).entries()
   ).map(([key, label]) => ({ key, label }));
 
-  const left = 170;
-  const right = 50;
+  const rolagem = useRef<HTMLDivElement | null>(null);
+  const [larguraVisivel, setLarguraVisivel] = useState(1100);
+  const [pxManual, setPxManual] = useState<number | null>(4.5);
+
+  useEffect(() => {
+    const elemento = rolagem.current;
+    if (!elemento) return;
+    const medir = () => setLarguraVisivel(elemento.clientWidth || 1100);
+    medir();
+    if (typeof ResizeObserver === "undefined") return;
+    const observador = new ResizeObserver(medir);
+    observador.observe(elemento);
+    return () => observador.disconnect();
+  }, []);
+
+  const left = 172;
+  const right = 56;
   const top = 82;
-  const bottom = 42;
-  const rowH = 42;
-  const pxPerDay = dados.total > 360 ? 4 : dados.total > 180 ? 5 : 7;
-  const width = Math.max(1200, left + right + dados.total * pxPerDay);
+  const bottom = 46;
+  const rowH = 44;
+  // Escala de leitura padrão: 4,5px por dia (~135px por mês). "Ajustar" espreme a
+  // obra inteira na tela; os botões de zoom vão de 0,6 a 48px por dia.
+  const pxAjustado = Math.max(0.8, (larguraVisivel - left - right - 8) / Math.max(1, dados.total));
+  const pxPerDay = pxManual ?? pxAjustado;
+  const width = Math.round(left + right + dados.total * pxPerDay);
   const height = Math.max(420, top + Math.max(1, locationOrder.length) * rowH + bottom);
   const x = (iso: string) =>
     left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * pxPerDay;
@@ -248,20 +432,54 @@ function LinhaDeBalanco({
     return `${m}/${y.slice(2)}`;
   };
 
-  return (
-    <div className="pl-lob-scroll pl-planejamento-scroll">
-      <svg
-        className="pl-lob pl-lob-prevision"
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Linha de balanço com tempo horizontal e localizações verticais"
-      >
-        <rect x="0" y="0" width={width} height={height} className="pl-lob-bg" />
+  const hojeX = Math.max(left, Math.min(width - right, x(hoje)));
+  const irParaHoje = () => {
+    const elemento = rolagem.current;
+    if (!elemento) return;
+    elemento.scrollTo({ left: Math.max(0, hojeX - elemento.clientWidth / 2), behavior: "smooth" });
+  };
 
-        <text x="14" y="22" className="pl-gantt-title">LINHA DE BALANÇO</text>
-        <text x="14" y="43" className="pl-lob-subtitle">
-          FLUXO POR LOCALIZAÇÃO · RITMO DAS EQUIPES
-        </text>
+  return (
+    <div className="pg">
+      <div className="pg-ferramentas">
+        <div className="pg-escala">
+          Escala: <strong>{unidadeDaEscala(pxPerDay)}</strong>
+          <span className="pg-escala-nota">
+            {locationOrder.length} locais · {servicos.length} serviços
+          </span>
+        </div>
+        <div className="pg-zoom" role="group" aria-label="Zoom da linha de balanço">
+          <button type="button" onClick={() => setPxManual(Math.min(48, Math.max(0.6, pxPerDay / 1.6)))} aria-label="Diminuir zoom" title="Diminuir zoom">
+            <ZoomOut size={16} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => setPxManual(Math.min(48, Math.max(0.6, pxPerDay * 1.6)))} aria-label="Aumentar zoom" title="Aumentar zoom">
+            <ZoomIn size={16} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => setPxManual(pxAjustado)} aria-label="Ajustar a obra inteira à tela" title="Ajustar à tela">
+            <Scan size={16} aria-hidden="true" />
+            <span>Ajustar</span>
+          </button>
+          <button type="button" onClick={irParaHoje} aria-label="Ir para a data de hoje" title="Ir para hoje">
+            <Crosshair size={16} aria-hidden="true" />
+            <span>Hoje</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="pg-rolagem" ref={rolagem}>
+        <svg
+          className="pl-lob pl-lob-prevision"
+          style={{ width, maxWidth: "none" }}
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label="Linha de balanço: tempo no eixo horizontal, localizações no eixo vertical"
+        >
+          <rect x="0" y="0" width={width} height={height} className="pl-lob-bg" />
+
+          <text x="14" y="22" className="pl-gantt-title">LINHA DE BALANÇO</text>
+          <text x="14" y="43" className="pl-lob-subtitle">
+            RITMO DAS EQUIPES POR LOCAL
+          </text>
 
         <rect x={left} y="28" width={width - left - right} height="28" className="pl-lob-header" />
         {monthTicks.map(month => {
@@ -374,10 +592,19 @@ function LinhaDeBalanco({
 
         <line x1={left} x2={width - right} y1={56} y2={56} className="pl-lob-axis" />
         <line x1={left} x2={left} y1={56} y2={height - bottom} className="pl-lob-axis" />
+        <line x1={hojeX} x2={hojeX} y1="28" y2={height - bottom} className="pg-hoje-linha" />
+        <text x={hojeX + 4} y="22" className="pl-gantt-hoje-label">HOJE</text>
         <text x={width / 2} y={height - 12} textAnchor="middle" className="pl-lob-caption">
           TEMPO →
         </text>
-      </svg>
+        </svg>
+      </div>
+
+      <div className="pg-legenda">
+        <span><i className="pg-amostra normal" /> serviço executado no local</span>
+        <span><i className="pg-amostra" style={{ background: "#b3261e", width: 2, height: 12 }} /> hoje</span>
+        <span>As linhas ligam o mesmo serviço entre locais: a inclinação é o ritmo da equipe.</span>
+      </div>
     </div>
   );
 }
