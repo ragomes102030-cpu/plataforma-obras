@@ -1333,6 +1333,108 @@ tr:hover .xl-codigo {
   gap: 6px;
 }
 
+.pg-filtros {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pg-busca {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #cfdae0;
+  border-radius: 6px;
+  background: #fff;
+  color: #6c7d87;
+}
+
+.pg-busca:focus-within {
+  border-color: #4d8291;
+  box-shadow: 0 0 0 2px rgba(77, 130, 145, 0.16);
+}
+
+.pg-busca input {
+  width: 156px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #172a35;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.pg-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #cfdae0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2f4a55;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pg-chip:hover {
+  border-color: #8fb0bd;
+  background: #f0f6f8;
+}
+
+.pg-chip.ativo {
+  border-color: #35606c;
+  background: #35606c;
+  color: #fff;
+}
+
+.pg-setas {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pg-seta {
+  fill: none;
+  stroke: #5f7180;
+  stroke-width: 1.1;
+}
+
+.pg-seta.critica {
+  stroke: #a63a2c;
+  stroke-width: 1.4;
+}
+
+.pg-seta-ponta {
+  fill: #5f7180;
+  stroke: none;
+}
+
+.pg-seta-ponta.critica {
+  fill: #a63a2c;
+}
+
+.pg-vazio-filtro {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  padding: 16px;
+  color: #6c7d87;
+  font-size: 12.5px;
+  text-align: center;
+}
+
 .pg-zoom button {
   display: inline-flex;
   align-items: center;
@@ -1764,6 +1866,20 @@ tr:hover .xl-codigo {
 .pg-amostra.critica { background: #a63a2c; }
 .pg-amostra.hoje { width: 2px; height: 12px; background: #b3261e; }
 .pg-amostra.semana { background: #eef1f3; border: 1px solid #dfe6ea; }
+.pg-amostra.ligacao {
+  position: relative;
+  height: 2px;
+  width: 18px;
+  background: #5f7180;
+}
+.pg-amostra.ligacao::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -1px;
+  border: 4px solid transparent;
+  border-left-color: #5f7180;
+}
 
 @media (max-width: 760px) {
   .pg-ferramentas {
@@ -1820,6 +1936,24 @@ tr:hover .xl-codigo {
   }
   .pg-legenda {
     font-size: 12px;
+  }
+  /* No celular a busca ocupa a linha inteira e os filtros ficam ao lado do zoom,
+     sem espremer os botões em alvos pequenos. */
+  .pg-filtros {
+    flex: 1 1 100%;
+    order: 3;
+  }
+  .pg-busca {
+    flex: 1 1 140px;
+    min-height: 40px;
+  }
+  .pg-busca input {
+    width: 100%;
+    font-size: 13px;
+  }
+  .pg-chip {
+    min-height: 40px;
+    font-size: 12.5px;
   }
 }
 

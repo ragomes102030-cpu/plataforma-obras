@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Scan, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Scan, Search, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
@@ -56,6 +56,19 @@ export function VisualizacaoPlanejamento({
   );
   const cpmCalculado = atividades.length > 0 && atividades.some(activity => activity.cpmCalculatedAt);
 
+  // Dependências do cronograma traduzidas para os códigos da EAP, que é o que a
+  // planilha do Gantt usa como chave de linha. Sem isso o gráfico mostra barras
+  // soltas — e o Project/Primavera mostram a sequência entre elas.
+  const dependencias = useMemo(() => {
+    const codigoPorAtividade = new Map(atividades.map(activity => [activity.id, activity.wbsCode]));
+    return (planejamento.data?.dependencies ?? []).flatMap(dependencia => {
+      const de = codigoPorAtividade.get(dependencia.predecessorId);
+      const para = codigoPorAtividade.get(dependencia.successorId);
+      return de && para ? [{ de, para, tipo: String(dependencia.type ?? "FS") }] : [];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planejamento.data]);
+
   const dados = useMemo(() => {
     if (!linhas.length) return null;
     const min = linhas.reduce((v, l) => Math.min(v, dateMs(l.inicio)), dateMs(linhas[0]!.inicio));
@@ -102,7 +115,7 @@ export function VisualizacaoPlanejamento({
         </div>
       )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} atividades={atividadePorCodigo} dados={dados} hoje={hoje} inicioObra={inicioObra} />
+        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} />
       ) : (
         <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
       )}
@@ -142,12 +155,14 @@ function useTelaEstreita(): boolean {
 function Gantt({
   linhas,
   atividades,
+  dependencias,
   dados,
   hoje,
   inicioObra,
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<string, { critical: number; totalFloat: number | null; cpmCalculatedAt: Date | string | null }>;
+  dependencias: { de: string; para: string; tipo: string }[];
   dados: { start: string; end: string; total: number };
   hoje: IsoDate;
   inicioObra: IsoDate | null;
@@ -245,6 +260,59 @@ function Gantt({
   const [colapsados, setColapsados] = useState<Set<string>>(() => new Set());
   const temEtapas = arvore.some(no => no.temFilhos);
   const visiveis = useMemo(() => linhasVisiveis(arvore, colapsados), [arvore, colapsados]);
+
+  // Filtro de visão (não de edição): esconde linhas, nunca altera o plano.
+  const [busca, setBusca] = useState("");
+  const [soCritico, setSoCritico] = useState(false);
+  const [mostrarSetas, setMostrarSetas] = useState(true);
+  const termo = busca.trim().toLocaleLowerCase("pt-BR");
+  const filtradas = useMemo(
+    () =>
+      visiveis.filter(
+        no =>
+          (!soCritico || Boolean(no.critica)) &&
+          (!termo || `${no.codigo} ${no.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
+      ),
+    [visiveis, soCritico, termo]
+  );
+
+  // Geometria de cada linha filtrada, em coordenadas do trilho de tempo. É o que
+  // permite desenhar as setas de dependência como no Project.
+  const geometria = useMemo(() => {
+    const mapa = new Map<string, { x0: number; x1: number; y: number }>();
+    filtradas.forEach((no, indice) => {
+      const x0 = Math.max(0, ((dateMs(no.inicio) - dateMs(dados.start)) / 86400000) * px);
+      const x1 = x0 + Math.max(6, Math.min(larguraDoTempo - x0, Math.max(1, no.duracao) * px));
+      mapa.set(no.chave, { x0, x1, y: indice * alturaLinha + alturaLinha / 2 });
+    });
+    return mapa;
+  }, [filtradas, px, dados.start, larguraDoTempo, alturaLinha]);
+
+  const setas = useMemo(() => {
+    if (!mostrarSetas) return [];
+    const lista: { chave: string; d: string; critica: boolean }[] = [];
+    for (const dependencia of dependencias) {
+      const origem = geometria.get(dependencia.de);
+      const destino = geometria.get(dependencia.para);
+      if (!origem || !destino) continue;
+      const tipo = dependencia.tipo.toUpperCase();
+      const sai = tipo === "SS" || tipo === "SF" ? origem.x0 : origem.x1;
+      const entra = tipo === "FF" || tipo === "SF" ? destino.x1 : destino.x0;
+      const canal =
+        tipo === "SS"
+          ? Math.max(2, Math.min(origem.x0, destino.x0) - 8)
+          : tipo === "FS"
+            ? Math.max(sai + 8, 2)
+            : Math.max(origem.x1, destino.x1, sai) + 8;
+      const ponta = tipo === "FF" || tipo === "SF" ? 4 : -4;
+      lista.push({
+        chave: `${dependencia.de}>${dependencia.para}`,
+        d: `M ${sai} ${origem.y} H ${canal} V ${destino.y} H ${entra + ponta}`,
+        critica: codigosCriticos.has(dependencia.de) && codigosCriticos.has(dependencia.para),
+      });
+    }
+    return lista;
+  }, [dependencias, geometria, mostrarSetas, codigosCriticos]);
   const alternar = (chave: string) =>
     setColapsados(antes => {
       const proximo = new Set(antes);
@@ -267,6 +335,36 @@ function Gantt({
           <span className="pg-escala-nota">
             {totalCriticas > 0 ? `${totalCriticas} atividades no caminho crítico` : "CPM não calculado"}
           </span>
+        </div>
+        <div className="pg-filtros">
+          <label className="pg-busca">
+            <Search size={14} aria-hidden="true" />
+            <input
+              value={busca}
+              onChange={evento => setBusca(evento.target.value)}
+              placeholder="Buscar atividade ou EAP"
+              aria-label="Buscar atividade no Gantt"
+            />
+          </label>
+          <button
+            type="button"
+            className={`pg-chip${soCritico ? " ativo" : ""}`}
+            onClick={() => setSoCritico(valor => !valor)}
+            aria-pressed={soCritico}
+            title="Mostrar só o caminho crítico"
+          >
+            Só crítico
+          </button>
+          <button
+            type="button"
+            className={`pg-chip${mostrarSetas ? " ativo" : ""}`}
+            onClick={() => setMostrarSetas(valor => !valor)}
+            aria-pressed={mostrarSetas}
+            title="Mostrar as ligações de dependência no gráfico"
+          >
+            <GitBranch size={14} aria-hidden="true" />
+            Dependências
+          </button>
         </div>
         <div className="pg-zoom" role="group" aria-label="Zoom do gráfico de Gantt">
           {temEtapas && (
@@ -350,7 +448,40 @@ function Gantt({
               {inicioX != null && <div className="pg-inicio-obra" style={{ left: inicioX }} title="Início da obra" />}
             </div>
 
-            {visiveis.map((no, indice) => {
+            {mostrarSetas && setas.length > 0 && (
+              <svg
+                className="pg-setas"
+                width={larguraDoTempo}
+                height={Math.max(1, filtradas.length * alturaLinha)}
+                style={{ left: esquerda }}
+                aria-hidden="true"
+              >
+                <defs>
+                  <marker id="pg-seta" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                    <path d="M 0 0 L 8 4 L 0 8 z" className="pg-seta-ponta" />
+                  </marker>
+                  <marker id="pg-seta-critica" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+                    <path d="M 0 0 L 8 4 L 0 8 z" className="pg-seta-ponta critica" />
+                  </marker>
+                </defs>
+                {setas.map(seta => (
+                  <path
+                    key={seta.chave}
+                    d={seta.d}
+                    className={`pg-seta${seta.critica ? " critica" : ""}`}
+                    markerEnd={`url(#${seta.critica ? "pg-seta-critica" : "pg-seta"})`}
+                  />
+                ))}
+              </svg>
+            )}
+
+            {filtradas.length === 0 && (
+              <div className="pg-vazio-filtro">
+                Nenhuma atividade corresponde a este filtro. Limpe a busca ou desligue “Só crítico”.
+              </div>
+            )}
+
+            {filtradas.map((no, indice) => {
               const inicioBarra = Math.max(0, posicao(no.inicio));
               const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, Math.max(1, no.duracao) * px));
               const resumo = no.temFilhos;
@@ -426,6 +557,7 @@ function Gantt({
         <span><i className="pg-amostra critica" /> caminho crítico</span>
         <span><i className="pg-amostra hoje" /> hoje</span>
         <span><i className="pg-amostra semana" /> fim de semana</span>
+        {mostrarSetas && <span><i className="pg-amostra ligacao" /> dependência</span>}
         {inicioObra && <span>Início da obra: {fmtComAno(inicioObra, true)}</span>}
       </div>
     </div>
