@@ -140,9 +140,13 @@ function unidadeDaEscala(px: number): string {
   return "mês";
 }
 
-function mesCurto(iso: string): string {
+const NOMES_DO_MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** Rótulo de mês por extenso curto: "out" e, na virada do ano, "jan/27". */
+function rotuloDeMes(iso: string, comAno: boolean): string {
   const [ano, mes] = iso.split("-");
-  return `${mes}/${ano.slice(2)}`;
+  const nome = NOMES_DO_MES[Number(mes) - 1] ?? mes;
+  return comAno ? `${nome}/${ano.slice(2)}` : nome;
 }
 
 /** 760px é o mesmo corte do resto do layout de campo. */
@@ -196,6 +200,45 @@ function Gantt({
   const [larguraVisivel, setLarguraVisivel] = useState(1200);
   const utils = trpc.useUtils();
   const [alternandoMarco, setAlternandoMarco] = useState(false);
+  const [larguraEsquerda, setLarguraEsquerda] = useState(() => {
+    try {
+      const salvo = Number(window.localStorage.getItem("plataforma-obras:gantt-esquerda"));
+      return Number.isFinite(salvo) && salvo >= 300 && salvo <= 760 ? salvo : 470;
+    } catch {
+      return 470;
+    }
+  });
+  const [ajustandoColuna, setAjustandoColuna] = useState(false);
+  const inicioArraste = useRef<{ x: number; largura: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("plataforma-obras:gantt-esquerda", String(larguraEsquerda));
+    } catch {
+      // modo privado: segue sem guardar
+    }
+  }, [larguraEsquerda]);
+
+  useEffect(() => {
+    if (!ajustandoColuna) return;
+    const mover = (evento: PointerEvent) => {
+      const base = inicioArraste.current;
+      if (!base) return;
+      setLarguraEsquerda(Math.min(760, Math.max(300, base.largura + evento.clientX - base.x)));
+    };
+    const soltar = () => {
+      inicioArraste.current = null;
+      setAjustandoColuna(false);
+    };
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", soltar);
+    window.addEventListener("pointercancel", soltar);
+    return () => {
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", soltar);
+      window.removeEventListener("pointercancel", soltar);
+    };
+  }, [ajustandoColuna]);
   const marcarMarco = trpc.planning.atualizarAtividade.useMutation({
     // Sem `await`: se o refetch demorar, o painel não fica preso em "salvando…"
     // (a mutation só termina quando o onSuccess resolve). `utils.invalidate()`
@@ -211,8 +254,9 @@ function Gantt({
   const estreita = useTelaEstreita();
 
   // Planilha do Gantt: no desktop, EAP+atividade, duração, início, fim e avanço;
-  // no celular, atividade e avanço.
-  const esquerda = estreita ? 168 : 470;
+  // no celular, atividade e avanço. No desktop a largura é arrastável (divisória
+  // entre a planilha e o gráfico) e fica guardada no navegador.
+  const esquerda = estreita ? 168 : larguraEsquerda;
   const alturaLinha = estreita ? 46 : 30;
   const colunas = estreita ? "minmax(0,1fr) 40px" : "minmax(0,1fr) 46px 66px 66px 42px";
 
@@ -250,9 +294,8 @@ function Gantt({
       const inicioVisivel = Math.max(0, x0);
       const fimVisivel = Math.min(larguraDoTempo, x1);
       if (fimVisivel > inicioVisivel) {
-        const [ano] = ini.split("-");
         const viradaDeAno = ini.slice(5, 7) === "01" || lista.length === 0;
-        lista.push({ iso: ini, x: inicioVisivel, largura: fimVisivel - inicioVisivel, rotulo: viradaDeAno ? `${mesCurto(ini)}/${ano}` : mesCurto(ini) });
+        lista.push({ iso: ini, x: inicioVisivel, largura: fimVisivel - inicioVisivel, rotulo: rotuloDeMes(ini, viradaDeAno) });
       }
       cursor = proximo;
     }
@@ -382,7 +425,14 @@ function Gantt({
     const doDia = (iso: string) => ((dateMs(iso) - dateMs(dados.start)) / 86400000) * px;
     return {
       hoje: pct(Math.max(0, doDia(hoje))),
-      meses: meses.map(mes => ({ rotulo: mes.rotulo, esquerda: pct(mes.x), largura: pct(mes.largura) })),
+      meses: meses.map(mes => ({
+        rotulo: mes.rotulo,
+        esquerda: pct(mes.x),
+        largura: pct(mes.largura),
+        // No papel cabem poucos rótulos: só a virada de ano recebe texto, o resto
+        // vira linha fina de mês.
+        virada: mes.rotulo.includes("/"),
+      })),
       linhas: filtradas.map(no => {
         const inicio = Math.max(0, doDia(no.inicio));
         const largura = Math.max(6, Math.min(larguraDoTempo - inicio, Math.max(1, no.duracao) * px));
@@ -648,6 +698,30 @@ function Gantt({
                 )}
                 <span className="pg-cab-titulo pg-cab-num">%</span>
               </div>
+              {!estreita && (
+                <div
+                  className={`pg-col-divisor${ajustandoColuna ? " ativo" : ""}`}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Ajustar a largura da coluna EAP e atividade"
+                  aria-valuenow={larguraEsquerda}
+                  aria-valuemin={300}
+                  aria-valuemax={760}
+                  tabIndex={0}
+                  title="Arraste para alargar a planilha; duplo clique volta ao padrão"
+                  onPointerDown={evento => {
+                    evento.preventDefault();
+                    inicioArraste.current = { x: evento.clientX, largura: esquerda };
+                    setAjustandoColuna(true);
+                  }}
+                  onDoubleClick={() => setLarguraEsquerda(470)}
+                  onKeyDown={evento => {
+                    if (evento.key !== "ArrowLeft" && evento.key !== "ArrowRight") return;
+                    evento.preventDefault();
+                    setLarguraEsquerda(atual => Math.min(760, Math.max(300, atual + (evento.key === "ArrowRight" ? 12 : -12))));
+                  }}
+                />
+              )}
             </div>
             <div className="pg-cab-tempo" style={{ width: larguraDoTempo }}>
               <div className="pg-faixa-meses">
@@ -1001,7 +1075,7 @@ function Gantt({
                   <span className="pgp-meses">
                     {impressao.meses.map(mes => (
                       <span key={`${mes.rotulo}-${mes.esquerda}`} style={{ left: `${mes.esquerda}%`, width: `${mes.largura}%` }}>
-                        {mes.rotulo}
+                        {mes.virada ? mes.rotulo : ""}
                       </span>
                     ))}
                     <i className="pgp-hoje" style={{ left: `${impressao.hoje}%` }} />

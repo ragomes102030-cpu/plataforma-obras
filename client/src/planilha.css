@@ -2005,6 +2005,40 @@ tr:hover .xl-codigo {
   color: #5f7180;
 }
 
+/* Divisória arrastável entre a planilha e o gráfico (largura fica no navegador). */
+.pg-col-divisor {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 9px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 9;
+}
+
+.pg-col-divisor::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.pg-col-divisor:hover::after,
+.pg-col-divisor:focus-visible::after,
+.pg-col-divisor.ativo::after {
+  background: #7fa3b0;
+}
+
+.pg-col-divisor:focus-visible {
+  outline: 2px solid #4d8291;
+  outline-offset: -2px;
+}
+
 .pg-cab-tempo {
   position: relative;
   flex: none;
