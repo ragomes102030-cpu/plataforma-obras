@@ -1435,6 +1435,85 @@ tr:hover .xl-codigo {
   text-align: center;
 }
 
+.pg-linha.selecionada {
+  background: #e8f1f5;
+  box-shadow: inset 0 0 0 1px #9dc0cd;
+}
+
+.pg-linha.selecionada .pg-esquerda {
+  background: #e8f1f5;
+}
+
+.pg-detalhe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  border: 1px solid #c7d8e0;
+  border-radius: 8px;
+  background: #f7fbfc;
+}
+
+.pg-detalhe-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #172a35;
+  font-size: 13px;
+}
+
+.pg-detalhe-topo button {
+  border: 0;
+  background: transparent;
+  color: #5f7180;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.pg-detalhe-topo button:hover {
+  background: #e2edf1;
+  color: #172a35;
+}
+
+.pg-detalhe dl {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px 14px;
+  margin: 0;
+}
+
+.pg-detalhe dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pg-detalhe dt {
+  color: #6c7d87;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pg-detalhe dd {
+  margin: 0;
+  color: #172a35;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.pg-detalhe-larga {
+  grid-column: span 3;
+}
+
 .pg-zoom button {
   display: inline-flex;
   align-items: center;
@@ -1954,6 +2033,24 @@ tr:hover .xl-codigo {
   .pg-chip {
     min-height: 40px;
     font-size: 12.5px;
+  }
+  /* Detalhe da atividade vira uma ficha de duas colunas, legível no campo. */
+  .pg-detalhe {
+    margin: 0 8px 10px;
+    padding: 10px;
+  }
+  .pg-detalhe dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+  .pg-detalhe-larga {
+    grid-column: span 2;
+  }
+  .pg-detalhe dd {
+    font-size: 13px;
+  }
+  .pg-detalhe-topo {
+    font-size: 13.5px;
   }
 }
 
