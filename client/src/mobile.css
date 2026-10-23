@@ -603,6 +603,9 @@ html body .xl-app.xl-app--portfolio {
   html body .xl-tabela-th {
     font-size: 12px;
   }
+  html body .xl-badge {
+    font-size: 12px;
+  }
   /* Botão secundário (Catálogo de insumos, EAP, histórico): era 10px. Altura o
      bloco de toque genérico já garante; aqui sobe só o texto. */
   html body .outline-button {
@@ -630,10 +633,13 @@ html body .xl-app.xl-app--portfolio {
   html body .pl-look-semana > span {
     font-size: 12px;
   }
-  html body .pl-look-kpi > span {
+  /* Duas classes no seletor: planilha.css tem um ajuste de legibilidade no fim do
+     arquivo (`.pl-look-kpis .pl-look-kpi span`, 10px) que vence um seletor de uma
+     classe só. */
+  html body .pl-look-kpis .pl-look-kpi > span {
     font-size: 12px;
   }
-  html body .pl-look-kpi > strong {
+  html body .pl-look-kpis .pl-look-kpi > strong {
     font-size: 15px;
   }
   html body .pl-look-causa {
