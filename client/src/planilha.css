@@ -3746,20 +3746,20 @@ tr:hover .xl-codigo {
   width:100%;
   min-width:640px;
   border-collapse:collapse;
-  font-size:9px;
+  font-size:11px;
 }
 .pl-evm-tabela th{
-  padding:5px 6px;
+  padding:6px 7px;
   text-align:left;
-  font-size:8px;
+  font-size:10.5px;
   text-transform:uppercase;
   letter-spacing:.04em;
-  color:#7b8ea0;
+  color:#5c7285;
   border-bottom:1px solid #e3e9ef;
   white-space:nowrap;
 }
 .pl-evm-tabela td{
-  padding:5px 6px;
+  padding:6px 7px;
   border-bottom:1px solid #f0f3f6;
   color:#334155;
 }

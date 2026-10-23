@@ -185,10 +185,14 @@ export function computeDesembolso(entrada: DesembolsoEntrada): DesembolsoResulta
     // corrigido pelo CPI. E a correção é DIVISÃO, não multiplicação: CPI é
     // EV/AC, então CPI 0,80 significa que cada R$ 1,00 entregue custou
     // R$ 1,25 — o que falta gastar custa planejado ÷ 0,80, não × 0,80.
+    // Mês passado/atual: o que já foi gasto é fato; o que foi planejado e não
+    // foi gasto não desaparece — a obra ainda tem de pagar por ele. Usar só o
+    // realizado fazia o "projetado total" ficar R$ 1,5 mi abaixo do orçamento
+    // na AURORA (3,67 mi x 5,19 mi) e sugeria economia que não existe.
     const projetado =
       situacao === "futuro"
         ? dinheiro(valorPlanejado * fatorDeProjecao(entrada.cpi))
-        : valorRealizado;
+        : dinheiro(Math.max(valorRealizado, valorPlanejado));
 
     acumuladoPlanejado += valorPlanejado;
     acumuladoRealizado += valorRealizado;
