@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Crosshair, GitBranch, GanttChartSquare, Scan, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Scan, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
+import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
 
 type Props = {
   linhas: EntradaDaLinha[];
@@ -159,10 +160,11 @@ function Gantt({
   const [pxManual, setPxManual] = useState<number | null>(7);
   const estreita = useTelaEstreita();
 
-  // No celular a coluna de atividade fica estreita e a linha, alta (dedo);
-  // no desktop cabe o resumo (início, fim, duração, %).
-  const esquerda = estreita ? 126 : 320;
+  // Planilha do Gantt: no desktop, EAP+atividade, duração, início, fim e avanço;
+  // no celular, atividade e avanço.
+  const esquerda = estreita ? 168 : 470;
   const alturaLinha = estreita ? 46 : 30;
+  const colunas = estreita ? "minmax(0,1fr) 40px" : "minmax(0,1fr) 46px 66px 66px 42px";
 
   useEffect(() => {
     const elemento = referencia.current;
@@ -228,6 +230,28 @@ function Gantt({
   }, [dados.start, dados.total, px]);
 
   const totalCriticas = Array.from(atividades.values()).filter(item => item.critical === 1).length;
+
+  // Árvore da EAP (etapas recolhíveis, como no Project) e o que está visível.
+  const codigosCriticos = useMemo(
+    () =>
+      new Set(
+        Array.from(atividades.entries())
+          .filter(([, item]) => item.critical === 1)
+          .map(([codigo]) => codigo)
+      ),
+    [atividades]
+  );
+  const arvore = useMemo(() => montarArvore(linhas, codigosCriticos), [linhas, codigosCriticos]);
+  const [colapsados, setColapsados] = useState<Set<string>>(() => new Set());
+  const temEtapas = arvore.some(no => no.temFilhos);
+  const visiveis = useMemo(() => linhasVisiveis(arvore, colapsados), [arvore, colapsados]);
+  const alternar = (chave: string) =>
+    setColapsados(antes => {
+      const proximo = new Set(antes);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
+      return proximo;
+    });
   const zoom = (fator: number) => setPxManual(Math.min(48, Math.max(0.6, px * fator)));
   const irParaHoje = () => {
     const elemento = referencia.current;
@@ -245,6 +269,21 @@ function Gantt({
           </span>
         </div>
         <div className="pg-zoom" role="group" aria-label="Zoom do gráfico de Gantt">
+          {temEtapas && (
+            <>
+              <button type="button" onClick={() => setColapsados(new Set())} aria-label="Expandir todas as etapas" title="Expandir todas as etapas">
+                <ChevronsUpDown size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setColapsados(new Set(arvore.filter(no => no.temFilhos).map(no => no.chave)))}
+                aria-label="Recolher todas as etapas"
+                title="Recolher todas as etapas"
+              >
+                <ChevronsDownUp size={16} aria-hidden="true" />
+              </button>
+            </>
+          )}
           <button type="button" onClick={() => zoom(1 / 1.6)} aria-label="Diminuir zoom" title="Diminuir zoom">
             <ZoomOut size={16} aria-hidden="true" />
           </button>
@@ -266,7 +305,17 @@ function Gantt({
         <div className="pg-conteudo" style={{ width: esquerda + larguraDoTempo }}>
           <div className="pg-cabecalho">
             <div className="pg-cab-esquerda" style={{ width: esquerda }}>
-              <span className="pg-cab-titulo">Atividade</span>
+              <div className="pg-cab-celulas" style={{ gridTemplateColumns: colunas }}>
+                <span className="pg-cab-titulo">{estreita ? "Atividade" : "EAP · Atividade"}</span>
+                {!estreita && (
+                  <>
+                    <span className="pg-cab-titulo pg-cab-num">Dur.</span>
+                    <span className="pg-cab-titulo pg-cab-num">Início</span>
+                    <span className="pg-cab-titulo pg-cab-num">Fim</span>
+                  </>
+                )}
+                <span className="pg-cab-titulo pg-cab-num">%</span>
+              </div>
             </div>
             <div className="pg-cab-tempo" style={{ width: larguraDoTempo }}>
               <div className="pg-faixa-meses">
@@ -301,43 +350,68 @@ function Gantt({
               {inicioX != null && <div className="pg-inicio-obra" style={{ left: inicioX }} title="Início da obra" />}
             </div>
 
-            {linhas.map((linha, indice) => {
-              const fim = addDays(linha.inicio, Math.max(1, linha.duracao) - 1);
-              const inicioBarra = Math.max(0, posicao(linha.inicio));
-              const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, Math.max(1, linha.duracao) * px));
-              const progresso = linha.executado && linha.quantidade
-                ? Math.max(0, Math.min(100, (linha.executado / linha.quantidade) * 100))
-                : 0;
-              const critica = atividades.get(linha.codigo)?.critical === 1;
-              const descricao = `${linha.codigo} ${linha.atividade} · ${fmt(linha.inicio)} a ${fmt(fim)} · ${linha.duracao} dias · ${Math.round(progresso)}% executado${critica ? " · caminho crítico" : ""}`;
+            {visiveis.map((no, indice) => {
+              const inicioBarra = Math.max(0, posicao(no.inicio));
+              const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, Math.max(1, no.duracao) * px));
+              const resumo = no.temFilhos;
+              const descricao = `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${Math.round(no.progresso)}% executado${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}`;
               return (
-                <div key={`${linha.codigo}-${indice}`} className={`pg-linha${indice % 2 ? " alternada" : ""}`} style={{ height: alturaLinha }}>
+                <div
+                  key={no.chave}
+                  className={`pg-linha${indice % 2 ? " alternada" : ""}${resumo ? " resumo" : ""}`}
+                  style={{ height: alturaLinha }}
+                >
                   <div className="pg-esquerda" style={{ width: esquerda }}>
-                    <div className="pg-esquerda-principal">
-                      {critica && <i className="pg-ponto-critico" title="Caminho crítico" aria-hidden="true" />}
-                      <span className="pg-codigo">{linha.codigo}</span>
-                      <span className="pg-nome" title={linha.atividade}>{linha.atividade}</span>
+                    <div className="pg-celulas" style={{ gridTemplateColumns: colunas }}>
+                      <span className="pg-celula-atividade">
+                        {no.temFilhos ? (
+                          <button
+                            type="button"
+                            className="pg-toggle"
+                            onClick={() => alternar(no.chave)}
+                            aria-expanded={!colapsados.has(no.chave)}
+                            aria-label={`${colapsados.has(no.chave) ? "Abrir" : "Fechar"} etapa ${no.codigo}`}
+                            title={colapsados.has(no.chave) ? "Abrir etapa" : "Fechar etapa"}
+                            style={{ marginLeft: no.profundidade * 10 }}
+                          >
+                            {colapsados.has(no.chave) ? "+" : "−"}
+                          </button>
+                        ) : (
+                          <span className="pg-toggle-vazio" style={{ marginLeft: no.profundidade * 10 }} aria-hidden="true" />
+                        )}
+                        {no.critica && !resumo && <i className="pg-ponto-critico" title="Caminho crítico" aria-hidden="true" />}
+                        <span className="pg-codigo">{no.codigo}</span>
+                        <span className="pg-nome" title={no.nome}>{no.nome}</span>
+                      </span>
+                      {!estreita && (
+                        <>
+                          <span className="pg-celula-num">{no.duracao}d</span>
+                          <span className="pg-celula-num">{fmt(no.inicio)}</span>
+                          <span className="pg-celula-num">{fmt(no.fim)}</span>
+                        </>
+                      )}
+                      <span className="pg-celula-num pg-celula-pct">{Math.round(no.progresso)}%</span>
                     </div>
-                    {!estreita && (
-                      <div className="pg-esquerda-meta">
-                        <span>{fmt(linha.inicio)} → {fmt(fim)}</span>
-                        <span>{linha.duracao}d</span>
-                        <span>{Math.round(progresso)}%</span>
-                        <span className="pg-frente">{linha.pavimento || linha.frente}</span>
-                      </div>
-                    )}
                   </div>
                   <div className="pg-trilho" style={{ width: larguraDoTempo }}>
-                    <div
-                      className={`pg-barra${critica ? " critica" : ""}${progresso >= 100 ? " concluida" : ""}`}
-                      style={{ left: inicioBarra, width: larguraBarra }}
-                      title={descricao}
-                    >
-                      {progresso > 0 && <i className="pg-barra-avanco" style={{ width: `${progresso}%` }} />}
-                      {larguraBarra >= 52 && <span className="pg-barra-texto">{Math.round(progresso)}%</span>}
-                    </div>
-                    {larguraBarra < 18 && (
-                      <span className="pg-barra-dias" style={{ left: inicioBarra + larguraBarra + 4 }}>{linha.duracao}d</span>
+                    {resumo ? (
+                      <div className={`pg-resumo${no.critica ? " critica" : ""}`} style={{ left: inicioBarra, width: larguraBarra }} title={descricao}>
+                        <i className="pg-resumo-avanco" style={{ width: `${no.progresso}%` }} />
+                      </div>
+                    ) : (
+                      <>
+                        <div
+                          className={`pg-barra${no.critica ? " critica" : ""}${no.progresso >= 100 ? " concluida" : ""}`}
+                          style={{ left: inicioBarra, width: larguraBarra }}
+                          title={descricao}
+                        >
+                          {no.progresso > 0 && <i className="pg-barra-avanco" style={{ width: `${no.progresso}%` }} />}
+                          {larguraBarra >= 52 && <span className="pg-barra-texto">{Math.round(no.progresso)}%</span>}
+                        </div>
+                        {larguraBarra < 18 && (
+                          <span className="pg-barra-dias" style={{ left: inicioBarra + larguraBarra + 4 }}>{no.duracao}d</span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
