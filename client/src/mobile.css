@@ -607,8 +607,11 @@ html body .xl-app.xl-app--portfolio {
     font-size: 12px;
   }
   /* Botão secundário (Catálogo de insumos, EAP, histórico): era 10px. Altura o
-     bloco de toque genérico já garante; aqui sobe só o texto. */
-  html body .outline-button {
+     bloco de toque genérico já garante; aqui sobe só o texto. A paginação do
+     catálogo declara 9px com duas classes, então precisa de duas aqui também. */
+  html body .outline-button,
+  html body .catalog-paginacao .outline-button,
+  html body .catalog-paginacao {
     font-size: 12.5px;
   }
   html body .pl-look-sub {
