@@ -1017,7 +1017,7 @@ const eyebrow = {
   alignItems: "center",
   gap: 6,
   color: "#537785",
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 800,
   letterSpacing: "0.11em",
 };
@@ -1067,7 +1067,7 @@ const sidebar = {
 const sidebarTitle = {
   padding: "7px 9px 8px",
   color: "#9aabb1",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 800,
   letterSpacing: "0.12em",
 };
@@ -1081,7 +1081,7 @@ const navButton = {
   borderRadius: 9,
   padding: "9px 10px",
   marginBottom: 3,
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 650,
   cursor: "pointer",
   textAlign: "left" as const,
@@ -1094,7 +1094,7 @@ const navCounter = {
   borderRadius: 999,
   background: "#f1f6f7",
   color: "#77909a",
-  fontSize: 8,
+  fontSize: 12,
   textAlign: "center" as const,
 };
 
@@ -1193,7 +1193,7 @@ const metricIcon = {
 const metricLabel = {
   marginTop: 11,
   color: "#87979d",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 700,
 };
 
@@ -1207,7 +1207,7 @@ const metricValue = {
 const metricDetail = {
   marginTop: 4,
   color: "#9aa8ad",
-  fontSize: 9,
+  fontSize: 12,
 };
 
 const splitGrid = {
@@ -1305,7 +1305,7 @@ const searchInput = {
   outline: "none",
   background: "transparent",
   color: "#344f59",
-  fontSize: 11,
+  fontSize: 12,
 };
 
 const segmented = {
@@ -1323,7 +1323,7 @@ const segmentButton = {
   color: "#71848b",
   borderRadius: 7,
   padding: "7px 9px",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 700,
   cursor: "pointer",
 };
@@ -1337,7 +1337,7 @@ const toolbarStats = {
   display: "flex",
   gap: 8,
   color: "#91a0a6",
-  fontSize: 9,
+  fontSize: 12,
 };
 
 const capabilityList = {
@@ -1405,7 +1405,7 @@ const statusBadge = {
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-  fontSize: 8,
+  fontSize: 12,
   fontWeight: 800,
   letterSpacing: "0.04em",
   whiteSpace: "nowrap" as const,
@@ -1414,13 +1414,13 @@ const statusBadge = {
 const capabilityMeta = {
   marginTop: 5,
   color: "#8e9ca2",
-  fontSize: 9,
+  fontSize: 12,
 };
 
 const capabilityDescription = {
   margin: "6px 0 0",
   color: "#687c84",
-  fontSize: 10,
+  fontSize: 12,
   lineHeight: 1.5,
 };
 
@@ -1431,7 +1431,7 @@ const dependencyLine = {
   flexWrap: "wrap" as const,
   marginTop: 7,
   color: "#8c9aa0",
-  fontSize: 8,
+  fontSize: 12,
 };
 
 const dependencyBadge = {
@@ -1459,7 +1459,7 @@ const secondaryAction = {
   borderRadius: 8,
   background: "#ffffff",
   color: "#496c78",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 750,
   cursor: "pointer",
 };
@@ -1525,7 +1525,7 @@ const mcpCardTop = {
 
 const eyebrowSmall = {
   color: "#a0adb2",
-  fontSize: 8,
+  fontSize: 12,
   fontWeight: 800,
   letterSpacing: "0.1em",
 };
@@ -1554,7 +1554,7 @@ const metricTiny = {
 
 const metricTinyLabel = {
   color: "#9aa7ac",
-  fontSize: 8,
+  fontSize: 12,
 };
 
 const toolCloud = {
@@ -1569,7 +1569,7 @@ const toolBadge = {
   borderRadius: 6,
   background: "#f5f8f9",
   color: "#66818b",
-  fontSize: 8,
+  fontSize: 12,
   border: "1px solid #e6edef",
 };
 
@@ -1583,7 +1583,7 @@ const errorBox = {
   borderRadius: 8,
   background: "#fff7f5",
   color: "#a94a41",
-  fontSize: 9,
+  fontSize: 12,
 };
 
 const policyGrid = {
@@ -1622,7 +1622,7 @@ const permissionLevel = {
   borderRadius: 999,
   background: "#f5f8f9",
   color: "#72858c",
-  fontSize: 8,
+  fontSize: 12,
   fontWeight: 750,
   whiteSpace: "nowrap" as const,
 };
@@ -1650,7 +1650,7 @@ const principleNumber = {
   borderRadius: 7,
   background: "#eef5f7",
   color: "#537987",
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 800,
   flex: "0 0 auto",
 };
@@ -1702,7 +1702,7 @@ const timelineTop = {
 const timelineAction = {
   marginTop: 3,
   color: "#547783",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 750,
 };
 
@@ -1714,7 +1714,7 @@ const notice = {
   padding: "10px 12px",
   border: "1px solid",
   borderRadius: 9,
-  fontSize: 10,
+  fontSize: 12,
 };
 
 const dismissButton = {
@@ -1737,7 +1737,7 @@ const secondaryButton = {
   borderRadius: 8,
   background: "#ffffff",
   color: "#4d6f7a",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 750,
   cursor: "pointer",
 };
@@ -1756,14 +1756,14 @@ const linkButton = {
   border: 0,
   background: "transparent",
   color: "#5a7b86",
-  fontSize: 9,
+  fontSize: 12,
   fontWeight: 750,
   cursor: "pointer",
 };
 
 const mutedText = {
   color: "#9aa7ac",
-  fontSize: 8,
+  fontSize: 12,
 };
 
 const emptyState = {

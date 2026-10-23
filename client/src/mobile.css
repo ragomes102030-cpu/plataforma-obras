@@ -586,5 +586,192 @@ html body .xl-app.xl-app--portfolio {
   html body:has(input:focus, textarea:focus, select:focus) .xl-barra-campo {
     display: none;
   }
+
+  /* ------------------------------------------------------------------------
+     CONTROLE / PRODUÇÃO — a tela que se usa com o celular na mão, no sol.
+     A tabela de lançamentos e o lookahead foram desenhados para 1280px: 8,5px
+     no "cumprido", 10,5px no cabeçalho, 8px no select de compromisso. Aqui tudo
+     sobe para 12px+ e as grades de semana passam a duas colunas.
+     ---------------------------------------------------------------------- */
+  html body .xl-regua {
+    font-size: 12.5px;
+  }
+  html body .producao-tag {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+  html body .xl-tabela-th {
+    font-size: 12px;
+  }
+  /* Botão secundário (Catálogo de insumos, EAP, histórico): era 10px. Altura o
+     bloco de toque genérico já garante; aqui sobe só o texto. */
+  html body .outline-button {
+    font-size: 12.5px;
+  }
+  html body .pl-look-sub {
+    font-size: 12.5px;
+  }
+  html body .pl-look-mini,
+  html body .pl-look-ppc > span,
+  html body .pl-look-vazio,
+  html body .pl-look-num {
+    font-size: 12px;
+  }
+  html body .pl-look-aviso {
+    font-size: 12.5px;
+  }
+  html body .pl-look-semanas,
+  html body .pl-look-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html body .pl-look-semana > strong {
+    font-size: 13px;
+  }
+  html body .pl-look-semana > span {
+    font-size: 12px;
+  }
+  html body .pl-look-kpi > span {
+    font-size: 12px;
+  }
+  html body .pl-look-kpi > strong {
+    font-size: 15px;
+  }
+  html body .pl-look-causa {
+    grid-template-columns: minmax(84px, 1fr) 1.3fr 66px;
+    font-size: 12px;
+  }
+  html body .pl-look-causa > strong {
+    font-size: 12px;
+  }
+  html body .pl-look-ok,
+  html body .pl-look-bloqueio {
+    font-size: 12px;
+  }
+  html body .pl-look-tabela table {
+    min-width: 560px;
+  }
+  html body .pl-look-tabela th,
+  html body .pl-look-tabela td {
+    font-size: 12px;
+    padding: 8px 7px;
+  }
+  /* O select de compromisso tinha 8px e 92px de largura: não dava para ler nem
+     para acertar o dedo. Vira um campo de 40px de altura. */
+  html body .pl-look-acoes select {
+    max-width: none;
+    min-height: 40px;
+    padding: 6px 8px;
+    font-size: 12.5px;
+  }
+  /* Checkbox de 24px é o mínimo da norma e já é clicável com a unha do polegar. */
+  html body .pl-look input[type="checkbox"] {
+    inline-size: 24px !important;
+    block-size: 24px !important;
+  }
+}
+
+
+/* ==========================================================================
+   CUSTOS — EVM e medições
+   ==========================================================================
+   Estes dois painéis foram desenhados para 1280px: 7,5px no cabeçalho da tabela,
+   8px no status, 8,5px no gráfico de desembolso e 9px nos botões. No celular isso
+   não se lê — e é justamente a tela que o dono da obra abre no canteiro. */
+
+@media (max-width: 900px) {
+  html body .pl-evm-sub,
+  html body .pl-evm-vazio,
+  html body .pl-evm-num {
+    font-size: 12px;
+  }
+  html body .pl-evm-cartao > span {
+    font-size: 12px;
+  }
+  html body .pl-evm-cartao > strong {
+    font-size: 18px;
+  }
+  html body .pl-evm-tabela th {
+    font-size: 12px;
+    padding: 6px 7px;
+  }
+  html body .pl-evm-tabela td {
+    font-size: 12.5px;
+    padding: 7px;
+  }
+  html body .pl-evm-tabela table {
+    min-width: 540px;
+  }
+  html body .pl-evm-botao {
+    font-size: 12.5px;
+    min-height: 40px;
+  }
+  html body .pl-evm-link {
+    font-size: 12.5px;
+  }
+
+  html body .pl-med-sub,
+  html body .pl-med-mini,
+  html body .pl-med-vazio,
+  html body .pl-med-num {
+    font-size: 12px;
+  }
+  html body .pl-med-total > span:first-child {
+    font-size: 12px;
+  }
+  html body .pl-med-aviso {
+    font-size: 12.5px;
+  }
+  html body .pl-med-tabela th {
+    font-size: 12px;
+    padding: 6px 7px;
+  }
+  html body .pl-med-tabela td {
+    font-size: 12.5px;
+    padding: 7px;
+  }
+  html body .pl-med-tabela table {
+    font-size: 12.5px;
+    min-width: 540px;
+  }
+  html body .pl-med-status {
+    font-size: 12px;
+    padding: 2px 8px;
+  }
+  html body .pl-med-botao {
+    font-size: 12.5px;
+    min-height: 40px;
+  }
+  html body .pl-med-link {
+    font-size: 12.5px;
+  }
+  html body .pl-med-mes {
+    grid-template-columns: 62px 1fr 112px;
+  }
+  html body .pl-med-mes-rotulo,
+  html body .pl-med-mes-num {
+    font-size: 12px;
+  }
+  html body .pl-med-legenda {
+    font-size: 12px;
+  }
+  html body .pl-med-chip {
+    inline-size: 14px;
+    block-size: 8px;
+  }
+
+  /* Curva S: o SVG é um viewBox de 600 unidades exibido em 342px, então o texto
+     de 10px do desenho chegava ao olho com 5,7px. Aqui o gráfico ganha largura
+     mínima (rola na horizontal) e o texto sobe para 13 — 12px reais na tela. */
+  html body .xl-curva-container {
+    padding: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  html body .xl-curva-svg {
+    min-width: 560px;
+  }
+  html body .xl-curva-svg text {
+    font-size: 13px;
+  }
 }
 
