@@ -182,9 +182,11 @@ function Gantt({
   const utils = trpc.useUtils();
   const [alternandoMarco, setAlternandoMarco] = useState(false);
   const marcarMarco = trpc.planning.atualizarAtividade.useMutation({
-    onSuccess: async () => {
-      await utils.planning.list.invalidate();
-      await utils.planning.grade.invalidate();
+    // Sem `await`: se o refetch demorar, o painel não fica preso em "salvando…"
+    // (a mutation só termina quando o onSuccess resolve). `utils.invalidate()`
+    // pega a grade e a lista com os inputs que as telas já usam.
+    onSuccess: () => {
+      void utils.invalidate();
     },
   });
   // Abre na escala semanal (7px por dia), como o Project: uma obra de 820 dias
