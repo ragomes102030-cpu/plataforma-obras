@@ -265,6 +265,7 @@ function Gantt({
   const [busca, setBusca] = useState("");
   const [soCritico, setSoCritico] = useState(false);
   const [mostrarSetas, setMostrarSetas] = useState(true);
+  const [selecionada, setSelecionada] = useState<string | null>(null);
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const filtradas = useMemo(
     () =>
@@ -313,6 +314,26 @@ function Gantt({
     }
     return lista;
   }, [dependencias, geometria, mostrarSetas, codigosCriticos]);
+
+  // Faixa de detalhe da linha escolhida: datas, folga e ligações. É o que o
+  // engenheiro consulta no campo sem abrir a planilha inteira.
+  const detalhe = useMemo(() => {
+    const no = filtradas.find(linha => linha.chave === selecionada);
+    if (!no) return null;
+    const atividade = atividades.get(no.codigo);
+    const listaPred = dependencias.filter(dependencia => dependencia.para === no.codigo);
+    const listaSuces = dependencias.filter(dependencia => dependencia.de === no.codigo);
+    const resumo = (lista: { de: string; para: string; tipo: string }[], chave: "de" | "para") =>
+      lista.length === 0
+        ? "nenhuma"
+        : lista.map(dependencia => `${dependencia.tipo.toUpperCase()} ${dependencia[chave]}`).join(" · ");
+    return {
+      no,
+      folga: typeof atividade?.totalFloat === "number" ? atividade.totalFloat : null,
+      predecessoras: resumo(listaPred, "de"),
+      sucessoras: resumo(listaSuces, "para"),
+    };
+  }, [selecionada, filtradas, atividades, dependencias]);
   const alternar = (chave: string) =>
     setColapsados(antes => {
       const proximo = new Set(antes);
@@ -489,8 +510,19 @@ function Gantt({
               return (
                 <div
                   key={no.chave}
-                  className={`pg-linha${indice % 2 ? " alternada" : ""}${resumo ? " resumo" : ""}`}
+                  className={`pg-linha${indice % 2 ? " alternada" : ""}${resumo ? " resumo" : ""}${selecionada === no.chave ? " selecionada" : ""}`}
                   style={{ height: alturaLinha }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selecionada === no.chave}
+                  aria-label={`Detalhes de ${no.codigo} ${no.nome}`}
+                  onClick={() => setSelecionada(no.chave)}
+                  onKeyDown={evento => {
+                    if (evento.key === "Enter" || evento.key === " ") {
+                      evento.preventDefault();
+                      setSelecionada(no.chave);
+                    }
+                  }}
                 >
                   <div className="pg-esquerda" style={{ width: esquerda }}>
                     <div className="pg-celulas" style={{ gridTemplateColumns: colunas }}>
@@ -499,7 +531,10 @@ function Gantt({
                           <button
                             type="button"
                             className="pg-toggle"
-                            onClick={() => alternar(no.chave)}
+                            onClick={evento => {
+                              evento.stopPropagation();
+                              alternar(no.chave);
+                            }}
                             aria-expanded={!colapsados.has(no.chave)}
                             aria-label={`${colapsados.has(no.chave) ? "Abrir" : "Fechar"} etapa ${no.codigo}`}
                             title={colapsados.has(no.chave) ? "Abrir etapa" : "Fechar etapa"}
@@ -552,12 +587,66 @@ function Gantt({
         </div>
       </div>
 
+      {detalhe && (
+        <div className="pg-detalhe" role="status" aria-live="polite">
+          <div className="pg-detalhe-topo">
+            <strong>
+              {detalhe.no.codigo} · {detalhe.no.nome}
+            </strong>
+            <button type="button" onClick={() => setSelecionada(null)} aria-label="Fechar detalhes da atividade">
+              ×
+            </button>
+          </div>
+          <dl>
+            <div>
+              <dt>Início</dt>
+              <dd>{fmt(detalhe.no.inicio)}</dd>
+            </div>
+            <div>
+              <dt>Término</dt>
+              <dd>{fmt(detalhe.no.fim)}</dd>
+            </div>
+            <div>
+              <dt>Duração</dt>
+              <dd>{detalhe.no.duracao} dias</dd>
+            </div>
+            <div>
+              <dt>Executado</dt>
+              <dd>{Math.round(detalhe.no.progresso)}%</dd>
+            </div>
+            <div>
+              <dt>Folga total</dt>
+              <dd>
+                {detalhe.folga == null
+                  ? "sem cálculo"
+                  : detalhe.no.critica
+                    ? "zero (crítica)"
+                    : `${detalhe.folga} dia${detalhe.folga === 1 ? "" : "s"}`}
+              </dd>
+            </div>
+            <div>
+              <dt>Situação</dt>
+              <dd>{detalhe.no.temFilhos ? "etapa (resumo)" : detalhe.no.critica ? "caminho crítico" : "com folga"}</dd>
+            </div>
+            <div className="pg-detalhe-larga">
+              <dt>Predecessoras</dt>
+              <dd>{detalhe.predecessoras}</dd>
+            </div>
+            <div className="pg-detalhe-larga">
+              <dt>Sucessoras</dt>
+              <dd>{detalhe.sucessoras}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+
       <div className="pg-legenda">
         <span><i className="pg-amostra normal" /> executada</span>
         <span><i className="pg-amostra critica" /> caminho crítico</span>
         <span><i className="pg-amostra hoje" /> hoje</span>
         <span><i className="pg-amostra semana" /> fim de semana</span>
         {mostrarSetas && <span><i className="pg-amostra ligacao" /> dependência</span>}
+        <span>Clique numa linha para ver datas, folga e ligações.</span>
         {inicioObra && <span>Início da obra: {fmtComAno(inicioObra, true)}</span>}
       </div>
     </div>
