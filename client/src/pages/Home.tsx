@@ -512,6 +512,7 @@ function Obra({
     quantidade: l.quantidade,
     unidade: l.unidade,
     executado: l.executado,
+    marco: l.marco,
   }));
   const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
   const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
