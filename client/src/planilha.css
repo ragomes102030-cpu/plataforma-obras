@@ -1216,11 +1216,47 @@ tr:hover .xl-codigo {
   top: 0;
   left: 0;
   z-index: 3;
+  height: 100%;
   overflow: hidden;
   max-height: 100%;
   border-right: 1px solid #cfd8dc;
   background: #fff;
   box-shadow: 6px 0 10px -8px rgba(23, 42, 53, 0.35);
+}
+
+/* Cabeçalho de períodos preso no topo: mês, semanas e "hoje" não somem ao rolar. */
+.pl-lob-cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 0 8px 10px -10px rgba(23, 42, 53, 0.45);
+}
+
+.pl-lob-cabecalho svg,
+.pl-lob-corpo {
+  display: block;
+}
+
+.pl-lob-eixo-topo {
+  position: relative;
+  overflow: hidden;
+}
+
+.pl-lob-eixo-corpo {
+  position: absolute;
+  top: 96px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+.pl-lob-eixo-nomes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
 }
 
 .pl-lob-eixo-interno {
@@ -1510,6 +1546,34 @@ tr:hover .xl-codigo {
 
 .pg-seta-ponta.critica {
   fill: #a63a2c;
+}
+
+/* Linha de avanço: o que já foi executado, ponta a ponta. */
+.pg-avanco-linha {
+  fill: none;
+  stroke: #2f7d5b;
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3;
+  stroke-linejoin: round;
+}
+
+.pg-avanco-ponto {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: #2f7d5b;
+  box-shadow: 0 0 0 1.5px #fff;
+  pointer-events: none;
+}
+
+.pg-amostra.avanco {
+  height: 0;
+  width: 18px;
+  border-top: 2px dashed #2f7d5b;
 }
 
 .pg-vazio-filtro {

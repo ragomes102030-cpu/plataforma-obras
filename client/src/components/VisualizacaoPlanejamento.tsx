@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Maximize2, Minimize2, Scan, Search, Tags, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Maximize2, Minimize2, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
@@ -304,6 +304,7 @@ function Gantt({
   const [mostrarSetas, setMostrarSetas] = useState(true);
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [rotulos, setRotulos] = useState(true);
+  const [mostrarAvanco, setMostrarAvanco] = useState(true);
   const [telaCheia, setTelaCheia] = useState(false);
   // A visão geral é lembrada entre visitas: quem trabalha no campo recolhe uma
   // vez e o gráfico abre com a altura toda nas próximas vezes.
@@ -372,6 +373,29 @@ function Gantt({
     }
     return lista;
   }, [dependencias, geometria, mostrarSetas, codigosCriticos]);
+
+  // Linha de avanço: passa pelo ponto em que cada atividade realmente está.
+  // Trecho sem lançamento quebra a linha em vez de voltar ao início do gráfico.
+  const avancos = useMemo(() => {
+    const pontos = new Map<string, number>();
+    const trechos: string[] = [];
+    if (!mostrarAvanco) return { pontos, trechos };
+    let atual: string[] = [];
+    for (const no of filtradas) {
+      const geo = geometria.get(no.chave);
+      const progresso = Math.max(0, Math.min(100, no.progresso));
+      if (!geo || no.temFilhos || progresso <= 0) {
+        if (atual.length > 1) trechos.push(atual.join(" "));
+        atual = [];
+        continue;
+      }
+      const x = geo.x0 + (geo.x1 - geo.x0) * (progresso / 100);
+      pontos.set(no.chave, x);
+      atual.push(`${x},${geo.y}`);
+    }
+    if (atual.length > 1) trechos.push(atual.join(" "));
+    return { pontos, trechos };
+  }, [filtradas, geometria, mostrarAvanco]);
 
   // Faixa de detalhe da linha escolhida: datas, folga e ligações. É o que o
   // engenheiro consulta no campo sem abrir a planilha inteira.
@@ -488,6 +512,16 @@ function Gantt({
           >
             <GitBranch size={14} aria-hidden="true" />
             Dependências
+          </button>
+          <button
+            type="button"
+            className={`pg-chip${mostrarAvanco ? " ativo" : ""}`}
+            onClick={() => setMostrarAvanco(valor => !valor)}
+            aria-pressed={mostrarAvanco}
+            title="Mostrar a linha de avanço (onde cada atividade está de fato)"
+          >
+            <TrendingUp size={14} aria-hidden="true" />
+            Avanço
           </button>
           <button
             type="button"
@@ -620,6 +654,20 @@ function Gantt({
               </svg>
             )}
 
+            {mostrarAvanco && avancos.trechos.length > 0 && (
+              <svg
+                className="pg-setas pg-avancos"
+                width={larguraDoTempo}
+                height={Math.max(1, filtradas.length * alturaLinha)}
+                style={{ left: esquerda }}
+                aria-hidden="true"
+              >
+                {avancos.trechos.map((pontos, indice) => (
+                  <polyline key={indice} points={pontos} className="pg-avanco-linha" />
+                ))}
+              </svg>
+            )}
+
             {filtradas.length === 0 && (
               <div className="pg-vazio-filtro">
                 Nenhuma atividade corresponde a este filtro. Limpe a busca ou desligue “Só crítico”.
@@ -727,6 +775,13 @@ function Gantt({
                           </span>
                         );
                       })()}
+                    {mostrarAvanco && avancos.pontos.has(no.chave) && (
+                      <span
+                        className="pg-avanco-ponto"
+                        style={{ left: avancos.pontos.get(no.chave) }}
+                        title={`Avanço: ${Math.round(no.progresso)}%`}
+                      />
+                    )}
                   </div>
                 </div>
               );
@@ -794,6 +849,7 @@ function Gantt({
         <span><i className="pg-amostra hoje" /> hoje</span>
         <span><i className="pg-amostra semana" /> fim de semana</span>
         {mostrarSetas && <span><i className="pg-amostra ligacao" /> dependência</span>}
+        {mostrarAvanco && <span><i className="pg-amostra avanco" /> avanço real</span>}
         <span>Clique numa linha para ver datas, folga e ligações.</span>
         {inicioObra && <span>Início da obra: {fmtComAno(inicioObra, true)}</span>}
       </div>
@@ -860,10 +916,10 @@ function LinhaDeBalanco({
   const pxAjustado = Math.max(0.8, (larguraVisivel - left - right - 8) / Math.max(1, dados.total));
   const pxPerDay = pxManual ?? pxAjustado;
   const width = Math.round(left + right + dados.total * pxPerDay);
-  const height = Math.max(420, top + Math.max(1, locationOrder.length) * rowH + bottom);
+  const corpoAltura = Math.max(120, Math.max(1, locationOrder.length) * rowH + bottom);
   const x = (iso: string) =>
     left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * pxPerDay;
-  const yByLocation = new Map(locationOrder.map((location, i) => [location, top + i * rowH + rowH / 2]));
+  const yByLocation = new Map(locationOrder.map((location, i) => [location, i * rowH + rowH / 2]));
 
   const monthTicks: string[] = [];
   let cursor = new Date(`${dados.start}T12:00:00Z`);
@@ -921,51 +977,63 @@ function LinhaDeBalanco({
           ref={rolagem}
           onScroll={evento => setScrollTop(evento.currentTarget.scrollTop)}
         >
+        <div className="pl-lob-cabecalho">
+          <svg
+            className="pl-lob pl-lob-prevision"
+            style={{ width, maxWidth: "none" }}
+            viewBox={`0 0 ${width} ${top}`}
+            height={top}
+            aria-hidden="true"
+          >
+            <rect x="0" y="0" width={width} height={top} className="pl-lob-bg" />
+            <rect x={left} y="0" width={width - left - right} height="22" className="pl-lob-header" />
+            {monthTicks.map(month => {
+              const xx = x(month);
+              return (
+                <g key={month}>
+                  <line x1={xx} x2={xx} y1="0" y2={top} className="pl-lob-month-grid" />
+                  <text x={xx + 6} y="16" className="pl-lob-month">{fmtMes(month)}</text>
+                </g>
+              );
+            })}
+            {weekTicks.filter(d => dateMs(d) <= dateMs(dados.end)).map(d => {
+              const xx = x(d);
+              return (
+                <g key={d}>
+                  <line x1={xx} x2={xx} y1="22" y2={top} className="pl-lob-week-grid" />
+                  <text x={xx + 3} y={26} className="pl-lob-date" transform={`rotate(90 ${xx + 3} 26)`}>
+                    {fmt(d)}
+                  </text>
+                </g>
+              );
+            })}
+            <line x1={hojeX} x2={hojeX} y1="0" y2={top} className="pg-hoje-linha" />
+            <text x={hojeX + 4} y="16" className="pl-gantt-hoje-label">HOJE</text>
+            <line x1={left} x2={width - right} y1={top - 1} y2={top - 1} className="pl-lob-axis" />
+          </svg>
+        </div>
+
         <svg
-          className="pl-lob pl-lob-prevision"
+          className="pl-lob pl-lob-corpo"
           style={{ width, maxWidth: "none" }}
-          viewBox={`0 0 ${width} ${height}`}
+          viewBox={`0 0 ${width} ${corpoAltura}`}
+          height={corpoAltura}
           role="img"
           aria-label="Linha de balanço: tempo no eixo horizontal, localizações no eixo vertical"
         >
-          <rect x="0" y="0" width={width} height={height} className="pl-lob-bg" />
-
-          <text x="14" y="22" className="pl-gantt-title">LINHA DE BALANÇO</text>
-          <text x="14" y="43" className="pl-lob-subtitle">
-            RITMO DAS EQUIPES POR LOCAL
-          </text>
-
-        <rect x={left} y="28" width={width - left - right} height="22" className="pl-lob-header" />
-        {monthTicks.map(month => {
-          const xx = x(month);
-          return (
-            <g key={month}>
-              <line x1={xx} x2={xx} y1="28" y2={height - bottom} className="pl-lob-month-grid" />
-              <text x={xx + 6} y="44" className="pl-lob-month">{fmtMes(month)}</text>
-            </g>
-          );
-        })}
-
-        {weekTicks.filter(d => dateMs(d) <= dateMs(dados.end)).map(d => {
-          const xx = x(d);
-          return (
-            <g key={d}>
-              <line x1={xx} x2={xx} y1="50" y2={height - bottom} className="pl-lob-week-grid" />
-              <text
-                x={xx + 3}
-                y={54}
-                className="pl-lob-date"
-                transform={`rotate(90 ${xx + 3} 54)`}
-              >
-                {fmt(d)}
-              </text>
-            </g>
-          );
-        })}
-
-        <text x={left - 12} y="45" textAnchor="end" className="pl-lob-axis-title">
-          FRENTE / LOCAL
-        </text>
+          <rect x="0" y="0" width={width} height={corpoAltura} className="pl-lob-bg" />
+          {monthTicks.map(month => {
+            const xx = x(month);
+            return (
+              <line key={`mes-${month}`} x1={xx} x2={xx} y1="0" y2={corpoAltura - bottom} className="pl-lob-month-grid" />
+            );
+          })}
+          {weekTicks.filter(d => dateMs(d) <= dateMs(dados.end)).map(d => {
+            const xx = x(d);
+            return (
+              <line key={`sem-${d}`} x1={xx} x2={xx} y1="0" y2={corpoAltura - bottom} className="pl-lob-week-grid" />
+            );
+          })}
 
         {locationOrder.map((location, i) => {
           const yy = yByLocation.get(location)!;
@@ -1051,33 +1119,36 @@ function LinhaDeBalanco({
           );
         })}
 
-        <line x1={left} x2={width - right} y1={50} y2={50} className="pl-lob-axis" />
-        <line x1={left} x2={left} y1={50} y2={height - bottom} className="pl-lob-axis" />
-        <line x1={hojeX} x2={hojeX} y1="28" y2={height - bottom} className="pg-hoje-linha" />
-        <text x={hojeX + 4} y="22" className="pl-gantt-hoje-label">HOJE</text>
-        <text x={width / 2} y={height - 12} textAnchor="middle" className="pl-lob-caption">
+        <line x1={left} x2={left} y1="0" y2={corpoAltura - bottom} className="pl-lob-axis" />
+        <line x1={hojeX} x2={hojeX} y1="0" y2={corpoAltura - bottom} className="pg-hoje-linha" />
+        
+        <text x={width / 2} y={corpoAltura - 12} textAnchor="middle" className="pl-lob-caption">
           TEMPO →
         </text>
         </svg>
         </div>
 
-        <div className="pl-lob-eixo" style={{ width: left, height }} aria-hidden="true">
-          <div className="pl-lob-eixo-interno" style={{ height, transform: `translateY(${-scrollTop}px)` }}>
+        <div className="pl-lob-eixo" style={{ width: left }} aria-hidden="true">
+          <div className="pl-lob-eixo-topo" style={{ height: top }}>
             <strong className="pl-lob-eixo-titulo">LINHA DE BALANÇO</strong>
             <span className="pl-lob-eixo-sub">RITMO DAS EQUIPES POR LOCAL</span>
             <span className="pl-lob-eixo-cabeca" style={{ top: 44 }}>
               FRENTE / LOCAL
             </span>
-            {locationOrder.map((location, i) => (
-              <span
-                key={location}
-                className={`pl-lob-eixo-nome${i % 2 ? " alt" : ""}`}
-                style={{ top: top + i * rowH }}
-                title={location}
-              >
-                {location}
-              </span>
-            ))}
+          </div>
+          <div className="pl-lob-eixo-corpo" style={{ top }}>
+            <div className="pl-lob-eixo-nomes" style={{ transform: `translateY(${-scrollTop}px)` }}>
+              {locationOrder.map((location, i) => (
+                <span
+                  key={location}
+                  className={`pl-lob-eixo-nome${i % 2 ? " alt" : ""}`}
+                  style={{ top: i * rowH }}
+                  title={location}
+                >
+                  {location}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
