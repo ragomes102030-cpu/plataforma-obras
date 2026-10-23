@@ -271,8 +271,12 @@ function Gantt({
     let atividades = 0;
     let peso = 0;
     let ponderado = 0;
+    let primeiro = "";
+    let ultimo = "";
     const andar = (nos: typeof arvore) => {
       for (const no of nos) {
+        if (!primeiro || dateMs(no.inicio) < dateMs(primeiro)) primeiro = no.inicio;
+        if (!ultimo || dateMs(no.fim) > dateMs(ultimo)) ultimo = no.fim;
         total += 1;
         if (no.filhos.length) {
           andar(no.filhos);
@@ -289,8 +293,10 @@ function Gantt({
       atividades,
       etapas: total - atividades,
       executado: peso === 0 ? 0 : ponderado / peso,
+      inicio: primeiro || dados.start,
+      fim: ultimo || dados.end,
     };
-  }, [arvore]);
+  }, [arvore, dados.start, dados.end]);
 
   // Filtro de visão (não de edição): esconde linhas, nunca altera o plano.
   const [busca, setBusca] = useState("");
@@ -411,7 +417,7 @@ function Gantt({
           <span className="pg-visao-resumo">
             <span>{resumoDoPlano.atividades} atividades</span>
             <span>{resumoDoPlano.etapas} etapas</span>
-            <span>término {fmtComAno(dados.end, true)}</span>
+            <span>término {fmtComAno(resumoDoPlano.fim, true)}</span>
             <span className="pg-visao-destaque">{Math.round(resumoDoPlano.executado)}% executado</span>
           </span>
         </button>
@@ -420,7 +426,7 @@ function Gantt({
             <div>
               <dt>Período do plano</dt>
               <dd>
-                {fmt(dados.start)} a {fmt(dados.end)}
+                {fmt(resumoDoPlano.inicio)} a {fmt(resumoDoPlano.fim)}
               </dd>
             </div>
             <div>
