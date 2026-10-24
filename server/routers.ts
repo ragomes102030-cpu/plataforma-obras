@@ -54,6 +54,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
   adminProcedure,
+  isAdminUser,
   protectedProcedure,
   publicProcedure,
   router,
@@ -7142,6 +7143,7 @@ export const appRouter = router({
           db,
           projectId: input.projectId,
           userId: ctx.user.id,
+          userIsAdmin: isAdminUser(ctx.user),
           context: buildAgentProjectContext(
             project,
             activities,
@@ -7248,6 +7250,7 @@ export const appRouter = router({
           db,
           projectId: input.projectId,
           userId: ctx.user.id,
+          userIsAdmin: isAdminUser(ctx.user),
           context: buildAgentProjectContext(
             project,
             activities,

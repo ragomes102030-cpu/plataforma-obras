@@ -44,6 +44,8 @@ type StartAgentExecutionInput = {
   db: RunDb | null | undefined;
   projectId: number;
   userId: number;
+  /** Quem pediu é administrador (libera capacidades administrativas do agente). */
+  userIsAdmin?: boolean;
   context: AgentProjectContext;
   messages: AgentMessage[];
   mcpProjectIds: Partial<Record<ToolDomain, string>>;
@@ -369,6 +371,7 @@ async function executeAgentRun(
       {
         localProjectId: input.projectId,
         userId: input.userId,
+        userIsAdmin: input.userIsAdmin,
         mcpProjectIds: input.mcpProjectIds,
         taskId: requestId,
         // O orquestrador escolhe um orçamento adaptativo por intenção.

@@ -241,6 +241,8 @@ export type OrchestratorOptions = {
   localProjectId?: number;
   taskId?: string;
   userId?: number;
+  /** Quem pediu é administrador. Libera capacidades administrativas (ex.: escrita no repositório). */
+  userIsAdmin?: boolean;
   maxIterations?: number;
   deps?: OrchestratorDeps;
   onEvent?: (event: OrchestratorEvent) => void | Promise<void>;
@@ -1803,6 +1805,11 @@ export async function runProjectOrchestrator(
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "repository", toolName });
         try {
+          if (toolName === "repository_update_file" && !options.userIsAdmin) {
+            throw new Error(
+              "A auto-correção do repositório é restrita a administradores."
+            );
+          }
           let value: unknown;
           if (toolName === "repository_info") {
             value = repositoryInfo();

@@ -441,4 +441,87 @@ describe("runProjectOrchestrator", () => {
       )
     ).rejects.toThrow("Ferramenta não autorizada pelo runtime");
   });
+
+  it("bloqueia a escrita no repositório para quem não é administrador", async () => {
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Atualize o arquivo server/orchestrator.ts" }],
+      {
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          callLlm: async ({ messages }) => {
+            if (messages.length === 2) {
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "repo-1",
+                      type: "function",
+                      function: {
+                        name: "repository_update_file",
+                        arguments: "{\"path\":\"server/orchestrator.ts\",\"content\":\"x\",\"message\":\"m\",\"expectedSha\":\"abc\"}",
+                      },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{ message: { role: "assistant", content: "Não alterei o repositório." } }],
+            };
+          },
+        },
+      }
+    );
+
+    const event = result.audit.find(item => item.toolName === "repository_update_file");
+    expect(event?.status).toBe("error");
+    expect(event?.error).toContain("restrita a administradores");
+  });
+
+  it("não bloqueia a escrita no repositório para administrador (falha na configuração, não no gate)", async () => {
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Atualize o arquivo server/orchestrator.ts" }],
+      {
+        userIsAdmin: true,
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          callLlm: async ({ messages }) => {
+            if (messages.length === 2) {
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "repo-2",
+                      type: "function",
+                      function: {
+                        name: "repository_update_file",
+                        arguments: "{\"path\":\"server/orchestrator.ts\",\"content\":\"x\",\"message\":\"m\",\"expectedSha\":\"abc\"}",
+                      },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{ message: { role: "assistant", content: "Não alterei o repositório." } }],
+            };
+          },
+        },
+      }
+    );
+
+    const event = result.audit.find(item => item.toolName === "repository_update_file");
+    expect(event?.status).toBe("error");
+    expect(event?.error ?? "").not.toContain("restrita a administradores");
+  });
 });
