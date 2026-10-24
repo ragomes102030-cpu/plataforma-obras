@@ -167,6 +167,7 @@ import { deriveProjectProgress } from "./construction/project-progress";
 import { derivePlanningEvidence } from "./construction/planning-evidence";
 import {
   getAgentExecutionStatus,
+  listAgentRuns,
   startAgentExecution,
 } from "./agent-execution";
 import { getPublicLlmSettings, saveStoredLlmProviders } from "./llm-settings";
@@ -7166,6 +7167,20 @@ export const appRouter = router({
         );
         if (!status) throw notFound("Execução do agente não encontrada.");
         return status;
+      }),
+    runs: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          limit: z.number().int().min(1).max(50).default(20),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        // Autorização por obra: só quem tem acesso à obra vê as execuções dela.
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return listAgentRuns(db, input.projectId, ctx.user.id, input.limit);
       }),
     orchestrate: protectedProcedure
       .input(
