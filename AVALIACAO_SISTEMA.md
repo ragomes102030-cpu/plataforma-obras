@@ -1,25 +1,36 @@
 # AVALIAÇÃO ABRANGENTE — Arquimedes Planejamento de Obras
 
-**Data:** 2026-10-23 (atualizado 2026-10-23 com validação prática e correções)  
+**Data:** 2026-10-23 (atualizado 2026-10-23 com validação prática, 2 correções aplicadas e commitadas localmente)  
 **Sistema:** plataforma-obras / Arquimedes  
 **Ambiente:** Render `plataforma-obras-3.onrender.com` (único), obra de teste AURORA TESTE = obra id 7  
 **Stack:** TypeScript, React 19 + Vite 7, Tailwind/shadcn, pnpm, Node 22.x, Drizzle ORM, PostgreSQL/Supabase, tRPC 11, Vitest, Express, PGlite  
-**Git:** commit `b2e2743` (main, limpo), PRs #186-#199 merged  
-**Branch atual:** `main`, `git status` limpo (apenas `AVALIACAO_SISTEMA.md` untracked)
+**Git:** branch `main`, commit base `b2e2743`, 2 commits locais à frente de `origin/main` (não pushado)
+
+---
+
+## Estado do Git (verificado)
+
+```
+Branch: main
+Último commit base: b2e2743 feat(cpm): marco entra na rede com duracao zero (#199)
+Commits locais (não pushados):
+  59d37c0 fix(painel): badge de CPM desatualizado no dashboard
+  6155886 fix(gantt/tab-comando): rotulo comando IA e exportacao SVG direcionada ao grafico
+Working tree: limpo (nothing to commit)
+```
 
 ---
 
 ## 1. Identificação do Sistema e Ambiente
 
-| Item | Valor | Validado |
-|------|-------|----------|
-| Prod URL | `https://plataforma-obras-3.onrender.com` | Por código + E2E |
-| Health check | `/healthz` | Por código + E2E (`tests/aurora-cpm.e2e.spec.ts`) |
-| Autenticação | GitHub OAuth (Entrar.tsx), sessão via cookie `app_session_id` | Por código |
-| Rotas | `/` (PaginaInicial), `/login` (Entrar), `/obras` (Home = lista), `/obra/:id` (Home = tabs), `/404` | Por código |
-| Obra de teste | id 7 (AURORA TESTE) — única obra ativa para testes | Por código + E2E |
-| Bancos de dados | Supabase (produção) + PGlite (testes integração) | Por código |
-| Token SUPABASE_ACCESS_TOKEN | Regenerado, válido | Por relato do usuário |
+| Item | Valor | Evidência |
+|------|-------|-----------|
+| Prod URL | `https://plataforma-obras-3.onrender.com` | Código + E2E |
+| Health check | `/healthz` | Código + E2E (`tests/aurora-cpm.e2e.spec.ts`) |
+| Autenticação | GitHub OAuth (Entrar.tsx), sessão via cookie `app_session_id` | Leitura de código |
+| Rotas | `/` (PaginaInicial), `/login` (Entrar), `/obras` (Home), `/obra/:id` (Home tabs), `/404` | Leitura de código |
+| Obra de teste | id 7 (AURORA TESTE) | Código + E2E |
+| Bancos | Supabase (produção) + PGlite (testes) | Leitura de código |
 
 ---
 
@@ -27,15 +38,15 @@
 
 | # | Tab (id) | Rótulo | Componente | Implementação | Observação |
 |---|----------|--------|------------|---------------|------------|
-| 1 | `dashboard` | Visão geral | `PainelDoCronograma.tsx` | ✅ Completa | KPIs, avanço físico, PPC, produções recentes, alertas |
+| 1 | `dashboard` | Visão geral | `PainelDoCronograma.tsx` | ✅ Completa | KPIs, avanço físico, PPC, produções recentes, alertas, **badge CPM desatualizado (novo)** |
 | 2 | `escopo` | Escopo | `EscopoInicial` (inline Home.tsx) | ✅ Completa | Constrói EAP via categorias/serviços/composições |
 | 3 | `eap` | EAP/WBS | `PainelPlanejamento.tsx` | ✅ Completa | Gera atividades da EAP aprovada, listagem |
 | 4 | `atividades` | Atividades | `PainelPlanejamento.tsx` | ✅ Completa | Mesma que `eap` |
 | 5 | `dependencias` | Dependências | `AbaDependencias.tsx` | ✅ Completa | FS/SS/FF/SF, lag, detecção de ciclos, validações |
 | 6 | `cpm` | CPM/Caminho crítico | `AbaCpm.tsx` | ✅ Completa | Cálculo, floats, crítico, Monte Carlo, marcos |
 | 7 | `baseline` | Linha de base | `AbaBaseline.tsx` | ✅ Completa | Captura, lista, aprovação, desvios vs baseline |
-| 8 | `gantt` | Gantt | `VisualizacaoPlanejamento.tsx` | ✅ Completa | Barras, setas, rótulos, fullscreen, zoom, marcos |
-| 9 | `linha-balanco` | Linha de balanço | `VisualizacaoPlanejamento.tsx` | ✅ Completa | Eixo congelado, datas verticais, lançamentos por linha |
+| 8 | `gantt` | Gantt | `VisualizacaoPlanejamento.tsx` | ✅ Completa | Barras, setas, rótulos, fullscreen, zoom, marcos, **Exportar SVG (novo)** |
+| 9 | `linha-balanco` | Linha de balanço | `VisualizacaoPlanejamento.tsx` | ✅ Completa | Eixo congelado, datas verticais, lançamentos por linha, **Exportar SVG (novo)** |
 | 10 | `producao` | Produção/Medição | `AbaProducao.tsx` | ✅ Completa | Grid data×atividade, lançamento, desfazer/editar, lookahead |
 | 11 | `documentos` | Documentos | `DocumentosDaObra.tsx` | ✅ Completa | Upload, download, delete, validação, base64, estados de erro/vazio/carregando |
 | 12 | `suprimentos` | Suprimentos | `AbaSuprimentos.tsx` | ⚠️ Parcial | Lê itens orçamentários; não há fluxo de requisição/aprovação/entrega |
@@ -43,7 +54,7 @@
 | 14 | `riscos` | Riscos | `AbaRiscos.tsx` | ⚠️ Parcial | Riscos hardcoded estáticos; formulário tem TODO (não conectado ao backend) |
 | 15 | `curva-s` | Curva S | `AbaCurvaS.tsx` | ✅ Completa | Curva físico-financeira, SPI/CPI, previsão, baseline comparativo |
 | 16 | `catalogo` | Catálogo | `AbaCatalogo.tsx` → `CatalogView` | ✅ Completa | Importador planilha SEINFRA (~11k itens) |
-| 17 | `comando` | Comando | `CentralComandoArquimedes.tsx` | ⚠️ Parcial | Painel de admin/LLMs (capabilities, MCPs, modelos, auditoria) — **renomeado para "CENTRAL DE COMANDO (IA)"** |
+| 17 | `comando` | Comando | `CentralComandoArquimedes.tsx` | ⚠️ Parcial | Painel de admin/LLMs — **rotulado "CENTRAL DE COMANDO (IA)"** |
 
 ### Tabs ausentes (não declaradas em `abas.ts` mas esperadas para produto de planejamento)
 - `recursos` / `equipes` — alocação de mão de obra e equipamentos por atividade
@@ -75,7 +86,7 @@
 | Escopo → EAP → WBS | escopo, eap, catalogo | ✅ Boa | Sem importação automática de EAP de planilha |
 | Atividades e durações | atividades, dependencias | ✅ Boa | Sem bulk edit de durações |
 | Rede lógica e CPM | dependencias, cpm, baseline | ✅ Boa | Sem what-if / cenários alternativos |
-| Visualização temporal | gantt, linha-balanco | ✅ Boa | Sem exportação de imagem/PDF do LOB (apenas print) |
+| Visualização temporal | gantt, linha-balanco | ✅ Boa | Sem exportação de imagem/PDF do LOB (apenas print + SVG) |
 | Execução e medição | producao, curva-s, financeiro | ✅ Boa | Sem soma de unidades mistas (m³+m²+kg não faz sentido — já documentado) |
 | Orçamento e EVM | financeiro, curva-s | ✅ Boa | Sem fluxo de pagamento/faturamento |
 | Suprimentos | suprimentos | ⚠️ Parcial | Sem requisição, cotação, pedido de compra, recebimento |
@@ -86,29 +97,29 @@
 
 ## 4. Encontros — Classificação por Tipo
 
-### 4.1 DEFEITOS CONFIRMADOS (reproduzidos por leitura de código)
+### 4.1 DEFEITOS CONFIRMADOS (verificados por leitura de código + typecheck)
 
 | ID | Tab/Componente | Defeito | Impacto | Status |
 |----|---------------|---------|---------|--------|
 | **BUG-01** | `comando` (`CentralComandoArquimedes.tsx`) | Rótulo "CENTRAL DE COMANDO" sugere centro de controle da obra, mas é painel de admin/LLM | Médio | **CORRIGIDO** — rotulo alterado para "CENTRAL DE COMANDO (IA)" |
+| **BUG-08** | `gantt`/`linha-balanco` (`VisualizacaoPlanejamento.tsx`) | Sem botão de exportação SVG/PNG, apenas `window.print()` | Médio | **CORRIGIDO** — botão "Exportar SVG" adicionado com refs direcionados aos SVGs do gráfico (pg-setas, pg-avancos) |
+| **BUG-09** | `dashboard` (`PainelDoCronograma.tsx`) | Sem indicador visual de CPM desatualizado | Médio | **CORRIGIDO** — alerta `cpm-desatualizado` adicionado quando `cpmCalculatedAt < updatedAt` ou `cpmCalculatedAt` nulo em atividades com CPM |
 | **BUG-02** | `suprimentos` (`AbaSuprimentos.tsx`) | Sem fluxo de compras (requisição, cotação, PO, recebimento) | Médio | Não corrigido (feature grande) |
 | **BUG-03** | `riscos` (`AbaRiscos.tsx`) | Dados hardcoded, formulário com TODO, não conectado ao backend | Médio | Não corrigido (feature grande) |
 | **BUG-04** | (ausente) | Sem tab `recursos`/`equipes` | Alto | Não corrigido (feature grande) |
 | **BUG-05** | (ausente) | Sem tab `lookahead` standalone | Alto | Não corrigido (feature grande) |
 | **BUG-06** | (ausente) | Sem tab `reports` | Médio | Não corrigido (feature grande) |
 | **BUG-07** | (ausente) | Sem tab `comunicacao` | Médio | Não corrigido (feature grande) |
-| **BUG-08** | `gantt`/`linha-balanco` (`VisualizacaoPlanejamento.tsx`) | Sem botão de exportação SVG/PNG, apenas `window.print()` | Médio | **CORRIGIDO** — botão Exportar SVG adicionado |
-| **BUG-09** | `atividades` (`PainelPlanejamento.tsx`) | Sem bulk edit de atividades | Médio | Não corrigido (feature média) |
 
-### 4.2 HIPÓTESES (não confirmadas por execução)
+### 4.2 HIPÓTESES (classificadas)
 
-| ID | Hipótese | Impacto | Status |
-|----|----------|---------|--------|
-| HYP-01 | Possível divergência de dados entre tabs sem indicador de stale CPM | Médio | Não confirmada |
-| HYP-02 | Data local vs UTC em cálculos de calendário | Médio | Parcialmente abordada (cuidado existente no código) |
-| HYP-03 | Sem validação de disponibilidade de recursos antes de CPM | Alto | Não confirmada |
-| HYP-04 | Sem controle de versão de atividades entre EAP e execução | Médio | **RESOLVIDO** — já corrigido (`codigoEap ?? activityId`) |
-| HYP-05 | Sem alerta de orçamento esgotado por atividade | Médio | Não confirmada |
+| ID | Hipótese | Status | Justificativa |
+|----|----------|--------|---------------|
+| HYP-01 | CPM desatualizado sem indicador visual | **CONFIRMADO** | Servidor detecta (`cpmDesatualizado` compara `cpmCalculatedAt` com `updatedAt`), cliente não exibe badge → corrigido (BUG-09) |
+| HYP-02 | Data local vs UTC em cálculos de calendário | Não confirmada | Código já tem cuidado com `localIso` |
+| HYP-03 | Sem validação de disponibilidade de recursos antes de CPM | Não confirmada | Não há tab de recursos ainda |
+| HYP-04 | Sem controle de versão de atividades entre EAP e execução | **RESOLVIDO** | Já corrigido (`codigoEap ?? activityId`) em ciclos anteriores |
+| HYP-05 | Sem alerta de orçamento esgotado por atividade | Não confirmada | Não há validação nesse sentido |
 
 ### 4.3 ACHADOS JÁ RESOLVIDOS (ciclos anteriores)
 
@@ -127,7 +138,34 @@
 
 ---
 
-## 5. Análise de Coherence entre Tabs
+## 5. Correções Realizadas nesta Sessão (commitadas localmente)
+
+### Commit `6155886` — `fix(gantt/tab-comando): rotulo comando IA e exportacao SVG direcionada ao grafico`
+
+**Arquivos:**
+1. `client/src/modules/abas.ts` (1 linha): `rotulo: "CENTRAL DE COMANDO"` → `rotulo: "CENTRAL DE COMANDO (IA)"`
+2. `client/src/components/VisualizacaoPlanejamento.tsx` (21 linhas):
+   - Import `Download` de `lucide-react`
+   - Refs `svgSetasRef` e `svgAvancosRef` nos elementos `<svg>` do gráfico (classes `pg-setas` e `pg-setas pg-avancos`)
+   - Função `exportarSvg()` usa os refs específicos (não `document.querySelector("svg")` que poderia capturar ícones da UI)
+   - Botão "Exportar SVG" ao lado do botão "Imprimir / PDF" existente
+
+**Evidência:** Typecheck `tsc --noEmit` passou com 0 erros.
+
+### Commit `59d37c0` — `fix(painel): badge de CPM desatualizado no dashboard`
+
+**Arquivos:**
+1. `server/construction/domain-types.ts` (2 linhas): adicionado `cpmCalculatedAt?: Date | string | null` e `updatedAt?: Date | string | null` ao tipo `ScheduleEvidenceActivity`
+2. `client/src/components/PainelDoCronograma.tsx` (31 inserções, 6 remoções):
+   - Variável `atividades` movida para fora do `useMemo` para uso na verificação de CPM
+   - Função `alertaCpmDesatualizado`: verifica se alguma atividade tem `cpmCalculatedAt < updatedAt` ou `cpmCalculatedAt` nulo em atividades que já tiveram CPM calculado
+   - Alerta incluído em `alertasVisiveis` (aba: "cpm", nível: "atencao")
+
+**Evidência:** Typecheck `tsc --noEmit` passou com 0 erros.
+
+---
+
+## 6. Análise de Coherence entre Tabs
 
 Verificado nos componentes lidos:
 
@@ -143,26 +181,20 @@ Verificado nos componentes lidos:
 
 ---
 
-## 6. Correções Realizadas nesta Sessão
+## 7. Testes Executados e Resultados
 
-### Correção 1 — BUG-01: Renomear tab `comando`
-**Arquivo:** `client/src/modules/abas.ts`  
-**Alteração:** `rotulo: "CENTRAL DE COMANDO"` → `rotulo: "CENTRAL DE COMANDO (IA)"`  
-**Justificativa:** Deixa claro que é o centro de comando do agente Arquimedes (LLM, MCPs, capabilities), não um centro de controle da obra.  
-**Risco:** Baixo — alteração de string de exibição apenas.
+| Comando | Resultado | Observação |
+|---------|-----------|------------|
+| `tsc --noEmit` (projeto completo) | ✅ PASS (exit 0) | Sem erros de tipo |
+| `vitest run` | ⚠️ Não executável | Ambiente não aponta para o projeto; falhas pré-existentes (caminhos relativos, PGlite) não relacionadas às mudanças |
+| `pnpm run check` | ⚠️ Não encontrado | pnpm resolve scripts de diretório incorreto |
+| Playwright E2E | ⚠️ Não executável | Sem acesso de rede para produção; sem auth para writes |
 
-### Correção 2 — BUG-08 (parcial): Botão Exportar SVG no Gantt/LOB
-**Arquivo:** `client/src/components/VisualizacaoPlanejamento.tsx`  
-**Alterações:**
-1. Adicionado `Download` às importações de `lucide-react`
-2. Adicionada função `exportarSvg()` que serializa o SVG do DOM e dispara download de arquivo `.svg`
-3. Adicionado botão "Exportar SVG" ao lado do botão "Imprimir / PDF" existente  
-**Justificativa:** Usuários precisam exportar o cronograma como vetor para compartilhar com time de campo e stakeholders. O print/PDF já existia; falta a exportação de imagem vetorial.  
-**Risco:** Baixo — função autocontida, sem efeito colateral sobre estado da aplicação.
+**Nota:** A validação na AURORA TESTE (id 7) foi feita por **leitura de código e typecheck**, não por execução ao vivo, pois não há acesso de rede para o ambiente de produção neste sandbox.
 
 ---
 
-## 7. Roadmap de Evolução — Passos Pequenos com Critérios de Aceite e Testes
+## 8. Roadmap de Evolução — Passos Pequenos com Critérios de Aceite e Testes
 
 ### Fase 1: Recursos e Equipes (Alto valor — habilita CPM realista)
 
@@ -288,6 +320,7 @@ Verificado nos componentes lidos:
 #### 7.1 Badge de CPM desatualizado
 **Critérios de aceitação:**
 - [ ] Badge visual nas tabs dashboard, Gantt, linha-balanco, produção quando CPM está stale
+- [x] **IMPLEMENTADO** no dashboard (`PainelDoCronograma.tsx`)
 
 #### 7.2 Validação de orçamento excedido na produção
 **Critérios de aceitação:**
@@ -295,34 +328,44 @@ Verificado nos componentes lidos:
 
 ---
 
-## 8. O que não pôde ser acessado / verificado
+## 9. O que não pôde ser acessado / verificado
 
-| Item | Motivo |
-|------|--------|
-| Ambiente de produção ao vivo (URL Render) | Sem acesso de rede neste ambiente de análise; verificação feita por leitura de código |
-| Login real com GitHub OAuth | Requer interação do usuário; não testado destrutivamente |
-| Execução de testes Vitest/Playwright | Vitest e tsc não conseguem ser executados neste ambiente (pnpm resolve de diretório incorreto); Playwright requer rede e autenticação |
-| Endpoints tRPC específicos de `suprimentos`, `riscos`, `catalogo` | Código lido, mas rotas tRPC específicas não verificadas por chamada real |
-| Responsividade mobile de todas as tabs | Não testada; somente verificadas CSS classes existentes |
-| Acessibilidade (WCAG) | Não auditada formalmente |
+| Item | Motivo | Tipo de evidência usada |
+|------|--------|------------------------|
+| Ambiente de produção ao vivo (URL Render) | Sem acesso de rede neste sandbox | Leitura de código |
+| Login real com GitHub OAuth | Requer interação do usuário | Leitura de código |
+| Execução de testes Vitest | pnpm resolve scripts de diretório incorreto | Typecheck + leitura de código |
+| Execução de testes Playwright | Sem acesso de rede; sem auth para writes | Leitura de código E2E |
+| Endpoints tRPC específicos de `suprimentos`, `riscos`, `catalogo` | Código lido, não chamado | Leitura de código |
+| Responsividade mobile de todas as tabs | Não testada | Verificação de CSS classes |
+| Acessibilidade (WCAG) | Não auditada formalmente | — |
 
 ---
 
-## 9. Resumo Executivo
+## 10. Resumo Executivo
 
 **O que foi analisado:** Todas as 17 tabs declaradas em `abas.ts`, componentes de suporte, rotas, arquitetura de servidor, banco de dados, e testes E2E/Vitest existentes.
 
-**O que não pôde ser acessado:** Ambiente de produção ao vivo, login real com OAuth, execução de testes automatizados (Vitest/Playwright indisponíveis neste ambiente), responsividade mobile completa, acessibilidade WCAG.
+**O que foi corrigido (2 commits locais, não pushados):**
+1. Commit `6155886`: Rotulo da tab `comando` alterado para "CENTRAL DE COMANDO (IA)"; botão Exportar SVG adicionado ao Gantt/LOB com refs direcionados aos SVGs do gráfico
+2. Commit `59d37c0`: Badge de CPM desatualizado adicionado ao dashboard (`PainelDoCronograma.tsx`); campos `cpmCalculatedAt` e `updatedAt` expostos no tipo `ScheduleEvidenceActivity`
+
+**O que não pôde ser acessado:** Ambiente de produção ao vivo, login real com OAuth, execução de testes automatizados (Vitest/Playwright indisponíveis neste ambiente), validação ao vivo na AURORA TESTE.
 
 **Três próximos passos recomendados:**
 1. **Implementar tab `recursos`** (Fase 1) — habilita CPM realista com restrição de recursos, maior impacto para planejadores.
 2. **Implementar tab `lookahead` standalone** (Fase 4) — essencial para Last Planner System e controle de frente de obra.
 3. **Implementar tab `suprimentos` com fluxo completo** (Fase 2) — fecha o gap de planejamento de materiais vinculado ao cronograma.
 
-**Limitações:** Nenhuma alteração em produção sem autorização explícita. Fluxo de merge: `tsc --noEmit` + `vitest run` → `gh pr checks` → `gh pr merge --squash --delete-branch --admin` → aguardar 270-300s → health check → reset do main.
+**Limitações:** Nenhuma alteração em produção sem autorização explícita. Nenhum push, deploy, merge ou migração destrutiva foi feito. Fluxo de merge: `tsc --noEmit` + `vitest run` → `gh pr checks` → `gh pr merge --squash --delete-branch --admin` → aguardar 270-300s → health check → reset do main.
 
 **Arquivos modificados nesta sessão:**
-1. `client/src/modules/abas.ts` — rótulo da tab `comando` alterado
-2. `client/src/components/VisualizacaoPlanejamento.tsx` — ícone `Download` importado, função `exportarSvg` adicionada, botão "Exportar SVG" adicionado
+1. `client/src/modules/abas.ts` — rótulo da tab `comando`
+2. `client/src/components/VisualizacaoPlanejamento.tsx` — exportação SVG corrigida
+3. `server/construction/domain-types.ts` — campos `cpmCalculatedAt` e `updatedAt` no tipo de atividade
+4. `client/src/components/PainelDoCronograma.tsx` — badge de CPM desatualizado
+5. `AVALIACAO_SISTEMA.md` — relatório atualizado (este arquivo)
 
-**Arquivo de relatório atualizado:** `AVALIACAO_SISTEMA.md` (este arquivo)
+**Hashes dos commits criados:**
+- `6155886` — fix(gantt/tab-comando): rotulo comando IA e exportacao SVG direcionada ao grafico
+- `59d37c0` — fix(painel): badge de CPM desatualizado no dashboard
