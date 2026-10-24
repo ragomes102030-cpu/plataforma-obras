@@ -54,7 +54,25 @@ type StartAgentExecutionInput = {
 
 type MemoryRun = AgentRunView & { userId: number };
 
+const DEFAULT_MAX_MEMORY_RUNS = 500;
+let maxMemoryRuns = DEFAULT_MAX_MEMORY_RUNS;
 const memoryRuns = new Map<string, MemoryRun>();
+
+/**
+ * Teto de execuções guardadas em memória.
+ *
+ * `memoryRuns` é o fallback de status quando não há banco. Sem teto, cada
+ * conversa adiciona uma entrada que nunca sai — vazamento de memória
+ * crescente em produção. O Map preserva a ordem de inserção, então o mais
+ * antigo é o primeiro filho; eviction é FIFO.
+ */
+function pruneMemoryRuns() {
+  while (memoryRuns.size > maxMemoryRuns) {
+    const oldest = memoryRuns.keys().next().value;
+    if (oldest === undefined) return;
+    memoryRuns.delete(oldest);
+  }
+}
 const TERMINAL_STATUSES = new Set<AgentRunStatus>([
   "respondido",
   "falhou",
@@ -252,6 +270,7 @@ export async function startAgentExecution(input: StartAgentExecutionInput) {
   const startedAt = new Date();
   const view = initialView(input, requestId, startedAt);
   memoryRuns.set(requestId, { ...view, userId: input.userId });
+  pruneMemoryRuns();
 
   if (input.db) {
     await input.db.insert(agentRuns).values({
@@ -476,5 +495,16 @@ export function isAgentRunTerminal(status: AgentRunStatus) {
 }
 
 export function resetAgentExecutionMemory() {
+  maxMemoryRuns = DEFAULT_MAX_MEMORY_RUNS;
   memoryRuns.clear();
+}
+
+/** Somente para testes: ajusta o teto e devolve o tamanho atual. */
+export function setAgentExecutionMemoryLimitForTest(limit: number) {
+  maxMemoryRuns = Math.max(0, Math.floor(limit));
+  pruneMemoryRuns();
+}
+
+export function getAgentExecutionMemorySizeForTest() {
+  return memoryRuns.size;
 }
