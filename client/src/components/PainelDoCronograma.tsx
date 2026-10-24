@@ -126,12 +126,15 @@ export function PainelDoCronograma({
     { enabled: projetoId > 0, retry: false, staleTime: 5 * 60_000 }
   );
 
+  const atividades = (plano.data?.activities ?? []).map((a) => ({
+    id: a.id,
+    wbsNodeId: a.wbsNodeId,
+    wbsCode: a.wbsCode,
+    cpmCalculatedAt: a.cpmCalculatedAt ?? null,
+    updatedAt: a.updatedAt ?? null,
+  }));
+
   const dados = useMemo(() => {
-    const atividades = (plano.data?.activities ?? []).map((a) => ({
-      id: a.id,
-      wbsNodeId: a.wbsNodeId,
-      wbsCode: a.wbsCode,
-    }));
     const custo = calcularPesosDaCurva(atividades, orcamento.data?.items ?? []);
 
     const pctPorCodigo = new Map<string, number>();
@@ -287,7 +290,25 @@ export function PainelDoCronograma({
     };
   })();
 
-  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...alertas].slice(0, 6);
+  // CPM desatualizado: cpmCalculatedAt anterior a updatedAt ou nulo em atividades com cpmCalculatedAt.
+  const alertaCpmDesatualizado: AlertaDoPainel | null = (() => {
+    const comCpm = atividades.filter((a) => a.cpmCalculatedAt);
+    if (comCpm.length === 0) return null;
+    const desatualizadas = comCpm.filter(
+      (a) => !a.updatedAt || new Date(a.cpmCalculatedAt!) < new Date(a.updatedAt)
+    );
+    if (desatualizadas.length === 0) return null;
+    return {
+      id: "cpm-desatualizado",
+      nivel: "atencao",
+      titulo: `${desatualizadas.length} atividade(s) com CPM desatualizado`,
+      detalhe: "Recalcule o CPM antes de confiar nos prazos e no caminho crítico.",
+      aba: "cpm",
+      acao: "Recalcular CPM",
+    };
+  })();
+
+  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...(alertaCpmDesatualizado ? [alertaCpmDesatualizado] : []), ...alertas].slice(0, 6);
   const segmentos = [
     { chave: "concluidas", rotulo: "Concluídas", valor: status.concluidas, classe: "ok" },
     { chave: "andamento", rotulo: "Em andamento", valor: status.emAndamento, classe: "andamento" },
