@@ -352,7 +352,9 @@ async function selfHealGeneratedEap(
     corrected: boolean;
   }> = [];
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  let attempt = 0;
+  while (true) {
+    attempt += 1;
     const validation = validateGeneratedEap(proposal, context.projectId);
     const issueCodes = Array.from(new Set(validation.issues.map(issue => issue.code)));
     if (validation.valid) {
@@ -364,7 +366,7 @@ async function selfHealGeneratedEap(
       };
     }
 
-    if (attempt === 3) {
+    if (attempt >= 3) {
       history.push({
         attempt,
         issueCodes,
@@ -408,8 +410,6 @@ async function selfHealGeneratedEap(
       issueCodes.some(code => !repairedCodes.has(code));
     proposal = repaired;
   }
-
-  throw new Error("Autocorreção da EAP terminou em estado inesperado.");
 }
 
 async function proposeEapIncrementally(
