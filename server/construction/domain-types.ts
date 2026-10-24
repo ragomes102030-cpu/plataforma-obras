@@ -60,6 +60,10 @@ export type ScheduleEvidenceActivity = {
   mustStartOnDay?: number | null;
   /** Índice do dia útil (CPM) derivado de finishNoLaterThan (timestamp). */
   finishNoLaterThanDay?: number | null;
+  /** Quando o CPM foi calculado pela última vez. Nulo se nunca foi calculado. */
+  cpmCalculatedAt?: Date | string | null;
+  /** Quando a atividade foi atualizada pela última vez. */
+  updatedAt?: Date | string | null;
 };
 
 export type ScheduleEvidenceDependency = {

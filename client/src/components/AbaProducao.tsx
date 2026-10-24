@@ -56,6 +56,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   const [quantidade, setQuantidade] = useState("");
   const [unidade, setUnidade] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [avisoOrçamentoExcedido, setAvisoOrçamentoExcedido] = useState(false);
 
   const grade = trpc.production.entries.useQuery({ projectId: projetoId });
   const frentes = trpc.production.fronts.useQuery({ projectId: projetoId });
@@ -150,11 +151,43 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
       }, 0) / atividadesComQuantidade.length
     : 0;
 
+  // Aviso suave (não bloqueio): se o lançamento proposto levar a soma executada
+  // acima da quantidade planejada da atividade, avisa o usuário antes de confirmar.
+  const atividadeSelecionada = selecionada
+    ? gradeCrono.data?.activities?.find(a => a.id === selecionada)
+    : null;
+  const planejadoSelecionado = atividadeSelecionada
+    ? Number(atividadeSelecionada.plannedQuantity ?? 0)
+    : 0;
+  const realizadoSelecionado = atividadeSelecionada
+    ? Number(porAtividade[atividadeSelecionada.wbsCode] ?? 0)
+    : 0;
+  const quantidadeNova = Number(quantidade) || 0;
+  const totalComNova = realizadoSelecionado + quantidadeNova;
+
+  const excedeOrçamento =
+    planejadoSelecionado > 0 &&
+    quantidadeNova > 0 &&
+    totalComNova > planejadoSelecionado;
+
+  // Mantém o estado de aviso sincronizado com o cálculo (reage a quantidade e seleção).
+  if (excedeOrçamento !== avisoOrçamentoExcedido) {
+    setAvisoOrçamentoExcedido(excedeOrçamento);
+  }
+
   return (
     <div className="xl-painel">
       {erro && (
         <div className="xl-aviso-erro" role="alert">
           {erro}
+        </div>
+      )}
+      {avisoOrçamentoExcedido && (
+        <div className="xl-aviso-erro" role="alert">
+          A quantidade informada ({quantidadeNova.toFixed(3)}) somada ao já
+          lançado ({realizadoSelecionado.toFixed(3)}) excede a quantidade
+          planejada da atividade ({planejadoSelecionado.toFixed(3)}).
+          Confirme mesmo assim se o lançamento for intencional.
         </div>
       )}
 
@@ -337,7 +370,12 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           <button
             type="button"
             className="eap-btn"
-            disabled={!selecionada || registrar.isPending || !quantidade.trim()}
+            disabled={
+              !selecionada ||
+              registrar.isPending ||
+              !quantidade.trim() ||
+              excedeOrçamento
+            }
             onClick={() => {
               if (!selecionada) return;
               // Frente/equipe/unidade são opcionais (o schema já as aceita nulas).

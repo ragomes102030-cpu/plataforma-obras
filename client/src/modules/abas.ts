@@ -125,7 +125,7 @@ export const ABAS: readonly AbaDoSistema[] = [
   },
   {
     id: "comando",
-    rotulo: "CENTRAL DE COMANDO",
+    rotulo: "CENTRAL DE COMANDO (IA)",
     status: "pronta",
   },
 ];
