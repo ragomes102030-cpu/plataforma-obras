@@ -50,4 +50,10 @@ describe("Arquimedes intent router", () => {
     expect(classifyArquimedesIntent("confirmo")).toBe("operacao");
     expect(classifyArquimedesIntent("pode aplicar")).toBe("operacao");
   });
+
+  it("a proibição de mutação vence a confirmação", () => {
+    // "confirmo, mas não aplique nada" não pode destravar mutação.
+    expect(classifyArquimedesIntent("confirmo o diagnóstico, mas não aplique nada")).toBe("analise");
+    expect(classifyArquimedesIntent("confirmo, READ_ONLY, não criar nem atualizar")).toBe("analise");
+  });
 });

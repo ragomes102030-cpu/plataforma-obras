@@ -62,7 +62,23 @@ export function validateResponse(response: unknown): { success: true; data: Arqu
 }
 
 /**
+ * Domínio da ferramenta → fonte da evidência. O domínio diz de onde o dado
+ * veio; a fonte é o que a UI e o schema expõem. Ferramentas internas (runtime)
+ * e de repositório leem a fonte local.
+ */
+const AUDIT_SOURCE_BY_DOMAIN: Record<string, Evidence["source"]> = {
+  eap: "mcp_eap",
+  cronograma: "mcp_cronograma",
+  ganttLob: "mcp_gantt_lob",
+  runtime: "local_db",
+  repository: "local_db",
+};
+
+/**
  * Cria uma resposta estruturada a partir do resultado do orquestrador.
+ *
+ * A evidência é montada do rastro de auditoria (quais ferramentas rodaram e de
+ * qual domínio), não do texto do modelo: o "de onde veio" é dado, não opinião.
  */
 export function createStructuredResponse(params: {
   taskId: string;
@@ -71,13 +87,26 @@ export function createStructuredResponse(params: {
   provider: string;
   iterations: number;
   readOnly: boolean;
-  audit: Array<{ event: string; toolName?: string; status?: string }>;
+  audit: Array<{ event: string; toolName?: string; status?: string; domain?: string }>;
   planUsed?: boolean;
 }): Omit<ArquimedesResponse, "status"> & { status: "respondido" } {
-  const toolsConsulted = params.audit
-    .filter(event => event.event === "tool_call" && event.status === "success")
+  const consulted = params.audit.filter(
+    event => event.event === "tool_call" && event.status === "success"
+  );
+  const toolsConsulted = consulted
     .map(event => event.toolName!)
     .filter((name, index, all) => all.indexOf(name) === index)
+    .slice(0, 30);
+  const evidence: Evidence[] = consulted
+    .filter(event => event.toolName)
+    .map(event => ({
+      source: AUDIT_SOURCE_BY_DOMAIN[event.domain ?? ""] ?? "local_db",
+      toolName: event.toolName,
+    }))
+    .filter(
+      (item, index, all) =>
+        all.findIndex(other => other.toolName === item.toolName) === index
+    )
     .slice(0, 30);
 
   return {
@@ -88,7 +117,7 @@ export function createStructuredResponse(params: {
     iterations: params.iterations,
     readOnly: params.readOnly,
     status: "respondido" as const,
-    evidence: [],
+    evidence,
     findings: [],
     actions: [],
     planUsed: params.planUsed ?? false,

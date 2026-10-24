@@ -237,6 +237,8 @@ describe("runProjectOrchestrator", () => {
       { messages: 2, tools: 23 },
       { messages: 4, tools: 23 },
     ]);
+    // A evidência estruturada sai do rastro, não do texto do modelo.
+    expect(result.evidence).toContainEqual({ source: "mcp_eap", toolName: "get_eap_tree" });
     expect(events).toEqual([
       "catalog_started",
       "catalog_loaded",
