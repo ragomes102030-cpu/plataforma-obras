@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyArquimedesIntent,
   casualResponse,
+  isExplicitConfirmation,
   isSimpleCasualMessage,
 } from "./intent-router";
 
@@ -39,5 +40,14 @@ describe("Arquimedes intent router", () => {
     // Garante que a correção não quebra o caso legítimo
     expect(classifyArquimedesIntent("Crie as atividades da alvenaria")).toBe("operacao");
     expect(classifyArquimedesIntent("Adicione 5 atividades")).toBe("operacao");
+  });
+
+  it("classifica confirmação explícita de proposta como operacao", () => {
+    // Sem isto, o "confirmo" seria consulta e a mutação proposta nunca rodaria.
+    expect(isExplicitConfirmation("confirmo")).toBe(true);
+    expect(isExplicitConfirmation("pode aplicar")).toBe(true);
+    expect(isExplicitConfirmation("Crie uma atividade")).toBe(false);
+    expect(classifyArquimedesIntent("confirmo")).toBe("operacao");
+    expect(classifyArquimedesIntent("pode aplicar")).toBe("operacao");
   });
 });

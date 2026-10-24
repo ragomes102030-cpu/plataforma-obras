@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   getAgentExecutionStatus,
+  getAgentExecutionMemorySizeForTest,
   resetAgentExecutionMemory,
+  setAgentExecutionMemoryLimitForTest,
   startAgentExecution,
 } from "./agent-execution";
 import type { AgentProjectContext } from "./agent";
@@ -144,5 +146,33 @@ describe("agent-execution", () => {
       status: "timeout",
       errorCode: "execution_timeout",
     });
+  });
+
+  it("limita a memória de execuções (evita vazamento crescente)", async () => {
+    setAgentExecutionMemoryLimitForTest(2);
+    const requestIds: string[] = [];
+    for (let index = 0; index < 3; index++) {
+      const requestId = `req-cap-${index}`;
+      await startAgentExecution({
+        db: null,
+        projectId: 30 + index,
+        userId: 7,
+        context,
+        messages,
+        mcpProjectIds: {},
+        requestId,
+        deps: {
+          listTools: async () => catalog,
+          callLlm: async () => ({
+            provider: "fake",
+            choices: [{ message: { role: "assistant", content: "ok" } }],
+          }),
+        },
+      });
+      requestIds.push(requestId);
+    }
+    expect(getAgentExecutionMemorySizeForTest()).toBeLessThanOrEqual(2);
+    expect(await getAgentExecutionStatus(null, requestIds[0], 7)).toBeNull();
+    expect(await getAgentExecutionStatus(null, requestIds[2], 7)).not.toBeNull();
   });
 });

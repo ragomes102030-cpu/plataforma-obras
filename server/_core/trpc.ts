@@ -28,6 +28,21 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+/**
+ * Além do papel persistido no banco, o dono explicitamente configurado pelo
+ * ambiente pode operar as rotas administrativas. Isso evita que o primeiro
+ * login do proprietário fique preso em role="user" e receba
+ * "required permission (10002)" antes de existir uma tela de bootstrap.
+ */
+export function isAdminUser(
+  user: { role: string; openId: string } | null | undefined
+): boolean {
+  if (!user) return false;
+  const isConfiguredOwner =
+    Boolean(ENV.ownerOpenId) && user.openId === ENV.ownerOpenId;
+  return user.role === "admin" || isConfiguredOwner;
+}
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

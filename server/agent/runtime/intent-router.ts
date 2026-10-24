@@ -15,6 +15,18 @@ const ANALYSIS_PATTERNS = [
   /\b(analise|analisar|avalie|avaliar|revise|revisar|compare|comparar|diagnostique|diagnosticar|verifique|verificar|identifique|identificar)\b/i,
 ];
 
+const CONFIRMATION_PATTERN = /(?:^|\b)(confirmo|confirmado|pode aplicar|pode corrigir|aplique|pode executar|sim,?\s*(?:pode|aplique|corrija))(?:\b|$)/i;
+
+/**
+ * Confirmação explícita de uma proposta ("confirmo", "pode aplicar"...).
+ * É a resposta humana a uma proposta do agente — distinta de um pedido de
+ * operação novo. Sem isto, o "confirmo" seria classificado como consulta e a
+ * mutação proposta nunca rodaria.
+ */
+export function isExplicitConfirmation(text: string): boolean {
+  return CONFIRMATION_PATTERN.test(stripUiContext(text).trim());
+}
+
 function stripUiContext(message: string) {
   return message.replace(/^\s*\[aba:\s*[^\]]+\]\s*/i, "").trim();
 }
@@ -22,6 +34,9 @@ function stripUiContext(message: string) {
 export function classifyArquimedesIntent(message: string): ArquimedesIntent {
   const text = stripUiContext(message);
   if (CASUAL_PATTERNS.some(pattern => pattern.test(text))) return "casual";
+  // Confirmação explícita é uma ordem de operação: destrava a execução do que
+  // foi proposto (e só) na conversa.
+  if (isExplicitConfirmation(text)) return "operacao";
   // Mensagens que proíbem mutação (READ_ONLY, não aplicar/criar/remover) são
   // análise, não operação — mesmo que contenham verbos de operação no texto.
   if (/\bREAD_ONLY\b/i.test(text) || /\bn[aã]o\s+(aplicar|criar|atualizar|mover|remover|alterar|salvar|gerar)\b/i.test(text)) {
