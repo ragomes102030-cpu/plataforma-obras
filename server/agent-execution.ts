@@ -36,7 +36,36 @@ export type AgentRunView = {
   result: OrchestratorResult | null;
   errorCode: string | null;
   errorMessage: string | null;
+  /** Métricas derivadas do resultado: duração, ferramentas, read-only e evidências. */
+  durationMs: number | null;
+  toolsConsulted: string[];
+  readOnly: boolean | null;
+  evidenceCount: number;
 };
+
+type AgentRunMetrics = Pick<
+  AgentRunView,
+  "durationMs" | "toolsConsulted" | "readOnly" | "evidenceCount"
+>;
+type AgentRunViewInput = Omit<AgentRunView, keyof AgentRunMetrics>;
+
+/**
+ * Deriva as métricas de execução do resultado persistido (ou de um run em
+ * memória). Duração, ferramentas consultadas, read-only e nº de evidências são
+ * observabilidade: sem elas, "o agente fez o quê e quanto levou" não existe.
+ */
+function runMetrics<T extends AgentRunViewInput>(view: T): T & AgentRunMetrics {
+  const durationMs = view.finishedAt
+    ? Math.max(0, new Date(view.finishedAt).getTime() - new Date(view.startedAt).getTime())
+    : null;
+  return {
+    ...view,
+    durationMs,
+    toolsConsulted: view.result?.toolsConsulted ?? [],
+    readOnly: view.result?.readOnly ?? null,
+    evidenceCount: view.result?.evidence?.length ?? 0,
+  };
+}
 
 type RunDb = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -138,7 +167,7 @@ function initialView(
   requestId: string,
   startedAt: Date
 ): AgentRunView {
-  return {
+  return runMetrics({
     requestId,
     projectId: input.projectId,
     status: "executando",
@@ -151,7 +180,7 @@ function initialView(
     result: null,
     errorCode: null,
     errorMessage: null,
-  };
+  });
 }
 
 function toView(row: AgentRun): AgentRunView {
@@ -163,7 +192,7 @@ function toView(row: AgentRun): AgentRunView {
       result = null;
     }
   }
-  return {
+  return runMetrics({
     requestId: row.requestId,
     projectId: row.projectId,
     status: row.status,
@@ -176,7 +205,7 @@ function toView(row: AgentRun): AgentRunView {
     result,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
-  };
+  });
 }
 
 async function persistEvent(
@@ -264,7 +293,7 @@ async function updateMemoryRun(
 ) {
   const current = memoryRuns.get(requestId);
   if (!current) return;
-  memoryRuns.set(requestId, { ...current, ...patch });
+  memoryRuns.set(requestId, runMetrics({ ...current, ...patch }));
 }
 
 export async function startAgentExecution(input: StartAgentExecutionInput) {
@@ -495,6 +524,28 @@ export async function getAgentExecutionStatus(
 
 export function isAgentRunTerminal(status: AgentRunStatus) {
   return isTerminal(status);
+}
+
+/**
+ * Execuções recentes de uma obra (observabilidade): o que o agente rodou, com
+ * status, provedor, modelo, duração, ferramentas e evidências. Só o próprio
+ * usuário vê as suas.
+ */
+export async function listAgentRuns(
+  db: RunDb | null | undefined,
+  projectId: number,
+  userId: number,
+  limit = 20
+): Promise<AgentRunView[]> {
+  if (!db) return [];
+  const safeLimit = Math.min(Math.max(limit, 1), 50);
+  const rows = await db
+    .select()
+    .from(agentRuns)
+    .where(and(eq(agentRuns.projectId, projectId), eq(agentRuns.userId, userId)))
+    .orderBy(desc(agentRuns.startedAt))
+    .limit(safeLimit);
+  return rows.map(toView);
 }
 
 export function resetAgentExecutionMemory() {

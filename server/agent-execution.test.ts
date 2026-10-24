@@ -148,6 +148,49 @@ describe("agent-execution", () => {
     });
   });
 
+  it("expõe métricas da execução (duração, read-only, ferramentas, evidências)", async () => {
+    await startAgentExecution({
+      db: null,
+      projectId: 40,
+      userId: 7,
+      context,
+      messages,
+      mcpProjectIds: { eap: "obra-1" },
+      requestId: "req-metrics",
+      deps: {
+        listTools: async () => ({
+          eap: [{ name: "get_eap_tree", description: "EAP", inputSchema: { type: "object", properties: {} } }],
+          cronograma: [],
+          ganttLob: [],
+        }),
+        callTool: async () => ({ content: [{ type: "text", text: "EAP" }] }),
+        callLlm: async ({ messages }) => {
+          if (messages.length === 2) {
+            return {
+              model: "fake",
+              choices: [{
+                message: {
+                  role: "assistant",
+                  content: null,
+                  tool_calls: [{ id: "t1", type: "function", function: { name: "get_eap_tree", arguments: "{}" } }],
+                },
+              }],
+            };
+          }
+          return { model: "fake", choices: [{ message: { role: "assistant", content: "ok" } }] };
+        },
+      },
+    });
+
+    const finished = await waitForTerminal("req-metrics");
+    expect(finished.status).toBe("respondido");
+    expect(finished.readOnly).toBe(true);
+    expect(finished.toolsConsulted).toContain("get_eap_tree");
+    expect(typeof finished.durationMs).toBe("number");
+    expect(finished.durationMs!).toBeGreaterThanOrEqual(0);
+    expect(finished.evidenceCount).toBeGreaterThanOrEqual(0);
+  });
+
   it("limita a memória de execuções (evita vazamento crescente)", async () => {
     setAgentExecutionMemoryLimitForTest(2);
     const requestIds: string[] = [];
