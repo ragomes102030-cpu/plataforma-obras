@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, ne } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, ne, or } from "drizzle-orm";
 import { agentMemories, agentRuns } from "../../drizzle/schema";
 
 const MEMORY_CACHE_TTL_MS = 15_000;
@@ -187,7 +187,7 @@ export async function rememberArquimedesConversation(input: {
       "Use esta conversa como continuidade histórica. Separe fatos confirmados, hipóteses, propostas e regras validadas antes de reutilizar qualquer conteúdo.",
   };
 
-  return rememberArquimedes({
+  const remembered = await rememberArquimedes({
     projectId,
     ownerUserId: input.ownerUserId,
     scope,
@@ -198,6 +198,141 @@ export async function rememberArquimedesConversation(input: {
     sourceRef: input.sourceRef ?? input.taskId,
     confidence: "medium",
   });
+
+  // Higiene: cada conversa vira uma linha; sem teto, a tabela cresce sem fim.
+  // As mais antigas viram histórico (obsolete) — continuam no banco, saem do ativo.
+  await pruneArquimedesConversations(input.ownerUserId, projectId);
+
+  return remembered;
+}
+
+function toMemoryRecord(row: typeof agentMemories.$inferSelect): ArquimedesMemoryRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    scope: row.scope,
+    category: row.category,
+    memoryKey: row.memoryKey,
+    value: parseJson(row.valueJson),
+    sourceType: row.sourceType,
+    sourceRef: row.sourceRef,
+    confidence: row.confidence,
+    status: row.status,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export const ARQUIMEDES_MEMORY_STATUSES = ["proposed", "approved", "rejected", "obsolete"] as const;
+export type ArquimedesMemoryStatus = (typeof ARQUIMEDES_MEMORY_STATUSES)[number];
+
+/**
+ * Transições permitidas. Uma memória só nasce proposta; obsoleta é terminal.
+ * Sem isto, tudo nasce "proposed" e nunca sai dele — o agente não distingue o que
+ * o engenheiro já validou do que ainda é só uma hipótese.
+ */
+const ALLOWED_TRANSITIONS: Record<ArquimedesMemoryStatus, ArquimedesMemoryStatus[]> = {
+  proposed: ["approved", "rejected", "obsolete"],
+  approved: ["obsolete", "rejected"],
+  rejected: ["approved", "obsolete"],
+  obsolete: [],
+};
+
+/** Transição permitida entre dois status de memória (puro, testável sem banco). */
+export function canTransitionMemoryStatus(from: string, to: ArquimedesMemoryStatus): boolean {
+  const allowed = ALLOWED_TRANSITIONS[from as ArquimedesMemoryStatus];
+  return allowed ? allowed.includes(to) : false;
+}
+
+/** Move o ciclo de vida de uma memória (só o dono). */
+export async function setArquimedesMemoryStatus(
+  ownerUserId: number,
+  memoryId: number,
+  nextStatus: ArquimedesMemoryStatus
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados indisponível para a memória do Arquimedes.");
+
+  const [memory] = await db
+    .select({ id: agentMemories.id, status: agentMemories.status })
+    .from(agentMemories)
+    .where(and(eq(agentMemories.id, memoryId), eq(agentMemories.ownerUserId, ownerUserId)))
+    .limit(1);
+  if (!memory) throw new Error("Memória do Arquimedes não encontrada.");
+
+  if (!canTransitionMemoryStatus(memory.status, nextStatus)) {
+    throw new Error(`Transição inválida de memória: ${memory.status} -> ${nextStatus}.`);
+  }
+
+  const [updated] = await db
+    .update(agentMemories)
+    .set({ status: nextStatus, updatedAt: new Date() })
+    .where(eq(agentMemories.id, memoryId))
+    .returning();
+  invalidateMemoryRecallCache();
+  return updated;
+}
+
+/**
+ * Lista as memórias do projeto (observabilidade do cérebro). Devolve tudo,
+ * inclusive rejected/obsolete: o engenheiro precisa ver o que foi descartado.
+ */
+export async function listArquimedesMemories(
+  ownerUserId: number,
+  projectId?: number | null
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(agentMemories)
+    .where(
+      projectId
+        ? and(
+            eq(agentMemories.ownerUserId, ownerUserId),
+            or(eq(agentMemories.projectId, projectId), eq(agentMemories.scope, "library"))
+          )
+        : and(eq(agentMemories.ownerUserId, ownerUserId), eq(agentMemories.scope, "library"))
+    )
+    .orderBy(desc(agentMemories.updatedAt))
+    .limit(200);
+  return rows.map(toMemoryRecord);
+}
+
+/** Quantas conversas por obra ficam ativas; as mais antigas viram histórico. */
+const MAX_CONVERSATIONS_PER_PROJECT = 50;
+
+async function pruneArquimedesConversations(ownerUserId: number, projectId: number | null) {
+  const db = await getDb();
+  if (!db) return;
+  const base = projectId
+    ? and(eq(agentMemories.projectId, projectId), eq(agentMemories.category, "conversa_sistema"))
+    : and(isNull(agentMemories.projectId), eq(agentMemories.category, "conversa_sistema"));
+
+  const older = await db
+    .select({ id: agentMemories.id })
+    .from(agentMemories)
+    .where(
+      and(
+        eq(agentMemories.ownerUserId, ownerUserId),
+        base,
+        ne(agentMemories.status, "obsolete")
+      )
+    )
+    .orderBy(desc(agentMemories.updatedAt))
+    .offset(MAX_CONVERSATIONS_PER_PROJECT)
+    .limit(500);
+
+  if (!older.length) return;
+  await db
+    .update(agentMemories)
+    .set({ status: "obsolete", updatedAt: new Date() })
+    .where(
+      inArray(
+        agentMemories.id,
+        older.map(row => row.id)
+      )
+    );
+  invalidateMemoryRecallCache();
 }
 
 async function recallArquimedesInternal(
@@ -238,19 +373,7 @@ async function recallArquimedesInternal(
     .orderBy(desc(agentMemories.updatedAt))
     .limit(safeLimit);
 
-  return rows.map(row => ({
-    id: row.id,
-    projectId: row.projectId,
-    scope: row.scope,
-    category: row.category,
-    memoryKey: row.memoryKey,
-    value: parseJson(row.valueJson),
-    sourceType: row.sourceType,
-    sourceRef: row.sourceRef,
-    confidence: row.confidence,
-    status: row.status,
-    updatedAt: row.updatedAt,
-  }));
+  return rows.map(toMemoryRecord);
 }
 
 export async function recallArquimedes(

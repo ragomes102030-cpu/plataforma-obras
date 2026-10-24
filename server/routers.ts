@@ -170,6 +170,10 @@ import {
   listAgentRuns,
   startAgentExecution,
 } from "./agent-execution";
+import {
+  listArquimedesMemories,
+  setArquimedesMemoryStatus,
+} from "./agent/memory";
 import { getPublicLlmSettings, saveStoredLlmProviders } from "./llm-settings";
 import { invalidateStoredProviderCache } from "./llm-provider-gateway";
 import {
@@ -7181,6 +7185,24 @@ export const appRouter = router({
         // Autorização por obra: só quem tem acesso à obra vê as execuções dela.
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         return listAgentRuns(db, input.projectId, ctx.user.id, input.limit);
+      }),
+    memory: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return listArquimedesMemories(ctx.user.id, input.projectId);
+      }),
+    memorySetStatus: protectedProcedure
+      .input(
+        z.object({
+          memoryId: z.number().int().positive(),
+          status: z.enum(["proposed", "approved", "rejected", "obsolete"]),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return setArquimedesMemoryStatus(ctx.user.id, input.memoryId, input.status);
       }),
     orchestrate: protectedProcedure
       .input(
