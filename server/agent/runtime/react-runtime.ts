@@ -56,7 +56,15 @@ export type AgentRuntimeOptions = {
   }) => Promise<AgentRuntimeResponse>;
   executeTool: (toolName: string, args: Record<string, unknown>, iteration: number) => Promise<AgentRuntimeToolResult>;
   allowedTools?: ReadonlySet<string>;
+  /** Teto por resultado de ferramenta (caracteres). */
   maxToolResultChars?: number;
+  /**
+   * Teto ACUMULADO de caracteres de resultados por execução. Sem ele, uma
+   * sequência longa de consultas cresce o contexto sem limite — e o custo e a
+   * latência junto. Esgotado o orçamento, os resultados seguintes vêm vazios
+   * (com aviso), e a síntese final usa o que já foi reunido.
+   */
+  maxToolResultBudget?: number;
   onEvent?: (event: AgentRuntimeEvent) => void | Promise<void>;
 };
 
@@ -77,6 +85,8 @@ function extractText(response: AgentRuntimeResponse) {
 export async function runReActAgent(options: AgentRuntimeOptions) {
   const conversation = [...options.messages];
   const maxToolResultChars = options.maxToolResultChars ?? 12_000;
+  const maxToolResultBudget = options.maxToolResultBudget ?? Number.POSITIVE_INFINITY;
+  let usedToolResultChars = 0;
 
   for (let iteration = 1; iteration <= options.maxIterations; iteration++) {
     await options.onEvent?.({ type: "model_started", iteration });
@@ -178,9 +188,16 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
         ok: result.ok,
       });
 
-      const content = JSON.stringify(
+      const raw = JSON.stringify(
         result.ok ? { ok: true, result: result.content } : { ok: false, error: result.error }
-      ).slice(0, maxToolResultChars);
+      );
+      const remaining = Math.max(0, maxToolResultBudget - usedToolResultChars);
+      const budgeted = raw.slice(0, Math.min(maxToolResultChars, remaining));
+      const omitted = budgeted.length < raw.length;
+      const content = omitted
+        ? `${budgeted}\n[... resultado omitido: orçamento de contexto da execução esgotado ...]`
+        : budgeted;
+      usedToolResultChars += content.length;
 
       conversation.push({
         role: "tool",
