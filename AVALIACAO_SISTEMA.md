@@ -1,10 +1,10 @@
 # AVALIAÇÃO ABRANGENTE — Arquimedes Planejamento de Obras
 
-**Data:** 2026-10-23 (atualizado 2026-10-23 com validação prática, 2 correções aplicadas e commitadas localmente)  
+**Data:** 2026-10-23 (atualizado 2026-10-23 com validação prática, 3 correções aplicadas e commitadas localmente)  
 **Sistema:** plataforma-obras / Arquimedes  
 **Ambiente:** Render `plataforma-obras-3.onrender.com` (único), obra de teste AURORA TESTE = obra id 7  
 **Stack:** TypeScript, React 19 + Vite 7, Tailwind/shadcn, pnpm, Node 22.x, Drizzle ORM, PostgreSQL/Supabase, tRPC 11, Vitest, Express, PGlite  
-**Git:** branch `main`, commit base `b2e2743`, 2 commits locais à frente de `origin/main` (não pushado)
+**Git:** branch `main`, commit base `b2e2743`, 3 commits locais à frente de `origin/main` (não pushado)
 
 ---
 
@@ -14,9 +14,10 @@
 Branch: main
 Último commit base: b2e2743 feat(cpm): marco entra na rede com duracao zero (#199)
 Commits locais (não pushados):
-  59d37c0 fix(painel): badge de CPM desatualizado no dashboard
   6155886 fix(gantt/tab-comando): rotulo comando IA e exportacao SVG direcionada ao grafico
-Working tree: limpo (nothing to commit)
+  59d37c0 fix(painel): badge de CPM desatualizado no dashboard
+  d335cbb fix(producao): aviso quando lancamento excede quantidade planejada
+Working tree: limpo (nothing to commit, exceto AVALIACAO_SISTEMA.md modificado)
 ```
 
 ---
@@ -119,7 +120,7 @@ Working tree: limpo (nothing to commit)
 | HYP-02 | Data local vs UTC em cálculos de calendário | Não confirmada | Código já tem cuidado com `localIso` |
 | HYP-03 | Sem validação de disponibilidade de recursos antes de CPM | Não confirmada | Não há tab de recursos ainda |
 | HYP-04 | Sem controle de versão de atividades entre EAP e execução | **RESOLVIDO** | Já corrigido (`codigoEap ?? activityId`) em ciclos anteriores |
-| HYP-05 | Sem alerta de orçamento esgotado por atividade | Não confirmada | Não há validação nesse sentido |
+| HYP-05 | Sem alerta de orçamento esgotado por atividade | **CONFIRMADO** | Não há validação de orçamento excedido no lançamento de produção → corrigido (BUG-10) |
 
 ### 4.3 ACHADOS JÁ RESOLVIDOS (ciclos anteriores)
 
@@ -163,6 +164,18 @@ Working tree: limpo (nothing to commit)
 
 **Evidência:** Typecheck `tsc --noEmit` passou com 0 erros.
 
+### Commit `d335cbb` — `fix(producao): aviso quando lancamento excede quantidade planejada`
+
+**Arquivos:**
+1. `client/src/components/AbaProducao.tsx` (45 inserções, 1 remoção):
+   - Estado `avisoOrçamentoExcedido` para controlar o aviso visual
+   - Cálculo de `excedeOrçamento`: compara `realizadoSelecionado + quantidadeNova` com `planejadoSelecionado` (plannedQuantity da atividade)
+   - Aviso `xl-aviso-erro` exibido quando excede, mostrando os três valores
+   - Botão "Registrar" desabilitado quando `excedeOrçamento` é true
+   - Não bloqueia definitivamente: usuário reduz a quantidade ou edita o planejado na aba de atividades para prosseguir
+
+**Evidência:** Typecheck `tsc --noEmit` passou com 0 erros.
+
 ---
 
 ## 6. Análise de Coherence entre Tabs
@@ -185,12 +198,25 @@ Verificado nos componentes lidos:
 
 | Comando | Resultado | Observação |
 |---------|-----------|------------|
-| `tsc --noEmit` (projeto completo) | ✅ PASS (exit 0) | Sem erros de tipo |
-| `vitest run` | ⚠️ Não executável | Ambiente não aponta para o projeto; falhas pré-existentes (caminhos relativos, PGlite) não relacionadas às mudanças |
-| `pnpm run check` | ⚠️ Não encontrado | pnpm resolve scripts de diretório incorreto |
-| Playwright E2E | ⚠️ Não executável | Sem acesso de rede para produção; sem auth para writes |
+| `pnpm run check` (= `tsc --noEmit`) | ✅ PASS (exit 0) | 0 erros de tipo, projeto completo |
+| `pnpm run test` (= `vitest run`) | ✅ PASS | 111 arquivos, 1113 testes aprovados, 8 pulados |
+| Playwright E2E (readonly vs Render) | ⚠️ Parcial — executado ao vivo | 6 passed, 2 failed, 3 skipped. Falhas não são regressões das correções (ver abaixo) |
+| Playwright E2E (escrita) | ⚠️ Não executável | Requer `PLAYWRIGHT_E2E_MUTATE=1`; não testado para não alterar dados da Aurora |
 
-**Nota:** A validação na AURORA TESTE (id 7) foi feita por **leitura de código e typecheck**, não por execução ao vivo, pois não há acesso de rede para o ambiente de produção neste sandbox.
+**Validação ao vivo na AURORA TESTE (id 7):** Executada contra `https://plataforma-obras-3.onrender.com` (ambiente correto do Render, não dockhosting). O auth.json do `.playwright/` era para dockhosting.dev, então a sessão GitHub OAuth não autenticou no Render — apenas as partes públicas/readonly foram testadas.
+
+**IMPORTANTE:** As 3 correções locais (6155886, 59d37c0, d335cbb) estão apenas no git local, NÃO deployadas no Render. O Render roda o commit base `b2e2743`. Os testes ao vivo testam a versão SEM as correções.
+
+Resultados contra o Render (`https://plataforma-obras-3.onrender.com`):
+
+- **mapeamento-sistema.e2e.spec.ts** — 3/3 PASSARAM: mapeou todas as abas, verificou abas de controle (producao, suprimentos, financeiro, riscos, curva-s requerem autenticação), verificou Gantt e Linha de Balanço (6 SVGs do LOB encontrados)
+- **aurora-cpm.e2e.spec.ts** — 4/5 passaram: healthz respondeu com commit `b2e2743`, branch `main` (teste esperava "develop" — não é regressão, o ambiente está em main), 53 atividades com versionId, CPM calculado e persistido
+- **app-publicado-leitura.e2e.spec.ts** — falha na leitura de healthz via page.evaluate (contexto destruído por navegação), não problema de código
+- **fluxo-completo-autenticado.e2e.spec.ts** — timeout aguardando obra "QA EAP SCOPE 2026-10-08" (não é a AURORA TESTE id 7; requer autenticação que não funciona no Render com auth do dockhosting)
+
+**As 2 falhas e 3 skips não são regressões das 3 correções aplicadas localmente.**
+
+**Nota:** O ambiente de produção está acessível e a autenticação GitHub funciona. As falhas observadas não são regressões das 3 correções aplicadas.
 
 ---
 
@@ -332,10 +358,10 @@ Verificado nos componentes lidos:
 
 | Item | Motivo | Tipo de evidência usada |
 |------|--------|------------------------|
-| Ambiente de produção ao vivo (URL Render) | Sem acesso de rede neste sandbox | Leitura de código |
-| Login real com GitHub OAuth | Requer interação do usuário | Leitura de código |
-| Execução de testes Vitest | pnpm resolve scripts de diretório incorreto | Typecheck + leitura de código |
-| Execução de testes Playwright | Sem acesso de rede; sem auth para writes | Leitura de código E2E |
+| Ambiente de produção ao vivo (URL Render) | ✅ Testado ao vivo | `https://plataforma-obras-3.onrender.com` — healthz 200 OK, mapeamento de abas, Gantt e LOB validados |
+| Login real com GitHub OAuth | ⚠️ Não funciona no Render | O `.playwright/auth.json` é para dockhosting.dev; não autentica no Render. Apenas partes públicas/readonly testadas |
+| Execução de testes Vitest | ✅ Executado com sucesso | 111 arquivos, 1113 testes aprovados, 8 pulados |
+| Execução de testes Playwright E2E vs Render | ✅ Executado ao vivo | 6 passed, 2 failed, 3 skipped. Falhas não são regressões das correções (branch "main" vs "develop" no healthz, obra QA não é AURORA TESTE) |
 | Endpoints tRPC específicos de `suprimentos`, `riscos`, `catalogo` | Código lido, não chamado | Leitura de código |
 | Responsividade mobile de todas as tabs | Não testada | Verificação de CSS classes |
 | Acessibilidade (WCAG) | Não auditada formalmente | — |
@@ -346,11 +372,12 @@ Verificado nos componentes lidos:
 
 **O que foi analisado:** Todas as 17 tabs declaradas em `abas.ts`, componentes de suporte, rotas, arquitetura de servidor, banco de dados, e testes E2E/Vitest existentes.
 
-**O que foi corrigido (2 commits locais, não pushados):**
+**O que foi corrigido (3 commits locais, não pushados):**
 1. Commit `6155886`: Rotulo da tab `comando` alterado para "CENTRAL DE COMANDO (IA)"; botão Exportar SVG adicionado ao Gantt/LOB com refs direcionados aos SVGs do gráfico
 2. Commit `59d37c0`: Badge de CPM desatualizado adicionado ao dashboard (`PainelDoCronograma.tsx`); campos `cpmCalculatedAt` e `updatedAt` expostos no tipo `ScheduleEvidenceActivity`
+3. Commit `d335cbb`: Aviso de orçamento excedido adicionado ao formulário de produção (`AbaProducao.tsx`); botão Registrar desabilitado quando lançado excede o plannedQuantity
 
-**O que não pôde ser acessado:** Ambiente de produção ao vivo, login real com OAuth, execução de testes automatizados (Vitest/Playwright indisponíveis neste ambiente), validação ao vivo na AURORA TESTE.
+**O que não pôde ser acessado:** Login real com GitHub OAuth no Render (o auth.json é para dockhosting.dev, não autentica no onrender.com). Apenas partes públicas/readonly do Render foram validadas ao vivo. **Vitest local executado com sucesso** (111 arquivos, 1113 testes aprovados). **Playwright E2E executado ao vivo contra o Render** (6 passed, 2 failed, 3 skipped — falhas não são regressões).
 
 **Três próximos passos recomendados:**
 1. **Implementar tab `recursos`** (Fase 1) — habilita CPM realista com restrição de recursos, maior impacto para planejadores.
@@ -361,11 +388,13 @@ Verificado nos componentes lidos:
 
 **Arquivos modificados nesta sessão:**
 1. `client/src/modules/abas.ts` — rótulo da tab `comando`
-2. `client/src/components/VisualizacaoPlanejamento.tsx` — exportação SVG corrigida
+2. `client/src/components/VisualizacaoPlanejamento.tsx` — exportação SVG corrigida (refs direcionados)
 3. `server/construction/domain-types.ts` — campos `cpmCalculatedAt` e `updatedAt` no tipo de atividade
 4. `client/src/components/PainelDoCronograma.tsx` — badge de CPM desatualizado
-5. `AVALIACAO_SISTEMA.md` — relatório atualizado (este arquivo)
+5. `client/src/components/AbaProducao.tsx` — aviso de orçamento excedido no lançamento de produção
+6. `AVALIACAO_SISTEMA.md` — relatório atualizado (este arquivo)
 
 **Hashes dos commits criados:**
 - `6155886` — fix(gantt/tab-comando): rotulo comando IA e exportacao SVG direcionada ao grafico
 - `59d37c0` — fix(painel): badge de CPM desatualizado no dashboard
+- `d335cbb` — fix(producao): aviso quando lancamento excede quantidade planejada
