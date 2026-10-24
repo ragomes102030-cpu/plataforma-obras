@@ -34,14 +34,16 @@ function stripUiContext(message: string) {
 export function classifyArquimedesIntent(message: string): ArquimedesIntent {
   const text = stripUiContext(message);
   if (CASUAL_PATTERNS.some(pattern => pattern.test(text))) return "casual";
-  // Confirmação explícita é uma ordem de operação: destrava a execução do que
-  // foi proposto (e só) na conversa.
-  if (isExplicitConfirmation(text)) return "operacao";
   // Mensagens que proíbem mutação (READ_ONLY, não aplicar/criar/remover) são
-  // análise, não operação — mesmo que contenham verbos de operação no texto.
-  if (/\bREAD_ONLY\b/i.test(text) || /\bn[aã]o\s+(aplicar|criar|atualizar|mover|remover|alterar|salvar|gerar)\b/i.test(text)) {
+  // análise, não operação — mesmo que contenham verbos de operação ou uma
+  // confirmação ("confirmo o diagnóstico, mas não aplique nada"). A proibição
+  // vence a confirmação: quem proíbe não está autorizando.
+  if (/\bREAD_ONLY\b/i.test(text) || /\bn[aã]o\s+(aplicar|aplique|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gerar|gere)\b/i.test(text)) {
     return "analise";
   }
+  // Confirmação explícita de uma proposta é uma ordem de operação: destrava a
+  // execução do que foi proposto (e só) na conversa.
+  if (isExplicitConfirmation(text)) return "operacao";
   if (OPERATION_PATTERNS.some(pattern => pattern.test(text))) return "operacao";
   if (ANALYSIS_PATTERNS.some(pattern => pattern.test(text))) return "analise";
   return "consulta";

@@ -203,6 +203,45 @@ describe("createStructuredResponse", () => {
     expect(response.toolsConsulted).toEqual(["tool_a", "tool_b"]);
   });
 
+  it("deve montar a evidência a partir do domínio das ferramentas", () => {
+    const response = createStructuredResponse({
+      taskId: "task-ev",
+      content: "Análise",
+      model: "gpt-5-mini",
+      provider: "openai",
+      iterations: 2,
+      readOnly: true,
+      audit: [
+        { event: "tool_call", toolName: "get_eap_tree", status: "success", domain: "eap" },
+        { event: "tool_call", toolName: "listar_atividades", status: "success", domain: "cronograma" },
+        { event: "tool_call", toolName: "analisar_eap_localmente", status: "success", domain: "runtime" },
+      ],
+    });
+
+    // O "de onde veio" é dado pelo rastro, não pelo texto do modelo.
+    expect(response.evidence).toEqual([
+      { source: "mcp_eap", toolName: "get_eap_tree" },
+      { source: "mcp_cronograma", toolName: "listar_atividades" },
+      { source: "local_db", toolName: "analisar_eap_localmente" },
+    ]);
+  });
+
+  it("não inclui evidência de ferramenta com erro", () => {
+    const response = createStructuredResponse({
+      taskId: "task-ev-err",
+      content: "Análise",
+      model: "gpt-5-mini",
+      provider: "openai",
+      iterations: 1,
+      readOnly: true,
+      audit: [
+        { event: "tool_call", toolName: "get_eap_tree", status: "error", domain: "eap" },
+      ],
+    });
+
+    expect(response.evidence).toEqual([]);
+  });
+
   it("deve funcionar com audit vazio", () => {
     const response = createStructuredResponse({
       taskId: "task-789",
