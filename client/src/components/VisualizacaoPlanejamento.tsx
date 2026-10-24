@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, GitBranch, GanttChartSquare, Maximize2, Minimize2, Printer, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBranch, GanttChartSquare, Maximize2, Minimize2, Printer, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
@@ -197,6 +197,8 @@ function Gantt({
   localObra?: string | null;
 }) {
   const referencia = useRef<HTMLDivElement | null>(null);
+  const svgSetasRef = useRef<SVGSVGElement | null>(null);
+  const svgAvancosRef = useRef<SVGSVGElement | null>(null);
   const [larguraVisivel, setLarguraVisivel] = useState(1200);
   const utils = trpc.useUtils();
   const [alternandoMarco, setAlternandoMarco] = useState(false);
@@ -537,6 +539,35 @@ function Gantt({
     elemento.scrollTo({ left: Math.max(0, posicao(hoje) - elemento.clientWidth / 2), behavior: "smooth" });
   };
 
+  const exportarSvg = () => {
+    const svgSetas = svgSetasRef.current;
+    const svgAvancos = svgAvancosRef.current;
+
+    // Captura apenas os SVGs do gráfico (setas/avanços), nunca ícones da UI.
+    const svgs = [svgSetas, svgAvancos].filter(Boolean) as SVGSVGElement[];
+    if (svgs.length === 0) return;
+
+    const conteudo = svgs
+      .map(svg => new XMLSerializer().serializeToString(svg))
+      .join("\n");
+
+    const svgWrapper = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${svgs[0].clientWidth || svgs[0].getAttribute('width') || 1200}" height="${svgs.reduce((acc, svg) => acc + (svg.clientHeight || Number(svg.getAttribute('height') || 0)), 0)}">
+        ${conteudo}
+      </svg>
+    `;
+
+    const blob = new Blob([svgWrapper], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `cronograma-${new Date().toISOString().slice(0, 10)}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`pg${telaCheia ? " tela-cheia" : ""}${visaoAberta ? "" : " pg-visao-fechada"}`}>
       <section className={`pg-visao${visaoAberta ? "" : " recolhida"}`} aria-label="Visão geral do cronograma">
@@ -680,6 +711,10 @@ function Gantt({
             <Printer size={16} aria-hidden="true" />
             <span>Imprimir / PDF</span>
           </button>
+          <button type="button" onClick={exportarSvg} aria-label="Exportar o cronograma como arquivo SVG" title="Exportar SVG (vetor)">
+            <Download size={16} aria-hidden="true" />
+            <span>Exportar SVG</span>
+          </button>
         </div>
       </div>
 
@@ -758,11 +793,13 @@ function Gantt({
 
             {mostrarSetas && setas.length > 0 && (
               <svg
+                ref={svgSetasRef}
                 className="pg-setas"
                 width={larguraDoTempo}
                 height={Math.max(1, filtradas.length * alturaLinha)}
                 style={{ left: esquerda }}
                 aria-hidden="true"
+                data-export="gantt-svg"
               >
                 <defs>
                   <marker id="pg-seta" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
@@ -785,11 +822,13 @@ function Gantt({
 
             {mostrarAvanco && avancos.trechos.length > 0 && (
               <svg
+                ref={svgAvancosRef}
                 className="pg-setas pg-avancos"
                 width={larguraDoTempo}
                 height={Math.max(1, filtradas.length * alturaLinha)}
                 style={{ left: esquerda }}
                 aria-hidden="true"
+                data-export="gantt-svg"
               >
                 {avancos.trechos.map((pontos, indice) => (
                   <polyline key={indice} points={pontos} className="pg-avanco-linha" />
