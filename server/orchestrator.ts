@@ -49,6 +49,11 @@ import { searchWebEvidence } from "./web-research";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
+/**
+ * Teto ACUMULADO de caracteres de resultados por execução. Uma sequência longa
+ * de consultas cresceria o contexto sem limite; este orçamento o contém.
+ */
+const MAX_TOOL_RESULT_BUDGET = MAX_TOOL_RESULT_CHARS * 8;
 const MAX_MESSAGES = 20;
 const MAX_USER_MESSAGE_CHARS = 6_000;
 const MAX_ASSISTANT_MESSAGE_CHARS = 12_000;
@@ -1379,6 +1384,7 @@ export async function runProjectOrchestrator(
     maxIterations,
     allowedTools: new Set(tools.map(tool => tool.function.name)),
     maxToolResultChars: MAX_TOOL_RESULT_CHARS,
+    maxToolResultBudget: MAX_TOOL_RESULT_BUDGET,
     callModel: async input => {
       return (deps.callLlm ?? invokeLlmGateway)({
         messages: input.messages,
