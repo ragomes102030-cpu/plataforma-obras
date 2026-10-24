@@ -25,7 +25,7 @@ import {
   type LlmResponse,
   type LlmTool,
 } from "./llm-provider-gateway";
-import { classifyArquimedesIntent } from "./agent/runtime/intent-router";
+import { classifyArquimedesIntent, isExplicitConfirmation } from "./agent/runtime/intent-router";
 import { runEngineeringTeam } from "./agent/engineering-team";
 import { runReActAgent } from "./agent/runtime/react-runtime";
 import {
@@ -1104,9 +1104,7 @@ function toOpenAiTools(
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
   const lastUser = [...messages].reverse().find(message => message.role === "user");
   if (!lastUser) return false;
-  return /(?:^|\b)(confirmo|confirmado|pode aplicar|pode corrigir|aplique|pode executar|sim,?\s*(?:pode|aplique|corrija))(?:\b|$)/i.test(
-    lastUser.content.trim()
-  );
+  return isExplicitConfirmation(lastUser.content);
 }
 
 function buildSystem(
@@ -1498,7 +1496,7 @@ export async function runProjectOrchestrator(
       if (toolName === "criar_atividade_local") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
-        if (!allowMutations) {
+        if (!allowMutations || !hasExplicitMutationConfirmation(messages)) {
           const message = "A criação da atividade ainda não foi autorizada. Aguarde uma ordem operacional explícita.";
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
@@ -2259,7 +2257,7 @@ export async function runProjectOrchestrator(
       if (!domain || (!isReadOnly && !isMutation)) {
         throw new Error(`Ferramenta não permitida pelo runtime: ${toolName}`);
       }
-      if (isMutation && !allowMutations) {
+      if (isMutation && (!allowMutations || !hasExplicitMutationConfirmation(messages))) {
         const message = "A alteração ainda não foi autorizada. Apresente a proposta e peça confirmação explícita antes de executar.";
         audit.push({
           taskId, iteration, event: "tool_call", domain, toolName,

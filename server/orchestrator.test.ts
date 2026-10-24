@@ -524,4 +524,88 @@ describe("runProjectOrchestrator", () => {
     expect(event?.status).toBe("error");
     expect(event?.error ?? "").not.toContain("restrita a administradores");
   });
+
+  it("bloqueia mutação pedida sem confirmação explícita", async () => {
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Crie uma atividade para a fundação" }],
+      {
+        deps: {
+          listTools: async () => ({
+            eap: [{ name: "criar_eap_node", description: "Cria nó", inputSchema: { type: "object", properties: {} } }],
+            cronograma: [],
+            ganttLob: [],
+          }),
+          callLlm: async ({ messages }) => {
+            if (messages.length === 2) {
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "mut-1",
+                      type: "function",
+                      function: { name: "criar_eap_node", arguments: "{}" },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{ message: { role: "assistant", content: "Proposta apresentada; aguardando confirmação." } }],
+            };
+          },
+        },
+      }
+    );
+
+    const event = result.audit.find(item => item.toolName === "criar_eap_node");
+    expect(event?.status).toBe("error");
+    expect(event?.error).toContain("confirmação explícita");
+  });
+
+  it("permite mutação quando há confirmação explícita", async () => {
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "confirmo, pode aplicar" }],
+      {
+        deps: {
+          listTools: async () => ({
+            eap: [{ name: "criar_eap_node", description: "Cria nó", inputSchema: { type: "object", properties: {} } }],
+            cronograma: [],
+            ganttLob: [],
+          }),
+          callLlm: async ({ messages }) => {
+            if (messages.length === 2) {
+              return {
+                model: "test-model",
+                choices: [{
+                  message: {
+                    role: "assistant",
+                    content: null,
+                    tool_calls: [{
+                      id: "mut-2",
+                      type: "function",
+                      function: { name: "criar_eap_node", arguments: "{}" },
+                    }],
+                  },
+                }],
+              };
+            }
+            return {
+              model: "test-model",
+              choices: [{ message: { role: "assistant", content: "Aplicado." } }],
+            };
+          },
+        },
+      }
+    );
+
+    const event = result.audit.find(item => item.toolName === "criar_eap_node");
+    expect(event?.status).toBe("error");
+    expect(event?.error ?? "").not.toContain("confirmação explícita");
+  });
 });
