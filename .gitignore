@@ -129,3 +129,6 @@ e2e-fictitious-report.json
 phase1-readonly-battery-report.json
 scripts/aurora-abas.json
 scripts/abaurora.json
+
+# Workspace de planos (scratch do executor: ledger/briefs) — não versionar.
+.superpowers/
