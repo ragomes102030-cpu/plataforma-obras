@@ -1,6 +1,6 @@
 # Decisões de Arquitetura
 
-Última atualização: 19/10/2026
+> **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
 
 > Decisões 1 e 2 estão **substituídas** pelas decisões 16 e 17 (abaixo). Elas ficam
 > registradas porque explicam o caminho, não porque valem hoje. A stack em vigor

@@ -1,5 +1,7 @@
 # Documentação
 
+> **Normativo vs histórico.** Docs com o marcador **normativo** são a fonte de verdade do código (se divergirem, o código vence e o doc é corrigido). Docs marcados como **históricos** registram decisões de um momento anterior. Todos trazem data + commit no cabeçalho.
+
 Índice dos documentos do projeto. Se você está chegando agora, leia nesta ordem:
 **stack → arquitetura → setup → deploy**.
 

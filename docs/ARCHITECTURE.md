@@ -1,5 +1,7 @@
 # ARCHITECTURE.md — Arquitetura do Sistema
 
+> **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
+
 ## RESUMO
 
 ```
