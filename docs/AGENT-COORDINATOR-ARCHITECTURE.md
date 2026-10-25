@@ -1,5 +1,7 @@
 # Arquitetura do Agente Coordenador de Obras
 
+> **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
+
 ## Decisão executiva
 
 A Plataforma Obras terá **um único Agente Coordenador por obra**, persistente entre as abas EAP, Cronograma, Gantt/Linha de Balanço, Produção e Relatórios. As abas não possuem agentes diferentes. Elas fornecem foco, seleção e evidências ao mesmo coordenador.
@@ -12,7 +14,7 @@ O coordenador combina cinco capacidades que devem permanecer separadas:
 4. **Orquestrador:** escolhe o domínio MCP correto, respeita o marco da obra e explica lacunas.
 5. **Executor controlado:** prepara prévias e só executa mutações após confirmação, idempotência e auditoria.
 
-A DeepSeek é o motor de interpretação e decisão assistida. Ela não é a fonte de verdade, não recebe segredos e não substitui validações determinísticas dos MCPs.
+O modelo é um detalhe plugável: o sistema é **provider-agnóstico** (default `gpt-5-mini`, com fallback e provedores configuráveis via `llm-provider-gateway`). Ele não é a fonte de verdade, não recebe segredos e não substitui validações determinísticas dos MCPs.
 
 ## Visão de produto
 
