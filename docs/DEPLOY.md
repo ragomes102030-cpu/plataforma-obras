@@ -1,5 +1,7 @@
 # Deploy — Render + Supabase
 
+> **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
+
 Este é o runbook de produção. O alvo é **um só**: o serviço `plataforma-obras-3`
 no Render. A visão de stack está em [`STACK-ATUAL.md`](STACK-ATUAL.md).
 

@@ -1,6 +1,6 @@
 # Melhorias e Mudanças
 
-Última atualização: 26/09/2026
+> **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
 
 ---
 
