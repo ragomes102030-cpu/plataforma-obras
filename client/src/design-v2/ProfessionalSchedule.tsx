@@ -54,7 +54,7 @@ export default function ProfessionalSchedule({activities,onOpenActivity,onChange
  function toggle(code:string){setCollapsed(v=>{const n=new Set(v);if(n.has(code))n.delete(code);else n.add(code);return n;});}
  function groupRange(items:Activity[]){if(!items.length)return null;let min=brDate(items[0].start),max=brDate(items[0].end);items.forEach(a=>{const x=brDate(a.start),y=brDate(a.end);if(x<min)min=x;if(y>max)max=y;});return {start:brFormat(min),end:brFormat(max)};}
  return <section className="ps" aria-label="Cronograma profissional">
-  <div className="ps-head"><div><span className="pv2-eyebrow">PLANEJAMENTO · GANTT</span><h2>Cronograma hierárquico</h2><p>EAP recolhível, tabela editável e calendário sincronizado. Sem dependência do agente.</p></div><button className="pv2-primary" onClick={onAdd}><Plus size={16}/> Nova atividade</button></div>
+  <div className="ps-head"><div><span className="pv2-eyebrow">PLANEJAMENTO · GANTT</span><h2>Cronograma de atividades</h2><p>EAP recolhível, tabela editável e calendário sincronizado. Sem dependência do agente.</p></div><button className="pv2-primary" onClick={onAdd}><Plus size={16}/> Nova atividade</button></div>
   <div className="ps-toolbar">
    <div className="ps-controls"><button className="ps-action" onClick={()=>setCollapsed(new Set())}><ChevronsUpDown size={15}/> Expandir tudo</button><button className="ps-action" onClick={()=>setCollapsed(new Set(stages.map(s=>s.code)))}><ChevronsDownUp size={15}/> Recolher tudo</button></div>
    <label className="ps-search">⌕ <input aria-label="Buscar tarefa no Gantt" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar EAP / atividade"/></label>
