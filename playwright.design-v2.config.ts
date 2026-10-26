@@ -12,5 +12,11 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  outputDir: "test-results/design-v2",
+  outputDir: "test-results/design-v2", 
+  webServer: {
+    command: "pnpm exec vite --config vite.design-v2.config.ts",
+    url: "http://127.0.0.1:5182/design-v2.html",
+    reuseExistingServer: !process.env.CI,
+    timeout: 60000,
+  },
 });
