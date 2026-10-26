@@ -1,0 +1,46 @@
+name: Design V2 Preview (isolated)
+
+on:
+  pull_request:
+    paths:
+      - "client/design-v2.html"
+      - "client/src/design-v2/**"
+      - "vite.design-v2.config.ts"
+      - "playwright.design-v2.config.ts"
+      - "tests/design-v2.preview.spec.ts"
+      - ".github/workflows/design-v2-preview.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm check
+      - name: Build separado (não usa dist/public)
+        run: |
+          pnpm exec vite build --config vite.design-v2.config.ts
+          test -f dist/design-v2/design-v2.html
+      - name: Instalar Chromium para QA local
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Playwright somente dados fictícios
+        run: pnpm exec playwright test --config playwright.design-v2.config.ts
+      - name: Arquivo da prévia e screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plataforma-obras-design-v2
+          path: |
+            dist/design-v2/
+            test-results/design-v2/
+          if-no-files-found: ignore
