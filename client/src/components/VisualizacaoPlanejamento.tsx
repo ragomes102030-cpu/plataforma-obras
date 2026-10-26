@@ -5,7 +5,7 @@ import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBr
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
-import { AuroraLinhaBalanco } from "./AuroraLinhaBalanco";
+import { LinhaBalancoVertical } from "./AuroraLinhaBalanco";
 import "./aurora-piloto.css";
 
 type Props = {
@@ -138,7 +138,7 @@ export function VisualizacaoPlanejamento({
       {view === "gantt" ? (
         <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} />
       ) : layoutProfissional ? (
-        <AuroraLinhaBalanco linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
+        <LinhaBalancoVertical linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       ) : (
         <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
       )}
@@ -277,7 +277,7 @@ function Gantt({
   // entre a planilha e o gráfico) e fica guardada no navegador.
   const esquerda = estreita ? 168 : larguraEsquerda;
   const alturaLinha = estreita ? 46 : layoutProfissional ? 38 : 30;
-  const colunas = estreita ? "minmax(0,1fr) 40px" : layoutProfissional ? "minmax(0,1fr) 52px 82px 82px 52px" : "minmax(0,1fr) 46px 66px 42px";
+  const colunas = estreita ? "minmax(0,1fr) 40px" : layoutProfissional ? "minmax(0,1fr) 52px 82px 82px 52px" : "minmax(0,1fr) 46px 66px 66px 42px";
 
   useEffect(() => {
     const elemento = referencia.current;
