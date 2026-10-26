@@ -25,7 +25,7 @@ function obterLocais(linhas: EntradaDaLinha[]): string[] {
   return Array.from(new Set(linhas.map(l => String(l.pavimento || l.frente || "").trim()).filter(Boolean)))
     .sort((a,b) => a.localeCompare(b, "pt-BR", {numeric:true}));
 }
-export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[], finsCalculados: Record<string,string>) {
+export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalculados: Record<string,string>) {
   const validas = linhas.filter(l => !l.marco && ehData(l.inicio) && ehData(finsCalculados[l.codigo] ?? "") && Number.isFinite(l.duracao) && l.duracao >= 1);
   const locais = obterLocais(validas);
   const servicos = new Map<string, Serie>();
@@ -46,7 +46,7 @@ export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[], finsCalcula
 }
 
 export function LinhaBalancoVertical({linhas,finsCalculados,hoje,onAbrirAtividades}:Props) {
-  const {locais,series,semLocal} = useMemo(()=>prepararLinhaBalancoAurora(linhas,finsCalculados),[linhas,finsCalculados]);
+  const {locais,series,semLocal} = useMemo(()=>prepararLinhaBalancoVertical(linhas,finsCalculados),[linhas,finsCalculados]);
   const [ocultas,setOcultas]=useState<Set<string>>(()=>new Set());
   const [recolhido,setRecolhido]=useState(false);
   const [busca,setBusca]=useState("");
