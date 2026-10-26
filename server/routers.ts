@@ -152,6 +152,7 @@ import {
 } from "./producao-progresso";
 import {
   carregarCalendarioDaObra,
+  carregarCalendarioDoPeriodo,
   hojeNoBrasil,
   idDoCalendarioDaObra,
   localIso,
@@ -3872,6 +3873,25 @@ export const appRouter = router({
     // `work_calendars` nem `calendar_exceptions` diretamente — há um teste que
     // trava isso, porque duas fontes para a mesma verdade no mesmo arquivo já
     // foi defeito real uma vez.
+    // Mesma fonte do EVM: calendário real da obra, incluindo exceções
+    // dos anos atravessados pelo planejamento. Não criar 5x2 no cliente.
+    getCalendarForCurve: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), startYear: z.number().int().min(2000).max(2100) }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const yearEnd = Math.min(2102, input.startYear + 2);
+        const carregado = await carregarCalendarioDoPeriodo(
+          db, input.projectId, input.startYear, yearEnd
+        );
+        return {
+          weekPattern: carregado.calendar.weekPattern,
+          exceptions: carregado.calendar.exceptions,
+          origem: carregado.origem,
+          nome: carregado.nome,
+        };
+      }),
     getCalendar: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
