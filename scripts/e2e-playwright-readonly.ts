@@ -20,6 +20,9 @@ try {
   console.log("[Playwright] PASS public landing");
 
   if (!hasAuth) {
+    if (process.env.PLAYWRIGHT_REQUIRE_AUTH === "1") {
+      throw new Error("Authenticated Aurora smoke required but storage state is missing. Configure ARQUIMEDES_PLAYWRIGHT_AUTH_B64.");
+    }
     console.log("[Playwright] SKIP authenticated Aurora: no PLAYWRIGHT_STORAGE_STATE");
     process.exitCode = 0;
   } else {
