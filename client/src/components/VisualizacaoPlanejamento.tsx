@@ -19,6 +19,7 @@ type Props = {
   localObra?: string | null;
   /** Piloto só da obra OB-PUPOCN, explicitamente ativado via ?layout=aurora. */
   pilotoAurora?: boolean;
+  finsCalculados?: Record<string,string>;
 };
 
 type View = "gantt" | "lob";
@@ -57,6 +58,7 @@ export function VisualizacaoPlanejamento({
   codigoObra,
   localObra,
   pilotoAurora = false,
+  finsCalculados = {},
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
@@ -136,7 +138,7 @@ export function VisualizacaoPlanejamento({
       {view === "gantt" ? (
         <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} pilotoAurora={pilotoAurora} />
       ) : pilotoAurora ? (
-        <AuroraLinhaBalanco linhas={linhas} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
+        <AuroraLinhaBalanco linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       ) : (
         <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
       )}
