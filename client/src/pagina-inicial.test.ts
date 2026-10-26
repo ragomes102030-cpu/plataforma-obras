@@ -177,4 +177,15 @@ describe("orientação do fluxo de planejamento", () => {
     expect(HOME).toMatch(/trpc\.planning\.list\.useQuery/);
     expect(HOME).toMatch(/eapApproved/);
   });
+
+  it("mantém o bloqueio da baseline visível em qualquer aba da obra", () => {
+    // O cabeçalho é global. Se o bloqueio só for avaliado dentro da aba
+    // Baseline, as demais telas prometem um próximo passo que o servidor
+    // ainda não permite concluir.
+    const statusDoFluxo = HOME.slice(
+      HOME.indexOf("const baseline ="),
+      HOME.indexOf("// Barra de campo")
+    );
+    expect(statusDoFluxo).not.toMatch(/aba\s*===/);
+  });
 });
