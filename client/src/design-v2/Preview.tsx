@@ -4,32 +4,53 @@ import {
   BarChart3, Building2, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, Clock3, FileText, FolderOpen, GitBranch, Layers3, LayoutDashboard,
   LockKeyhole, Menu, Moon, Plus, Search, Settings2, ShieldCheck, Sun,
-  WalletCards, X,
+  WalletCards, Package, ShieldAlert, Bot, X,
 } from "lucide-react";
 import {
   initialActivities, project, wbsItems, weeks,
   type Activity, type StageStatus, type WbsItem,
 } from "./sample-data";
+import ModuleGallery, {type GalleryModule} from "./ModuleGallery";
+import {GRUPOS_V2} from "../modules/navegacao-v2";
 
-type Section = "dashboard" | "planning" | "execution" | "costs" | "documents" | "settings";
-type PlanningTab = "eap" | "schedule" | "dependencies" | "baselines";
+type Section = "dashboard" | "planning" | "execution" | "costs" | "supplies" | "management" | "assistant";
+type ModuleTab =
+  | "escopo" | "eap" | "atividades" | "dependencias" | "cpm" | "baseline" | "gantt" | "linha-balanco"
+  | "producao" | "curva-s" | "financeiro" | "suprimentos" | "catalogo" | "documentos" | "riscos" | "comando" | "dashboard";
 type DetailTab = "summary" | "planning" | "links";
-
 const navigation = [
   { id: "dashboard", label: "Visão geral", icon: LayoutDashboard },
   { id: "planning", label: "Planejamento", icon: Layers3 },
   { id: "execution", label: "Execução", icon: ActivityIcon },
   { id: "costs", label: "Custos", icon: WalletCards },
-  { id: "documents", label: "Documentos", icon: FolderOpen },
-  { id: "settings", label: "Configurações", icon: Settings2 },
+  { id: "supplies", label: "Suprimentos", icon: Package },
+  { id: "management", label: "Gestão", icon: ShieldAlert },
 ] as const;
-
 const tabs = [
+  { id: "escopo", label: "Escopo" },
   { id: "eap", label: "EAP" },
-  { id: "schedule", label: "Cronograma" },
-  { id: "dependencies", label: "Dependências" },
-  { id: "baselines", label: "Versões e baseline" },
+  { id: "atividades", label: "Atividades" },
+  { id: "dependencias", label: "Dependências" },
+  { id: "cpm", label: "CPM" },
+  { id: "baseline", label: "Versões e baseline" },
+  { id: "gantt", label: "Cronograma" },
+  { id: "linha-balanco", label: "Linha de Balanço" },
 ] as const;
+const otherTabs = {
+  execution: [{id:"producao",label:"Controle de produção"},{id:"curva-s",label:"Curva S"}],
+  costs: [{id:"financeiro",label:"Orçamento e custos"}],
+  supplies: [{id:"suprimentos",label:"Suprimentos"},{id:"catalogo",label:"Catálogo de insumos"}],
+  management: [{id:"documentos",label:"Documentos"},{id:"riscos",label:"Riscos"}],
+  assistant: [{id:"comando",label:"Central de Comando"}],
+} as const;
+const sectionDefaults:Record<Section,ModuleTab> = {
+  dashboard:"dashboard",planning:"eap",execution:"producao",costs:"financeiro",
+  supplies:"suprimentos",management:"documentos",assistant:"comando",
+};
+const sectionByGroup:Record<string,Section> = {
+  "visao-geral":"dashboard",planejamento:"planning",execucao:"execution",
+  custos:"costs",suprimentos:"supplies",gestao:"management",
+};
 
 function statusTone(label: string) {
   if (/Aprovada|Concluída|Em dia|Publicado/.test(label)) return "good";
@@ -58,7 +79,7 @@ function Metric({ eyebrow, value, note, icon: Icon, children }: {
 
 export default function Preview() {
   const [section, setSection] = useState<Section>("dashboard");
-  const [planningTab, setPlanningTab] = useState<PlanningTab>("eap");
+  const [activeTab, setActiveTab] = useState<ModuleTab>("eap");
   const [dark, setDark] = useState(false);
   const [sideOpen, setSideOpen] = useState(false);
   const [portfolio, setPortfolio] = useState(false);
@@ -92,11 +113,16 @@ export default function Preview() {
     (!search || (a.name + " " + a.code + " " + a.eap).toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR")))
   ), [activities, statusFilter, search]);
 
-  function go(sectionId: Section, tab?: PlanningTab) {
+  function go(sectionId: Section, tab?: ModuleTab) {
     setSection(sectionId);
     setSideOpen(false);
     setSearch("");
-    if (tab) setPlanningTab(tab);
+    setActiveTab(tab ?? sectionDefaults[sectionId]);
+  }
+  function openModule(id: string) {
+    if (id === "comando") { go("assistant","comando"); return; }
+    const area = GRUPOS_V2.find(grupo => (grupo.abas as readonly string[]).includes(id));
+    if (area) go(sectionByGroup[area.id], id as ModuleTab);
   }
   function startEdit(activity: Activity) {
     setSelectedActivity({ ...activity });
@@ -131,7 +157,7 @@ export default function Preview() {
   }
   const currentWbs = wbsItems.find(item => item.code === selectedWbs);
   const linkedActivity = activities.find(item => item.eap === selectedWbs);
-  const currentSection = navigation.find(n => n.id === section)?.label ?? "Visão geral";
+  const currentSection = section==="assistant"?"Central de Comando":navigation.find(n => n.id === section)?.label ?? "Visão geral";
 
   return <div className="pv2" data-theme={dark ? "dark" : "light"}>
     <div className="pv2-shell">
@@ -151,11 +177,12 @@ export default function Preview() {
             const Icon = item.icon;
             return <button key={item.id} onClick={() => { setPortfolio(false); go(item.id); }} className={"pv2-navitem" + (section === item.id && !portfolio ? " pv2-navactive" : "")} aria-current={section === item.id && !portfolio ? "page" : undefined}>
               <Icon size={19} strokeWidth={1.85}/><span>{item.label}</span>
-              {item.id === "planning" && <span className="pv2-navcount">4</span>}
+              {item.id === "planning" && <span className="pv2-navcount">8</span>}
             </button>;
           })}
         </nav>
         <div className="pv2-sidebar-bottom">
+          <button type="button" className={"pv2-assistant-link"+(section==="assistant"?" pv2-navactive":"")} onClick={()=>{setPortfolio(false);go("assistant","comando");}}><Bot size={18}/> Central de Comando <small>Prévia de IA</small></button>
           <div className="pv2-safety"><ShieldCheck size={17}/><span>Modo demonstração<br/><small>Sem acesso ao banco de dados</small></span></div>
           <button className="pv2-exit" onClick={() => { setPortfolio(true); setSideOpen(false); }}><ArrowLeft size={17}/> Sair da obra</button>
         </div>
@@ -208,7 +235,7 @@ export default function Preview() {
                     </div>
                   </article>
                   <article className="pv2-panel pv2-milestones">
-                    <div className="pv2-section-title"><div><h2>Visão do cronograma</h2><p>Próximas frentes · representação simplificada</p></div><button className="pv2-link" onClick={() => go("planning", "schedule")}>Abrir Gantt <ArrowRight size={16}/></button></div>
+                    <div className="pv2-section-title"><div><h2>Visão do cronograma</h2><p>Próximas frentes · representação simplificada</p></div><button className="pv2-link" onClick={() => go("planning", "gantt")}>Abrir Gantt <ArrowRight size={16}/></button></div>
                     <div className="pv2-snapshot">
                       <div className="pv2-snapshot-gridhead"><span></span>{["NOV", "DEZ", "JAN", "FEV", "MAR", "ABR"].map(m => <span key={m}>{m}</span>)}</div>
                       {[
@@ -223,18 +250,18 @@ export default function Preview() {
                 <aside className="pv2-dashboard-aside">
                   <article className="pv2-panel">
                     <div className="pv2-section-title"><h2>Pontos de atenção</h2><span className="pv2-count">3</span></div>
-                    <div className="pv2-alert"><span className="pv2-alert-icon pv2-alert-critical"><LockKeyhole size={17}/></span><div><strong>Baseline bloqueada</strong><p>A versão V3 da EAP precisa de aprovação.</p><button onClick={() => go("planning", "baselines")}>Ver versões <ArrowRight size={14}/></button></div></div>
+                    <div className="pv2-alert"><span className="pv2-alert-icon pv2-alert-critical"><LockKeyhole size={17}/></span><div><strong>Baseline bloqueada</strong><p>A versão V3 da EAP precisa de aprovação.</p><button onClick={() => go("planning", "baseline")}>Ver versões <ArrowRight size={14}/></button></div></div>
                     <div className="pv2-alert"><span className="pv2-alert-icon"><AlertCircle size={17}/></span><div><strong>4 pacotes para revisar</strong><p>Escopo e critérios de conclusão.</p><button onClick={() => go("planning", "eap")}>Revisar EAP <ArrowRight size={14}/></button></div></div>
-                    <div className="pv2-alert"><span className="pv2-alert-icon"><Clock3 size={17}/></span><div><strong>Atividade com atraso</strong><p>Blocos de fundação · exemplo.</p><button onClick={() => { go("planning", "schedule"); startEdit(activities[3]); }}>Abrir atividade <ArrowRight size={14}/></button></div></div>
+                    <div className="pv2-alert"><span className="pv2-alert-icon"><Clock3 size={17}/></span><div><strong>Atividade com atraso</strong><p>Blocos de fundação · exemplo.</p><button onClick={() => { go("planning", "gantt"); startEdit(activities[3]); }}>Abrir atividade <ArrowRight size={14}/></button></div></div>
                   </article>
                   <article className="pv2-panel pv2-summary">
                     <h2>Resumo do planejamento</h2>
                     {[
                       ["EAP","Em revisão","eap"],
-                      ["Atividades","Em andamento","schedule"],
-                      ["Dependências","Em andamento","dependencies"],
-                      ["Baseline","Bloqueada","baselines"]
-                    ].map(([label,status,tab]) => <button className="pv2-summary-row" key={label} onClick={() => go("planning", tab as PlanningTab)}><span>{label}</span><Status label={status}/><ChevronRight size={16}/></button>)}
+                      ["Atividades","Em andamento","gantt"],
+                      ["Dependências","Em andamento","dependencias"],
+                      ["Baseline","Bloqueada","baseline"]
+                    ].map(([label,status,tab]) => <button className="pv2-summary-row" key={label} onClick={() => go("planning", tab as ModuleTab)}><span>{label}</span><Status label={status}/><ChevronRight size={16}/></button>)}
                   </article>
                 </aside>
               </div>
@@ -251,22 +278,22 @@ export default function Preview() {
               <div className={"pv2-gate " + (baselineBlocked ? "pv2-gate-blocked" : "pv2-gate-approved")}>
                 {baselineBlocked ? <LockKeyhole size={19}/> : <CheckCircle2 size={19}/>}
                 <div><strong>{baselineBlocked ? "Baseline bloqueada nesta versão" : "Versão de referência aprovada"}</strong><span>{baselineBlocked ? "Conclua a revisão da EAP antes da captura. Este aviso acompanha todas as abas." : "Versão anterior usada somente para explorar o protótipo."}</span></div>
-                <button onClick={() => setPlanningTab(baselineBlocked ? "eap" : "baselines")}>{baselineBlocked ? "Ir para EAP" : "Ver baseline"} <ArrowRight size={15}/></button>
+                <button onClick={() => setActiveTab(baselineBlocked ? "eap" : "baseline")}>{baselineBlocked ? "Ir para EAP" : "Ver baseline"} <ArrowRight size={15}/></button>
               </div>
               <div className="pv2-tabstrip" role="tablist" aria-label="Áreas de planejamento">
-                {tabs.map(tab => <button role="tab" aria-selected={planningTab === tab.id} className={planningTab===tab.id ? "pv2-tab-active" : ""} key={tab.id} onClick={() => {setPlanningTab(tab.id);setSearch("");}}>{tab.label}</button>)}
+                {tabs.map(tab => <button role="tab" aria-selected={activeTab === tab.id} className={activeTab===tab.id ? "pv2-tab-active" : ""} key={tab.id} onClick={() => {setActiveTab(tab.id);setSearch("");}}>{tab.label}</button>)}
               </div>
-              {(planningTab === "eap" || planningTab === "schedule") && <div className="pv2-toolbar">
-                <label className="pv2-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={planningTab === "eap" ? "Buscar código ou pacote da EAP" : "Buscar atividade ou código"} aria-label="Buscar"/></label>
+              {(activeTab === "eap" || activeTab === "gantt") && <div className="pv2-toolbar">
+                <label className="pv2-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={activeTab === "eap" ? "Buscar código ou pacote da EAP" : "Buscar atividade ou código"} aria-label="Buscar"/></label>
                 <div className="pv2-toolbar-right">
-                  {planningTab === "eap" ? <span className="pv2-muted-caption">12 itens · 4 fases</span> :
+                  {activeTab === "eap" ? <span className="pv2-muted-caption">12 itens · 4 fases</span> :
                     <select className="pv2-select" aria-label="Filtrar por situação" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
                       {["Todas","Concluída","Em andamento","Não iniciada","Atrasada"].map(t=><option key={t}>{t}</option>)}
                     </select>}
                 </div>
               </div>}
 
-              {planningTab === "eap" && <div className="pv2-planning-grid">
+              {activeTab === "eap" && <div className="pv2-planning-grid">
                 <div className="pv2-panel pv2-eap-panel">
                   <div className="pv2-table-scroll">
                     <table className="pv2-table"><thead><tr><th className="pv2-code">Código</th><th>Estrutura da obra</th><th>Tipo</th><th>Situação</th></tr></thead>
@@ -292,7 +319,7 @@ export default function Preview() {
                 </aside>
               </div>}
 
-              {planningTab === "schedule" && <div className="pv2-panel pv2-gantt-wrap">
+              {activeTab === "gantt" && <div className="pv2-panel pv2-gantt-wrap">
                 <div className="pv2-gantt-header"><div><h2>Cronograma de atividades</h2><p>Selecione uma atividade para ver ou editar seus detalhes.</p></div>
                   <label className="pv2-check"><input type="checkbox" checked={compare} onChange={e=>setCompare(e.target.checked)}/> Sobrepor referência</label>
                 </div>
@@ -313,14 +340,14 @@ export default function Preview() {
                 <div className="pv2-gantt-legend"><span><i className="pv2-leg-blue"/> Planejado</span><span><i className="pv2-leg-green"/> Concluído</span><span><i className="pv2-leg-red"/> Atraso</span><span><i className="pv2-leg-outline"/> Referência (opcional)</span></div>
               </div>}
 
-              {planningTab === "dependencies" && <div className="pv2-panel pv2-tall-panel">
+              {activeTab === "dependencias" && <div className="pv2-panel pv2-tall-panel">
                 <div className="pv2-section-title"><div><h2>Relações entre atividades</h2><p>Somente os vínculos essenciais nesta visualização.</p></div><GitBranch size={21}/></div>
                 <div className="pv2-table-scroll"><table className="pv2-table"><thead><tr><th>Predecessora</th><th>Tipo</th><th>Sucessora</th><th>Defasagem</th></tr></thead>
                   <tbody>{activities.filter(a=>a.predecessor!=="—").map(a=><tr key={a.id}><td>{activities.find(x=>x.id===a.predecessor)?.name??a.predecessor}</td><td>TI</td><td><button className="pv2-name-button" onClick={()=>startEdit(a)}>{a.name}</button></td><td>0 dia</td></tr>)}</tbody></table></div>
                 <p className="pv2-helper">TI = término–início. Relações fictícias; o motor CPM do sistema real não é executado nesta prévia.</p>
               </div>}
 
-              {planningTab === "baselines" && <div className="pv2-panel pv2-tall-panel">
+              {activeTab === "baseline" && <div className="pv2-panel pv2-tall-panel">
                 <div className="pv2-section-title"><div><h2>Versões e baseline</h2><p>Histórico simplificado da aprovação.</p></div><LockKeyhole size={21}/></div>
                 <div className="pv2-version-cards">
                   <button onClick={()=>setVersion("V3")} className={"pv2-version-card" + (version==="V3"?" pv2-version-selected":"")}><strong>Versão V3 <Status label="Em revisão"/></strong><p>Versão de trabalho · revisão dos pacotes</p><small>Não permite capturar uma baseline</small></button>
@@ -328,23 +355,27 @@ export default function Preview() {
                 </div>
                 <div className="pv2-softnote"><AlertCircle size={18}/> Todas as aprovações, datas e bloqueios são simulados. A regra real permanece sob responsabilidade do backend.</div>
               </div>}
+              {(["escopo","atividades","cpm","linha-balanco"] as string[]).includes(activeTab) && (
+                <ModuleGallery key={activeTab} module={activeTab as GalleryModule}
+                  activities={activities} onOpenActivity={startEdit} onNavigate={openModule}/>
+              )}
             </section>}
 
-            {section === "execution" && <SimpleSection eyebrow="CONTROLE DE CAMPO" title="Execução" subtitle="Avanço, restrições e frentes de serviço sem poluição visual." icon={<ActivityIcon size={23}/>}>
-              <div className="pv2-simple-grid"><Metric eyebrow="Avanço físico" value="38%" note="Cenário de demonstração" icon={BarChart3}><MiniProgress value={38}/></Metric><Metric eyebrow="Frentes ativas" value="3" note="Equipes em produção" icon={ActivityIcon}/><Metric eyebrow="Pendências" value="2" note="Restrições operacionais" icon={AlertCircle}/></div>
-              <button className="pv2-secondary" onClick={()=>go("planning","schedule")}>Ver atividades planejadas <ArrowRight size={16}/></button>
-            </SimpleSection>}
-            {section === "costs" && <SimpleSection eyebrow="ORÇAMENTO E CUSTOS" title="Custos" subtitle="Previsto e realizado de forma clara, com detalhes sob demanda." icon={<WalletCards size={23}/>}>
-              <div className="pv2-simple-grid"><Metric eyebrow="Orçamento fictício" value="R$ 4,8 mi" note="Estimativa de referência" icon={WalletCards}/><Metric eyebrow="Executado fictício" value="R$ 1,6 mi" note="Acumulado no cenário" icon={BarChart3}/><Metric eyebrow="Status" value="Em revisão" note="Sem dados financeiros reais" icon={Clock3}/></div>
-              <div className="pv2-softnote"><ShieldCheck size={18}/> Nenhum valor é carregado do Supabase.</div>
-            </SimpleSection>}
-            {section === "documents" && <SimpleSection eyebrow="ARQUIVOS DA OBRA" title="Documentos" subtitle="Acesso aos documentos importantes em uma lista reduzida." icon={<FolderOpen size={23}/>}>
-              {["Projeto estrutural · revisão A","Memorial descritivo · versão 02","Relatório de planejamento · preliminar"].map((name,i)=><div className="pv2-file-row" key={name}><FileText size={19}/><div><strong>{name}</strong><small>Documento fictício {i+1}</small></div><span>Exemplo</span></div>)}
-            </SimpleSection>}
-            {section === "settings" && <SimpleSection eyebrow="PREFERÊNCIAS" title="Configurações" subtitle="Preferências da visualização local desta prévia." icon={<Settings2 size={23}/>}>
-              <div className="pv2-setting-row"><div><strong>Aparência escura</strong><p>Altere o tema somente desta prévia.</p></div><button className="pv2-secondary" onClick={()=>setDark(v=>!v)}>{dark ? <Sun size={17}/> : <Moon size={17}/>} {dark ? "Tema claro" : "Tema escuro"}</button></div>
-              <div className="pv2-softnote"><ShieldCheck size={18}/> O sistema principal e as configurações persistidas não são afetados.</div>
-            </SimpleSection>}
+            {section !== "dashboard" && section !== "planning" && (
+              <section>
+                <div className="pv2-tabstrip pv2-extra-tabs" role="tablist" aria-label="Ferramentas da área atual">
+                  {otherTabs[section].map(tab => (
+                    <button type="button" key={tab.id} role="tab" aria-selected={activeTab===tab.id}
+                      className={activeTab===tab.id?"pv2-tab-active":""}
+                      onClick={()=>{setActiveTab(tab.id);setSearch("");}}>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                <ModuleGallery key={activeTab} module={activeTab as GalleryModule}
+                  activities={activities} onOpenActivity={startEdit} onNavigate={openModule}/>
+              </section>
+            )}
           </>}
         </main>
       </div>
