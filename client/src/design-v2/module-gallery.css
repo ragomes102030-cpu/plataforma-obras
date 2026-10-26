@@ -98,3 +98,11 @@
   .pv2 .pv2-module-actions{flex-direction:column;align-items:stretch}
   .pv2 .pv2-legend small{width:100%}
 }
+
+
+.pv2 .pv2-assistant-link{display:flex;align-items:center;gap:11px;width:100%;min-height:42px;background:transparent;border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:12px;font-weight:650;padding:10px 12px;margin-bottom:14px;text-align:left}
+.pv2 .pv2-assistant-link svg{color:var(--brand);flex-shrink:0}
+.pv2 .pv2-assistant-link small{margin-left:auto;font-size:10px;color:var(--muted);font-weight:460}
+.pv2 .pv2-assistant-link:hover,.pv2 .pv2-assistant-link.pv2-navactive{background:var(--brand-faint);border-color:var(--brand);color:var(--brand)}
+.pv2 .pv2-extra-tabs{margin-bottom:21px}
+@media(max-width:1190px){.pv2 .pv2-assistant-link{flex-wrap:wrap}.pv2 .pv2-assistant-link small{display:none}}
