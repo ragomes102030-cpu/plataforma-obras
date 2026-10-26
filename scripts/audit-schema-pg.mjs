@@ -39,17 +39,7 @@ const MIGRATIONS_FOLDER = "drizzle";
 const JOURNAL = join(MIGRATIONS_FOLDER, "meta", "_journal.json");
 
 export function runtimeDatabaseUrl() {
-  const raw = process.env.USE_SUPABASE === "1"
-    ? (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL)
-    : process.env.DATABASE_URL;
-  if (!raw) return undefined;
-  const u = new URL(raw);
-  if (process.env.USE_SUPABASE === "1" && u.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
-    u.hostname = "aws-0-sa-east-1.pooler.supabase.com";
-    u.port = "5432";
-    if (u.username === "postgres") u.username = "postgres.tromrvfijbtihuilvnuk";
-  }
-  return u.toString();
+  return process.env.DATABASE_URL;
 }
 
 /** As entradas do journal, na ordem em que o drizzle as aplicaria. */
@@ -352,19 +342,19 @@ async function main() {
   const { default: pg } = await import("pg");
   const raw = runtimeDatabaseUrl();
   if (!raw) {
-    console.error("[audit] sem string de conexao (SUPABASE_DB_URL/DATABASE_URL); nada a auditar.");
+    console.error("[audit] sem DATABASE_URL; nada a auditar.");
     process.exit(1);
   }
   const u = new URL(raw);
   u.searchParams.delete("ssl-mode");
   u.searchParams.delete("charset");
   const sslDesejado = (u.searchParams.get("sslmode") ?? "").toLowerCase();
-  const sslDesligado = sslDesejado === "disable";
-  if (sslDesligado) u.searchParams.delete("sslmode");
+  if (sslDesejado === "disable" || sslDesejado === "disabled") throw new Error("DATABASE_URL não pode desabilitar TLS.");
+  u.searchParams.delete("sslmode");
 
   const conn = new pg.Client({
     connectionString: u.toString(),
-    ...(sslDesejado && !sslDesligado ? { ssl: { rejectUnauthorized: false } } : {}),
+    ssl: { rejectUnauthorized: true },
   });
 
   try {

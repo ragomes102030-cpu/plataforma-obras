@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AURORA_PROJECT_ID: 7
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -36,9 +36,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Exigir o segredo do banco
-        if: ${{ env.SUPABASE_DB_URL == '' }}
+        if: ${{ env.DATABASE_URL == '' }}
         run: |
-          echo "::error::SUPABASE_DB_URL ausente. Esta regressão consulta o banco real da Aurora; sem o segredo ela não pode passar em silêncio."
+          echo "::error::DATABASE_URL ausente. Esta regressão consulta o banco real da Aurora; sem o segredo ela não pode passar em silêncio."
           exit 1
 
       - name: Run Aurora EAP regression

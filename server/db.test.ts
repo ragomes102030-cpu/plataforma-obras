@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDatabaseConnection } from "./db";
+import { normalizeDatabaseConnection, runtimeDatabaseUrl } from "./db";
 
 /**
  * A URL do PostgreSQL e da do MySQL nao sao a mesma coisa, e o detalhe que
@@ -18,16 +18,11 @@ describe("normalizeDatabaseConnection", () => {
     );
 
     expect(connection.uri).not.toContain("ssl-mode");
-    expect(connection.ssl).toEqual({ rejectUnauthorized: false });
+    expect(connection.ssl).toEqual({ rejectUnauthorized: true });
   });
 
-  it("nao liga TLS quando o sslmode esta desligado", () => {
-    const connection = normalizeDatabaseConnection(
-      "postgresql://user:secret@example.test/app?sslmode=disable"
-    );
-
-    expect(connection.uri).not.toContain("sslmode");
-    expect(connection).not.toHaveProperty("ssl");
+  it("recusa URL que desabilita TLS", () => {
+    expect(() => normalizeDatabaseConnection("postgresql://user:secret@example.test/app?sslmode=disable")).toThrow(/TLS/i);
   });
 
   it("trata o sslmode do proprio PostgreSQL", () => {
@@ -35,8 +30,8 @@ describe("normalizeDatabaseConnection", () => {
       "postgresql://user:secret@example.test/app?sslmode=require"
     );
 
-    expect(connection.uri).toContain("sslmode=require");
-    expect(connection.ssl).toEqual({ rejectUnauthorized: false });
+    expect(connection.uri).not.toContain("sslmode");
+    expect(connection.ssl).toEqual({ rejectUnauthorized: true });
   });
 
   it("descarta o charset, que e parametro do MySQL e nao do PostgreSQL", () => {
@@ -52,8 +47,18 @@ describe("normalizeDatabaseConnection", () => {
       "postgresql://user:secret@example.test/app"
     );
 
-    expect(connection).toEqual({
-      uri: "postgresql://user:secret@example.test/app",
-    });
+    expect(connection).toEqual({ uri: "postgresql://user:secret@example.test/app", ssl: { rejectUnauthorized: true } });
+  });
+});
+
+describe("runtimeDatabaseUrl", () => {
+  it("aceita apenas DATABASE_URL", () => {
+    const original = process.env.DATABASE_URL;
+    const legado = process.env.SUPABASE_DB_URL;
+    delete process.env.DATABASE_URL;
+    process.env.SUPABASE_DB_URL = "postgresql://user:secret@example.test/app";
+    expect(runtimeDatabaseUrl()).toBeUndefined();
+    if (original === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = original;
+    if (legado === undefined) delete process.env.SUPABASE_DB_URL; else process.env.SUPABASE_DB_URL = legado;
   });
 });

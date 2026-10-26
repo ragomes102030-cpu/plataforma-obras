@@ -499,6 +499,10 @@ function Obra({
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
+  const coordenador = trpc.agent.snapshot.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 }
+  );
 
   const calendario: WorkCalendar = CALENDARIO_CORRIDO;
   const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
@@ -557,6 +561,15 @@ function Obra({
     suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos",
     "curva-s": "Curva S", catalogo: "Catálogo de Insumos", comando: "Central de Comando"
   } as Record<string, string>)[aba] ?? aba;
+  const abaPorEstagio: Record<string, IdDaAba> = {
+    DESCRITIVO: "escopo", EAP_PROPOSTA: "eap", EAP_REVISAO: "eap",
+    ATIVIDADES_PROPOSTA: "atividades", DEPENDENCIAS_PROPOSTA: "dependencias",
+    CPM_VALIDADO: "cpm", CRONOGRAMA_PROPOSTO: "cpm", BASELINE_PROPOSTA: "baseline",
+    GANTT_LOB_PROPOSTO: "baseline", CONTROLE: "baseline",
+  };
+  const destinoDoProximoPasso = coordenador.data?.nextStage
+    ? abaPorEstagio[coordenador.data.nextStage]
+    : abaPorEstagio[coordenador.data?.stage ?? "DESCRITIVO"];
 
   // Barra de campo (so no celular). Sao as quatro telas que se usa de pe, na
   // obra, mais o "Mais" que abre o menu completo. Existe porque o painel nao
@@ -671,6 +684,16 @@ function Obra({
                 ))}
               </div>
             )}
+            <div className="arquimedes-fluxo-status" aria-live="polite">
+              <div>
+                <span>Próximo passo</span>
+                <strong>{coordenador.isPending ? "Lendo o planejamento…" : coordenador.data?.canAdvance ? "Pronto para avançar" : "Revisar pendência"}</strong>
+                <small>{coordenador.data?.gateMessage ?? "Verifique o escopo antes de estruturar a EAP."}</small>
+              </div>
+              <button type="button" onClick={() => irParaAba(destinoDoProximoPasso)}>
+                {coordenador.data?.nextStage ? "Abrir etapa" : "Ver escopo"} <ArrowRight size={14} aria-hidden="true" />
+              </button>
+            </div>
             {/* O menu do celular saiu daqui e virou a barra de campo, no fim da
                 pagina: era o unico caminho de navegacao e desaparecia justamente
                 no painel. A barra de trabalho ficou so com o "proximo passo". */}

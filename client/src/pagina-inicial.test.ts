@@ -161,3 +161,12 @@ describe("transição EAP aprovada → atividades", () => {
     expect(routers).toMatch(/Somente uma folha terminal da EAP pode virar atividade/);
   });
 });
+
+describe("orientação do fluxo de planejamento", () => {
+  it("mostra o estágio persistido e a próxima ação no cabeçalho da obra", () => {
+    expect(HOME).toMatch(/trpc\.agent\.snapshot\.useQuery/);
+    expect(HOME).toMatch(/arquimedes-fluxo-status/);
+    expect(HOME).toMatch(/Próximo passo/);
+    expect(HOME).toMatch(/gateMessage/);
+  });
+});

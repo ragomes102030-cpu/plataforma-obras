@@ -57,6 +57,11 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
+# A CA pública do Supabase permite validar a cadeia do Session Pooler. Sem ela,
+# o Node recusa corretamente o certificado autoassinado apresentado pelo pooler.
+COPY certs/supabase-ca-2021.crt /etc/ssl/certs/supabase-ca-2021.crt
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/supabase-ca-2021.crt
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches/ ./patches/
 RUN npm install -g pnpm@10.34.5
