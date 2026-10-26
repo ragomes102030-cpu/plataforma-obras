@@ -1,33 +1,32 @@
-/* Piloto AURORA TESTE: toda regra visual é opt-in (.aurora-pl-piloto / .aurora-layout-piloto).
-   Não afeta os demais projetos nem as APIs. */
-.aurora-layout-piloto .aurora-layout-selo{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:13px 22px;border-bottom:1px solid #d3e2e8;background:#eaf4f6;font-size:12px;color:#264c59}
-.aurora-layout-selo strong{font-weight:800;font-size:10px;letter-spacing:.09em}
-.aurora-layout-selo span{flex:1;min-width:180px}
-.aurora-layout-selo button{border:1px solid #b0cbd2;border-radius:7px;padding:7px 11px;background:#fff;color:#23677d;font-weight:700;font-size:11px}
-.aurora-pl-piloto.pl-visual-full{background:#f6f8fa;padding:18px 22px 28px}
-.aurora-pl-piloto .pl-visual-header{background:#fff;border:1px solid #e0e7eb;border-radius:10px;padding:18px 22px;margin-bottom:12px}
-.aurora-pl-piloto .pl-visual-header strong{color:#17394a;letter-spacing:.03em}
-.aurora-pl-piloto .pl-visual-header span{color:#6d818b}
-.aurora-layout-atalhos{display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:#fff;border:1px solid #dee7eb;border-radius:10px;padding:12px 15px;margin-bottom:13px}
-.aurora-layout-atalhos>span{font-size:11px;color:#687c86;margin-right:5px}
-.aurora-layout-atalhos button,.aurora-manual-action{display:inline-flex;align-items:center;gap:7px;border:1px solid #c7dbe2;border-radius:7px;color:#20596f;background:#f0f7f9;font-weight:700;font-size:11px;padding:9px 12px;cursor:pointer}
-.aurora-layout-atalhos button:hover,.aurora-manual-action:hover{background:#dfeff3;border-color:#84aab8}
-.aurora-pl-piloto .pg{border-radius:11px;border-color:#dbe5ea;box-shadow:0 1px 14px rgba(18,54,70,.04)}
-.aurora-pl-piloto .pg-visao{border-color:#dde8ec;background:white;border-radius:9px}
-.aurora-pl-piloto .pg-visao-cabeca{min-height:50px;padding-inline:16px}
-.aurora-pl-piloto .pg-ferramentas{padding:14px 16px;gap:12px;background:#f5f8fa}
-.aurora-pl-piloto .pg-escala strong{color:#184a5c}
-.aurora-pl-piloto .pg-zoom button{border-radius:7px;min-height:36px}
-.aurora-pl-piloto .pg-chip{border-radius:7px}
-.aurora-pl-piloto .pg-rolagem{max-height:min(76vh,900px);border-top:1px solid #dde6eb}
-.aurora-pl-piloto .pg-linha:hover,.aurora-pl-piloto .pg-linha:hover .pg-esquerda{background:#eaf3f6}
-.aurora-pl-piloto .pg-nome{font-weight:540;font-size:11.5px;color:#213d49}
-.aurora-pl-piloto .pg-codigo{font-weight:660;color:#3d7184}
-.aurora-pl-piloto .pg-cab-esquerda,.aurora-pl-piloto .pg-esquerda{box-shadow:2px 0 4px #16384713}
-.aurora-pl-piloto .pg-cab-titulo{font-size:11px}
-.aurora-pl-piloto .pg-detalhe{border-color:#d7e7ed;background:#f9fcfd}
-.aurora-pl-piloto .pg-legenda{background:#fff;padding:16px;font-size:11px}
-.aurora-pl-piloto button:focus-visible,.aurora-lob button:focus-visible,.aurora-lob input:focus-visible,.aurora-lob select:focus-visible{outline:2px solid #267c9a;outline-offset:2px}
+/* Estilos profissionais globais para as abas Gantt e Linha de Balanço; tema independente do projeto. */
+.planejamento-layout-selo{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:13px 22px;border-bottom:1px solid #d3e2e8;background:#eaf4f6;font-size:12px;color:#264c59}
+.planejamento-layout-selo strong{font-weight:800;font-size:10px;letter-spacing:.09em}
+.planejamento-layout-selo span{flex:1;min-width:180px}
+.planejamento-layout-selo button{border:1px solid #b0cbd2;border-radius:7px;padding:7px 11px;background:#fff;color:#23677d;font-weight:700;font-size:11px}
+.planejamento-profissional.pl-visual-full{background:#f6f8fa;padding:18px 22px 28px}
+.planejamento-profissional .pl-visual-header{background:#fff;border:1px solid #e0e7eb;border-radius:10px;padding:18px 22px;margin-bottom:12px}
+.planejamento-profissional .pl-visual-header strong{color:#17394a;letter-spacing:.03em}
+.planejamento-profissional .pl-visual-header span{color:#6d818b}
+.planejamento-layout-atalhos{display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:#fff;border:1px solid #dee7eb;border-radius:10px;padding:12px 15px;margin-bottom:13px}
+.planejamento-layout-atalhos>span{font-size:11px;color:#687c86;margin-right:5px}
+.planejamento-layout-atalhos button,.aurora-manual-action{display:inline-flex;align-items:center;gap:7px;border:1px solid #c7dbe2;border-radius:7px;color:#20596f;background:#f0f7f9;font-weight:700;font-size:11px;padding:9px 12px;cursor:pointer}
+.planejamento-layout-atalhos button:hover,.aurora-manual-action:hover{background:#dfeff3;border-color:#84aab8}
+.planejamento-profissional .pg{border-radius:11px;border-color:#dbe5ea;box-shadow:0 1px 14px rgba(18,54,70,.04)}
+.planejamento-profissional .pg-visao{border-color:#dde8ec;background:white;border-radius:9px}
+.planejamento-profissional .pg-visao-cabeca{min-height:50px;padding-inline:16px}
+.planejamento-profissional .pg-ferramentas{padding:14px 16px;gap:12px;background:#f5f8fa}
+.planejamento-profissional .pg-escala strong{color:#184a5c}
+.planejamento-profissional .pg-zoom button{border-radius:7px;min-height:36px}
+.planejamento-profissional .pg-chip{border-radius:7px}
+.planejamento-profissional .pg-rolagem{max-height:min(76vh,900px);border-top:1px solid #dde6eb}
+.planejamento-profissional .pg-linha:hover,.planejamento-profissional .pg-linha:hover .pg-esquerda{background:#eaf3f6}
+.planejamento-profissional .pg-nome{font-weight:540;font-size:11.5px;color:#213d49}
+.planejamento-profissional .pg-codigo{font-weight:660;color:#3d7184}
+.planejamento-profissional .pg-cab-esquerda,.planejamento-profissional .pg-esquerda{box-shadow:2px 0 4px #16384713}
+.planejamento-profissional .pg-cab-titulo{font-size:11px}
+.planejamento-profissional .pg-detalhe{border-color:#d7e7ed;background:#f9fcfd}
+.planejamento-profissional .pg-legenda{background:#fff;padding:16px;font-size:11px}
+.planejamento-profissional button:focus-visible,.aurora-lob button:focus-visible,.aurora-lob input:focus-visible,.aurora-lob select:focus-visible{outline:2px solid #267c9a;outline-offset:2px}
 .aurora-lob{border:1px solid #dbe6eb;border-radius:11px;background:#fff;box-shadow:0 1px 14px #1638470a;overflow:hidden;color:#1d3745}
 .aurora-lob-cabecalho{padding:22px;display:flex;gap:14px;align-items:center;justify-content:space-between}
 .aurora-piloto-eyebrow{display:flex;align-items:center;gap:7px;color:#478094;font-weight:800;font-size:10px;letter-spacing:.09em}
@@ -72,5 +71,5 @@
 .aurora-lob-vazio h3{margin:0;font-size:17px}
 .aurora-lob-vazio p{max-width:520px;color:#6c818a;font-size:12px}
 @media(max-width:970px){.aurora-lob-area{grid-template-columns:1fr}.aurora-lob-lista{border-right:0;border-bottom:1px solid #dce7ea}.aurora-lob-itens{max-height:180px}.aurora-lob-cabecalho{flex-direction:column;align-items:flex-start}}
-@media(max-width:650px){.aurora-pl-piloto.pl-visual-full{padding:9px}.aurora-layout-piloto .aurora-layout-selo{padding:9px 12px}.aurora-layout-atalhos{padding:9px}.aurora-lob-cabecalho{padding:15px}.aurora-lob-top{flex-wrap:wrap}.aurora-pl-piloto .pg-ferramentas{padding:9px}}
-@media(prefers-reduced-motion:reduce){.aurora-pl-piloto *{transition:none!important}}
+@media(max-width:650px){.planejamento-profissional.pl-visual-full{padding:9px}.planejamento-layout-selo{padding:9px 12px}.planejamento-layout-atalhos{padding:9px}.aurora-lob-cabecalho{padding:15px}.aurora-lob-top{flex-wrap:wrap}.planejamento-profissional .pg-ferramentas{padding:9px}}
+@media(prefers-reduced-motion:reduce){.planejamento-profissional *{transition:none!important}}
