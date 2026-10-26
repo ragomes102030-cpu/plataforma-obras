@@ -22,6 +22,7 @@ import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
+import { GRUPOS_V2, ROTULOS_V2, grupoDaAbaV2 } from "@/modules/navegacao-v2";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
@@ -80,6 +81,9 @@ export default function Home() {
   const ehRotaDeObra = Boolean(rotaDaObra);
   const idNaUrl = ehRotaDeObra ? Number(parametrosDaRota?.id) : null;
   const [aba, setAba] = useState<IdDaAba>("dashboard");
+  // Opt-in visual: por padrão, manter a interface atual sem mudanças.
+  // A flag modifica apenas a apresentação: mesma rota, APIs, permissões e dados.
+  const interfaceV2 = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ui") === "v2";
   const [novaObraAberta, setNovaObraAberta] = useState(false);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [obraParaExcluir, setObraParaExcluir] = useState<{ id: number; name: string } | null>(null);
@@ -156,13 +160,13 @@ export default function Home() {
   }, []);
 
   return (
-    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}`}>
+    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}${interfaceV2 ? " po-v2-app" : ""}`}>
       {mostrarTituloDaObra && obra && (
         <header className="arq-context-header">
           <div className="arq-context-top">
             <div className="arq-context-brand">
               <Layers3 size={20} aria-hidden="true" />
-              <strong>ARQUIMEDES</strong>
+              <strong>{interfaceV2 ? "PLATAFORMA OBRAS" : "ARQUIMEDES"}</strong>
             </div>
             <div className="xl-contexto-obra-acoes">
               {user?.role === "admin" && (
@@ -318,7 +322,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
+          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} interfaceV2={interfaceV2} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -447,6 +451,7 @@ function Obra({
   aba,
   onAba,
   usuario,
+  interfaceV2,
   onLixeira,
   lixeiraCount,
 }: {
@@ -462,6 +467,7 @@ function Obra({
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
   usuario: { name?: string | null; role?: string | null } | null;
+  interfaceV2: boolean;
   onLixeira: () => void;
   lixeiraCount: number;
 }) {
@@ -530,6 +536,10 @@ function Obra({
   const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
   const exemploPorCodigo = new Set(Object.keys(grade.data?.exemploPorCodigo ?? {}));
   const definicao = ABAS.find(a => a.id === aba);
+  const grupoV2 = grupoDaAbaV2(aba);
+  const grupoV2Ativo = grupoV2?.id ?? "";
+  // A mudança de grupo seleciona a primeira aba real; o despacho existente permanece intocado.
+  const abrirGrupoV2 = (grupo: (typeof GRUPOS_V2)[number]) => irParaAba(grupo.abaInicial);
 
   const icones: Record<string, ReactNode> = {
     dashboard: <HomeIcon size={17} />,
@@ -606,12 +616,50 @@ function Obra({
   ];
 
   return (
-    <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}${menuMobileAberto ? " menu-mobile-aberto" : ""}`}>
+    <div className={`xl-pasta xl-pasta-sidebar${sidebarRecolhida ? " sidebar-recolhida" : ""}${menuMobileAberto ? " menu-mobile-aberto" : ""}${interfaceV2 ? " po-v2-live" : ""}`}>
       {/* Backdrop do drawer: so aparece no celular com o menu aberto. */}
       {menuMobileAberto && (
         <div className="xl-sidebar-backdrop" onClick={() => setMenuMobileAberto(false)} aria-hidden="true" />
       )}
       <aside className="xl-sidebar" aria-label="Navegação da obra">
+        {interfaceV2 ? (
+          <nav className="xl-sidebar-nav po-v2-primary-nav" aria-label="Áreas da Plataforma Obras">
+            {!sidebarRecolhida && <span className="po-v2-sidebar-heading">ÁREAS DE TRABALHO</span>}
+            {GRUPOS_V2.map(grupo => {
+              const Icon = icones[grupo.abaInicial] ?? <Layers3 size={18} />;
+              return (
+                <button
+                  type="button"
+                  key={grupo.id}
+                  className={`xl-sidebar-item po-v2-primary-item${grupoV2Ativo === grupo.id ? " ativa" : ""}`}
+                  aria-current={grupoV2Ativo === grupo.id ? "page" : undefined}
+                  title={grupo.rotulo}
+                  onClick={() => abrirGrupoV2(grupo)}
+                >
+                  {Icon}
+                  {!sidebarRecolhida && <span>{grupo.rotulo}</span>}
+                </button>
+              );
+            })}
+            <div className="po-v2-sidebar-tools">
+              {!sidebarRecolhida && <span className="po-v2-sidebar-heading">FERRAMENTAS</span>}
+              <button type="button" className="xl-sidebar-item" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))} title="Assistente">
+                <Bot size={17} />
+                {!sidebarRecolhida && <span>Assistente</span>}
+              </button>
+              {usuario?.role === "admin" && (
+                <button type="button" className={`xl-sidebar-item${aba === "comando" ? " ativa" : ""}`} aria-current={aba === "comando" ? "page" : undefined} onClick={() => irParaAba("comando")} title="Central de Comando (admin)">
+                  <Sparkles size={17}/>
+                  {!sidebarRecolhida && <span>Central de Comando</span>}
+                </button>
+              )}
+              <button type="button" className="xl-sidebar-item" onClick={onLixeira} title="Lixeira de obras">
+                <Trash2 size={17}/>
+                {!sidebarRecolhida && <span>Lixeira{lixeiraCount ? ` (${lixeiraCount})` : ""}</span>}
+              </button>
+            </div>
+          </nav>
+        ) : (
         <nav className="xl-sidebar-nav">
           {grupos.map(grupo => (
             <div className="xl-sidebar-group" key={grupo.titulo}>
@@ -663,6 +711,7 @@ function Obra({
             </button>
           </div>
         </nav>
+        )}
 
         <div className="xl-sidebar-pe">
           <span className="xl-sidebar-user" title={usuario?.name || "Conta"}>
@@ -681,6 +730,28 @@ function Obra({
       </aside>
 
       <main className="xl-area xl-area-sidebar">
+        {interfaceV2 && (
+          <div className="po-v2-subnav" aria-label="Ferramentas da área de trabalho">
+            <div className="po-v2-subnav-context">
+              <span>{grupoV2?.rotulo ?? "Sistema"}</span>
+              <strong>{ROTULOS_V2[aba] ?? definicao?.rotulo ?? aba}</strong>
+            </div>
+            <nav className="po-v2-subnav-tabs" aria-label="Abas da área atual">
+              {(grupoV2?.abas ?? (usuario?.role === "admin" ? ["comando"] : [])).map(id => (
+                <button
+                  type="button"
+                  key={id}
+                  className={`po-v2-subnav-tab${aba === id ? " ativa" : ""}`}
+                  onClick={() => irParaAba(id)}
+                  aria-current={aba === id ? "page" : undefined}
+                >
+                  {ROTULOS_V2[id] ?? ABAS.find(a => a.id === id)?.rotulo ?? id}
+                </button>
+              ))}
+            </nav>
+            {grupoV2Ativo === "planejamento" && <span className="po-v2-technical-caption">Ferramentas completas de engenharia</span>}
+          </div>
+        )}
         {/* O painel já tem cabeçalho próprio: a barra aqui só repetia o nome. */}
         {aba !== "dashboard" && (
           <div className="arquimedes-workbar">
