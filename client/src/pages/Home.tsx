@@ -23,6 +23,7 @@ import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
 import { usarLayoutProfissional } from "@/modules/layout-planejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
+import { VISTAS_DO_WORKSPACE, pertenceAoWorkspace } from "@/modules/navegacao-workspace";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
@@ -73,18 +74,6 @@ const etapasDoPlanejamento: { etapa: string; aba: IdDaAba }[] = [
   { etapa: "Dependências", aba: "dependencias" },
   { etapa: "CPM", aba: "cpm" },
   { etapa: "Baseline", aba: "baseline" },
-];
-// As oito vistas pertencem ao MESMO ambiente técnico. A navegação não chama agente
-// nem altera dados: apenas troca a aba usando o fluxo manual já existente.
-const vistasDoPlanejamento: { titulo: string; aba: IdDaAba }[] = [
-  { titulo: "Escopo", aba: "escopo" },
-  { titulo: "EAP", aba: "eap" },
-  { titulo: "Atividades", aba: "atividades" },
-  { titulo: "Dependências", aba: "dependencias" },
-  { titulo: "CPM", aba: "cpm" },
-  { titulo: "Baseline", aba: "baseline" },
-  { titulo: "Gantt", aba: "gantt" },
-  { titulo: "Linha de Balanço", aba: "linha-balanco" },
 ];
 
 export default function Home() {
@@ -583,7 +572,7 @@ function Obra({
     { titulo: "SISTEMA", ids: ["catalogo", "comando"] },
   ];
 
-  const emWorkspacePlanejamento = vistasDoPlanejamento.some(item => item.aba === aba);
+  const emWorkspacePlanejamento = pertenceAoWorkspace(aba);
   const etapaAtual = ({
     dashboard: "Painel da obra", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
     dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
@@ -713,7 +702,7 @@ function Obra({
             </div>
             {emWorkspacePlanejamento && (
               <nav className="planejamento-workspace-nav" aria-label="Módulos do planejamento">
-                {vistasDoPlanejamento.map(({ aba: destino, titulo }) => (
+                {VISTAS_DO_WORKSPACE.map(({ aba: destino, titulo }) => (
                   <button
                     type="button"
                     key={destino}
