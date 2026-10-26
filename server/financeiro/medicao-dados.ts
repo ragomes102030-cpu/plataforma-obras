@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, lte, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, lte } from "drizzle-orm";
 import {
   budgetItems,
   budgetVersions,
@@ -21,7 +21,7 @@ import type {
  *   - A quantidade produzida vem de `production_entries` **confirmadas**, ligadas
  *     à atividade e, por ela, ao item de orçamento. Produção em rascunho não
  *     vira fatura.
- *   - O "já medido" considera medições não canceladas com `periodEnd` ANTERIOR ao
+ *   - O "já medido" considera medições aprovadas/faturadas/pagas com `periodEnd` ANTERIOR ao
  *     início do novo período. Usar `<= periodStart` pegaria a borda do dia e
  *     poderia contar duas vezes o mesmo dia.
  */
@@ -116,7 +116,8 @@ export async function coletarDadosMedicao(
     .where(
       and(
         eq(measurements.projectId, projectId),
-        ne(measurements.status, "cancelada"),
+        // Rascunho/em aprovação não consomem saldo: a medição ainda não foi aceita.
+        inArray(measurements.status, ["aprovada", "faturada", "paga"]),
         lt(measurements.periodEnd, periodStart)
       )
     );
