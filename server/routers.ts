@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { z } from "zod";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import {
@@ -128,6 +129,7 @@ import { coletarDadosEvms } from "./construction/evm-dados";
 import { coletarDadosLookahead } from "./construction/lookahead-dados";
 import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
+import { consolidateControlProgress } from "./construction/control-summary";
 import { coletarDadosMedicao } from "./financeiro/medicao-dados";
 import {
   calcularMedicao,
@@ -150,6 +152,7 @@ import {
 } from "./producao-progresso";
 import {
   carregarCalendarioDaObra,
+  carregarCalendarioDoPeriodo,
   hojeNoBrasil,
   idDoCalendarioDaObra,
   localIso,
@@ -976,7 +979,8 @@ async function loadStageGateEvidence(
     eapValid: eapValidation.valid,
     activityCount: activities.length,
     dependenciesValid: cpm.issues.every(issue => issue.code !== "invalid_dependency"),
-    cpmValid: cpm.valid,
+    // Rede calculável não significa cronograma viável: folga negativa bloqueia aprovação.
+    cpmValid: cpm.valid && !cpm.infeasible,
     blockerCount,
     costCoverageValid: costCoverage.valid,
     eapDictionaryStandardApproved: false,
@@ -2523,6 +2527,31 @@ export const appRouter = router({
       }),
   }),
   budgets: router({
+    // Curva S e decisões de desempenho usam exclusivamente pesos aprovados.
+    // budgets.list continua exibindo o rascunho mais recente para edição.
+    approvedForCurve: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { versionId: null, items: [] };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [approved] = await db
+          .select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(and(
+            eq(budgetVersions.projectId, input.projectId),
+            eq(budgetVersions.status, "aprovado"),
+          ))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (!approved) return { versionId: null, items: [] };
+        const items = await db
+          .select()
+          .from(budgetItems)
+          .where(eq(budgetItems.budgetVersionId, approved.id))
+          .orderBy(budgetItems.sortOrder);
+        return { versionId: approved.id, items };
+      }),
     list: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -3844,6 +3873,25 @@ export const appRouter = router({
     // `work_calendars` nem `calendar_exceptions` diretamente — há um teste que
     // trava isso, porque duas fontes para a mesma verdade no mesmo arquivo já
     // foi defeito real uma vez.
+    // Mesma fonte do EVM: calendário real da obra, incluindo exceções
+    // dos anos atravessados pelo planejamento. Não criar 5x2 no cliente.
+    getCalendarForCurve: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), startYear: z.number().int().min(2000).max(2100) }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const yearEnd = Math.min(2102, input.startYear + 2);
+        const carregado = await carregarCalendarioDoPeriodo(
+          db, input.projectId, input.startYear, yearEnd
+        );
+        return {
+          weekPattern: carregado.calendar.weekPattern,
+          exceptions: carregado.calendar.exceptions,
+          origem: carregado.origem,
+          nome: carregado.nome,
+        };
+      }),
     getCalendar: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -4310,16 +4358,40 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { asOf: new Date(), activities: [], totals: { plannedQuantity: 0, actualQuantity: 0, plannedProgress: 0, actualProgress: 0, variance: 0 } };
+        if (!db) return { asOf: new Date(), activities: [], totals: consolidateControlProgress([], null) };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
         const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
-        const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
-        const actualByActivity = new Map<number, number>();
-        for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
         const asOf = input.asOf ?? new Date();
+        // Mesmo corte histórico e reconciliação entre versões aplicados pelo EVM:
+        // um lançamento posterior ao asOf não pode alterar o passado, e o
+        // activityId antigo precisa reencontrar a atividade atual pelo código EAP.
+        const entries = await db
+          .select({
+            activityId: productionEntries.activityId,
+            quantity: productionEntries.quantity,
+            codigoEap: scheduleActivities.wbsCode,
+          })
+          .from(productionEntries)
+          .leftJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
+          .where(and(
+            eq(productionEntries.projectId, input.projectId),
+            eq(productionEntries.status, "confirmada"),
+            lte(productionEntries.productionDate, asOf),
+          ));
+        const idsAtuais = new Set(activities.map(activity => activity.id));
+        const idPorCodigo = indexarAtividadesPorCodigo(activities);
+        const actualByActivity = new Map<number, number>();
+        for (const entry of entries) {
+          const id = resolverAtividadeDaProducao(
+            entry.activityId, entry.codigoEap, idsAtuais, idPorCodigo
+          );
+          if (id != null) {
+            actualByActivity.set(id, (actualByActivity.get(id) ?? 0) + Number(entry.quantity));
+          }
+        }
         const start = project?.plannedStart?.getTime() ?? asOf.getTime();
         const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
         const rows = activities.map(activity => {
@@ -4330,11 +4402,27 @@ export const appRouter = router({
           const actualProgress = plannedQuantity > 0 ? Math.max(0, Math.min(100, (actualQuantity / plannedQuantity) * 100)) : 0;
           return { id: activity.id, wbsCode: activity.wbsCode, name: activity.name, phase: activity.phase, plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10, critical: activity.critical === 1, status: activity.status };
         });
-        const plannedQuantity = rows.reduce((sum, row) => sum + row.plannedQuantity, 0);
-        const actualQuantity = rows.reduce((sum, row) => sum + row.actualQuantity, 0);
-        const plannedProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.plannedProgress, 0) / plannedQuantity : 0;
-        const actualProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.actualProgress, 0) / plannedQuantity : 0;
-        return { asOf, activities: rows, totals: { plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10 } };
+        // Somar m², m³ e unidades para calcular peso da obra é incorreto.
+        // Sem orçamento aprovado e cobertura integral, o agregado declara
+        // ausência de base ao invés de apresentar um percentual enganoso.
+        const [approvedBudget] = await db.select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado")))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        const approvedItems = approvedBudget
+          ? await db.select({ id: budgetItems.id, unitPrice: budgetItems.unitPrice })
+              .from(budgetItems)
+              .where(eq(budgetItems.budgetVersionId, approvedBudget.id))
+          : null;
+        const totals = consolidateControlProgress(
+          rows.map(row => ({
+            ...row,
+            budgetItemId: activities.find(activity => activity.id === row.id)?.budgetItemId ?? null,
+          })),
+          approvedItems,
+        );
+        return { asOf, activities: rows, totals };
       }),
     // Aprovar a versão de trabalho é um ato de governança, não um efeito
     // colateral de uma etapa do agente. Enquanto isso morava só dentro do
@@ -4428,6 +4516,16 @@ export const appRouter = router({
         if (semDuracao.length) {
           throw badRequest(`A baseline exige duração válida em todas as atividades; ${semDuracao.length} ainda estão inválidas.`);
         }
+        // A captura não pode fotografar um cronograma inviável, mesmo quando
+        // o cálculo CPM foi concluído com sucesso e persiste folgas negativas.
+        const inviaveis = activities.filter(activity =>
+          activity.totalFloat != null && Number(activity.totalFloat) < 0
+        );
+        if (inviaveis.length) {
+          throw badRequest(
+            `O cronograma tem ${inviaveis.length} atividade(s) com folga total negativa. Revise as restrições antes de capturar a baseline.`
+          );
+        }
         // Uma baseline congela uma decisão de prazo. Congelar a versão errada é
         // pior que não congelar: o registro fica ativo, o Gantt o usa como
         // referência, e ninguém consegue dizer depois qual versão ele mede.
@@ -4470,9 +4568,26 @@ export const appRouter = router({
           const blocking = networkValidation.issues.find(issue => issue.severity === "error");
           throw badRequest(blocking?.message ?? "A rede de dependências é inválida para congelar uma baseline.");
         }
-        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, versionId: currentVersion.id, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
-        await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
-        return { id: created.id, activityCount: activities.length, versionId: currentVersion.id, versionNumber: currentVersion.versionNumber };
+        // Cabeçalho e itens formam uma única fotografia: falha em qualquer
+        // item reverte também o registro da baseline.
+        return db.transaction(async tx => {
+          const [created] = await tx.insert(scheduleBaselines).values({
+            projectId: input.projectId, versionId: currentVersion.id,
+            name: input.name, status: "ativa", createdBy: ctx.user.id,
+          }).returning({ id: scheduleBaselines.id });
+          await tx.insert(scheduleBaselineItems).values(activities.map(activity => ({
+            baselineId: created.id,
+            activityId: activity.id,
+            startOffset: activity.startOffset,
+            durationDays: activity.durationDays,
+            earlyStart: activity.earlyStart,
+            earlyFinish: activity.earlyFinish,
+          })));
+          return {
+            id: created.id, activityCount: activities.length,
+            versionId: currentVersion.id, versionNumber: currentVersion.versionNumber,
+          };
+        });
       }),
     // "O que mudou desde que eu aprovei isto?" — a pergunta que justifica a
     // baseline existir. Sem isto a captura é só um arquivo morto: o engenheiro

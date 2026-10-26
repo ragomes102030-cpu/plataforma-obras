@@ -377,21 +377,41 @@ export async function approveCurrentPlanVersion(
   // Uma obra pode ter somente uma versão vigente com status approved.
   // Aprovar uma nova versão não apaga o histórico: versões aprovadas anteriores
   // passam a superseded, preservando decisão, auditoria e rastreabilidade.
-  await db
-    .update(projectPlanVersions)
-    .set({ status: "superseded", updatedAt: new Date() })
-    .where(
-      and(
+  // Ambas as transições são uma única operação lógica: se a aprovação
+  // falhar, a versão anteriormente aprovada permanece vigente.
+  await db.transaction(async tx => {
+    const now = new Date();
+    const [candidate] = await tx
+      .select({ id: projectPlanVersions.id, status: projectPlanVersions.status })
+      .from(projectPlanVersions)
+      .where(and(
+        eq(projectPlanVersions.id, ensured.id),
+        eq(projectPlanVersions.projectId, projectId)
+      ))
+      .for("update");
+    if (!candidate || !["draft", "proposed"].includes(candidate.status)) {
+      throw new Error("Versão de trabalho indisponível para aprovação.");
+    }
+
+    await tx
+      .update(projectPlanVersions)
+      .set({ status: "superseded", updatedAt: now })
+      .where(and(
         eq(projectPlanVersions.projectId, projectId),
         eq(projectPlanVersions.status, "approved"),
         ne(projectPlanVersions.id, ensured.id)
-      )
-    );
+      ));
 
-  await db
-    .update(projectPlanVersions)
-    .set({ status: "approved", decisionId, approvedAt: new Date(), updatedAt: new Date() })
-    .where(eq(projectPlanVersions.id, ensured.id));
+    const [approved] = await tx
+      .update(projectPlanVersions)
+      .set({ status: "approved", decisionId, approvedAt: now, updatedAt: now })
+      .where(and(
+        eq(projectPlanVersions.id, ensured.id),
+        eq(projectPlanVersions.projectId, projectId)
+      ))
+      .returning({ id: projectPlanVersions.id });
+    if (!approved) throw new Error("A versão não pôde ser aprovada.");
+  });
   return { id: ensured.id, versionNumber: ensured.versionNumber };
 }
 

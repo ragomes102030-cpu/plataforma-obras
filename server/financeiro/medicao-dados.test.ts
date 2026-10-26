@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import type { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -192,6 +193,38 @@ afterEach(async () => {
 });
 
 describe("coletarDadosMedicao — produção no período", () => {
+  it("não desconta medição em rascunho ou revisão de períodos anteriores", async () => {
+    const { projectId } = await criarObra();
+    const versaoId = await criarVersao(projectId, 1, "aprovado");
+    const itemId = await criarItem(versaoId, "01.01", "100.000", "10.00");
+    const atividadeId = await criarAtividade(projectId, { budgetItemId: itemId });
+    await lancarProducao(projectId, atividadeId, "2026-02-04", "60.000");
+
+    const anteriorRascunho = await criarMedicao(
+      projectId, 1, { start: "2026-01-01", end: "2026-01-31" }, "rascunho"
+    );
+    await medirItem(anteriorRascunho, itemId, "20.000");
+
+    const resultado = await coletarDadosMedicao(
+      db, projectId,
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-28T23:59:59Z")
+    );
+    expect(resultado.produzidoAcumulado).toEqual([{ budgetItemId: itemId, quantity: 60 }]);
+    expect(resultado.medidoAcumuladoAnterior).toEqual([]);
+
+    await db.update(measurements)
+      .set({ status: "aprovada" })
+      .where(eq(measurements.id, anteriorRascunho));
+    const aprovado = await coletarDadosMedicao(
+      db, projectId,
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-28T23:59:59Z")
+    );
+    expect(aprovado.medidoAcumuladoAnterior).toEqual([{ budgetItemId: itemId, quantity: 20 }]);
+  });
+
+
   it("inclui o último dia do período e exclui o primeiro dia do seguinte", async () => {
     const { projectId } = await criarObra();
     const versaoId = await criarVersao(projectId, 1, "aprovado");

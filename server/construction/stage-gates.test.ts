@@ -91,6 +91,21 @@ describe("stage gates", () => {
     expect(denied.allowed).toBe(false);
   });
 
+  it("bloqueia validação do CPM e captura de baseline quando o cálculo não é viável", () => {
+    const evidence = { ...validEvidence, cpmValid: false };
+    for (const [stage, target] of [
+      ["DEPENDENCIAS_PROPOSTA", "CPM_VALIDADO"],
+      ["CRONOGRAMA_PROPOSTO", "BASELINE_PROPOSTA"],
+    ] as const) {
+      const result = evaluateStageTransition({
+        currentStage: stage, targetStage: target,
+        decision: "approved", evidence,
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.checks.some(check => check.code === "cpm_valid" && !check.valid)).toBe(true);
+    }
+  });
+
   it("bloqueia baseline quando o dicionário obrigatório da EAP está incompleto", () => {
     const result = evaluateStageTransition({
       currentStage: "CRONOGRAMA_PROPOSTO",

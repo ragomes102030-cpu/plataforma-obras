@@ -297,6 +297,30 @@ describe("versão do plano: o que o painel conta", () => {
     ).toBe(0);
   });
 
+  it("mantém a versão anterior aprovada se a nova aprovação falhar", async () => {
+    const { projectId, userId } = await criarObra();
+    await semearPlano(projectId);
+    const primeira = await ensureWritablePlanVersion(projectId, userId);
+    const decisao = await criarDecisao(projectId, userId);
+    await approveCurrentPlanVersion(projectId, decisao, userId);
+
+    const nova = await ensureWritablePlanVersion(projectId, userId);
+    expect(nova.id).not.toBe(primeira.id);
+
+    // ID inválido: a chave estrangeira deve falhar na SEGUNDA atualização.
+    // A transação precisa reverter também o superseded da versão anterior.
+    await expect(
+      approveCurrentPlanVersion(projectId, 999999999, userId)
+    ).rejects.toThrow();
+
+    const statuses = await db
+      .select({ id: projectPlanVersions.id, status: projectPlanVersions.status })
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.projectId, projectId));
+    expect(statuses.find(v => v.id === primeira.id)?.status).toBe("approved");
+    expect(statuses.find(v => v.id === nova.id)?.status).toBe("draft");
+  });
+
   it("a versão aprovada é reaberta como draft e a anterior vira superseded", async () => {
     // A regra de reabertura: aprovado não é gravável. A próxima escrita cria
     // v+1. Este teste existe porque a adoção de órfãos agora acontece nos DOIS
