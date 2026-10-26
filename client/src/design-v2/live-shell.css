@@ -1,0 +1,241 @@
+/*
+ * Plataforma Obras V2 — shell real (opt-in ?ui=v2).
+ * Esta folha nunca substitui as folhas técnicas; apenas muda a moldura.
+ * Todas as regras são escopadas. A aplicação original permanece inalterada.
+ */
+html body .po-v2-app {
+  --po2-bg: #f5f7f8;
+  --po2-card: #fff;
+  --po2-border: #e2e8eb;
+  --po2-title: #203540;
+  --po2-muted: #6a808b;
+  --po2-accent: #216c7b;
+  background: var(--po2-bg);
+}
+html body .po-v2-app .arq-context-header {
+  background: var(--po2-card);
+  border-bottom: 1px solid var(--po2-border);
+  box-shadow: none;
+}
+html body .po-v2-app .arq-context-brand strong {
+  font-weight: 750;
+  letter-spacing: -.025em;
+}
+html body .po-v2-app .arq-context-project {
+  border-color: var(--po2-border);
+}
+html body .po-v2-app .arq-context-project-copy > span,
+html body .po-v2-app .arq-context-project-copy small {
+  color: var(--po2-muted);
+}
+html body .po-v2-app .arq-context-project-copy strong {
+  color: var(--po2-title);
+}
+/* Nova navegação: seis áreas em vez de 17 destinos simultâneos. */
+html body .po-v2-live .xl-sidebar {
+  width: 218px;
+  min-width: 218px;
+  flex-basis: 218px;
+  background: var(--po2-card);
+  border-right: 1px solid var(--po2-border);
+  color: var(--po2-title);
+}
+html body .po-v2-live.sidebar-recolhida .xl-sidebar {
+  width: 64px;
+  min-width: 64px;
+  flex-basis: 64px;
+}
+html body .po-v2-live .xl-sidebar-nav.po-v2-primary-nav {
+  padding: 23px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+html body .po-v2-live .po-v2-sidebar-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--po2-muted);
+  margin: 0 6px 9px;
+  display: block;
+}
+html body .po-v2-live .xl-sidebar-item.po-v2-primary-item,
+html body .po-v2-live .po-v2-sidebar-tools > .xl-sidebar-item {
+  min-height: 43px;
+  color: var(--po2-muted);
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 570;
+  background: transparent;
+  box-shadow: none;
+  padding: 8px 11px;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+html body .po-v2-live .xl-sidebar-item.po-v2-primary-item svg,
+html body .po-v2-live .po-v2-sidebar-tools > .xl-sidebar-item svg {
+  color: inherit;
+  flex-shrink: 0;
+}
+html body .po-v2-live .xl-sidebar-item.po-v2-primary-item:hover,
+html body .po-v2-live .po-v2-sidebar-tools > .xl-sidebar-item:hover {
+  color: var(--po2-accent);
+  background: #f0f5f6;
+}
+html body .po-v2-live .xl-sidebar-item.po-v2-primary-item.ativa,
+html body .po-v2-live .po-v2-sidebar-tools > .xl-sidebar-item.ativa {
+  color: #20697a;
+  background: #e6f0f2;
+  font-weight: 700;
+  box-shadow: none;
+}
+html body .po-v2-live .po-v2-sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--po2-border);
+  padding-top: 17px;
+  margin-top: 23px;
+  gap: 5px;
+}
+html body .po-v2-live .xl-sidebar-pe {
+  background: var(--po2-card);
+  border-top: 1px solid var(--po2-border);
+  color: var(--po2-muted);
+}
+html body .po-v2-live .xl-sidebar-user-nome {
+  color: var(--po2-title);
+}
+/* Contexto e navegação secundária. A mesma aba real permanece montada abaixo. */
+html body .po-v2-live .xl-area-sidebar {
+  background: var(--po2-bg);
+}
+html body .po-v2-live .po-v2-subnav {
+  padding: 20px 28px 0;
+  background: var(--po2-card);
+  border-bottom: 1px solid var(--po2-border);
+}
+html body .po-v2-live .po-v2-subnav-context {
+  display: flex;
+  align-items: baseline;
+  gap: 13px;
+  margin: 0 0 12px;
+}
+html body .po-v2-live .po-v2-subnav-context > span {
+  font-size: 10px;
+  font-weight: 720;
+  color: var(--po2-muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+html body .po-v2-live .po-v2-subnav-context > strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--po2-title);
+  letter-spacing: -.035em;
+}
+html body .po-v2-live .po-v2-subnav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+html body .po-v2-live .po-v2-subnav-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 11px 12px 13px;
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--po2-muted);
+  flex: 0 0 auto;
+}
+html body .po-v2-live .po-v2-subnav-tab:hover {
+  color: var(--po2-accent);
+  background: #f7fafb;
+}
+html body .po-v2-live .po-v2-subnav-tab.ativa {
+  color: var(--po2-accent);
+  border-bottom-color: var(--po2-accent);
+  font-weight: 710;
+}
+html body .po-v2-live .po-v2-technical-caption {
+  display: block;
+  font-size: 10px;
+  color: var(--po2-muted);
+  padding: 3px 0 10px;
+}
+/* O cabeçalho antigo duplicava o nome da obra e a trilha já presente na subnav. */
+html body .po-v2-live .arquimedes-workbar {
+  position: relative;
+  min-height: 0;
+  padding: 10px 26px;
+  gap: 16px;
+  background: #f7f9fa;
+  border-bottom: 1px solid var(--po2-border);
+  box-shadow: none;
+}
+html body .po-v2-live .arquimedes-workbar-title,
+html body .po-v2-live .arquimedes-trilha {
+  display: none;
+}
+html body .po-v2-live .arquimedes-fluxo-status {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html body .po-v2-live .arquimedes-fluxo-status strong {
+  font-size: 12px;
+}
+html body .po-v2-live .arquimedes-fluxo-status small {
+  font-size: 11px;
+}
+html body .po-v2-live .arquimedes-content {
+  background: var(--po2-bg);
+  min-width: 0;
+}
+html body .po-v2-live .xl-painel {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 26px 27px 25px;
+}
+/* Somente a moldura muda; planilhas, campos, botões e tabelas existentes continuam disponíveis. */
+@media (max-width: 1100px) {
+  html body .po-v2-live .xl-sidebar {
+    width: 196px;
+    min-width: 196px;
+    flex-basis: 196px;
+  }
+  html body .po-v2-live .po-v2-subnav { padding: 17px 16px 0; }
+  html body .po-v2-live .arquimedes-workbar { padding: 9px 16px; }
+}
+@media (max-width: 900px) {
+  /* Respeita o drawer do CSS de campo; não reintroduz o menu fixo na tela. */
+  html body .po-v2-live .xl-sidebar {
+    width: min(300px, 84vw);
+    min-width: 0;
+    flex-basis: auto;
+    background: var(--po2-card);
+  }
+  html body .po-v2-live.sidebar-recolhida .xl-sidebar {
+    width: min(300px, 84vw);
+    min-width: 0;
+    flex-basis: auto;
+  }
+  html body .po-v2-live .xl-sidebar-nav.po-v2-primary-nav { padding: 18px 12px; }
+  html body .po-v2-live .po-v2-subnav { padding: 14px 12px 0; }
+  html body .po-v2-live .po-v2-subnav-context > strong { font-size: 17px; }
+  html body .po-v2-live .po-v2-subnav-tab { min-height: 44px; padding: 10px 11px; }
+  html body .po-v2-live .xl-painel { padding: 14px 12px 85px; }
+  html body .po-v2-live .arquimedes-workbar { padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html body .po-v2-live .po-v2-subnav-tab { transition: none; }
+}
