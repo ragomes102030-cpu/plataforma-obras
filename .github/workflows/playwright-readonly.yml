@@ -27,6 +27,7 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: https://plataforma-obras-3.onrender.com
           PLAYWRIGHT_STORAGE_STATE: .playwright/auth.json
+          PLAYWRIGHT_REQUIRE_AUTH: "1"
           AUTH_STATE_B64: ${{ secrets.ARQUIMEDES_PLAYWRIGHT_AUTH_B64 }}
         run: |
           if [ -n "$AUTH_STATE_B64" ]; then
