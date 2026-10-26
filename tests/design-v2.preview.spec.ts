@@ -97,3 +97,44 @@ test("telas técnicas demonstram detalhes e buscam itens sem gravar dados", asyn
   await expect(page.getByRole("img", { name: /Linha de Balanço fictícia/ })).toBeVisible();
   await page.screenshot({ path: "test-results/design-v2/linha-de-balanco.png", fullPage: true });
 });
+
+
+test("Gantt colapsável, edição direta e alteração manual de data e predecessora", async ({page})=>{
+  await page.goto("/design-v2.html");
+  await page.getByRole("button", {name:/Continuar planejamento/}).click();
+  await page.getByRole("tab", {name:"Cronograma"}).click();
+  await expect(page.getByRole("heading",{name:"Cronograma de atividades"})).toBeVisible();
+  await expect(page.getByRole("button",{name:/Escavações A03/})).toBeVisible();
+  await page.getByRole("button",{name:/1.2 Infraestrutura/}).click();
+  await expect(page.getByRole("button",{name:/Escavações A03/})).toHaveCount(0);
+  await page.getByRole("button",{name:/Expandir tudo/}).click();
+  await expect(page.getByRole("button",{name:/Escavações A03/})).toBeVisible();
+  await page.getByRole("spinbutton",{name:"Avanço de Escavações"}).fill("72");
+  await page.getByRole("button",{name:/Escavações A03/}).click();
+  const drawer=page.getByRole("dialog",{name:"Detalhe da atividade"});
+  await drawer.getByRole("tab",{name:"Planejamento"}).click();
+  await drawer.getByRole("textbox",{name:"Início previsto"}).fill("2026-11-18");
+  await drawer.getByRole("spinbutton",{name:"Duração (dias)"}).fill("17");
+  await drawer.getByRole("tab",{name:"Vínculos"}).click();
+  await drawer.getByRole("combobox",{name:"Predecessora da atividade"}).selectOption("AT-001");
+  await drawer.getByRole("button",{name:"Salvar na prévia"}).click();
+  await expect(page.getByRole("spinbutton",{name:"Avanço de Escavações"})).toHaveValue("72");
+  await expect(page.getByRole("button",{name:"Abrir atividade Escavações"})).toHaveAttribute("title",/18\/11\/2026—04\/12\/2026/);
+  await page.screenshot({path:"test-results/design-v2/gantt-profissional.png",fullPage:true});
+});
+
+test("Linha de Balanço com datas verticais, grupos recolhíveis e edição humana",async ({page})=>{
+  await page.goto("/design-v2.html");
+  await page.getByRole("button",{name:/Continuar planejamento/}).click();
+  await page.getByRole("tab",{name:"Linha de Balanço"}).click();
+  await expect(page.getByRole("img",{name:/datas no eixo vertical/})).toBeVisible();
+  await page.getByRole("button",{name:/Estrutura 2/}).click();
+  await expect(page.getByRole("button",{name:/Concretagem de lajes/})).toHaveCount(0);
+  await page.getByRole("button",{name:/Expandir todas/}).click();
+  await page.getByRole("button",{name:/Concretagem de lajes/}).click();
+  await page.getByRole("spinbutton",{name:"Ritmo em dias por pavimento"}).fill("9");
+  await expect(page.getByText("9 d/pav.")).toBeVisible();
+  await page.getByRole("textbox",{name:"Equipe responsável pela frente"}).fill("Equipe F");
+  await expect(page.getByText(/Equipe F · 9 d\/pav/)).toBeVisible();
+  await page.screenshot({path:"test-results/design-v2/linha-balanco-vertical.png",fullPage:true});
+});
