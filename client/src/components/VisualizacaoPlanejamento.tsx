@@ -5,6 +5,8 @@ import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBr
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
+import { AuroraLinhaBalanco } from "./AuroraLinhaBalanco";
+import "./aurora-piloto.css";
 
 type Props = {
   linhas: EntradaDaLinha[];
@@ -15,6 +17,8 @@ type Props = {
   titulo?: string;
   codigoObra?: string | null;
   localObra?: string | null;
+  /** Piloto só da obra OB-PUPOCN, explicitamente ativado via ?layout=aurora. */
+  pilotoAurora?: boolean;
 };
 
 type View = "gantt" | "lob";
@@ -52,6 +56,7 @@ export function VisualizacaoPlanejamento({
   titulo,
   codigoObra,
   localObra,
+  pilotoAurora = false,
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
@@ -105,13 +110,19 @@ export function VisualizacaoPlanejamento({
   }
 
   return (
-    <section className="pl-visual pl-visual-full">
+    <section className={`pl-visual pl-visual-full${pilotoAurora ? " aurora-pl-piloto" : ""}`}>
       <header className="pl-visual-header">
         <div>
           <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
-          <span>{view === "gantt" ? "Sequência, duração, avanço e caminho crítico" : "Tempo no eixo horizontal · locais no eixo vertical · ritmo das equipes"}</span>
+          <span>{view === "gantt" ? "EAP recolhível · tarefas, datas, vínculos e progresso" : pilotoAurora ? "Datas na vertical · locais na horizontal · séries reais da obra" : "Tempo no eixo horizontal · locais no eixo vertical · ritmo das equipes"}</span>
         </div>
       </header>
+      {pilotoAurora && <nav className="aurora-layout-atalhos" aria-label="Edição manual do planejamento">
+        <span>Editar no sistema, sem agente:</span>
+        {([["atividades","Atividades e durações"],["dependencias","Predecessoras"],["cpm","Calcular CPM"],["eap","Estrutura EAP"]] as const).map(([aba,rotulo]) =>
+          <button key={aba} type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba}}))}>{rotulo}</button>
+        )}
+      </nav>}
       {view === "gantt" && !cpmCalculado && atividades.length > 0 && (
         <div className="pl-gantt-cpm-aviso">
           O Gantt está usando o início/duração informados. Calcule o CPM para destacar o caminho crítico do plano.
@@ -123,7 +134,9 @@ export function VisualizacaoPlanejamento({
         </div>
       )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} />
+        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} pilotoAurora={pilotoAurora} />
+      ) : pilotoAurora ? (
+        <AuroraLinhaBalanco linhas={linhas} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       ) : (
         <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
       )}
@@ -174,6 +187,7 @@ function Gantt({
   titulo,
   codigoObra,
   localObra,
+  pilotoAurora = false,
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<
@@ -191,6 +205,7 @@ function Gantt({
   dados: { start: string; end: string; total: number };
   hoje: IsoDate;
   inicioObra: IsoDate | null;
+  pilotoAurora?: boolean;
   /** Cabeçalho da impressão: nome, código e local da obra. */
   titulo?: string;
   codigoObra?: string | null;
@@ -205,9 +220,9 @@ function Gantt({
   const [larguraEsquerda, setLarguraEsquerda] = useState(() => {
     try {
       const salvo = Number(window.localStorage.getItem("plataforma-obras:gantt-esquerda"));
-      return Number.isFinite(salvo) && salvo >= 300 && salvo <= 760 ? salvo : 470;
+      return Number.isFinite(salvo) && salvo >= 300 && salvo <= 760 ? salvo : (pilotoAurora ? 610 : 470);
     } catch {
-      return 470;
+      return pilotoAurora ? 610 : 470;
     }
   });
   const [ajustandoColuna, setAjustandoColuna] = useState(false);
@@ -259,8 +274,8 @@ function Gantt({
   // no celular, atividade e avanço. No desktop a largura é arrastável (divisória
   // entre a planilha e o gráfico) e fica guardada no navegador.
   const esquerda = estreita ? 168 : larguraEsquerda;
-  const alturaLinha = estreita ? 46 : 30;
-  const colunas = estreita ? "minmax(0,1fr) 40px" : "minmax(0,1fr) 46px 66px 66px 42px";
+  const alturaLinha = estreita ? 46 : pilotoAurora ? 38 : 30;
+  const colunas = estreita ? "minmax(0,1fr) 40px" : pilotoAurora ? "minmax(0,1fr) 52px 82px 82px 52px" : "minmax(0,1fr) 46px 66px 66px 42px";
 
   useEffect(() => {
     const elemento = referencia.current;
