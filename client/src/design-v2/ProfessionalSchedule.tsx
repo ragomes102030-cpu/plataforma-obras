@@ -74,7 +74,7 @@ export default function ProfessionalSchedule({activities,onOpenActivity,onChange
       {rows.map(r=>r.kind==="group"?<div className="ps-grid-row ps-group" key={r.code}>
        <button className="ps-group-button" onClick={()=>toggle(r.code)} aria-expanded={!collapsed.has(r.code)}>{collapsed.has(r.code)?<ChevronRight size={16}/>:<ChevronDown size={16}/>}<b>{r.code}</b><strong>{r.name}</strong></button><span className="ps-group-count">{r.items.length} ativ.</span>
       </div>:<div className={"ps-grid-row ps-task "+(selected===r.item.id?"ps-selected":"")} key={r.item.id}>
-       <button className="ps-edit-task" onClick={()=>{setSelected(r.item.id);onOpenActivity(r.item);}} title="Abrir edição manual"><span>{r.item.code}</span><strong>{r.item.name}</strong></button>
+       <button className="ps-edit-task" aria-label={r.item.name+" "+r.item.code} onClick={()=>{setSelected(r.item.id);onOpenActivity(r.item);}} title="Abrir edição manual"><span>{r.item.code}</span><strong>{r.item.name}</strong></button>
        {wide&&<span className="ps-data-small">{r.item.duration}d</span>}
        {wide&&<span className="ps-data-small">{r.item.predecessor==="—"?"—":r.item.predecessor.replace("AT-","")}</span>}
        <label className="ps-progress" title="Alterar avanço manualmente"><input aria-label={"Avanço de "+r.item.name} type="number" min="0" max="100" value={r.item.progress} onChange={e=>onChange({...r.item,progress:Math.min(100,Math.max(0,Number(e.target.value)))})}/>%</label>
