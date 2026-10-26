@@ -21,6 +21,7 @@ import { AbaOrcamento } from "@/components/AbaOrcamento";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
+import { usarLayoutProfissional } from "@/modules/layout-planejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
@@ -109,7 +110,7 @@ export default function Home() {
   const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
   // Layout profissional padrão em todas as obras, com retorno opt-in ao visual anterior.
   const layoutProfissional = typeof window === "undefined" ||
-    new URLSearchParams(window.location.search).get("layout") !== "classico";
+    usarLayoutProfissional(window.location.search);
 
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
