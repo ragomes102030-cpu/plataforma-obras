@@ -1,0 +1,100 @@
+/* Telas técnicas da prévia V2 — escopado à aplicação demonstrativa. */
+.pv2 .pv2-module{max-width:1560px}
+.pv2 .pv2-module-icon{height:47px;width:47px;display:grid;place-items:center;border-radius:11px;background:var(--brand-faint);color:var(--brand);flex-shrink:0}
+.pv2 .pv2-module-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 20px}
+.pv2 .pv2-module-stat{padding:18px 19px;border:1px solid var(--border);background:var(--surface);border-radius:11px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.pv2 .pv2-module-stat>span{font-size:11px;color:var(--muted);font-weight:590}
+.pv2 .pv2-module-stat>strong{font-size:23px;letter-spacing:-.025em;line-height:1.3}
+.pv2 .pv2-module-stat>small{font-size:10px;color:var(--muted)}
+.pv2 .pv2-module-columns{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(270px,1fr);align-items:start;gap:18px}
+.pv2 .pv2-module-panel{min-width:0}
+.pv2 .pv2-module-panel h3{font-size:13px;font-weight:670;margin:12px 0}
+.pv2 .pv2-module-panel>p{font-size:12px;line-height:1.7}
+.pv2 .pv2-module-table{min-width:490px}
+.pv2 .pv2-module-table td{padding:14px 16px}
+.pv2 .pv2-clickrow{cursor:pointer}
+.pv2 .pv2-clickrow:hover td{color:var(--brand)}
+.pv2 .pv2-module-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:18px}
+.pv2 .pv2-module-disclaimer{display:flex;align-items:center;gap:9px;margin:20px 0 10px;color:var(--muted);font-size:11px}
+.pv2 .pv2-module-disclaimer svg{flex-shrink:0}
+.pv2 .pv2-data-pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding-top:5px}
+.pv2 .pv2-data-pairs div{min-width:0}
+.pv2 .pv2-data-pairs span{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+.pv2 .pv2-data-pairs strong{font-size:12px;font-weight:620}
+.pv2 .pv2-details{margin-top:22px}
+.pv2 .pv2-details details{border-top:1px solid var(--border);padding:14px 0}
+.pv2 .pv2-details details>summary{cursor:pointer;font-size:12px;font-weight:650}
+.pv2 .pv2-details details>p{padding-top:10px;font-size:12px}
+.pv2 .pv2-checklist{display:grid;gap:14px;margin:20px 0}
+.pv2 .pv2-checklist span{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px}
+.pv2 .pv2-checklist svg{color:var(--brand);flex-shrink:0}
+.pv2 .pv2-checklist+button{margin-top:15px}
+.pv2 .pv2-module-filter{display:flex;align-items:center;gap:9px;padding:10px 12px;margin-bottom:16px;max-width:340px;background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;color:var(--muted)}
+.pv2 .pv2-module-filter input{border:0;outline:0;background:transparent;color:var(--text);min-width:0;width:100%;font-size:12px}
+.pv2 .pv2-path-scroll{overflow:auto;padding:20px 0}
+.pv2 .pv2-critical-path{display:flex;align-items:center;min-width:max-content}
+.pv2 .pv2-critical-step{display:flex;align-items:center;gap:10px}
+.pv2 .pv2-critical-step>div{width:156px;min-height:92px;padding:12px;border:1px solid var(--border);border-top:3px solid var(--danger);border-radius:7px;background:var(--surface-alt);display:flex;flex-direction:column;gap:5px}
+.pv2 .pv2-critical-step>div small{color:var(--muted);font-size:10px}
+.pv2 .pv2-critical-step>div strong{font-size:11px;line-height:1.3;flex:1}
+.pv2 .pv2-critical-step>div span{color:var(--muted);font-size:10px}
+.pv2 .pv2-critical-step>svg{color:var(--danger);flex-shrink:0}
+.pv2 .pv2-chart-frame{width:100%;min-width:0;overflow-x:auto}
+.pv2 .pv2-chart-frame svg{width:100%;min-width:440px;display:block;height:auto;max-height:420px;color:var(--text)}
+.pv2 .pv2-legend{display:flex;align-items:center;flex-wrap:wrap;gap:17px;padding-top:10px;font-size:11px;color:var(--muted)}
+.pv2 .pv2-legend span{display:inline-flex;align-items:center;gap:8px}
+.pv2 .pv2-legend i{display:inline-block;width:16px;height:8px;border-radius:2px}
+.pv2 .pv2-legend small{margin-left:auto;font-size:10px}
+.pv2 .pv2-cost-bars{display:flex;flex-direction:column;gap:17px;padding:16px 0 22px}
+.pv2 .pv2-cost-row{display:grid;grid-template-columns:100px minmax(60px,1fr) 78px;align-items:center;gap:12px}
+.pv2 .pv2-cost-row strong{font-size:11px;font-weight:570}
+.pv2 .pv2-cost-row small{font-size:10px;color:var(--muted);text-align:right}
+.pv2 .pv2-cost-row>div{display:flex;flex-direction:column;gap:3px}
+.pv2 .pv2-cost-plan,.pv2 .pv2-cost-actual{display:block;height:11px;border-radius:3px;background:var(--brand)}
+.pv2 .pv2-cost-actual{background:var(--good)}
+.pv2 .pv2-kanban{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.pv2 .pv2-kanban-column{border:1px solid var(--border);background:var(--surface-alt);border-radius:10px;padding:11px;min-width:0}
+.pv2 .pv2-kanban-column>div{display:flex;align-items:center;justify-content:space-between;padding:7px 7px 13px;gap:6px}
+.pv2 .pv2-kanban-column>div strong{font-size:11px}
+.pv2 .pv2-kanban-column>div span{font-size:10px;color:var(--muted);border-radius:100px;background:var(--surface);padding:2px 6px}
+.pv2 .pv2-kanban-column>button{border:1px solid var(--border);background:var(--surface);width:100%;text-align:left;padding:15px 12px;border-radius:8px;margin-bottom:9px;color:var(--text);font-size:12px;font-weight:600}
+.pv2 .pv2-kanban-column>button:hover{border-color:var(--brand)}
+.pv2 .pv2-kanban-column>button small{display:block;font-size:10px;color:var(--muted);font-weight:400;margin-top:6px}
+.pv2 .pv2-expand-row{border-top:1px solid var(--border)}
+.pv2 .pv2-expand-row>button{display:flex;align-items:center;gap:14px;min-height:67px;width:100%;border:0;background:none;color:var(--text);padding:10px 1px;text-align:left}
+.pv2 .pv2-expand-row>button:hover{color:var(--brand)}
+.pv2 .pv2-expand-row>button>span:nth-child(1),.pv2 .pv2-expand-row>button>span:nth-child(2){flex:1;min-width:0}
+.pv2 .pv2-expand-row>button strong{display:block;font-size:12px}
+.pv2 .pv2-expand-row>button small{display:block;font-size:10px;color:var(--muted);margin-top:5px}
+.pv2 .pv2-expand-row>button>svg{flex-shrink:0;color:var(--brand)}
+.pv2 .pv2-chevron{display:grid;place-items:center;border:1px solid var(--border);border-radius:6px;width:26px;height:26px;font-size:17px;flex:0 0 26px!important;color:var(--muted)}
+.pv2 .pv2-expanded-details{margin:0 0 14px;padding:14px 18px;background:var(--surface-alt);border-radius:8px}
+.pv2 .pv2-expanded-details>p{font-size:12px;margin:13px 0 3px}
+.pv2 .pv2-risk-matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:340px;margin:12px auto}
+.pv2 .pv2-risk-cell{display:grid;place-items:center;min-height:76px;border-radius:6px;font-size:11px;font-weight:650}
+.pv2 .pv2-risk-baixo{background:var(--good-bg);color:var(--good)}
+.pv2 .pv2-risk-medio{background:var(--warn-bg);color:var(--warning)}
+.pv2 .pv2-risk-alto,.pv2 .pv2-risk-critico{background:var(--danger-bg);color:var(--danger)}
+.pv2 .pv2-module-hint{font-size:10px;color:var(--muted);margin:15px 0 0}
+.pv2 .pv2-command-notice{margin:0 0 18px}
+.pv2 .pv2-command{display:grid;gap:10px;padding:18px 0;max-height:340px;overflow:auto}
+.pv2 .pv2-assistant-msg{border-radius:11px;background:var(--brand-faint);color:var(--text);padding:13px;font-size:12px;line-height:1.65}
+.pv2 .pv2-command-conversation>p{font-size:12px;padding:0 12px;margin:7px 0}
+.pv2 .pv2-command-form{display:flex;gap:8px;border-top:1px solid var(--border);padding-top:15px}
+.pv2 .pv2-command-form input{flex:1;min-width:0;border-radius:8px;background:var(--surface-alt);border:1px solid var(--border);padding:11px;color:var(--text);font-size:12px}
+.pv2 .pv2-command-form .pv2-primary{min-width:87px}
+@media(max-width:1200px){
+  .pv2 .pv2-module-columns{grid-template-columns:1fr}
+}
+@media(max-width:800px){
+  .pv2 .pv2-module-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pv2 .pv2-kanban{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+  .pv2 .pv2-module-stats{gap:8px}
+  .pv2 .pv2-module-stat{padding:12px}
+  .pv2 .pv2-module-stat>strong{font-size:18px}
+  .pv2 .pv2-data-pairs{grid-template-columns:1fr}
+  .pv2 .pv2-module-actions{flex-direction:column;align-items:stretch}
+  .pv2 .pv2-legend small{width:100%}
+}
