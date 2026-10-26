@@ -68,7 +68,7 @@ export default function ProfessionalSchedule({activities,onOpenActivity,onChange
   <div className="ps-board">
    <div className="ps-grid-scroll">
     <div className={"ps-grid "+(wide?"ps-grid-wide":"ps-grid-compact")} style={{"--ps-width":width+"px","--ps-tick":cell+"px"} as React.CSSProperties}>
-     <div className="ps-table-top"><strong>Estrutura / atividades</strong><span>{activities.length} linhas</span></div>
+     <div className="ps-table-top"><strong>Atividade / EAP</strong>{wide&&<><span>Duração</span><span>Início</span><span>Término</span><span>Predecessora</span></>}<span>Avanço</span></div>
      <div className="ps-calendar" style={{width}}>{ticks.map(t=><span key={t.i} style={{width:cell}}>{t.text}</span>)}</div>
      <div className="ps-table-rows">
       {rows.map(r=>r.kind==="group"?<div className="ps-grid-row ps-group" key={r.code}>
@@ -76,6 +76,8 @@ export default function ProfessionalSchedule({activities,onOpenActivity,onChange
       </div>:<div className={"ps-grid-row ps-task "+(selected===r.item.id?"ps-selected":"")} key={r.item.id}>
        <button className="ps-edit-task" aria-label={r.item.name+" "+r.item.code} onClick={()=>{setSelected(r.item.id);onOpenActivity(r.item);}} title="Abrir edição manual"><span>{r.item.code}</span><strong>{r.item.name}</strong></button>
        {wide&&<span className="ps-data-small">{r.item.duration}d</span>}
+       {wide&&<span className="ps-data-small">{r.item.start.slice(0,5)}</span>}
+       {wide&&<span className="ps-data-small">{r.item.end.slice(0,5)}</span>}
        {wide&&<span className="ps-data-small">{r.item.predecessor==="—"?"—":r.item.predecessor.replace("AT-","")}</span>}
        <label className="ps-progress" title="Alterar avanço manualmente"><input aria-label={"Avanço de "+r.item.name} type="number" min="0" max="100" value={r.item.progress} onChange={e=>onChange({...r.item,progress:Math.min(100,Math.max(0,Number(e.target.value)))})}/>%</label>
       </div>)}
