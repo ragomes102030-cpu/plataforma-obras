@@ -295,6 +295,7 @@ export default function Preview() {
 
               {activeTab === "eap" && <div className="pv2-planning-grid">
                 <div className="pv2-panel pv2-eap-panel">
+                  <div className="pv2-eap-head"><h2>Estrutura Analítica do Projeto</h2><p>Pacotes e entregas · seleção com detalhes no painel lateral</p></div>
                   <div className="pv2-table-scroll">
                     <table className="pv2-table"><thead><tr><th className="pv2-code">Código</th><th>Estrutura da obra</th><th>Tipo</th><th>Situação</th></tr></thead>
                       <tbody>{shownWbs.map(item => <tr key={item.code} className={(item.code===selectedWbs ? "pv2-row-selected " : "") + (item.type === "Fase" ? "pv2-row-phase" : "")} onClick={()=>setSelectedWbs(item.code)}>
