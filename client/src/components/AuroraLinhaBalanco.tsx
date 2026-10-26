@@ -4,7 +4,7 @@ import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 
 /**
- * Piloto visual da obra AURORA TESTE, inteiramente baseado em planejamento.grade.
+ * Visualização vertical comum a todas as obras, baseada nos dados de planejamento.grade.
  * Não sintetiza pavimentos, atividades, durações, produtividades ou datas.
  * Nenhuma mutação, chamada ao agente ou cálculo de CPM ocorre aqui.
  */
@@ -25,7 +25,7 @@ function obterLocais(linhas: EntradaDaLinha[]): string[] {
   return Array.from(new Set(linhas.map(l => String(l.pavimento || l.frente || "").trim()).filter(Boolean)))
     .sort((a,b) => a.localeCompare(b, "pt-BR", {numeric:true}));
 }
-export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[], finsCalculados: Record<string,string>) {
+export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalculados: Record<string,string>) {
   const validas = linhas.filter(l => !l.marco && ehData(l.inicio) && ehData(finsCalculados[l.codigo] ?? "") && Number.isFinite(l.duracao) && l.duracao >= 1);
   const locais = obterLocais(validas);
   const servicos = new Map<string, Serie>();
@@ -45,8 +45,8 @@ export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[], finsCalcula
   return { locais, series:Array.from(servicos.values()), semLocal:validas.filter(l => !(l.pavimento || l.frente)).length };
 }
 
-export function AuroraLinhaBalanco({linhas,finsCalculados,hoje,onAbrirAtividades}:Props) {
-  const {locais,series,semLocal} = useMemo(()=>prepararLinhaBalancoAurora(linhas,finsCalculados),[linhas,finsCalculados]);
+export function LinhaBalancoVertical({linhas,finsCalculados,hoje,onAbrirAtividades}:Props) {
+  const {locais,series,semLocal} = useMemo(()=>prepararLinhaBalancoVertical(linhas,finsCalculados),[linhas,finsCalculados]);
   const [ocultas,setOcultas]=useState<Set<string>>(()=>new Set());
   const [recolhido,setRecolhido]=useState(false);
   const [busca,setBusca]=useState("");
@@ -77,10 +77,10 @@ export function AuroraLinhaBalanco({linhas,finsCalculados,hoje,onAbrirAtividades
   const selecionadaSerie=series.find(s=>s.chave===selecionada);
   function toggle(key:string) { setOcultas(current=>{const next=new Set(current);next.has(key)?next.delete(key):next.add(key);return next;}); }
   return (
-    <section className="aurora-lob" aria-label="Linha de Balanço Aurora — piloto visual">
+    <section className="aurora-lob" aria-label="Linha de Balanço vertical — planejamento da obra">
       <header className="aurora-lob-cabecalho">
         <div>
-          <span className="aurora-piloto-eyebrow"><Layers3 size={14}/> PILOTO AURORA · LINHA DE BALANÇO</span>
+          <span className="aurora-piloto-eyebrow"><Layers3 size={14}/> PILOTO LINHA DE BALANÇO · PLANEJAMENTO</span>
           <h2>Ritmo de produção — dados do planejamento</h2>
           <p>Tempo na vertical · locais na horizontal · frentes recolhíveis. Visualização de leitura.</p>
         </div>
@@ -93,7 +93,7 @@ export function AuroraLinhaBalanco({linhas,finsCalculados,hoje,onAbrirAtividades
         <span><strong>{series.filter(s=>new Set(s.pontos.map(p=>p.local)).size>1).length}</strong> séries repetitivas</span>
       </div>
       {locais.length===0 ? (
-        <div className="aurora-lob-vazio"><Activity size={28}/><h3>Nenhuma frente com local cadastrado</h3><p>Na Aurora, preencha manualmente o campo <strong>pavimento</strong> ou <strong>frente</strong> das atividades. O gráfico não cria unidades repetitivas fictícias.</p><button type="button" className="aurora-manual-action" onClick={onAbrirAtividades}>Abrir atividades</button></div>
+        <div className="aurora-lob-vazio"><Activity size={28}/><h3>Nenhuma frente com local cadastrado</h3><p>Preencha manualmente o campo <strong>pavimento</strong> ou <strong>frente</strong> das atividades. O gráfico não cria unidades repetitivas fictícias.</p><button type="button" className="aurora-manual-action" onClick={onAbrirAtividades}>Abrir atividades</button></div>
       ) : (
         <div className="aurora-lob-area">
           <aside className="aurora-lob-lista">
@@ -116,7 +116,7 @@ export function AuroraLinhaBalanco({linhas,finsCalculados,hoje,onAbrirAtividades
               <label>Intervalo de leitura <select aria-label="Intervalo das datas" value={escala} onChange={e=>setEscala(e.target.value as "quinzena"|"mes")}><option value="mes">Mensal</option><option value="quinzena">Quinzenal</option></select></label>
             </div>
             <div className="aurora-lob-scroll">
-              <svg role="img" aria-label="Linha de Balanço da Aurora com datas no eixo vertical" width={largura} height={altura} viewBox={"0 0 "+largura+" "+altura}>
+              <svg role="img" aria-label="Linha de Balanço com datas no eixo vertical" width={largura} height={altura} viewBox={"0 0 "+largura+" "+altura}>
                 <rect x="0" y="0" width={largura} height={altura} fill="#fff"/>
                 {tics.map(d=><g key={d}><line x1={esquerda} x2={largura-direita} y1={y(d)} y2={y(d)} stroke="#e3eaf0" strokeWidth="1"/><text x={esquerda-12} y={y(d)+4} fill="#62717b" textAnchor="end" fontSize="11">{dataBr(d).slice(0,5)}</text></g>)}
                 {locais.map(l=><g key={l}><line x1={x(l)} x2={x(l)} y1={topo} y2={altura-rodape} stroke="#e3eaf0" strokeWidth="1"/><text x={x(l)} y="27" fontSize="12" textAnchor="middle" fill="#334853" fontWeight="600">{l.length>15?l.slice(0,13)+"…":l}</text></g>)}
