@@ -54,7 +54,7 @@ async function verificarConteudoAba(page: Page): Promise<{ temConteudo: boolean;
   try {
     const conteudo = page.locator('.arquimedes-content');
     const texto = await conteudo.textContent({ timeout: 5000 }) || '';
-    const temErro = texto.includes('erro') || textarea.includes('Error') || textarea.includes('falha');
+    const temErro = /\berro\b|\berror\b|\bfalha\b/i.test(texto);
     const temConteudo = texto.length > 50 && !temErro;
     return { temConteudo, temErro, textoVisivel: texto.slice(0, 200) };
   } catch {
@@ -127,6 +127,10 @@ test.describe('Mapeamento do Sistema Plataforma Obras', () => {
       console.log(`  ${r.status.toUpperCase().padEnd(12)} | ${r.grupo.padEnd(20)} | ${r.rotulo.padEnd(30)} | ${r.observacoes}`);
     });
     
+    // Não permitir CI verde quando uma aba esperada está quebrada.
+    expect(resultados.filter(r => r.status === 'quebrada'),
+      'Todas as abas esperadas devem estar acessíveis e sem erro visível').toEqual([]);
+
     // 6. Verificar componentes específicos
     console.log('\n\n========== VERIFICAÇÃO DE COMPONENTES ==========\n');
     
