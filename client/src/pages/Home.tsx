@@ -28,6 +28,7 @@ import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import "@/planilha.css";
 import "@/eap.css";
+import "@/workspace-planejamento.css";
 // mobile.css e campo-tipografia.css NAO sao importados aqui de proposito: eles
 // tem de ser a ultima folha do bundle, e qualquer CSS importado de dentro de App
 // entra antes de index.css. Eles sao importados no fim de main.tsx.
@@ -72,6 +73,18 @@ const etapasDoPlanejamento: { etapa: string; aba: IdDaAba }[] = [
   { etapa: "Dependências", aba: "dependencias" },
   { etapa: "CPM", aba: "cpm" },
   { etapa: "Baseline", aba: "baseline" },
+];
+// As oito vistas pertencem ao MESMO ambiente técnico. A navegação não chama agente
+// nem altera dados: apenas troca a aba usando o fluxo manual já existente.
+const vistasDoPlanejamento: { titulo: string; aba: IdDaAba }[] = [
+  { titulo: "Escopo", aba: "escopo" },
+  { titulo: "EAP", aba: "eap" },
+  { titulo: "Atividades", aba: "atividades" },
+  { titulo: "Dependências", aba: "dependencias" },
+  { titulo: "CPM", aba: "cpm" },
+  { titulo: "Baseline", aba: "baseline" },
+  { titulo: "Gantt", aba: "gantt" },
+  { titulo: "Linha de Balanço", aba: "linha-balanco" },
 ];
 
 export default function Home() {
@@ -570,6 +583,7 @@ function Obra({
     { titulo: "SISTEMA", ids: ["catalogo", "comando"] },
   ];
 
+  const emWorkspacePlanejamento = vistasDoPlanejamento.some(item => item.aba === aba);
   const etapaAtual = ({
     dashboard: "Painel da obra", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
     dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
@@ -692,28 +706,27 @@ function Obra({
       <main className="xl-area xl-area-sidebar">
         {/* O painel já tem cabeçalho próprio: a barra aqui só repetia o nome. */}
         {aba !== "dashboard" && (
-          <div className="arquimedes-workbar">
+          <div className={`arquimedes-workbar${emWorkspacePlanejamento ? " planejamento-workbar" : ""}`}>
             <div className="arquimedes-workbar-title">
               <span className="arquimedes-kicker">{etapaAtual}</span>
               {obra && <span className="arquimedes-workbar-obra">{obra}</span>}
             </div>
-            {etapasDoPlanejamento.some((passo) => passo.aba === aba) && (
-              <div className="arquimedes-trilha" aria-label="Fluxo do planejamento">
-                <span className="arquimedes-trilha-label">Fluxo:</span>
-                {etapasDoPlanejamento.map((passo, index) => (
-                  <Fragment key={passo.etapa}>
-                    {index > 0 && <span className="arquimedes-trilha-seta">→</span>}
-                    <button
-                      type="button"
-                      className={etapaAtual === passo.etapa ? "ativo" : ""}
-                      onClick={() => irParaAba(passo.aba)}
-                      title={`Ir para ${passo.etapa}`}
-                    >
-                      {passo.etapa}
-                    </button>
-                  </Fragment>
+            {emWorkspacePlanejamento && (
+              <nav className="planejamento-workspace-nav" aria-label="Módulos do planejamento">
+                {vistasDoPlanejamento.map(({ aba: destino, titulo }) => (
+                  <button
+                    type="button"
+                    key={destino}
+                    className={aba === destino ? "ativo" : ""}
+                    aria-current={aba === destino ? "page" : undefined}
+                    onClick={() => irParaAba(destino)}
+                    title={`Abrir ${titulo} sem usar o agente`}
+                  >
+                    {icones[destino]}
+                    <span>{titulo}</span>
+                  </button>
                 ))}
-              </div>
+              </nav>
             )}
             <div className="arquimedes-fluxo-status" aria-live="polite">
               <div>
@@ -730,7 +743,7 @@ function Obra({
                 no painel. A barra de trabalho ficou so com o "proximo passo". */}
           </div>
         )}
-        <div className="arquimedes-content">
+        <div className={`arquimedes-content${emWorkspacePlanejamento ? " planejamento-area" : ""}`}>
         {(aba === "gantt" || aba === "linha-balanco") && (
           <div className="planejamento-layout-selo" role="note">
             <strong>{layoutProfissional ? "CRONOGRAMA PROFISSIONAL" : "CRONOGRAMA CLÁSSICO"}</strong>
