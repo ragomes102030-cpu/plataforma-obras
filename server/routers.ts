@@ -978,7 +978,8 @@ async function loadStageGateEvidence(
     eapValid: eapValidation.valid,
     activityCount: activities.length,
     dependenciesValid: cpm.issues.every(issue => issue.code !== "invalid_dependency"),
-    cpmValid: cpm.valid,
+    // Rede calculável não significa cronograma viável: folga negativa bloqueia aprovação.
+    cpmValid: cpm.valid && !cpm.infeasible,
     blockerCount,
     costCoverageValid: costCoverage.valid,
     eapDictionaryStandardApproved: false,
@@ -4470,6 +4471,16 @@ export const appRouter = router({
         if (semDuracao.length) {
           throw badRequest(`A baseline exige duração válida em todas as atividades; ${semDuracao.length} ainda estão inválidas.`);
         }
+        // A captura não pode fotografar um cronograma inviável, mesmo quando
+        // o cálculo CPM foi concluído com sucesso e persiste folgas negativas.
+        const inviaveis = activities.filter(activity =>
+          activity.totalFloat != null && Number(activity.totalFloat) < 0
+        );
+        if (inviaveis.length) {
+          throw badRequest(
+            `O cronograma tem ${inviaveis.length} atividade(s) com folga total negativa. Revise as restrições antes de capturar a baseline.`
+          );
+        }
         // Uma baseline congela uma decisão de prazo. Congelar a versão errada é
         // pior que não congelar: o registro fica ativo, o Gantt o usa como
         // referência, e ninguém consegue dizer depois qual versão ele mede.
@@ -4512,9 +4523,26 @@ export const appRouter = router({
           const blocking = networkValidation.issues.find(issue => issue.severity === "error");
           throw badRequest(blocking?.message ?? "A rede de dependências é inválida para congelar uma baseline.");
         }
-        const [created] = await db.insert(scheduleBaselines).values({ projectId: input.projectId, versionId: currentVersion.id, name: input.name, status: "ativa", createdBy: ctx.user.id }).returning({ id: scheduleBaselines.id });
-        await db.insert(scheduleBaselineItems).values(activities.map(activity => ({ baselineId: created.id, activityId: activity.id, startOffset: activity.startOffset, durationDays: activity.durationDays, earlyStart: activity.earlyStart, earlyFinish: activity.earlyFinish })));
-        return { id: created.id, activityCount: activities.length, versionId: currentVersion.id, versionNumber: currentVersion.versionNumber };
+        // Cabeçalho e itens formam uma única fotografia: falha em qualquer
+        // item reverte também o registro da baseline.
+        return db.transaction(async tx => {
+          const [created] = await tx.insert(scheduleBaselines).values({
+            projectId: input.projectId, versionId: currentVersion.id,
+            name: input.name, status: "ativa", createdBy: ctx.user.id,
+          }).returning({ id: scheduleBaselines.id });
+          await tx.insert(scheduleBaselineItems).values(activities.map(activity => ({
+            baselineId: created.id,
+            activityId: activity.id,
+            startOffset: activity.startOffset,
+            durationDays: activity.durationDays,
+            earlyStart: activity.earlyStart,
+            earlyFinish: activity.earlyFinish,
+          })));
+          return {
+            id: created.id, activityCount: activities.length,
+            versionId: currentVersion.id, versionNumber: currentVersion.versionNumber,
+          };
+        });
       }),
     // "O que mudou desde que eu aprovei isto?" — a pergunta que justifica a
     // baseline existir. Sem isto a captura é só um arquivo morto: o engenheiro
