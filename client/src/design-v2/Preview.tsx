@@ -11,6 +11,8 @@ import {
   type Activity, type StageStatus, type WbsItem,
 } from "./sample-data";
 import ModuleGallery, {type GalleryModule} from "./ModuleGallery";
+import ProfessionalSchedule, {addDays,brToInput,inputToBr,brDate} from "./ProfessionalSchedule";
+import BalanceLineEditor from "./BalanceLineEditor";
 import {GRUPOS_V2} from "../modules/navegacao-v2";
 
 type Section = "dashboard" | "planning" | "execution" | "costs" | "supplies" | "management" | "assistant";
@@ -142,14 +144,25 @@ export default function Preview() {
     setToast("Atividade criada apenas na memória da prévia.");
   }
   function saveMockActivity() {
-    if (!selectedActivity || !selectedActivity.name.trim() || selectedActivity.duration < 1) {
+    if (!selectedActivity || !selectedActivity.name.trim() || selectedActivity.duration < 1 || selectedActivity.duration>365 || selectedActivity.progress<0 || selectedActivity.progress>100 || Number.isNaN(brDate(selectedActivity.start).getTime())) {
       setToast("Informe um nome e uma duração maior que zero.");
       return;
+    }
+    // A relação é alterada manualmente, sem nenhum motor de cálculo silencioso.
+    if (selectedActivity.predecessor===selectedActivity.id) {
+      setToast("Uma atividade não pode ser sua própria predecessora.");return;
+    }
+    const seen=new Set([selectedActivity.id]);
+    let current=selectedActivity.predecessor;
+    while(current!=="—" && current){
+      if(seen.has(current)){setToast("Dependência circular: escolha outra predecessora.");return;}
+      seen.add(current);
+      current=activities.find(a=>a.id===current)?.predecessor??"—";
     }
     const next: Activity = {
       ...selectedActivity,
       name: selectedActivity.name.trim(),
-      progress: Math.min(100, Math.max(0, selectedActivity.progress)),
+      end:addDays(selectedActivity.start,selectedActivity.duration-1),
     };
     setActivities(prev => prev.map(a => a.id === next.id ? next : a));
     setSelectedActivity(null);
@@ -283,7 +296,7 @@ export default function Preview() {
               <div className="pv2-tabstrip" role="tablist" aria-label="Áreas de planejamento">
                 {tabs.map(tab => <button role="tab" aria-selected={activeTab === tab.id} className={activeTab===tab.id ? "pv2-tab-active" : ""} key={tab.id} onClick={() => {setActiveTab(tab.id);setSearch("");}}>{tab.label}</button>)}
               </div>
-              {(activeTab === "eap" || activeTab === "gantt") && <div className="pv2-toolbar">
+              {activeTab === "eap" && <div className="pv2-toolbar">
                 <label className="pv2-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={activeTab === "eap" ? "Buscar código ou pacote da EAP" : "Buscar atividade ou código"} aria-label="Buscar"/></label>
                 <div className="pv2-toolbar-right">
                   {activeTab === "eap" ? <span className="pv2-muted-caption">12 itens · 4 fases</span> :
@@ -320,26 +333,11 @@ export default function Preview() {
                 </aside>
               </div>}
 
-              {activeTab === "gantt" && <div className="pv2-panel pv2-gantt-wrap">
-                <div className="pv2-gantt-header"><div><h2>Cronograma de atividades</h2><p>Selecione uma atividade para ver ou editar seus detalhes.</p></div>
-                  <label className="pv2-check"><input type="checkbox" checked={compare} onChange={e=>setCompare(e.target.checked)}/> Sobrepor referência</label>
-                </div>
-                <div className="pv2-gantt-scroll"><div className="pv2-gantt-inner">
-                  <div className="pv2-gantt-labelhead">Atividade <span>Duração</span></div>
-                  <div className="pv2-gantt-weeks">{weeks.map(w=><span key={w}>{w}</span>)}</div>
-                  {shownActivities.map(a=><div key={a.id} className="pv2-gantt-row">
-                    <button className="pv2-gantt-task" onClick={()=>startEdit(a)}><span><strong>{a.name}</strong><small>{a.eap} · {a.code}</small></span><span className="pv2-dur">{a.duration}d</span></button>
-                    <div className="pv2-gantt-track" onClick={()=>startEdit(a)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==="Enter")startEdit(a);}} aria-label={"Detalhar " + a.name}>
-                      {compare && <span className="pv2-baseline-bar" style={{gridColumn:(a.offset+1) + " / span " + a.span}}/>}
-                      <span className={"pv2-activity-bar pv2-activity-" + statusTone(a.status)} style={{gridColumn:(a.offset+1) + " / span " + a.span}}>
-                        {a.progress > 0 && <span style={{width:a.progress+"%"}}/>}
-                      </span>
-                    </div>
-                  </div>)}
-                  {shownActivities.length === 0 && <div className="pv2-empty">Nenhuma atividade encontrada.</div>}
-                </div></div>
-                <div className="pv2-gantt-legend"><span><i className="pv2-leg-blue"/> Planejado</span><span><i className="pv2-leg-green"/> Concluído</span><span><i className="pv2-leg-red"/> Atraso</span><span><i className="pv2-leg-outline"/> Referência (opcional)</span></div>
-              </div>}
+              {activeTab === "gantt" && <ProfessionalSchedule
+                activities={activities} onAdd={addMockActivity} onOpenActivity={startEdit}
+                onChange={item=>setActivities(prev=>prev.map(x=>x.id===item.id?item:x))}
+              />}
+              {activeTab === "linha-balanco" && <BalanceLineEditor/>}
 
               {activeTab === "dependencias" && <div className="pv2-panel pv2-tall-panel">
                 <div className="pv2-section-title"><div><h2>Relações entre atividades</h2><p>Somente os vínculos essenciais nesta visualização.</p></div><GitBranch size={21}/></div>
@@ -356,7 +354,7 @@ export default function Preview() {
                 </div>
                 <div className="pv2-softnote"><AlertCircle size={18}/> Todas as aprovações, datas e bloqueios são simulados. A regra real permanece sob responsabilidade do backend.</div>
               </div>}
-              {(["escopo","atividades","cpm","linha-balanco"] as string[]).includes(activeTab) && (
+              {(["escopo","atividades","cpm"] as string[]).includes(activeTab) && (
                 <ModuleGallery key={activeTab} module={activeTab as GalleryModule}
                   activities={activities} onOpenActivity={startEdit} onNavigate={openModule}/>
               )}
@@ -389,23 +387,23 @@ export default function Preview() {
         <div className="pv2-drawer-body">
           {detailTab==="summary" && <>
             <label className="pv2-field">Nome da atividade<input value={selectedActivity.name} onChange={e=>setSelectedActivity({...selectedActivity,name:e.target.value})}/></label>
-            <div className="pv2-field-grid"><label className="pv2-field">Código<input value={selectedActivity.code} readOnly/></label><label className="pv2-field">Pacote EAP<input value={selectedActivity.eap} readOnly/></label></div>
+            <div className="pv2-field-grid"><label className="pv2-field">Código<input value={selectedActivity.code} readOnly/></label><label className="pv2-field">Pacote EAP<select value={selectedActivity.eap} onChange={e=>setSelectedActivity({...selectedActivity,eap:e.target.value})}>{wbsItems.filter(w=>w.type==="Pacote").map(w=><option value={w.code} key={w.code}>{w.code} · {w.name}</option>)}</select></label></div>
             <label className="pv2-field">Descrição<textarea rows={4} value={selectedActivity.description} onChange={e=>setSelectedActivity({...selectedActivity,description:e.target.value})}/></label>
             <label className="pv2-field">Responsável<input value={selectedActivity.owner} onChange={e=>setSelectedActivity({...selectedActivity,owner:e.target.value})}/></label>
-            <div className="pv2-field">Situação <Status label={selectedActivity.status}/></div>
+            <label className="pv2-field">Situação<select aria-label="Situação da atividade" value={selectedActivity.status} onChange={e=>setSelectedActivity({...selectedActivity,status:e.target.value as StageStatus})}>{["Concluída","Em andamento","Não iniciada","Atrasada"].map(st=><option key={st}>{st}</option>)}</select></label>
           </>}
           {detailTab==="planning" && <>
-            <div className="pv2-field-grid"><label className="pv2-field">Início previsto<input value={selectedActivity.start} readOnly/></label><label className="pv2-field">Término previsto<input value={selectedActivity.end} readOnly/></label></div>
-            <label className="pv2-field">Duração (dias)<input type="number" min={1} max={365} value={selectedActivity.duration} onChange={e=>setSelectedActivity({...selectedActivity,duration:Number(e.target.value)})}/></label>
+            <div className="pv2-field-grid"><label className="pv2-field">Início previsto<input aria-label="Início previsto" type="date" value={brToInput(selectedActivity.start)} onChange={e=>{if(e.target.value){const start=inputToBr(e.target.value);setSelectedActivity({...selectedActivity,start,end:addDays(start,selectedActivity.duration-1)});}}}/></label><label className="pv2-field">Término previsto<input value={selectedActivity.end} readOnly title="Calculado na prévia a partir do início e da duração"/></label></div>
+            <label className="pv2-field">Duração (dias)<input type="number" min={1} max={365} value={selectedActivity.duration} onChange={e=>{const duration=Number(e.target.value);setSelectedActivity({...selectedActivity,duration,end:addDays(selectedActivity.start,Math.max(1,duration)-1)});}}/></label>
             <label className="pv2-field">Avanço físico (%)<input type="number" min={0} max={100} value={selectedActivity.progress} onChange={e=>setSelectedActivity({...selectedActivity,progress:Number(e.target.value)})}/></label>
             <MiniProgress value={selectedActivity.progress}/>
-            <div className="pv2-softnote"><CalendarDays size={18}/> Datas são apenas de leitura. Nenhum cálculo de datas ou CPM é executado no protótipo.</div>
+            <div className="pv2-softnote"><CalendarDays size={18}/> Datas e duração são editáveis manualmente. O término é derivado apenas de dias corridos nesta prévia; não há calendário técnico ou CPM.</div>
           </>}
           {detailTab==="links" && <>
             <div className="pv2-info-block"><small>Pacote de trabalho</small><p>{wbsItems.find(i=>i.code===selectedActivity.eap)?.name ?? "Não encontrado"}</p></div>
-            <div className="pv2-info-block"><small>Predecessora</small><p>{selectedActivity.predecessor==="—"?"Nenhuma":activities.find(a=>a.id===selectedActivity.predecessor)?.name ?? selectedActivity.predecessor}</p></div>
-            <div className="pv2-info-block"><small>Caminho crítico</small><p>{selectedActivity.critical?"Atividade crítica (simulação)":"Não crítica (simulação)"}</p></div>
-            <div className="pv2-softnote"><GitBranch size={18}/> Os vínculos técnicos e folgas reais não são recalculados aqui.</div>
+            <label className="pv2-field">Predecessora (relação TI)<select aria-label="Predecessora da atividade" value={selectedActivity.predecessor} onChange={e=>setSelectedActivity({...selectedActivity,predecessor:e.target.value})}><option value="—">Nenhuma</option>{activities.filter(a=>a.id!==selectedActivity.id).map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label>
+            <label className="pv2-check"><input type="checkbox" checked={selectedActivity.critical} onChange={e=>setSelectedActivity({...selectedActivity,critical:e.target.checked})}/> Marcar como crítica (visualização manual)</label>
+            <div className="pv2-softnote"><GitBranch size={18}/> As relações podem ser alteradas manualmente sem agente. Na prévia, alterar predecessoras não recalcula CPM, datas de sucessoras ou folgas.</div>
           </>}
         </div>
         <div className="pv2-drawer-footer"><button className="pv2-secondary" onClick={()=>setSelectedActivity(null)}>Cancelar</button><button className="pv2-primary" onClick={saveMockActivity}><Check size={17}/> Salvar na prévia</button></div>
