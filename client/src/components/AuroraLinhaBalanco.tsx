@@ -8,8 +8,8 @@ import type { IsoDate } from "@shared/work-calendar";
  * Não sintetiza pavimentos, atividades, durações, produtividades ou datas.
  * Nenhuma mutação, chamada ao agente ou cálculo de CPM ocorre aqui.
  */
-type Props = { linhas: EntradaDaLinha[]; hoje: IsoDate; onAbrirAtividades: () => void };
-type Ponto = { codigo: string; nome: string; local: string; inicio: string; fim: string; progresso: number };
+type Props = { linhas: EntradaDaLinha[]; finsCalculados: Record<string, string>; hoje: IsoDate; onAbrirAtividades: () => void };
+type Ponto = { codigo: string; nome: string; local: string; inicio: string; fim: string; executado: number; quantidade: number | null; unidade: string | null };
 type Serie = { nome: string; chave: string; pontos: Ponto[]; cor: string };
 const DIA = 86400000;
 const CORES = ["#286d86", "#b7764d", "#407d6f", "#8168a6", "#987c2b", "#9a5b71", "#5177a3", "#5f8c48"];
@@ -25,8 +25,8 @@ function obterLocais(linhas: EntradaDaLinha[]): string[] {
   return Array.from(new Set(linhas.map(l => String(l.pavimento || l.frente || "").trim()).filter(Boolean)))
     .sort((a,b) => a.localeCompare(b, "pt-BR", {numeric:true}));
 }
-export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[]) {
-  const validas = linhas.filter(l => !l.marco && ehData(l.inicio) && Number.isFinite(l.duracao) && l.duracao >= 1);
+export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[], finsCalculados: Record<string,string>) {
+  const validas = linhas.filter(l => !l.marco && ehData(l.inicio) && ehData(finsCalculados[l.codigo] ?? "") && Number.isFinite(l.duracao) && l.duracao >= 1);
   const locais = obterLocais(validas);
   const servicos = new Map<string, Serie>();
   validas.forEach(l => {
@@ -38,15 +38,15 @@ export function prepararLinhaBalancoAurora(linhas: EntradaDaLinha[]) {
     if (!servicos.has(chave)) servicos.set(chave, {nome, chave, pontos: [], cor:CORES[servicos.size % CORES.length]});
     servicos.get(chave)!.pontos.push({
       codigo:l.codigo, nome, local,
-      inicio:l.inicio, fim:somar(l.inicio,Math.max(1,l.duracao)-1),
-      progresso:Math.max(0,Math.min(100,Number(l.executado) || 0))
+      inicio:l.inicio, fim:finsCalculados[l.codigo],
+      executado:l.executado, quantidade:l.quantidade, unidade:l.unidade
     });
   });
   return { locais, series:Array.from(servicos.values()), semLocal:validas.filter(l => !(l.pavimento || l.frente)).length };
 }
 
-export function AuroraLinhaBalanco({linhas,hoje,onAbrirAtividades}:Props) {
-  const {locais,series,semLocal} = useMemo(()=>prepararLinhaBalancoAurora(linhas),[linhas]);
+export function AuroraLinhaBalanco({linhas,finsCalculados,hoje,onAbrirAtividades}:Props) {
+  const {locais,series,semLocal} = useMemo(()=>prepararLinhaBalancoAurora(linhas,finsCalculados),[linhas,finsCalculados]);
   const [ocultas,setOcultas]=useState<Set<string>>(()=>new Set());
   const [recolhido,setRecolhido]=useState(false);
   const [busca,setBusca]=useState("");
@@ -127,7 +127,7 @@ export function AuroraLinhaBalanco({linhas,hoje,onAbrirAtividades}:Props) {
                     {unicos>1&&<polyline points={ordenados.map(p=>x(p.local)+","+y(p.inicio)).join(" ")} stroke={s.cor} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" fill="none"/>}
                     {ordenados.map(p=><g key={p.codigo+"-"+p.local}>
                       <line x1={x(p.local)} y1={y(p.inicio)} x2={x(p.local)} y2={y(p.fim)} stroke={s.cor} strokeWidth="7" strokeLinecap="round" opacity=".62"/>
-                      <circle cx={x(p.local)} cy={y(p.inicio)} r="5" fill={s.cor}><title>{s.nome+" · "+p.local+" · "+dataBr(p.inicio)+" até "+dataBr(p.fim)+" · "+p.progresso+"%"}</title></circle>
+                      <circle cx={x(p.local)} cy={y(p.inicio)} r="5" fill={s.cor}><title>{s.nome+" · "+p.local+" · "+dataBr(p.inicio)+" até "+dataBr(p.fim)+" · "+p.executado+(p.unidade ? " "+p.unidade : "")}</title></circle>
                     </g>)}
                   </g>;
                 })}
