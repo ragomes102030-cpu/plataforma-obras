@@ -174,5 +174,7 @@ describe("orientação do fluxo de planejamento", () => {
     expect(HOME).toMatch(
       /Baseline bloqueada: aprove a EAP da versão de trabalho antes de capturar\./
     );
+    expect(HOME).toMatch(/trpc\.planning\.list\.useQuery/);
+    expect(HOME).toMatch(/eapApproved/);
   });
 });

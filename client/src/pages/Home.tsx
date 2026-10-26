@@ -503,6 +503,13 @@ function Obra({
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
+  // A aba Baseline é a autoridade para saber se a versão de trabalho da EAP
+  // pode ser congelada. O snapshot do coordenador resume outra versão quando
+  // há histórico aprovado, portanto não pode decidir a mensagem desta tela.
+  const baseline = trpc.planning.list.useQuery(
+    { projectId: projetoId },
+    { enabled: projetoId > 0 && aba === "baseline" }
+  );
 
   const calendario: WorkCalendar = CALENDARIO_CORRIDO;
   const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
@@ -570,14 +577,10 @@ function Obra({
   const destinoDoProximoPasso = coordenador.data?.nextStage
     ? abaPorEstagio[coordenador.data.nextStage]
     : abaPorEstagio[coordenador.data?.stage ?? "DESCRITIVO"];
-  const versaoDoPlano =
-    coordenador.data && "planVersion" in coordenador.data
-      ? coordenador.data.planVersion
-      : null;
   const baselineBloqueadaPorEap =
-    !coordenador.isPending &&
+    !baseline.isPending &&
     aba === "baseline" &&
-    versaoDoPlano?.status !== "approved";
+    baseline.data?.eapApproved !== true;
   const tituloDoFluxo = baselineBloqueadaPorEap
     ? "Baseline bloqueada"
     : coordenador.isPending
