@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { z } from "zod";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import {
@@ -4316,10 +4317,34 @@ export const appRouter = router({
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
         const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
-        const entries = await db.select({ activityId: productionEntries.activityId, quantity: productionEntries.quantity }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
-        const actualByActivity = new Map<number, number>();
-        for (const entry of entries) actualByActivity.set(entry.activityId, (actualByActivity.get(entry.activityId) ?? 0) + Number(entry.quantity));
         const asOf = input.asOf ?? new Date();
+        // Mesmo corte histórico e reconciliação entre versões aplicados pelo EVM:
+        // um lançamento posterior ao asOf não pode alterar o passado, e o
+        // activityId antigo precisa reencontrar a atividade atual pelo código EAP.
+        const entries = await db
+          .select({
+            activityId: productionEntries.activityId,
+            quantity: productionEntries.quantity,
+            codigoEap: scheduleActivities.wbsCode,
+          })
+          .from(productionEntries)
+          .leftJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
+          .where(and(
+            eq(productionEntries.projectId, input.projectId),
+            eq(productionEntries.status, "confirmada"),
+            lte(productionEntries.productionDate, asOf),
+          ));
+        const idsAtuais = new Set(activities.map(activity => activity.id));
+        const idPorCodigo = indexarAtividadesPorCodigo(activities);
+        const actualByActivity = new Map<number, number>();
+        for (const entry of entries) {
+          const id = resolverAtividadeDaProducao(
+            entry.activityId, entry.codigoEap, idsAtuais, idPorCodigo
+          );
+          if (id != null) {
+            actualByActivity.set(id, (actualByActivity.get(id) ?? 0) + Number(entry.quantity));
+          }
+        }
         const start = project?.plannedStart?.getTime() ?? asOf.getTime();
         const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
         const rows = activities.map(activity => {
