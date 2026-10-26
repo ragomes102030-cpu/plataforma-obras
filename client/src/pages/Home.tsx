@@ -521,6 +521,7 @@ function Obra({
 
   const calendario: WorkCalendar = CALENDARIO_CORRIDO;
   const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
+  const finsCalculados = Object.fromEntries((grade.data?.linhas ?? []).map(l => [l.codigo, l.fim]));
   const linhas: EntradaDaLinha[] = (grade.data?.linhas ?? []).map(l => ({
     codigo: l.codigo,
     atividade: l.atividade,
@@ -763,7 +764,7 @@ function Obra({
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} pilotoAurora={pilotoAurora} localObra={localizacao} />
         ) : aba === "linha-balanco" ? (
-          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" codigoObra={codigoObra} pilotoAurora={pilotoAurora} />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" codigoObra={codigoObra} pilotoAurora={pilotoAurora} finsCalculados={finsCalculados} />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : aba === "documentos" ? (
