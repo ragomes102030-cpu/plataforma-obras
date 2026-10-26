@@ -106,3 +106,9 @@
 .pv2 .pv2-assistant-link:hover,.pv2 .pv2-assistant-link.pv2-navactive{background:var(--brand-faint);border-color:var(--brand);color:var(--brand)}
 .pv2 .pv2-extra-tabs{margin-bottom:21px}
 @media(max-width:1190px){.pv2 .pv2-assistant-link{flex-wrap:wrap}.pv2 .pv2-assistant-link small{display:none}}
+
+
+.pv2 .pv2-eap-head{padding:19px 21px 15px;border-bottom:1px solid var(--border)}
+.pv2 .pv2-eap-head h2{font-size:14px}
+.pv2 .pv2-eap-head p{font-size:11px;margin:5px 0 0}
+@media(max-width:680px){.pv2 .pv2-eap-head{padding:15px 17px}}
