@@ -2526,6 +2526,31 @@ export const appRouter = router({
       }),
   }),
   budgets: router({
+    // Curva S e decisões de desempenho usam exclusivamente pesos aprovados.
+    // budgets.list continua exibindo o rascunho mais recente para edição.
+    approvedForCurve: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { versionId: null, items: [] };
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [approved] = await db
+          .select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(and(
+            eq(budgetVersions.projectId, input.projectId),
+            eq(budgetVersions.status, "aprovado"),
+          ))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (!approved) return { versionId: null, items: [] };
+        const items = await db
+          .select()
+          .from(budgetItems)
+          .where(eq(budgetItems.budgetVersionId, approved.id))
+          .orderBy(budgetItems.sortOrder);
+        return { versionId: approved.id, items };
+      }),
     list: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
