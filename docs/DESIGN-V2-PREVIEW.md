@@ -103,3 +103,46 @@ A PR contém uma moldura V2 conectada aos módulos existentes, além da prévia 
 
 ### Escopo atual
 A moldura e a navegação reais são remodeladas; os conteúdos internos das 17 telas ainda preservam sua densidade original. A simplificação das tabelas será incremental, com modo essencial/avançado, sem esconder recursos técnicos. O modo escuro já funciona no mock, mas não foi aplicado às planilhas reais para não comprometer legibilidade.
+
+## Gantt profissional e Linha de Balanço — edição manual como regra (2026-10-26)
+
+A interface deve funcionar **sem depender do agente Arquimedes** em todos os
+fluxos de planejamento, cadastro, orçamento, execução e administração. A IA
+pode propor alterações, mas nunca ser obrigatória para criar, revisar,
+modificar, aprovar ou acompanhar itens; a autorização continua no backend.
+
+### Prévia implementada e testável
+
+- Gantt com visão dividida (tabela técnica e calendário), grupos hierárquicos
+  por EAP que expandem/recolhem, busca, destaque visual de críticas, alternância
+  da referência baseline, vínculos e zoom semanal/quinzenal.
+- Tabela com código, atividade, duração, início, término, predecessora e avanço;
+  versão compacta e edição direta de porcentagem.
+- Editor lateral com nome, pacote EAP, responsável, status, início, duração,
+  avanço e predecessora editáveis manualmente. Relações circulares são
+  recusadas no protótipo. Alterar duração deriva término somente por dias
+  corridos na prévia. Isto **não representa recálculo CPM nem calendário real**.
+- Linha de Balanço com **datas no eixo vertical** e pavimentos no horizontal,
+  disciplinas/frentes recolhíveis, séries ocultáveis, nome, início, cadência
+  (dias por pavimento), quantidade de pavimentos e equipe editáveis manualmente.
+  Frentes podem ser criadas e excluídas na memória da página.
+- Nenhuma dessas edições aciona o agente, escreve no Supabase ou persiste
+  depois de recarregar. Cálculos e projeções são ilustrativos.
+
+### Regra de produto para integrar à obra real
+
+Todas as edições devem continuar disponíveis em modo manual, sem chamadas de
+LLM/MCP ou dependência de disponibilidade do agente. Antes de migrar o visual
+para produção, auditar e testar EAP, atividades, dependências, CPM, baseline,
+Gantt, LOB, orçamento, suprimentos, produção e controle de acesso **em modo
+manual**, com dados exclusivamente da AURORA TESTE para ensaios mutáveis.
+A integração deve seguir os contratos existentes, respeitando versionamento
+da EAP, calendário, consistência de predecessoras, bloqueios de aprovação,
+concorrência, auditoria e permissões; nunca simular esses cálculos no front-end.
+
+### Referências de ergonomia
+
+- Oracle Primavera P6 — Activities Grid, agrupamento WBS, expandir/recolher,
+  e dock de detalhes.
+- Microsoft Project — tarefas de resumo, vínculos, predecessoras e Gantt.
+- Não foi copiado nenhum código, logotipo ou outro conteúdo proprietário.
