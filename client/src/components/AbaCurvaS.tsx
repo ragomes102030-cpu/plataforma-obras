@@ -41,7 +41,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     { enabled: Number(projetoId) > 0 }
   );
 
-  const budget = trpc.budgets.list.useQuery(
+  const budget = trpc.budgets.approvedForCurve.useQuery(
     { projectId: Number(projetoId) },
     { enabled: Number(projetoId) > 0 }
   );
