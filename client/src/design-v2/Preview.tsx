@@ -191,7 +191,7 @@ export default function Preview() {
               <div className="pv2-metrics">
                 <Metric eyebrow="Avanço físico" value="38%" note="Meta da demonstração: 42%" icon={BarChart3}><MiniProgress value={38}/></Metric>
                 <Metric eyebrow="Prazo da obra" value="241 dias" note={project.start + " — " + project.finish} icon={CalendarDays}><div className="pv2-metric-foot">Cronograma preliminar</div></Metric>
-                <Metric eyebrow="Pacotes da EAP" value="8 de 12" note="4 itens exigem revisão" icon={Layers3}><MiniProgress value={67}/></Metric>
+                <Metric eyebrow="Pacotes da EAP" value="4 de 8" note="4 pacotes exigem revisão" icon={Layers3}><MiniProgress value={50}/></Metric>
                 <Metric eyebrow="Situação da baseline" value="Pendente" note="Aguardando aprovação da EAP" icon={LockKeyhole}><div className="pv2-metric-foot pv2-text-warning">1 bloqueio de planejamento</div></Metric>
               </div>
               <div className="pv2-dashboard-layout">
