@@ -1,0 +1,308 @@
+/*
+ * ARQUIMEDES | Workspace de planejamento 1/3
+ * Refino visual unificado das telas técnicas existentes. Esta folha NÃO define
+ * regras de cálculo, não grava no banco e não depende do agente.
+ * Todas as regras de módulo ficam sob .planejamento-area; a barra pertence ao
+ * mesmo workspace e não altera dashboard, portfólio ou telas administrativas.
+ */
+
+/* Uma área de trabalho, com navegação técnica contínua em vez de breadcrumbs
+ * fragmentados entre abas. A barra superior permanece visível ao rolar. */
+.arquimedes-workbar.planejamento-workbar {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px 16px;
+  padding:10px clamp(12px,2vw,25px) 0;
+  min-height:0;
+  border-bottom:1px solid #cddde4;
+  background:#ffffff;
+  box-shadow:0 3px 12px rgba(22,52,66,.055);
+}
+.planejamento-workbar .arquimedes-workbar-title {
+  flex:1 1 180px;
+  min-width:0;
+  padding-bottom:9px;
+}
+.planejamento-workbar .arquimedes-kicker {
+  font-size:12px;
+  font-weight:780;
+  letter-spacing:.02em;
+  text-transform:none;
+  color:#173c51;
+}
+.planejamento-workbar .arquimedes-workbar-obra {
+  font-size:11px;
+  color:#667c88;
+  max-width:420px;
+}
+.planejamento-workbar .arquimedes-fluxo-status {
+  order:2;
+  margin-left:auto;
+  border-left:0;
+  padding:0 0 9px 14px;
+  min-width:0;
+  max-width:min(420px,43%);
+  gap:12px;
+}
+.planejamento-workbar .arquimedes-fluxo-status strong {
+  color:#255469;
+  font-size:11px;
+  letter-spacing:.005em;
+}
+.planejamento-workbar .arquimedes-fluxo-status small {
+  max-width:230px;
+  font-size:10px;
+}
+.planejamento-workbar .arquimedes-fluxo-status button {
+  min-height:34px;
+  padding:7px 11px;
+  border-radius:7px;
+  background:#eff7f9;
+  color:#195e75;
+}
+.planejamento-workspace-nav {
+  order:3;
+  flex:1 1 100%;
+  min-width:0;
+  display:flex;
+  align-items:stretch;
+  gap:2px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:0;
+  scrollbar-width:thin;
+  scrollbar-color:#cfdee6 transparent;
+  -webkit-overflow-scrolling:touch;
+}
+.planejamento-workspace-nav button {
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  min-height:43px;
+  border:0;
+  border-bottom:3px solid transparent;
+  padding:6px 13px 4px;
+  border-radius:6px 6px 0 0;
+  background:transparent;
+  color:#58707e;
+  font-size:11.5px;
+  line-height:1.3;
+  font-weight:620;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.planejamento-workspace-nav svg {width:15px;height:15px;flex-shrink:0}
+.planejamento-workspace-nav button:hover {
+  color:#18586d;
+  background:#edf6f8;
+}
+.planejamento-workspace-nav button.ativo {
+  color:#165b72;
+  background:#eaf4f7;
+  border-bottom-color:#247e97;
+  font-weight:800;
+}
+.planejamento-workspace-nav button:focus-visible,
+.planejamento-area button:focus-visible,
+.planejamento-area input:focus-visible,
+.planejamento-area select:focus-visible {
+  outline:2px solid #277f9d;
+  outline-offset:2px;
+}
+
+/* Remove breadcrumb secundário redundante: o fluxo segue representado pela
+ * navegação acessível acima, sem esconder validações nem status dos módulos. */
+.planejamento-area .eap-workspace-flow,
+.planejamento-area .pl-atividades-flow {display:none}
+.planejamento-area {min-width:0; background:#f5f8fa}
+.planejamento-area .eap,
+.planejamento-area .pl-atividades-page,
+.planejamento-area .pl-planejamento-panel,
+.planejamento-area .pl-visual-full {
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+}
+
+/* Identidade tipográfica comum das ferramentas de planejamento. */
+.planejamento-area .eap-workspace-header,
+.planejamento-area .pl-atividades-header,
+.planejamento-area .pl-planejamento-head {
+  align-items:center;
+  gap:15px;
+}
+.planejamento-area .eap-workspace-title h1,
+.planejamento-area .pl-atividades-title h1 {font-size:21px;line-height:1.25;letter-spacing:-.025em;color:#173344}
+.planejamento-area .eap-workspace-title p,
+.planejamento-area .pl-atividades-title p {font-size:11.5px;line-height:1.5;color:#637b88}
+.planejamento-area .eap-workspace-btn,
+.planejamento-area .pl-atividades-btn {border-radius:7px;min-height:35px}
+.planejamento-area .eap-workspace-header {
+  border-color:#dbe6eb;
+  border-radius:9px;
+  padding:15px 17px;
+  box-shadow:none;
+}
+.planejamento-area .eap-workspace-metrics {gap:9px;background:transparent;border:0}
+.planejamento-area .eap-workspace-metrics>div {
+  border:1px solid #dbe6eb;
+  border-radius:9px;
+  padding:11px 13px;
+  box-shadow:0 1px 6px #16374707;
+}
+.planejamento-area .eap-workspace-toolbar,
+.planejamento-area .eap-workspace-validation {
+  border-color:#dbe6eb;
+  border-radius:9px;
+  padding:11px 13px;
+  gap:10px;
+  box-shadow:none;
+}
+.planejamento-area .eap-workspace-validation {border-left:3px solid #2f8498}
+.planejamento-area .eap-workspace-search {min-height:34px}
+.planejamento-area .eap-workspace-grid {
+  border-color:#cbdce4;
+  border-radius:9px;
+  max-height:min(74vh,920px);
+  overscroll-behavior:contain;
+}
+.planejamento-area .eap-workspace-grid-head {
+  min-height:37px;
+  background:#e9f0f4;
+  border-bottom:2px solid #b9cbd5;
+  color:#365468;
+  font-size:9.5px;
+  letter-spacing:.025em;
+}
+.planejamento-area .eap-workspace-grid-head>span {height:37px}
+.planejamento-area .eap-workspace-grid-body .eap-linha {min-height:38px}
+.planejamento-area .eap-workspace-grid-body .eap-nome {font-size:11.5px;color:#264657}
+.planejamento-area .eap-workspace-grid-body .eap-responsavel,
+.planejamento-area .eap-workspace-grid-body .eap-local {font-size:10px}
+.planejamento-area .eap-workspace-grid-body .eap-acao-linha {min-height:28px}
+.planejamento-area .eap-workspace-grid-body .eap-linha:hover {background:#edf6f9}
+
+/* Atividades: cabeçalho e planilha consistentes com a EAP. Mantém os inputs
+ * e o salvamento por campo no mesmo lugar, sem mudar as mutations. */
+.planejamento-area .pl-atividades-page {padding:16px clamp(11px,1.5vw,22px) 12px;gap:12px}
+.planejamento-area .pl-atividades-header {
+  background:#fff;
+  border:1px solid #dbe6eb;
+  border-radius:9px;
+  padding:16px 17px;
+}
+.planejamento-area .pl-atividades-metrics {
+  gap:9px;
+  border:0;
+  background:transparent;
+}
+.planejamento-area .pl-atividades-metrics>div {
+  border:1px solid #dbe6eb;
+  border-radius:9px;
+  padding:13px;
+}
+.planejamento-area .pl-atividades-metrics strong {font-size:19px}
+.planejamento-area .pl-atividades-toolbar {
+  padding:10px 12px;
+  min-height:45px;
+  background:#fff;
+  border:1px solid #dbe6eb;
+  border-radius:9px;
+  flex-wrap:wrap;
+}
+.planejamento-area .pl-atividades-search {
+  height:36px;
+  border:1px solid #c8d9e2;
+  border-radius:7px;
+}
+.planejamento-area .pl-atividades-table-wrap {
+  border:1px solid #cbdce4;
+  border-radius:9px;
+  max-height:min(75vh,900px);
+  min-height:240px;
+  overscroll-behavior:contain;
+}
+.planejamento-area .pl-atividades-table th {
+  height:38px;
+  background:#e9f0f4;
+  color:#375469;
+  border-bottom:2px solid #b9cbd5;
+  font-size:10px;
+  letter-spacing:.025em;
+}
+.planejamento-area .pl-atividades-table td {
+  height:42px;
+  font-size:11.5px;
+  color:#264657;
+}
+.planejamento-area .pl-atividades-table .name-col strong {font-weight:640}
+.planejamento-area .pl-atividades-table tbody tr:hover td {background:#eef7fa}
+.planejamento-area .pl-atividades-table input:not([type="checkbox"]):focus {
+  border-color:#2a7d9b;
+  box-shadow:0 0 0 2px #c5e6ef;
+}
+
+/* Cronograma: atenção no gráfico, não em cartões de apresentação. */
+.planejamento-area .planejamento-layout-selo {
+  border:1px solid #d7e5eb;
+  border-radius:9px;
+  margin:13px 18px 0;
+  background:#fff;
+}
+.planejamento-area .planejamento-profissional.pl-visual-full {
+  padding:13px clamp(10px,1.5vw,20px) 24px;
+  background:transparent;
+}
+.planejamento-area .planejamento-profissional .pl-visual-header {
+  border-radius:9px;
+  margin-bottom:10px;
+  padding:14px 17px;
+}
+.planejamento-area .planejamento-layout-atalhos {
+  border-radius:9px;
+  padding:9px 13px;
+  margin-bottom:10px;
+}
+.planejamento-area .planejamento-profissional .pg-rolagem {max-height:min(78vh,980px)}
+.planejamento-area .planejamento-profissional .pg-visao {margin-bottom:10px}
+.planejamento-area .planejamento-profissional .pg-nome {font-size:11.75px}
+.planejamento-area .planejamento-profissional .pg-zoom button {min-width:34px}
+
+/* Notebook e campo: nunca deixar a navegação sair da largura disponível. */
+@media(max-width:1140px) {
+  .planejamento-workbar .arquimedes-fluxo-status {max-width:47%}
+  .planejamento-workspace-nav button {min-height:41px;padding:7px 10px 4px}
+}
+@media(max-width:900px) {
+  .planejamento-workbar .arquimedes-workbar-title {flex:1 1 100%}
+  .planejamento-workbar .arquimedes-fluxo-status {
+    order:2;
+    max-width:100%;
+    flex:1 1 100%;
+    border-top:1px solid #e9eef1;
+    padding:7px 0 0;
+    justify-content:space-between;
+  }
+  .planejamento-workspace-nav {order:3}
+  .planejamento-area .eap-workspace-metrics,
+  .planejamento-area .pl-atividades-metrics {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:580px) {
+  .arquimedes-workbar.planejamento-workbar{padding:7px 10px 0;gap:4px}
+  .planejamento-workbar .arquimedes-workbar-title{padding-bottom:5px}
+  .planejamento-workbar .arquimedes-fluxo-status small {max-width:min(52vw,230px)}
+  .planejamento-workspace-nav button{min-height:44px;padding:8px 11px 5px;font-size:11px}
+  .planejamento-workspace-nav button span{display:inline}
+  .planejamento-area .eap-workspace-header,.planejamento-area .pl-atividades-header{padding:12px}
+  .planejamento-area .eap-workspace-metrics,
+  .planejamento-area .pl-atividades-metrics {grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .planejamento-area .eap-workspace-grid,
+  .planejamento-area .pl-atividades-table-wrap{max-height:65vh}
+  .planejamento-area .planejamento-layout-selo{margin:7px 9px 0;padding:10px}
+}
+@media(prefers-reduced-motion:reduce) {
+  .planejamento-workspace-nav *, .planejamento-area * {scroll-behavior:auto}
+}
