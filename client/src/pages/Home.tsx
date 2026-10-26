@@ -107,9 +107,9 @@ export default function Home() {
       : lista.find(o => o.id === idNaUrl);
   const projetoId = obra?.id ?? null;
   const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
-  // Opt-in restrito à AURORA TESTE: nenhum outro projeto recebe o layout piloto.
-  const pilotoAurora = obra?.code === "OB-PUPOCN" && typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("layout") === "aurora";
+  // Layout profissional padrão em todas as obras, com retorno opt-in ao visual anterior.
+  const layoutProfissional = typeof window === "undefined" ||
+    new URLSearchParams(window.location.search).get("layout") !== "classico";
 
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
@@ -159,7 +159,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}${pilotoAurora ? " aurora-layout-piloto" : ""}`}>
+    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}${layoutProfissional ? " planejamento-layout-profissional" : ""}`}>
       {mostrarTituloDaObra && obra && (
         <header className="arq-context-header">
           <div className="arq-context-top">
@@ -321,7 +321,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} codigoObra={obra!.code} pilotoAurora={pilotoAurora} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
+          <Obra projetoId={projetoId} obra={obra!.name} codigoObra={obra!.code} layoutProfissional={layoutProfissional} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -441,7 +441,7 @@ function Obra({
   projetoId,
   obra,
   codigoObra,
-  pilotoAurora,
+  layoutProfissional,
   localizacao,
   descricao,
   tipoDeObra,
@@ -458,7 +458,7 @@ function Obra({
   projetoId: number;
   obra: string;
   codigoObra: string;
-  pilotoAurora: boolean;
+  layoutProfissional: boolean;
   localizacao: string;
   descricao: string;
   tipoDeObra: TipoDeObra | "";
@@ -730,15 +730,16 @@ function Obra({
           </div>
         )}
         <div className="arquimedes-content">
-        {pilotoAurora && (aba === "gantt" || aba === "linha-balanco") && (
-          <div className="aurora-layout-selo" role="note">
-            <strong>LABORATÓRIO DE LAYOUT · AURORA TESTE</strong>
-            <span>Visualização opcional da obra real. Dados preservados; ajustes manuais ficam nas abas técnicas.</span>
+        {(aba === "gantt" || aba === "linha-balanco") && (
+          <div className="planejamento-layout-selo" role="note">
+            <strong>{layoutProfissional ? "CRONOGRAMA PROFISSIONAL" : "CRONOGRAMA CLÁSSICO"}</strong>
+            <span>Visualização dos dados da obra. Para alterar atividades, datas ou predecessoras, use as abas técnicas; o agente é opcional.</span>
             <button type="button" onClick={() => {
               const url = new URL(window.location.href);
-              url.searchParams.delete("layout");
+              if (layoutProfissional) url.searchParams.set("layout", "classico");
+              else url.searchParams.delete("layout");
               window.location.assign(url.toString());
-            }}>Visual clássico</button>
+            }}>{layoutProfissional ? "Ver visual clássico" : "Ver layout profissional"}</button>
           </div>
         )}
         {aba === "dashboard" ? (
@@ -762,9 +763,9 @@ function Obra({
         ) : aba === "baseline" ? (
           <AbaBaseline projetoId={projetoId} />
         ) : aba === "gantt" ? (
-          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} pilotoAurora={pilotoAurora} localObra={localizacao} />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} layoutProfissional={layoutProfissional} localObra={localizacao} />
         ) : aba === "linha-balanco" ? (
-          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" codigoObra={codigoObra} pilotoAurora={pilotoAurora} finsCalculados={finsCalculados} />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" codigoObra={codigoObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : aba === "documentos" ? (
