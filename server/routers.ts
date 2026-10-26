@@ -129,6 +129,7 @@ import { coletarDadosEvms } from "./construction/evm-dados";
 import { coletarDadosLookahead } from "./construction/lookahead-dados";
 import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
+import { consolidateControlProgress } from "./construction/control-summary";
 import { coletarDadosMedicao } from "./financeiro/medicao-dados";
 import {
   calcularMedicao,
@@ -4311,7 +4312,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { asOf: new Date(), activities: [], totals: { plannedQuantity: 0, actualQuantity: 0, plannedProgress: 0, actualProgress: 0, variance: 0 } };
+        if (!db) return { asOf: new Date(), activities: [], totals: consolidateControlProgress([], null) };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4355,11 +4356,27 @@ export const appRouter = router({
           const actualProgress = plannedQuantity > 0 ? Math.max(0, Math.min(100, (actualQuantity / plannedQuantity) * 100)) : 0;
           return { id: activity.id, wbsCode: activity.wbsCode, name: activity.name, phase: activity.phase, plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10, critical: activity.critical === 1, status: activity.status };
         });
-        const plannedQuantity = rows.reduce((sum, row) => sum + row.plannedQuantity, 0);
-        const actualQuantity = rows.reduce((sum, row) => sum + row.actualQuantity, 0);
-        const plannedProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.plannedProgress, 0) / plannedQuantity : 0;
-        const actualProgress = plannedQuantity ? rows.reduce((sum, row) => sum + row.plannedQuantity * row.actualProgress, 0) / plannedQuantity : 0;
-        return { asOf, activities: rows, totals: { plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10 } };
+        // Somar m², m³ e unidades para calcular peso da obra é incorreto.
+        // Sem orçamento aprovado e cobertura integral, o agregado declara
+        // ausência de base ao invés de apresentar um percentual enganoso.
+        const [approvedBudget] = await db.select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado")))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        const approvedItems = approvedBudget
+          ? await db.select({ id: budgetItems.id, unitPrice: budgetItems.unitPrice })
+              .from(budgetItems)
+              .where(eq(budgetItems.budgetVersionId, approvedBudget.id))
+          : null;
+        const totals = consolidateControlProgress(
+          rows.map(row => ({
+            ...row,
+            budgetItemId: activities.find(activity => activity.id === row.id)?.budgetItemId ?? null,
+          })),
+          approvedItems,
+        );
+        return { asOf, activities: rows, totals };
       }),
     // Aprovar a versão de trabalho é um ato de governança, não um efeito
     // colateral de uma etapa do agente. Enquanto isso morava só dentro do
