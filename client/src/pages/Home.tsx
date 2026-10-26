@@ -570,6 +570,25 @@ function Obra({
   const destinoDoProximoPasso = coordenador.data?.nextStage
     ? abaPorEstagio[coordenador.data.nextStage]
     : abaPorEstagio[coordenador.data?.stage ?? "DESCRITIVO"];
+  const versaoDoPlano =
+    coordenador.data && "planVersion" in coordenador.data
+      ? coordenador.data.planVersion
+      : null;
+  const baselineBloqueadaPorEap =
+    !coordenador.isPending &&
+    aba === "baseline" &&
+    versaoDoPlano?.status !== "approved";
+  const tituloDoFluxo = baselineBloqueadaPorEap
+    ? "Baseline bloqueada"
+    : coordenador.isPending
+      ? "Lendo o planejamento…"
+      : coordenador.data?.canAdvance
+        ? "Pronto para avançar"
+        : "Revisar pendência";
+  const mensagemDoFluxo = baselineBloqueadaPorEap
+    ? "Baseline bloqueada: aprove a EAP da versão de trabalho antes de capturar."
+    : coordenador.data?.gateMessage ?? "Verifique o escopo antes de estruturar a EAP.";
+  const destinoDoFluxo = baselineBloqueadaPorEap ? "eap" : destinoDoProximoPasso;
 
   // Barra de campo (so no celular). Sao as quatro telas que se usa de pe, na
   // obra, mais o "Mais" que abre o menu completo. Existe porque o painel nao
@@ -687,11 +706,11 @@ function Obra({
             <div className="arquimedes-fluxo-status" aria-live="polite">
               <div>
                 <span>Próximo passo</span>
-                <strong>{coordenador.isPending ? "Lendo o planejamento…" : coordenador.data?.canAdvance ? "Pronto para avançar" : "Revisar pendência"}</strong>
-                <small>{coordenador.data?.gateMessage ?? "Verifique o escopo antes de estruturar a EAP."}</small>
+                <strong>{tituloDoFluxo}</strong>
+                <small>{mensagemDoFluxo}</small>
               </div>
-              <button type="button" onClick={() => irParaAba(destinoDoProximoPasso)}>
-                {coordenador.data?.nextStage ? "Abrir etapa" : "Ver escopo"} <ArrowRight size={14} aria-hidden="true" />
+              <button type="button" onClick={() => irParaAba(destinoDoFluxo)}>
+                {baselineBloqueadaPorEap ? "Abrir EAP" : coordenador.data?.nextStage ? "Abrir etapa" : "Ver escopo"} <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
             {/* O menu do celular saiu daqui e virou a barra de campo, no fim da

@@ -169,4 +169,10 @@ describe("orientação do fluxo de planejamento", () => {
     expect(HOME).toMatch(/Próximo passo/);
     expect(HOME).toMatch(/gateMessage/);
   });
+
+  it("explica que a baseline depende da aprovação da EAP", () => {
+    expect(HOME).toMatch(
+      /Baseline bloqueada: aprove a EAP da versão de trabalho antes de capturar\./
+    );
+  });
 });
