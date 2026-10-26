@@ -107,6 +107,9 @@ export default function Home() {
       : lista.find(o => o.id === idNaUrl);
   const projetoId = obra?.id ?? null;
   const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
+  // Opt-in restrito à AURORA TESTE: nenhum outro projeto recebe o layout piloto.
+  const pilotoAurora = obra?.code === "OB-PUPOCN" && typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("layout") === "aurora";
 
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
@@ -156,7 +159,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}`}>
+    <div className={`xl-app${!ehRotaDeObra && user ? " xl-app--portfolio" : ""}${pilotoAurora ? " aurora-layout-piloto" : ""}`}>
       {mostrarTituloDaObra && obra && (
         <header className="arq-context-header">
           <div className="arq-context-top">
@@ -318,7 +321,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
+          <Obra projetoId={projetoId} obra={obra!.name} codigoObra={obra!.code} pilotoAurora={pilotoAurora} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -437,6 +440,8 @@ function EscolhaDeObra({ obras, carregando, onEscolher, onNovaObra, onObraDemo, 
 function Obra({
   projetoId,
   obra,
+  codigoObra,
+  pilotoAurora,
   localizacao,
   descricao,
   tipoDeObra,
@@ -452,6 +457,8 @@ function Obra({
 }: {
   projetoId: number;
   obra: string;
+  codigoObra: string;
+  pilotoAurora: boolean;
   localizacao: string;
   descricao: string;
   tipoDeObra: TipoDeObra | "";
@@ -722,6 +729,17 @@ function Obra({
           </div>
         )}
         <div className="arquimedes-content">
+        {pilotoAurora && (aba === "gantt" || aba === "linha-balanco") && (
+          <div className="aurora-layout-selo" role="note">
+            <strong>LABORATÓRIO DE LAYOUT · AURORA TESTE</strong>
+            <span>Visualização opcional da obra real. Dados preservados; ajustes manuais ficam nas abas técnicas.</span>
+            <button type="button" onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("layout");
+              window.location.assign(url.toString());
+            }}>Visual clássico</button>
+          </div>
+        )}
         {aba === "dashboard" ? (
           <PainelDoCronograma
             agregado={agregado}
@@ -743,9 +761,9 @@ function Obra({
         ) : aba === "baseline" ? (
           <AbaBaseline projetoId={projetoId} />
         ) : aba === "gantt" ? (
-          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} localObra={localizacao} />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} pilotoAurora={pilotoAurora} localObra={localizacao} />
         ) : aba === "linha-balanco" ? (
-          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" codigoObra={codigoObra} pilotoAurora={pilotoAurora} />
         ) : aba === "producao" ? (
           <AbaProducao projetoId={projetoId} />
         ) : aba === "documentos" ? (
