@@ -43,7 +43,7 @@ export default function BalanceLineEditor(){
  function toggleGroup(stage:string){setClosed(v=>{const next=new Set(v);next.has(stage)?next.delete(stage):next.add(stage);return next;});}
  function setLineDate(input:string){if(input)change(selected,{start:inputToBr(input)});}
  return <section className="lb" aria-label="Linha de Balanço editável">
-  <header className="lb-header"><div><span className="pv2-eyebrow">PLANEJAMENTO · LINHA DE BALANÇO</span><h2>Ritmo de produção por pavimento</h2><p>Datas na vertical, unidades no eixo horizontal e frentes recolhíveis.</p></div><button className="pv2-primary" onClick={addLine}><Plus size={16}/> Nova frente</button></header>
+  <header className="lb-header"><div><span className="pv2-eyebrow">PLANEJAMENTO · LINHA DE BALANÇO</span><h2>Linha de Balanço</h2><p>Datas na vertical, unidades no eixo horizontal e frentes recolhíveis.</p></div><button className="pv2-primary" onClick={addLine}><Plus size={16}/> Nova frente</button></header>
   <div className="lb-toolbar">
    <div><button className="ps-action" onClick={()=>setClosed(new Set())}><ChevronsUpDown size={15}/> Expandir todas</button><button className="ps-action" onClick={()=>setClosed(new Set(groupOrder))}><ChevronsDownUp size={15}/> Recolher todas</button></div>
    <div><label className="ps-switch"><input type="checkbox" checked={showLabels} onChange={e=>setShowLabels(e.target.checked)}/> Legendas</label><select className="ps-select" aria-label="Escala da Linha de Balanço" value={zoom} onChange={e=>setZoom(e.target.value as "complete"|"compact")}><option value="complete">Visão detalhada</option><option value="compact">Visão compacta</option></select></div>
@@ -63,7 +63,7 @@ export default function BalanceLineEditor(){
     </section>}
    </div>
    <div className="lb-chart-wrap"><div className="lb-chart-head"><strong>Linha de Balanço</strong><span>Tempo ↓ &nbsp; Pavimentos →</span></div>
-    <svg className="lb-chart" viewBox={"0 0 755 "+chartHeight} role="img" aria-label="Linha de Balanço com datas no eixo vertical e pavimentos no eixo horizontal">
+    <svg className="lb-chart" viewBox={"0 0 755 "+chartHeight} role="img" aria-label="Linha de Balanço fictícia com datas no eixo vertical e pavimentos no eixo horizontal">
       {floorTicks.map(f=><g key={f}><line x1={x(f)} x2={x(f)} y1="40" y2={chartHeight-50} stroke="currentColor" opacity=".12"/><text x={x(f)} y="29" fontSize="12" fill="currentColor" textAnchor="middle" opacity=".75">P{f}</text></g>)}
       {dateTicks.map(d=><g key={d} opacity=".68"><line x1="75" x2="709" y1={y(d)} y2={y(d)} stroke="currentColor" opacity=".17"/><text x="69" y={y(d)+4} fontSize="10" fill="currentColor" textAnchor="end">{d.slice(0,5)}</text></g>)}
       {active.map(line=>{
