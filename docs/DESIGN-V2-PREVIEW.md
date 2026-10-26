@@ -61,3 +61,45 @@ Saída: dist/design-v2/ — **não** dist/public/.
 - Menu <= 6 itens; no máximo uma ação primária em cada área principal.
 - Campos editáveis e toggles têm comportamento demonstrável e identificado como fictício.
 - Build, typecheck e smoke Playwright da prévia aprovados antes da avaliação visual.
+
+## Integração real V2 — sem mudança de dados
+
+A PR contém uma moldura V2 conectada aos módulos existentes, além da prévia fictícia. É uma versão visual opcional.
+
+1. Executar a branch de design em ambiente isolado.
+2. Autenticar e abrir uma obra existente.
+3. Adicionar `?ui=v2` à URL `/obra/ID`.
+4. Remover `?ui=v2` e recarregar para voltar à interface clássica.
+
+**Atenção:** a V2 real não é sandbox: os comandos existentes continuam gravando no mesmo banco. Apenas a prévia fictícia em `design-v2.html` é livre de API. Testar navegação em leitura; qualquer operação mutável só na AURORA TESTE.
+
+### Cobertura integral
+
+| Área | Abas reais |
+| --- | --- |
+| Visão geral | dashboard |
+| Planejamento | escopo, eap, atividades, dependencias, cpm, baseline, gantt, linha-balanco |
+| Execução | producao, curva-s |
+| Custos | financeiro |
+| Suprimentos | suprimentos, catalogo |
+| Gestão | documentos, riscos |
+| Ferramenta administrativa | comando (admin-only) |
+
+**17 de 17 abas**. Assistente flutuante, lixeira, seleção de obras e regras de permissão permanecem.
+
+### Implementação
+- `client/src/modules/navegacao-v2.ts`: organização dos mesmos IDs reais em seis áreas.
+- `client/src/pages/Home.tsx`: altera apenas a moldura e a navegação mediante opt-in. Os componentes, hooks tRPC, comandos e cálculos permanecem.
+- `client/src/design-v2/live-shell.css`: CSS escopado ao modo V2.
+- `client/src/main.tsx`: importa CSS após os estilos atuais.
+- `client/src/modules/navegacao-v2.test.ts`: audita a correspondência de 17/17 abas.
+
+### Condições antes de qualquer merge ou publicação
+- Testes, TypeScript e build aprovados.
+- Conferência das 17 telas em notebook/tablet com autenticação, inicialmente só leitura.
+- Conferir permissões (inclusive Central de Comando) e persistência após navegação.
+- Testes que escrevem dados exclusivamente na AURORA TESTE, com aprovação específica.
+- **Sem merge na main ou deploy no Render até validação e autorização.**
+
+### Escopo atual
+A moldura e a navegação reais são remodeladas; os conteúdos internos das 17 telas ainda preservam sua densidade original. A simplificação das tabelas será incremental, com modo essencial/avançado, sem esconder recursos técnicos. O modo escuro já funciona no mock, mas não foi aplicado às planilhas reais para não comprometer legibilidade.
