@@ -16,7 +16,7 @@ test("dashboard, fluxo EAP, cronograma e painel de atividade", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Cronograma de atividades" })).toBeVisible();
   await page.screenshot({ path: "test-results/design-v2/gantt.png", fullPage: true });
 
-  await page.getByRole("button", { name: /Escavações/ }).click();
+  await page.getByRole("button", { name: /^Escavações / }).click();
   const drawer = page.getByRole("dialog", { name: "Detalhe da atividade" });
   await expect(drawer).toBeVisible();
   await drawer.getByRole("textbox", { name: "Nome da atividade" }).fill("Escavações — teste da prévia");
@@ -36,7 +36,7 @@ test("modo escuro e navegação responsiva no tablet", async ({ page }) => {
   await expect(page.locator(".pv2")).toHaveAttribute("data-theme", "dark");
 
   await page.getByRole("button", { name: "Abrir menu" }).click();
-  await page.getByRole("button", { name: "Planejamento" }).click();
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("button", { name: /^Planejamento/ }).click();
   await expect(page.getByRole("heading", { name: "Planejamento" })).toBeVisible();
   await page.screenshot({ path: "test-results/design-v2/tablet.png", fullPage: true });
 
