@@ -2,13 +2,20 @@ import pg from "pg";
 
 const { Client } = pg;
 const projectId = Number(process.env.AURORA_PROJECT_ID ?? 7);
-const databaseUrl = process.env.SUPABASE_DB_URL ?? process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error("SUPABASE_DB_URL ou DATABASE_URL não configurada.");
+  throw new Error("DATABASE_URL não configurada.");
 }
 
-const client = new Client({ connectionString: databaseUrl });
+const connectionUrl = new URL(databaseUrl);
+const sslMode = (connectionUrl.searchParams.get("ssl-mode") ?? connectionUrl.searchParams.get("sslmode") ?? "").toLowerCase();
+if (sslMode === "disable" || sslMode === "disabled") {
+  throw new Error("DATABASE_URL não pode desabilitar TLS.");
+}
+connectionUrl.searchParams.delete("ssl-mode");
+connectionUrl.searchParams.delete("sslmode");
+const client = new Client({ connectionString: connectionUrl.toString(), ssl: { rejectUnauthorized: true } });
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);

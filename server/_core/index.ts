@@ -9,7 +9,7 @@ import { registerGitHubOAuthRoutes } from "./github-oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { count, desc, gte, sql } from "drizzle-orm";
 import { appRouter } from "../routers";
-import { getDb } from "../db";
+import { getDb, validateDatabaseConfiguration } from "../db";
 import { ENV } from "./env";
 import { origemDeploy } from "./deploy-info";
 import { createContext } from "./context";
@@ -81,14 +81,11 @@ async function listTableNames(): Promise<string[] | null> {
   }
 
 async function startServer() {
+  if (process.env.NODE_ENV === "production") validateDatabaseConfiguration();
   const app = express();
   const server = createServer(app);
 
-  if (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL) {
-    console.log("[schema] backend de banco selecionado: Supabase (host ocultado por segurança)");
-  } else {
-    console.warn("[schema] nenhuma conexão Supabase configurada; DATABASE_URL legado será usado");
-  }
+  console.log("[schema] backend de banco configurado por DATABASE_URL");
   await logSchemaInventory();
   const configVars = configVarNames();
   console.log(

@@ -103,18 +103,7 @@ async function sincronizarSequenciasDeIdentidade(conn) {
 }
 
 // ----------------------------------------------------------------- conexão --
-const rawUrl = process.env.USE_SUPABASE === "1"
-  ? (process.env.SUPABASE_DB_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL_SUPABASE || process.env.SUPA_DB_URL)
-  : process.env.DATABASE_URL;
-const url = rawUrl ? (() => {
-  const u = new URL(rawUrl);
-  if (process.env.USE_SUPABASE === "1" && u.hostname === "db.tromrvfijbtihuilvnuk.supabase.co") {
-    u.hostname = "aws-0-sa-east-1.pooler.supabase.com";
-    u.port = "5432";
-    if (u.username === "postgres") u.username = "postgres.tromrvfijbtihuilvnuk";
-  }
-  return u.toString();
-})() : undefined;
+const url = process.env.DATABASE_URL;
 if (!url) {
   fail("DATABASE_URL ausente. O banco e o PostgreSQL; sem esta variavel nao ha onde aplicar.");
 }
@@ -125,12 +114,12 @@ const parsed = new URL(url);
 parsed.searchParams.delete("ssl-mode");
 parsed.searchParams.delete("charset");
 const sslDesejado = (parsed.searchParams.get("sslmode") ?? "").toLowerCase();
-const sslDesligado = sslDesejado === "disable";
-if (sslDesligado) parsed.searchParams.delete("sslmode");
+if (sslDesejado === "disable" || sslDesejado === "disabled") fail("DATABASE_URL não pode desabilitar TLS.");
+parsed.searchParams.delete("sslmode");
 
 const conn = new Client({
   connectionString: parsed.toString(),
-  ...(sslDesejado && !sslDesligado ? { ssl: { rejectUnauthorized: false } } : {}),
+  ssl: { rejectUnauthorized: true },
 });
 
 try {

@@ -1,10 +1,12 @@
 import { and, eq, type ColumnsSelection } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgInsertBase, PgQueryResultHKT, PgTable } from "drizzle-orm/pg-core";
+import { Pool, type PoolConfig } from "pg";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: Pool | null = null;
 
 /**
  * Normaliza a connection string para o `pg`.
@@ -19,70 +21,56 @@ let _db: ReturnType<typeof drizzle> | null = null;
  * vez de confiar que o driver adivinhou certo.
  */
 export function runtimeDatabaseUrl() {
-  // Se a conexão Supabase estiver configurada, ela sempre vence o DATABASE_URL legado.
-  // Isso evita que um segredo antigo do Render seja escolhido por engano em produção.
-  const supabaseUrl =
-    process.env.SUPABASE_DB_URL ||
-    process.env.SUPABASE_DATABASE_URL ||
-    process.env.DATABASE_URL_SUPABASE ||
-    process.env.SUPA_DB_URL;
-  const raw = supabaseUrl || process.env.DATABASE_URL;
+  // A aplicação aceita uma única fonte de configuração. Nunca reescreva o
+  // usuário da URL: cada ambiente deve fornecer a URL emitida pelo provedor.
+  const raw = process.env.DATABASE_URL;
   if (!raw) return undefined;
 
-  // Quando SUPABASE_DB_URL existe, ela é a fonte de verdade. Não reescrevemos
-  // host, usuário ou senha: a connection string copiada do Supabase já contém
-  // a combinação correta e uma reescrita pode invalidar uma credencial válida.
   const url = new URL(raw);
 
-  // A Session Pooler do Supabase exige o usuário no formato
-  // `postgres.<project-ref>`. Se alguém colar no Render uma URL do pooler
-  // montada manualmente com apenas `postgres`, o PostgreSQL responde 28P01
-  // mesmo com a senha correta. Corrigimos somente esse caso; URLs já geradas
-  // pelo Supabase permanecem intactas.
-  if (
-    supabaseUrl &&
-    url.hostname.endsWith(".pooler.supabase.com") &&
-    url.username === "postgres"
-  ) {
-    url.username = "postgres.tromrvfijbtihuilvnuk";
-    console.log("[database] pooler Supabase: usuário normalizado para o project-ref");
-  }
-
-  const source = supabaseUrl ? "supabase" : "legacy";
   const maskedUser = url.username ? url.username.replace(/[^a-zA-Z0-9_.-]/g, "_") : "<none>";
   const passwordConfigured = url.password.length > 0;
   console.log(
-    `[database] source=${source} host=${url.hostname} port=${url.port || "5432"} user=${maskedUser} password=${passwordConfigured ? "configured" : "missing"}`
+    `[database] source=DATABASE_URL host=${url.hostname} port=${url.port || "5432"} user=${maskedUser} password=${passwordConfigured ? "configured" : "missing"}`
   );
   return url.toString();
 }
 
 export function normalizeDatabaseConnection(databaseUrl: string) {
   const url = new URL(databaseUrl);
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error("DATABASE_URL deve usar o protocolo PostgreSQL.");
+  if (!url.hostname || !url.username || !url.password || url.pathname === "/") throw new Error("DATABASE_URL deve informar host, usuário, senha e banco.");
   const sslMode = (
     url.searchParams.get("ssl-mode") ?? url.searchParams.get("sslmode")
   )?.toLowerCase();
   url.searchParams.delete("ssl-mode");
+  url.searchParams.delete("sslmode");
   // `charset` e parametro do MySQL. O `pg` nao o conhece e nao faz nada com
   // ele: deixei-lo ali seria carregar um parametro morto para dentro de toda
   // conexao, achando que ele ainda diz alguma coisa.
   url.searchParams.delete("charset");
-  const desligado = sslMode === "disable" || sslMode === "disabled";
-  if (desligado) {
-    url.searchParams.delete("sslmode");
-  }
+  if (sslMode === "disable" || sslMode === "disabled") throw new Error("DATABASE_URL não pode desabilitar TLS.");
   return {
     uri: url.toString(),
-    ...(!desligado && sslMode ? { ssl: { rejectUnauthorized: false } } : {}),
+    ssl: { rejectUnauthorized: true },
   };
 }
+
+export function databasePoolConfig(databaseUrl = runtimeDatabaseUrl()): PoolConfig {
+  if (!databaseUrl) throw new Error("DATABASE_URL ausente.");
+  const connection = normalizeDatabaseConnection(databaseUrl);
+  return { connectionString: connection.uri, ssl: connection.ssl };
+}
+
+export function validateDatabaseConfiguration(): void { databasePoolConfig(); }
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   const databaseUrl = runtimeDatabaseUrl();
   if (!_db && databaseUrl) {
     try {
-      _db = drizzle(databaseUrl);
+      _pool = new Pool(databasePoolConfig(databaseUrl));
+      _db = drizzle({ client: _pool });
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

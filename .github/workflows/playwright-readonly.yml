@@ -25,7 +25,7 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - name: Public + authenticated read-only smoke
         env:
-          PLAYWRIGHT_BASE_URL: https://plataforma-obras.dockhosting.dev
+          PLAYWRIGHT_BASE_URL: https://plataforma-obras-3.onrender.com
           PLAYWRIGHT_STORAGE_STATE: .playwright/auth.json
           AUTH_STATE_B64: ${{ secrets.ARQUIMEDES_PLAYWRIGHT_AUTH_B64 }}
         run: |
