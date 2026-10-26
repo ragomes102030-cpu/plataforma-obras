@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildSCurve, type SCurveResult } from "@shared/s-curve";
 import { acumularRealizado, realizadoNoDia, type PontoRealizado } from "@shared/curva-realizado";
-import { brazilianHolidays, defaultCalendar, indexOf } from "@shared/work-calendar";
+import { indexOf } from "@shared/work-calendar";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { EstadoCarregando } from "./EstadoCarregando";
 
@@ -138,17 +138,20 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
   // "Planejado até hoje 0,0% — Realizado 0,0%" mesmo com 10 atividades em 100%.
   // A ponte dia↔data vem do calendário da obra (`planning.grade`).
   const inicioObra = grade.data?.inicioObra ?? null;
-  const calendario = useMemo(() => {
-    if (!inicioObra) return null;
-    const ano = Number(inicioObra.slice(0, 4));
-    const base = defaultCalendar(ano);
-    // Uma obra de 580 dias atravessa dois ou três anos; sem os feriados do ano
-    // seguinte o "hoje" cairia alguns dias fora do eixo.
-    return {
-      ...base,
-      exceptions: [ano, ano + 1, ano + 2].flatMap(y => brazilianHolidays(y)),
-    };
-  }, [inicioObra]);
+  const anoInicio = inicioObra ? Number(inicioObra.slice(0, 4)) : 0;
+  const consultaCalendario = trpc.planning.getCalendarForCurve.useQuery(
+    { projectId: Number(projetoId), startYear: anoInicio },
+    { enabled: Number(projetoId) > 0 && anoInicio >= 2000 && anoInicio <= 2100 }
+  );
+  const calendario = useMemo(
+    () => consultaCalendario.data
+      ? {
+          weekPattern: consultaCalendario.data.weekPattern,
+          exceptions: consultaCalendario.data.exceptions,
+        }
+      : null,
+    [consultaCalendario.data]
+  );
   const hojeNum = hoje && inicioObra && calendario ? indexOf(calendario, inicioObra, hoje) : 0;
   const aindaNaoComecou = hoje != null && inicioObra != null && hojeNum < 0;
   const dataDeInicio = inicioObra
@@ -217,7 +220,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
   // Carregando ≠ vazio. As duas consultas desta aba são pesadas (atividades +
   // itens de orçamento) e, no plano gratuito, a tela ficava 10-30 s dizendo
   // "sem dados" para uma obra que tem os dois.
-  if (Number(projetoId) > 0 && (planejamento.isPending || budget.isPending)) {
+  if (Number(projetoId) > 0 && (planejamento.isPending || budget.isPending || grade.isPending || (anoInicio >= 2000 && consultaCalendario.isPending))) {
     return (
       <div className="xl-painel">
         <EstadoCarregando
@@ -225,6 +228,14 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           detalhe="A curva S cruza o caminho crítico com o valor de cada item de orçamento."
           linhas={4}
         />
+      </div>
+    );
+  }
+
+  if (anoInicio >= 2000 && consultaCalendario.isError) {
+    return (
+      <div className="xl-painel" role="alert">
+        <p>Não foi possível carregar o calendário da obra. A Curva S não pode usar dias úteis presumidos.</p>
       </div>
     );
   }
