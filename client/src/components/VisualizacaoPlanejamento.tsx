@@ -114,7 +114,7 @@ export function VisualizacaoPlanejamento({
       <header className="pl-visual-header">
         <div>
           <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
-          <span>{view === "gantt" ? "EAP recolhível · tarefas, datas, vínculos e progresso" : pilotoAurora ? "Datas na vertical · locais na horizontal · séries reais da obra" : "Tempo no eixo horizontal · locais no eixo vertical · ritmo das equipes"}</span>
+          <span>{view === "gantt" ? (pilotoAurora ? "EAP recolhível · tarefas, datas, vínculos e progresso" : "Sequência, duração, avanço e caminho crítico") : pilotoAurora ? "Datas na vertical · locais na horizontal · séries reais da obra" : "Tempo no eixo horizontal · locais no eixo vertical · ritmo das equipes"}</span>
         </div>
       </header>
       {pilotoAurora && <nav className="aurora-layout-atalhos" aria-label="Edição manual do planejamento">
@@ -219,7 +219,7 @@ function Gantt({
   const [alternandoMarco, setAlternandoMarco] = useState(false);
   const [larguraEsquerda, setLarguraEsquerda] = useState(() => {
     try {
-      const salvo = Number(window.localStorage.getItem("plataforma-obras:gantt-esquerda"));
+      const salvo = Number(window.localStorage.getItem(pilotoAurora ? "plataforma-obras:gantt-esquerda-aurora-piloto" : "plataforma-obras:gantt-esquerda"));
       return Number.isFinite(salvo) && salvo >= 300 && salvo <= 760 ? salvo : (pilotoAurora ? 610 : 470);
     } catch {
       return pilotoAurora ? 610 : 470;
@@ -230,11 +230,11 @@ function Gantt({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("plataforma-obras:gantt-esquerda", String(larguraEsquerda));
+      window.localStorage.setItem(pilotoAurora ? "plataforma-obras:gantt-esquerda-aurora-piloto" : "plataforma-obras:gantt-esquerda", String(larguraEsquerda));
     } catch {
       // modo privado: segue sem guardar
     }
-  }, [larguraEsquerda]);
+  }, [larguraEsquerda, pilotoAurora]);
 
   useEffect(() => {
     if (!ajustandoColuna) return;
