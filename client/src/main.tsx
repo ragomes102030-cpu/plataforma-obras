@@ -38,6 +38,8 @@ import "@/legibilidade-gerada.css";
 // outras camadas -- com especificidade igual, vence quem vem depois -- e so age a
 // partir de 621px, para nao cruzar com a camada de campo (ate 900px, com o dedo).
 import "@/tipografia-desktop.css";
+// Última camada: somente regras escopadas ao shell V2 (?ui=v2).
+import "@/design-v2/live-shell.css";
 
 const queryClient = new QueryClient();
 
