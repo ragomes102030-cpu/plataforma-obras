@@ -1,8 +1,8 @@
 /**
- * Gantt e Linha de Balanço profissionais são o padrão para todos os projetos.
- * Um parâmetro reversível permite comparar com a visualização clássica.
- * Não depende de obra, usuário, agente ou banco.
+ * Layout único do cronograma: a interface clássica é o padrão estável.
+ * Mantido temporariamente como API de compatibilidade com telas já existentes.
+ * Parâmetros da URL não criam variantes de interface.
  */
-export function usarLayoutProfissional(search = ""): boolean {
-  return new URLSearchParams(search).get("layout") !== "classico";
+export function usarLayoutProfissional(_search = ""): boolean {
+  return false;
 }
