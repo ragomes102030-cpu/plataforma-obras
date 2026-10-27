@@ -499,7 +499,7 @@ export function PainelDoCronograma({
           )}
         </section>
 
-        <section className="pd-bloco" aria-label="Próximos sete dias">
+        <section className="pd-bloco" aria-label="Semana de trabalho">
           <div className="pd-bloco-topo">
             <h3 className="pd-bloco-titulo">Semana de trabalho</h3>
             {semana && (
