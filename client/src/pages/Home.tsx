@@ -761,7 +761,7 @@ function Obra({
         ) : aba === "baseline" ? (
           <AbaBaseline projetoId={projetoId} />
         ) : aba === "gantt" ? (
-          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} layoutProfissional={layoutProfissional} localObra={localizacao} />
+          <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} layoutProfissional={layoutProfissional} localObra={localizacao} finsCalculados={finsCalculados} />
         ) : aba === "linha-balanco" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="lob" codigoObra={codigoObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} />
         ) : aba === "producao" ? (
