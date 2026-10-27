@@ -124,7 +124,7 @@ export function VisualizacaoPlanejamento({
         {([["atividades","Atividades e durações"],["dependencias","Predecessoras"],["cpm","Calcular CPM"],["eap","Estrutura EAP"]] as const).map(([aba,rotulo]) =>
           <button key={aba} type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba}}))}>{rotulo}</button>
         )}
-      </nav>}
+      </nav>
       {view === "gantt" && !cpmCalculado && atividades.length > 0 && (
         <div className="pl-gantt-cpm-aviso">
           O Gantt está usando o início/duração informados. Calcule o CPM para destacar o caminho crítico do plano.
