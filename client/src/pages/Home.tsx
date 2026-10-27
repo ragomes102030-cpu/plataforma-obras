@@ -30,6 +30,7 @@ import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import "@/planilha.css";
 import "@/eap.css";
 import "@/workspace-planejamento.css";
+import "@/escopo-eap-studio.css";
 // mobile.css e campo-tipografia.css NAO sao importados aqui de proposito: eles
 // tem de ser a ultima folha do bundle, e qualquer CSS importado de dentro de App
 // entra antes de index.css. Eles sao importados no fim de main.tsx.
@@ -130,7 +131,7 @@ export default function Home() {
     onSuccess: async created => {
       await obras.refetch();
       setLocation(`/obra/${created.id}`);
-      setAba("eap");
+      setAba("escopo");
       setNovaObraAberta(false);
     },
   });
@@ -863,6 +864,13 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     && (bdiNum === null || (bdiNum >= 0 && bdiNum <= 1));
   const formatarReal = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v; };
   const formatarPct = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? (n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + "%" : v; };
+  // Quantidades em m², m³, un etc. não podem ser somadas em um total adimensional.
+  const wbsEscopo = trpc.projects.wbs.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
+  const versoesEscopo = trpc.agent.agentPlanVersions.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
+  const totalPacotes = (wbsEscopo.data ?? []).filter(n => n.nodeType === "pacote").length;
+  const versaoAtual = versoesEscopo.data?.[0];
+  const versaoAprovada = versoesEscopo.data?.find(v => v.status === "approved");
+  const irParaEap = () => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "eap" } }));
   const cubCamposPreenchidos = [cubValor.trim(), cubUf.trim(), cubMes.trim()].filter(v => v !== "").length;
   const cubCompleto = cubCamposPreenchidos === 3;
   const grade = trpc.planning.grade.useQuery(
@@ -873,12 +881,11 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const atividades = linhas.filter(l => !String(l.codigo ?? "").toLowerCase().includes("exemplo"));
   const frentes = Array.from(new Set(atividades.map(l => l.frente).filter(Boolean)));
   const pavimentos = Array.from(new Set(atividades.map(l => l.pavimento).filter(Boolean)));
-  const unidades = atividades.reduce((sum, l) => sum + (Number(l.quantidade) || 0), 0);
   const temPlanejamento = atividades.length > 0;
   const comQuantidade = atividades.filter(l => (Number(l.quantidade) || 0) > 0).length;
   const naturezaDoObjeto = ({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? null;
   const dimensoesComDados = [
-    Boolean(descricao.trim() && naturezaDoObjeto),
+    Boolean(descricao.trim() && naturezaDoObjeto && !/(n[ãa]o invente|proponha uma eap|ser[áa] revisada pelo engenheiro|com base nessa descri[çc][ãa]o)/i.test(descricao)),
     frentes.length > 0,
     pavimentos.length > 0,
     comQuantidade > 0,
@@ -888,6 +895,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   // invente informações", "proponha uma EAP"). Isso não é declaração de escopo e
   // não pode passar como se fosse: o painel avisa e o gate não fecha.
   const instrucoesNoTexto = /(n[ãa]o invente|proponha uma eap|ser[áa] revisada pelo engenheiro|com base nessa descri[çc][ãa]o)/i.test(descricao);
+  const escopoFormal = Boolean(naturezaDoObjeto && localizacao.trim() && descricao.trim() && !instrucoesNoTexto);
   const plural = (quantidade: number, singular: string, varios: string) =>
     `${quantidade} ${quantidade === 1 ? singular : varios}`;
 
@@ -926,7 +934,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       codigo: "ESC-04",
       nome: "Quantitativos",
       categoria: "MEDIÇÃO",
-      detalhe: `${plural(atividades.length, "atividade no cronograma", "atividades no cronograma")}, ${comQuantidade} com quantidade${unidades > 0 ? ` · ${unidades.toLocaleString("pt-BR")} unidades no total` : ""}`,
+      detalhe: `${plural(atividades.length, "atividade no cronograma", "atividades no cronograma")}, ${comQuantidade} com quantidade informada. Unidades diferentes não são somadas.`,
       status: comQuantidade === atividades.length && atividades.length > 0 ? "Completo" : comQuantidade > 0 ? "Parcial" : "Pendente",
     },
   ];
@@ -952,6 +960,31 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         </div>
       </header>
 
+      <section className="ct-escopo-etapa" aria-labelledby="ct-escopo-titulo">
+        <div>
+          <span className="ct-escopo-etiqueta">ETAPA 01 · DEFINIÇÃO DO OBJETO</span>
+          <h2 id="ct-escopo-titulo">Escopo antes da Estrutura Analítica</h2>
+          <p>A descrição contratual orienta a proposta do Arquimedes e o desenho manual da EAP. A geração é uma sugestão, nunca uma aprovação automática.</p>
+          <div className="ct-escopo-estados">
+            <span className={escopoFormal ? "ct-escopo-estado completo" : "ct-escopo-estado pendente"}>
+              {escopoFormal ? "Escopo formal declarado" : "Descrição formal precisa de revisão"}
+            </span>
+            <span className="ct-escopo-estado informativo">
+              {versaoAtual ? "EAP v" + versaoAtual.versionNumber + " · " + (versaoAtual.status === "approved" ? "aprovada" : "em elaboração") : "EAP ainda não criada"}
+            </span>
+            {versaoAprovada && <span className="ct-escopo-estado informativo">Referência aprovada: v{versaoAprovada.versionNumber}</span>}
+          </div>
+        </div>
+        <div className="ct-escopo-acoes">
+          <button type="button" className="ct-escopo-avancar" onClick={irParaEap}>
+            <TreePine size={17} /> {totalPacotes > 0 ? "Inspecionar EAP · " + totalPacotes + " pacotes" : "Estruturar EAP"} <ArrowRight size={16} />
+          </button>
+          <button type="button" className="ct-escopo-analisar" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}>
+            <Bot size={16} /> Analisar escopo com Arquimedes
+          </button>
+          {!escopoFormal && <small>Revise o escopo declarado antes de solicitar uma nova proposta. A edição manual continua disponível.</small>}
+        </div>
+      </section>
       <section className="scopo-trace-grid">
         <details open className="scopo-detail">
           <summary>Escopo declarado da obra</summary>

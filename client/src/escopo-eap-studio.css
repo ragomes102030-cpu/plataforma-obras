@@ -1,0 +1,81 @@
+/* Arquimedes Studio: somente abas Escopo e EAP, sem alterar a Control Tower. */
+.scopo-workspace,.eap{
+  --studio-ink:#143243;--studio-muted:#637c8d;--studio-line:#dce7ed;
+  font-variant-numeric:tabular-nums;
+}
+.scopo-workspace button:focus-visible,.eap button:focus-visible,
+.scopo-workspace summary:focus-visible,.eap summary:focus-visible{
+  outline:3px solid #3daeca;outline-offset:3px;
+}
+.ct-escopo-etapa,.ct-eap-etapa{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  background:#112c3d;color:#eaf8fc;border:1px solid #284b5f;border-radius:14px;
+  padding:23px 26px;margin:0 0 15px;
+  box-shadow:0 10px 24px rgba(16,43,60,.10);
+}
+.ct-escopo-etapa>div:first-child,.ct-eap-etapa>div:first-child{min-width:0;flex:1}
+.ct-escopo-etiqueta,.ct-eap-kicker{font-size:10px;letter-spacing:.12em;font-weight:800;color:#92cbd8}
+.ct-escopo-etapa h2{font-size:23px;font-weight:800;letter-spacing:-.03em;line-height:1.25;margin:10px 0 7px;color:#f6fcfe}
+.ct-escopo-etapa p,.ct-eap-etapa p{font-size:12px;color:#b2cbd6;line-height:1.62;max-width:720px;margin:0}
+.ct-escopo-acoes{flex:0 0 254px;display:flex;flex-direction:column;gap:8px}
+.ct-escopo-acoes button{display:flex;align-items:center;justify-content:center;gap:9px;text-align:center;border-radius:9px;min-height:42px;padding:9px 11px;font-size:12px;font-weight:800}
+.ct-escopo-avancar{background:#e9f9fc;border:1px solid #c7e7ed;color:#17647d}
+.ct-escopo-avancar:hover{background:#fff}
+.ct-escopo-analisar{background:#1d475b;border:1px solid #4c7384;color:#dff3f8}
+.ct-escopo-analisar:hover{background:#2a576b}
+.ct-escopo-acoes small{color:#c8d6dc;font-size:10.5px;line-height:1.55}
+.ct-escopo-estados{display:flex;gap:7px;margin-top:15px;flex-wrap:wrap}
+.ct-escopo-estado{display:inline-flex;align-items:center;border-radius:7px;padding:6px 9px;font-size:10px;font-weight:750;border:1px solid #ffffff30}
+.ct-escopo-estado.completo{background:#143f3b;color:#b6e8d7;border-color:#38675c}
+.ct-escopo-estado.pendente{background:#483824;color:#ffdb9c;border-color:#766040}
+.ct-escopo-estado.informativo{background:#244455;color:#d6eef4;border-color:#396475}
+.ct-eap-etapa>div:first-child>strong{display:block;font-size:22px;letter-spacing:-.035em;line-height:1.35;margin:8px 0}
+.ct-eap-versao{display:flex;flex-direction:column;gap:8px;flex:0 0 180px;font-size:11px;font-weight:800;color:#cee6ef}
+.ct-eap-versao span{border:1px solid #406879;background:#224658;border-radius:7px;padding:9px 11px}
+.ct-eap-modos{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:11px 12px;margin:0 0 12px;background:#fff;border:1px solid #dce7ec;border-radius:11px}
+.ct-eap-modos button{border:1px solid #d9e7ed;color:#325f73;background:#f7fafb;border-radius:8px;min-height:39px;display:inline-flex;align-items:center;gap:8px;padding:9px 13px;font-size:12px;font-weight:740}
+.ct-eap-modos button.ativo{border-color:#9cced9;background:#e4f3f7;color:#145e76}
+.ct-eap-modos button:hover{background:#eaf6f8}
+.ct-eap-inspection-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;align-items:stretch;gap:11px;min-width:0;margin:0 0 13px}
+.ct-eap-inspection-layout .eap-workspace-grid{min-width:0;margin:0}
+.ct-eap-inspection-layout .eap-workspace-grid-body{min-width:0}
+.ct-eap-selecionado{background:#e7f4f9!important;box-shadow:inset 3px 0 #1e809b}
+.ct-eap-inspecionar{border:1px solid #c9e1e9;border-radius:5px;background:#f2f8fa;color:#236d87;font-weight:700;font-size:10px;padding:6px 8px}
+.ct-eap-inspecionar:hover{background:#e3f2f6}
+.ct-eap-ficha{background:#fff;border:1px solid #dce7ed;border-radius:10px;overflow:auto;max-height:min(74vh,920px);min-width:0;display:flex;flex-direction:column;box-shadow:0 3px 14px rgba(17,45,60,.04)}
+.ct-eap-ficha-cabecalho{background:#f8fbfd;padding:19px 17px 16px;border-bottom:1px solid #e4edf1}
+.ct-eap-ficha-cabecalho>span{font-size:9px;font-weight:850;letter-spacing:.13em;color:#2f859c}
+.ct-eap-ficha-cabecalho h3{font-size:17px;color:#1c4356;line-height:1.35;letter-spacing:-.025em;margin:8px 0 5px}
+.ct-eap-ficha-cabecalho p{font-size:11px;color:#708693;line-height:1.6;margin:0}
+.ct-eap-ficha-corpo{padding:15px 17px;display:flex;flex-direction:column;gap:10px}
+.ct-eap-ficha-corpo h4{font-size:9.5px;letter-spacing:.1em;color:#577d91;margin:11px 0 2px;font-weight:850}
+.ct-eap-ficha-corpo dl{margin:0}
+.ct-eap-ficha-corpo dl>div{display:flex;gap:10px;justify-content:space-between;border-bottom:1px solid #e8eff2;padding:8px 0}
+.ct-eap-ficha-corpo dt{font-size:11px;color:#6a8290}
+.ct-eap-ficha-corpo dd{margin:0;max-width:64%;text-align:right;font-size:11px;font-weight:750;color:#25485a;overflow-wrap:anywhere}
+.ct-eap-ficha-campo{border-top:1px solid #eef3f5;padding-top:10px}
+.ct-eap-ficha-campo strong{font-size:11px;color:#3c6679}
+.ct-eap-ficha-campo p,.ct-eap-ficha-corpo details p{font-size:11.5px;line-height:1.6;color:#576e7d;white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0}
+.ct-eap-ficha-corpo details{border:1px solid #e1ebef;border-radius:7px;padding:10px}
+.ct-eap-ficha-corpo details summary{font-size:11.5px;font-weight:750;color:#2b627b;cursor:pointer}
+.ct-eap-ficha-status{font-size:11px;color:#336b7c;background:#eef8fa;padding:10px;border:1px solid #d6e8ee;border-radius:7px;line-height:1.55;margin:0}
+.ct-eap-atalhos{display:grid;grid-template-columns:1fr;gap:6px}
+.ct-eap-atalhos button{border:1px solid #d6e8ef;background:#fbfdfe;border-radius:7px;min-height:37px;padding:8px 11px;display:flex;align-items:center;justify-content:space-between;font-size:11.5px;font-weight:750;text-align:left;color:#2c6c84}
+.ct-eap-atalhos button:hover{background:#eef8fa;border-color:#a4d5e1}
+.ct-eap-ficha-aviso{font-size:10.5px;color:#748895;line-height:1.55;margin:0}
+.ct-eap-editar{display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px;border:1px solid #267f98;background:#17748e;color:#fff;border-radius:8px;font-size:11.5px;font-weight:780;padding:9px 12px}
+.ct-eap-editar:hover{background:#0e5973}
+.ct-eap-ficha-vazia{color:#7695a2;padding:35px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:15px}
+.ct-eap-ficha-vazia p{font-size:12px;line-height:1.6}
+@media(max-width:1280px){.ct-eap-inspection-layout{grid-template-columns:minmax(0,1fr) 268px}}
+@media(max-width:1100px){.ct-eap-inspection-layout{grid-template-columns:1fr}.ct-eap-ficha{max-height:none}.ct-eap-ficha-corpo{display:block}.ct-eap-ficha-corpo h4{margin-top:15px}.ct-eap-atalhos{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:690px){
+ .ct-escopo-etapa,.ct-eap-etapa{flex-direction:column;align-items:stretch;padding:18px;gap:14px}
+ .ct-escopo-acoes,.ct-eap-versao{flex:0 0 auto;width:100%}
+ .ct-escopo-etapa h2{font-size:21px}
+ .ct-eap-etapa>div:first-child>strong{font-size:20px}
+ .ct-eap-modos button{flex:1;justify-content:center;min-width:146px}
+ .ct-eap-atalhos{grid-template-columns:1fr}
+ .ct-eap-inspection-layout .eap-workspace-grid{max-width:100%}
+}
+@media(prefers-reduced-motion:reduce){.ct-eap-ficha *, .ct-escopo-etapa *{transition:none!important;animation:none!important}}
