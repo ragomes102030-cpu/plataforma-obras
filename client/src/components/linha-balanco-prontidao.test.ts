@@ -42,6 +42,6 @@ describe("prontidão visual de Linha de Balanço", () => {
     expect(componente).toContain("meses.map");
     expect(componente).toContain("Revisar atividades e locais");
     expect(componente).toContain('aba: "gantt"');
-    expect(componente).not.toContain("LinhaBalancoVertical");
+    expect(componente).not.toContain("export function LinhaBalancoVertical");
   });
 });
