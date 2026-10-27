@@ -61,4 +61,25 @@ describe("LOB — renderização real do componente (SSR, sem banco)", () => {
     expect(r.series).toHaveLength(2);
     expect(r.series.every(s=>!s.repetitiva)).toBe(true);
   });
+  it("duas frentes repetitivas em pavimentos distintos são exibidas juntas na LOB", () => {
+    const linhas = [
+      a("QA.101","Alvenaria de vedação","P01","Vedação"),
+      a("QA.102","Alvenaria de vedação","P02","Vedação"),
+      a("QA.201","Chapisco interno","P01","Revestimentos"),
+      a("QA.202","Chapisco interno","P02","Revestimentos"),
+    ];
+    const html = renderizar(linhas);
+    const resultado = prepararLinhaBalancoVertical(
+      linhas, Object.fromEntries(linhas.map(l=>[l.codigo,"2026-11-12"]))
+    );
+    expect(resultado.series.filter(s=>s.repetitiva)).toHaveLength(2);
+    expect(html).toContain("2 sequência(s) visível(is)");
+    expect(html).toContain("Mostrar todas as frentes");
+    expect(html).toContain("Alvenaria de vedação");
+    expect(html).toContain("Chapisco interno");
+    expect((html.match(/<polyline /g)??[])).toHaveLength(4);
+    expect(html).toContain("P01");
+    expect(html).toContain("P02");
+  });
+
 });
