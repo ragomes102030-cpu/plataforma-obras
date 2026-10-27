@@ -119,7 +119,7 @@ export function VisualizacaoPlanejamento({
           <span>{view === "gantt" ? (layoutProfissional ? "EAP recolhível · tarefas, datas, vínculos e progresso" : "Sequência, duração, avanço e caminho crítico") : "Datas na vertical · locais na horizontal · séries reais da obra"}</span>
         </div>
       </header>
-      {<nav className="planejamento-layout-atalhos" aria-label="Edição manual do planejamento">
+      <nav className="planejamento-layout-atalhos" aria-label="Edição manual do planejamento">
         <span>Editar no sistema, sem agente:</span>
         {([["atividades","Atividades e durações"],["dependencias","Predecessoras"],["cpm","Calcular CPM"],["eap","Estrutura EAP"]] as const).map(([aba,rotulo]) =>
           <button key={aba} type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba}}))}>{rotulo}</button>
