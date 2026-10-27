@@ -69,7 +69,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
   const altura = Math.max(550, Math.min(1480,faixas.length*(escala==="mes"?49:28)+topo+rodape));
   const h = altura-topo-rodape;
   const xLocal = (local:string) => esquerda+locais.indexOf(local)*larguraLocal+larguraLocal/2;
-  const yData = (iso:string) => topo+(diaUtc(iso)-diaUtc(inicioEixo))/dias*h;
+  const yData = (iso:string) => topo+((diaUtc(iso)-diaUtc(inicioEixo))/DIA)/dias*h;
   const mostrarHoje = Boolean(inicioEixo && fimEixo && diaUtc(hoje)>=diaUtc(inicioEixo) && diaUtc(hoje)<=diaUtc(fimEixo));
   const intervaloRotulos = Math.max(1,Math.ceil(faixas.length/28));
 
@@ -83,7 +83,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
     <section className="lob-pro" aria-label="Linha de Balanço — planejamento">
       <header className="lob-pro-cabecalho">
         <div>
-          <span className="lob-pro-kicker"><Layers3 size={14}/> PLANEJAMENTO · RITMO E FRENTES</span>
+          <span className="lob-pro-kicker"><Layers3 size={14}/> PLANEJAMENTO · RITMO E LOCAIS</span>
           <h2>Linha de Balanço</h2>
           <p>Tempo na vertical e locais na horizontal. Dados reais do cronograma, sem estimativas artificiais.</p>
         </div>
@@ -91,27 +91,35 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
       </header>
 
       <div className="lob-pro-indicadores" aria-label="Resumo da Linha de Balanço">
-        <span><strong>{locais.length}</strong> categorias cadastradas</span>
+        <span><strong>{locais.length}</strong> locais físicos cadastrados</span>
         <span><strong>{pontosTodos.length}</strong> atividades localizadas</span>
         <span><strong>{repetidas.length}</strong> sequências repetitivas válidas</span>
         <span><strong>{semLocal}</strong> sem local</span>
       </div>
 
       {repetidas.length === 0 ? (
+        <>
         <div className="lob-pro-prontidao" role="status" aria-label="Diagnóstico da Linha de Balanço">
           <div className="lob-pro-prontidao-marca"><Layers3 size={24}/></div>
           <div className="lob-pro-prontidao-conteudo">
-            <span className="lob-pro-prontidao-kicker">DADOS INSUFICIENTES PARA LINHA DE BALANÇO</span>
+            <span className="lob-pro-prontidao-kicker">LINHA DE RITMO AINDA NÃO DISPONÍVEL</span>
             <h3>A obra ainda não tem serviços repetidos por unidade de execução.</h3>
             <p>Uma LOB precisa relacionar o mesmo serviço a duas ou mais unidades físicas,
-              com início e término definidos. Nesta versão do cronograma, nenhuma série atende
-              a esse requisito. Não é correto transformar disciplinas ou fases em pavimentos,
-              nem desenhar linhas artificiais.</p>
+              com início e término definidos. Hoje há {pontosTodos.length} atividade(s) com local
+              e período válidos, mas nenhuma sequência repetitiva que permita traçar o ritmo.
+              O mapa abaixo mostra a ocupação planejada por local; ele não representa produtividade.
+              Disciplinas ou fases não são convertidas em pavimentos e nenhuma linha é inventada.</p>
+            <div className="lob-pro-diagnostico-contagens" aria-label="Diagnóstico dos dados da Linha de Balanço">
+              <span><strong>{locais.length}</strong> locais físicos cadastrados</span>
+              <span><strong>{pontosTodos.length}</strong> atividades com datas válidas</span>
+              <span><strong>{semLocal}</strong> atividades sem local físico</span>
+              <span><strong>{descartadas}</strong> marcos ou registros com datas/duração inválidas</span>
+            </div>
             {locais.length > 0 && <div className="lob-pro-categorias">
-              <strong>Valores atuais do campo pavimento/frente ({locais.length})</strong>
+              <strong>Locais físicos cadastrados ({locais.length})</strong>
               <div>{locais.slice(0,12).map(local=><span key={local}>{local}</span>)}
                 {locais.length>12&&<span>+ {locais.length-12} outros</span>}</div>
-              <small>Verifique se esses valores são locais físicos ou disciplinas da obra.</small>
+              <small>Confirme que cada valor identifica uma unidade física de execução, como pavimento, bloco ou trecho.</small>
             </div>}
             <div className="lob-pro-prontidao-acoes">
               <button type="button" className="lob-pro-editar" onClick={onAbrirAtividades}><ListTodo size={16}/> Revisar atividades e locais</button>
@@ -119,9 +127,27 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                 Ver cronograma no Gantt <ChevronRight size={16}/>
               </button>
             </div>
-            <p className="lob-pro-prontidao-nota">A EAP, as atividades e as datas permanecem intactas. A visualização de LOB aparecerá quando houver registros repetitivos válidos.</p>
+            <p className="lob-pro-prontidao-nota">A EAP, as atividades e as datas permanecem intactas. As linhas de ritmo aparecerão quando houver registros repetitivos válidos.</p>
           </div>
         </div>
+        {locais.length > 0 && pontosTodos.length > 0 && <section className="lob-pro-mapa-aux" aria-label="Mapa auxiliar de atividades por local">
+          <header><div><strong>Mapa auxiliar de atividades</strong><span>Períodos e locais cadastrados · contagem de tarefas planejadas · sem conexão de ritmo</span></div>
+            <small>ocupação não representa produtividade</small>
+          </header>
+          <div className="lob-pro-mapa-rolagem" role="region" tabIndex={0} aria-label="Ocupação planejada por período e local; role a tabela horizontalmente no celular">
+            <div className="lob-pro-mapa-grade" role="table" style={{gridTemplateColumns:`minmax(112px, 0.8fr) repeat(${locais.length}, minmax(116px, 1fr))`}}>
+              <div role="row" className="lob-pro-mapa-linha lob-pro-mapa-cabecalho"><div role="columnheader">PERÍODO</div>{locais.map(local=><div role="columnheader" key={local} title={local}>{local}</div>)}</div>
+              {faixas.map(faixa=><div role="row" className="lob-pro-mapa-linha" key={faixa.inicio}>
+                <div role="rowheader">{faixa.rotulo}</div>
+                {locais.map(local=>{
+                  const tarefas=ocupacaoNaFaixa(pontosTodos,local,faixa);
+                  return <div role="cell" key={local} className={tarefas.length?"com-atividade":""} aria-label={`${local}, ${faixa.rotulo}: ${tarefas.length} atividade(s)`} title={tarefas.map(p=>`${p.codigo} · ${p.nome}`).join("\n")||"Sem atividade neste período"}>{tarefas.length||"—"}</div>;
+                })}
+              </div>)}
+            </div>
+          </div>
+        </section>}
+        </>
       ) : (<>
       <div className="lob-pro-controles">
         <div className="lob-pro-visoes" aria-label="Modo de leitura">

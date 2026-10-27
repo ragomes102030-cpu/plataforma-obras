@@ -23,13 +23,15 @@ describe("LOB — renderização real do componente (SSR, sem banco)", () => {
       a("1.2","Revestimento de paredes","Revestimentos","Acabamentos"),
       a("1.3","Passagem de eletrodutos","Instalações","Instalações"),
     ]);
-    expect(html).toContain("DADOS INSUFICIENTES PARA LINHA DE BALANÇO");
+    expect(html).toContain("LINHA DE RITMO AINDA NÃO DISPONÍVEL");
     expect(html).toContain("Estrutura");
     expect(html).toContain("Revestimentos");
     expect(html).toContain("Ver cronograma no Gantt");
     expect(html).toContain("Revisar atividades e locais");
+    expect(html).toContain("Mapa auxiliar de atividades");
+    expect(html).toContain("ocupação não representa produtividade");
     expect(html).not.toContain('class="lob-pro-scroll"');
-    expect(html).not.toContain("Mapa auxiliar de frentes");
+    expect(html).not.toContain("<polyline");
   });
 
   it("série repetitiva com dois pavimentos físicos exibe efetivamente o gráfico de ritmo", () => {

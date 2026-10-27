@@ -78,4 +78,23 @@
 .lob-pro-prontidao-acoes>button:not(.lob-pro-editar){display:flex;align-items:center;gap:6px;min-height:36px;border:1px solid #d3e1e8;border-radius:7px;background:white;color:#2a627a;font-size:11px;font-weight:720;padding:8px 12px;cursor:pointer}
 .lob-pro-prontidao-acoes>button:hover{background:#eaf3f7}
 .lob-pro-prontidao .lob-pro-prontidao-nota{font-size:10.5px;color:#79909c}
+.lob-pro-diagnostico-contagens{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;margin-top:18px}
+.lob-pro-diagnostico-contagens span{display:flex;align-items:center;gap:8px;min-height:38px;padding:7px 9px;border:1px solid #e0e9ed;border-radius:6px;background:#fff;color:#637984;font-size:10px;line-height:1.35}
+.lob-pro-diagnostico-contagens strong{color:#285b70;font-size:15px;white-space:nowrap}
+.lob-pro-mapa-aux{border-top:1px solid #dfe8ec;background:#fff}
+.lob-pro-mapa-aux>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 17px;background:#f7fafb;border-bottom:1px solid #e2eaed}
+.lob-pro-mapa-aux>header div{display:flex;flex-direction:column;gap:4px}
+.lob-pro-mapa-aux>header strong{font-size:12px;color:#2c4d5a}
+.lob-pro-mapa-aux>header span,.lob-pro-mapa-aux>header small{font-size:10px;color:#70858f}
+.lob-pro-mapa-aux>header small{padding:5px 8px;border:1px solid #dce7eb;border-radius:5px;background:#fff;font-weight:650}
+.lob-pro-mapa-rolagem{max-height:440px;overflow:auto;overscroll-behavior:contain}
+.lob-pro-mapa-grade{min-width:100%;width:max-content;color:#526975;font-size:10.5px}
+.lob-pro-mapa-linha{display:grid;min-height:36px;border-bottom:1px solid #e9eff2}
+.lob-pro-mapa-linha>div{display:flex;align-items:center;justify-content:center;padding:7px 9px;border-right:1px solid #edf1f3;text-align:center}
+.lob-pro-mapa-linha>div:first-child{position:sticky;left:0;z-index:1;justify-content:flex-start;background:#fbfcfd;color:#55717e;font-weight:650}
+.lob-pro-mapa-cabecalho{position:sticky;top:0;z-index:2;background:#f1f6f8;font-size:10px;font-weight:760}
+.lob-pro-mapa-cabecalho>div:first-child{z-index:3;background:#f1f6f8}
+.lob-pro-mapa-linha>div.com-atividade{background:#dceef3;color:#245c70;font-weight:760}
+.lob-pro-mapa-linha>div[role="cell"]{font-variant-numeric:tabular-nums}
+@media(max-width:600px){.lob-pro-mapa-aux>header{align-items:flex-start;padding:12px}.lob-pro-mapa-rolagem{max-height:52vh}.lob-pro-diagnostico-contagens{grid-template-columns:repeat(2,minmax(0,1fr))}.lob-pro-diagnostico-contagens span{align-items:flex-start;flex-direction:column;justify-content:center;gap:3px;min-width:0}}
 @media(max-width:600px){.lob-pro-prontidao{padding:21px 15px;flex-direction:column;gap:13px}.lob-pro-prontidao h3{font-size:16px}.lob-pro-prontidao-acoes{flex-direction:column;align-items:stretch}.lob-pro-prontidao-acoes button{justify-content:center}}
