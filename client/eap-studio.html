@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Arquimedes — EAP Studio · Protótipo interativo</title>
+<meta name="description" content="Protótipo da EAP profissional do Arquimedes, somente visual, sem acesso ao banco.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#163043;--muted:#698092;--line:#dce7ed;--nav:#112430;--navtext:#c0d5df;--blue:#187b96;--cyan:#39b6c3;--bg:#f2f6f8;--card:#fff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:13px "DM Sans",sans-serif}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #46afcc;outline-offset:2px}button:disabled{opacity:.6;cursor:not-allowed}
+.app{min-height:100vh;display:flex}.sidebar{background:var(--nav);color:var(--navtext);width:213px;flex:none;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}.brand{height:83px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid #ffffff14}.brand-mark{height:32px;width:32px;border-radius:9px;background:linear-gradient(145deg,#4dcee0,#147b99);color:#092632;display:grid;place-items:center;font-weight:900;font-size:21px}.brand strong{font:800 13px "Manrope",sans-serif;letter-spacing:.12em;color:#fff}.brand small{display:block;color:#94b1bd;letter-spacing:.13em;font-size:9px;margin-top:5px}.nav{flex:1;padding:20px 10px;overflow:auto}.nav h4{font-size:10px;letter-spacing:.14em;color:#7195a4;padding:0 11px;margin:18px 0 12px}.nav h4:first-child{margin-top:0}.nav button{border:1px solid transparent;border-radius:8px;width:100%;min-height:40px;text-align:left;color:#b9d0db;display:flex;align-items:center;gap:11px;background:transparent;font-weight:650;font-size:12px;padding:9px 12px;margin:3px 0}.nav button:hover{background:#223d4b}.nav button.active{background:#254b5b;border-color:#376373;color:#c6eff3}.nav-icon{font-weight:800;font-size:12px;color:#8dbbc9;width:18px;display:inline-block;text-align:center}.nav-bottom{font-size:10px;color:#92abb9;border-top:1px solid #ffffff1c;padding:17px 18px;line-height:1.6}.nav-bottom b{display:block;color:#fff;font-size:11px}
+.workspace{min-width:0;flex:1}.top{height:68px;padding:0 27px;background:#fff;border-bottom:1px solid #e0e8ee;display:flex;align-items:center;justify-content:space-between;gap:15px}.crumb{color:#8296a5;font-size:11px}.crumb strong{color:#2c5164}.top-right{display:flex;align-items:center;gap:9px}.tag{background:#e9f5f7;border:1px solid #cbe6ec;border-radius:6px;font-size:9.5px;font-weight:800;letter-spacing:.06em;color:#1a7188;padding:7px 10px}.avatar{width:32px;height:32px;background:#e5f2f4;color:#226e82;border-radius:8px;display:grid;place-items:center;font-weight:800}.menu{display:none;background:#eff7f9;border:1px solid #d7e7ed;border-radius:7px;color:#21556a;min-width:35px;min-height:35px}
+.info{padding:9px 28px;background:#fff9e9;border-bottom:1px solid #ead8aa;color:#725421;font-size:11px;line-height:1.5}.info b{font-weight:800}.main{max-width:1580px;margin:auto;padding:27px 27px 44px}
+.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:20px}.eyebrow{font-size:10px;color:#438c9e;font-weight:850;letter-spacing:.15em;text-transform:uppercase}.intro h1{font:800 clamp(24px,2.4vw,34px) "Manrope",sans-serif;letter-spacing:-.05em;margin:5px 0 7px}.intro p{color:#718695;font-size:12px;margin:0}.intro-actions{display:flex;gap:8px}.button{border:1px solid #ccdde5;border-radius:9px;background:#fff;padding:10px 13px;color:#2c5e72;font-size:11px;font-weight:780;display:inline-flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap}.button:hover{border-color:#9dcad6;background:#f0f8fa}.button.primary{background:#16758f;border-color:#16758f;color:#fff}.button.primary:hover{background:#115e75}
+.version-banner{display:flex;align-items:center;gap:20px;background:#112c3c;border-radius:15px;border:1px solid #294859;color:#e4f3f7;padding:20px 23px;min-height:110px;box-shadow:0 10px 22px #142b3b12}.version-banner>div:first-child{flex:1}.version-banner .label{font-weight:850;letter-spacing:.13em;font-size:10px;color:#96c5d2}.version-banner h2{font:800 20px "Manrope",sans-serif;letter-spacing:-.035em;margin:7px 0 4px}.version-banner p{margin:0;font-size:11px;color:#adcad4}.versions{display:flex;align-items:center;gap:4px;background:#2b4756;padding:5px;border-radius:9px}.versions button{border:1px solid transparent;border-radius:6px;padding:11px 14px;color:#b9d4df;background:transparent;font-size:11px;font-weight:800}.versions button.active{background:white;color:#24566a}.versions button:hover:not(.active){color:#fff}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0 17px}.stat{border:1px solid var(--line);background:#fff;border-radius:12px;min-width:0;padding:18px 18px 15px}.stat span{font-size:10px;color:#6e8795;font-weight:800;letter-spacing:.03em}.stat strong{font:800 25px "Manrope",sans-serif;display:block;letter-spacing:-.04em;margin:9px 0 4px}.stat small{font-size:11px;color:#8596a2}.stat .ok{color:#177b73}.stat .warn{color:#a56e30}
+.work{border:1px solid var(--line);background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 22px #133e5210}.work-toolbar{min-height:65px;padding:12px 16px;border-bottom:1px solid #e5edf1;display:flex;align-items:center;gap:11px;flex-wrap:wrap}.search{flex:1;min-width:195px;max-width:470px;display:flex;align-items:center;gap:9px;border:1px solid #d3e2e9;background:#f8fafb;border-radius:8px;color:#7594a4;padding:0 11px;height:39px}.search input{border:0;background:transparent;outline:none;min-width:0;flex:1;font-size:12px;color:#153b4b}.search input:focus-visible{outline:none}.search:focus-within{outline:3px solid #86d0e1}.filterset{display:flex;align-items:center;gap:3px;background:#f1f6f8;border:1px solid #e0e8ee;border-radius:8px;padding:3px}.filterset button{border:0;padding:8px 10px;border-radius:6px;background:transparent;color:#738995;font-size:10.5px;font-weight:740}.filterset button.active{background:#fff;color:#21657f;box-shadow:0 2px 8px #1d455414}.work-count{color:#698494;font-size:11px;font-weight:750;margin-left:auto}
+.work-grid{display:grid;grid-template-columns:175px minmax(0,1fr) 325px;align-items:stretch;min-height:610px}.phases{border-right:1px solid #e2ecf0;background:#fafcfd;padding:18px 9px}.pane-heading{font-size:9.5px;letter-spacing:.13em;color:#7a92a2;font-weight:850;margin:0 9px 13px}.phases button{border:0;background:transparent;border-radius:7px;display:flex;align-items:center;gap:6px;width:100%;min-height:34px;text-align:left;color:#4c7182;padding:7px 9px;font-size:10.7px;font-weight:720}.phases button:hover{background:#edf6f9}.phases button.active{background:#dfedf2;color:#175c75}.phases button .ph-num{font-size:9px;color:#3e90a9;font-weight:850}.phases button small{margin-left:auto;color:#829baa;font-size:10px}
+.table-panel{min-width:0;background:#fff}.table-head{height:42px;display:grid;grid-template-columns:75px minmax(160px,1fr) 75px 79px;border-bottom:1px solid #dce7ed;background:#f4f8fa;color:#728997;align-items:center;font-size:9.5px;font-weight:850;letter-spacing:.055em;padding:0 12px}.table-head span{padding-left:4px}.table-scroll{max-height:622px;overflow-y:auto;min-height:520px}.row{width:100%;display:grid;grid-template-columns:75px minmax(160px,1fr) 75px 79px;align-items:center;text-align:left;gap:0;min-height:43px;padding:0 12px;background:#fff;border:0;border-bottom:1px solid #eef2f4;color:#26485a;font-size:11.5px}.row:hover{background:#eff7fa}.row.selected{background:#e9f6f9;box-shadow:inset 3px 0 #2185a0}.row.group{background:#f9fbfc}.row.group:hover{background:#eff6f9}.row b{font-size:11px;color:#287e9a;font-variant-numeric:tabular-nums}.row-name{min-width:0;display:flex;align-items:center;gap:7px;padding-left:4px}.row-name strong{font-weight:770;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-name .arrow{width:16px;text-align:center;font-size:10px;color:#6992a2}.row:not(.group) .row-name{padding-left:17px}.type{font-size:10px;color:#768b96}.scope{font-size:9.5px;font-weight:770;border:1px solid #cde7dc;background:#eaf7f1;color:#2b7b69;border-radius:5px;padding:5px 5px;text-align:center;margin-right:6px}.group .scope{background:#f2f5f7;color:#788993;border-color:#e0e9ed}.no-results{text-align:center;padding:60px 25px;color:#6c8591;line-height:1.7}
+.inspector{border-left:1px solid #e1ebef;background:#fcfefe;display:flex;flex-direction:column}.inspector-head{border-bottom:1px solid #e6eff2;padding:22px 20px 18px}.inspector-head .kicker{color:#4b91a5;font-size:9.5px;font-weight:850;letter-spacing:.13em}.inspector-head h3{margin:9px 0 6px;font:800 18px "Manrope",sans-serif;line-height:1.35;letter-spacing:-.025em}.inspector-head p{font-size:10.5px;color:#778e9e;line-height:1.55;margin:0}.inspector-body{padding:17px 20px;flex:1}.inspect-section{border-bottom:1px solid #e9eff2;padding:0 0 15px;margin-bottom:16px}.inspect-section:last-child{border:0}.inspect-section h4{font-size:10px;letter-spacing:.11em;color:#638194;margin:0 0 12px}.field{display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:11px;color:#617988}.field strong{color:#2b5365;font-weight:760;text-align:right}.link-list{display:grid;gap:7px}.link-list button{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;min-height:37px;padding:8px 11px;border:1px solid #dbe9ee;border-radius:8px;background:#fff;color:#2d6278;font-size:11px;font-weight:740}.link-list button:hover{border-color:#8cc4d4;background:#f1f9fb}.link-list button small{font-size:9px;color:#5e8798}.inspector-foot{padding:13px 20px;border-top:1px solid #e8eff2}.inspector-foot button{width:100%}
+.version-note{padding:12px 16px;background:#fff8e8;border-top:1px solid #ecdfc2;font-size:10.5px;line-height:1.65;color:#826029}.footer{padding:16px 4px;color:#93a3ac;font-size:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+#toast{position:fixed;bottom:17px;left:50%;transform:translate(-50%,20px);background:#132e3c;color:#f1f8fb;padding:13px 18px;border-radius:10px;z-index:100;box-shadow:0 15px 40px #0e2b3a44;max-width:min(540px,90vw);line-height:1.5;opacity:0;transition:.2s;font-size:12px;font-weight:700;pointer-events:none}#toast.active{transform:translate(-50%,0);opacity:1}
+@media(max-width:1430px){.sidebar{width:188px}.main{padding:20px 17px}.work-grid{grid-template-columns:145px minmax(0,1fr) 280px}.phases button{font-size:10px;padding:7px 6px}.inspector-head,.inspector-body{padding-left:15px;padding-right:15px}.table-head,.row{grid-template-columns:69px minmax(110px,1fr) 60px 72px}.row-name strong{font-size:10.6px}}
+@media(max-width:1130px){.sidebar{width:165px}.work-grid{grid-template-columns:130px minmax(0,1fr)}.inspector{grid-column:1 / -1;border-top:1px solid #e5edf0;border-left:0}.inspector-head{padding:18px 20px}.inspector-body{display:grid;grid-template-columns:1fr 1fr;gap:20px}.inspector-foot{max-width:300px;border-top:0}.table-scroll{max-height:530px}}
+@media(max-width:720px){.app{display:block}.sidebar{display:none;position:relative;height:auto;width:100%;padding:0}.sidebar.open{display:flex}.brand{height:65px}.nav{padding:8px 10px}.top{height:61px;padding:0 12px}.top-right .tag{font-size:8px;padding:6px}.avatar{display:none}.menu{display:inline-grid;place-items:center}.info{padding:9px 12px}.main{padding:17px 11px}.intro{flex-direction:column;align-items:flex-start}.intro-actions{width:100%}.intro-actions button{flex:1}.version-banner{flex-direction:column;align-items:stretch;padding:18px;gap:16px}.versions{width:100%}.versions button{flex:1}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{padding:15px 13px}.stat strong{font-size:22px}.work-toolbar{gap:9px;padding:10px}.search{width:100%;max-width:100%;flex:1 1 100%}.filterset{flex:1}.filterset button{flex:1;padding:8px 4px;font-size:10px}.work-count{margin-left:0}.work-grid{display:block}.phases{display:flex;gap:4px;padding:9px 10px;overflow-x:auto;white-space:nowrap;border-right:0;border-bottom:1px solid #e2ecf0}.phases .pane-heading{display:none}.phases button{flex:none;width:auto;min-height:33px;padding:6px 11px}.phases button small{margin-left:4px}.table-scroll{max-height:460px;min-height:250px}.table-head,.row{grid-template-columns:58px minmax(0,1fr) 52px 65px;padding:0 8px}.row{min-height:49px}.row-name{padding-left:3px}.row:not(.group) .row-name{padding-left:6px}.row-name strong{white-space:normal;line-height:1.3}.inspector-body{display:block}.inspector-foot{max-width:none}.footer{flex-wrap:wrap}}
+@media(max-width:395px){.top .crumb{font-size:10px}.intro h1{font-size:25px}.stats{gap:6px}.stat strong{font-size:21px}.row,.table-head{grid-template-columns:55px minmax(0,1fr) 45px 59px}.row{font-size:10px}.scope{font-size:8.5px;padding:4px}.type{font-size:9px}.table-head{font-size:8.5px}.work-toolbar .filterset button{font-size:9px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+</style></head>
+<body><div class="app">
+<aside class="sidebar" id="sidebar" aria-label="Navegação ilustrativa da obra">
+ <div class="brand"><div class="brand-mark" aria-hidden="true">A</div><div><strong>ARQUIMEDES</strong><small>CONSTRUCTION INTELLIGENCE</small></div></div>
+ <nav class="nav"><h4>ESPAÇO DE TRABALHO</h4><button data-navigation="Dashboard"><span class="nav-icon">▦</span> Dashboard</button><h4>PLANEJAMENTO</h4><button data-navigation="Escopo"><span class="nav-icon">▤</span> Escopo</button><button class="active"><span class="nav-icon">▥</span> EAP</button><button data-navigation="Atividades"><span class="nav-icon">☷</span> Atividades</button><button data-navigation="CPM"><span class="nav-icon">◇</span> CPM</button><button data-navigation="Gantt"><span class="nav-icon">▤</span> Gantt</button><h4>CONTROLE</h4><button data-navigation="Orçamento"><span class="nav-icon">▣</span> Orçamento</button><button data-navigation="Produção"><span class="nav-icon">≡</span> Produção</button></nav>
+ <div class="nav-bottom"><b>AURORA TESTE</b>Prévia isolada · Nenhum dado pode ser alterado.</div>
+</aside>
+<section class="workspace">
+<header class="top"><div class="crumb"><button class="menu" id="menu" aria-label="Abrir menu">☰</button> PLANEJAMENTO / <strong>ESTRUTURA ANALÍTICA</strong></div><div class="top-right"><span class="tag">PRÉVIA · SOMENTE LEITURA</span><div class="avatar">AT</div></div></header>
+<div class="info" role="note"><b>CONCEITO VISUAL DA EAP</b> · Estrutura e contagens baseadas na AURORA TESTE. Descrições completas e ações de edição não são carregadas neste ambiente. Nenhuma informação é gravada.</div>
+<main class="main">
+<div class="intro"><div><span class="eyebrow">ESTÚDIO DE ESCOPO / EAP</span><h1>Estrutura Analítica da Obra<span style="color:#2999b3">.</span></h1><p>Controle de escopo, pacotes de trabalho e rastreabilidade em uma única superfície.</p></div><div class="intro-actions"><button class="button" id="compareBtn">Comparar versões ↗</button><button class="button primary" id="reviewBtn">Analisar vínculos ↗</button></div></div>
+<section class="version-banner"><div><span class="label">LINHA DE TRABALHO · AURORA TESTE</span><h2 id="versionHeading">Versão 6 · Em elaboração</h2><p id="versionSub">A versão 5 permanece aprovada; a versão 6 é uma cópia de trabalho editável.</p></div><div class="versions" role="group" aria-label="Selecionar a versão do plano"><button class="active" data-version="6" aria-pressed="true">v6 · Trabalho</button><button data-version="5" aria-pressed="false">v5 · Aprovada</button></div></section>
+<section class="stats" aria-label="Indicadores da EAP">
+ <article class="stat"><span>NÓS DA EAP</span><strong>69</strong><small>1 raiz · 15 etapas · 53 pacotes</small></article>
+ <article class="stat"><span>PACOTES DE TRABALHO</span><strong>53</strong><small>Folhas terminais da estrutura</small></article>
+ <article class="stat"><span>DICIONÁRIO DO ESCOPO</span><strong class="ok">53/53</strong><small>Campos essenciais preenchidos</small></article>
+ <article class="stat"><span>ATIVIDADES VINCULADAS</span><strong>53/53</strong><small>Vínculos por código e por versão</small></article>
+</section>
+<section class="work">
+ <div class="work-toolbar"><label class="search">⌕ <input id="search" type="search" autocomplete="off" placeholder="Buscar código, pacote ou etapa…" aria-label="Buscar itens na EAP"/></label>
+  <div class="filterset" role="group" aria-label="Filtro dos elementos"><button data-filter="all" class="active" aria-pressed="true">Todos</button><button data-filter="grupo" aria-pressed="false">Etapas</button><button data-filter="pacote" aria-pressed="false">Pacotes</button></div>
+  <button class="button" id="expandBtn">Expandir tudo</button><span class="work-count" id="workCount">69 elementos</span>
+ </div>
+ <div class="work-grid">
+  <nav class="phases" aria-label="Filtrar por etapa da obra" id="phases"><div class="pane-heading">ETAPAS DA OBRA</div></nav>
+  <section class="table-panel" aria-label="Planilha hierárquica da EAP">
+   <div class="table-head"><span>EAP</span><span>ELEMENTO / ENTREGA</span><span>TIPO</span><span>SITUAÇÃO</span></div>
+   <div class="table-scroll" id="rows" role="tree" aria-label="Árvore hierárquica da EAP"></div>
+  </section>
+  <aside class="inspector" id="inspector" aria-label="Detalhamento do pacote de trabalho">
+   <div class="inspector-head"><span class="kicker">FICHA DO ESCOPO · INSPEÇÃO</span><h3 id="detailName">Selecione um elemento</h3><p id="detailCode">Clique em um pacote na planilha para examinar sua rastreabilidade.</p></div>
+   <div class="inspector-body">
+    <div class="inspect-section"><h4>IDENTIDADE TÉCNICA</h4><div class="field"><span>Código da EAP</span><strong id="detailRef">—</strong></div><div class="field"><span>Tipo do elemento</span><strong id="detailType">—</strong></div><div class="field"><span>Versão em análise</span><strong id="detailVersion">v6 · Rascunho</strong></div></div>
+    <div class="inspect-section"><h4>DICIONÁRIO DO ESCOPO</h4><div class="field"><span>Descrição / inclusões</span><strong id="detailScope">—</strong></div><div class="field"><span>Critério de aceitação</span><strong id="detailAcceptance">—</strong></div><div class="field"><span>Responsável</span><strong id="detailResponsible">—</strong></div></div>
+    <div class="inspect-section"><h4>VÍNCULOS ENTRE MÓDULOS</h4><div class="link-list" id="linkList"><button data-link="Atividades">Atividade do cronograma <small>Conferir ↗</small></button><button data-link="Orçamento">Composição orçamentária <small>Conferir ↗</small></button><button data-link="CPM">Rede de precedências <small>Conferir ↗</small></button><button data-link="Produção">Apontamentos da produção <small>Conferir ↗</small></button></div></div>
+   </div><div class="inspector-foot"><button class="button primary" id="openDict">Ver dicionário completo ↗</button></div>
+  </aside>
+ </div>
+ <div class="version-note"><b>CONCILIAÇÃO DE VERSÕES:</b> o orçamento aprovado e os apontamentos confirmados referenciam registros históricos da versão 3. As correspondências por código existem na v5 e na v6. As duas baselines antigas ativas ainda precisam de revisão de governança; esta demonstração não altera vínculos.</div>
+</section>
+<div class="footer"><span>ARQUIMEDES EAP STUDIO · PRÉVIA PARA APROVAÇÃO</span><span>Sem autenticação, sem consultas ao Supabase, sem gravação</span></div>
+</main></section></div><div role="status" aria-live="polite" id="toast"></div>
+<script>
+(function(){
+"use strict";
+var raw=[
+"1|AURORA TESTE",
+"1.1|Implantação e administração",
+"1.1.1|Mobilização e canteiro",
+"1.1.2|Administração e controle da obra",
+"1.1.3|Licenças, sinalização e segurança",
+"1.2|Serviços preliminares",
+"1.2.1|Locação e preparação do terreno",
+"1.2.2|Limpeza e remoção",
+"1.2.3|Demolições e remanejamentos",
+"1.3|Infraestrutura",
+"1.3.1|Terraplenagem",
+"1.3.2|Fundações",
+"1.3.3|Contenções",
+"1.4|Superestrutura",
+"1.4.1|Pilares",
+"1.4.2|Vigas",
+"1.4.3|Lajes",
+"1.4.4|Escadas e elementos estruturais complementares",
+"1.5|Vedações",
+"1.5.1|Alvenarias",
+"1.5.2|Divisórias e sistemas leves",
+"1.5.3|Elementos de vedação complementares",
+"1.6|Cobertura",
+"1.6.1|Estrutura da cobertura",
+"1.6.2|Telhamento e fechamento",
+"1.6.3|Calhas, rufos e arremates",
+"1.7|Impermeabilização",
+"1.7.1|Impermeabilização de fundações e áreas enterradas",
+"1.7.2|Impermeabilização de áreas molhadas",
+"1.7.3|Impermeabilização de cobertura e áreas expostas",
+"1.8|Revestimentos",
+"1.8.1|Chapisco, emboço e reboco",
+"1.8.2|Contrapisos",
+"1.8.3|Revestimentos de paredes",
+"1.8.4|Revestimentos de pisos",
+"1.8.5|Forros",
+"1.9|Esquadrias e vidros",
+"1.9.1|Portas e esquadrias",
+"1.9.2|Vidros",
+"1.9.3|Ferragens e acessórios",
+"1.10|Instalações",
+"1.10.1|Instalações hidrossanitárias",
+"1.10.2|Instalações elétricas",
+"1.10.3|SPDA e aterramento",
+"1.10.4|Sistemas de incêndio",
+"1.10.5|Telecomunicações e sistemas especiais",
+"1.10.6|Climatização e ventilação",
+"1.11|Fachada",
+"1.11.1|Revestimento e acabamento de fachada",
+"1.11.2|Esquadrias e elementos externos",
+"1.11.3|Selagens e arremates",
+"1.12|Acabamentos",
+"1.12.1|Pintura",
+"1.12.2|Louças, metais e acessórios",
+"1.12.3|Bancadas e elementos de acabamento",
+"1.12.4|Sinalização e acabamento final",
+"1.13|Áreas externas e urbanização",
+"1.13.1|Calçadas e pavimentação externa",
+"1.13.2|Drenagem externa",
+"1.13.3|Muros, gradis e fechamentos",
+"1.13.4|Paisagismo e urbanização",
+"1.14|Comissionamento",
+"1.14.1|Testes e inspeções",
+"1.14.2|Comissionamento dos sistemas",
+"1.14.3|Correção de pendências",
+"1.15|Entrega da obra",
+"1.15.1|As built e documentação",
+"1.15.2|Limpeza e desmobilização",
+"1.15.3|Entrega e aceite final"
+];
+var data=raw.map(function(x){var a=x.split("|");return {code:a[0],name:a[1],type:a[0].split(".").length<=2?"grupo":"pacote"}});
+var groups=data.filter(function(a){return a.type==="grupo"&&a.code!=="1"}),selected="1.3.2",phase="all",filter="all",query="",version="6",allExpanded=false;
+var expanded=new Set(["1"]), $=function(id){return document.getElementById(id)},t=null;
+function toast(txt){var el=$("toast");el.textContent=txt;el.classList.add("active");clearTimeout(t);t=setTimeout(function(){el.classList.remove("active")},3500)}
+function matches(n){return (n.code+" "+n.name).toLowerCase().includes(query)}
+function visible(n){
+ if(phase!=="all"&&n.code!==phase&&!n.code.startsWith(phase+"."))return false;
+ if(filter!=="all"&&n.type!==filter)return false;
+ if(query&&!matches(n))return false;
+ if(filter==="all"&&!query){
+   var parts=n.code.split(".");
+   if(phase==="all"){if(parts.length>1&&!expanded.has("1"))return false;if(parts.length>2&&!expanded.has(parts.slice(0,2).join(".")))return false}
+   if(phase!=="all"&&parts.length>2&&!expanded.has(parts.slice(0,2).join(".")))return false;
+ }
+ return true
+}
+function renderPhases(){
+ var p=$("phases");p.querySelectorAll("button").forEach(function(n){n.remove()});
+ var all=document.createElement("button");all.textContent="Todas as etapas";all.className=phase==="all"?"active":"";all.setAttribute("aria-pressed",String(phase==="all"));all.onclick=function(){phase="all";renderPhases();renderRows()};p.appendChild(all);
+ groups.forEach(function(g){var b=document.createElement("button");b.className=phase===g.code?"active":"";b.setAttribute("aria-pressed",String(phase===g.code));var c=document.createElement("span");c.className="ph-num";c.textContent=g.code;var n=document.createElement("span");n.textContent=g.name;var count=document.createElement("small");count.textContent=data.filter(function(z){return z.type==="pacote"&&z.code.startsWith(g.code+".")}).length;b.append(c,n,count);b.onclick=function(){phase=g.code;expanded.add(g.code);renderPhases();renderRows()};p.appendChild(b)})
+}
+function renderRows(){
+ var holder=$("rows");holder.replaceChildren();
+ var display=data.filter(visible);
+ $("workCount").textContent=display.length+" de "+data.length+" elementos";
+ if(!display.length){var empty=document.createElement("div");empty.className="no-results";empty.textContent="Nenhum elemento encontrado. Altere o filtro ou o termo pesquisado.";holder.append(empty);return}
+ display.forEach(function(n){
+  var row=document.createElement("button");row.type="button";row.className="row"+(n.type==="grupo"?" group":"")+(selected===n.code?" selected":"");row.setAttribute("role","treeitem");row.setAttribute("aria-selected",String(selected===n.code));
+  if(n.type==="grupo"){row.setAttribute("aria-expanded",String(expanded.has(n.code)))}
+  var code=document.createElement("b");code.textContent=n.code;
+  var name=document.createElement("span");name.className="row-name";
+  var arrow=document.createElement("span");arrow.className="arrow";arrow.textContent=n.type==="grupo"?(expanded.has(n.code)?"▾":"▸"):"·";
+  var bold=document.createElement("strong");bold.textContent=n.name;name.append(arrow,bold);
+  var typ=document.createElement("span");typ.className="type";typ.textContent=n.type==="grupo"?"ETAPA":"PACOTE";
+  var status=document.createElement("span");status.className="scope";status.textContent=n.type==="grupo"?"ESTRUT.":"PREENCHIDO";
+  row.append(code,name,typ,status);
+  row.onclick=function(){if(n.type==="grupo"){if(expanded.has(n.code))expanded.delete(n.code);else expanded.add(n.code)}selected=n.code;renderDetail();renderRows()};
+  row.onkeydown=function(event){if(event.key==="ArrowDown"||event.key==="ArrowUp"){event.preventDefault();var list=Array.from(holder.querySelectorAll("button.row"));var i=list.indexOf(row),next=list[i+(event.key==="ArrowDown"?1:-1)];if(next)next.focus()}};
+  holder.appendChild(row);
+ })
+}
+function renderDetail(){
+ var n=data.find(function(x){return x.code===selected})||data[0];
+ $("detailName").textContent=n.name;$("detailCode").textContent="Elemento "+n.code+" · "+(n.type==="pacote"?"pacote terminal":"etapa de escopo");
+ $("detailRef").textContent=n.code;$("detailType").textContent=n.type==="grupo"?"Etapa estrutural":"Pacote de trabalho";
+ $("detailVersion").textContent="v"+version+(version==="6"?" · Trabalho":" · Aprovada");
+ $("detailScope").textContent="Campo preenchido";$("detailAcceptance").textContent="Campo preenchido";$("detailResponsible").textContent=n.type==="pacote"?"Campo preenchido":"Conferir hierarquia";
+ $("linkList").querySelectorAll("button").forEach(function(b){
+  b.disabled=n.type!=="pacote";
+  var small=b.querySelector("small");if(small)small.textContent=n.type==="pacote"?"Correspondência ↗":"Selecionar pacote";
+ })
+}
+function switchVersion(v){version=v;$("versionHeading").textContent=v==="6"?"Versão 6 · Em elaboração":"Versão 5 · Aprovada";
+$("versionSub").textContent=v==="6"?"A versão 5 permanece aprovada; a versão 6 é uma cópia de trabalho editável.":"Versão aprovada preservada como referência; a versão 6 é o estado de trabalho mais recente.";
+document.querySelectorAll("[data-version]").forEach(function(b){var active=b.dataset.version===v;b.classList.toggle("active",active);b.setAttribute("aria-pressed",String(active))});
+renderDetail();toast("Visualizando o contexto da v"+v+". A prévia não altera versões nem dados.")
+}
+$("search").addEventListener("input",function(e){query=e.target.value.trim().toLowerCase();renderRows()});
+document.querySelectorAll("[data-filter]").forEach(function(b){b.onclick=function(){filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(function(x){x.classList.toggle("active",x===b);x.setAttribute("aria-pressed",String(x===b))});renderRows()}});
+document.querySelectorAll("[data-version]").forEach(function(b){b.onclick=function(){switchVersion(b.dataset.version)}});
+$("expandBtn").onclick=function(){allExpanded=!allExpanded;expanded=new Set(allExpanded?data.filter(function(n){return n.type==="grupo"}).map(function(n){return n.code}):["1"]);$("expandBtn").textContent=allExpanded?"Recolher tudo":"Expandir tudo";renderRows()};
+$("compareBtn").onclick=function(){toast("v5 aprovada: 69 nós, 53 pacotes. v6 rascunho: 69 nós, 53 pacotes. Comparação detalhada de mudanças será uma função da EAP real.")};
+$("reviewBtn").onclick=function(){toast("Vínculos estruturais verificados: 53 atividades e 53 itens orçamentários por código. Produção: 10 apontamentos históricos conciliáveis. Baselines antigas exigem revisão.")};
+$("openDict").onclick=function(){var n=data.find(function(n){return n.code===selected});toast("Dicionário "+selected+": descrição, inclusões, exclusões e critérios cadastrados. O conteúdo integral será carregado apenas no sistema autenticado.")};
+document.querySelectorAll("[data-link]").forEach(function(b){b.onclick=function(){toast("Navegação simulada para "+b.dataset.link+" · pacote "+selected+". Na versão integrada abrirá o módulo real filtrado pela EAP.")}});
+document.querySelectorAll("[data-navigation]").forEach(function(b){b.onclick=function(){toast("Prévia limitada à EAP. A aba "+b.dataset.navigation+" permanece no Arquimedes principal.")}});
+$("menu").onclick=function(){$("sidebar").classList.toggle("open")};
+renderPhases();renderDetail();renderRows();
+})();
+</script></body></html>
