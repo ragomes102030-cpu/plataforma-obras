@@ -36,7 +36,10 @@ describe("prontidão visual de Linha de Balanço", () => {
     const componente = readFileSync(resolve("client/src/components/AuroraLinhaBalanco.tsx"), "utf8");
     expect(componente).toContain('useState<Visao>("ritmo")');
     expect(componente).toContain("repetidas.length === 0 ? (");
-    expect(componente).toContain("DADOS INSUFICIENTES PARA LINHA DE BALANÇO");
+    expect(componente).toContain("LINHA DE RITMO AINDA NÃO DISPONÍVEL");
+    expect(componente).toContain("Mapa auxiliar de atividades");
+    expect(componente).toContain("ocupação não representa produtividade");
+    expect(componente).toContain("((diaUtc(iso)-diaUtc(inicioEixo))/DIA)/dias*h");
     expect(componente).toContain('aba:"gantt"');
     expect(componente).toContain("Revisar atividades e locais");
     expect(componente).toContain('visao === "ritmo" ? repetidas : series');
