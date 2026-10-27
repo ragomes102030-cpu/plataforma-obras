@@ -34,5 +34,7 @@ describe("EAP Aurora — invariantes, não números fixos", () => {
     expect(regression).toContain("configurarConexaoEap(databaseUrl)");
     expect(regression).not.toContain("rejectUnauthorized: false");
     expect(workflow).not.toContain("NODE_TLS_REJECT_UNAUTHORIZED");
+    expect(schemaAudit).toContain("configurarConexaoEap(raw)");
+    expect(ci).not.toContain("NODE_EXTRA_CA_CERTS:");
   });
 });
