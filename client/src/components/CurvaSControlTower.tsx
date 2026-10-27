@@ -104,7 +104,7 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
         return { codigo: e.codigoEap ?? null, quantidade: Number(e.quantity ?? 0), data };
       })
       .filter(e => /^\d{4}-\d{2}-\d{2}$/.test(e.data) && Number.isFinite(e.quantidade));
-    if (confirmados.length === 0) return null;
+    if (!confirmados.some(e => Boolean(e.codigo && pesosPorCodigo.has(e.codigo) && pesosPorCodigo.get(e.codigo)!.planejado > 0 && e.quantidade > 0))) return null;
     return acumularRealizado(confirmados, pesosPorCodigo, data => indexOf(cal, inicio, data));
   }, [calendario.data, inicio, serie, producao.data, planejamento.data, pesos.total, pesos.custoPorAtividade]);
 
@@ -127,13 +127,14 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
     return { dados, inicio: limiteInicio, fim: limiteFinal };
   }, [serie, planoAprovado, acumuladoConfirmado, cal, inicio, faixa, hojeNum]);
 
-  const emCarregamento = planejamento.isPending || budget.isPending || grade.isPending || producao.isPending || (ano >= 2000 && calendario.isPending) || comparacao.isPending;
+  const temBaseline = (planejamento.data?.baselines?.length ?? 0) > 0;
+  const emCarregamento = planejamento.isPending || budget.isPending || grade.isPending || producao.isPending || (ano >= 2000 && calendario.isPending) || (temBaseline && comparacao.isPending);
   const falhou = planejamento.isError || budget.isError || grade.isError || producao.isError || (ano >= 2000 && calendario.isError) || comparacao.isError;
   const pronto = Boolean(curvaDados && serie && cal && inicio);
   const erroRegua = Boolean(
     pronto && acumuladoConfirmado && hojeNum >= 0 &&
-    (Math.abs((serie?.points[Math.min(hojeNum, serie!.duration)]?.planned ?? 0) / 100 - painelPlanejado) > .2 ||
-     Math.abs(realizadoNoDia(acumuladoConfirmado, hojeNum) / 100 - painelReal) > .2)
+    (Math.abs((serie?.points[Math.min(hojeNum, serie!.duration)]?.planned ?? 0) / 100 - painelPlanejado) > .002 ||
+     Math.abs(realizadoNoDia(acumuladoConfirmado, hojeNum) / 100 - painelReal) > .002)
   );
 
   return (
