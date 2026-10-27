@@ -1,0 +1,31 @@
+import {test,expect} from "@playwright/test";
+test("EAP desktop: dados, ficha, modos e proteção contra edição acidental",async({page})=>{
+ await page.setViewportSize({width:1440,height:900});
+ const errors:string[]=[];page.on("pageerror",e=>errors.push(e.message));
+ await page.goto("/eap-studio-integracao.html");
+ await expect(page.getByRole("heading",{name:"Estrutura Analítica da Obra"})).toBeVisible();
+ await expect(page.getByText("Modo de inspeção",{exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Ficha"}).last().click();
+ await expect(page.getByRole("complementary",{name:"Ficha de inspeção do escopo"})).toContainText("Critérios de aceitação");
+ await page.getByRole("button",{name:"Editar manualmente"}).first().click();
+ await expect(page.getByText("Modo de edição manual",{exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Editar este elemento manualmente"}).click();
+ await expect(page.getByRole("region",{name:"Editar item da EAP"})).toBeVisible();
+ await page.getByRole("button",{name:"Cancelar"}).last().click();
+ await page.getByRole("button",{name:"Voltar ao Escopo"}).click();
+ await expect(page.getByRole("heading",{name:"Escopo"})).toBeVisible();
+ await page.screenshot({path:test.info().outputPath("eap-studio-real-desktop.png"),fullPage:true});
+ expect(errors).toEqual([]);
+});
+test("EAP 375px: inspeção, árvore, teclado e sem transbordo global",async({page})=>{
+ await page.setViewportSize({width:375,height:812});
+ const errors:string[]=[];page.on("pageerror",e=>errors.push(e.message));
+ await page.goto("/eap-studio-integracao.html");
+ await expect(page.getByRole("heading",{name:"Estrutura Analítica da Obra"})).toBeVisible();
+ await page.getByRole("button",{name:"Ficha"}).last().click();
+ await expect(page.getByRole("complementary",{name:"Ficha de inspeção do escopo"})).toBeVisible();
+ const w=await page.evaluate(()=>({client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}));
+ expect(w.scroll).toBeLessThanOrEqual(w.client+2);
+ await page.screenshot({path:test.info().outputPath("eap-studio-real-375.png"),fullPage:true});
+ expect(errors).toEqual([]);
+});
