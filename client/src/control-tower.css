@@ -69,6 +69,10 @@
 .ct-chart-key .ct-key-real:before{background:#25a6a0}
 .ct-chart-key .ct-key-base:before{background:repeating-linear-gradient(90deg,#899aaa 0 5px,transparent 5px 9px)}
 .ct-chart-box{height:263px;min-width:0;width:100%}
+.ct-chart-explorador{display:flex;flex-wrap:wrap;align-items:center;gap:9px;padding:12px 0 10px}
+.ct-chart-explorador label{font-size:11px;font-weight:760;color:#42677c}
+.ct-chart-explorador input{min-width:95px;flex:1;accent-color:#187d9c;cursor:pointer}
+.ct-chart-explorador output{width:100%;font-size:11px;color:#4e7588;font-variant-numeric:tabular-nums}
 .ct-chart-footer{border-top:1px solid #e9eff2;padding-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .ct-chart-footer span{color:#768c9a;font-size:11px;line-height:1.5}
 .ct-chart-footer button,.ct-lower-title button{border:0;background:transparent;color:#176f8b;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:780;padding:4px}
