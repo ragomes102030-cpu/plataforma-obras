@@ -1,4 +1,5 @@
 import pg from "pg";
+import { configurarConexaoEap, diagnosticoCertificado } from "./aurora-eap-db-tls.mjs";
 
 const { Client } = pg;
 const projectId = Number(process.env.AURORA_PROJECT_ID ?? 7);
@@ -8,14 +9,7 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL não configurada.");
 }
 
-const connectionUrl = new URL(databaseUrl);
-const sslMode = (connectionUrl.searchParams.get("ssl-mode") ?? connectionUrl.searchParams.get("sslmode") ?? "").toLowerCase();
-if (sslMode === "disable" || sslMode === "disabled") {
-  throw new Error("DATABASE_URL não pode desabilitar TLS.");
-}
-connectionUrl.searchParams.delete("ssl-mode");
-connectionUrl.searchParams.delete("sslmode");
-const client = new Client({ connectionString: connectionUrl.toString(), ssl: { rejectUnauthorized: true } });
+const client = new Client(configurarConexaoEap(databaseUrl));
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -85,13 +79,27 @@ async function main() {
     return !parent || Number(node.level) !== Number(parent.level) + 1;
   });
 
-  assert(rows.length === 69, `Esperado 69 nós; encontrado ${rows.length}.`);
-  assert(leaves.length === 53, `Esperado 53 folhas; encontrado ${leaves.length}.`);
+  // Integridade, não fotografia fixa: a EAP pode evoluir legitimamente.
+  assert(rows.length > 0, "A EAP aprovada não pode estar vazia.");
+  assert(leaves.length > 0, "A EAP aprovada precisa de pacotes terminais.");
   assert(roots.length === 1, `Esperada 1 raiz; encontrado ${roots.length}.`);
-  assert(
-    rows.filter(node => node.level === 2).length === 15,
-    "Esperados 15 grupos de nível 2."
+  const duplicateCodes = rows.filter((node, index) =>
+    rows.some((other, otherIndex) =>
+      otherIndex < index && other.code === node.code
+    )
   );
+  assert(duplicateCodes.length === 0, `Existem ${duplicateCodes.length} códigos da EAP duplicados.`);
+  // Fotografias opcionais são verificadas SOMENTE quando explicitamente solicitadas.
+  // Ex.: AURORA_EAP_SNAPSHOT=69:53:15 para uma regressão congelada específica.
+  const snapshot = process.env.AURORA_EAP_SNAPSHOT?.trim();
+  if (snapshot) {
+    assert(/^\d+:\d+:\d+$/.test(snapshot), "AURORA_EAP_SNAPSHOT deve usar nós:folhas:etapas.");
+    const [nodesExpected, leavesExpected, phasesExpected] = snapshot.split(":").map(Number);
+    assert(rows.length === nodesExpected, `Snapshot: esperado ${nodesExpected} nós; encontrado ${rows.length}.`);
+    assert(leaves.length === leavesExpected, `Snapshot: esperado ${leavesExpected} folhas; encontrado ${leaves.length}.`);
+    assert(rows.filter(node => Number(node.level) === 2).length === phasesExpected,
+      `Snapshot: esperado ${phasesExpected} grupos nível 2.`);
+  }
   assert(orphans.length === 0, `Existem ${orphans.length} nós órfãos.`);
   assert(
     nonLeavesWithoutChildren.length === 0,
@@ -102,6 +110,8 @@ async function main() {
   assert(invalidLevels.length === 0, `Existem ${invalidLevels.length} nós com nível hierárquico inválido.`);
 
   for (const leaf of leaves) {
+    assert(leaf.nodeType === "pacote",
+      `Folha ${leaf.code} deve ser pacote terminal.`);
     for (const field of ["description", "inclusions", "exclusions", "acceptanceCriteria"]) {
       assert(
         String(leaf[field] ?? "").trim().length > 0,
@@ -110,23 +120,17 @@ async function main() {
     }
   }
 
-  // A derivação do cronograma já aconteceu na Aurora: a versão aprovada (v3) e o
-  // fork da v4 têm atividade para cada folha. Proibir atividade, como antes,
-  // passou a contrariar o próprio produto. O que se guarda agora é a coerência
-  // da derivação: uma atividade por folha da EAP daquela versão, com duração
-  // positiva.
+  // Uma EAP pode decompor um pacote em mais de uma atividade. A integridade
+  // vem do vínculo com um nó da MESMA versão, não da contagem de folhas.
   const activities = await client.query(
     `
       SELECT a."versionId"::int AS version_id,
              count(*)::int AS total,
              count(*) FILTER (WHERE a."durationDays" IS NULL OR a."durationDays" <= 0)::int AS invalid_duration,
-             (
-               SELECT count(*)::int
-               FROM wbs_nodes n
-               WHERE n."versionId" = a."versionId"
-                 AND NOT EXISTS (SELECT 1 FROM wbs_nodes f WHERE f."parentId" = n.id)
-             ) AS leaves_of_version
+             count(*) FILTER (WHERE a."wbsNodeId" IS NULL OR n.id IS NULL)::int AS unlinked,
+             count(*) FILTER (WHERE n.id IS NOT NULL AND n."versionId" IS DISTINCT FROM a."versionId")::int AS wrong_version
       FROM schedule_activities a
+      LEFT JOIN wbs_nodes n ON n.id = a."wbsNodeId"
       WHERE a."projectId" = $1
       GROUP BY a."versionId"
       ORDER BY a."versionId"
@@ -140,8 +144,8 @@ async function main() {
       `Versão ${row.version_id} tem ${row.invalid_duration} atividades sem duração positiva.`
     );
     assert(
-      Number(row.total) === Number(row.leaves_of_version),
-      `Versão ${row.version_id} tem ${row.total} atividades para ${row.leaves_of_version} folhas de EAP.`
+      Number(row.unlinked) === 0 && Number(row.wrong_version) === 0,
+      `Versão ${row.version_id} possui ${row.unlinked} atividades sem EAP e ${row.wrong_version} ligadas a versões diferentes.`
     );
   }
 
@@ -150,7 +154,7 @@ async function main() {
     `
       SELECT count(*)::int AS total,
              count(*) FILTER (WHERE d."predecessorId" = d."successorId")::int AS self_loop,
-             count(*) FILTER (WHERE p."versionId" <> s."versionId")::int AS cross_version
+             count(*) FILTER (WHERE p."versionId" IS DISTINCT FROM s."versionId" OR d."versionId" IS DISTINCT FROM p."versionId")::int AS cross_version
       FROM schedule_dependencies d
       JOIN schedule_activities p ON p.id = d."predecessorId"
       JOIN schedule_activities s ON s.id = d."successorId"
@@ -175,7 +179,7 @@ async function main() {
     approvedVersionNumber: latestApproved.versionNumber,
     nodes: rows.length,
     leaves: leaves.length,
-    level2: 15,
+    level2: rows.filter(node => Number(node.level) === 2).length,
     roots: roots.length,
     orphans: orphans.length,
     invalidLevels: invalidLevels.length,
@@ -188,7 +192,7 @@ async function main() {
 
 main()
   .catch(error => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(diagnosticoCertificado(error));
     process.exitCode = 1;
   })
   .finally(async () => {

@@ -17,6 +17,11 @@ jobs:
     env:
       AURORA_PROJECT_ID: 7
       DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+      # CA do próprio projeto Supabase; mantém autenticação do servidor TLS.
+      # Configure SUPABASE_DB_CA_PEM em Settings → Secrets and variables → Actions.
+      SUPABASE_DB_CA_PEM: ${{ secrets.SUPABASE_DB_CA_PEM }}
+      # Snapshot opcional (ex. 69:53:15), nunca obrigatório para edição manual.
+      AURORA_EAP_SNAPSHOT: ${{ vars.AURORA_EAP_SNAPSHOT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
