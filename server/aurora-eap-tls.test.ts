@@ -9,7 +9,7 @@ describe("Regressão Aurora — PostgreSQL TLS autenticado", () => {
     expect(config.connectionString).toContain("pooler.example.com:5432");
   });
   it("remove sslmode de URL para não sobrepor o objeto ssl", () => {
-    const config = configurarConexaoEap(url + "?sslmode=require", "");
+    const config = configurarConexaoEap(url + "?sslmode=require&charset=utf8", "");
     expect(config.connectionString).not.toContain("sslmode=");
     expect(config.ssl.rejectUnauthorized).toBe(true);
   });
