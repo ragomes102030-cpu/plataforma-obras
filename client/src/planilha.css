@@ -6679,3 +6679,23 @@ tr:hover .xl-codigo {
   font-size:10px;
   line-height:1.25;
 }
+
+
+/* Comparação com baseline: adicionada à grade CLÁSSICA existente.
+   Linha cinza = período aprovado; barra colorida = situação atual.
+   Botão opcional evita poluir o Gantt quando o usuário não compara. */
+.pg-comparando-baseline .pg-barra{height:13px;margin-top:-2px}
+.pg-comparando-baseline .pg-barra-texto{line-height:13px}
+.pg-baseline-barra{position:absolute;top:50%;height:5px;margin-top:-12px;min-width:3px;border-radius:3px;background:#8798aa;opacity:.82;box-shadow:inset -1px 0 0 #64788c;pointer-events:auto}
+.pg-amostra.pg-amostra-baseline{height:5px;background:#8798aa}
+.pg-delta-fim{font-size:10px;font-weight:700;color:#657681}
+.pg-delta-fim.atraso{color:#b13c34}
+.pg-delta-fim.adiantada{color:#22754d}
+.pg-baseline-resumo{display:flex;gap:9px 18px;align-items:center;flex-wrap:wrap;padding:10px 14px;margin:8px 0 0;border-top:1px solid #dbe5ec;border-bottom:1px solid #dbe5ec;background:#f4f8fb;color:#426177;font-size:11px}
+.pg-baseline-resumo strong{color:#163c55;font-size:12px}
+.pg-baseline-resumo span{white-space:nowrap}
+.pg-baseline-resumo span:nth-child(2){max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.pg-baseline-resumo b{font-size:12px;font-variant-numeric:tabular-nums;color:#173c54}
+.pg-baseline-resumo small{font-size:10px;color:#657f90}
+.pg-filtros .pg-chip:disabled{opacity:.52;cursor:not-allowed}
+@media(max-width:760px){.pg-baseline-resumo{gap:6px 11px;padding:9px}.pg-baseline-resumo small{flex-basis:100%}}
