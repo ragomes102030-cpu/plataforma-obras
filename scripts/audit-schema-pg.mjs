@@ -345,22 +345,16 @@ async function main() {
     console.error("[audit] sem DATABASE_URL; nada a auditar.");
     process.exit(1);
   }
-  const u = new URL(raw);
-  u.searchParams.delete("ssl-mode");
-  u.searchParams.delete("charset");
-  const sslDesejado = (u.searchParams.get("sslmode") ?? "").toLowerCase();
-  if (sslDesejado === "disable" || sslDesejado === "disabled") throw new Error("DATABASE_URL não pode desabilitar TLS.");
-  u.searchParams.delete("sslmode");
-
-  const conn = new pg.Client({
-    connectionString: u.toString(),
-    ssl: { rejectUnauthorized: true },
-  });
+  // Mesma CA e mesma política TLS autenticada da regressão EAP.
+  // Elimina divergências entre os dois jobs no GitHub Actions.
+  const { configurarConexaoEap, diagnosticoCertificado } =
+    await import("./aurora-eap-db-tls.mjs");
+  const conn = new pg.Client(configurarConexaoEap(raw));
 
   try {
     await conn.connect();
   } catch (error) {
-    console.error("[audit] falha ao conectar:", error?.message ?? String(error));
+    console.error("[audit] falha ao conectar:", diagnosticoCertificado(error));
     process.exit(1);
   }
 
