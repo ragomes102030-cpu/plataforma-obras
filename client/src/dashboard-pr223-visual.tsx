@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import { useState, useEffect } from "react";
 import { LayoutDashboard, Layers3, TreePine, ListTodo, GitBranch, Network, LockKeyhole, BarChart3, Activity, FileText, WalletCards, ClipboardList, ChevronLeft } from "lucide-react";
 import { PainelDoCronograma } from "./components/PainelDoCronograma";
-import "../planilha.css";
-import "../dashboard-executivo.css";
+import "./planilha.css";
+import "./dashboard-executivo.css";
 import "./dashboard-pr223-visual.css";
 
 const grupos=[
