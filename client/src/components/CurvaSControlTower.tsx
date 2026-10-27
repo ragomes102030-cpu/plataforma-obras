@@ -32,6 +32,7 @@ const soFinito = (n: number) => Number.isFinite(n) ? n : 0;
 
 export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, painelPlanejado }: Props) {
   const [faixa, setFaixa] = useState<Faixa>("total");
+  const [pontoSelecionado, setPontoSelecionado] = useState<number | null>(null);
   const planejamento = trpc.planning.list.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
   const budget = trpc.budgets.approvedForCurve.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
   const grade = trpc.planning.grade.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
@@ -128,6 +129,9 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
   }, [serie, planoAprovado, acumuladoConfirmado, cal, inicio, faixa, hojeNum]);
 
   const temBaseline = (planejamento.data?.baselines?.length ?? 0) > 0;
+  const itemSelecionado = curvaDados?.dados[Math.min(pontoSelecionado ?? (curvaDados.dados.length - 1), curvaDados.dados.length - 1)] ?? null;
+  const indiceSelecionado = curvaDados ? Math.min(pontoSelecionado ?? (curvaDados.dados.length - 1), curvaDados.dados.length - 1) : 0;
+
   const emCarregamento = planejamento.isPending || budget.isPending || grade.isPending || producao.isPending || (ano >= 2000 && calendario.isPending) || (temBaseline && comparacao.isPending);
   const falhou = planejamento.isError || budget.isError || grade.isError || producao.isError || (ano >= 2000 && calendario.isError) || comparacao.isError;
   const pronto = Boolean(curvaDados && serie && cal && inicio);
@@ -143,7 +147,7 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
         <div><span className="ct-overline">LEITURA TEMPORAL</span><h3 id="ct-curve-title">Curva S de desempenho</h3><p>Planejamento atualizado, produção confirmada e baseline, quando aprovada.</p></div>
         {pronto && <div className="ct-filtros" role="group" aria-label="Período da Curva S">
           {([{ key: "90", label: "90 dias" }, { key: "365", label: "12 meses" }, { key: "total", label: "Toda obra" }] as const).map(f =>
-            <button key={f.key} type="button" onClick={() => setFaixa(f.key)} aria-pressed={faixa === f.key} className={faixa === f.key ? "selecionado" : ""}>{f.label}</button>
+            <button key={f.key} type="button" onClick={() => { setFaixa(f.key); setPontoSelecionado(null); }} aria-pressed={faixa === f.key} className={faixa === f.key ? "selecionado" : ""}>{f.label}</button>
           )}
         </div>}
       </div>
@@ -151,7 +155,7 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
         : falhou ? <div className="ct-chart-empty" role="alert"><AlertTriangle size={22} />Não foi possível consultar a série de planejamento. <button type="button" onClick={() => abrirAba("curva-s")}>Abrir diagnóstico da Curva S</button></div>
         : !pronto ? <div className="ct-chart-empty"><ChartNoAxesCombined size={25} /><strong>Curva S ainda não disponível</strong><span>É necessário um CPM calculado, orçamento aprovado associado às atividades e calendário válido. Nenhum histórico é inventado.</span><button type="button" onClick={() => abrirAba("curva-s")}>Ver o que falta <ArrowUpRight size={14}/></button></div>
         : <>
-          <div className="ct-chart-key"><span className="ct-key-plano">Planejado</span><span className="ct-key-real">Realizado</span>{planoAprovado && <span className="ct-key-base">Baseline</span>}</div>
+          <div className="ct-chart-key"><span className="ct-key-plano">Planejado</span>{acumuladoConfirmado && <span className="ct-key-real">Realizado</span>}{planoAprovado && <span className="ct-key-base">Baseline</span>}</div>
           <div className="ct-chart-box" role="img" aria-label={"Curva S com séries reais de planejamento e produção, em porcentagem, desde o início da obra. " + (!acumuladoConfirmado ? "Sem lançamentos confirmados válidos para o realizado." : "Realizado obtido de lançamentos confirmados.")}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={curvaDados!.dados} margin={{ top: 12, right: 14, left: -12, bottom: 6 }}>
@@ -163,11 +167,20 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
                   contentStyle={{ borderRadius: 10, border: "1px solid #dce6eb", fontSize: 12 }} />
                 {hojeNum >= curvaDados!.inicio && hojeNum <= curvaDados!.fim && <ReferenceLine x={hojeNum} stroke="#d59d4b" strokeDasharray="4 5" />}
                 <Line dataKey="planejado" name="Planejado" stroke="#187d9c" strokeWidth={3} dot={false} isAnimationActive={false} type="monotone" />
-                <Line dataKey="realizado" name="Realizado" stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />
+                {acumuladoConfirmado && <Line dataKey="realizado" name="Realizado" stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
                 {planoAprovado && <Line dataKey="baseline" name="Baseline" stroke="#899aaa" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} type="monotone" />}
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {itemSelecionado && <div className="ct-chart-explorador">
+            <label htmlFor="ct-cursor-data">Explorar evolução</label>
+            <input id="ct-cursor-data" aria-label="Selecionar ponto da série acumulada no tempo" type="range" min={0} max={Math.max(0, curvaDados!.dados.length - 1)} value={indiceSelecionado}
+              onChange={e => setPontoSelecionado(Number(e.target.value))} />
+            <output htmlFor="ct-cursor-data" aria-live="polite">
+              {dataBr(dateAt(cal!, inicio!, itemSelecionado.dia))} · Planejado {pct(itemSelecionado.planejado)}
+              {itemSelecionado.realizado == null ? " · Sem realizado apurado" : " · Realizado " + pct(itemSelecionado.realizado)}
+            </output>
+          </div>}
           <div className="ct-chart-footer">
             <span>{!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes: realizado não exibido." : "Realizado datado pela produção confirmada."}</span>
             <button type="button" onClick={() => abrirAba("curva-s")}>Abrir Curva S <ArrowUpRight size={14}/></button>
