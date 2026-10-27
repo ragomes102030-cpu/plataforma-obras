@@ -37,14 +37,17 @@ export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalcu
     dataValida(finsCalculados[l.codigo]) &&
     diaUtc(finsCalculados[l.codigo]) >= diaUtc(l.inicio) &&
     Number.isFinite(l.duracao) && l.duracao >= 1);
-  const locais = Array.from(new Set(validas.map(l => String(l.pavimento || l.frente || "").trim()).filter(Boolean)))
+  const locais = Array.from(new Set(validas.map(l => String(l.pavimento ?? "").trim()).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
   const agrupados = new Map<string, SerieLob>();
   for (const l of validas) {
-    const local = String(l.pavimento || l.frente || "").trim();
+    // Frente/disciplina NÃO é unidade física: a LOB usa apenas o pavimento explicitamente cadastrado.
+    const local = String(l.pavimento ?? "").trim();
     const nome = l.atividade.trim();
     if (!local || !nome) continue;
-    const chave = nome.toLocaleLowerCase("pt-BR");
+    // Mesmo nome em disciplinas distintas não forma automaticamente uma série de ritmo.
+    const disciplina = String(l.frente ?? "").trim().toLocaleLowerCase("pt-BR");
+    const chave = nome.toLocaleLowerCase("pt-BR") + (disciplina ? "|" + disciplina : "");
     if (!agrupados.has(chave)) agrupados.set(chave, { chave, nome, pontos: [], repetitiva: false });
     agrupados.get(chave)!.pontos.push({
       codigo: l.codigo, nome, local, inicio: l.inicio, fim: finsCalculados[l.codigo],
@@ -57,7 +60,7 @@ export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalcu
   }).sort((a,b) => a.nome.localeCompare(b.nome, "pt-BR", {numeric:true}));
   return {
     locais, series,
-    semLocal: validas.filter(l => !(l.pavimento || l.frente)).length,
+    semLocal: validas.filter(l => !String(l.pavimento ?? "").trim()).length,
     descartadas: linhas.length - validas.length,
   };
 }
