@@ -52,9 +52,10 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
   const pesquisa = busca.trim().toLocaleLowerCase("pt-BR");
   const listadas = (visao === "ritmo" ? repetidas : series).filter(s => (s.nome+" "+s.pontos[0]?.codigo).toLocaleLowerCase("pt-BR").includes(pesquisa));
   const selecionadaSerie = series.find(s => s.chave === selecionada) ?? null;
-  const serieRitmo = repetidas.find(s => s.chave === selecionada) ?? repetidas[0] ?? null;
-  // Exibir séries simultâneas é apenas leitura: sem recalcular CPM ou alterar datas.
-  const seriesRitmoVisiveis = mostrarTodas && !selecionada ? listadas.filter(s => s.repetitiva) : serieRitmo ? [serieRitmo] : [];
+  const ritmosFiltrados = listadas.filter(s => s.repetitiva);
+  const serieRitmo = ritmosFiltrados.find(s => s.chave === selecionada) ?? ritmosFiltrados[0] ?? null;
+  // A busca limita também a sequência isolada; nunca voltar a desenhar um serviço oculto.
+  const seriesRitmoVisiveis = mostrarTodas && !selecionada ? ritmosFiltrados : serieRitmo ? [serieRitmo] : [];
   const coresRitmo = ["#257e94", "#8662a2", "#b16e3d", "#25896b", "#ba566f", "#657f31"];
   const seriesOcupacao = listadas.filter(s => !selecionadaSerie || s.chave === selecionadaSerie.chave);
   const pontosOcupacao = seriesOcupacao.flatMap(s => s.pontos);
