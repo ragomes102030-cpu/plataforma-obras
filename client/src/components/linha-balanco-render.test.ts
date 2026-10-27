@@ -93,7 +93,7 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("janelas simultâneas");
     expect(html).toContain('data-testid="lob-flow-alert"');
     expect(html).toContain("Indicadores de calendário, não medições reais");
-    expect(html).toContain("dias entre inícios consecutivos");
+    expect(html).toContain("entre inícios consecutivos (média)");
   });
 
 });
