@@ -31,4 +31,17 @@ describe("SVG exportado do Gantt",()=>{
    expect(svg).toContain("Vigas");
    expect(svg).not.toContain('<circle cx="');
  });
+ it("inclui a barra cinza da baseline só quando a comparação está ativa",()=>{
+   const sem=gerarSvgGantt(entrada);
+   const com=gerarSvgGantt({...entrada,
+     baseline:[{codigo:"1.1",inicio:"2026-10-22",fim:"2026-10-26"}]});
+   expect(sem).not.toContain('fill="#8798aa"');
+   expect(com).toContain('fill="#8798aa"');
+   expect(com).toContain("baseline aprovada");
+   const oculto=gerarSvgGantt({...entrada,
+     linhas:[entrada.linhas[0]!],
+     baseline:[{codigo:"1.1",inicio:"2026-10-22",fim:"2026-10-26"}]});
+   expect(oculto).not.toContain('fill="#8798aa"');
+ });
+
 });
