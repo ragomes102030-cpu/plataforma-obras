@@ -1,9 +1,10 @@
+import * as React from "react";
 import { useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, Download, ListTodo, Maximize2, Search, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import {
-  dataValida, diaUtc, diaSeguinte, prepararLinhaBalancoVertical,
+  dataValida, diaUtc, prepararLinhaBalancoVertical,
   type PontoLob, type SerieLob,
 } from "./linha-balanco-modelo";
 import "./linha-balanco-profissional.css";
