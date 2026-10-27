@@ -47,6 +47,6 @@ describe("Gantt e LOB de todas as obras: dados e operação manual",()=>{
   expect(view).not.toContain("function LinhaDeBalanco");
   expect(view).toContain('aba:"atividades"');
   expect(view).toContain("function Gantt");
- });;
+ });
 
 });
