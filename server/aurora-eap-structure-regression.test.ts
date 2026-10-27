@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 
 const regression = readFileSync("scripts/regression-aurora-eap.mjs", "utf8");
 const workflow = readFileSync(".github/workflows/aurora-eap-regression.yml", "utf8");
+const schemaAudit = readFileSync("scripts/audit-schema-pg.mjs", "utf8");
+const ci = readFileSync(".github/workflows/ci.yml", "utf8");
 
 describe("EAP Aurora — invariantes, não números fixos", () => {
   it("exige raiz única, integridade, dicionário, atividades e dependências", () => {
