@@ -30,6 +30,7 @@ import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import "@/planilha.css";
 import "@/eap.css";
 import "@/workspace-planejamento.css";
+import "@/dashboard-executivo.css";
 // mobile.css e campo-tipografia.css NAO sao importados aqui de proposito: eles
 // tem de ser a ultima folha do bundle, e qualquer CSS importado de dentro de App
 // entra antes de index.css. Eles sao importados no fim de main.tsx.
