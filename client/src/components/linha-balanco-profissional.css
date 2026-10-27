@@ -1,0 +1,62 @@
+/* Linha de Balanço: visualização técnica baseada em dados oficiais da grade.
+   CSS independente do antigo piloto; isolado em .lob-pro. */
+.lob-pro{border:1px solid #d6e2e8;border-radius:10px;background:#fff;overflow:hidden;color:#243f4d;box-shadow:0 1px 12px rgba(18,52,68,.035)}
+.lob-pro-cabecalho{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:18px 20px 16px}
+.lob-pro-kicker{display:flex;align-items:center;gap:7px;color:#4f7c90;font-size:10px;letter-spacing:.06em;font-weight:790}
+.lob-pro-cabecalho h2{margin:4px 0;color:#203f4c;font-size:21px;font-weight:780;letter-spacing:-.02em}
+.lob-pro-cabecalho p{margin:0;color:#68808c;font-size:11.5px;line-height:1.6}
+.lob-pro-editar{display:inline-flex;justify-content:center;align-items:center;gap:7px;border:1px solid #9bc7d5;background:#eaf5f9;color:#1f6177;padding:10px 12px;border-radius:7px;cursor:pointer;font-weight:730;font-size:11px}
+.lob-pro-editar:hover{background:#d9ebf1}
+.lob-pro-indicadores{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#f6f9fa;padding:10px 18px;border-block:1px solid #e1e8ec}
+.lob-pro-indicadores span{font-size:11px;color:#617a87;padding:6px 12px;border:1px solid #e3ecf0;border-radius:6px;background:#fff}
+.lob-pro-indicadores strong{font-size:15px;font-weight:790;color:#255a70;margin-right:5px}
+.lob-pro-controles{display:flex;align-items:center;justify-content:space-between;gap:13px;flex-wrap:wrap;padding:11px 16px;border-bottom:1px solid #e3eaef}
+.lob-pro-visoes{display:inline-flex;align-items:center;gap:3px;padding:3px;border:1px solid #dae6ec;border-radius:8px;background:#f3f7f9}
+.lob-pro-visoes button{border:0;border-radius:6px;padding:8px 13px;background:transparent;color:#5f7887;font-size:11px;font-weight:660;cursor:pointer}
+.lob-pro-visoes button.ativo{background:#fff;color:#1b657e;box-shadow:0 1px 5px #214b5c12;font-weight:780}
+.lob-pro-escala{display:flex;align-items:center;gap:8px;font-size:11px;color:#66808e}
+.lob-pro-escala select{padding:8px 10px;border:1px solid #cbdce4;border-radius:6px;background:#fff;font-size:11px;color:#2d5262}
+.lob-pro-layout{display:grid;grid-template-columns:minmax(245px,290px) minmax(0,1fr);min-height:520px}
+.lob-pro-layout.lista-recolhida{grid-template-columns:47px minmax(0,1fr)}
+.lob-pro-lista{display:flex;flex-direction:column;min-width:0;border-right:1px solid #dce8ed;background:#fcfdfe}
+.lob-pro-colapsar{display:flex;gap:8px;align-items:center;width:100%;min-height:47px;background:none;border:0;padding:10px 12px;color:#365b6b;cursor:pointer;text-align:left}
+.lob-pro-colapsar strong{flex:1;font-size:12px}
+.lob-pro-colapsar span{font-size:11px;color:#80929b}
+.lob-pro-pesquisa{display:flex;align-items:center;gap:7px;border:1px solid #d9e5ea;background:white;border-radius:7px;margin:2px 11px 9px;padding:8px 10px;color:#6b8795}
+.lob-pro-pesquisa input{border:0;outline:none;flex:1;min-width:0;font-size:11px;color:#2b4e5f}
+.lob-pro-mostrar-tudo{align-self:flex-start;padding:2px 12px 11px;border:0;background:none;color:#247187;font-size:10.5px;font-weight:660;cursor:pointer}
+.lob-pro-servicos{overflow:auto;max-height:min(66vh,590px);border-top:1px solid #e7edf0}
+.lob-pro-servico{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid #edf1f3;background:transparent;padding:11px 12px;text-align:left;cursor:pointer;color:#526b77}
+.lob-pro-servico:hover{background:#edf6f8}
+.lob-pro-servico.selecionado{background:#e4f2f6;color:#1e637b}
+.lob-pro-servico svg{flex:0 0 auto;color:#7395a3}
+.lob-pro-servico.selecionado svg{color:#1e738d}
+.lob-pro-servico span{min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;font-weight:630}
+.lob-pro-servico small{font-size:9.5px;color:#768c98;white-space:nowrap}
+.lob-pro-lista-vazia{padding:15px;color:#7a8d98;font-size:11px}
+.lob-pro-nota{margin-top:auto;padding:13px;background:#f2f7f9;color:#637d89;border-top:1px solid #dfe9ed;font-size:10.5px;line-height:1.65}
+.lob-pro-painel{min-width:0}
+.lob-pro-faixa-titulo{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 15px;border-bottom:1px solid #e5edf0}
+.lob-pro-faixa-titulo>div{display:flex;flex-direction:column;gap:3px}
+.lob-pro-faixa-titulo strong{font-size:12px;color:#2b4c59}
+.lob-pro-faixa-titulo span{font-size:10.5px;color:#768994}
+.lob-pro-faixa-titulo button{border:1px solid #c9dfe7;background:#f1f8fa;color:#2a6b82;border-radius:6px;padding:7px 9px;font-size:10px}
+.lob-pro-scroll{max-height:min(75vh,900px);min-height:395px;overflow:auto;overscroll-behavior:contain;background:#fff}
+.lob-pro-scroll svg{display:block}
+.lob-pro-legenda{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 15px;background:#f7fafb;border-top:1px solid #e1e9ed;color:#5c7582;font-size:10.5px}
+.lob-pro-legenda strong{font-size:11px;color:#385b6d}
+.lob-pro-legenda span{display:inline-flex;align-items:center;gap:5px}
+.lob-pro-legenda i{width:13px;height:13px;border-radius:3px;border:1px solid #b4cfdc;display:inline-block}
+.lob-pro-legenda small{font-size:10px;color:#8797a0}
+.lob-pro-rodape{font-size:10.5px;line-height:1.6;color:#7a8d98;padding:12px 15px;margin:0;border-top:1px solid #e7eef1}
+.lob-pro-aviso{padding:9px 15px;background:#fff9ec;color:#8a6a36;font-size:10.5px;border-top:1px solid #f0e4c9;margin:0}
+.lob-pro-vazio{min-height:310px;padding:55px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;text-align:center}
+.lob-pro-vazio svg{color:#779aa7}
+.lob-pro-vazio h3{margin:0;font-size:16px;color:#365666}
+.lob-pro-vazio p{max-width:510px;margin:0;color:#6a8390;font-size:12px;line-height:1.6}
+.lob-pro-vazio>button:not(.lob-pro-editar){background:none;border:0;font-size:11px;color:#26728a;font-weight:750;padding:6px;cursor:pointer}
+.lob-pro-vazio-tecnico{min-height:400px}
+.lob-pro button:focus-visible,.lob-pro input:focus-visible,.lob-pro select:focus-visible,.lob-pro-scroll:focus-visible{outline:2px solid #267d9b;outline-offset:2px}
+@media(max-width:920px){.lob-pro-layout{grid-template-columns:minmax(190px,240px) minmax(0,1fr)}}
+@media(max-width:730px){.lob-pro-layout,.lob-pro-layout.lista-recolhida{display:flex;flex-direction:column}.lob-pro-lista{border-right:0;border-bottom:1px solid #dce8ed}.lob-pro-servicos{max-height:190px}.lob-pro-colapsar{min-height:42px}.lob-pro-cabecalho{padding:15px}.lob-pro-controles{align-items:stretch}.lob-pro-scroll{max-height:62vh}.lob-pro-nota{padding:9px 12px}}
+@media(max-width:450px){.lob-pro-visoes{width:100%}.lob-pro-visoes button{flex:1;padding:9px 7px;font-size:10px}.lob-pro-indicadores{padding:8px 9px}.lob-pro-indicadores span{padding:6px 8px}.lob-pro-escala{width:100%;justify-content:flex-end}}
