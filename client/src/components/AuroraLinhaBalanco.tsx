@@ -1,11 +1,10 @@
-import * as React from "react";
-import { useMemo, useState } from "react";
-import { Activity, CalendarDays, ChevronDown, ChevronRight, Eye, EyeOff, Layers3, ListTodo, Search } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { CalendarDays, ChevronDown, Download, ListTodo, Maximize2, Search, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import {
-  prepararLinhaBalancoVertical, diaUtc, faixasDeTempo, ocupacaoNaFaixa, rotuloMes,
-  type PontoLob,
+  dataValida, diaUtc, diaSeguinte, prepararLinhaBalancoVertical,
+  type PontoLob, type SerieLob,
 } from "./linha-balanco-modelo";
 import "./linha-balanco-profissional.css";
 
@@ -17,286 +16,300 @@ type Props = {
   hoje: IsoDate;
   onAbrirAtividades: () => void;
 };
-type Visao = "ocupacao" | "ritmo";
-type Escala = "mes" | "quinzena";
+type Escala = "dia" | "semana" | "quinzena" | "mes";
+type Barra = { serie: SerieLob; ponto: PontoLob; cor: string; indice: number };
 const DIA = 86400000;
-const CORES_OCUPACAO = ["#f2f6f8", "#c8e3ed", "#89c2d6", "#4e94b0", "#256b87"];
-function textoData(iso: string) {
-  const [a,m,d] = iso.split("-");
-  return d+"/"+m+"/"+a;
+const COLUNA = 168;
+const CORES = ["#176fc0", "#d2792e", "#268148", "#8259b5", "#b54a62", "#258599", "#a47b21"];
+const ESCALAS: Record<Escala, number> = { dia: 28, semana: 19, quinzena: 10, mes: 5 };
+
+const adicionarDias = (iso: string, dias: number) =>
+  new Date(diaUtc(iso) + dias * DIA).toISOString().slice(0, 10);
+const formatoCurto = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+const formatoCompleto = (iso: string) => formatoCurto(iso) + "/" + iso.slice(0, 4);
+function segundaDaSemana(iso: string): string {
+  const dia = new Date(diaUtc(iso)).getUTCDay();
+  return adicionarDias(iso, -((dia + 6) % 7));
 }
-function legendaPonto(p: PontoLob) {
-  const qtd = p.quantidade == null ? "sem quantitativo" :
-    "previsto: "+p.quantidade+(p.unidade ? " "+p.unidade : "");
-  return p.codigo+" · "+p.nome+" · "+p.local+" | "+textoData(p.inicio)+" a "+textoData(p.fim)+" | "+qtd;
+function normalizarCelulaCsv(valor: string | number | null): string {
+  const texto = String(valor ?? "");
+  // Evita execução acidental de fórmula ao abrir CSV no Excel.
+  const seguro = /^[\s]*[=+\-@]/.test(texto) ? "'" + texto : texto;
+  return '"' + seguro.replace(/"/g, '""') + '"';
+}
+
+function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string; ultimo: string } | null {
+  const pontos = series.flatMap(s => s.pontos);
+  if (!pontos.length) return null;
+  return {
+    primeiro: pontos.reduce((min, p) => p.inicio < min ? p.inicio : min, pontos[0]!.inicio),
+    ultimo: pontos.reduce((max, p) => p.fim > max ? p.fim : max, pontos[0]!.fim),
+  };
 }
 
 /**
- * Datas são derivadas exclusivamente de planning.grade.
- * Uma série só é conectada quando possui UM registro por local e ao menos
- * dois locais: uma linha ligando registros ambíguos sugeriria produtividade
- * que o sistema não calculou.
+ * Cronograma de produção em escadinha, integrado à interface CLÁSSICA.
+ * Calendário no eixo horizontal, pavimentos no vertical; cada barra usa
+ * exclusivamente datas da planning.grade, sem inventar produtividade ou execução.
+ * Não cria nem altera versões do plano. Filtros e exportação são somente leitura.
  */
-export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtividades }: Props) {
-  const { locais, series, semLocal, descartadas } =
-    useMemo(() => prepararLinhaBalancoVertical(linhas, finsCalculados), [linhas, finsCalculados]);
-
-  const [visao, setVisao] = useState<Visao>("ritmo");
-  const [escala, setEscala] = useState<Escala>("mes");
-  const [recolhida, setRecolhida] = useState(false);
+export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAtividades }: Props) {
+  const dados = useMemo(
+    () => prepararLinhaBalancoVertical(linhas, finsCalculados),
+    [linhas, finsCalculados],
+  );
+  const repetitivas = useMemo(() => dados.series.filter(s => s.repetitiva), [dados.series]);
   const [busca, setBusca] = useState("");
-  const [selecionada, setSelecionada] = useState<string | null>(null);
-  const [mostrarTodas, setMostrarTodas] = useState(true);
+  const [ocultas, setOcultas] = useState<Set<string>>(() => new Set());
+  const [pavimento, setPavimento] = useState("todos");
+  const [escala, setEscala] = useState<Escala>("semana");
+  const [pxManual, setPxManual] = useState<number | null>(null);
+  const [dataInicial, setDataInicial] = useState("");
+  const [dataFinal, setDataFinal] = useState("");
+  const [detalhe, setDetalhe] = useState<Barra | null>(null);
+  const rolagem = useRef<HTMLDivElement | null>(null);
 
-  const repetidas = series.filter(s => s.repetitiva);
-  const pesquisa = busca.trim().toLocaleLowerCase("pt-BR");
-  const listadas = (visao === "ritmo" ? repetidas : series).filter(s => (s.nome+" "+s.pontos[0]?.codigo).toLocaleLowerCase("pt-BR").includes(pesquisa));
-  const selecionadaSerie = series.find(s => s.chave === selecionada) ?? null;
-  const ritmosFiltrados = listadas.filter(s => s.repetitiva);
-  const serieRitmo = ritmosFiltrados.find(s => s.chave === selecionada) ?? ritmosFiltrados[0] ?? null;
-  // A busca limita também a sequência isolada; nunca voltar a desenhar um serviço oculto.
-  const seriesRitmoVisiveis = mostrarTodas && !selecionada ? ritmosFiltrados : serieRitmo ? [serieRitmo] : [];
-  const coresRitmo = ["#257e94", "#8662a2", "#b16e3d", "#25896b", "#ba566f", "#657f31"];
-  // Somente os locais físicos das séries exibidas pertencem ao eixo de ritmo.
-  // Mantemos a lista completa para o mapa auxiliar de ocupação e diagnósticos.
-  const locaisDoGrafico = visao === "ritmo"
-    ? Array.from(new Set(seriesRitmoVisiveis.flatMap(s=>s.pontos.map(p=>p.local))))
-        .sort((a,b)=>a.localeCompare(b,"pt-BR",{numeric:true}))
-    : locais;
-  const seriesOcupacao = listadas.filter(s => !selecionadaSerie || s.chave === selecionadaSerie.chave);
-  const pontosOcupacao = seriesOcupacao.flatMap(s => s.pontos);
-  const pontosTodos = series.flatMap(s => s.pontos);
-  const primeiro = pontosTodos.reduce((atual,p) => !atual || diaUtc(p.inicio)<diaUtc(atual) ? p.inicio : atual,"");
-  const ultimo = pontosTodos.reduce((atual,p) => !atual || diaUtc(p.fim)>diaUtc(atual) ? p.fim : atual,"");
-  const faixas = useMemo(() => primeiro && ultimo ? faixasDeTempo(primeiro, ultimo, escala) : [], [primeiro,ultimo,escala]);
-  const inicioEixo = faixas[0]?.inicio ?? primeiro;
-  const fimEixo = faixas[faixas.length-1]?.fimExclusivo ?? ultimo;
-  const dias = inicioEixo && fimEixo ? Math.max(1, (diaUtc(fimEixo)-diaUtc(inicioEixo))/DIA) : 1;
-  const larguraLocal = 122;
-  const esquerda = 106;
-  const topo = 65;
-  const rodape = 36;
-  const largura = Math.max(690, esquerda+locaisDoGrafico.length*larguraLocal+35);
-  const altura = Math.max(550, Math.min(1480,faixas.length*(escala==="mes"?49:28)+topo+rodape));
-  const h = altura-topo-rodape;
-  const xLocal = (local:string) => esquerda+locaisDoGrafico.indexOf(local)*larguraLocal+larguraLocal/2;
-  const yData = (iso:string) => topo+((diaUtc(iso)-diaUtc(inicioEixo))/DIA)/dias*h;
-  const mostrarHoje = Boolean(inicioEixo && fimEixo && diaUtc(hoje)>=diaUtc(inicioEixo) && diaUtc(hoje)<=diaUtc(fimEixo));
-  const intervaloRotulos = Math.max(1,Math.ceil(faixas.length/28));
+  const termo = busca.trim().toLocaleLowerCase("pt-BR");
+  const seriesVisiveis = repetitivas.filter(s =>
+    !ocultas.has(s.chave) &&
+    (s.nome + " " + s.pontos.map(p => p.codigo).join(" ")).toLocaleLowerCase("pt-BR").includes(termo)
+  );
+  // Descarta categorias antigas usadas equivocadamente no campo pavimento:
+  // apenas unidades de serviços repetitivos entram no eixo físico.
+  const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
+    .sort((a, b) => b.localeCompare(a, "pt-BR", { numeric: true }));
+  const locais = locaisValidos.filter(p => pavimento === "todos" || p === pavimento);
+  const pontosVisiveis = seriesVisiveis.map(s => ({
+    ...s, pontos: s.pontos.filter(p => locais.includes(p.local)),
+  }));
+  const periodoAutomatico = selecionarPeriodoPelosServicos(pontosVisiveis);
+  const baseInicio = periodoAutomatico?.primeiro ?? "2026-01-01";
+  const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
+  const inicioEscolhido = dataValida(dataInicial) ? dataInicial : baseInicio;
+  const fimEscolhido = dataValida(dataFinal) ? dataFinal : baseFim;
+  const periodoInvalido = diaUtc(fimEscolhido) < diaUtc(inicioEscolhido);
+  const eixoInicio = segundaDaSemana(adicionarDias(inicioEscolhido, -7));
+  const eixoFim = segundaDaSemana(adicionarDias(fimEscolhido, 14));
+  const eixoFimExclusivo = adicionarDias(eixoFim, 7);
+  const diasNoEixo = Math.max(1, Math.round((diaUtc(eixoFimExclusivo) - diaUtc(eixoInicio)) / DIA));
+  const pxDia = pxManual ?? ESCALAS[escala];
+  const larguraTempo = Math.max(1, diasNoEixo * pxDia);
+  const alturaLinha = Math.max(64, 14 + seriesVisiveis.length * 23);
+  const dataX = (iso: string) => ((diaUtc(iso) - diaUtc(eixoInicio)) / DIA) * pxDia;
 
-  function selecionar(chave:string) {
-    const item=series.find(s=>s.chave===chave);
-    if (visao==="ritmo" && item && !item.repetitiva) setVisao("ocupacao");
-    setSelecionada(atual=>visao==="ocupacao" && atual===chave ? null : chave);
+  // Cabeçalhos com meses civis verdadeiros e semanas começando na segunda.
+  const meses: { inicio: string; texto: string; x: number; largura: number }[] = [];
+  if (!periodoInvalido) {
+    const cursor = new Date(diaUtc(eixoInicio));
+    cursor.setUTCDate(1);
+    for (let i = 0; i < 120 && cursor.getTime() < diaUtc(eixoFimExclusivo); i++) {
+      const inicio = cursor.toISOString().slice(0, 10);
+      const proximo = new Date(cursor);
+      proximo.setUTCMonth(proximo.getUTCMonth() + 1);
+      const fim = proximo.toISOString().slice(0, 10);
+      const a = Math.max(0, dataX(inicio));
+      const b = Math.min(larguraTempo, dataX(fim));
+      if (b > a) {
+        const titulo = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(cursor);
+        meses.push({ inicio, texto: titulo, x: a, largura: b - a });
+      }
+      cursor.setTime(proximo.getTime());
+    }
+  }
+
+  const semanas: { inicio: string; x: number }[] = [];
+  for (let i = 0; i < diasNoEixo && i < 3650 && !periodoInvalido; i += 7) {
+    const inicio = adicionarDias(eixoInicio, i);
+    semanas.push({ inicio, x: i * pxDia });
+  }
+
+  const barrasPorLocal = new Map<string, Barra[]>();
+  for (const local of locais) {
+    const barras: Barra[] = [];
+    seriesVisiveis.forEach((serie, indice) => {
+      const ponto = serie.pontos.find(p => p.local === local);
+      if (ponto) barras.push({ serie, ponto, cor: CORES[repetitivas.findIndex(s => s.chave === serie.chave) % CORES.length]!, indice });
+    });
+    barrasPorLocal.set(local, barras);
+  }
+
+  const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
+
+  function alterarSerie(chave: string, visivel: boolean) {
+    setOcultas(anterior => {
+      const proximo = new Set(anterior);
+      if (visivel) proximo.delete(chave);
+      else proximo.add(chave);
+      return proximo;
+    });
+    setDetalhe(null);
+    setPxManual(null);
+  }
+
+  function exportarCsv() {
+    const linhasCsv = [["Serviço", "EAP", "Pavimento", "Início", "Término", "Quantidade", "Unidade", "Executado"]];
+    seriesVisiveis.forEach(serie => {
+      serie.pontos.filter(p => locais.includes(p.local)).forEach(p => {
+        linhasCsv.push([serie.nome, p.codigo, p.local, p.inicio, p.fim, String(p.quantidade ?? ""), p.unidade ?? "", String(p.executado)]);
+      });
+    });
+    const conteudo = "\uFEFF" + linhasCsv.map(celulas => celulas.map(normalizarCelulaCsv).join(";")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([conteudo], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "arquimedes-linha-de-balanco.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
-    <section className="lob-pro" aria-label="Linha de Balanço — planejamento">
-      <header className="lob-pro-cabecalho">
+    <section className="lob-stairs" aria-label="Linha de Balanço — escadinha do cronograma">
+      <header className="lob-stairs-heading">
         <div>
-          <span className="lob-pro-kicker"><Layers3 size={14}/> PLANEJAMENTO · RITMO E LOCAIS</span>
+          <div className="lob-stairs-eyebrow">ARQUIMEDES · CRONOGRAMA DA OBRA</div>
           <h2>Linha de Balanço</h2>
-          <p>Tempo na vertical e locais na horizontal. Dados reais do cronograma, sem estimativas artificiais.</p>
+          <p>Planejamento por pavimentos e frentes de serviço · datas reais da grade do cronograma</p>
         </div>
-        <button className="lob-pro-editar" type="button" onClick={onAbrirAtividades}><ListTodo size={16}/> Editar atividades</button>
+        <div className="lob-stairs-heading-actions">
+          <button type="button" onClick={onAbrirAtividades}><ListTodo size={16}/> Editar atividades</button>
+          <button type="button" onClick={exportarCsv} disabled={!qtdBarras} title="Exportar apenas serviços e pavimentos visíveis"><Download size={16}/> Exportar CSV</button>
+        </div>
       </header>
 
-      <div className="lob-pro-indicadores" aria-label="Resumo da Linha de Balanço">
-        <span><strong>{locais.length}</strong> locais físicos cadastrados</span>
-        <span><strong>{pontosTodos.length}</strong> atividades localizadas</span>
-        <span><strong>{repetidas.length}</strong> sequências repetitivas válidas</span>
-        <span><strong>{semLocal}</strong> sem local</span>
-      </div>
-
-      {repetidas.length === 0 ? (
-        <>
-        <div className="lob-pro-prontidao" role="status" aria-label="Diagnóstico da Linha de Balanço">
-          <div className="lob-pro-prontidao-marca"><Layers3 size={24}/></div>
-          <div className="lob-pro-prontidao-conteudo">
-            <span className="lob-pro-prontidao-kicker">LINHA DE RITMO AINDA NÃO DISPONÍVEL</span>
-            <h3>A obra ainda não tem serviços repetidos por unidade de execução.</h3>
-            <p>Uma LOB precisa relacionar o mesmo serviço a duas ou mais unidades físicas,
-              com início e término definidos. Hoje há {pontosTodos.length} atividade(s) com local
-              e período válidos, mas nenhuma sequência repetitiva que permita traçar o ritmo.
-              O mapa abaixo mostra a ocupação planejada por local; ele não representa produtividade.
-              Disciplinas ou fases não são convertidas em pavimentos e nenhuma linha é inventada.</p>
-            <div className="lob-pro-diagnostico-contagens" aria-label="Diagnóstico dos dados da Linha de Balanço">
-              <span><strong>{locais.length}</strong> locais físicos cadastrados</span>
-              <span><strong>{pontosTodos.length}</strong> atividades com datas válidas</span>
-              <span><strong>{semLocal}</strong> atividades sem local físico</span>
-              <span><strong>{descartadas}</strong> marcos ou registros com datas/duração inválidas</span>
-            </div>
-            {locais.length > 0 && <div className="lob-pro-categorias">
-              <strong>Locais físicos cadastrados ({locais.length})</strong>
-              <div>{locais.slice(0,12).map(local=><span key={local}>{local}</span>)}
-                {locais.length>12&&<span>+ {locais.length-12} outros</span>}</div>
-              <small>Confirme que cada valor identifica uma unidade física de execução, como pavimento, bloco ou trecho.</small>
-            </div>}
-            <div className="lob-pro-prontidao-acoes">
-              <button type="button" className="lob-pro-editar" onClick={onAbrirAtividades}><ListTodo size={16}/> Revisar atividades e locais</button>
-              <button type="button" onClick={()=>window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"gantt"}}))}>
-                Ver cronograma no Gantt <ChevronRight size={16}/>
-              </button>
-            </div>
-            <p className="lob-pro-prontidao-nota">A EAP, as atividades e as datas permanecem intactas. As linhas de ritmo aparecerão quando houver registros repetitivos válidos.</p>
+      {repetitivas.length === 0 ? (
+        <div className="lob-stairs-empty" role="status">
+          <h3>LINHA DE RITMO AINDA NÃO DISPONÍVEL</h3>
+          <p>O cronograma ainda não contém o mesmo serviço em dois ou mais pavimentos físicos distintos. A escadinha não une atividades diferentes ou disciplinas como se fossem pavimentos.</p>
+          <p>{dados.semLocal} atividade(s) sem local · {dados.descartadas} sem período válido ou marcos.</p>
+          <div className="lob-stairs-empty-actions">
+            <button type="button" onClick={onAbrirAtividades}>Revisar atividades e locais</button>
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "gantt" } }))}>Ver cronograma no Gantt</button>
           </div>
         </div>
-        {locais.length > 0 && pontosTodos.length > 0 && <section className="lob-pro-mapa-aux" aria-label="Mapa auxiliar de atividades por local">
-          <header><div><strong>Mapa auxiliar de atividades</strong><span>Períodos e locais cadastrados · contagem de tarefas planejadas · sem conexão de ritmo</span></div>
-            <small>ocupação não representa produtividade</small>
-          </header>
-          <div className="lob-pro-mapa-rolagem" role="region" tabIndex={0} aria-label="Ocupação planejada por período e local; role a tabela horizontalmente no celular">
-            <div className="lob-pro-mapa-grade" role="table" style={{gridTemplateColumns:`minmax(112px, 0.8fr) repeat(${locais.length}, minmax(116px, 1fr))`}}>
-              <div role="row" className="lob-pro-mapa-linha lob-pro-mapa-cabecalho"><div role="columnheader">PERÍODO</div>{locais.map(local=><div role="columnheader" key={local} title={local}>{local}</div>)}</div>
-              {faixas.map(faixa=><div role="row" className="lob-pro-mapa-linha" key={faixa.inicio}>
-                <div role="rowheader">{faixa.rotulo}</div>
-                {locais.map(local=>{
-                  const tarefas=ocupacaoNaFaixa(pontosTodos,local,faixa);
-                  return <div role="cell" key={local} className={tarefas.length?"com-atividade":""} aria-label={`${local}, ${faixa.rotulo}: ${tarefas.length} atividade(s)`} title={tarefas.map(p=>`${p.codigo} · ${p.nome}`).join("\n")||"Sem atividade neste período"}>{tarefas.length||"—"}</div>;
-                })}
-              </div>)}
-            </div>
-          </div>
-        </section>}
-        </>
-      ) : (<>
-      <div className="lob-pro-controles">
-        <div className="lob-pro-visoes" aria-label="Modo de leitura">
-          <button type="button" aria-pressed={visao==="ocupacao"} className={visao==="ocupacao"?"ativo":""} onClick={()=>{setVisao("ocupacao");setSelecionada(null);}}>
-            Mapa auxiliar de frentes
-          </button>
-          <button type="button" aria-pressed={visao==="ritmo"} className={visao==="ritmo"?"ativo":""} onClick={()=>{setVisao("ritmo");setSelecionada(null);}}>
-            Linha de Balanço
-          </button>
-        </div>
-        {visao === "ritmo" && <label className="lob-pro-escala">
-          <input type="checkbox" checked={mostrarTodas} onChange={e=>{setMostrarTodas(e.target.checked);setSelecionada(null);}} aria-label="Mostrar todas as sequências repetitivas"/>
-          Mostrar todas as frentes
-        </label>}
-        <label className="lob-pro-escala"><CalendarDays size={15}/> Período
-          <select aria-label="Escala da Linha de Balanço" value={escala} onChange={e=>setEscala(e.target.value as Escala)}>
-            <option value="mes">Mensal</option><option value="quinzena">Quinzenal</option>
-          </select>
-        </label>
-      </div>
-
-      {locais.length === 0 ? (
-        <div className="lob-pro-vazio"><Activity size={27}/><h3>Não há atividades com local e datas válidos</h3>
-          <p>Preencha os campos pavimento/frente, início e duração na aba Atividades. O gráfico não cria informações fictícias.</p>
-          <button type="button" className="lob-pro-editar" onClick={onAbrirAtividades}>Abrir Atividades</button></div>
       ) : (
-        <div className={"lob-pro-layout"+(recolhida?" lista-recolhida":"")}>
-          <aside className="lob-pro-lista" aria-label="Serviços cadastrados">
-            <button type="button" className="lob-pro-colapsar" aria-expanded={!recolhida} onClick={()=>setRecolhida(v=>!v)}>
-              {recolhida?<ChevronRight size={18}/>:<ChevronDown size={18}/>}
-              {!recolhida&&<><strong>{visao==="ritmo"?"Serviços repetidos":"Serviços"}</strong><span>{listadas.length}</span></>}
-            </button>
-            {!recolhida&&<>
-              <label className="lob-pro-pesquisa"><Search size={15}/>
-                <input type="search" aria-label="Pesquisar serviço da Linha de Balanço" value={busca} onChange={e=>{setBusca(e.target.value);setSelecionada(null);}} placeholder="Pesquisar por nome ou código"/>
-              </label>
-              <button type="button" className="lob-pro-mostrar-tudo" onClick={()=>{setBusca("");setSelecionada(null);}}>Mostrar todos os serviços</button>
-              <div className="lob-pro-servicos">
-                {listadas.map(s=><button type="button" key={s.chave} className={"lob-pro-servico"+((selecionadaSerie?.chave===s.chave || (visao==="ritmo"&&serieRitmo?.chave===s.chave))?" selecionado":"")}
-                  onClick={()=>selecionar(s.chave)} aria-pressed={selecionadaSerie?.chave===s.chave || (visao==="ritmo" && serieRitmo?.chave===s.chave)}>
-                    {s.repetitiva?<Eye size={14}/>:<EyeOff size={14}/>}
-                    <span title={s.nome}>{s.nome}</span>
-                    <small>{new Set(s.pontos.map(p=>p.local)).size} local(is)</small>
-                  </button>)}
-                {listadas.length===0&&<p className="lob-pro-lista-vazia">Nenhum serviço encontrado.</p>}
-              </div>
-              <div className="lob-pro-nota">Clique em um serviço para isolá-lo. <strong>Ritmo</strong> só conecta serviços repetidos em locais distintos.</div>
-            </>}
-          </aside>
-
-          <div className="lob-pro-painel">
-            <div className="lob-pro-faixa-titulo">
-              <div><strong>{visao==="ocupacao"?"Ocupação planejada por local":"Sequência de serviço repetitivo"}</strong>
-                <span>{visao==="ocupacao"?"Contagem de atividades com execução no intervalo; não é produtividade.":"Linha contínua = inícios; tracejada = términos planejados."}</span>
-              </div>
-              {selecionadaSerie&&visao==="ocupacao"&&<button type="button" onClick={()=>setSelecionada(null)}>Limpar filtro</button>}
-            </div>
-
-            {visao==="ritmo" && seriesRitmoVisiveis.length===0 ? (
-              <div className="lob-pro-vazio lob-pro-vazio-tecnico"><Layers3 size={25}/>
-                <h3>Sem sequência repetitiva identificável</h3>
-                <p>Nesta obra, não foi encontrado um mesmo serviço com um registro inequívoco em pelo menos dois locais. Conectar atividades diferentes produziria uma linha de ritmo falsa.</p>
-                <button type="button" onClick={()=>setVisao("ocupacao")}>Consultar ocupação das frentes</button>
-                <button type="button" className="lob-pro-editar" onClick={onAbrirAtividades}>Organizar atividades manualmente</button>
-              </div>
-            ) : (
-              <>
-                <div className="lob-pro-scroll" role="region" tabIndex={0} aria-label="Diagrama com tempo vertical e locais horizontais">
-                  <svg role="img" aria-label={visao==="ocupacao"?"Mapa de ocupação por local e período":"Linhas de início e conclusão de serviços repetitivos"} viewBox={"0 0 "+largura+" "+altura} width={largura} height={altura}>
-                    <rect x={0} y={0} width={largura} height={altura} fill="#ffffff"/>
-                    {locaisDoGrafico.map((local,i)=><g key={local}>
-                      <rect x={esquerda+i*larguraLocal} y={topo} width={larguraLocal} height={h} fill={i%2===0?"#f8fbfc":"#ffffff"}/>
-                      <line x1={xLocal(local)} y1={topo} x2={xLocal(local)} y2={altura-rodape} stroke="#dce7eb" strokeWidth={1}/>
-                      <text x={xLocal(local)} y={28} textAnchor="middle" fontSize={11} fill="#294755" fontWeight={650}>
-                        {local.length>16?local.slice(0,14)+"…":local}
-                        <title>{local}</title>
-                      </text>
-                    </g>)}
-                    <text x={esquerda-14} y={28} textAnchor="end" fontSize={11} fill="#5c7481" fontWeight={700}>DATA</text>
-                    {faixas.map((faixa,i)=>{
-                      const yy=yData(faixa.inicio);
-                      return <g key={faixa.inicio}>
-                        <line x1={esquerda} x2={largura-30} y1={yy} y2={yy} stroke={i===0?"#acbec8":"#dfe8ec"} strokeWidth={i===0?1.5:1}/>
-                        {i%intervaloRotulos===0&&<text x={esquerda-12} y={yy+13} textAnchor="end" fontSize={11} fill="#5a7280">{faixa.rotulo}</text>}
-                      </g>;
-                    })}
-                    {visao==="ocupacao" ? faixas.flatMap(faixa=>locaisDoGrafico.map(local=>{
-                      const lista=ocupacaoNaFaixa(pontosOcupacao,local,faixa);
-                      const n=lista.length;
-                      if(n===0)return null;
-                      const yi=yData(faixa.inicio);
-                      const yfim=yData(faixa.fimExclusivo);
-                      const cor=CORES_OCUPACAO[Math.min(n,4)];
-                      return <g key={faixa.inicio+"-"+local}>
-                        <rect x={xLocal(local)-36} y={yi+3} width={72} height={Math.max(3,yfim-yi-6)} rx={4} fill={cor} stroke="#fff" strokeWidth={1}/>
-                        <text x={xLocal(local)} y={(yi+yfim)/2+4} textAnchor="middle" fontSize={11} fill={n>=4?"#fff":"#27556b"} fontWeight={750}>{n}</text>
-                        <title>{local+" · "+faixa.rotulo+" · "+n+" atividade(s): "+lista.slice(0,8).map(p=>p.nome).join("; ")+(lista.length>8?"…":"")}</title>
-                      </g>;
-                    })) : seriesRitmoVisiveis.map((serie, indice) => {
-                      const ordenados=[...serie.pontos].sort((a,b)=>locaisDoGrafico.indexOf(a.local)-locaisDoGrafico.indexOf(b.local));
-                      const cor = coresRitmo[repetidas.findIndex(s=>s.chave===serie.chave)%coresRitmo.length] ?? coresRitmo[indice%coresRitmo.length];
-                      return <g key={serie.chave}>
-                        <polyline fill="none" stroke={cor} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"
-                          points={ordenados.map(p=>xLocal(p.local)+","+yData(p.inicio)).join(" ")}/>
-                        <polyline fill="none" stroke={cor} opacity={0.65} strokeWidth={2.5} strokeDasharray="7 5" strokeLinejoin="round"
-                          points={ordenados.map(p=>xLocal(p.local)+","+yData(p.fim)).join(" ")}/>
-                        {ordenados.map(p=><g key={p.codigo+"-"+p.local}>
-                          <line x1={xLocal(p.local)} y1={yData(p.inicio)} x2={xLocal(p.local)} y2={yData(p.fim)} stroke={cor} strokeWidth={8} strokeLinecap="round" opacity={0.6}/>
-                          <circle cx={xLocal(p.local)} cy={yData(p.inicio)} r={5} fill={cor}/>
-                          <circle cx={xLocal(p.local)} cy={yData(p.fim)} r={5} fill={cor} opacity={0.75}/>
-                          <title>{serie.nome+" · "+legendaPonto(p)}</title>
-                        </g>)}
-                      </g>;
-                    })}
-                    {mostrarHoje&&<g>
-                      <line x1={esquerda} x2={largura-30} y1={yData(hoje)} y2={yData(hoje)} stroke="#be6855" strokeDasharray="5 5" strokeWidth={2}/>
-                      <text x={largura-28} y={yData(hoje)-5} textAnchor="end" fontWeight={750} fontSize={10} fill="#a65442">HOJE</text>
-                    </g>}
-                    <line x1={esquerda} x2={largura-30} y1={altura-rodape} y2={altura-rodape} stroke="#acbec8"/>
-                    <text x={esquerda+(locaisDoGrafico.length*larguraLocal)/2} y={altura-11} textAnchor="middle" fontSize={11} fill="#627c89">LOCAIS DE EXECUÇÃO</text>
-                  </svg>
+        <>
+          <div className="lob-stairs-toolbar">
+            <label className="lob-stairs-field lob-stairs-period">
+              <span><CalendarDays size={13}/> Período inicial</span>
+              <input aria-label="Início do período da Linha de Balanço" type="date" value={inicioEscolhido}
+                onChange={e => { setDataInicial(e.target.value); setPxManual(null); }} />
+            </label>
+            <label className="lob-stairs-field lob-stairs-period">
+              <span>Período final</span>
+              <input aria-label="Fim do período da Linha de Balanço" type="date" value={fimEscolhido}
+                onChange={e => { setDataFinal(e.target.value); setPxManual(null); }} />
+            </label>
+            <label className="lob-stairs-field">
+              <span>Zoom</span>
+              <select aria-label="Zoom do calendário" value={escala}
+                onChange={e => { setEscala(e.target.value as Escala); setPxManual(null); }}>
+                <option value="dia">Dias</option>
+                <option value="semana">Semanas</option>
+                <option value="quinzena">Quinzenas</option>
+                <option value="mes">Meses</option>
+              </select>
+            </label>
+            <div className="lob-stairs-field lob-stairs-dropdown">
+              <span>Serviços</span>
+              <details>
+                <summary>{seriesVisiveis.length} de {repetitivas.length} selecionados <ChevronDown size={14}/></summary>
+                <div className="lob-stairs-options">
+                  {repetitivas.map(serie => (
+                    <label key={serie.chave}>
+                      <input type="checkbox" checked={!ocultas.has(serie.chave)}
+                        onChange={e => alterarSerie(serie.chave, e.target.checked)} />
+                      <i style={{ background: CORES[repetitivas.indexOf(serie) % CORES.length] }}/>
+                      <span>{serie.nome}</span>
+                    </label>
+                  ))}
                 </div>
-                {visao==="ocupacao"?
-                  <div className="lob-pro-legenda">
-                    <strong>Atividades no intervalo</strong>
-                    {[1,2,3,4].map(n=><span key={n}><i style={{background:CORES_OCUPACAO[n]}}/>{n===4?"4 ou mais":String(n)}</span>)}
-                    <small>Intervalos de calendário; não confundir ocupação com avanço físico.</small>
-                  </div>
-                  : <div className="lob-pro-legenda"><strong>{seriesRitmoVisiveis.length} sequência(s) visível(is)</strong>{seriesRitmoVisiveis.map(serie=><span key={serie.chave}><i style={{background:coresRitmo[repetidas.findIndex(s=>s.chave===serie.chave)%coresRitmo.length]}}/>{serie.nome}</span>)}<small>Traço contínuo: início · tracejado: término. Cores identificam serviços, não produtividade calculada.</small></div>}
-              </>
-            )}
-            {descartadas>0&&<p className="lob-pro-aviso">{descartadas} registros sem datas válidas ou marcos não entram nesta leitura de duração.</p>}
-            {semLocal>0&&<p className="lob-pro-aviso">{semLocal} atividades possuem datas, mas ainda não têm frente/pavimento cadastrado.</p>}
-            <p className="lob-pro-rodape">A interpretação das linhas depende do cadastro correto das frentes. Para atualizar duração, quantitativo ou local, utilize a aba Atividades. Esta tela não calcula produtividade nem altera o cronograma.</p>
+              </details>
+            </div>
+            <label className="lob-stairs-field">
+              <span>Pavimentos</span>
+              <select aria-label="Filtrar pavimento" value={pavimento}
+                onChange={e => { setPavimento(e.target.value); setDetalhe(null); setPxManual(null); }}>
+                <option value="todos">Todos</option>
+                {locaisValidos.map(local => <option key={local} value={local}>{local}</option>)}
+              </select>
+            </label>
+            <label className="lob-stairs-field lob-stairs-search">
+              <span>Pesquisar</span>
+              <span className="lob-stairs-search-input"><Search size={14}/>
+                <input type="search" aria-label="Buscar serviço na Linha de Balanço" value={busca} placeholder="Serviço ou EAP" onChange={e=>{setBusca(e.target.value);setDetalhe(null);setPxManual(null);}}/>
+              </span>
+            </label>
           </div>
-        </div>
+
+          <div className="lob-stairs-zoom-actions" aria-label="Ajustes do gráfico">
+            <span><strong>{locais.length}</strong> pavimentos · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades</span>
+            <div>
+              <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
+              <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
+              <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
+              <button type="button" onClick={()=>{setDataInicial("");setDataFinal("");setPxManual(null);}}>Período dos serviços</button>
+            </div>
+          </div>
+
+          {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
+          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Nenhum serviço neste filtro</h3><p>Selecione pelo menos um serviço e um pavimento com atividade cadastrada.</p></div>
+          : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
+              <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+larguraTempo}}>
+                <div className="lob-stairs-months" role="row">
+                  <div className="lob-stairs-sticky-head" role="columnheader">Pavimento</div>
+                  <div className="lob-stairs-time" role="presentation" style={{ width: larguraTempo }}>
+                    {meses.map(m=><span key={m.inicio} className="lob-stairs-month" style={{left:m.x,width:m.largura}}>{m.texto}</span>)}
+                  </div>
+                </div>
+                <div className="lob-stairs-weeks" role="row">
+                  <div className="lob-stairs-sticky-week" role="columnheader">Local de execução</div>
+                  <div className="lob-stairs-time" role="presentation" style={{width:larguraTempo}}>
+                    {semanas.map(s=><span key={s.inicio} className="lob-stairs-week" style={{left:s.x,width:Math.min(pxDia*7,larguraTempo-s.x)}}>{formatoCurto(s.inicio)}</span>)}
+                  </div>
+                </div>
+                {locais.map((local, row) => (
+                  <div key={local} className={"lob-stairs-row"+(row%2?" lob-stairs-row-alt":"")} role="row" style={{height:alturaLinha}}>
+                    <div className="lob-stairs-local" role="rowheader">{local}</div>
+                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
+                      {semanas.map(s=><span key={s.inicio} className="lob-stairs-gridline" style={{left:s.x}}/>)}
+                      {barrasPorLocal.get(local)?.map(b=>{
+                        const inicioCortado = Math.max(diaUtc(b.ponto.inicio), diaUtc(eixoInicio));
+                        const fimCortado = Math.min(diaUtc(b.ponto.fim), diaUtc(eixoFimExclusivo)-DIA);
+                        if(fimCortado < inicioCortado) return null;
+                        const largura = Math.max(5, ((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
+                        const x = ((inicioCortado-diaUtc(eixoInicio))/DIA)*pxDia;
+                        const nomeCurto = b.serie.nome.split(" ")[0] ?? b.serie.nome;
+                        return <button type="button" key={b.ponto.codigo} data-testid="lob-step-bar"
+                          className="lob-stairs-bar" style={{left:x,top:10+b.indice*23,width:largura,backgroundColor:b.cor}}
+                          aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
+                          title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
+                          onClick={()=>setDetalhe(b)}>
+                          <span>{largura >= 62 ? nomeCurto : ""}</span>
+                        </button>;
+                      })}
+                      {dataValida(hoje) && diaUtc(hoje)>=diaUtc(eixoInicio) && diaUtc(hoje)<diaUtc(eixoFimExclusivo)
+                        && <span className="lob-stairs-today" title={"Hoje: "+formatoCompleto(hoje)} style={{left:dataX(hoje)}}/>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>}
+
+          <div className="lob-stairs-legend">
+            {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
+            <span className="lob-stairs-legend-note">Barras = períodos planejados · eixo horizontal = tempo · eixo vertical = pavimentos</span>
+          </div>
+          {detalhe && <div className="lob-stairs-detail" role="status">
+            <div><strong>{detalhe.serie.nome} · {detalhe.ponto.local}</strong><span>EAP {detalhe.ponto.codigo}</span></div>
+            <span>Início: {formatoCompleto(detalhe.ponto.inicio)} · Término: {formatoCompleto(detalhe.ponto.fim)}</span>
+            <span>Quantidade prevista: {detalhe.ponto.quantidade == null ? "não informada" : detalhe.ponto.quantidade+" "+(detalhe.ponto.unidade??"")}</span>
+            <button type="button" onClick={()=>setDetalhe(null)}>Fechar</button>
+          </div>}
+          {(dados.semLocal>0||dados.descartadas>0)&&<p className="lob-stairs-footnote">{dados.semLocal} atividades sem local físico · {dados.descartadas} marcos ou registros sem duração válida. Não são inventados pavimentos ou prazos.</p>}
+        </>
       )}
-      </>)}
     </section>
   );
 }
