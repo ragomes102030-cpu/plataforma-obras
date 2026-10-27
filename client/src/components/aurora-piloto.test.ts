@@ -32,7 +32,7 @@ describe("Gantt e LOB de todas as obras: dados e operação manual",()=>{
   expect(r.series.flatMap(s=>s.pontos.map(p=>p.codigo))).toEqual(["1.2"]);
   expect(prepararLinhaBalancoVertical([b],{}).series).toHaveLength(0);
  });
- it("usa apenas a interface clássica e mantém a LOB vertical integrada",()=>{
+ it("usa apenas a interface clássica e mantém a LOB escadinha integrada",()=>{
   expect(usarLayoutProfissional("")).toBe(false);
   expect(usarLayoutProfissional("?layout=aurora")).toBe(false);
   expect(usarLayoutProfissional("?layout=classico")).toBe(false);
@@ -43,7 +43,7 @@ describe("Gantt e LOB de todas as obras: dados e operação manual",()=>{
   expect(home).not.toContain("Ver layout profissional");
   expect(home).not.toContain("Ver visual clássico");
   expect(home).toContain('layoutProfissional={layoutProfissional}');
-  expect(view).toContain("<LinhaBalancoVertical");
+  expect(view).toContain("<LinhaBalancoEscadinha");
   expect(view).not.toContain("function LinhaDeBalanco");
   expect(view).toContain('aba:"atividades"');
   expect(view).toContain("function Gantt");
