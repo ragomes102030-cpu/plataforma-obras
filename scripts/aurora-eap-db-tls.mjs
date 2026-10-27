@@ -16,7 +16,7 @@ export function configurarConexaoEap(databaseUrl, caPem = process.env.SUPABASE_D
   }
   // node-postgres pode sobrescrever ssl:{ ca, rejectUnauthorized } quando a
   // string traz sslmode. Remove para manter o contrato explícito de confiança.
-  for (const option of ["sslmode", "ssl-mode", "sslrootcert", "sslcert", "sslkey"]) {
+  for (const option of ["sslmode", "ssl-mode", "sslrootcert", "sslcert", "sslkey", "charset"]) {
     url.searchParams.delete(option);
   }
   const ssl = { rejectUnauthorized: true };
