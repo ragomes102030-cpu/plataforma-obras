@@ -296,6 +296,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
               <th className="id-col">ID</th>
               <th className="wbs-col">EAP / WBS</th>
               <th className="name-col">Atividade</th>
+              <th className="frente-col">Frente / disciplina</th>
+              <th className="pavimento-col">Local físico</th>
               <th className="type-col">Tipo</th>
               <th className="dur-col">Duração</th>
               <th className="unit-col">Unidade</th>
@@ -312,6 +314,19 @@ export function PainelPlanejamento({ projetoId }: Props) {
                 <td className="id-col mono">{activity.id}</td>
                 <td className="wbs-col mono">{activity.wbsCode}</td>
                 <td className="name-col"><strong>{activity.name}</strong></td>
+                <td className="frente-col">
+                  <input className="pl-duracao-input" type="text" value={valorEdicao(activity, "frente")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|frente"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "frente")}
+                    aria-label={"Frente ou disciplina de " + activity.name} title="Área ou disciplina de trabalho; não é o pavimento físico" />
+                </td>
+                <td className="pavimento-col">
+                  <input className="pl-duracao-input" type="text" value={valorEdicao(activity, "pavimento")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|pavimento"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "pavimento")}
+                    aria-label={"Unidade física de " + activity.name}
+                    placeholder="ex.: Pav. 02" title="Pavimento, trecho ou unidade física real da execução. Não informar a disciplina aqui." />
+                </td>
                 <td className="type-col"><span className="pl-atividade-tag">Task</span></td>
                 <td className="dur-col">
                   <input
@@ -407,6 +422,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     <span className="pl-decompor-flag"><Layers3 size={11} /> revisar decomposição</span>
                   )}
                 </td>
+                <td className="frente-col">{item.phase || "—"}</td>
+                <td className="pavimento-col">—</td>
                 <td className="type-col"><span className="pl-atividade-tag proposta">Proposta</span></td>
                 <td className="dur-col">
                   <input
@@ -440,7 +457,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
             {!temLinhasVisiveis && (
               <tr>
-                <td colSpan={11} className="pl-atividades-empty">
+                <td colSpan={13} className="pl-atividades-empty">
                   <strong>{busca ? "Nenhum resultado encontrado." : filtro === "pendentes" ? "Nenhuma atividade aguardando revisão." : "Nenhuma atividade criada ainda."}</strong>
                   <span>{busca ? "Ajuste a pesquisa para localizar outro item." : "As atividades aparecem aqui quando forem adicionadas a partir da EAP aprovada."}</span>
                 </td>
