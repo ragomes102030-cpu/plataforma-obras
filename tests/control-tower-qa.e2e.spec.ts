@@ -17,6 +17,7 @@ test("Desktop 1440x900: desempenho, investigação, navegação e Curva S",async
   await expect(dialog).toContainText("28/12/2028");
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".ct-chart-explorador")).toContainText("27/10/2026");
   await page.getByRole("button",{name:"90 dias"}).click();
   await expect(page.locator("#ct-cursor-data")).toBeVisible();
   await page.locator("#ct-cursor-data").fill("0");
