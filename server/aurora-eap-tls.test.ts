@@ -11,6 +11,7 @@ describe("Regressão Aurora — PostgreSQL TLS autenticado", () => {
   it("remove sslmode de URL para não sobrepor o objeto ssl", () => {
     const config = configurarConexaoEap(url + "?sslmode=require&charset=utf8", "");
     expect(config.connectionString).not.toContain("sslmode=");
+    expect(config.connectionString).not.toContain("charset=");
     expect(config.ssl.rejectUnauthorized).toBe(true);
   });
   it.each(["disable", "allow", "prefer"])("recusa modo TLS inseguro %s", mode => {
