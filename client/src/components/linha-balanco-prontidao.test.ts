@@ -21,6 +21,17 @@ describe("prontidão visual de Linha de Balanço", () => {
     expect(r.locais).toEqual(["Acabamentos", "Estrutura", "Revestimentos"]);
     expect(r.series.every(s => !s.repetitiva)).toBe(true);
   });
+  it("o cadastro de frente e local físico está disponível para operação manual", () => {
+    const atividades = readFileSync(resolve("client/src/components/PainelPlanejamento.tsx"), "utf8");
+    expect(atividades).toContain('className="frente-col">Frente / disciplina');
+    expect(atividades).toContain('className="pavimento-col">Local físico');
+    expect(atividades).toContain('onBlur={() => salvarEdicao(activity.id, "frente")}');
+    expect(atividades).toContain('onBlur={() => salvarEdicao(activity.id, "pavimento")}');
+    expect(atividades).toContain('<td colSpan={13} className="pl-atividades-empty">');
+    const router = readFileSync(resolve("server/routers.ts"), "utf8");
+    expect(router).toContain('if (input.campo === "frente") patch.phase');
+    expect(router).toContain('if (input.campo === "pavimento") patch.pavimento');
+  });
   it("a tela utiliza a LOB verdadeira por padrão e bloqueia gráficos enganosos sem séries", () => {
     const componente = readFileSync(resolve("client/src/components/AuroraLinhaBalanco.tsx"), "utf8");
     expect(componente).toContain('useState<Visao>("ritmo")');
