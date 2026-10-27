@@ -62,7 +62,7 @@ export function VisualizacaoPlanejamento({
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
-    { enabled: view === "gantt" && Number(projetoId) > 0 }
+    { enabled: Number(projetoId) > 0 }
   );
   const atividades = planejamento.data?.activities ?? [];
   const atividadePorCodigo = useMemo(
@@ -79,7 +79,7 @@ export function VisualizacaoPlanejamento({
     return (planejamento.data?.dependencies ?? []).flatMap(dependencia => {
       const de = codigoPorAtividade.get(dependencia.predecessorId);
       const para = codigoPorAtividade.get(dependencia.successorId);
-      return de && para ? [{ de, para, tipo: String(dependencia.type ?? "FS") }] : [];
+      return de && para ? [{ de, para, tipo: String(dependencia.type ?? "FS"), lag: Number(dependencia.lag ?? 0) }] : [];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planejamento.data]);
@@ -116,7 +116,7 @@ export function VisualizacaoPlanejamento({
       <header className="pl-visual-header">
         <div>
           <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
-          <span>{view === "gantt" ? (layoutProfissional ? "EAP recolhível · tarefas, datas, vínculos e progresso" : "Sequência, duração, avanço e caminho crítico") : "Datas na vertical · locais na horizontal · séries reais da obra"}</span>
+          <span>{view === "gantt" ? (layoutProfissional ? "EAP recolhível · tarefas, datas, vínculos e progresso" : "Sequência, duração, avanço e caminho crítico") : "Datas na horizontal · pavimentos na vertical · status e análise de fluxo"}</span>
         </div>
       </header>
       <nav className="planejamento-layout-atalhos" aria-label="Edição manual do planejamento">
@@ -138,7 +138,7 @@ export function VisualizacaoPlanejamento({
       {view === "gantt" ? (
         <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} />
       ) : (
-        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
+        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       )}
     </section>
   );

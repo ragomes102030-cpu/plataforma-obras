@@ -96,4 +96,47 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("entre inícios consecutivos (média)");
   });
 
+  it("layout aprovado mostra coluna de status e três painéis técnicos sem medir o que falta",()=>{
+    const linhas=[
+      atividade("QA.1","Alvenaria","P01","2026-11-03"),
+      atividade("QA.2","Alvenaria","P02","2026-11-07"),
+      atividade("QA.3","Chapisco","P01","2026-11-08"),
+      atividade("QA.4","Chapisco","P02","2026-11-12"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,
+      finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      hoje:"2026-10-27",
+      estadoVinculos:"pronto",
+      dependencias:[{de:"QA.1",para:"QA.3",tipo:"FS",lag:0}],
+      onAbrirAtividades:()=>{},
+    }));
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(4);
+    expect(html).toContain('role="columnheader">Status');
+    expect(html).toContain("Planejado");
+    expect(html).toContain('aria-label="Resumo do planejamento"');
+    expect(html).toContain('aria-label="Análise de fluxo resumida"');
+    expect(html).toContain('aria-label="Detalhes da atividade selecionada"');
+    expect(html).toContain("Mostrar vínculos (1)");
+    expect(html).toContain("Selecione uma barra");
+    expect(html).toContain("Período dos serviços visíveis");
+    expect(html).toContain("Atividades no gráfico");
+    expect(html).not.toContain('aria-label="Vínculos cadastrados entre atividades visíveis"');
+  });
+
+  it("não inventa dependências quando o estado do cronograma está indisponível",()=>{
+    const linhas=[
+      atividade("QA.1","Alvenaria","P01","2026-11-03"),
+      atividade("QA.2","Alvenaria","P02","2026-11-07"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas, finsCalculados:{"QA.1":"2026-11-06","QA.2":"2026-11-10"},
+      hoje:"2026-10-27",estadoVinculos:"erro",
+      dependencias:[{de:"QA.1",para:"QA.2",tipo:"FS",lag:0}],
+      onAbrirAtividades:()=>{},
+    }));
+    expect(html).not.toContain("Mostrar vínculos (1)");
+    expect(html).toContain("Resumo do planejamento");
+  });
+
 });

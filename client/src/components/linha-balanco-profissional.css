@@ -93,3 +93,47 @@
 .lob-stairs-location-note{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:50%;font-size:10px!important;font-weight:800!important;color:#8b5b18;background:#f9e8c6}
 @media(max-width:780px){.lob-stairs-analysis-body{grid-template-columns:1fr;padding:12px}.lob-stairs-analysis>summary{padding:12px;gap:8px}}
 @media(prefers-reduced-motion:reduce){.lob-stairs-analysis>summary>svg:last-child{transition:none}}
+
+
+/* Nível 2 aprovado — colunas e cartões do planejamento na MESMA escadinha. */
+.lob-stairs-sticky-head,.lob-stairs-sticky-week,.lob-stairs-local{width:168px;flex-basis:168px}
+.lob-stairs-status-head,.lob-stairs-status-cell{width:112px;flex:0 0 112px;position:sticky;left:168px;z-index:8;display:flex;align-items:center;justify-content:center;border-right:1px solid #cbd7e2;border-bottom:1px solid #d9e3ea;font-size:10px;color:#38576d;font-weight:720;background:#eaf0f6}
+.lob-stairs-status-week{background:#f4f7fa;font-size:9px;font-weight:600}
+.lob-stairs-status-cell{background:#fff;z-index:6}
+.lob-stairs-row-alt .lob-stairs-status-cell{background:#f9fbfd}
+.lob-stairs-status-tag{border-radius:5px;padding:5px 7px;font-size:10px;text-align:center;white-space:normal;line-height:1.2;color:#435e70;background:#e7edf2}
+.lob-stairs-status-tag.concluido{background:#dcf4e5;color:#23633c}
+.lob-stairs-status-tag.parcial{background:#dff0ff;color:#145e9a}
+.lob-stairs-status-tag.prazo{background:#fff2da;color:#835618}
+.lob-stairs-status-tag.planejado{background:#edf2f7;color:#36526c}
+.lob-stairs-status-tag.sem-medicao{background:#f4f5f7;color:#5f717f}
+.lob-stairs-show-links{display:flex;align-items:center;gap:5px;border:1px solid #dbe6ef;border-radius:5px;padding:5px 8px;font-size:10px;color:#365770;cursor:pointer}
+.lob-stairs-show-links input{accent-color:#176fc0}
+.lob-stairs-links{position:absolute;pointer-events:none;z-index:4;overflow:visible}
+.lob-stairs-milestone{position:absolute;z-index:4;top:0;line-height:20px;color:#7a5eac;font-size:18px;transform:translateX(-50%);pointer-events:none}
+.lob-stairs-today-label{position:absolute;top:2px;border-radius:3px;background:#ce493b;color:white;padding:2px 5px;transform:translateX(-50%);font-weight:750;font-size:10px}
+.lob-stairs-dashboard{display:grid;grid-template-columns:minmax(200px,.9fr) minmax(290px,1.55fr) minmax(225px,1fr);gap:12px;padding:15px 15px 18px;background:#f5f8fb;border-top:1px solid #dfe8ef}
+.lob-stairs-dashboard-card{min-width:0;border:1px solid #dce5ed;border-radius:8px;background:white;padding:13px 14px;box-shadow:0 1px 5px #17374808}
+.lob-stairs-dashboard-card h3{font-size:12px;font-weight:800;color:#1c3c55;margin:0 0 11px}
+.lob-stairs-dashboard-card dl{display:flex;flex-direction:column;gap:0;margin:0}
+.lob-stairs-dashboard-card dl>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #edf1f4}
+.lob-stairs-dashboard-card dt{color:#60798c;font-size:10px;line-height:1.4}
+.lob-stairs-dashboard-card dd{margin:0;color:#29485f;font-size:10px;font-weight:730;text-align:right;overflow-wrap:anywhere}
+.lob-stairs-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.lob-stairs-kpis>div{display:flex;flex-direction:column;gap:4px;min-width:0;padding:10px;border:1px solid #d8e6ee;border-radius:5px;background:#eff8ff}
+.lob-stairs-kpis>div:first-child{background:#eef9f2;border-color:#cdebd6}
+.lob-stairs-kpis>div:last-child{background:#fff8ef;border-color:#f1decb}
+.lob-stairs-kpis strong{font-size:19px;color:#185975}
+.lob-stairs-kpis span{font-size:9px;color:#537587;line-height:1.4}
+.lob-stairs-flow-list{margin-top:10px;border:1px solid #e5edf3;border-radius:6px;overflow:hidden}
+.lob-stairs-flow-list>div{display:grid;grid-template-columns:minmax(80px,1.2fr) minmax(75px,1fr) minmax(70px,.7fr);gap:8px;align-items:center;padding:8px;border-top:1px solid #e7eef3;font-size:10px;color:#50697a}
+.lob-stairs-flow-list>div:first-child{border:0}
+.lob-stairs-flow-list strong{font-size:10px;color:#24445c;overflow-wrap:anywhere}
+.lob-stairs-flow-list small{font-size:9px;color:#56778b}
+.lob-stairs-dashboard-flow>p,.lob-stairs-detail-hint{font-size:10px;color:#6a8190;line-height:1.5;margin:11px 0 0}
+.lob-stairs-detail-close{border:1px solid #c3d8e5;color:#2a617e;background:#f4f9fc;padding:5px 9px;border-radius:5px;font-size:10px;margin-top:9px;cursor:pointer}
+@media(max-width:1150px){.lob-stairs-dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}.lob-stairs-dashboard-detail{grid-column:1/-1}}
+@media(max-width:780px){.lob-stairs-sticky-head,.lob-stairs-sticky-week,.lob-stairs-local{flex-basis:168px;width:168px}.lob-stairs-dashboard{grid-template-columns:1fr}.lob-stairs-dashboard-detail{grid-column:auto}.lob-stairs-flow-list>div{grid-template-columns:1fr 1fr}.lob-stairs-flow-list small{grid-column:1/-1}}
+
+.lob-stairs-bar-progress{position:absolute;left:0;top:0;bottom:0;background:rgba(8,30,50,.28);pointer-events:none;border-right:2px solid #effaf4}
+.lob-stairs-bar>span{position:relative;z-index:1}

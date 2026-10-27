@@ -8,6 +8,7 @@ import {
   type PontoLob, type SerieLob,
 } from "./linha-balanco-modelo";
 import { analisarFluxoLob } from "./lob-analise-fluxo";
+import { calcularVinculosExibidos, resumoLob, taxaPlanejadaLob, type VínculoLob } from "./lob-indicadores";
 import "./linha-balanco-profissional.css";
 
 export { prepararLinhaBalancoVertical } from "./linha-balanco-modelo";
@@ -17,11 +18,14 @@ type Props = {
   finsCalculados: Record<string, string>;
   hoje: IsoDate;
   onAbrirAtividades: () => void;
+  dependencias?: VínculoLob[];
+  estadoVinculos?: "pronto" | "carregando" | "erro";
 };
 type Escala = "dia" | "semana" | "quinzena" | "mes";
 type Barra = { serie: SerieLob; ponto: PontoLob; cor: string; indice: number };
 const DIA = 86400000;
 const COLUNA = 168;
+const STATUS_COLUNA = 112;
 const CORES = ["#176fc0", "#d2792e", "#268148", "#8259b5", "#b54a62", "#258599", "#a47b21"];
 const ESCALAS: Record<Escala, number> = { dia: 28, semana: 19, quinzena: 10, mes: 5 };
 
@@ -55,7 +59,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  * exclusivamente datas da planning.grade, sem inventar produtividade ou execução.
  * Não cria nem altera versões do plano. Filtros e exportação são somente leitura.
  */
-export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAtividades }: Props) {
+export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAtividades, dependencias = [], estadoVinculos = "carregando" }: Props) {
   const dados = useMemo(
     () => prepararLinhaBalancoVertical(linhas, finsCalculados),
     [linhas, finsCalculados],
@@ -69,6 +73,8 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
+  const [mostrarVinculos, setMostrarVinculos] = useState(false);
+  const [mostrarMarcos, setMostrarMarcos] = useState(true);
   const rolagem = useRef<HTMLDivElement | null>(null);
 
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -136,9 +142,31 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
   }
 
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
+  const resumo = resumoLob(seriesVisiveis,locais,hoje);
+  const originais = new Map(linhas.map(l=>[l.codigo,l]));
+  const ligacoes = estadoVinculos==="pronto" ? calcularVinculosExibidos(dependencias,resumo.pontos) : [];
+  const coordenadas = new Map<string,{inicio:number;fim:number;y:number}>();
+  locais.forEach((local, linhaIndex)=>{
+    for (const barra of barrasPorLocal.get(local) ?? []) coordenadas.set(barra.ponto.codigo,{
+      inicio:dataX(barra.ponto.inicio),
+      fim:dataX(adicionarDias(barra.ponto.fim,1)),
+      y:linhaIndex*alturaLinha+19+barra.indice*23,
+    });
+  });
+  const setas = ligacoes.flatMap(v=>{
+    const origem=coordenadas.get(v.de),destino=coordenadas.get(v.para);
+    if(!origem||!destino)return [];
+    const tipo=v.tipo.toUpperCase();
+    const x1=tipo==="SS"||tipo==="SF"?origem.inicio:origem.fim;
+    const x2=tipo==="FF"||tipo==="SF"?destino.fim:destino.inicio;
+    return [{...v,x1,x2,y1:origem.y,y2:destino.y}];
+  });
+  const marcos = mostrarMarcos?linhas.filter(l=>l.marco && dataValida(l.inicio) && locais.includes(String(l.pavimento??"").trim())):[];
   // Leitura analítica derivada apenas dos serviços e locais exibidos.
   // Não interpreta coincidência temporal como colisão ou infração de predecessora.
   const analise = analisarFluxoLob(seriesVisiveis, locais);
+  const taxaMedia = analise.ritmos.map(r=>r.diasPorTransferencia).filter((n):n is number=>n!==null);
+  const ritmoMedio = taxaMedia.length?taxaMedia.reduce((a,b)=>a+b,0)/taxaMedia.length:null;
   const sobreposicoesPorLocal = new Map<string, number>();
   for (const alerta of analise.alertas) {
     if (alerta.tipo === "sobreposicao") {
@@ -259,8 +287,10 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
             <div>
               <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
               <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
-              <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
+              <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-STATUS_COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
               <button type="button" onClick={()=>{setDataInicial("");setDataFinal("");setPxManual(null);}}>Período dos serviços</button>
+              {estadoVinculos==="pronto" && ligacoes.length>0 && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarVinculos} onChange={e=>setMostrarVinculos(e.target.checked)}/> Mostrar vínculos ({ligacoes.length})</label>}
+              {linhas.some(l=>l.marco&&dataValida(l.inicio)) && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarMarcos} onChange={e=>setMostrarMarcos(e.target.checked)}/> Mostrar marcos</label>}
             </div>
           </div>
 
@@ -312,17 +342,20 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
           {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
           : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Nenhum serviço neste filtro</h3><p>Selecione pelo menos um serviço e um pavimento com atividade cadastrada.</p></div>
           : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
-              <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+larguraTempo}}>
+              <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
                 <div className="lob-stairs-months" role="row">
                   <div className="lob-stairs-sticky-head" role="columnheader">Pavimento</div>
+                  <div className="lob-stairs-status-head" role="columnheader">Status</div>
                   <div className="lob-stairs-time" role="presentation" style={{ width: larguraTempo }}>
                     {meses.map(m=><span key={m.inicio} className="lob-stairs-month" style={{left:m.x,width:m.largura}}>{m.texto}</span>)}
                   </div>
                 </div>
                 <div className="lob-stairs-weeks" role="row">
                   <div className="lob-stairs-sticky-week" role="columnheader">Local de execução</div>
+                  <div className="lob-stairs-status-head lob-stairs-status-week" role="columnheader">Execução registrada</div>
                   <div className="lob-stairs-time" role="presentation" style={{width:larguraTempo}}>
                     {semanas.map(s=><span key={s.inicio} className="lob-stairs-week" style={{left:s.x,width:Math.min(pxDia*7,larguraTempo-s.x)}}>{formatoCurto(s.inicio)}</span>)}
+                    {dataValida(hoje)&&diaUtc(hoje)>=diaUtc(eixoInicio)&&diaUtc(hoje)<diaUtc(eixoFimExclusivo)&&<span className="lob-stairs-today-label" style={{left:dataX(hoje)}}>Hoje</span>}
                   </div>
                 </div>
                 {locais.map((local, row) => (
@@ -331,6 +364,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                       {(sobreposicoesPorLocal.get(local) ?? 0) > 0 &&
                         <span className="lob-stairs-location-note" title="Janelas de serviços simultâneas neste local; verifique compatibilidade">!</span>}
                     </div>
+                    <div className="lob-stairs-status-cell" role="cell"><span className={"lob-stairs-status-tag "+(resumo.estados.find(x=>x.local===local)?.status??"sem-medicao")}>{({concluido:"Concluído",parcial:"Parcial",prazo:"Prazo decorrido",planejado:"Planejado","sem-medicao":"Sem medição"} as const)[resumo.estados.find(x=>x.local===local)?.status??"sem-medicao"]}</span></div>
                     <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
                       {semanas.map(s=><span key={s.inicio} className="lob-stairs-gridline" style={{left:s.x}}/>)}
                       {barrasPorLocal.get(local)?.map(b=>{
@@ -345,27 +379,70 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                           aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
                           title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
                           onClick={()=>setDetalhe(b)}>
+                          {b.ponto.quantidade!==null&&b.ponto.quantidade>0&&b.ponto.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,b.ponto.executado/b.ponto.quantidade*100))+"%"}}/>}
                           <span>{largura >= 62 ? nomeCurto : ""}</span>
                         </button>;
                       })}
+                      {marcos.filter(m=>m.pavimento===local).map(m=><span key={m.codigo} className="lob-stairs-milestone" style={{left:dataX(m.inicio)}} title={m.atividade+" · "+m.codigo+" · "+formatoCompleto(m.inicio)}>◆</span>)}
                       {dataValida(hoje) && diaUtc(hoje)>=diaUtc(eixoInicio) && diaUtc(hoje)<diaUtc(eixoFimExclusivo)
                         && <span className="lob-stairs-today" title={"Hoje: "+formatoCompleto(hoje)} style={{left:dataX(hoje)}}/>}
                     </div>
                   </div>
                 ))}
+                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
+                  <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
+                  {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
+                </svg>}
               </div>
             </div>}
 
           <div className="lob-stairs-legend">
             {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
-            <span className="lob-stairs-legend-note">Barras = períodos planejados · eixo horizontal = tempo · eixo vertical = pavimentos</span>
+            <span className="lob-stairs-legend-note">Barras = períodos planejados · status = execução registrada · vínculos = somente cadastrados</span>
           </div>
-          {detalhe && <div className="lob-stairs-detail" role="status">
-            <div><strong>{detalhe.serie.nome} · {detalhe.ponto.local}</strong><span>EAP {detalhe.ponto.codigo}</span></div>
-            <span>Início: {formatoCompleto(detalhe.ponto.inicio)} · Término: {formatoCompleto(detalhe.ponto.fim)}</span>
-            <span>Quantidade prevista: {detalhe.ponto.quantidade == null ? "não informada" : detalhe.ponto.quantidade+" "+(detalhe.ponto.unidade??"")}</span>
-            <button type="button" onClick={()=>setDetalhe(null)}>Fechar</button>
-          </div>}
+          <div className="lob-stairs-dashboard" aria-label="Painel técnico da Linha de Balanço">
+            <section className="lob-stairs-dashboard-card" aria-label="Resumo do planejamento">
+              <h3>Resumo do planejamento</h3>
+              <dl>
+                <div><dt>Período dos serviços visíveis</dt><dd>{resumo.inicio&&resumo.fim?formatoCompleto(resumo.inicio)+" – "+formatoCompleto(resumo.fim):"Sem período"}</dd></div>
+                <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
+                <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
+                <div><dt>Atividades no gráfico</dt><dd>{resumo.pontos.length}</dd></div>
+                <div><dt>Janela total de calendário</dt><dd>{resumo.diasCalendario===null?"—":resumo.diasCalendario+" dias"}</dd></div>
+                <div><dt>Cadência média de inícios</dt><dd>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})+" dias/pavimento"}</dd></div>
+              </dl>
+            </section>
+            <section className="lob-stairs-dashboard-card lob-stairs-dashboard-flow" aria-label="Análise de fluxo resumida">
+              <h3>Análise de fluxo</h3>
+              <div className="lob-stairs-kpis">
+                <div><strong>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})}</strong><span>dias por pavimento (média de inícios)</span></div>
+                <div><strong>{analise.intervalos+analise.transferencias}</strong><span>intervalos a conferir</span></div>
+                <div><strong>{analise.sobreposicoes}</strong><span>janelas simultâneas</span></div>
+              </div>
+              <div className="lob-stairs-flow-list">
+                {analise.ritmos.map(r=><div key={r.chave}><strong>{r.nome}</strong><span>{r.diasPorTransferencia===null?"Sem ritmo mensurável":r.diasPorTransferencia.toLocaleString("pt-BR")+" dias entre inícios"}</span><small>{r.variavel?"Ritmo variável":"Cadência uniforme"}</small></div>)}
+              </div>
+              <p>Os intervalos não provam ociosidade; simultaneidade não confirma conflito físico.</p>
+            </section>
+            <section className="lob-stairs-dashboard-card lob-stairs-dashboard-detail" aria-label="Detalhes da atividade selecionada">
+              <h3>Detalhes da atividade</h3>
+              {!detalhe?<p className="lob-stairs-detail-hint">Selecione uma barra na escadinha para consultar o vínculo EAP, o período e os quantitativos.</p>:
+                <dl data-testid="lob-activity-detail">
+                  <div><dt>Serviço</dt><dd>{detalhe.serie.nome}</dd></div>
+                  <div><dt>Código EAP</dt><dd>{detalhe.ponto.codigo}</dd></div>
+                  <div><dt>Pavimento</dt><dd>{detalhe.ponto.local}</dd></div>
+                  <div><dt>Início planejado</dt><dd>{formatoCompleto(detalhe.ponto.inicio)}</dd></div>
+                  <div><dt>Término planejado</dt><dd>{formatoCompleto(detalhe.ponto.fim)}</dd></div>
+                  <div><dt>Duração cadastrada</dt><dd>{originais.get(detalhe.ponto.codigo)?.duracao??"—"} dias</dd></div>
+                  <div><dt>Quantidade prevista</dt><dd>{detalhe.ponto.quantidade===null?"Não informada":detalhe.ponto.quantidade.toLocaleString("pt-BR")+" "+(detalhe.ponto.unidade??"")}</dd></div>
+                  <div><dt>Execução registrada</dt><dd>{detalhe.ponto.executado>0?detalhe.ponto.executado.toLocaleString("pt-BR")+" "+(detalhe.ponto.unidade??""):"Sem quantidade executada registrada"}</dd></div>
+                  <div><dt>Taxa planejada por dia de duração</dt><dd>{taxaPlanejadaLob(detalhe.ponto,originais.get(detalhe.ponto.codigo)?.duracao??null)?.toLocaleString("pt-BR")??"Não calculável"} {detalhe.ponto.quantidade!==null&&detalhe.ponto.quantidade>0?((detalhe.ponto.unidade??"unid.")+"/dia"):""}</dd></div>
+                  <div><dt>Predecessoras cadastradas</dt><dd>{estadoVinculos!=="pronto"?"Indisponíveis":dependencias.filter(v=>v.para===detalhe.ponto.codigo).map(v=>v.de+" ("+v.tipo+")").join(", ")||"Nenhuma"}</dd></div>
+                  <div><dt>Sucessoras cadastradas</dt><dd>{estadoVinculos!=="pronto"?"Indisponíveis":dependencias.filter(v=>v.de===detalhe.ponto.codigo).map(v=>v.para+" ("+v.tipo+")").join(", ")||"Nenhuma"}</dd></div>
+                </dl>}
+              {detalhe&&<button type="button" className="lob-stairs-detail-close" onClick={()=>setDetalhe(null)}>Limpar seleção</button>}
+            </section>
+          </div>
           {(dados.semLocal>0||dados.descartadas>0)&&<p className="lob-stairs-footnote">{dados.semLocal} atividades sem local físico · {dados.descartadas} marcos ou registros sem duração válida. Não são inventados pavimentos ou prazos.</p>}
         </>
       )}
