@@ -129,8 +129,13 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
   }, [serie, planoAprovado, acumuladoConfirmado, cal, inicio, faixa, hojeNum]);
 
   const temBaseline = (planejamento.data?.baselines?.length ?? 0) > 0;
-  const itemSelecionado = curvaDados?.dados[Math.min(pontoSelecionado ?? (curvaDados.dados.length - 1), curvaDados.dados.length - 1)] ?? null;
-  const indiceSelecionado = curvaDados ? Math.min(pontoSelecionado ?? (curvaDados.dados.length - 1), curvaDados.dados.length - 1) : 0;
+  // A leitura inicial usa a DATA DE REFERÊNCIA, não o fim futuro da obra.
+  // Sem esse cursor, um planejamento de anos abre dizendo "sem realizado" no último dia.
+  const indiceHoje = curvaDados?.dados.findIndex(p => p.dia === hojeNum) ?? -1;
+  const indiceSelecionado = curvaDados
+    ? Math.min(pontoSelecionado ?? (indiceHoje >= 0 ? indiceHoje : curvaDados.dados.length - 1), curvaDados.dados.length - 1)
+    : 0;
+  const itemSelecionado = curvaDados?.dados[indiceSelecionado] ?? null;
 
   const emCarregamento = planejamento.isPending || budget.isPending || grade.isPending || producao.isPending || (ano >= 2000 && calendario.isPending) || (temBaseline && comparacao.isPending);
   const falhou = planejamento.isError || budget.isError || grade.isError || producao.isError || (ano >= 2000 && calendario.isError) || comparacao.isError;
