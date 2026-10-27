@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
 import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBranch, GanttChartSquare, Maximize2, Minimize2, Printer, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
-import type { IsoDate } from "@shared/work-calendar";
+import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
+import { prepararBarrasBaselineGantt, resumirBaselineNoGantt, type BarraBaselineGantt } from "@shared/gantt-baseline-visual";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
 import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
@@ -71,6 +72,37 @@ export function VisualizacaoPlanejamento({
     () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
     [atividades]
   );
+  // A baseline vigente é a única referência automática. Nunca utilizar
+  // silenciosamente uma fotografia histórica quando não houver vigente.
+  const [compararBaseline, setCompararBaseline] = useState(false);
+  const baselinesVigentes = (planejamento.data?.baselines ?? []).filter(b => b.status === "ativa");
+  const baselineVigente = baselinesVigentes.length === 1 ? baselinesVigentes[0] : null;
+  const anoObra = Number(inicioObra?.slice(0,4) ?? 0);
+  const anoValido = Number.isInteger(anoObra) && anoObra >= 2000 && anoObra <= 2100;
+  const consultarBaseline = view === "gantt" && compararBaseline && baselineVigente !== null;
+  const comparacaoBaseline = trpc.planning.compararComBaseline.useQuery(
+    { projectId: Number(projetoId), baselineId: baselineVigente?.id },
+    { enabled: consultarBaseline && Number(projetoId) > 0 }
+  );
+  const calendarioBaseline = trpc.planning.getCalendarForCurve.useQuery(
+    { projectId: Number(projetoId), startYear: anoValido ? anoObra : 2000 },
+    { enabled: consultarBaseline && anoValido && Number(projetoId) > 0 }
+  );
+  const barrasBaseline = useMemo(() =>
+    compararBaseline && inicioObra && comparacaoBaseline.data?.linhas && calendarioBaseline.data
+      ? prepararBarrasBaselineGantt(
+          comparacaoBaseline.data.linhas,
+          inicioObra,
+          calendarioBaseline.data as WorkCalendar,
+        )
+      : new Map<string, BarraBaselineGantt>(),
+    [compararBaseline, inicioObra, comparacaoBaseline.data, calendarioBaseline.data]
+  );
+  const baselinePronta = compararBaseline && comparacaoBaseline.isSuccess &&
+    calendarioBaseline.isSuccess && Boolean(comparacaoBaseline.data);
+  const resumoBaseline = baselinePronta && comparacaoBaseline.data
+    ? resumirBaselineNoGantt(comparacaoBaseline.data.resumo)
+    : null;
   const estadoCpm = avaliarCpmGantt(atividades);
   const cpmValido = !planejamento.isPending && !planejamento.isError && estadoCpm.valido;
 
@@ -89,7 +121,9 @@ export function VisualizacaoPlanejamento({
 
   const dados = useMemo(() => {
     if (!linhas.length) return null;
-    const min = linhas.reduce((v, l) => Math.min(v, dateMs(l.inicio)), dateMs(linhas[0]!.inicio));
+    const baselineExibida = baselinePronta ? Array.from(barrasBaseline.values()) : [];
+    const minAtual = linhas.reduce((v,l) => Math.min(v,dateMs(l.inicio)),dateMs(linhas[0]!.inicio));
+    const min = baselineExibida.reduce((v,b)=>Math.min(v,dateMs(b.inicio)),minAtual);
     const max = linhas.reduce((v,l)=>{
       const fim = finsCalculados[l.codigo];
       const dataValida = typeof fim === "string" &&
@@ -98,16 +132,17 @@ export function VisualizacaoPlanejamento({
       return Math.max(v, dataValida ? dateMs(fim!) :
         dateMs(l.inicio) + Math.max(0,l.duracao-1) * 86400000);
     }, min);
+    const maxComBaseline = baselineExibida.reduce((v,b)=>Math.max(v,dateMs(b.fim)),max);
     const inicio = new Date(min);
     inicio.setUTCDate(1);
-    const fim = new Date(max);
+    const fim = new Date(maxComBaseline);
     fim.setUTCDate(1);
     fim.setUTCMonth(fim.getUTCMonth() + 1);
     const start = inicio.toISOString().slice(0, 10);
     const end = fim.toISOString().slice(0, 10);
     const total = Math.max(1, Math.round((dateMs(end) - dateMs(start)) / 86400000));
     return { start, end, total };
-  }, [linhas, finsCalculados]);
+  }, [linhas, finsCalculados, barrasBaseline, baselinePronta]);
 
   if (!dados) {
     return (
@@ -142,8 +177,22 @@ export function VisualizacaoPlanejamento({
           Não foi possível carregar o estado do CPM: {planejamento.error.message}
         </div>
       )}
+      {view === "gantt" && compararBaseline && !baselinePronta && (
+        <div className="pl-gantt-cpm-aviso" role="status">
+          {!baselineVigente ? "Não há baseline vigente única para comparar. Consulte a aba Baseline." :
+           !anoValido ? "A obra não possui data de início válida para converter os dias úteis da baseline." :
+           comparacaoBaseline.isError ? "Erro ao carregar comparação: "+comparacaoBaseline.error.message :
+           calendarioBaseline.isError ? "Erro ao carregar calendário: "+calendarioBaseline.error.message :
+           "Carregando baseline vigente e calendário da obra…"}
+        </div>
+      )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido} />
+        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
+          compararBaseline={compararBaseline} onAlternarBaseline={() => setCompararBaseline(v=>!v)}
+          baselineDisponivel={baselineVigente !== null && anoValido}
+          baselinePronta={baselinePronta} barrasBaseline={barrasBaseline}
+          nomeBaseline={comparacaoBaseline.data?.baseline.name ?? baselineVigente?.name ?? null}
+          resumoBaseline={resumoBaseline} />
       ) : (
         <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       )}
@@ -197,6 +246,13 @@ function Gantt({
   layoutProfissional = true,
   finsCalculados,
   cpmValido,
+  compararBaseline,
+  onAlternarBaseline,
+  baselineDisponivel,
+  baselinePronta,
+  barrasBaseline,
+  nomeBaseline,
+  resumoBaseline,
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<
@@ -217,6 +273,13 @@ function Gantt({
   layoutProfissional?: boolean;
   finsCalculados: Readonly<Record<string, string>>;
   cpmValido: boolean;
+  compararBaseline: boolean;
+  onAlternarBaseline: () => void;
+  baselineDisponivel: boolean;
+  baselinePronta: boolean;
+  barrasBaseline: ReadonlyMap<string, BarraBaselineGantt>;
+  nomeBaseline: string | null;
+  resumoBaseline: ReturnType<typeof resumirBaselineNoGantt> | null;
   /** Cabeçalho da impressão: nome, código e local da obra. */
   titulo?: string;
   codigoObra?: string | null;
@@ -284,7 +347,10 @@ function Gantt({
   // entre a planilha e o gráfico) e fica guardada no navegador.
   const esquerda = estreita ? 168 : larguraEsquerda;
   const alturaLinha = estreita ? 46 : layoutProfissional ? 38 : 30;
-  const colunas = estreita ? "minmax(0,1fr) 40px" : layoutProfissional ? "minmax(0,1fr) 52px 82px 82px 52px" : "minmax(0,1fr) 46px 66px 66px 42px";
+  const colunasBase = estreita ? "minmax(0,1fr) 40px" :
+    layoutProfissional ? "minmax(0,1fr) 52px 82px 82px 52px" :
+      "minmax(0,1fr) 46px 66px 66px 42px";
+  const colunas = baselinePronta && !estreita ? colunasBase + " 44px" : colunasBase;
 
   useEffect(() => {
     const elemento = referencia.current;
@@ -573,6 +639,10 @@ function Gantt({
         marco:no.marco,resumo:no.temFilhos,profundidade:no.profundidade,
       })),
       vinculos: mostrarSetas ? dependencias : [],
+      baseline: baselinePronta ? filtradas.flatMap(no=>{
+        const b=barrasBaseline.get(no.codigo);
+        return b && !no.temFilhos ? [{codigo:no.codigo,inicio:b.inicio,fim:b.fim}] : [];
+      }) : [],
     });
     const url = URL.createObjectURL(new Blob([conteudo],{type:"image/svg+xml;charset=utf-8"}));
     const link=document.createElement("a");
@@ -585,7 +655,7 @@ function Gantt({
   };
 
   return (
-    <div className={`pg${telaCheia ? " tela-cheia" : ""}${visaoAberta ? "" : " pg-visao-fechada"}`}>
+    <div className={`pg${telaCheia ? " tela-cheia" : ""}${visaoAberta ? "" : " pg-visao-fechada"}${baselinePronta ? " pg-comparando-baseline" : ""}`}>
       <section className={`pg-visao${visaoAberta ? "" : " recolhida"}`} aria-label="Visão geral do cronograma">
         <button type="button" className="pg-visao-cabeca" onClick={alternarVisao} aria-expanded={visaoAberta} aria-controls="pg-visao-kpis">
           <span className={`pg-visao-seta${visaoAberta ? "" : " girada"}`} aria-hidden="true">
@@ -633,6 +703,15 @@ function Gantt({
           </span>
         </div>
         <div className="pg-filtros">
+          <button type="button" className={`pg-chip${compararBaseline ? " ativo" : ""}`}
+            disabled={!baselineDisponivel && !compararBaseline}
+            aria-pressed={compararBaseline}
+            aria-label="Comparar Gantt com baseline vigente"
+            title={baselineDisponivel ? "Sobrepor cronograma atual à baseline vigente" : "Sem baseline vigente única ou data de obra válida"}
+            onClick={onAlternarBaseline}>
+            <GitBranch size={14} aria-hidden="true" />
+            Baseline
+          </button>
           <label className="pg-busca">
             <Search size={14} aria-hidden="true" />
             <input
@@ -748,6 +827,7 @@ function Gantt({
                   </>
                 )}
                 <span className="pg-cab-titulo pg-cab-num">%</span>
+                {baselinePronta && !estreita && <span className="pg-cab-titulo pg-cab-num" title="Diferença de término em dias úteis da baseline">Δ fim</span>}
               </div>
               {!estreita && (
                 <div
@@ -917,9 +997,23 @@ function Gantt({
                         </>
                       )}
                       <span className="pg-celula-num pg-celula-pct">{Math.round(no.progresso)}%</span>
+                      {baselinePronta && !estreita && <span className={`pg-celula-num pg-delta-fim${(barrasBaseline.get(no.codigo)?.deltaFim??0)>0 ? " atraso" : (barrasBaseline.get(no.codigo)?.deltaFim??0)<0 ? " adiantada" : ""}`}
+                        title="Variação do término em dias úteis do CPM, em comparação à baseline vigente">
+                        {no.temFilhos ? "—" : barrasBaseline.get(no.codigo)?.deltaFim != null
+                          ? `${barrasBaseline.get(no.codigo)!.deltaFim!>0?"+":""}${barrasBaseline.get(no.codigo)!.deltaFim}d`
+                          : "—"}
+                      </span>}
                     </div>
                   </div>
                   <div className="pg-trilho" style={{ width: larguraDoTempo }}>
+                    {baselinePronta && !resumo && barrasBaseline.has(no.codigo) && (()=>{
+                      const base=barrasBaseline.get(no.codigo)!;
+                      const x=Math.max(0,posicao(base.inicio));
+                      const dias=Math.round((dateMs(base.fim)-dateMs(base.inicio))/86400000)+1;
+                      const w=Math.max(5,Math.min(larguraDoTempo-x,dias*px));
+                      return <span className="pg-baseline-barra" data-testid="gantt-baseline-bar"
+                        style={{left:x,width:w}} title={`Baseline ${base.inicio} a ${base.fim} · desvio de término ${base.deltaFim??"indisponível"} dias úteis`}/>;
+                    })()}
                     {resumo ? (
                       <div className={`pg-resumo${no.critica ? " critica" : ""}`} style={{ left: inicioBarra, width: larguraBarra }} title={descricao}>
                         <i className="pg-resumo-avanco" style={{ width: `${no.progresso}%` }} />
@@ -986,6 +1080,15 @@ function Gantt({
         </div>
       </div>
 
+      {baselinePronta && resumoBaseline && <section className="pg-baseline-resumo" aria-label="Resumo comparativo da baseline vigente">
+        <strong>Comparação com a baseline</strong>
+        <span title={nomeBaseline??""}>{nomeBaseline??"Vigente"}</span>
+        <span><b>{resumoBaseline.atrasadas}</b> atrasadas</span>
+        <span><b>{resumoBaseline.adiantadas}</b> adiantadas</span>
+        <span><b>{resumoBaseline.novas}</b> novas</span>
+        <span><b>{resumoBaseline.removidas}</b> removidas</span>
+        <small>Δ fim em dias úteis CPM · datas civis convertidas com o calendário atual da obra · escopo removido consultável na aba Baseline</small>
+      </section>}
       {detalhe && (
         <div className="pg-detalhe" role="status" aria-live="polite">
           <div className="pg-detalhe-topo">
@@ -1059,6 +1162,12 @@ function Gantt({
                 </dd>
               </div>
             )}
+            {baselinePronta && !detalhe.no.temFilhos && <div>
+              <dt>Baseline vigente</dt>
+              <dd>{barrasBaseline.has(detalhe.no.codigo)
+                ? `${fmtComAno(barrasBaseline.get(detalhe.no.codigo)!.inicio,true)} a ${fmtComAno(barrasBaseline.get(detalhe.no.codigo)!.fim,true)} · Δ término ${barrasBaseline.get(detalhe.no.codigo)!.deltaFim??"—"} d úteis`
+                : "Sem correspondência nesta baseline"}</dd>
+            </div>}
             <div className="pg-detalhe-larga">
               <dt>Predecessoras</dt>
               <dd>{detalhe.predecessoras}</dd>
@@ -1073,6 +1182,7 @@ function Gantt({
 
       <div className="pg-legenda">
         <span><i className="pg-amostra normal" /> executada</span>
+        {baselinePronta && <span><i className="pg-amostra pg-amostra-baseline" /> baseline vigente</span>}
         <span><i className="pg-amostra critica" /> caminho crítico</span>
         <span><i className="pg-amostra marco" /> marco</span>
         <span><i className="pg-amostra hoje" /> hoje</span>
