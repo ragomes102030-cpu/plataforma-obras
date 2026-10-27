@@ -222,11 +222,11 @@ export function PainelDoCronograma({
 
   if (aindaCarregando) {
     return (
-      <div className="pd">
+      <div className="pd pd-executivo">
         <div className="pd-cabecalho">
           <div>
-            <p className="pd-sobretitulo">Painel da obra</p>
-            <h2 className="pd-titulo">{nomeObra ?? "Carregando obra…"}</h2>
+            <p className="pd-sobretitulo">Painel de controle</p>
+            <h2 className="pd-titulo">Visão geral</h2>
             <p className="pd-sub">Lendo cronograma e produção…</p>
           </div>
         </div>
@@ -241,12 +241,12 @@ export function PainelDoCronograma({
 
   if (agregado.totalAtividades === 0) {
     return (
-      <div className="pd">
+      <div className="pd pd-executivo">
         <div className="pd-cabecalho">
           <div>
-            <p className="pd-sobretitulo">Painel da obra</p>
-            <h2 className="pd-titulo">{nomeObra ?? "Obra"}</h2>
-            <p className="pd-sub">Ainda não há atividades planejadas.</p>
+            <p className="pd-sobretitulo">Painel de controle</p>
+            <h2 className="pd-titulo">Visão geral</h2>
+            <p className="pd-sub">{nomeObra ?? "Obra"} · Ainda não há atividades planejadas.</p>
           </div>
         </div>
         <div className="pd-vazio">
@@ -325,21 +325,26 @@ export function PainelDoCronograma({
   const restantesDaSemana = abertasNaSemana.length - atividadesDaSemana.length;
 
   return (
-    <div className="pd">
+    <div className="pd pd-executivo">
       <header className="pd-cabecalho">
         <div>
-          <p className="pd-sobretitulo">Painel da obra</p>
-          <h2 className="pd-titulo">{nomeObra ?? "Obra"}</h2>
+          <p className="pd-sobretitulo">Painel de controle</p>
+          <h2 className="pd-titulo">Visão geral</h2>
           <p className="pd-sub">
             {dataLonga(hoje)} · {status.total} atividades
             {agregado.prazoDias ? ` · plano de ${agregado.prazoDias} dias corridos` : ""}
           </p>
         </div>
-        <span className={`pd-selo pd-selo-${selo.tipo}`}>{selo.rotulo}</span>
+        <div className="pd-cabecalho-acoes">
+          <span className={`pd-selo pd-selo-${selo.tipo}`}>{selo.rotulo}</span>
+          <button type="button" className="pd-ir-gantt" onClick={() => abrirAba("gantt")}>
+            Abrir cronograma <span aria-hidden="true">↗</span>
+          </button>
+        </div>
       </header>
 
       <section className="pd-kpis" aria-label="Indicadores principais">
-        <article className="pd-kpi">
+        <article className="pd-kpi pd-kpi-avanco">
           <p className="pd-rotulo">
             Avanço da obra <span className="pd-regua">ponderado pelo valor do orçamento</span>
           </p>
@@ -354,7 +359,7 @@ export function PainelDoCronograma({
           </p>
         </article>
 
-        <article className="pd-kpi">
+        <article className="pd-kpi pd-kpi-prazo">
           <p className="pd-rotulo">
             Prazo <span className="pd-regua">dias de calendário</span>
           </p>
@@ -370,16 +375,16 @@ export function PainelDoCronograma({
           </p>
         </article>
 
-        <article className="pd-kpi">
+        <article className="pd-kpi pd-kpi-valor">
           <p className="pd-rotulo">
-            Valor <span className="pd-regua">ponderado pelo orçamento</span>
+            Valor agregado (EV) <span className="pd-regua">valor orçado do trabalho executado</span>
           </p>
           <p className={`pd-numero ${valor.pctExecutado === null ? "pd-numero-fraco" : ""}`}>
             {orcamento.isPending
               ? "Lendo orçamento…"
               : valor.pctExecutado === null
                 ? "Sem orçamento"
-                : pct(valor.pctExecutado)}
+                : brl(valor.executado)}
           </p>
           <div className="pd-barra">
             <span className="pd-barra-real pd-barra-valor" style={{ width: `${(valor.pctExecutado ?? 0) * 100}%` }} />
@@ -390,7 +395,7 @@ export function PainelDoCronograma({
               "Aguardando o orçamento para ponderar o valor…"
             ) : valor.total > 0 ? (
               <>
-                {brl(valor.executado)} de {brl(valor.total)} ·{" "}
+                {pct(valor.pctExecutado ?? 0)} do orçamento de {brl(valor.total)} ·{" "}
                 {valorSemDestino > 0 ? (
                   <button type="button" className="pd-link" onClick={() => abrirAba("financeiro")}>
                     {brl(valorSemDestino)} sem atividade
@@ -407,7 +412,7 @@ export function PainelDoCronograma({
           </p>
         </article>
 
-        <article className="pd-kpi">
+        <article className="pd-kpi pd-kpi-compromissos">
           <p className="pd-rotulo">
             Compromissos <span className="pd-regua">semana corrente</span>
           </p>
@@ -441,7 +446,7 @@ export function PainelDoCronograma({
           </p>
           <p className="pd-status-total">{status.total} atividades</p>
         </div>
-        <div className="pd-status-barra">
+        <div className="pd-status-barra" role="img" aria-label={`Situação de ${status.total} atividades: ${segmentos.map(s => `${s.rotulo}: ${s.valor}`).join("; ")}`}>
           {segmentos.map((s) => (
             <span
               key={s.chave}
@@ -465,9 +470,9 @@ export function PainelDoCronograma({
       </section>
 
       <div className="pd-duas-colunas">
-        <section className="pd-bloco" aria-label="Precisa de decisão">
+        <section className="pd-bloco pd-bloco-decisoes" aria-label="Decisões prioritárias">
           <div className="pd-bloco-topo">
-            <h3 className="pd-bloco-titulo">Precisa de decisão</h3>
+            <h3 className="pd-bloco-titulo">Decisões prioritárias</h3>
             <span className="pd-contador">{alertasVisiveis.length}</span>
           </div>
           {alertasVisiveis.length === 0 ? (
@@ -496,7 +501,7 @@ export function PainelDoCronograma({
 
         <section className="pd-bloco" aria-label="Próximos sete dias">
           <div className="pd-bloco-topo">
-            <h3 className="pd-bloco-titulo">Próximos 7 dias</h3>
+            <h3 className="pd-bloco-titulo">Semana de trabalho</h3>
             {semana && (
               <span className="pd-bloco-nota">
                 semana {semana.numero} · {dataBr(semana.inicio)} a {dataBr(semana.fim)}
@@ -597,8 +602,8 @@ export function PainelDoCronograma({
         )}
       </section>
 
-      <footer className="pd-nota">
-        <strong>Como este painel calcula</strong>
+      <details className="pd-nota">
+        <summary>Como este painel calcula os indicadores</summary>
         <p>
           Avanço da obra pondera pelo valor de orçamento de cada atividade — somar m³ com m² e
           kg não mede nada. É a mesma régua da Curva S, então os dois números batem. Valor
@@ -606,7 +611,7 @@ export function PainelDoCronograma({
           primeiro início ao último fim; a Curva S mostra a mesma obra em dias úteis. A contagem
           de atividades é simples e serve para achar o serviço, não para medir avanço.
         </p>
-      </footer>
+      </details>
     </div>
   );
 }
