@@ -111,9 +111,8 @@ export default function Home() {
       : lista.find(o => o.id === idNaUrl);
   const projetoId = obra?.id ?? null;
   const mostrarTituloDaObra = ehRotaDeObra && Boolean(user);
-  // Layout profissional padrão em todas as obras, com retorno opt-in ao visual anterior.
-  const layoutProfissional = typeof window === "undefined" ||
-    usarLayoutProfissional(window.location.search);
+  // Uma interface clássica para todas as obras, sem bifurcações de layout.
+  const layoutProfissional = usarLayoutProfissional();
 
   const lixeira = trpc.projects.trash.useQuery(undefined, { enabled: Boolean(user), retry: false });
   const moverParaLixeira = trpc.projects.moveToTrash.useMutation({ onSuccess: async () => { await Promise.all([obras.refetch(), lixeira.refetch()]); setObraParaExcluir(null); setLocation("/obras"); } });
@@ -736,14 +735,8 @@ function Obra({
         <div className={`arquimedes-content${emWorkspacePlanejamento ? " planejamento-area" : ""}`}>
         {(aba === "gantt" || aba === "linha-balanco") && (
           <div className="planejamento-layout-selo" role="note">
-            <strong>{layoutProfissional ? "CRONOGRAMA PROFISSIONAL" : "CRONOGRAMA CLÁSSICO"}</strong>
-            <span>Visualização dos dados da obra. Para alterar atividades, datas ou predecessoras, use as abas técnicas; o agente é opcional.</span>
-            <button type="button" onClick={() => {
-              const url = new URL(window.location.href);
-              if (layoutProfissional) url.searchParams.set("layout", "classico");
-              else url.searchParams.delete("layout");
-              window.location.assign(url.toString());
-            }}>{layoutProfissional ? "Ver visual clássico" : "Ver layout profissional"}</button>
+            <strong>CRONOGRAMA DA OBRA</strong>
+            <span>Interface clássica única. Edite atividades, datas e predecessoras nas abas técnicas; o agente é opcional.</span>
           </div>
         )}
         {aba === "dashboard" ? (
