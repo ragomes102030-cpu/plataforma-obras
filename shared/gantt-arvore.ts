@@ -170,3 +170,11 @@ export function linhasVisiveis(arvore: NoDoGantt[], recolhidas: ReadonlySet<stri
   arvore.forEach(andar);
   return lista;
 }
+
+/** O modo "Só crítico" ignora temporariamente o recolhimento manual,
+ * para nunca ocultar atividades críticas dentro de etapas fechadas.
+ * Não altera o estado original de expansão e não inclui atividades não críticas.
+ */
+export function linhasCriticasVisiveisGantt(arvore: NoDoGantt[]): NoDoGantt[] {
+  return linhasVisiveis(arvore, new Set()).filter(no => no.critica);
+}
