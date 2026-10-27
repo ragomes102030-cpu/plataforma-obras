@@ -162,11 +162,11 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
     return [{...v,x1,x2,y1:origem.y,y2:destino.y}];
   });
   const marcos = mostrarMarcos?linhas.filter(l=>l.marco && dataValida(l.inicio) && locais.includes(String(l.pavimento??"").trim())):[];
-  const taxaMedia = analise.ritmos.map(r=>r.diasPorTransferencia).filter((n):n is number=>n!==null);
-  const ritmoMedio = taxaMedia.length?taxaMedia.reduce((a,b)=>a+b,0)/taxaMedia.length:null;
   // Leitura analítica derivada apenas dos serviços e locais exibidos.
   // Não interpreta coincidência temporal como colisão ou infração de predecessora.
   const analise = analisarFluxoLob(seriesVisiveis, locais);
+  const taxaMedia = analise.ritmos.map(r=>r.diasPorTransferencia).filter((n):n is number=>n!==null);
+  const ritmoMedio = taxaMedia.length?taxaMedia.reduce((a,b)=>a+b,0)/taxaMedia.length:null;
   const sobreposicoesPorLocal = new Map<string, number>();
   for (const alerta of analise.alertas) {
     if (alerta.tipo === "sobreposicao") {
