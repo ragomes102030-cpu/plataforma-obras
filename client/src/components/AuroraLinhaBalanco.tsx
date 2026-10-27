@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useMemo, useState } from "react";
 import { Activity, CalendarDays, ChevronDown, ChevronRight, Eye, EyeOff, Layers3, ListTodo, Search } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
