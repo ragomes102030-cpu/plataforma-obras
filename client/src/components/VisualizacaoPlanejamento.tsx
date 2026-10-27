@@ -17,7 +17,7 @@ type Props = {
   titulo?: string;
   codigoObra?: string | null;
   localObra?: string | null;
-  /** Modo profissional padrão; modo clássico disponível em ?layout=classico. */
+  /** Compatibilidade com o Gantt; a aplicação usa a interface clássica. */
   layoutProfissional?: boolean;
   finsCalculados?: Record<string,string>;
 };
@@ -116,15 +116,15 @@ export function VisualizacaoPlanejamento({
       <header className="pl-visual-header">
         <div>
           <strong>{view === "gantt" ? "GANTT — PLANEJAMENTO DA OBRA" : "LINHA DE BALANÇO — FLUXO DA PRODUÇÃO"}</strong>
-          <span>{view === "gantt" ? (layoutProfissional ? "EAP recolhível · tarefas, datas, vínculos e progresso" : "Sequência, duração, avanço e caminho crítico") : layoutProfissional ? "Datas na vertical · locais na horizontal · séries reais da obra" : "Tempo no eixo horizontal · locais no eixo vertical · ritmo das equipes"}</span>
+          <span>{view === "gantt" ? (layoutProfissional ? "EAP recolhível · tarefas, datas, vínculos e progresso" : "Sequência, duração, avanço e caminho crítico") : "Datas na vertical · locais na horizontal · séries reais da obra"}</span>
         </div>
       </header>
-      {layoutProfissional && <nav className="planejamento-layout-atalhos" aria-label="Edição manual do planejamento">
+      <nav className="planejamento-layout-atalhos" aria-label="Edição manual do planejamento">
         <span>Editar no sistema, sem agente:</span>
         {([["atividades","Atividades e durações"],["dependencias","Predecessoras"],["cpm","Calcular CPM"],["eap","Estrutura EAP"]] as const).map(([aba,rotulo]) =>
           <button key={aba} type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba}}))}>{rotulo}</button>
         )}
-      </nav>}
+      </nav>
       {view === "gantt" && !cpmCalculado && atividades.length > 0 && (
         <div className="pl-gantt-cpm-aviso">
           O Gantt está usando o início/duração informados. Calcule o CPM para destacar o caminho crítico do plano.
@@ -137,10 +137,8 @@ export function VisualizacaoPlanejamento({
       )}
       {view === "gantt" ? (
         <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} />
-      ) : layoutProfissional ? (
-        <LinhaBalancoVertical linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       ) : (
-        <LinhaDeBalanco linhas={linhas} dados={dados} hoje={hoje} />
+        <LinhaBalancoVertical linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       )}
     </section>
   );
@@ -1181,319 +1179,3 @@ function Gantt({
   );
 }
 
-function LinhaDeBalanco({
-  linhas,
-  dados,
-  hoje,
-}: {
-  linhas: EntradaDaLinha[];
-  dados: { start: string; end: string; total: number };
-  hoje: IsoDate;
-}) {
-  // Modelo Prevision: tempo no eixo X, localizações no eixo Y.
-  // Cada serviço repetitivo vira uma faixa colorida por localização e uma
-  // linha de ritmo que conecta o início do serviço entre os pavimentos.
-  //
-  // Marco fica de fora: ele é um ponto de entrega, não uma frente de serviço —
-  // se entrasse, viraria uma bolinha solta e quebraria a linha de ritmo.
-  const linhasDeServico = useMemo(() => linhas.filter(l => !l.marco), [linhas]);
-  const locations = Array.from(
-    new Set(linhasDeServico.map(l => l.pavimento || l.frente).filter(Boolean))
-  );
-  const locationOrder = [...locations].sort((a, b) => {
-    const na = Number(String(a).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
-    const nb = Number(String(b).match(/-?\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
-    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
-    return String(a).localeCompare(String(b), "pt-BR", { numeric: true });
-  });
-
-  const servicos = Array.from(
-    new Map(
-      linhasDeServico.map(l => {
-        const key = l.atividade.trim().toLocaleLowerCase("pt-BR");
-        return [key, l.atividade.trim()];
-      })
-    ).entries()
-  ).map(([key, label]) => ({ key, label }));
-
-  const rolagem = useRef<HTMLDivElement | null>(null);
-  const [larguraVisivel, setLarguraVisivel] = useState(1100);
-  const [pxManual, setPxManual] = useState<number | null>(4.5);
-  const [scrollTop, setScrollTop] = useState(0);
-
-  useEffect(() => {
-    const elemento = rolagem.current;
-    if (!elemento) return;
-    const medir = () => setLarguraVisivel(elemento.clientWidth || 1100);
-    medir();
-    if (typeof ResizeObserver === "undefined") return;
-    const observador = new ResizeObserver(medir);
-    observador.observe(elemento);
-    return () => observador.disconnect();
-  }, []);
-
-  // O eixo de locais fica congelado à esquerda (como no Prevision): rolar o
-  // tempo não pode esconder em que pavimento a equipe está.
-  const left = larguraVisivel < 560 ? 118 : 172;
-  const right = 56;
-  const top = 96;
-  const bottom = 46;
-  const rowH = 44;
-  // Escala de leitura padrão: 4,5px por dia (~135px por mês). "Ajustar" espreme a
-  // obra inteira na tela; os botões de zoom vão de 0,6 a 48px por dia.
-  const pxAjustado = Math.max(0.8, (larguraVisivel - left - right - 8) / Math.max(1, dados.total));
-  const pxPerDay = pxManual ?? pxAjustado;
-  const width = Math.round(left + right + dados.total * pxPerDay);
-  const corpoAltura = Math.max(120, Math.max(1, locationOrder.length) * rowH + bottom);
-  const x = (iso: string) =>
-    left + ((dateMs(iso) - dateMs(dados.start)) / 86400000) * pxPerDay;
-  const yByLocation = new Map(locationOrder.map((location, i) => [location, i * rowH + rowH / 2]));
-
-  const monthTicks: string[] = [];
-  let cursor = new Date(`${dados.start}T12:00:00Z`);
-  cursor.setUTCDate(1);
-  while (cursor.getTime() <= dateMs(dados.end)) {
-    monthTicks.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-  }
-
-  const weekTicks: string[] = [];
-  for (let d = 0; d <= dados.total; d += 7) weekTicks.push(addDays(dados.start, d));
-
-  const fmtMes = (iso: string) => {
-    const [y, m] = iso.split("-");
-    return `${m}/${y.slice(2)}`;
-  };
-
-  const hojeX = Math.max(left, Math.min(width - right, x(hoje)));
-  const irParaHoje = () => {
-    const elemento = rolagem.current;
-    if (!elemento) return;
-    elemento.scrollTo({ left: Math.max(0, hojeX - elemento.clientWidth / 2), behavior: "smooth" });
-  };
-
-  return (
-    <div className="pg">
-      <div className="pg-ferramentas">
-        <div className="pg-escala">
-          Escala: <strong>{unidadeDaEscala(pxPerDay)}</strong>
-          <span className="pg-escala-nota">
-            {locationOrder.length} locais · {servicos.length} serviços
-          </span>
-        </div>
-        <div className="pg-zoom" role="group" aria-label="Zoom da linha de balanço">
-          <button type="button" onClick={() => setPxManual(Math.min(48, Math.max(0.6, pxPerDay / 1.6)))} aria-label="Diminuir zoom" title="Diminuir zoom">
-            <ZoomOut size={16} aria-hidden="true" />
-          </button>
-          <button type="button" onClick={() => setPxManual(Math.min(48, Math.max(0.6, pxPerDay * 1.6)))} aria-label="Aumentar zoom" title="Aumentar zoom">
-            <ZoomIn size={16} aria-hidden="true" />
-          </button>
-          <button type="button" onClick={() => setPxManual(pxAjustado)} aria-label="Ajustar a obra inteira à tela" title="Ajustar à tela">
-            <Scan size={16} aria-hidden="true" />
-            <span>Ajustar</span>
-          </button>
-          <button type="button" onClick={irParaHoje} aria-label="Ir para a data de hoje" title="Ir para hoje">
-            <Crosshair size={16} aria-hidden="true" />
-            <span>Hoje</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="pg-lob-janela">
-        <div
-          className="pg-rolagem"
-          ref={rolagem}
-          onScroll={evento => setScrollTop(evento.currentTarget.scrollTop)}
-        >
-        <div className="pl-lob-cabecalho">
-          <svg
-            className="pl-lob pl-lob-prevision"
-            style={{ width, maxWidth: "none" }}
-            viewBox={`0 0 ${width} ${top}`}
-            height={top}
-            aria-hidden="true"
-          >
-            <rect x="0" y="0" width={width} height={top} className="pl-lob-bg" />
-            <rect x={left} y="0" width={width - left - right} height="22" className="pl-lob-header" />
-            {monthTicks.map(month => {
-              const xx = x(month);
-              return (
-                <g key={month}>
-                  <line x1={xx} x2={xx} y1="0" y2={top} className="pl-lob-month-grid" />
-                  <text x={xx + 6} y="16" className="pl-lob-month">{fmtMes(month)}</text>
-                </g>
-              );
-            })}
-            {weekTicks.filter(d => dateMs(d) <= dateMs(dados.end)).map(d => {
-              const xx = x(d);
-              return (
-                <g key={d}>
-                  <line x1={xx} x2={xx} y1="22" y2={top} className="pl-lob-week-grid" />
-                  <text x={xx + 3} y={26} className="pl-lob-date" transform={`rotate(90 ${xx + 3} 26)`}>
-                    {fmt(d)}
-                  </text>
-                </g>
-              );
-            })}
-            <line x1={hojeX} x2={hojeX} y1="0" y2={top} className="pg-hoje-linha" />
-            <text x={hojeX + 4} y="16" className="pl-gantt-hoje-label">HOJE</text>
-            <line x1={left} x2={width - right} y1={top - 1} y2={top - 1} className="pl-lob-axis" />
-          </svg>
-        </div>
-
-        <svg
-          className="pl-lob pl-lob-corpo"
-          style={{ width, maxWidth: "none" }}
-          viewBox={`0 0 ${width} ${corpoAltura}`}
-          height={corpoAltura}
-          role="img"
-          aria-label="Linha de balanço: tempo no eixo horizontal, localizações no eixo vertical"
-        >
-          <rect x="0" y="0" width={width} height={corpoAltura} className="pl-lob-bg" />
-          {monthTicks.map(month => {
-            const xx = x(month);
-            return (
-              <line key={`mes-${month}`} x1={xx} x2={xx} y1="0" y2={corpoAltura - bottom} className="pl-lob-month-grid" />
-            );
-          })}
-          {weekTicks.filter(d => dateMs(d) <= dateMs(dados.end)).map(d => {
-            const xx = x(d);
-            return (
-              <line key={`sem-${d}`} x1={xx} x2={xx} y1="0" y2={corpoAltura - bottom} className="pl-lob-week-grid" />
-            );
-          })}
-
-        {locationOrder.map((location, i) => {
-          const yy = yByLocation.get(location)!;
-          return (
-            <g key={location}>
-              <rect
-                x="0"
-                y={yy - rowH / 2}
-                width={width}
-                height={rowH}
-                className={i % 2 ? "pl-lob-row alt" : "pl-lob-row"}
-              />
-              <line x1={left} x2={width - right} y1={yy + rowH / 2} y2={yy + rowH / 2} className="pl-lob-row-grid" />
-              <text x={left - 12} y={yy + 4} textAnchor="end" className="pl-lob-location">
-                {location}
-              </text>
-            </g>
-          );
-        })}
-
-        {servicos.map((servico, serviceIndex) => {
-          const pontos = linhasDeServico
-            .filter(l => l.atividade.trim().toLocaleLowerCase("pt-BR") === servico.key)
-            .filter(l => Boolean(l.pavimento || l.frente))
-            .map(l => {
-              const location = l.pavimento || l.frente;
-              const yy = yByLocation.get(location);
-              if (yy == null) return null;
-              const startX = x(l.inicio);
-              const endX = x(addDays(l.inicio, Math.max(1, l.duracao) - 1));
-              return {
-                location,
-                x: startX,
-                y: yy,
-                width: Math.max(8, endX - startX),
-                duracao: l.duracao,
-                codigo: l.codigo,
-              };
-            })
-            .filter(Boolean) as Array<{ location: string; x: number; y: number; width: number; duracao: number; codigo: string }>;
-
-          if (!pontos.length) return null;
-
-          const colorClass = `lob-service-${serviceIndex % 8}`;
-          const linha = [...pontos].sort((a, b) => a.y - b.y);
-          const polyline = linha.length > 1
-            ? linha.map(p => `${p.x},${p.y}`).join(" ")
-            : "";
-
-          return (
-            <g key={servico.key}>
-              {polyline && (
-                <polyline points={polyline} className={`pl-lob-rhythm ${colorClass}`} />
-              )}
-              {pontos.map(p => (
-                <g key={`${servico.key}-${p.location}-${p.codigo}`}>
-                  <title>{`${servico.label} · ${p.location} · ${p.duracao} dias · início ${fmt(pontos.length ? linhasDeServico.find(l => l.codigo === p.codigo)?.inicio || dados.start : dados.start)}`}</title>
-                  <rect
-                    x={p.x}
-                    y={p.y - 10}
-                    width={p.width}
-                    height="20"
-                    rx="2"
-                    className={`pl-lob-service ${colorClass}`}
-                  />
-                  {p.width > 55 && (
-                    <text x={p.x + 5} y={p.y + 4} className="pl-lob-service-label">
-                      {servico.label.slice(0, 24)}
-                    </text>
-                  )}
-                </g>
-              ))}
-              {linha.length > 1 && (
-                <text
-                  x={linha[linha.length - 1]!.x + linha[linha.length - 1]!.width + 8}
-                  y={linha[linha.length - 1]!.y + 4}
-                  className={`pl-lob-rhythm-label ${colorClass}`}
-                >
-                  {servico.label}
-                </text>
-              )}
-            </g>
-          );
-        })}
-
-        <line x1={left} x2={left} y1="0" y2={corpoAltura - bottom} className="pl-lob-axis" />
-        <line x1={hojeX} x2={hojeX} y1="0" y2={corpoAltura - bottom} className="pg-hoje-linha" />
-        
-        <text x={width / 2} y={corpoAltura - 12} textAnchor="middle" className="pl-lob-caption">
-          TEMPO →
-        </text>
-        </svg>
-        </div>
-
-        <div className="pl-lob-eixo" style={{ width: left }} aria-hidden="true">
-          <div className="pl-lob-eixo-topo" style={{ height: top }}>
-            <strong className="pl-lob-eixo-titulo">LINHA DE BALANÇO</strong>
-            <span className="pl-lob-eixo-sub">RITMO DAS EQUIPES POR LOCAL</span>
-            <span className="pl-lob-eixo-cabeca" style={{ top: 44 }}>
-              FRENTE / LOCAL
-            </span>
-          </div>
-          <div className="pl-lob-eixo-corpo" style={{ top }}>
-            <div className="pl-lob-eixo-nomes" style={{ transform: `translateY(${-scrollTop}px)` }}>
-              {locationOrder.map((location, i) => (
-                <span
-                  key={location}
-                  className={`pl-lob-eixo-nome${i % 2 ? " alt" : ""}`}
-                  style={{ top: i * rowH }}
-                  title={location}
-                >
-                  {location}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {locationOrder.length === 0 && (
-        <p className="pl-lob-vazio">
-          A linha de balanço precisa de <strong>pavimento</strong> ou <strong>frente</strong> nas atividades. Preencha o
-          local na planilha do cronograma para o gráfico aparecer.
-        </p>
-      )}
-
-      <div className="pg-legenda">
-        <span><i className="pg-amostra normal" /> serviço executado no local</span>
-        <span><i className="pg-amostra" style={{ background: "#b3261e", width: 2, height: 12 }} /> hoje</span>
-        <span>As linhas ligam o mesmo serviço entre locais: a inclinação é o ritmo da equipe.</span>
-        <span>Eixo vertical: pavimento ou frente informada em cada atividade.</span>
-      </div>
-    </div>
-  );
-}

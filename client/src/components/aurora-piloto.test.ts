@@ -32,22 +32,21 @@ describe("Gantt e LOB de todas as obras: dados e operação manual",()=>{
   expect(r.series.flatMap(s=>s.pontos.map(p=>p.codigo))).toEqual(["1.2"]);
   expect(prepararLinhaBalancoVertical([b],{}).series).toHaveLength(0);
  });
- it("ativa Gantt/LOB profissional em qualquer obra por padrão e aceita retorno ao clássico",()=>{
-  expect(usarLayoutProfissional("")).toBe(true);
-  expect(usarLayoutProfissional("?layout=aurora")).toBe(true);
+ it("usa apenas a interface clássica e mantém a LOB vertical integrada",()=>{
+  expect(usarLayoutProfissional("")).toBe(false);
+  expect(usarLayoutProfissional("?layout=aurora")).toBe(false);
   expect(usarLayoutProfissional("?layout=classico")).toBe(false);
-  expect(usarLayoutProfissional("?aba=gantt&layout=classico")).toBe(false);
+  expect(usarLayoutProfissional("?layout=profissional")).toBe(false);
   const home=readFileSync(path.resolve(process.cwd(),"client/src/pages/Home.tsx"),"utf8");
   const view=readFileSync(path.resolve(process.cwd(),"client/src/components/VisualizacaoPlanejamento.tsx"),"utf8");
-  expect(home).toContain('usarLayoutProfissional(window.location.search)');
-  expect(home).not.toContain('obra?.code === "OB-PUPOCN"');
+  expect(home).toContain("const layoutProfissional = usarLayoutProfissional()");
+  expect(home).not.toContain("Ver layout profissional");
+  expect(home).not.toContain("Ver visual clássico");
   expect(home).toContain('layoutProfissional={layoutProfissional}');
-  expect(view).toContain('layoutProfissional ? (');
   expect(view).toContain("<LinhaBalancoVertical");
+  expect(view).not.toContain("function LinhaDeBalanco");
   expect(view).toContain('aba:"atividades"');
-  expect(view).toContain("function LinhaDeBalanco");
   expect(view).toContain("function Gantt");
-  expect(view).toContain('plataforma-obras:gantt-esquerda-profissional');
  });
 
 });
