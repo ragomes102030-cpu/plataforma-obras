@@ -11,8 +11,10 @@ test("Desktop: EAP real, seleção, versão, filtros, busca e vínculos",async({
   await page.locator("#expandBtn").click();
   await expect(page.locator("#rows .row")).toHaveCount(69);
   await page.locator("#search").fill("Fundações");
-  await expect(page.locator("#rows .row")).toHaveCount(1);
-  await page.locator("#rows .row").first().click();
+  // Fundações aparece também em "Impermeabilização de fundações e áreas enterradas".
+  // Ambos são resultados válidos; o teste seleciona o pacote técnico exato.
+  await expect(page.locator("#rows .row")).toHaveCount(2);
+  await page.locator("#rows .row").filter({hasText:"1.3.2"}).click();
   await expect(page.locator("#detailName")).toHaveText("Fundações");
   await page.locator('[data-version="5"]').click();
   await expect(page.locator("#versionHeading")).toContainText("Aprovada");
