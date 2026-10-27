@@ -14,7 +14,7 @@ describe("baseline vigente sem apagar histórico", () => {
     expect(migration).toContain("SET status = 'arquivada'");
     expect(migration).toContain("CREATE UNIQUE INDEX IF NOT EXISTS");
     expect(migration).toContain("WHERE status = 'ativa'");
-    expect(migration).not.toMatch(/DELETE\\s+FROM\\s+"?schedule_baselines"?/i);
+    expect(migration).not.toContain('DELETE FROM "schedule_baselines"');
     expect(schema).toContain('uniqueIndex("schedule_baselines_uma_ativa_por_obra_idx")');
   });
   it("captura transacional, arquiva anterior, compara com vigente", () => {
@@ -32,7 +32,7 @@ describe("baseline vigente sem apagar histórico", () => {
     expect(ui).toContain('b.status === "ativa"');
     expect(ui).toContain("Nenhuma baseline vigente definida");
     expect(ui).toContain("value={selecionadaId}");
-    expect(ui).not.toMatch(/\\.useMutation\\(/);
+    expect(ui).not.toContain(".useMutation(");
   });
   it("EAP estrutural sem contagens fixas; fotografia apenas opcional", () => {
     expect(regression).toContain("rows.length > 0");
