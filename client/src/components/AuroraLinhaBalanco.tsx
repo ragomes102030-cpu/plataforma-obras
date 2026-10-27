@@ -355,6 +355,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                   <div className="lob-stairs-status-head lob-stairs-status-week" role="columnheader">Execução registrada</div>
                   <div className="lob-stairs-time" role="presentation" style={{width:larguraTempo}}>
                     {semanas.map(s=><span key={s.inicio} className="lob-stairs-week" style={{left:s.x,width:Math.min(pxDia*7,larguraTempo-s.x)}}>{formatoCurto(s.inicio)}</span>)}
+                    {dataValida(hoje)&&diaUtc(hoje)>=diaUtc(eixoInicio)&&diaUtc(hoje)<diaUtc(eixoFimExclusivo)&&<span className="lob-stairs-today-label" style={{left:dataX(hoje)}}>Hoje</span>}
                   </div>
                 </div>
                 {locais.map((local, row) => (
@@ -378,6 +379,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                           aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
                           title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
                           onClick={()=>setDetalhe(b)}>
+                          {b.ponto.quantidade!==null&&b.ponto.quantidade>0&&b.ponto.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,b.ponto.executado/b.ponto.quantidade*100))+"%"}}/>}
                           <span>{largura >= 62 ? nomeCurto : ""}</span>
                         </button>;
                       })}
@@ -405,7 +407,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                 <div><dt>Período dos serviços visíveis</dt><dd>{resumo.inicio&&resumo.fim?formatoCompleto(resumo.inicio)+" – "+formatoCompleto(resumo.fim):"Sem período"}</dd></div>
                 <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
                 <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
-                <div><dt>Atividades vinculadas à EAP</dt><dd>{resumo.pontos.length}</dd></div>
+                <div><dt>Atividades no gráfico</dt><dd>{resumo.pontos.length}</dd></div>
                 <div><dt>Janela total de calendário</dt><dd>{resumo.diasCalendario===null?"—":resumo.diasCalendario+" dias"}</dd></div>
                 <div><dt>Cadência média de inícios</dt><dd>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})+" dias/pavimento"}</dd></div>
               </dl>
@@ -433,7 +435,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                   <div><dt>Término planejado</dt><dd>{formatoCompleto(detalhe.ponto.fim)}</dd></div>
                   <div><dt>Duração cadastrada</dt><dd>{originais.get(detalhe.ponto.codigo)?.duracao??"—"} dias</dd></div>
                   <div><dt>Quantidade prevista</dt><dd>{detalhe.ponto.quantidade===null?"Não informada":detalhe.ponto.quantidade.toLocaleString("pt-BR")+" "+(detalhe.ponto.unidade??"")}</dd></div>
-                  <div><dt>Execução registrada</dt><dd>{detalhe.ponto.executado.toLocaleString("pt-BR")+" "+(detalhe.ponto.unidade??"")}</dd></div>
+                  <div><dt>Execução registrada</dt><dd>{detalhe.ponto.executado>0?detalhe.ponto.executado.toLocaleString("pt-BR")+" "+(detalhe.ponto.unidade??""):"Sem quantidade executada registrada"}</dd></div>
                   <div><dt>Taxa planejada por dia de duração</dt><dd>{taxaPlanejadaLob(detalhe.ponto,originais.get(detalhe.ponto.codigo)?.duracao??null)?.toLocaleString("pt-BR")??"Não calculável"} {detalhe.ponto.quantidade!==null&&detalhe.ponto.quantidade>0?((detalhe.ponto.unidade??"unid.")+"/dia"):""}</dd></div>
                   <div><dt>Predecessoras cadastradas</dt><dd>{estadoVinculos!=="pronto"?"Indisponíveis":dependencias.filter(v=>v.para===detalhe.ponto.codigo).map(v=>v.de+" ("+v.tipo+")").join(", ")||"Nenhuma"}</dd></div>
                   <div><dt>Sucessoras cadastradas</dt><dd>{estadoVinculos!=="pronto"?"Indisponíveis":dependencias.filter(v=>v.de===detalhe.ponto.codigo).map(v=>v.para+" ("+v.tipo+")").join(", ")||"Nenhuma"}</dd></div>
