@@ -46,12 +46,23 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
   const [recolhida, setRecolhida] = useState(false);
   const [busca, setBusca] = useState("");
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  const [mostrarTodas, setMostrarTodas] = useState(true);
 
   const repetidas = series.filter(s => s.repetitiva);
   const pesquisa = busca.trim().toLocaleLowerCase("pt-BR");
   const listadas = (visao === "ritmo" ? repetidas : series).filter(s => (s.nome+" "+s.pontos[0]?.codigo).toLocaleLowerCase("pt-BR").includes(pesquisa));
   const selecionadaSerie = series.find(s => s.chave === selecionada) ?? null;
-  const serieRitmo = repetidas.find(s => s.chave === selecionada) ?? repetidas[0] ?? null;
+  const ritmosFiltrados = listadas.filter(s => s.repetitiva);
+  const serieRitmo = ritmosFiltrados.find(s => s.chave === selecionada) ?? ritmosFiltrados[0] ?? null;
+  // A busca limita também a sequência isolada; nunca voltar a desenhar um serviço oculto.
+  const seriesRitmoVisiveis = mostrarTodas && !selecionada ? ritmosFiltrados : serieRitmo ? [serieRitmo] : [];
+  const coresRitmo = ["#257e94", "#8662a2", "#b16e3d", "#25896b", "#ba566f", "#657f31"];
+  // Somente os locais físicos das séries exibidas pertencem ao eixo de ritmo.
+  // Mantemos a lista completa para o mapa auxiliar de ocupação e diagnósticos.
+  const locaisDoGrafico = visao === "ritmo"
+    ? Array.from(new Set(seriesRitmoVisiveis.flatMap(s=>s.pontos.map(p=>p.local))))
+        .sort((a,b)=>a.localeCompare(b,"pt-BR",{numeric:true}))
+    : locais;
   const seriesOcupacao = listadas.filter(s => !selecionadaSerie || s.chave === selecionadaSerie.chave);
   const pontosOcupacao = seriesOcupacao.flatMap(s => s.pontos);
   const pontosTodos = series.flatMap(s => s.pontos);
@@ -65,10 +76,10 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
   const esquerda = 106;
   const topo = 65;
   const rodape = 36;
-  const largura = Math.max(690, esquerda+locais.length*larguraLocal+35);
+  const largura = Math.max(690, esquerda+locaisDoGrafico.length*larguraLocal+35);
   const altura = Math.max(550, Math.min(1480,faixas.length*(escala==="mes"?49:28)+topo+rodape));
   const h = altura-topo-rodape;
-  const xLocal = (local:string) => esquerda+locais.indexOf(local)*larguraLocal+larguraLocal/2;
+  const xLocal = (local:string) => esquerda+locaisDoGrafico.indexOf(local)*larguraLocal+larguraLocal/2;
   const yData = (iso:string) => topo+((diaUtc(iso)-diaUtc(inicioEixo))/DIA)/dias*h;
   const mostrarHoje = Boolean(inicioEixo && fimEixo && diaUtc(hoje)>=diaUtc(inicioEixo) && diaUtc(hoje)<=diaUtc(fimEixo));
   const intervaloRotulos = Math.max(1,Math.ceil(faixas.length/28));
@@ -158,6 +169,10 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
             Linha de Balanço
           </button>
         </div>
+        {visao === "ritmo" && <label className="lob-pro-escala">
+          <input type="checkbox" checked={mostrarTodas} onChange={e=>{setMostrarTodas(e.target.checked);setSelecionada(null);}} aria-label="Mostrar todas as sequências repetitivas"/>
+          Mostrar todas as frentes
+        </label>}
         <label className="lob-pro-escala"><CalendarDays size={15}/> Período
           <select aria-label="Escala da Linha de Balanço" value={escala} onChange={e=>setEscala(e.target.value as Escala)}>
             <option value="mes">Mensal</option><option value="quinzena">Quinzenal</option>
@@ -202,7 +217,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
               {selecionadaSerie&&visao==="ocupacao"&&<button type="button" onClick={()=>setSelecionada(null)}>Limpar filtro</button>}
             </div>
 
-            {visao==="ritmo" && !serieRitmo ? (
+            {visao==="ritmo" && seriesRitmoVisiveis.length===0 ? (
               <div className="lob-pro-vazio lob-pro-vazio-tecnico"><Layers3 size={25}/>
                 <h3>Sem sequência repetitiva identificável</h3>
                 <p>Nesta obra, não foi encontrado um mesmo serviço com um registro inequívoco em pelo menos dois locais. Conectar atividades diferentes produziria uma linha de ritmo falsa.</p>
@@ -214,7 +229,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                 <div className="lob-pro-scroll" role="region" tabIndex={0} aria-label="Diagrama com tempo vertical e locais horizontais">
                   <svg role="img" aria-label={visao==="ocupacao"?"Mapa de ocupação por local e período":"Linhas de início e conclusão de serviços repetitivos"} viewBox={"0 0 "+largura+" "+altura} width={largura} height={altura}>
                     <rect x={0} y={0} width={largura} height={altura} fill="#ffffff"/>
-                    {locais.map((local,i)=><g key={local}>
+                    {locaisDoGrafico.map((local,i)=><g key={local}>
                       <rect x={esquerda+i*larguraLocal} y={topo} width={larguraLocal} height={h} fill={i%2===0?"#f8fbfc":"#ffffff"}/>
                       <line x1={xLocal(local)} y1={topo} x2={xLocal(local)} y2={altura-rodape} stroke="#dce7eb" strokeWidth={1}/>
                       <text x={xLocal(local)} y={28} textAnchor="middle" fontSize={11} fill="#294755" fontWeight={650}>
@@ -230,7 +245,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                         {i%intervaloRotulos===0&&<text x={esquerda-12} y={yy+13} textAnchor="end" fontSize={11} fill="#5a7280">{faixa.rotulo}</text>}
                       </g>;
                     })}
-                    {visao==="ocupacao" ? faixas.flatMap(faixa=>locais.map(local=>{
+                    {visao==="ocupacao" ? faixas.flatMap(faixa=>locaisDoGrafico.map(local=>{
                       const lista=ocupacaoNaFaixa(pontosOcupacao,local,faixa);
                       const n=lista.length;
                       if(n===0)return null;
@@ -242,27 +257,28 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                         <text x={xLocal(local)} y={(yi+yfim)/2+4} textAnchor="middle" fontSize={11} fill={n>=4?"#fff":"#27556b"} fontWeight={750}>{n}</text>
                         <title>{local+" · "+faixa.rotulo+" · "+n+" atividade(s): "+lista.slice(0,8).map(p=>p.nome).join("; ")+(lista.length>8?"…":"")}</title>
                       </g>;
-                    })) : serieRitmo && (() => {
-                      const ordenados=[...serieRitmo.pontos].sort((a,b)=>locais.indexOf(a.local)-locais.indexOf(b.local));
-                      return <g>
-                        <polyline fill="none" stroke="#257e94" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"
+                    })) : seriesRitmoVisiveis.map((serie, indice) => {
+                      const ordenados=[...serie.pontos].sort((a,b)=>locaisDoGrafico.indexOf(a.local)-locaisDoGrafico.indexOf(b.local));
+                      const cor = coresRitmo[repetidas.findIndex(s=>s.chave===serie.chave)%coresRitmo.length] ?? coresRitmo[indice%coresRitmo.length];
+                      return <g key={serie.chave}>
+                        <polyline fill="none" stroke={cor} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"
                           points={ordenados.map(p=>xLocal(p.local)+","+yData(p.inicio)).join(" ")}/>
-                        <polyline fill="none" stroke="#c17b50" strokeWidth={2.5} strokeDasharray="7 5" strokeLinejoin="round"
+                        <polyline fill="none" stroke={cor} opacity={0.65} strokeWidth={2.5} strokeDasharray="7 5" strokeLinejoin="round"
                           points={ordenados.map(p=>xLocal(p.local)+","+yData(p.fim)).join(" ")}/>
                         {ordenados.map(p=><g key={p.codigo+"-"+p.local}>
-                          <line x1={xLocal(p.local)} y1={yData(p.inicio)} x2={xLocal(p.local)} y2={yData(p.fim)} stroke="#6da9ba" strokeWidth={8} strokeLinecap="round" opacity={0.6}/>
-                          <circle cx={xLocal(p.local)} cy={yData(p.inicio)} r={5} fill="#257e94"/>
-                          <circle cx={xLocal(p.local)} cy={yData(p.fim)} r={5} fill="#c17b50"/>
-                          <title>{legendaPonto(p)}</title>
+                          <line x1={xLocal(p.local)} y1={yData(p.inicio)} x2={xLocal(p.local)} y2={yData(p.fim)} stroke={cor} strokeWidth={8} strokeLinecap="round" opacity={0.6}/>
+                          <circle cx={xLocal(p.local)} cy={yData(p.inicio)} r={5} fill={cor}/>
+                          <circle cx={xLocal(p.local)} cy={yData(p.fim)} r={5} fill={cor} opacity={0.75}/>
+                          <title>{serie.nome+" · "+legendaPonto(p)}</title>
                         </g>)}
                       </g>;
-                    })()}
+                    })}
                     {mostrarHoje&&<g>
                       <line x1={esquerda} x2={largura-30} y1={yData(hoje)} y2={yData(hoje)} stroke="#be6855" strokeDasharray="5 5" strokeWidth={2}/>
                       <text x={largura-28} y={yData(hoje)-5} textAnchor="end" fontWeight={750} fontSize={10} fill="#a65442">HOJE</text>
                     </g>}
                     <line x1={esquerda} x2={largura-30} y1={altura-rodape} y2={altura-rodape} stroke="#acbec8"/>
-                    <text x={esquerda+(locais.length*larguraLocal)/2} y={altura-11} textAnchor="middle" fontSize={11} fill="#627c89">LOCAIS DE EXECUÇÃO</text>
+                    <text x={esquerda+(locaisDoGrafico.length*larguraLocal)/2} y={altura-11} textAnchor="middle" fontSize={11} fill="#627c89">LOCAIS DE EXECUÇÃO</text>
                   </svg>
                 </div>
                 {visao==="ocupacao"?
@@ -271,7 +287,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                     {[1,2,3,4].map(n=><span key={n}><i style={{background:CORES_OCUPACAO[n]}}/>{n===4?"4 ou mais":String(n)}</span>)}
                     <small>Intervalos de calendário; não confundir ocupação com avanço físico.</small>
                   </div>
-                  : <div className="lob-pro-legenda"><strong>{serieRitmo?.nome}</strong><span><i style={{background:"#257e94"}}/> Inícios</span><span><i style={{background:"#c17b50"}}/> Términos</span></div>}
+                  : <div className="lob-pro-legenda"><strong>{seriesRitmoVisiveis.length} sequência(s) visível(is)</strong>{seriesRitmoVisiveis.map(serie=><span key={serie.chave}><i style={{background:coresRitmo[repetidas.findIndex(s=>s.chave===serie.chave)%coresRitmo.length]}}/>{serie.nome}</span>)}<small>Traço contínuo: início · tracejado: término. Cores identificam serviços, não produtividade calculada.</small></div>}
               </>
             )}
             {descartadas>0&&<p className="lob-pro-aviso">{descartadas} registros sem datas válidas ou marcos não entram nesta leitura de duração.</p>}
