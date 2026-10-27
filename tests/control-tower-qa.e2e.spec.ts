@@ -1,0 +1,53 @@
+import {test,expect} from "@playwright/test";
+
+test("Desktop 1440x900: desempenho, investigação, navegação e Curva S",async({page})=>{
+  await page.setViewportSize({width:1440,height:900});
+  const erros:string[]=[];
+  page.on("pageerror",e=>erros.push(e.message));
+  await page.goto("/control-tower-qa.html");
+  await expect(page.getByTestId("arquimedes-control-tower")).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Visão geral da obra"})).toBeVisible();
+  await expect(page.locator(".ct-kpi")).toHaveCount(4);
+  await expect(page.locator(".ct-hero")).toContainText("−14,1 p.p.");
+  await expect(page.locator(".ct-hero")).toContainText("15,1%");
+  await expect(page.locator(".ct-hero")).toContainText("29,2%");
+  await page.getByRole("button",{name:/TÉRMINO PREVISTO/i}).click();
+  const dialog=page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("28/12/2028");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button",{name:"90 dias"}).click();
+  await expect(page.locator("#ct-cursor-data")).toBeVisible();
+  await page.locator("#ct-cursor-data").fill("0");
+  await expect(page.locator(".ct-chart-explorador")).toContainText("Planejado");
+  await page.getByRole("button",{name:/Investigar no módulo|Revisar lançamentos/i}).first().click();
+  await expect(page.locator(".ctq-destino")).toBeVisible();
+  await expect(page.locator(".ctq-destino")).toContainText("Produção");
+  await page.getByRole("button",{name:"Voltar ao Dashboard"}).last().click();
+  await expect(page.getByTestId("arquimedes-control-tower")).toBeVisible();
+  await page.screenshot({path:test.info().outputPath("control-tower-desktop.png"),fullPage:true});
+  expect(erros).toEqual([]);
+});
+
+test("Celular 375x812: layout, navegação e detalhes",async({page})=>{
+  await page.setViewportSize({width:375,height:812});
+  const erros:string[]=[];
+  page.on("pageerror",e=>erros.push(e.message));
+  await page.goto("/control-tower-qa.html");
+  await expect(page.getByTestId("arquimedes-control-tower")).toBeVisible();
+  await expect(page.locator(".ct-kpi")).toHaveCount(4);
+  await page.getByRole("button",{name:"Abrir navegação"}).click();
+  await expect(page.locator(".ctq-nav")).toHaveClass(/open/);
+  await page.locator(".ctq-nav").getByRole("button",{name:"EAP"}).click();
+  await expect(page.locator(".ctq-destino")).toBeVisible();
+  await page.getByRole("button",{name:"Voltar ao Dashboard"}).last().click();
+  await page.getByRole("button",{name:/VALOR AGREGADO/i}).click();
+  await expect(page.getByRole("dialog")).toContainText("R$");
+  await page.getByRole("button",{name:"Fechar investigação"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const largura=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
+  expect(largura.scroll).toBeLessThanOrEqual(largura.client+2);
+  await page.screenshot({path:test.info().outputPath("control-tower-375px.png"),fullPage:true});
+  expect(erros).toEqual([]);
+});
