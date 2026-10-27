@@ -751,6 +751,7 @@ function Obra({
             linhas={grade.data?.linhas}
             projetoId={projetoId}
             nomeObra={obra}
+            hojeReferencia={hoje}
             carregandoGrade={grade.isPending}
           />
         ) : aba === "escopo" ? (
