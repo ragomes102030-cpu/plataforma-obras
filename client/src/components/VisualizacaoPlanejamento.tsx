@@ -5,6 +5,8 @@ import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBr
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
+import { gerarSvgGantt } from "@shared/gantt-export-svg";
+import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
 import { LinhaBalancoEscadinha } from "./AuroraLinhaBalanco";
 import "./aurora-piloto.css";
 
@@ -69,7 +71,8 @@ export function VisualizacaoPlanejamento({
     () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
     [atividades]
   );
-  const cpmCalculado = atividades.length > 0 && atividades.some(activity => activity.cpmCalculatedAt);
+  const estadoCpm = avaliarCpmGantt(atividades);
+  const cpmValido = !planejamento.isPending && !planejamento.isError && estadoCpm.valido;
 
   // Dependências do cronograma traduzidas para os códigos da EAP, que é o que a
   // planilha do Gantt usa como chave de linha. Sem isso o gráfico mostra barras
@@ -87,10 +90,14 @@ export function VisualizacaoPlanejamento({
   const dados = useMemo(() => {
     if (!linhas.length) return null;
     const min = linhas.reduce((v, l) => Math.min(v, dateMs(l.inicio)), dateMs(linhas[0]!.inicio));
-    const max = linhas.reduce(
-      (v, l) => Math.max(v, dateMs(l.inicio) + Math.max(1, l.duracao - 1) * 86400000),
-      min
-    );
+    const max = linhas.reduce((v,l)=>{
+      const fim = finsCalculados[l.codigo];
+      const dataValida = typeof fim === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(fim) &&
+        Number.isFinite(dateMs(fim)) && fim >= l.inicio;
+      return Math.max(v, dataValida ? dateMs(fim!) :
+        dateMs(l.inicio) + Math.max(0,l.duracao-1) * 86400000);
+    }, min);
     const inicio = new Date(min);
     inicio.setUTCDate(1);
     const fim = new Date(max);
@@ -100,7 +107,7 @@ export function VisualizacaoPlanejamento({
     const end = fim.toISOString().slice(0, 10);
     const total = Math.max(1, Math.round((dateMs(end) - dateMs(start)) / 86400000));
     return { start, end, total };
-  }, [linhas]);
+  }, [linhas, finsCalculados]);
 
   if (!dados) {
     return (
@@ -125,9 +132,9 @@ export function VisualizacaoPlanejamento({
           <button key={aba} type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba}}))}>{rotulo}</button>
         )}
       </nav>
-      {view === "gantt" && !cpmCalculado && atividades.length > 0 && (
+      {view === "gantt" && !cpmValido && !planejamento.isPending && !planejamento.isError && atividades.length > 0 && (
         <div className="pl-gantt-cpm-aviso">
-          O Gantt está usando o início/duração informados. Calcule o CPM para destacar o caminho crítico do plano.
+          CPM ausente, incompleto ou desatualizado em alguma atividade. O caminho crítico e as folgas não serão considerados válidos até recalcular a rede.
         </div>
       )}
       {view === "gantt" && planejamento.isError && (
@@ -136,7 +143,7 @@ export function VisualizacaoPlanejamento({
         </div>
       )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} />
+        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido} />
       ) : (
         <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       )}
@@ -188,6 +195,8 @@ function Gantt({
   codigoObra,
   localObra,
   layoutProfissional = true,
+  finsCalculados,
+  cpmValido,
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<
@@ -206,14 +215,14 @@ function Gantt({
   hoje: IsoDate;
   inicioObra: IsoDate | null;
   layoutProfissional?: boolean;
+  finsCalculados: Readonly<Record<string, string>>;
+  cpmValido: boolean;
   /** Cabeçalho da impressão: nome, código e local da obra. */
   titulo?: string;
   codigoObra?: string | null;
   localObra?: string | null;
 }) {
   const referencia = useRef<HTMLDivElement | null>(null);
-  const svgSetasRef = useRef<SVGSVGElement | null>(null);
-  const svgAvancosRef = useRef<SVGSVGElement | null>(null);
   const [larguraVisivel, setLarguraVisivel] = useState(1200);
   const utils = trpc.useUtils();
   const [alternandoMarco, setAlternandoMarco] = useState(false);
@@ -344,19 +353,19 @@ function Gantt({
     return faixas;
   }, [dados.start, dados.total, px]);
 
-  const totalCriticas = Array.from(atividades.values()).filter(item => item.critical === 1).length;
+  const totalCriticas = cpmValido ? Array.from(atividades.values()).filter(item => item.critical === 1).length : 0;
 
   // Árvore da EAP (etapas recolhíveis, como no Project) e o que está visível.
   const codigosCriticos = useMemo(
     () =>
       new Set(
         Array.from(atividades.entries())
-          .filter(([, item]) => item.critical === 1)
+          .filter(([, item]) => cpmValido && item.critical === 1)
           .map(([codigo]) => codigo)
       ),
-    [atividades]
+    [atividades, cpmValido]
   );
-  const arvore = useMemo(() => montarArvore(linhas, codigosCriticos), [linhas, codigosCriticos]);
+  const arvore = useMemo(() => montarArvore(linhas, codigosCriticos, finsCalculados), [linhas, codigosCriticos, finsCalculados]);
   const [colapsados, setColapsados] = useState<Set<string>>(() => new Set());
   const temEtapas = arvore.some(no => no.temFilhos);
   const visiveis = useMemo(() => linhasVisiveis(arvore, colapsados), [arvore, colapsados]);
@@ -452,7 +461,7 @@ function Gantt({
       })),
       linhas: filtradas.map(no => {
         const inicio = Math.max(0, doDia(no.inicio));
-        const largura = Math.max(6, Math.min(larguraDoTempo - inicio, Math.max(1, no.duracao) * px));
+        const largura = Math.max(6, Math.min(larguraDoTempo - inicio, (Math.round((dateMs(no.fim)-dateMs(no.inicio))/86400000)+1) * px));
         return { no, esquerda: pct(inicio), largura: pct(largura) };
       }),
     };
@@ -464,7 +473,7 @@ function Gantt({
     const mapa = new Map<string, { x0: number; x1: number; y: number }>();
     filtradas.forEach((no, indice) => {
       const x0 = Math.max(0, ((dateMs(no.inicio) - dateMs(dados.start)) / 86400000) * px);
-      const x1 = x0 + Math.max(6, Math.min(larguraDoTempo - x0, Math.max(1, no.duracao) * px));
+      const x1 = x0 + Math.max(6, Math.min(larguraDoTempo - x0, (Math.round((dateMs(no.fim)-dateMs(no.inicio))/86400000)+1) * px));
       mapa.set(no.chave, { x0, x1, y: indice * alturaLinha + alturaLinha / 2 });
     });
     return mapa;
@@ -535,11 +544,11 @@ function Gantt({
       no,
       atividadeId: atividade?.id ?? null,
       projetoId: atividade?.projectId ?? null,
-      folga: typeof atividade?.totalFloat === "number" ? atividade.totalFloat : null,
+      folga: cpmValido && typeof atividade?.totalFloat === "number" ? atividade.totalFloat : null,
       predecessoras: resumo(listaPred, "de"),
       sucessoras: resumo(listaSuces, "para"),
     };
-  }, [selecionada, filtradas, atividades, dependencias]);
+  }, [selecionada, filtradas, atividades, dependencias, cpmValido]);
   const alternar = (chave: string) =>
     setColapsados(antes => {
       const proximo = new Set(antes);
@@ -555,31 +564,23 @@ function Gantt({
   };
 
   const exportarSvg = () => {
-    const svgSetas = svgSetasRef.current;
-    const svgAvancos = svgAvancosRef.current;
-
-    // Captura apenas os SVGs do gráfico (setas/avanços), nunca ícones da UI.
-    const svgs = [svgSetas, svgAvancos].filter(Boolean) as SVGSVGElement[];
-    if (svgs.length === 0) return;
-
-    const conteudo = svgs
-      .map(svg => new XMLSerializer().serializeToString(svg))
-      .join("\n");
-
-    const svgWrapper = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${svgs[0].clientWidth || svgs[0].getAttribute('width') || 1200}" height="${svgs.reduce((acc, svg) => acc + (svg.clientHeight || Number(svg.getAttribute('height') || 0)), 0)}">
-        ${conteudo}
-      </svg>
-    `;
-
-    const blob = new Blob([svgWrapper], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `cronograma-${new Date().toISOString().slice(0, 10)}.svg`;
+    const conteudo = gerarSvgGantt({
+      titulo: titulo || "Cronograma da obra",
+      inicio: dados.start, totalDias: dados.total, pxDia: px, hoje,
+      linhas: filtradas.map(no => ({
+        codigo:no.codigo,nome:no.nome,inicio:no.inicio,fim:no.fim,
+        duracao:no.duracao,progresso:no.progresso,critica:no.critica,
+        marco:no.marco,resumo:no.temFilhos,profundidade:no.profundidade,
+      })),
+      vinculos: mostrarSetas ? dependencias : [],
+    });
+    const url = URL.createObjectURL(new Blob([conteudo],{type:"image/svg+xml;charset=utf-8"}));
+    const link=document.createElement("a");
+    link.href=url;
+    link.download="cronograma-"+new Date().toISOString().slice(0,10)+".svg";
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
     URL.revokeObjectURL(url);
   };
 
@@ -628,7 +629,7 @@ function Gantt({
         <div className="pg-escala">
           Escala: <strong>{unidadeDaEscala(px)}</strong>
           <span className="pg-escala-nota">
-            {totalCriticas > 0 ? `${totalCriticas} atividades no caminho crítico` : "CPM não calculado"}
+            {cpmValido ? `${totalCriticas} atividades no caminho crítico` : "CPM pendente ou desatualizado"}
           </span>
         </div>
         <div className="pg-filtros">
@@ -726,7 +727,7 @@ function Gantt({
             <Printer size={16} aria-hidden="true" />
             <span>Imprimir / PDF</span>
           </button>
-          <button type="button" onClick={exportarSvg} aria-label="Exportar o cronograma como arquivo SVG" title="Exportar SVG (vetor)">
+          <button type="button" onClick={exportarSvg} aria-label="Exportar o cronograma como arquivo SVG" title="Exportar Gantt completo em SVG (grade, barras, datas e ligações)">
             <Download size={16} aria-hidden="true" />
             <span>Exportar SVG</span>
           </button>
@@ -808,7 +809,6 @@ function Gantt({
 
             {mostrarSetas && setas.length > 0 && (
               <svg
-                ref={svgSetasRef}
                 className="pg-setas"
                 width={larguraDoTempo}
                 height={Math.max(1, filtradas.length * alturaLinha)}
@@ -837,7 +837,6 @@ function Gantt({
 
             {mostrarAvanco && avancos.trechos.length > 0 && (
               <svg
-                ref={svgAvancosRef}
                 className="pg-setas pg-avancos"
                 width={larguraDoTempo}
                 height={Math.max(1, filtradas.length * alturaLinha)}
@@ -859,7 +858,7 @@ function Gantt({
 
             {filtradas.map((no, indice) => {
               const inicioBarra = Math.max(0, posicao(no.inicio));
-              const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, Math.max(1, no.duracao) * px));
+              const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, (Math.round((dateMs(no.fim)-dateMs(no.inicio))/86400000)+1) * px));
               const resumo = no.temFilhos;
               // Marco não tem barra: é um losango na data. O rótulo e o ponto de
               // avanço passam a nascer do losango, não do fim de uma barra.

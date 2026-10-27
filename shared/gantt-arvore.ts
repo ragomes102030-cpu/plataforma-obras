@@ -47,7 +47,8 @@ function compararPorCodigo(a: NoDoGantt, b: NoDoGantt): number {
  */
 export function montarArvore(
   linhas: EntradaDaLinha[],
-  codigosCriticos: ReadonlySet<string> = new Set()
+  codigosCriticos: ReadonlySet<string> = new Set(),
+  finsCalculados: Readonly<Record<string, string>> = {}
 ): NoDoGantt[] {
   const raizes: NoDoGantt[] = [];
   const porChave = new Map<string, NoDoGantt>();
@@ -106,7 +107,17 @@ export function montarArvore(
     // Marco é ponto: começa e termina no mesmo dia, mesmo que a planilha tenha
     // lançado duração (o banco exige >= 1).
     no.marco = Boolean(linha.marco);
-    no.fim = no.marco ? linha.inicio : somarDias(linha.inicio, Math.max(1, linha.duracao) - 1);
+    const fimOficial = finsCalculados[no.codigo];
+    // Quando existe, o término do motor (calendário de trabalho, feriados e
+    // dependências) é a autoridade. Não reconstituir o fim com dias corridos.
+    const fimValido = typeof fimOficial === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(fimOficial) &&
+      Number.isFinite(Date.parse(fimOficial+"T00:00:00Z")) &&
+      fimOficial >= linha.inicio;
+    no.fim = no.marco ? linha.inicio :
+      fimValido ? fimOficial as IsoDate :
+      somarDias(linha.inicio, Math.max(1, linha.duracao) - 1);
+    // Duração é o número de dias de trabalho armazenado, não o intervalo civil.
     no.duracao = no.marco ? 1 : Math.max(1, linha.duracao);
     const quantidade = Number(linha.quantidade) || 0;
     const executado = Number(linha.executado) || 0;
@@ -117,6 +128,9 @@ export function montarArvore(
   const agregar = (no: NoDoGantt): void => {
     no.filhos.sort(compararPorCodigo);
     no.filhos.forEach(agregar);
+    // Atividade-folha mantém a duração em DIAS DE TRABALHO informada na grade.
+    // Apenas etapas com descendentes têm duração de intervalo civil.
+    if (no.filhos.length === 0) return;
     const descendentes = folhas(no).filter(item => item.linha);
     if (!descendentes.length) return;
     no.inicio = descendentes.reduce<IsoDate>(

@@ -106,6 +106,27 @@ describe("montarArvore", () => {
     ]);
     expect(arvore[0]!.fim).toBe("2026-10-10");
   });
+  it("usa o término real em dias úteis sem alterar duração cadastrada", () => {
+    const arvore=montarArvore([
+      entrada("1.1","2026-10-23",2),
+      entrada("1.2","2026-10-26",2),
+    ],new Set(),{"1.1":"2026-10-26","1.2":"2026-10-29"});
+    expect(arvore[0]!.filhos[0]).toMatchObject({
+      inicio:"2026-10-23",fim:"2026-10-26",duracao:2,
+    });
+    expect(arvore[0]!.filhos[1]!.fim).toBe("2026-10-29");
+    expect(arvore[0]!.fim).toBe("2026-10-29");
+    expect(arvore[0]!.duracao).toBe(7);
+  });
+  it("não aceita término oficial inválido, anterior ao início ou de marco",()=>{
+    const arvore=montarArvore([
+      entrada("1.1","2026-11-05",3),
+      entrada("1.2","2026-11-08",10,{marco:true}),
+    ],new Set(),{"1.1":"2026-11-02","1.2":"2026-12-30"});
+    expect(arvore[0]!.filhos[0]!.fim).toBe("2026-11-07");
+    expect(arvore[0]!.filhos[1]!.fim).toBe("2026-11-08");
+  });
+
 });
 
 describe("linhasVisiveis", () => {
