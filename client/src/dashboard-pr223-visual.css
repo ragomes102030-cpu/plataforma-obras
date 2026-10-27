@@ -1,0 +1,33 @@
+html,body,#root{margin:0;min-height:100%;font-family:Inter,"Segoe UI",Arial,sans-serif;color:#173342;background:#f3f7f9}
+*{box-sizing:border-box}
+.dv-app{display:flex;flex-direction:column;min-height:100vh}
+.dv-topo{background:#1f6d86;color:white}
+.dv-topo-linha{height:49px;padding:0 19px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #ffffff23}
+.dv-marca{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;letter-spacing:.02em}
+.dv-marca small{padding:4px 8px;border:1px solid #ffffff66;font-weight:600;font-size:9px;border-radius:4px;margin-left:6px}
+.dv-topo-info{font-size:11px;color:#e9f6fa}
+.dv-obra{min-height:61px;padding:9px 19px;display:flex;flex-direction:column;gap:1px}
+.dv-obra span{font-size:9px;letter-spacing:.08em;color:#cae4ef;font-weight:750}
+.dv-obra strong{font-size:13px}
+.dv-obra small{font-size:10px;color:#e1f0f6}
+.dv-faixa{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;padding:10px 20px;background:#fffbeb;border-bottom:1px solid #e9d5a4;color:#816521;font-size:12px}
+.dv-faixa strong{font-size:11px;letter-spacing:.02em}
+.dv-faixa span{color:#705d32;line-height:1.4}
+.dv-corpo{display:grid;grid-template-columns:193px minmax(0,1fr);flex:1;min-height:0}
+.dv-sidebar{display:flex;flex-direction:column;background:#101f2c;color:#bad4e4;border-right:1px solid #284353;min-width:0}
+.dv-sidebar nav{flex:1}
+.dv-grupo{display:flex;flex-direction:column;padding:12px 9px 1px;gap:3px}
+.dv-grupo-titulo{color:#7facca;font-weight:750;font-size:10px;letter-spacing:.12em;padding:4px 6px 5px}
+.dv-grupo button{display:flex;align-items:center;gap:9px;text-align:left;min-height:35px;padding:9px 10px;width:100%;border:0;border-radius:5px;color:#c8e1ef;background:transparent;font-size:11.5px;font-weight:670;cursor:pointer}
+.dv-grupo button:hover{background:#223e50}
+.dv-grupo button.ativo{background:#1c4a61;color:#7ce5ff}
+.dv-grupo button svg{flex:none}
+.dv-usuario{border-top:1px solid #2a4858;padding:12px;display:flex;align-items:center;gap:8px;font-size:11px}
+.dv-usuario span{background:#256d87;color:white;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;font-weight:800}
+.dv-principal{min-width:0;background:#f3f7f9}
+.dv-principal .pd.pd-executivo{max-width:1620px}
+.dv-aviso{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:12px 22px 0;padding:12px 15px;background:#e4f5fa;border:1px solid #b9dbe8;color:#26536a;border-radius:8px;font-size:12px}
+.dv-aviso button{border:0;background:transparent;font-size:22px;cursor:pointer;color:inherit}
+.dv-bottom{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;background:#eaf1f4;color:#6d8390;font-size:11px;border-top:1px solid #d5e0e6}
+@media(max-width:850px){.dv-corpo{grid-template-columns:155px minmax(0,1fr)}.dv-grupo button{font-size:10.5px}.dv-sidebar{overflow:auto}}
+@media(max-width:650px){.dv-corpo{display:block}.dv-sidebar{display:none}.dv-marca small{display:none}.dv-faixa{padding:9px 12px}.dv-topo-linha{padding:0 12px}.dv-obra{padding:8px 12px}.dv-aviso{margin:10px}.dv-bottom{padding:12px;text-align:center}}
