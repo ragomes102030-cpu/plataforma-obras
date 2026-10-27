@@ -15,7 +15,9 @@ Para habilitar a regressão online:
 4. Confirme que o secret `SUPABASE_DB_URL` continua apontando para o endereço exato oferecido pelo Supabase. **Não copie a URL nem senha nos logs**.
 5. Acione manualmente o workflow **Aurora EAP Regression** e confirme a mensagem `passed: true` com métricas estruturais.
 
-O script usa `rejectUnauthorized: true`, valida o formato PEM, remove `sslmode` da URL para evitar sobrescrever a configuração segura do driver e informa erro de cadeia de certificados com uma instrução clara. **Se a CA ainda não estiver configurada, o teste pode continuar falhando; isso é preferível a aceitar conexão não autenticada.**
+O script usa `rejectUnauthorized: true`, valida o formato PEM, remove `sslmode` da URL para evitar sobrescrever a configuração segura do driver e informa erro de cadeia de certificados com uma instrução clara.
+
+A auditoria `pnpm db:audit` passou a usar a **mesma configuração TLS** e deixou de apontar `NODE_EXTRA_CA_CERTS` para o arquivo ausente `certs/supabase-ca-2021.crt`. O certificado, quando necessário, é injetado por variável segura e nunca precisa ser comitado ao GitHub. **Se a CA ainda não estiver configurada, o teste pode continuar falhando; isso é preferível a aceitar conexão não autenticada.**
 
 ### 2. Uma baseline vigente por obra
 
