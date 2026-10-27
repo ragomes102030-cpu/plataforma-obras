@@ -56,6 +56,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [densidade, setDensidade] = useState<"compacta" | "normal" | "confortavel">("compacta");
   const [validacaoAberta, setValidacaoAberta] = useState(false);
   const [modoRevisao, setModoRevisao] = useState(false);
+  const [selecionadoId, setSelecionadoId] = useState<number | null>(null);
   const [filtroEap, setFiltroEap] = useState<"todos" | "grupos" | "folhas" | "pendencias">("todos");
 
   const utils = trpc.useUtils();
@@ -132,6 +133,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   );
   const jaNoCronograma = (codigo: string) => codigosNoCronograma.has(codigo);
   const nos = (wbs.data ?? []) as No[];
+  const selecionado = nos.find(no => no.id === selecionadoId) ?? null;
+  const versaoEmUso = versoes.data?.[0];
+  const versaoAprovada = versoes.data?.find(v => v.status === "approved");
+  const navegar = (aba: string) => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }));
 
   const idsComFilhos = new Set(nos.filter(n => n.parentId !== null).map(n => n.parentId as number));
   const folhasEap = nos.filter(n => !idsComFilhos.has(n.id));
@@ -362,11 +367,29 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
           <p>Defina e revise o escopo antes de transformar pacotes de trabalho em atividades do cronograma.</p>
         </div>
         <div className="eap-workspace-actions">
-          <button type="button" className="eap-workspace-btn secondary" onClick={() => setModoRevisao(v => !v)}><Pencil size={13} /> {modoRevisao ? "Encerrar revisão" : "Editar EAP"}</button>
+          <button type="button" className="eap-workspace-btn secondary" onClick={() => navegar("escopo")}><FileText size={13}/> Voltar ao Escopo</button>
+          <button type="button" className="eap-workspace-btn secondary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={13} /> Analisar com Arquimedes</button>
+          <button type="button" className="eap-workspace-btn secondary" aria-pressed={modoRevisao} onClick={() => setModoRevisao(v => !v)}><Pencil size={13} /> {modoRevisao ? "Encerrar edição manual" : "Editar manualmente"}</button>
           <button type="button" className="eap-workspace-btn secondary" onClick={expandirTudo}><Maximize2 size={13} /> Expandir</button>
           <button type="button" className="eap-workspace-btn secondary" onClick={recolherTudo}><Minimize2 size={13} /> Recolher</button>
         </div>
       </header>
+      <section className="ct-eap-etapa" aria-label="Contexto e versão da EAP">
+        <div>
+          <span className="ct-eap-kicker">ETAPA 02 · ESTRUTURA ANALÍTICA</span>
+          <strong>{versaoEmUso ? "Versão " + versaoEmUso.versionNumber + " · " + (versaoEmUso.status === "approved" ? "Aprovada" : "Em elaboração") : "Versão ainda não disponível"}</strong>
+          <p>A proposta do agente é revisada pelo engenheiro. A edição manual ocorre em uma versão de trabalho; a versão aprovada e as medições anteriores permanecem rastreáveis.</p>
+        </div>
+        <div className="ct-eap-versao">
+          {versaoAprovada && <span>Referência aprovada: v{versaoAprovada.versionNumber}</span>}
+          <span>{modoRevisao ? "Modo de edição manual" : "Modo de inspeção"}</span>
+        </div>
+      </section>
+      <div className="ct-eap-modos" aria-label="Modos de trabalho na EAP">
+        <button type="button" className={!modoRevisao ? "ativo" : ""} aria-pressed={!modoRevisao} onClick={() => setModoRevisao(false)}><BookOpen size={16}/> Inspecionar pacotes</button>
+        <button type="button" className={modoRevisao ? "ativo" : ""} aria-pressed={modoRevisao} onClick={() => setModoRevisao(true)}><Pencil size={16}/> Editar manualmente</button>
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={16}/> Pedir revisão ao Arquimedes</button>
+      </div>
       <div className="eap-workspace-flow"><span className="done"><CheckCircle2 size={13} /> Escopo</span><span>→</span><strong>EAP</strong><span>→</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades</span></div>
       <div className="eap-workspace-metrics">
         <div><span>Nós da EAP</span><strong>{total}</strong><small>estrutura completa</small></div>
@@ -377,7 +400,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       <div className="eap-workspace-toolbar">
         <label className="eap-workspace-search"><Search size={15} /><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Pesquisar código, nome, escopo ou referência…" aria-label="Pesquisar na EAP" /></label>
         <div className="eap-workspace-filters"><span><Layers3 size={13} /> FILTRAR</span>{([["todos",`Todos · ${total}`],["grupos",`Grupos · ${grupos}`],["folhas",`Folhas · ${folhas}`],["pendencias",`Pendências · ${folhasSemDicionario.length}`]] as const).map(([id,label])=><button key={id} type="button" className={filtroEap===id?"ativo":""} onClick={()=>setFiltroEap(id)}>{label}</button>)}</div>
-        <button type="button" className="eap-workspace-btn principal" onClick={()=>setEditor({mode:"create",parentId:null})}><Plus size={14}/> Adicionar</button>
+        <button type="button" className="eap-workspace-btn principal" onClick={() => { setModoRevisao(true); setEditor({mode:"create",parentId:null}); }}><Plus size={14}/> Adicionar manualmente</button>
       </div>
       {erro && <div className="eap-workspace-alert erro" role="alert">{erro}<button type="button" onClick={()=>setErro(null)}>fechar</button></div>}
       <div className={`eap-workspace-validation ${validacao.data?.valid ? "ok" : "attention"}`}>
@@ -388,12 +411,46 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       {coordenador.data?.stage==="EAP_PROPOSTA"&&<div className="eap-workspace-stage"><div><strong>Proposta pronta para revisão</strong><span>A EAP foi estruturada. O próximo passo é a revisão técnica antes da aprovação.</span></div><button type="button" className="eap-workspace-btn principal" disabled={!coordenador.data?.canAdvance||enviarEapParaRevisao.isPending} onClick={()=>enviarEapParaRevisao.mutate({projectId:projetoId})}>{enviarEapParaRevisao.isPending?"Enviando…":"Enviar para revisão"}</button></div>}
       {coordenador.data?.stage==="EAP_REVISAO"&&<div className="eap-workspace-stage review"><div><strong>EAP em revisão técnica</strong><span>Edite a estrutura e use o Arquimedes pelo chat para solicitar análises especializadas. A aprovação só ocorre quando os gates forem atendidos.</span></div>{propostaArquimedes?<span className="eap-stage-status"><CheckCircle2 size={13}/> Análise registrada</span>:<span className="eap-stage-status"><Info size={13}/> Aguardando análise coordenada</span>}</div>}
       {propostaArquimedes&&<details className="eap-workspace-details"><summary><Bot size={14}/> Revisão técnica do Arquimedes <span>{propostaArquimedes.nodes.length} ações · {propostaArquimedes.missingInformation.length} pendências</span></summary><div className="eap-workspace-details-body"><div className="eap-workspace-review-kpis"><div><span>Ações propostas</span><strong>{propostaArquimedes.nodes.length}</strong></div><div><span>Decisões pendentes</span><strong>{propostaArquimedes.missingInformation.length}</strong></div><div><span>Bloqueios após correção</span><strong>{bloqueiosAposCorrecao}</strong></div></div>{!!resumoCorrecao.length&&<div className="eap-workspace-review-list">{resumoCorrecao.slice(0,8).map((item,index)=><div key={index}><span>{String(index+1).padStart(2,"0")}</span><p>{item}</p></div>)}</div>}{propostaArquimedes.missingInformation.length>0&&<div className="eap-workspace-pending"><strong>Decisões do engenheiro</strong><span>{propostaArquimedes.missingInformation.join(" · ")}</span></div>}{!cicloRevisaoAplicado&&propostaArquimedes.validation?.valid!==false&&propostaArquimedes.nodes.every(item=>item.operation==="create"||item.operation==="update")&&<button type="button" className="eap-workspace-btn principal" disabled={aplicarPropostaEap.isPending} onClick={()=>{if(!window.confirm("Aplicar a proposta do Arquimedes como rascunho?\n\nA EAP continuará editável e não será aprovada nem congelada."))return;aplicarPropostaEap.mutate({projectId:projetoId,confirm:true,proposal:propostaArquimedes});}}>{aplicarPropostaEap.isPending?"Aplicando rascunho…":"Aplicar proposta como rascunho"}</button>}</div></details>}
+      <div className="ct-eap-inspection-layout">
       <div className="eap-workspace-grid">
         <div className="eap-workspace-grid-head"><span className="rownum">#</span><span className="tree-col"></span><span>EAP</span><span>ESCOPO / ENTREGÁVEL</span><span>TIPO</span><span>RESPONSÁVEL</span><span>LOCAL</span><span>STATUS</span></div>
         <div className="eap-workspace-grid-body" role="tree" aria-label="Estrutura analítica da obra">
-          {filtradaPorTipo.map(no=><NoDaArvore key={no.no.id} ramo={no} abertos={busca.trim()||filtroEap!=="todos"?new Set(nos.map(n=>n.id)):aberto} onAlternar={id=>setAberto(antigo=>{const novo=new Set(antigo);if(novo.has(id))novo.delete(id);else novo.add(id);return novo;})} aoTrazer={id=>trazer.mutate({projectId:projetoId,wbsNodeId:id})} aoAdicionar={id=>setEditor({mode:"create",parentId:id})} aoEditar={id=>setEditor({mode:"edit",nodeId:id})} modoRevisao={modoRevisao} jaNoCronograma={jaNoCronograma} profundidade={0}/>)}
+          {filtradaPorTipo.map(no=><NoDaArvore key={no.no.id} ramo={no} abertos={busca.trim()||filtroEap!=="todos"?new Set(nos.map(n=>n.id)):aberto} onAlternar={id=>setAberto(antigo=>{const novo=new Set(antigo);if(novo.has(id))novo.delete(id);else novo.add(id);return novo;})} aoTrazer={id=>trazer.mutate({projectId:projetoId,wbsNodeId:id})} aoAdicionar={id=>setEditor({mode:"create",parentId:id})} aoEditar={id=>setEditor({mode:"edit",nodeId:id})} modoRevisao={modoRevisao} jaNoCronograma={jaNoCronograma} profundidade={0} selecionadoId={selecionadoId} aoSelecionar={setSelecionadoId}/>)}
           {filtradaPorTipo.length===0&&<div className="eap-workspace-empty"><strong>Nenhum item encontrado.</strong><span>Ajuste a pesquisa ou o filtro para localizar outra parte da EAP.</span></div>}
         </div>
+      </div>
+      <aside className="ct-eap-ficha" aria-label="Ficha de inspeção do escopo">
+        <div className="ct-eap-ficha-cabecalho">
+          <span>FICHA TÉCNICA / EAP</span>
+          <h3>{selecionado ? selecionado.name : "Selecione um pacote"}</h3>
+          <p>{selecionado ? selecionado.code + " · " + (selecionado.nodeType === "grupo" ? "Etapa estrutural" : "Pacote / entregável") : "Clique em um elemento da árvore para examinar seu escopo e os módulos relacionados."}</p>
+        </div>
+        {selecionado ? <div className="ct-eap-ficha-corpo">
+          <h4>IDENTIDADE DO ESCOPO</h4>
+          <dl>
+            <div><dt>Responsável</dt><dd>{selecionado.responsible || "Não informado"}</dd></div>
+            <div><dt>Localização</dt><dd>{selecionado.location || "Não informada"}</dd></div>
+            <div><dt>Situação do escopo</dt><dd>{selecionado.scopeStatus || "Não definida"}</dd></div>
+            <div><dt>Versão</dt><dd>{versaoEmUso ? "v" + versaoEmUso.versionNumber : "Não identificada"}</dd></div>
+          </dl>
+          <h4>DICIONÁRIO DO PACOTE</h4>
+          <div className="ct-eap-ficha-campo"><strong>Descrição</strong><p>{selecionado.description || "Descrição pendente."}</p></div>
+          <details><summary>Inclusões e exclusões</summary>
+            <div className="ct-eap-ficha-campo"><strong>Inclusões</strong><p>{selecionado.inclusions || "Não informadas."}</p></div>
+            <div className="ct-eap-ficha-campo"><strong>Exclusões</strong><p>{selecionado.exclusions || "Não informadas."}</p></div>
+          </details>
+          <details><summary>Critérios de aceitação</summary><p>{selecionado.acceptanceCriteria || "Não informados."}</p></details>
+          <h4>VÍNCULOS DE PLANEJAMENTO</h4>
+          <p className="ct-eap-ficha-status">{jaNoCronograma(selecionado.code) ? "Atividade correspondente encontrada no cronograma vigente." : "Sem atividade correspondente no cronograma vigente."}</p>
+          <div className="ct-eap-atalhos">
+            <button type="button" onClick={() => navegar("atividades")}>Abrir atividades <span>↗</span></button>
+            <button type="button" onClick={() => navegar("financeiro")}>Abrir orçamento <span>↗</span></button>
+            <button type="button" onClick={() => navegar("cpm")}>Abrir CPM <span>↗</span></button>
+          </div>
+          <p className="ct-eap-ficha-aviso">Os atalhos abrem os módulos da obra. Nenhum filtro por pacote é aplicado automaticamente nesta etapa.</p>
+          <button type="button" className="ct-eap-editar" onClick={() => { setModoRevisao(true); setEditor({mode:"edit",nodeId:selecionado.id}); }}><Pencil size={14}/> Editar este elemento manualmente</button>
+        </div> : <div className="ct-eap-ficha-vazia"><BookOpen size={24}/><p>A estrutura é navegável e continua editável mesmo que o agente esteja indisponível.</p></div>}
+      </aside>
       </div>
       {editor&&<EditorEapPanel key={editor.mode==="edit"?`edit-${editor.nodeId}`:`create-${editor.parentId??"root"}`} editor={editor} nos={nos} busy={criarNo.isPending||editarNo.isPending} error={criarNo.isError?criarNo.error.message:editarNo.isError?editarNo.error.message:null} onCancel={()=>setEditor(null)} onCreate={dados=>criarNo.mutate({projectId:projetoId,...(editor.mode==="create" && editor.parentId !== null ? { parentId: editor.parentId } : {}),...dados})} onUpdate={dados=>{if(editor.mode!=="edit")return;const no=nos.find(n=>n.id===editor.nodeId);if(!no)return;editarNo.mutate({projectId:projetoId,nodeId:no.id,code:no.code,...dados});}}/>}
       <details className="eap-workspace-control"><summary><ClipboardCheck size={14}/> Governança da EAP <span>{dicionarioPendenteDecisao?"padrão aguardando decisão":folhasSemDicionario.length?`${folhasSemDicionario.length} folhas fora do padrão`:"dicionário conforme"}</span></summary><div className="eap-workspace-control-body"><div className="eap-workspace-control-grid"><div><span>Pacotes de trabalho</span><strong>{pacotesTrabalho.length}</strong><small>folhas terminais controláveis</small></div><div><span>Quantitativos</span><strong>{folhasSemQuantidade.length||"—"}</strong><small>{folhasSemQuantidade.length?"aguardando unidade/quantidade":"etapa própria"}</small></div><div><span>Critérios de parada</span><strong>{validacao.data?.valid?"OK":"REVISAR"}</strong><small>prontidão estrutural</small></div><div><span>Baseline</span><strong>{versoes.data?.[0]?.status==="approved"?"APROVADA":"EM REVISÃO"}</strong><small>{versoes.data?.[0]?`v${versoes.data[0].versionNumber}`:"ainda não criada"}</small></div></div>{dicionarioPadrao.data?.status!=="approved"&&<div className="eap-workspace-dictionary"><div><strong>Padrão de dicionário</strong><span>Defina quais campos serão obrigatórios nesta obra.</span></div><button type="button" className="eap-workspace-btn principal" disabled={decidirDicionario.isPending} onClick={()=>decidirDicionario.mutate({projectId:projetoId,decision:"approved",requiredFields:["description","inclusions","exclusions","acceptanceCriteria","responsible","scopeStatus","decompositionBasis"],conditionalFields:["location","unit","plannedQuantity"],summary:"Padrão proposto pelo Arquimedes aprovado pelo engenheiro para esta obra."})}>Aprovar padrão</button></div>}<div className="eap-workspace-baseline"><div><LockKeyhole size={14}/><div><strong>Baseline da EAP</strong><span>{versoes.data?.[0]?`v${versoes.data[0].versionNumber} · ${versoes.data[0].status}${versoes.data[0].approvedAt?` · ${new Date(versoes.data[0].approvedAt).toLocaleString("pt-BR")}`:""}`:"Ainda não existe versão do plano."}</span></div></div>{versoes.data?.[0]?.status==="approved"?<span className="eap-stage-status"><CheckCircle2 size={13}/> EAP aprovada · seguir para Atividades</span>:<button type="button" className="eap-workspace-btn principal" disabled={!podeAprovarEap} onClick={()=>{if(!podeAprovarEap)return;if(!window.confirm("Aprovar a EAP e congelar esta versão?\n\nA versão atual é congelada para rastrear a estrutura aprovada. A baseline da curva S é outra coisa: ela é capturada na aba Baseline, depois do CPM."))return;aprovarEap.mutate({projectId:projetoId,stage:"EAP_REVISAO",decision:"approved",nextStage:"ATIVIDADES_PROPOSTA",scope:{kind:"eap",nodeCount:nos.length,leafCount:folhasEap.length,workPackageCount:pacotesTrabalho.length},summary:`EAP aprovada: ${nos.length} nós, ${folhasEap.length} folhas e ${pacotesTrabalho.length} pacotes de trabalho.`});}}>{aprovarEap.isPending?"Concluindo…":"Aprovar EAP e congelar versão"}</button>}</div></div></details>
@@ -492,6 +549,8 @@ function NoDaArvore({
   modoRevisao,
   jaNoCronograma,
   profundidade,
+  selecionadoId,
+  aoSelecionar,
 }: {
   ramo: Ramo;
   abertos: Set<number>;
@@ -502,6 +561,8 @@ function NoDaArvore({
   modoRevisao: boolean;
   jaNoCronograma: (codigo: string) => boolean;
   profundidade: number;
+  selecionadoId: number | null;
+  aoSelecionar: (id: number) => void;
 }) {
   const { no, filhos } = ramo;
   const temFilhos = filhos.length > 0;
@@ -510,9 +571,10 @@ function NoDaArvore({
   return (
     <div role="treeitem" aria-expanded={temFilhos ? aberto : undefined}>
       <div
-        className={`eap-linha eap-nivel-${no.level}${no.nodeType === "entrega" ? " eap-folha" : " eap-grupo"}`}
-        title="Duplo clique para abrir a ficha do escopo"
-        onDoubleClick={() => aoEditar(no.id)}
+        className={`eap-linha eap-nivel-${no.level}${no.nodeType === "entrega" ? " eap-folha" : " eap-grupo"}${no.id === selecionadoId ? " ct-eap-selecionado" : ""}`}
+        title="Clique para inspecionar; a edição requer modo manual"
+        onClick={() => aoSelecionar(no.id)}
+        onDoubleClick={() => { if (modoRevisao) aoEditar(no.id); }}
       >
         <span className="eap-rownum" aria-hidden="true">{no.code}</span>
         <span className="eap-indent" style={{ paddingLeft: profundidade * 18 }}>
@@ -554,6 +616,7 @@ function NoDaArvore({
           ) : (
             <span className="eap-grupo-label">{temFilhos ? `${filhos.length} itens` : "Grupo"}</span>
           )}
+          {!modoRevisao && <button type="button" className="ct-eap-inspecionar" onClick={() => aoSelecionar(no.id)}>Ficha</button>}
           {modoRevisao && (
             <span className="eap-acoes-linha eap-acoes-revisao">
               {no.nodeType !== "entrega" && (
@@ -583,6 +646,8 @@ function NoDaArvore({
               modoRevisao={modoRevisao}
               jaNoCronograma={jaNoCronograma}
               profundidade={profundidade + 1}
+              selecionadoId={selecionadoId}
+              aoSelecionar={aoSelecionar}
             />
           ))}
         </div>
