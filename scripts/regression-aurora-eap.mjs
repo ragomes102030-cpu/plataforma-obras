@@ -110,8 +110,8 @@ async function main() {
   assert(invalidLevels.length === 0, `Existem ${invalidLevels.length} nós com nível hierárquico inválido.`);
 
   for (const leaf of leaves) {
-    assert(["pacote", "entrega"].includes(leaf.nodeType),
-      `Folha ${leaf.code} deve ser pacote ou entrega terminal.`);
+    assert(leaf.nodeType === "pacote",
+      `Folha ${leaf.code} deve ser pacote terminal.`);
     for (const field of ["description", "inclusions", "exclusions", "acceptanceCriteria"]) {
       assert(
         String(leaf[field] ?? "").trim().length > 0,
@@ -120,21 +120,17 @@ async function main() {
     }
   }
 
-  // As versões históricas podem conter redes completas; rascunhos podem estar
-  // em elaboração. Verificamos durações e excesso de atividades por folha,
-  // sem exigir que a versão em edição já tenha TODAS as atividades criadas.
+  // Uma EAP pode decompor um pacote em mais de uma atividade. A integridade
+  // vem do vínculo com um nó da MESMA versão, não da contagem de folhas.
   const activities = await client.query(
     `
       SELECT a."versionId"::int AS version_id,
              count(*)::int AS total,
              count(*) FILTER (WHERE a."durationDays" IS NULL OR a."durationDays" <= 0)::int AS invalid_duration,
-             (
-               SELECT count(*)::int
-               FROM wbs_nodes n
-               WHERE n."versionId" = a."versionId"
-                 AND NOT EXISTS (SELECT 1 FROM wbs_nodes f WHERE f."parentId" = n.id)
-             ) AS leaves_of_version
+             count(*) FILTER (WHERE a."wbsNodeId" IS NULL OR n.id IS NULL)::int AS unlinked,
+             count(*) FILTER (WHERE n.id IS NOT NULL AND n."versionId" IS DISTINCT FROM a."versionId")::int AS wrong_version
       FROM schedule_activities a
+      LEFT JOIN wbs_nodes n ON n.id = a."wbsNodeId"
       WHERE a."projectId" = $1
       GROUP BY a."versionId"
       ORDER BY a."versionId"
@@ -148,8 +144,8 @@ async function main() {
       `Versão ${row.version_id} tem ${row.invalid_duration} atividades sem duração positiva.`
     );
     assert(
-      Number(row.total) <= Number(row.leaves_of_version),
-      `Versão ${row.version_id} tem mais atividades (${row.total}) que folhas (${row.leaves_of_version}); revisar vínculos.`
+      Number(row.unlinked) === 0 && Number(row.wrong_version) === 0,
+      `Versão ${row.version_id} possui ${row.unlinked} atividades sem EAP e ${row.wrong_version} ligadas a versões diferentes.`
     );
   }
 
@@ -158,7 +154,7 @@ async function main() {
     `
       SELECT count(*)::int AS total,
              count(*) FILTER (WHERE d."predecessorId" = d."successorId")::int AS self_loop,
-             count(*) FILTER (WHERE p."versionId" <> s."versionId")::int AS cross_version
+             count(*) FILTER (WHERE p."versionId" IS DISTINCT FROM s."versionId" OR d."versionId" IS DISTINCT FROM p."versionId")::int AS cross_version
       FROM schedule_dependencies d
       JOIN schedule_activities p ON p.id = d."predecessorId"
       JOIN schedule_activities s ON s.id = d."successorId"
