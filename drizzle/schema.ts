@@ -661,7 +661,10 @@ export const scheduleBaselines = pgTable("schedule_baselines", {
   status: enumScheduleBaselinesStatus("status").default("ativa").notNull(),
   createdBy: integer("createdBy").references(() => users.id),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-});
+}, table => [
+  uniqueIndex("schedule_baselines_uma_ativa_por_obra_idx")
+    .on(table.projectId).where(drizzleSql`${table.status} = 'ativa'`),
+]);
 
 export const scheduleBaselineItems = pgTable(
   "schedule_baseline_items",
