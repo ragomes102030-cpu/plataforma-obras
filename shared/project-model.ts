@@ -7,7 +7,7 @@
  */
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -60,12 +60,12 @@ export async function getProjectModel(
     throw new Error(`Projeto ${projectId} não encontrado.`);
   }
 
-  // Versão atual do plano (a mais recente)
+  // Versão atual de trabalho: a de MAIOR número, inclusive rascunho. Mesma regra de getCurrentPlanVersion().
   const [currentVersion] = await db
     .select()
     .from(schema.projectPlanVersions)
     .where(eq(schema.projectPlanVersions.projectId, projectId))
-    .orderBy(schema.projectPlanVersions.versionNumber)
+    .orderBy(desc(schema.projectPlanVersions.versionNumber))
     .limit(1);
 
   const versionId = currentVersion?.id ?? null;
@@ -96,12 +96,12 @@ export async function getProjectModel(
         .where(eq(schema.scheduleDependencies.versionId, versionId))
     : [];
 
-  // Orçamento (versão mais recente)
+  // Orçamento mais recente para contexto do agente (não confundir com BAC/EVM: este exige orçamento aprovado).
   const [budgetVersion] = await db
     .select()
     .from(schema.budgetVersions)
     .where(eq(schema.budgetVersions.projectId, projectId))
-    .orderBy(schema.budgetVersions.versionNumber)
+    .orderBy(desc(schema.budgetVersions.versionNumber))
     .limit(1);
 
   const budgetItems = budgetVersion
