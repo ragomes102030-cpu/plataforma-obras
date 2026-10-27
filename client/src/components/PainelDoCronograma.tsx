@@ -333,6 +333,9 @@ export function PainelDoCronograma({
       compromissosPendentes={lookahead.data?.compromissosPendentes ?? null}
       carregandoComplementos={carregandoComplementos}
       erroComplementos={erroComplementos}
+      orcamentoEstado={orcamento.isError ? "erro" : orcamento.isPending ? "pendente" : "ok"}
+      producaoEstado={producao.isError ? "erro" : producao.isPending ? "pendente" : "ok"}
+      semanaEstado={lookahead.isError ? "erro" : lookahead.isPending ? "pendente" : "ok"}
       abrirAba={abrirAba}
     />
   );
