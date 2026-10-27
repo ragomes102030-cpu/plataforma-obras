@@ -1,0 +1,32 @@
+name: Control Tower QA (isolado, somente leitura)
+on:
+  push:
+    branches:
+      - qa/control-tower-pr224-preview
+  workflow_dispatch:
+jobs:
+  visual-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Testar a Control Tower isolada sem API
+        run: pnpm exec playwright test -c playwright.control-tower-qa.config.ts
+      - name: Exportar evidências de desktop e mobile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-tower-pr224-qa-screenshots
+          path: |
+            test-results/control-tower/
+            playwright-report/
+          if-no-files-found: ignore
