@@ -23,7 +23,8 @@
     "db:verify:scratch": "node scripts/verify-migration-from-scratch.mjs",
     "test:regression:aurora-eap": "node scripts/regression-aurora-eap.mjs",
     "e2e:aurora": "playwright test tests/aurora-arquimedes.e2e.spec.ts",
-    "e2e:playwright": "tsx scripts/e2e-playwright-readonly.ts"
+    "e2e:playwright": "tsx scripts/e2e-playwright-readonly.ts",
+    "e2e:lob-qa": "playwright test -c playwright.lob-qa.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
