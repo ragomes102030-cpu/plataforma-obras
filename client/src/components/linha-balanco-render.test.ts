@@ -82,4 +82,18 @@ describe("LOB — renderização real do componente (SSR, sem banco)", () => {
     expect(html).toContain("P02");
   });
 
+  it("eixo de ritmo inclui só os locais das séries repetitivas visíveis", () => {
+    const html = renderizar([
+      a("QA.101","Alvenaria de vedação","P01","Execução"),
+      a("QA.102","Alvenaria de vedação","P02","Execução"),
+      a("1.1","Administração","Serviços Gerais","Execução"),
+      a("1.2","Licenças","Infraestrutura","Execução"),
+    ]);
+    const grafico = html.slice(html.indexOf("<svg"), html.indexOf("</svg>") + 6);
+    expect(grafico).toContain(">P01<");
+    expect(grafico).toContain(">P02<");
+    expect(grafico).not.toContain(">Serviços Gerais<");
+    expect(grafico).not.toContain(">Infraestrutura<");
+  });
+
 });
