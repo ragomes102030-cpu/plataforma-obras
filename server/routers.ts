@@ -4571,6 +4571,15 @@ export const appRouter = router({
         // Cabeçalho e itens formam uma única fotografia: falha em qualquer
         // item reverte também o registro da baseline.
         return db.transaction(async tx => {
+          // Apenas UMA baseline vigente por obra: as antigas permanecem no
+          // banco, mas deixam de ser referência ativa. O índice parcial garante
+          // o mesmo invariante mesmo em capturas simultâneas.
+          await tx.update(scheduleBaselines)
+            .set({ status: "arquivada" })
+            .where(and(
+              eq(scheduleBaselines.projectId, input.projectId),
+              eq(scheduleBaselines.status, "ativa"),
+            ));
           const [created] = await tx.insert(scheduleBaselines).values({
             projectId: input.projectId, versionId: currentVersion.id,
             name: input.name, status: "ativa", createdBy: ctx.user.id,
@@ -4619,9 +4628,14 @@ export const appRouter = router({
           : await db
               .select()
               .from(scheduleBaselines)
-              .where(eq(scheduleBaselines.projectId, input.projectId))
+              .where(and(
+                eq(scheduleBaselines.projectId, input.projectId),
+                eq(scheduleBaselines.status, "ativa"),
+              ))
               .orderBy(desc(scheduleBaselines.createdAt), desc(scheduleBaselines.id))
               .limit(1);
+        // Sem baseline vigente não se presume que a última arquivada seja oficial.
+        // Uma baseline histórica continua consultável por baselineId explícito.
         if (!baseline) return null;
 
         const versao = await getCurrentPlanVersion(input.projectId);
