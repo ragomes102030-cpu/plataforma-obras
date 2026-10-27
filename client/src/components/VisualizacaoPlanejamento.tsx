@@ -5,7 +5,6 @@ import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBr
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import { prepararBarrasBaselineGantt, resumirBaselineNoGantt, type BarraBaselineGantt } from "@shared/gantt-baseline-visual";
-import type { ResumoDesvios } from "@shared/desvios-baseline";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
 import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
@@ -640,6 +639,10 @@ function Gantt({
         marco:no.marco,resumo:no.temFilhos,profundidade:no.profundidade,
       })),
       vinculos: mostrarSetas ? dependencias : [],
+      baseline: baselinePronta ? filtradas.flatMap(no=>{
+        const b=barrasBaseline.get(no.codigo);
+        return b && !no.temFilhos ? [{codigo:no.codigo,inicio:b.inicio,fim:b.fim}] : [];
+      }) : [],
     });
     const url = URL.createObjectURL(new Blob([conteudo],{type:"image/svg+xml;charset=utf-8"}));
     const link=document.createElement("a");
@@ -1084,7 +1087,7 @@ function Gantt({
         <span><b>{resumoBaseline.adiantadas}</b> adiantadas</span>
         <span><b>{resumoBaseline.novas}</b> novas</span>
         <span><b>{resumoBaseline.removidas}</b> removidas</span>
-        <small>Δ fim em dias úteis · escopo removido consultável na aba Baseline</small>
+        <small>Δ fim em dias úteis CPM · datas civis convertidas com o calendário atual da obra · escopo removido consultável na aba Baseline</small>
       </section>}
       {detalhe && (
         <div className="pg-detalhe" role="status" aria-live="polite">
