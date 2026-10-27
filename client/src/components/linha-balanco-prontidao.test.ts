@@ -32,16 +32,16 @@ describe("prontidão visual de Linha de Balanço", () => {
     expect(router).toContain('if (input.campo === "frente") patch.phase');
     expect(router).toContain('if (input.campo === "pavimento") patch.pavimento');
   });
-  it("a tela utiliza a LOB verdadeira por padrão e bloqueia gráficos enganosos sem séries", () => {
+  it("mantém escadinha única, com datas horizontais e diagnóstico honesto", () => {
     const componente = readFileSync(resolve("client/src/components/AuroraLinhaBalanco.tsx"), "utf8");
-    expect(componente).toContain('useState<Visao>("ritmo")');
-    expect(componente).toContain("repetidas.length === 0 ? (");
     expect(componente).toContain("LINHA DE RITMO AINDA NÃO DISPONÍVEL");
-    expect(componente).toContain("Mapa auxiliar de atividades");
-    expect(componente).toContain("ocupação não representa produtividade");
-    expect(componente).toContain("((diaUtc(iso)-diaUtc(inicioEixo))/DIA)/dias*h");
-    expect(componente).toContain('aba:"gantt"');
+    expect(componente).toContain("repetitivas.length === 0");
+    expect(componente).toContain('className="lob-stairs-board"');
+    expect(componente).toContain("data-testid=\"lob-step-bar\"");
+    expect(componente).toContain("semanas.map");
+    expect(componente).toContain("meses.map");
     expect(componente).toContain("Revisar atividades e locais");
-    expect(componente).toContain('visao === "ritmo" ? repetidas : series');
+    expect(componente).toContain('aba: "gantt"');
+    expect(componente).not.toContain("LinhaBalancoVertical");
   });
 });
