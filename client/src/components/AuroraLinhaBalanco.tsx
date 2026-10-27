@@ -46,12 +46,16 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
   const [recolhida, setRecolhida] = useState(false);
   const [busca, setBusca] = useState("");
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  const [mostrarTodas, setMostrarTodas] = useState(true);
 
   const repetidas = series.filter(s => s.repetitiva);
   const pesquisa = busca.trim().toLocaleLowerCase("pt-BR");
   const listadas = (visao === "ritmo" ? repetidas : series).filter(s => (s.nome+" "+s.pontos[0]?.codigo).toLocaleLowerCase("pt-BR").includes(pesquisa));
   const selecionadaSerie = series.find(s => s.chave === selecionada) ?? null;
   const serieRitmo = repetidas.find(s => s.chave === selecionada) ?? repetidas[0] ?? null;
+  // Exibir séries simultâneas é apenas leitura: sem recalcular CPM ou alterar datas.
+  const seriesRitmoVisiveis = mostrarTodas && !selecionada ? listadas.filter(s => s.repetitiva) : serieRitmo ? [serieRitmo] : [];
+  const coresRitmo = ["#257e94", "#8662a2", "#b16e3d", "#25896b", "#ba566f", "#657f31"];
   const seriesOcupacao = listadas.filter(s => !selecionadaSerie || s.chave === selecionadaSerie.chave);
   const pontosOcupacao = seriesOcupacao.flatMap(s => s.pontos);
   const pontosTodos = series.flatMap(s => s.pontos);
@@ -158,6 +162,10 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
             Linha de Balanço
           </button>
         </div>
+        {visao === "ritmo" && <label className="lob-pro-escala">
+          <input type="checkbox" checked={mostrarTodas} onChange={e=>{setMostrarTodas(e.target.checked);setSelecionada(null);}} aria-label="Mostrar todas as sequências repetitivas"/>
+          Mostrar todas as frentes
+        </label>}
         <label className="lob-pro-escala"><CalendarDays size={15}/> Período
           <select aria-label="Escala da Linha de Balanço" value={escala} onChange={e=>setEscala(e.target.value as Escala)}>
             <option value="mes">Mensal</option><option value="quinzena">Quinzenal</option>
@@ -202,7 +210,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
               {selecionadaSerie&&visao==="ocupacao"&&<button type="button" onClick={()=>setSelecionada(null)}>Limpar filtro</button>}
             </div>
 
-            {visao==="ritmo" && !serieRitmo ? (
+            {visao==="ritmo" && seriesRitmoVisiveis.length===0 ? (
               <div className="lob-pro-vazio lob-pro-vazio-tecnico"><Layers3 size={25}/>
                 <h3>Sem sequência repetitiva identificável</h3>
                 <p>Nesta obra, não foi encontrado um mesmo serviço com um registro inequívoco em pelo menos dois locais. Conectar atividades diferentes produziria uma linha de ritmo falsa.</p>
@@ -242,21 +250,22 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                         <text x={xLocal(local)} y={(yi+yfim)/2+4} textAnchor="middle" fontSize={11} fill={n>=4?"#fff":"#27556b"} fontWeight={750}>{n}</text>
                         <title>{local+" · "+faixa.rotulo+" · "+n+" atividade(s): "+lista.slice(0,8).map(p=>p.nome).join("; ")+(lista.length>8?"…":"")}</title>
                       </g>;
-                    })) : serieRitmo && (() => {
-                      const ordenados=[...serieRitmo.pontos].sort((a,b)=>locais.indexOf(a.local)-locais.indexOf(b.local));
-                      return <g>
-                        <polyline fill="none" stroke="#257e94" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"
+                    })) : seriesRitmoVisiveis.map((serie, indice) => {
+                      const ordenados=[...serie.pontos].sort((a,b)=>locais.indexOf(a.local)-locais.indexOf(b.local));
+                      const cor = coresRitmo[repetidas.findIndex(s=>s.chave===serie.chave)%coresRitmo.length] ?? coresRitmo[indice%coresRitmo.length];
+                      return <g key={serie.chave}>
+                        <polyline fill="none" stroke={cor} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"
                           points={ordenados.map(p=>xLocal(p.local)+","+yData(p.inicio)).join(" ")}/>
-                        <polyline fill="none" stroke="#c17b50" strokeWidth={2.5} strokeDasharray="7 5" strokeLinejoin="round"
+                        <polyline fill="none" stroke={cor} opacity={0.65} strokeWidth={2.5} strokeDasharray="7 5" strokeLinejoin="round"
                           points={ordenados.map(p=>xLocal(p.local)+","+yData(p.fim)).join(" ")}/>
                         {ordenados.map(p=><g key={p.codigo+"-"+p.local}>
-                          <line x1={xLocal(p.local)} y1={yData(p.inicio)} x2={xLocal(p.local)} y2={yData(p.fim)} stroke="#6da9ba" strokeWidth={8} strokeLinecap="round" opacity={0.6}/>
-                          <circle cx={xLocal(p.local)} cy={yData(p.inicio)} r={5} fill="#257e94"/>
-                          <circle cx={xLocal(p.local)} cy={yData(p.fim)} r={5} fill="#c17b50"/>
-                          <title>{legendaPonto(p)}</title>
+                          <line x1={xLocal(p.local)} y1={yData(p.inicio)} x2={xLocal(p.local)} y2={yData(p.fim)} stroke={cor} strokeWidth={8} strokeLinecap="round" opacity={0.6}/>
+                          <circle cx={xLocal(p.local)} cy={yData(p.inicio)} r={5} fill={cor}/>
+                          <circle cx={xLocal(p.local)} cy={yData(p.fim)} r={5} fill={cor} opacity={0.75}/>
+                          <title>{serie.nome+" · "+legendaPonto(p)}</title>
                         </g>)}
                       </g>;
-                    })()}
+                    })}
                     {mostrarHoje&&<g>
                       <line x1={esquerda} x2={largura-30} y1={yData(hoje)} y2={yData(hoje)} stroke="#be6855" strokeDasharray="5 5" strokeWidth={2}/>
                       <text x={largura-28} y={yData(hoje)-5} textAnchor="end" fontWeight={750} fontSize={10} fill="#a65442">HOJE</text>
@@ -271,7 +280,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                     {[1,2,3,4].map(n=><span key={n}><i style={{background:CORES_OCUPACAO[n]}}/>{n===4?"4 ou mais":String(n)}</span>)}
                     <small>Intervalos de calendário; não confundir ocupação com avanço físico.</small>
                   </div>
-                  : <div className="lob-pro-legenda"><strong>{serieRitmo?.nome}</strong><span><i style={{background:"#257e94"}}/> Inícios</span><span><i style={{background:"#c17b50"}}/> Términos</span></div>}
+                  : <div className="lob-pro-legenda"><strong>{seriesRitmoVisiveis.length} sequência(s) visível(is)</strong>{seriesRitmoVisiveis.map(serie=><span key={serie.chave}><i style={{background:coresRitmo[repetidas.findIndex(s=>s.chave===serie.chave)%coresRitmo.length]}}/>{serie.nome}</span>)}<small>Traço contínuo: início · tracejado: término. Cores identificam serviços, não produtividade calculada.</small></div>}
               </>
             )}
             {descartadas>0&&<p className="lob-pro-aviso">{descartadas} registros sem datas válidas ou marcos não entram nesta leitura de duração.</p>}
