@@ -6,6 +6,7 @@ import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
+import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
 import { LinhaBalancoEscadinha } from "./AuroraLinhaBalanco";
 import "./aurora-piloto.css";
 
@@ -70,15 +71,8 @@ export function VisualizacaoPlanejamento({
     () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
     [atividades]
   );
-  // CPM exige TODOS os registros com duração válida e cálculo posterior à edição.
-  const cpmValido = !planejamento.isPending && !planejamento.isError &&
-    atividades.length > 0 && atividades.every(activity =>
-      Number(activity.durationDays) >= 1 &&
-      activity.cpmCalculatedAt != null &&
-      Number.isFinite(new Date(activity.cpmCalculatedAt).getTime()) &&
-      Number.isFinite(new Date(activity.updatedAt).getTime()) &&
-      new Date(activity.cpmCalculatedAt).getTime() >= new Date(activity.updatedAt).getTime()
-    );
+  const estadoCpm = avaliarCpmGantt(atividades);
+  const cpmValido = !planejamento.isPending && !planejamento.isError && estadoCpm.valido;
 
   // Dependências do cronograma traduzidas para os códigos da EAP, que é o que a
   // planilha do Gantt usa como chave de linha. Sem isso o gráfico mostra barras
