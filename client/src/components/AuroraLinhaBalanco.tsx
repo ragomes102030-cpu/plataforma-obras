@@ -144,7 +144,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
           <div className="lob-pro-painel">
             <div className="lob-pro-faixa-titulo">
               <div><strong>{visao==="ocupacao"?"Ocupação planejada por local":"Sequência de serviço repetitivo"}</strong>
-                <span>{visao==="ocupacao"?"Intensidade = atividades simultâneas; não é produtividade.":"Linha contínua = inícios; tracejada = términos planejados."}</span>
+                <span>{visao==="ocupacao"?"Contagem de atividades com execução no intervalo; não é produtividade.":"Linha contínua = inícios; tracejada = términos planejados."}</span>
               </div>
               {selecionadaSerie&&visao==="ocupacao"&&<button type="button" onClick={()=>setSelecionada(null)}>Limpar filtro</button>}
             </div>
@@ -214,7 +214,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
                 </div>
                 {visao==="ocupacao"?
                   <div className="lob-pro-legenda">
-                    <strong>Atividades simultâneas</strong>
+                    <strong>Atividades no intervalo</strong>
                     {[1,2,3,4].map(n=><span key={n}><i style={{background:CORES_OCUPACAO[n]}}/>{n===4?"4 ou mais":String(n)}</span>)}
                     <small>Intervalos de calendário; não confundir ocupação com avanço físico.</small>
                   </div>
