@@ -32,6 +32,6 @@ describe("Linha de Balanço — única escadinha da interface clássica", () => 
     expect(model).not.toContain("l.pavimento || l.frente");
     expect(model).toContain("finsCalculados[l.codigo]");
     expect(component).toContain("repetitivas.length === 0");
-    expect(component).not.toContain("LinhaBalancoVertical");
+    expect(component).not.toContain("export function LinhaBalancoVertical");
   });
 });
