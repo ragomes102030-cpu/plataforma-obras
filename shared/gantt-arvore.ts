@@ -128,6 +128,9 @@ export function montarArvore(
   const agregar = (no: NoDoGantt): void => {
     no.filhos.sort(compararPorCodigo);
     no.filhos.forEach(agregar);
+    // Atividade-folha mantém a duração em DIAS DE TRABALHO informada na grade.
+    // Apenas etapas com descendentes têm duração de intervalo civil.
+    if (no.filhos.length === 0) return;
     const descendentes = folhas(no).filter(item => item.linha);
     if (!descendentes.length) return;
     no.inicio = descendentes.reduce<IsoDate>(
