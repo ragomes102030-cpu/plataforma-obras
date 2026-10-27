@@ -14,7 +14,7 @@ import { EstadoCarregando } from "./EstadoCarregando";
  * refazer a EAP não zera o histórico.
  */
 
-type BaselineDoProjeto = { id: number; name: string; createdAt: Date | string };
+type BaselineDoProjeto = { id: number; name: string; createdAt: Date | string; status: "ativa" | "arquivada" | "rascunho" };
 
 const ROTULO: Record<SituacaoDesvio, string> = {
   atrasada: "Atrasada",
@@ -59,9 +59,16 @@ export function PainelDesviosBaseline({
   const [baselineId, setBaselineId] = useState<number | undefined>(undefined);
   const [somenteMudancas, setSomenteMudancas] = useState(true);
 
+  // A referência vem do status, nunca do primeiro item histórico na lista.
+  // Se não há baseline vigente, exigimos escolha explícita de uma fotografia.
+  const vigentes = baselines.filter(b => b.status === "ativa");
+  const vigente = vigentes[0];
+  const selecaoManualValida = baselines.some(b => b.id === baselineId);
+  const selecionadaId = selecaoManualValida ? baselineId : vigente?.id;
+
   const comparacao = trpc.planning.compararComBaseline.useQuery(
-    { projectId: projetoId, baselineId },
-    { enabled: projetoId > 0 && baselines.length > 0 }
+    { projectId: projetoId, baselineId: selecionadaId },
+    { enabled: projetoId > 0 && selecionadaId !== undefined }
   );
 
   const linhas = useMemo(() => {
@@ -70,6 +77,28 @@ export function PainelDesviosBaseline({
   }, [comparacao.data, somenteMudancas]);
 
   if (baselines.length === 0) return null;
+
+  if (selecionadaId === undefined) {
+    return (
+      <div className="pl-planejamento-alerta" role="status">
+        Nenhuma baseline vigente definida. Escolha uma fotografia histórica para
+        comparação manual; isso não a torna ativa.
+        <label>
+          Baseline histórica
+          <select
+            aria-label="Escolher baseline histórica para comparação"
+            value=""
+            onChange={evento => setBaselineId(Number(evento.target.value))}
+          >
+            <option value="" disabled>Selecione uma baseline…</option>
+            {baselines.map(item => (
+              <option key={item.id} value={item.id}>{item.name} · {item.status}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+    );
+  }
 
   if (comparacao.isPending) {
     return (
@@ -106,6 +135,9 @@ export function PainelDesviosBaseline({
 
   return (
     <div className="pl-planejamento-box">
+      {vigentes.length > 1 && <p role="alert" className="pl-planejamento-alerta">
+        Esta obra possui {vigentes.length} baselines marcadas como ativas. Verifique a migração de governança antes de usar a comparação para decisões.
+      </p>}
       <div className="pl-planejamento-box-head">
         <div>
           <strong>O que mudou desde a baseline</strong>
@@ -118,13 +150,13 @@ export function PainelDesviosBaseline({
           <label>
             Baseline
             <select
-              value={baselineId ?? baseline.id}
+              value={selecionadaId}
               onChange={evento => setBaselineId(Number(evento.target.value))}
               aria-label="Baseline usada na comparação"
             >
               {baselines.map(item => (
                 <option key={item.id} value={item.id}>
-                  {item.name}
+                  {item.name}{item.status === "ativa" ? " · VIGENTE" : " · histórica (" + item.status + ")"}
                 </option>
               ))}
             </select>
