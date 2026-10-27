@@ -40,7 +40,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
   const { locais, series, semLocal, descartadas } =
     useMemo(() => prepararLinhaBalancoVertical(linhas, finsCalculados), [linhas, finsCalculados]);
 
-  const [visao, setVisao] = useState<Visao>("ocupacao");
+  const [visao, setVisao] = useState<Visao>("ritmo");
   const [escala, setEscala] = useState<Escala>("mes");
   const [recolhida, setRecolhida] = useState(false);
   const [busca, setBusca] = useState("");
@@ -48,7 +48,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
 
   const repetidas = series.filter(s => s.repetitiva);
   const pesquisa = busca.trim().toLocaleLowerCase("pt-BR");
-  const listadas = series.filter(s => (s.nome+" "+s.pontos[0]?.codigo).toLocaleLowerCase("pt-BR").includes(pesquisa));
+  const listadas = (visao === "ritmo" ? repetidas : series).filter(s => (s.nome+" "+s.pontos[0]?.codigo).toLocaleLowerCase("pt-BR").includes(pesquisa));
   const selecionadaSerie = series.find(s => s.chave === selecionada) ?? null;
   const serieRitmo = repetidas.find(s => s.chave === selecionada) ?? repetidas[0] ?? null;
   const seriesOcupacao = listadas.filter(s => !selecionadaSerie || s.chave === selecionadaSerie.chave);
@@ -90,19 +90,45 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
       </header>
 
       <div className="lob-pro-indicadores" aria-label="Resumo da Linha de Balanço">
-        <span><strong>{locais.length}</strong> locais</span>
+        <span><strong>{locais.length}</strong> categorias cadastradas</span>
         <span><strong>{pontosTodos.length}</strong> atividades localizadas</span>
-        <span><strong>{repetidas.length}</strong> serviços repetitivos</span>
+        <span><strong>{repetidas.length}</strong> sequências repetitivas válidas</span>
         <span><strong>{semLocal}</strong> sem local</span>
       </div>
 
+      {repetidas.length === 0 ? (
+        <div className="lob-pro-prontidao" role="status" aria-label="Diagnóstico da Linha de Balanço">
+          <div className="lob-pro-prontidao-marca"><Layers3 size={24}/></div>
+          <div className="lob-pro-prontidao-conteudo">
+            <span className="lob-pro-prontidao-kicker">DADOS INSUFICIENTES PARA LINHA DE BALANÇO</span>
+            <h3>A obra ainda não tem serviços repetidos por unidade de execução.</h3>
+            <p>Uma LOB precisa relacionar o mesmo serviço a duas ou mais unidades físicas,
+              com início e término definidos. Nesta versão do cronograma, nenhuma série atende
+              a esse requisito. Não é correto transformar disciplinas ou fases em pavimentos,
+              nem desenhar linhas artificiais.</p>
+            {locais.length > 0 && <div className="lob-pro-categorias">
+              <strong>Valores atuais do campo pavimento/frente ({locais.length})</strong>
+              <div>{locais.slice(0,12).map(local=><span key={local}>{local}</span>)}
+                {locais.length>12&&<span>+ {locais.length-12} outros</span>}</div>
+              <small>Verifique se esses valores são locais físicos ou disciplinas da obra.</small>
+            </div>}
+            <div className="lob-pro-prontidao-acoes">
+              <button type="button" className="lob-pro-editar" onClick={onAbrirAtividades}><ListTodo size={16}/> Revisar atividades e locais</button>
+              <button type="button" onClick={()=>window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"gantt"}}))}>
+                Ver cronograma no Gantt <ChevronRight size={16}/>
+              </button>
+            </div>
+            <p className="lob-pro-prontidao-nota">A EAP, as atividades e as datas permanecem intactas. A visualização de LOB aparecerá quando houver registros repetitivos válidos.</p>
+          </div>
+        </div>
+      ) : (<>
       <div className="lob-pro-controles">
         <div className="lob-pro-visoes" aria-label="Modo de leitura">
           <button type="button" aria-pressed={visao==="ocupacao"} className={visao==="ocupacao"?"ativo":""} onClick={()=>{setVisao("ocupacao");setSelecionada(null);}}>
-            Ocupação das frentes
+            Mapa auxiliar de frentes
           </button>
           <button type="button" aria-pressed={visao==="ritmo"} className={visao==="ritmo"?"ativo":""} onClick={()=>{setVisao("ritmo");setSelecionada(null);}}>
-            Ritmo entre locais
+            Linha de Balanço
           </button>
         </div>
         <label className="lob-pro-escala"><CalendarDays size={15}/> Período
@@ -121,7 +147,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
           <aside className="lob-pro-lista" aria-label="Serviços cadastrados">
             <button type="button" className="lob-pro-colapsar" aria-expanded={!recolhida} onClick={()=>setRecolhida(v=>!v)}>
               {recolhida?<ChevronRight size={18}/>:<ChevronDown size={18}/>}
-              {!recolhida&&<><strong>Serviços</strong><span>{series.length}</span></>}
+              {!recolhida&&<><strong>{visao==="ritmo"?"Serviços repetidos":"Serviços"}</strong><span>{listadas.length}</span></>}
             </button>
             {!recolhida&&<>
               <label className="lob-pro-pesquisa"><Search size={15}/>
@@ -227,6 +253,7 @@ export function LinhaBalancoVertical({ linhas, finsCalculados, hoje, onAbrirAtiv
           </div>
         </div>
       )}
+      </>)}
     </section>
   );
 }
