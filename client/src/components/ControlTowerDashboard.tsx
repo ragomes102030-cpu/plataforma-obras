@@ -39,6 +39,9 @@ type Props = {
   compromissosPendentes: number | null;
   carregandoComplementos: boolean;
   erroComplementos: boolean;
+  orcamentoEstado: "pendente" | "erro" | "ok";
+  producaoEstado: "pendente" | "erro" | "ok";
+  semanaEstado: "pendente" | "erro" | "ok";
   abrirAba: (aba: string) => void;
 };
 
@@ -59,7 +62,7 @@ const destinos: Record<Detalhe, string> = {
 export function ControlTowerDashboard({
   projetoId, nomeObra, hoje, resumo, alertas, valorSemDestino,
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
-  carregandoComplementos, erroComplementos, abrirAba,
+  carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
   const { fisico, prazo, valor, status, selo } = resumo;
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
