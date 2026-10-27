@@ -1,0 +1,358 @@
+/*
+ * ARQUIMEDES — Dashboard de obra / leitura executiva v1.
+ *
+ * Escopo exclusivo: .pd.pd-executivo. Não modifica Gantt, EAP, sidebar,
+ * motores do planejamento, cálculos, API nem esquema do banco.
+ * As réguas técnicas permanecem ao lado de cada indicador.
+ */
+.pd.pd-executivo {
+  --pd-tinta:#1a3342;
+  --pd-suave:#536c7d;
+  --pd-linha:#d5e1e8;
+  --pd-fundo:#f3f7f9;
+  --pd-azul:#196b85;
+  --pd-verde:#27865a;
+  --pd-ambar:#936012;
+  --pd-vermelho:#b33d35;
+  width:100%;
+  min-width:0;
+  max-width:1600px;
+  margin-inline:auto;
+  padding:clamp(17px,2vw,28px);
+  gap:16px;
+  font-size:14px;
+  line-height:1.5;
+  color:var(--pd-tinta);
+}
+.pd-executivo :where(button, summary):focus-visible {
+  outline:3px solid #227e9c;
+  outline-offset:3px;
+}
+
+/* Obra já identificada no contexto global. Título da área não a repete. */
+.pd-executivo .pd-cabecalho {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:0 0 18px;
+  border-bottom:1px solid #cbdce5;
+}
+.pd-executivo .pd-sobretitulo {
+  display:block;
+  color:#456b80;
+  font-size:11px;
+  font-weight:750;
+  text-transform:uppercase;
+  letter-spacing:.075em;
+  margin-bottom:4px;
+}
+.pd-executivo .pd-titulo {
+  font-size:clamp(24px,2.2vw,30px);
+  line-height:1.16;
+  font-weight:770;
+  letter-spacing:-.03em;
+  color:#173647;
+}
+.pd-executivo .pd-sub {
+  color:#557183;
+  margin-top:7px;
+  font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.pd-executivo .pd-cabecalho-acoes {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.pd-executivo .pd-selo {
+  display:inline-flex;
+  align-items:center;
+  min-height:33px;
+  padding:7px 13px;
+  font-size:12px;
+  border-radius:8px;
+  font-weight:750;
+}
+.pd-executivo .pd-ir-gantt {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  min-height:37px;
+  border-radius:8px;
+  background:#17627d;
+  border:1px solid #17627d;
+  color:#fff;
+  padding:8px 14px;
+  font-size:13px;
+  line-height:1.2;
+  font-weight:720;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.pd-executivo .pd-ir-gantt:hover { background:#104f68 }
+.pd-executivo .pd-ir-gantt span {font-size:17px;line-height:1}
+
+/* Indicadores: maior peso no número, subtítulos legíveis e métricas íntegras. */
+.pd-executivo .pd-kpis {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:13px;
+}
+.pd-executivo .pd-kpi {
+  position:relative;
+  min-width:0;
+  min-height:158px;
+  background:#fff;
+  border:1px solid #d2dfe7;
+  border-radius:12px;
+  padding:17px 17px 16px;
+  gap:11px;
+  box-shadow:0 2px 6px rgba(20,51,69,.035);
+}
+.pd-executivo .pd-kpi::before {
+  content:"";
+  position:absolute;
+  inset:0 auto auto 0;
+  width:100%;
+  height:3px;
+  background:#a8c7d3;
+  border-radius:12px 12px 0 0;
+}
+.pd-executivo .pd-kpi-valor::before {background:#7fbea0}
+.pd-executivo .pd-kpi-prazo::before {background:#c0b08e}
+.pd-executivo .pd-kpi-compromissos::before {background:#aab9c3}
+.pd-executivo .pd-rotulo {
+  display:block;
+  color:#1d3b4d;
+  font-size:14px;
+  line-height:1.25;
+  font-weight:740;
+  letter-spacing:-.005em;
+}
+.pd-executivo .pd-regua {
+  display:block;
+  flex-basis:auto;
+  margin-top:4px;
+  font-size:11.5px;
+  line-height:1.4;
+  color:#617c8b;
+  font-weight:500;
+  letter-spacing:0;
+}
+.pd-executivo .pd-numero {
+  margin-top:auto;
+  color:#142f40;
+  font-size:clamp(22px,2.2vw,29px);
+  font-weight:780;
+  line-height:1.1;
+  letter-spacing:-.035em;
+  overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums;
+}
+.pd-executivo .pd-numero-fraco {
+  color:#5d7583;
+  font-size:22px;
+  font-weight:680;
+}
+.pd-executivo .pd-numero-atrasada,
+.pd-executivo .pd-numero-atencao,
+.pd-executivo .pd-numero-atrasada.pd-numero-fraco {color:#a94434}
+.pd-executivo .pd-kpi-compromissos .pd-numero {font-size:clamp(20px,2vw,26px)}
+.pd-executivo .pd-legenda {
+  display:block;
+  font-size:12px;
+  line-height:1.48;
+  color:#536d7c;
+  margin-top:0;
+}
+.pd-executivo .pd-legenda strong {font-weight:730;color:#233f51}
+.pd-executivo .pd-negativo {color:#aa3b35!important}
+.pd-executivo .pd-positivo {color:#1e8052!important}
+.pd-executivo .pd-barra,
+.pd-executivo .pd-linha-tempo {height:9px;flex:0 0 auto;background:#eaf0f3}
+.pd-executivo .pd-kpi .pd-link {font-size:12px;font-weight:700}
+
+/* Estado da programação: leitura conjunta, sem parecer mais um KPI monetário. */
+.pd-executivo .pd-status {
+  gap:11px;
+  padding:17px 19px;
+  background:#fff;
+  border:1px solid #d3e0e7;
+  border-radius:12px;
+}
+.pd-executivo .pd-status-topo .pd-rotulo {font-size:14px}
+.pd-executivo .pd-status-total {font-size:12.5px;color:#516f80}
+.pd-executivo .pd-status-barra {height:12px;background:#e7edef}
+.pd-executivo .pd-status-legenda {gap:9px 19px}
+.pd-executivo .pd-status-item {font-size:12.5px;color:#455f71;gap:7px}
+.pd-executivo .pd-status-item strong {font-size:13px}
+.pd-executivo .pd-status-fatia {font-size:11.5px;color:#5c7785}
+.pd-executivo .pd-ponto {height:9px;width:9px}
+
+/* Ações em primeiro plano; semana como painel de trabalho. */
+.pd-executivo .pd-duas-colunas {
+  grid-template-columns:minmax(0,1.13fr) minmax(0,1fr);
+  gap:13px;
+  align-items:stretch;
+}
+.pd-executivo .pd-bloco {
+  min-width:0;
+  background:#fff;
+  border:1px solid #d3e0e7;
+  border-radius:12px;
+  padding:17px 18px;
+  gap:14px;
+}
+.pd-executivo .pd-bloco-topo {
+  align-items:flex-start;
+  gap:12px;
+}
+.pd-executivo .pd-bloco-titulo {
+  font-size:16px;
+  line-height:1.3;
+  font-weight:760;
+  color:#17394a;
+}
+.pd-executivo .pd-bloco-nota {
+  font-size:11.5px;
+  text-align:right;
+  color:#607c8b;
+  line-height:1.5;
+}
+.pd-executivo .pd-contador {
+  min-width:26px;
+  padding:3px 8px;
+  font-size:12px;
+  color:#7c332c;
+  background:#fbece9;
+  border-radius:7px;
+}
+.pd-executivo .pd-alertas {gap:8px}
+.pd-executivo .pd-alerta {
+  display:grid;
+  grid-template-columns:3px minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:12px;
+  border:1px solid #e2e8eb;
+  border-radius:9px;
+  background:#f9fbfc;
+}
+.pd-executivo .pd-alerta:first-child{padding-top:12px;border-top:1px solid #e2e8eb}
+.pd-executivo .pd-alerta-critico {background:#fff8f6;border-color:#f2ded8}
+.pd-executivo .pd-alerta-atencao {background:#fffaf2;border-color:#f0e5cc}
+.pd-executivo .pd-alerta-marca {
+  width:3px;
+  min-height:44px;
+  align-self:stretch;
+  border-radius:5px;
+}
+.pd-executivo .pd-alerta-titulo {
+  font-size:13.5px;
+  line-height:1.4;
+  color:#203d4a;
+  font-weight:730;
+}
+.pd-executivo .pd-alerta-detalhe {
+  font-size:12px;
+  line-height:1.55;
+  margin-top:4px;
+  color:#587180;
+}
+.pd-executivo .pd-alerta-acao {
+  align-self:center;
+  max-width:136px;
+  border:1px solid #bed7e1;
+  border-radius:7px;
+  color:#1c6581;
+  background:#fff;
+  padding:9px 10px;
+  min-height:38px;
+  white-space:normal;
+  text-align:center;
+  font-size:11.5px;
+  font-weight:730;
+  line-height:1.35;
+}
+.pd-executivo .pd-alerta-acao:hover{background:#eaf4f8;border-color:#9fc8d8}
+.pd-executivo .pd-semana-item {padding:11px 0;gap:10px}
+.pd-executivo .pd-semana-codigo {font-size:12px;min-width:60px}
+.pd-executivo .pd-semana-nome {font-size:13px;font-weight:690;line-height:1.5}
+.pd-executivo .pd-semana-meta {font-size:12px;line-height:1.5;color:#627d8a}
+.pd-executivo .pd-tranquilo {font-size:13px;line-height:1.6;color:#5b7584}
+.pd-executivo .pd-etiqueta {font-size:11px;font-weight:720;padding:4px 9px}
+.pd-executivo .pd-link {color:#176782;font-weight:720;font-size:12.5px;text-underline-offset:3px}
+.pd-executivo .pd-link:hover {color:#0d4d62}
+.pd-executivo .pd-tabela {font-size:13px}
+.pd-executivo .pd-tabela th {
+  font-size:11.5px;
+  color:#496878;
+  background:#f6f9fa;
+  padding:10px;
+  border-bottom:1px solid #d7e4eb;
+}
+.pd-executivo .pd-tabela td {padding:12px 10px;color:#314d5c;border-bottom-color:#e8eff3}
+.pd-executivo .pd-tabela tbody tr:hover td{background:#f7fafb}
+.pd-executivo .pd-tabela-codigo {font-size:12px;font-weight:720}
+.pd-executivo .pd-tabela-rolagem {overflow-x:auto}
+
+/* Nota técnica sob demanda. Mantém a rastreabilidade sem poluir o painel. */
+.pd-executivo .pd-nota {
+  padding:0;
+  background:#f5f9fa;
+  border:1px solid #d9e5eb;
+  border-radius:10px;
+}
+.pd-executivo .pd-nota summary {
+  cursor:pointer;
+  padding:13px 16px;
+  color:#345f73;
+  font-size:13px;
+  font-weight:710;
+}
+.pd-executivo .pd-nota[open] summary {border-bottom:1px solid #dde8ed}
+.pd-executivo .pd-nota p {margin:0;padding:13px 16px;color:#526e7c;font-size:12.5px;line-height:1.7}
+.pd-executivo .pd-vazio {padding:28px;font-size:14px}
+.pd-executivo .pd-vazio strong {font-size:17px}
+.pd-executivo .pd-botao {font-size:13px;min-height:38px}
+
+@media(max-width:1279px) {
+  .pd.pd-executivo .pd-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pd.pd-executivo .pd-duas-colunas{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:760px) {
+  .pd.pd-executivo{padding:14px 12px 24px;gap:12px}
+  .pd.pd-executivo .pd-cabecalho{flex-direction:column;align-items:flex-start;gap:10px;padding-bottom:14px}
+  .pd.pd-executivo .pd-cabecalho-acoes{width:100%;justify-content:space-between}
+  .pd.pd-executivo .pd-titulo{font-size:25px}
+  .pd.pd-executivo .pd-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .pd.pd-executivo .pd-kpi{min-height:166px;padding:14px 12px;gap:9px}
+  .pd.pd-executivo .pd-rotulo{font-size:13px}
+  .pd.pd-executivo .pd-regua{font-size:11.5px}
+  .pd.pd-executivo .pd-numero{font-size:23px}
+  .pd.pd-executivo .pd-kpi-compromissos .pd-numero{font-size:21px}
+  .pd.pd-executivo .pd-legenda{font-size:11.5px}
+  .pd.pd-executivo .pd-status{padding:14px 12px}
+  .pd.pd-executivo .pd-bloco{padding:15px 12px}
+  .pd.pd-executivo .pd-bloco-topo{flex-wrap:wrap}
+  .pd.pd-executivo .pd-bloco-nota{text-align:left}
+  .pd.pd-executivo .pd-alerta{grid-template-columns:3px minmax(0,1fr);gap:9px;padding:10px}
+  .pd.pd-executivo .pd-alerta:first-child{padding-top:10px}
+  .pd.pd-executivo .pd-alerta-acao{grid-column:2;justify-self:start;max-width:none;min-height:40px;font-size:12px}
+  .pd.pd-executivo .pd-semana-item{flex-wrap:wrap}
+  .pd.pd-executivo .pd-semana-codigo{min-width:53px}
+}
+@media(max-width:480px) {
+  .pd.pd-executivo .pd-kpis{grid-template-columns:minmax(0,1fr)}
+  .pd.pd-executivo .pd-kpi{min-height:138px}
+  .pd.pd-executivo .pd-numero{font-size:28px}
+  .pd.pd-executivo .pd-rotulo{font-size:14px}
+  .pd.pd-executivo .pd-regua{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .pd.pd-executivo {scroll-behavior:auto}
+}
