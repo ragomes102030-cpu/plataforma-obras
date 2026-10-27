@@ -1,12 +1,13 @@
 import * as React from "react";
 import { useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, Download, ListTodo, Maximize2, Search, ZoomIn, ZoomOut } from "lucide-react";
+import { Activity, CalendarDays, ChevronDown, Download, ListTodo, Maximize2, Search, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import {
   dataValida, diaUtc, prepararLinhaBalancoVertical,
   type PontoLob, type SerieLob,
 } from "./linha-balanco-modelo";
+import { analisarFluxoLob } from "./lob-analise-fluxo";
 import "./linha-balanco-profissional.css";
 
 export { prepararLinhaBalancoVertical } from "./linha-balanco-modelo";
@@ -135,6 +136,15 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
   }
 
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
+  // Leitura analítica derivada apenas dos serviços e locais exibidos.
+  // Não interpreta coincidência temporal como colisão ou infração de predecessora.
+  const analise = analisarFluxoLob(seriesVisiveis, locais);
+  const sobreposicoesPorLocal = new Map<string, number>();
+  for (const alerta of analise.alertas) {
+    if (alerta.tipo === "sobreposicao") {
+      sobreposicoesPorLocal.set(alerta.local, (sobreposicoesPorLocal.get(alerta.local) ?? 0) + 1);
+    }
+  }
 
   function alterarSerie(chave: string, visivel: boolean) {
     setOcultas(anterior => {
@@ -254,6 +264,51 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
             </div>
           </div>
 
+          <details className="lob-stairs-analysis" data-testid="lob-flow-analysis">
+            <summary>
+              <span className="lob-stairs-analysis-name"><Activity size={16}/> Análise de fluxo</span>
+              <span>{analise.ritmos.length} ritmos · {analise.sobreposicoes} janelas simultâneas · {analise.intervalos} intervalos por local · {analise.transferencias} entre pavimentos</span>
+              <ChevronDown size={15}/>
+            </summary>
+            <div className="lob-stairs-analysis-body">
+              <div className="lob-stairs-analysis-rhythms">
+                <strong>Cadência dos serviços</strong>
+                <div className="lob-stairs-analysis-rhythm-grid">
+                  {analise.ritmos.map(ritmo => (
+                    <div className="lob-stairs-analysis-rhythm" key={ritmo.chave}>
+                      <strong>{ritmo.nome}</strong>
+                      <span>{ritmo.diasPorTransferencia === null
+                        ? "Sem duas unidades visíveis para medir intervalo"
+                        : `${ritmo.diasPorTransferencia.toLocaleString("pt-BR")} dia(s) entre inícios consecutivos (média)`}
+                      </span>
+                      <small>{ritmo.variavel
+                        ? `Varia de ${ritmo.menorIntervalo} a ${ritmo.maiorIntervalo} dias`
+                        : ritmo.invertido ? "Sequência de pavimentos em ordem temporal invertida"
+                          : "Intervalos de início uniformes nos locais exibidos"}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="lob-stairs-analysis-observations">
+                <strong>Janelas e intervalos para conferir</strong>
+                {analise.alertas.length === 0 ? <p>Nenhuma sobreposição ou intervalo entre os serviços selecionados.</p>
+                : <ul>
+                  {analise.alertas.slice(0, 12).map((alerta, indice) => (
+                    <li key={alerta.tipo+"-"+alerta.local+"-"+alerta.codigos.join("-")+"-"+indice} data-testid="lob-flow-alert">
+                      <strong>{alerta.tipo === "sobreposicao" ? "Janelas simultâneas" :
+                        alerta.tipo === "transferencia" ? "Intervalo entre pavimentos" : "Intervalo neste pavimento"}</strong>
+                      <span>{alerta.local} · {alerta.servicos} · {alerta.dias} dia(s)</span>
+                      <small>{alerta.descricao} · EAP {alerta.codigos.join(" / ")}</small>
+                    </li>
+                  ))}
+                  {analise.alertas.length > 12 && <li>Mais {analise.alertas.length - 12} observações nos filtros atuais.</li>}
+                </ul>}
+              </div>
+              <p className="lob-stairs-analysis-note">Indicadores de calendário, não medições reais nem conflitos confirmados. Sem dados de equipe, restrições de frente e verificação das dependências, uma sobreposição NÃO prova interferência. Intervalos não comprovam ociosidade. Tudo é somente leitura.</p>
+            </div>
+          </details>
+
           {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
           : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Nenhum serviço neste filtro</h3><p>Selecione pelo menos um serviço e um pavimento com atividade cadastrada.</p></div>
           : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
@@ -272,7 +327,10 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
                 </div>
                 {locais.map((local, row) => (
                   <div key={local} className={"lob-stairs-row"+(row%2?" lob-stairs-row-alt":"")} role="row" style={{height:alturaLinha}}>
-                    <div className="lob-stairs-local" role="rowheader">{local}</div>
+                    <div className="lob-stairs-local" role="rowheader">{local}
+                      {(sobreposicoesPorLocal.get(local) ?? 0) > 0 &&
+                        <span className="lob-stairs-location-note" title="Janelas de serviços simultâneas neste local; verifique compatibilidade">!</span>}
+                    </div>
                     <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
                       {semanas.map(s=><span key={s.inicio} className="lob-stairs-gridline" style={{left:s.x}}/>)}
                       {barrasPorLocal.get(local)?.map(b=>{

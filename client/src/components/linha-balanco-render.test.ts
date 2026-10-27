@@ -79,4 +79,21 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("03/11/2026 a 12/11/2026");
     expect(html).toContain("10/11/2026 a 23/11/2026");
   });
+  it("painel de fluxo aparece na escadinha sem alterar as barras e com indicadores derivados",()=>{
+    const linhas=[
+      atividade("A1","Alvenaria","P01","2026-11-01"),
+      atividade("A2","Alvenaria","P02","2026-11-05"),
+      atividade("B1","Revestimento","P01","2026-11-03"),
+      atividade("B2","Revestimento","P02","2026-11-07"),
+    ];
+    const html=renderizar(linhas);
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(4);
+    expect(html).toContain('data-testid="lob-flow-analysis"');
+    expect(html).toContain("Análise de fluxo");
+    expect(html).toContain("janelas simultâneas");
+    expect(html).toContain('data-testid="lob-flow-alert"');
+    expect(html).toContain("Indicadores de calendário, não medições reais");
+    expect(html).toContain("entre inícios consecutivos (média)");
+  });
+
 });
