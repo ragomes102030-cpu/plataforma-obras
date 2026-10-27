@@ -89,7 +89,9 @@ describe("LOB — renderização real do componente (SSR, sem banco)", () => {
       a("1.1","Administração","Serviços Gerais","Execução"),
       a("1.2","Licenças","Infraestrutura","Execução"),
     ]);
-    const grafico = html.slice(html.indexOf("<svg"), html.indexOf("</svg>") + 6);
+    const posicao = html.indexOf('aria-label="Linhas de início e conclusão de serviços repetitivos"');
+    expect(posicao).toBeGreaterThan(0);
+    const grafico = html.slice(html.lastIndexOf("<svg", posicao), html.indexOf("</svg>", posicao) + 6);
     expect(grafico).toContain(">P01<");
     expect(grafico).toContain(">P02<");
     expect(grafico).not.toContain(">Serviços Gerais<");
