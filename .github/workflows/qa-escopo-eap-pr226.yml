@@ -1,0 +1,25 @@
+name: EAP Studio React QA (isolado)
+on:
+  push:
+    branches: [qa/escopo-eap-studio-integracao]
+jobs:
+  eap-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 10.34.5}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Testar componente EAP de leitura sem backend
+        run: pnpm exec playwright test -c playwright.eap-integracao.config.ts
+      - name: Evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: escopo-eap-studio-pr226
+          path: test-results/eap-studio-integracao/
+          if-no-files-found: ignore
