@@ -306,3 +306,12 @@
 @media(prefers-reduced-motion:reduce) {
   .planejamento-workspace-nav *, .planejamento-area * {scroll-behavior:auto}
 }
+
+/* Permite cadastrar manualmente a diferença entre frente/disciplina e
+   unidade física (pavimento, trecho, setor), indispensável à LOB. */
+.planejamento-area .pl-atividades-table{min-width:1360px}
+.planejamento-area .pl-atividades-table .frente-col{width:124px}
+.planejamento-area .pl-atividades-table .pavimento-col{width:124px}
+.planejamento-area .pl-atividades-table .frente-col input,
+.planejamento-area .pl-atividades-table .pavimento-col input{box-sizing:border-box;width:100%;min-width:0}
+.planejamento-area .pl-atividades-table .pavimento-col input:focus{background:#f4fbfe}
