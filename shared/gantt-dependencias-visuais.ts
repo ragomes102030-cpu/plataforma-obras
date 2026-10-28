@@ -34,7 +34,7 @@ export function gerarSetasVisiveisGantt(
     // A ponta da flecha sempre se aproxima do lado físico correto:
     // inícios recebem seta da esquerda (→); términos, da direita (←).
     let d:string;
-    if(entraInicio && !saiInicio && origem+afastamento<destino-afastamento) {
+    if(entraInicio && !saiInicio && origem+afastamento<destino) {
       // FS sem recuo: caminho ortogonal curto.
       const x=origem+afastamento;
       d=`M ${origem} ${a.y} H ${x} V ${b.y} H ${destino}`;
