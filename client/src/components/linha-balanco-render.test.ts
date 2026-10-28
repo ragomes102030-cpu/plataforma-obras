@@ -57,6 +57,22 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("Pintura interna");
   });
 
+  it("dimensiona cada pavimento pelas sobreposições simultâneas, reutilizando as faixas livres",()=>{
+    const linhas=[
+      atividade("A.P01","Alvenaria de vedação","P01","2026-11-01"),
+      atividade("B.P01","Chapisco interno","P01","2026-11-03"),
+      atividade("C.P01","Pintura interna","P01","2026-11-04"),
+      atividade("A.P02","Alvenaria de vedação","P02","2026-11-10"),
+      atividade("B.P02","Chapisco interno","P02","2026-11-15"),
+      atividade("C.P02","Pintura interna","P02","2026-11-20"),
+    ];
+    const html=renderizar(linhas);
+    const linhaP01=html.match(/class="lob-stairs-row lob-stairs-row-alt" role="row" style="height:83px/);
+    const linhaP02=html.match(/class="lob-stairs-row" role="row" style="height:64px/);
+    expect(linhaP01).not.toBeNull(); // três barras concorrentes precisam de três faixas
+    expect(linhaP02).not.toBeNull(); // atividades sequenciais reutilizam a mesma faixa
+  });
+
   it("não coloca disciplinas isoladas no eixo dos pavimentos da escadinha",()=>{
     const html=renderizar([
       atividade("QA.1","Alvenaria","P01","2026-11-03"),

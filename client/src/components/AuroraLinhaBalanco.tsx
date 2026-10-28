@@ -214,7 +214,6 @@ export function LinhaBalancoEscadinha({
   const diasNoEixo = Math.max(1, Math.round((diaUtc(eixoFimExclusivo) - diaUtc(eixoInicio)) / DIA));
   const pxDia = pxManual ?? ESCALAS[escala];
   const larguraTempo = Math.max(1, diasNoEixo * pxDia);
-  const alturaLinha = Math.max(64, 14 + seriesVisiveis.length * 23);
   const dataX = (iso: string) => ((diaUtc(iso) - diaUtc(eixoInicio)) / DIA) * pxDia;
 
   // Cabeçalhos com meses civis verdadeiros e semanas começando na segunda.
@@ -244,12 +243,31 @@ export function LinhaBalancoEscadinha({
   }
 
   const barrasPorLocal = new Map<string, Barra[]>();
+  const alturaPorLocal = new Map<string, number>();
+  const deslocamentoPorLocal = new Map<string, number>();
+  let alturaEscadinha = 0;
   for (const local of locais) {
     const barras: Barra[] = [];
     seriesVisiveis.forEach((serie, indice) => {
       const ponto = serie.pontos.find(p => p.local === local);
       if (ponto) barras.push({ serie, ponto, cor: CORES[repetitivas.findIndex(s => s.chave === serie.chave) % CORES.length]!, indice });
     });
+    // Reuse each visual lane after a bar finishes. Reserving one row per
+    // selected service made every physical location thousands of pixels tall.
+    const fimDasFaixas: number[] = [];
+    for (const barra of [...barras].sort((a,b) =>
+      diaUtc(a.ponto.inicio)-diaUtc(b.ponto.inicio) ||
+      diaUtc(a.ponto.fim)-diaUtc(b.ponto.fim) || a.ponto.codigo.localeCompare(b.ponto.codigo))) {
+      const inicio = diaUtc(barra.ponto.inicio);
+      let faixa = fimDasFaixas.findIndex(fim => fim < inicio);
+      if (faixa < 0) faixa = fimDasFaixas.length;
+      barra.indice = faixa;
+      fimDasFaixas[faixa] = diaUtc(barra.ponto.fim);
+    }
+    const altura = Math.max(64, 14 + fimDasFaixas.length * 23);
+    deslocamentoPorLocal.set(local, alturaEscadinha);
+    alturaPorLocal.set(local, altura);
+    alturaEscadinha += altura;
     barrasPorLocal.set(local, barras);
   }
 
@@ -260,14 +278,14 @@ export function LinhaBalancoEscadinha({
   const ligacoes = estadoVinculos==="pronto"
     ? calcularVinculosExibidos(dependencias,[...resumo.pontos,...pontosPendentes]) : [];
   const coordenadas = new Map<string,{inicio:number;fim:number;y:number}>();
-  locais.forEach((local, linhaIndex)=>{
+  locais.forEach(local=>{
     for (const barra of barrasPorLocal.get(local) ?? []) coordenadas.set(barra.ponto.codigo,{
       inicio:dataX(barra.ponto.inicio),
       fim:dataX(adicionarDias(barra.ponto.fim,1)),
-      y:linhaIndex*alturaLinha+19+barra.indice*23,
+      y:(deslocamentoPorLocal.get(local) ?? 0)+19+barra.indice*23,
     });
   });
-  let deslocamentoPendente = locais.length*alturaLinha;
+  let deslocamentoPendente = alturaEscadinha;
   for (const linha of linhasPendentes) {
     if (linha.tipo==="atividade") coordenadas.set(linha.ponto.codigo,{
       inicio:dataX(linha.ponto.inicio),fim:dataX(adicionarDias(linha.ponto.fim,1)),
@@ -517,7 +535,7 @@ export function LinhaBalancoEscadinha({
                   </div>
                 </div>
                 {locais.map((local, row) => (
-                  <div key={local} className={"lob-stairs-row"+(row%2?" lob-stairs-row-alt":"")} role="row" style={{height:alturaLinha}}>
+                  <div key={local} className={"lob-stairs-row"+(row%2?" lob-stairs-row-alt":"")} role="row" style={{height:alturaPorLocal.get(local) ?? 64}}>
                     <div className="lob-stairs-local" role="rowheader">{local}
                       {(sobreposicoesPorLocal.get(local) ?? 0) > 0 &&
                         <span className="lob-stairs-location-note" title="Janelas de serviços simultâneas neste local; verifique compatibilidade">!</span>}
@@ -595,7 +613,7 @@ export function LinhaBalancoEscadinha({
                     </div>
                   </div>
                 ))}
-                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
+                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={alturaEscadinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${alturaEscadinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
                 </svg>}
