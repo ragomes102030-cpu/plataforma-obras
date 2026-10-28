@@ -88,9 +88,20 @@ export function LinhaBalancoEscadinha({
     ()=>aplicarLocaisDaEapNaLob(linhasDaVisualizacao,nodosEap,unidades),
     [linhasDaVisualizacao,nodosEap,unidades]
   );
+  // Na versão mista (obra real + QA), disciplinas textuais do campo legado
+  // "pavimento" NÃO podem virar localizações fictícias da escadinha.
+  // Somente vínculos EAP → unidade física ou QA explicitamente habilitada.
+  const linhasFisicas = useMemo(
+    () => possuiQaSeparada
+      ? locaisConfirmados.linhas.filter(l =>
+          locaisConfirmados.codigosConfirmados.has(l.codigo) ||
+          (exibirQa && !!codigosExemplo?.has(l.codigo)))
+      : locaisConfirmados.linhas,
+    [locaisConfirmados, possuiQaSeparada, exibirQa, codigosExemplo]
+  );
   const dados = useMemo(
-    () => prepararLinhaBalancoVertical(locaisConfirmados.linhas, finsCalculados, locaisConfirmados.codigosConfirmados),
-    [locaisConfirmados, finsCalculados],
+    () => prepararLinhaBalancoVertical(linhasFisicas, finsCalculados, locaisConfirmados.codigosConfirmados),
+    [linhasFisicas, finsCalculados, locaisConfirmados.codigosConfirmados],
   );
   const repetitivas = useMemo(
     () => dados.series.filter(s => s.repetitiva || s.localizada),
