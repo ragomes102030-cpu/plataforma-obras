@@ -81,7 +81,7 @@ describe("LOB — todas as atividades na mesma régua desde o início da obra",(
     expect(r[0]?.pontos[0]?.inicio).toBe("2026-10-01");
     expect(modelo.series.filter(x=>x.repetitiva).flatMap(x=>x.pontos)).toHaveLength(18);
     expect(r.flatMap(x=>x.pontos).some(x=>x.codigo.startsWith("QA"))).toBe(false);
-    expect(r.map(x=>x.nome)).toEqual(["Mobilização","Estrutura","Acabamentos"]);
+    expect(r.map(x=>x.nome)).toEqual(["Acabamentos","Estrutura","Mobilização"]);
   });
   it("não cria períodos para marcos nem registros sem término válido",()=>{
     const m=linha("M","Liberação","Serviços Gerais");m.marco=true;
