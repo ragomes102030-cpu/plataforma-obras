@@ -190,3 +190,12 @@ A próxima etapa só inicia quando a mesma versão aprovada apresentar zero bloq
 **Regra permanente:** toda migração/transferência de dados PostgreSQL que preserve IDs deve verificar as sequences de colunas identity. "Tabela com dados" e "sequence pronta para novo INSERT" são condições distintas e ambas precisam ser validadas.
 
 **Não liberar:** nenhuma funcionalidade de escrita deve ser considerada homologada apenas porque leitura, build ou validação estrutural passaram. Toda mutação crítica precisa de teste real contra o banco de homologação.
+
+
+## 28/out/2026 — Período cadastrado da obra e Linha de Balanço
+
+**Sintoma:** a distribuição física de trechos dentro da janela oficial do CPM era rejeitada quando o término do CPM ultrapassava `projects.plannedFinish`. Na AURORA TESTE, a janela visível do cronograma seguia até dezembro de 2028, enquanto o período cadastrado da obra terminava antes; a tela de edição do escopo não permitia corrigir esse cadastro.
+
+**Correção:** a edição do escopo passou a apresentar início e término previstos da obra. O backend aceita alterar qualquer uma das datas, valida o intervalo combinado com a data atual não alterada e mantém a guarda de acesso ao projeto. A distribuição LOB continua limitada pela janela oficial do CPM e pelo período cadastrado da obra; as datas do cronograma não são alteradas.
+
+**Regressão:** `server/access-isolation.test.ts` confirma que o dono consegue atualizar o período, período invertido é rejeitado e outro usuário não altera as datas. A conclusão de produção ainda exige repetir a distribuição de trechos no fluxo LOB autenticado.
