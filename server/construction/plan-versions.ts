@@ -3,6 +3,7 @@ import {
   projectPlanVersions,
   scheduleActivities,
   scheduleDependencies,
+  lobActivityLocations,
   wbsNodes,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -303,6 +304,22 @@ export async function ensureWritablePlanVersion(
           .$returningIds();
         if (!inserted) throw new Error(`Falha ao clonar a atividade ${activity.name}.`);
         activityIdMap.set(activity.id, inserted);
+      }
+
+      // Cada versão herda as parcelas físicas da versão base usando os novos
+      // IDs de atividade; a versão histórica permanece imutável.
+      const parcelasBase = await tx.select().from(lobActivityLocations).where(and(
+        eq(lobActivityLocations.projectId,projectId),
+        eq(lobActivityLocations.versionId,decision.baseVersionId)
+      ));
+      for(const parcela of parcelasBase){
+        const novaAtividade=activityIdMap.get(parcela.activityId);
+        if(!novaAtividade)throw new Error("Parcela LOB sem atividade correspondente no fork.");
+        await tx.insert(lobActivityLocations).values({
+          projectId,versionId:created,activityId:novaAtividade,
+          unitId:parcela.unitId,plannedQuantity:parcela.plannedQuantity,
+          startDate:parcela.startDate,finishDate:parcela.finishDate,
+        });
       }
 
       const baseDependencies = await tx
