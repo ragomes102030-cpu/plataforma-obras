@@ -32,6 +32,9 @@ type Props = {
 };
 type Escala = "dia" | "semana" | "quinzena" | "mes";
 type Barra = { serie: SerieLob; ponto: PontoLob; cor: string; indice: number };
+type LinhaPendente =
+  | { tipo: "grupo"; grupo: string; altura: number }
+  | { tipo: "atividade"; grupo: string; ponto: PontoLob; altura: number };
 const DIA = 86400000;
 const COLUNA = 168;
 const STATUS_COLUNA = 112;
@@ -80,8 +83,9 @@ export function LinhaBalancoEscadinha({
   const possuiQaSeparada = qtdQa > 0 && qtdReais > 0;
   const [exibirQa, setExibirQa] = useState(false);
   const linhasDaVisualizacao = useMemo(
-    () => possuiQaSeparada && !exibirQa
-      ? linhas.filter(l => !codigosExemplo?.has(l.codigo)) : linhas,
+    () => possuiQaSeparada
+      ? linhas.filter(l => exibirQa ? !!codigosExemplo?.has(l.codigo) : !codigosExemplo?.has(l.codigo))
+      : linhas,
     [linhas, codigosExemplo, possuiQaSeparada, exibirQa]
   );
   const locaisConfirmados = useMemo(
@@ -114,6 +118,7 @@ export function LinhaBalancoEscadinha({
     [locaisConfirmados, finsCalculados, repetitivas]
   );
   const [busca, setBusca] = useState("");
+  const [mostrarPendentes, setMostrarPendentes] = useState(true);
   const [localSelecionado,setLocalSelecionado]=useState<Record<string,string>>({});
   const [novoLocalCodigo,setNovoLocalCodigo]=useState("");
   const [novoLocalNome,setNovoLocalNome]=useState("");
@@ -133,6 +138,7 @@ export function LinhaBalancoEscadinha({
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
   const rolagem = useRef<HTMLDivElement | null>(null);
+  const painelVinculo = useRef<HTMLDetailsElement | null>(null);
 
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const seriesVisiveis = repetitivas.filter(s =>
@@ -145,6 +151,17 @@ export function LinhaBalancoEscadinha({
     !termo || `${p.nome} ${p.codigo} ${g.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
   })).filter(g=>g.pontos.length>0);
   const totalGerais = geraisVisiveis.reduce((s,g)=>s+g.pontos.length,0);
+  // A EAP continua integral no MESMO eixo; sem confundir frente com local físico.
+  const linhasPendentes: LinhaPendente[] = [];
+  if (mostrarPendentes && pavimento === "todos") {
+    for (const grupo of geraisVisiveis) {
+      linhasPendentes.push({tipo:"grupo",grupo:grupo.nome,altura:30});
+      for (const ponto of grupo.pontos)
+        linhasPendentes.push({tipo:"atividade",grupo:grupo.nome,ponto,altura:38});
+    }
+  }
+  const pontosPendentes = linhasPendentes.flatMap(l=>l.tipo==="atividade" ? [l.ponto] : []);
+  const alturaPendentes = linhasPendentes.reduce((s,l)=>s+l.altura,0);
   // Descarta categorias antigas usadas equivocadamente no campo pavimento:
   // apenas unidades de serviços repetitivos entram no eixo físico.
   const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
@@ -155,10 +172,10 @@ export function LinhaBalancoEscadinha({
   }));
   const periodoRepetitivo = selecionarPeriodoPelosServicos(pontosVisiveis);
   const periodoFoco = selecionarPeriodoPelosServicos(pontosVisiveis.filter(s=>s.repetitiva))??periodoRepetitivo;
-  const periodoCompleto = incluirInicioObra ?? (possuiQaSeparada ? false : locaisConfirmados.codigosConfirmados.size > 0);
+  const periodoCompleto = incluirInicioObra ?? (totalGerais > 0 || locaisConfirmados.codigosConfirmados.size > 0);
   const periodoAutomatico = selecionarPeriodoPelosServicos([
     ...pontosVisiveis,
-    ...geraisVisiveis.map(g=>({...g,repetitiva:false})),
+    ...(mostrarPendentes && pavimento === "todos" ? geraisVisiveis.map(g=>({...g,repetitiva:false})) : []),
   ]);
   const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2026-01-01");
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
@@ -220,9 +237,11 @@ export function LinhaBalancoEscadinha({
   }
 
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
+  const qtdGrafico = qtdBarras + pontosPendentes.length;
   const resumo = resumoLob(seriesVisiveis,locais,hoje);
   const originais = new Map(linhas.map(l=>[l.codigo,l]));
-  const ligacoes = estadoVinculos==="pronto" ? calcularVinculosExibidos(dependencias,resumo.pontos) : [];
+  const ligacoes = estadoVinculos==="pronto"
+    ? calcularVinculosExibidos(dependencias,[...resumo.pontos,...pontosPendentes]) : [];
   const coordenadas = new Map<string,{inicio:number;fim:number;y:number}>();
   locais.forEach((local, linhaIndex)=>{
     for (const barra of barrasPorLocal.get(local) ?? []) coordenadas.set(barra.ponto.codigo,{
@@ -231,6 +250,14 @@ export function LinhaBalancoEscadinha({
       y:linhaIndex*alturaLinha+19+barra.indice*23,
     });
   });
+  let deslocamentoPendente = locais.length*alturaLinha;
+  for (const linha of linhasPendentes) {
+    if (linha.tipo==="atividade") coordenadas.set(linha.ponto.codigo,{
+      inicio:dataX(linha.ponto.inicio),fim:dataX(adicionarDias(linha.ponto.fim,1)),
+      y:deslocamentoPendente+19,
+    });
+    deslocamentoPendente += linha.altura;
+  }
   const setas = ligacoes.flatMap(v=>{
     const origem=coordenadas.get(v.de),destino=coordenadas.get(v.para);
     if(!origem||!destino)return [];
@@ -318,7 +345,7 @@ export function LinhaBalancoEscadinha({
                 {periodoRepetitivo && <span>{pontosVisiveis.some(s => s.repetitiva) ? "Primeira atividade repetitiva" : "Primeira atividade localizada"}: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {qtdQa > 0 && <span className="lob-stairs-qa">QA: {qtdQa} atividade(s) de demonstração {possuiQaSeparada && !exibirQa ? "— ocultas da visão principal" : "nas sequências repetitivas"}{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                {possuiQaSeparada && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{locaisConfirmados.codigosConfirmados.size}</b> localizadas · <b>{Math.max(0,qtdReais-locaisConfirmados.codigosConfirmados.size)}</b> pendentes de vínculo físico</span>}
+                {possuiQaSeparada && !exibirQa && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{locaisConfirmados.codigosConfirmados.size}</b> localizadas · <b>{Math.max(0,qtdReais-locaisConfirmados.codigosConfirmados.size)}</b> pendentes de vínculo físico</span>}
                 <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
               {possuiQaSeparada && <label className="lob-stairs-qa-toggle">
@@ -396,8 +423,9 @@ export function LinhaBalancoEscadinha({
           </div>
 
           <div className="lob-stairs-zoom-actions" aria-label="Ajustes do gráfico">
-            <span><strong>{locais.length}</strong> locais · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades localizadas</span>
+            <span data-testid="lob-total-timeline"><strong>{qtdGrafico}</strong> atividades no gráfico · <strong>{qtdBarras}</strong> com local físico · <strong>{pontosPendentes.length}</strong> aguardando localização</span>
             <div>
+              <label className="lob-stairs-show-links"><input type="checkbox" data-testid="lob-show-pending" checked={mostrarPendentes} onChange={e=>{setMostrarPendentes(e.target.checked);setDataInicial("");setDataFinal("");setPxManual(null);}}/> Atividades sem local ({totalGerais})</label>
               <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
               <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
               <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-STATUS_COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
@@ -453,9 +481,9 @@ export function LinhaBalancoEscadinha({
           </details>
 
           {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
-          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Sem escadinha neste filtro</h3><p>Verifique os serviços e pavimentos selecionados. As demais atividades da obra estão na relação cronológica abaixo.</p></div>
-          : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
-              <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
+          : qtdGrafico === 0 ? <div className="lob-stairs-empty"><h3>Sem atividades neste filtro</h3><p>Confira os filtros ou habilite as atividades sem localização. Nenhum pavimento é inferido automaticamente.</p></div>
+          : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Linha de Balanço integrada: tempo, locais físicos e atividades ainda sem local">
+              <div className="lob-stairs-board" role="table" aria-label="Cronograma completo: locais físicos e atividades ainda sem local" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
                 <div className="lob-stairs-months" role="row">
                   <div className="lob-stairs-sticky-head" role="columnheader">Local físico</div>
                   <div className="lob-stairs-status-head" role="columnheader">Status</div>
@@ -502,7 +530,55 @@ export function LinhaBalancoEscadinha({
                     </div>
                   </div>
                 ))}
-                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
+
+                {linhasPendentes.map((linha,i)=>linha.tipo==="grupo" ? (
+                  <div key={"grupo-"+linha.grupo} className="lob-stairs-pending-group" role="row"
+                    data-testid="lob-pending-group" style={{height:linha.altura}}>
+                    <div className="lob-stairs-local" role="rowheader" title={linha.grupo}>Sem local · {linha.grupo}</div>
+                    <div className="lob-stairs-status-cell" role="cell">EAP</div>
+                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
+                      {semanas.map(w=><span key={w.inicio} className="lob-stairs-gridline" style={{left:w.x}}/>)}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={"pendente-"+linha.ponto.codigo} className={"lob-stairs-row lob-stairs-pending-row"+(i%2?" lob-stairs-row-alt":"")}
+                    role="row" data-testid="lob-pending-row" style={{height:linha.altura}}>
+                    <div className="lob-stairs-local" role="rowheader" title={linha.ponto.codigo+" · "+linha.ponto.nome}>
+                      <span className="lob-pending-code">{linha.ponto.codigo}</span>
+                      <span className="lob-pending-name">{linha.ponto.nome}</span>
+                    </div>
+                    <div className="lob-stairs-status-cell" role="cell">
+                      <button type="button" className="lob-pending-link" title="Confirmar local físico na EAP"
+                        aria-label={"Vincular local de "+linha.ponto.codigo} onClick={()=>{
+                          const painel=painelVinculo.current;
+                          if(painel){painel.open=true; painel.scrollIntoView({behavior:"smooth",block:"start"});}
+                        }}>Vincular local</button>
+                    </div>
+                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
+                      {semanas.map(w=><span key={w.inicio} className="lob-stairs-gridline" style={{left:w.x}}/>)}
+                      {diaUtc(linha.ponto.fim)>=diaUtc(eixoInicio)&&diaUtc(linha.ponto.inicio)<diaUtc(eixoFimExclusivo)&&(()=>{
+                        const inicioCortado=Math.max(diaUtc(linha.ponto.inicio),diaUtc(eixoInicio));
+                        const fimCortado=Math.min(diaUtc(linha.ponto.fim),diaUtc(eixoFimExclusivo)-DIA);
+                        const x=(inicioCortado-diaUtc(eixoInicio))/DIA*pxDia;
+                        const largura=Math.max(5,((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
+                        const ponto={...linha.ponto,local:""};
+                        const serie:SerieLob={chave:"pendente-"+ponto.codigo,nome:ponto.nome,pontos:[ponto],repetitiva:false};
+                        return <button type="button" className="lob-stairs-bar lob-pending-bar"
+                          data-testid="lob-unlocated-bar" style={{left:x,top:9,width:largura}}
+                          title={ponto.nome+" | EAP "+ponto.codigo+" | Sem local confirmado | "+formatoCompleto(ponto.inicio)+" a "+formatoCompleto(ponto.fim)}
+                          aria-label={ponto.codigo+" · "+ponto.nome+" · local pendente · "+formatoCompleto(ponto.inicio)+" a "+formatoCompleto(ponto.fim)}
+                          onClick={()=>setDetalhe({serie,ponto,cor:"#657d8f",indice:0})}>
+                          {ponto.quantidade!==null&&ponto.quantidade>0&&ponto.executado>0&&
+                            <i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,ponto.executado/ponto.quantidade*100))+"%"}}/>}
+                          <span>{largura>=52?ponto.codigo:""}</span>
+                        </button>;
+                      })()}
+                      {dataValida(hoje)&&diaUtc(hoje)>=diaUtc(eixoInicio)&&diaUtc(hoje)<diaUtc(eixoFimExclusivo)&&
+                        <span className="lob-stairs-today" title={"Hoje: "+formatoCompleto(hoje)} style={{left:dataX(hoje)}}/>}
+                    </div>
+                  </div>
+                ))}
+                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
                 </svg>}
@@ -511,10 +587,10 @@ export function LinhaBalancoEscadinha({
 
           <div className="lob-stairs-legend">
             {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
-            <span className="lob-stairs-legend-note">Barras = períodos planejados · status = execução registrada · vínculos = somente cadastrados</span>
+            <span className="lob-stairs-legend-note">Barras coloridas = local confirmado · barras cinzas = local pendente · vínculos = dependências cadastradas</span>
           </div>
           {totalGerais>0 && (
-            <details className="lob-stairs-mapping" data-testid="lob-location-mapping">
+            <details className="lob-stairs-mapping" data-testid="lob-location-mapping" ref={painelVinculo}>
               <summary><strong>Vincular serviços aos locais físicos</strong>
                 <span>{totalGerais} atividades sem sequência localizada · dados da EAP</span><ChevronDown size={15}/></summary>
               <div className="lob-stairs-mapping-body">
@@ -591,7 +667,9 @@ export function LinhaBalancoEscadinha({
                 <div><dt>Período das atividades visíveis</dt><dd>{periodoAutomatico?formatoCompleto(periodoAutomatico.primeiro)+" – "+formatoCompleto(periodoAutomatico.ultimo):"Sem período"}</dd></div>
                 <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
                 <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
-                <div><dt>Atividades na escadinha</dt><dd>{qtdBarras}</dd></div>
+                <div><dt>Atividades no gráfico integrado</dt><dd data-testid="lob-summary-total">{qtdGrafico}</dd></div>
+                <div><dt>Atividades na escadinha física</dt><dd>{qtdBarras}</dd></div>
+                <div><dt>Pendentes de localização</dt><dd>{pontosPendentes.length}</dd></div>
                 <div><dt>Janela total de calendário</dt><dd>{resumo.diasCalendario===null?"—":resumo.diasCalendario+" dias"}</dd></div>
                 <div><dt>Cadência média de inícios</dt><dd>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})+" dias/pavimento"}</dd></div>
               </dl>
@@ -610,7 +688,7 @@ export function LinhaBalancoEscadinha({
             </section>
             <section className="lob-stairs-dashboard-card lob-stairs-dashboard-detail" aria-label="Detalhes da atividade selecionada">
               <h3>Detalhes da atividade</h3>
-              {!detalhe?<p className="lob-stairs-detail-hint">Selecione uma barra na escadinha para consultar o vínculo EAP, o período e os quantitativos.</p>:
+              {!detalhe?<p className="lob-stairs-detail-hint">Selecione uma barra da escadinha física ou das faixas sem local para consultar EAP, período e quantitativos.</p>:
                 <dl data-testid="lob-activity-detail">
                   <div><dt>Serviço</dt><dd>{detalhe.serie.nome}</dd></div>
                   <div><dt>Código EAP</dt><dd>{detalhe.ponto.codigo}</dd></div>
