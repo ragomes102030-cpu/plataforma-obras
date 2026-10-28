@@ -70,6 +70,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateEapScope, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
+import { eapDictionaryDecisionStatus } from "./construction/eap-approval-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
   ScheduleEvidenceActivity,
@@ -2005,7 +2006,7 @@ export const appRouter = router({
       const rows=await db.select().from(agentDecisions).where(and(eq(agentDecisions.projectId,input.projectId),eq(agentDecisions.stage,"EAP_DICIONARIO"))).orderBy(desc(agentDecisions.createdAt)).limit(1);
       if(!rows[0]) return {status:"pending" as const,requiredFields:[],conditionalFields:[],summary:"Padrão do dicionário ainda não aprovado."};
       const scope=parseJsonValue(rows[0].scopeJson) as {requiredFields?:string[];conditionalFields?:string[]}|null;
-      return {status:rows[0].decision==="rejected"?"rejected" as const:"approved" as const,requiredFields:scope?.requiredFields??[],conditionalFields:scope?.conditionalFields??[],summary:rows[0].reason??""};
+      return {status:eapDictionaryDecisionStatus(rows[0].decision),requiredFields:scope?.requiredFields??[],conditionalFields:scope?.conditionalFields??[],summary:rows[0].reason??""};
     }),
     decideEapDictionaryStandard: protectedProcedure.input(z.object({projectId:z.number().int().positive(),decision:z.enum(["approved","partially_approved","rejected"]),requiredFields:z.array(z.string()).max(30),conditionalFields:z.array(z.string()).max(30),summary:z.string().max(2000)})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
@@ -2013,7 +2014,7 @@ export const appRouter = router({
       return {saved:true as const,decisionId:decision.id};
     }),
     validateWbsStructure: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{
-      const db=await getDb(); if(!db) return {valid:true,issues:[],summary:{errors:0,warnings:0,costErrors:0}};
+      const db=await getDb(); if(!db) return {valid:false,issues:[{code:"eap_validation_unavailable",severity:"error" as const,message:"Validação indisponível: banco de dados não configurado.",entityRef:"project"}],summary:{nodes:0,leaves:0,errors:1,warnings:0,costErrors:0}};
       await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const versionId=await getCurrentPlanVersionId(db,input.projectId);
       const nodes=await db.select().from(wbsNodes).where(

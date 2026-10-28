@@ -5,6 +5,14 @@ export type EapBaselineValidationResult = EapValidationResult & {
   readyForBaseline: boolean;
 };
 
+export type EapDictionaryDecision = "approved" | "partially_approved" | "rejected";
+export type EapDictionaryStatus = "pending" | EapDictionaryDecision;
+
+export function eapDictionaryDecisionStatus(decision: string | null | undefined): EapDictionaryStatus {
+  if (decision === "approved" || decision === "partially_approved" || decision === "rejected") return decision;
+  return "pending";
+}
+
 /**
  * Validação de aprovação/baseline.
  *

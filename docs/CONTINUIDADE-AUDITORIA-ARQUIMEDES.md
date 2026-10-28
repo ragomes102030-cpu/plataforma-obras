@@ -20,7 +20,7 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Playwright local: um teste passou em desktop e celular; verificou linha de 64 px, faixa compartilhada e ausência de overflow horizontal da página.
 - Capturas locais: `test-results/lob-profissional/desktop-faixas-compactas.png` e `test-results/lob-profissional/mobile-faixas-compactas.png`.
 - `pnpm check`: passou. `pnpm build`: passou com avisos sobre as variáveis de analytics ausentes e o bundle JS acima de 500 kB.
-- `pnpm test`: 141 arquivos passaram; 1.271 testes passaram e 8 foram ignorados por falta da planilha de referência local.
+- `pnpm test`: 141 arquivos passaram; 1.274 testes passaram e 8 foram ignorados por falta da planilha de referência local.
 - Runtime disponível: Node.js 24.21.0; o projeto declara Node 22.x, portanto comandos reportam aviso de engine.
 - `git diff --check`: passou. PR #244 está aberta contra `develop`; CI não havia reportado verificações na última consulta. Código não incorporado nem publicado.
 
@@ -33,6 +33,21 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Limite de evidência: a tentativa de consultar o Supabase pela integração MCP falhou porque a ferramenta não está disponível nesta sessão; o CLI `supabase` também não está instalado. Portanto, existência/aplicação da migração, contagens atuais da Aurora, dados multilocais reais e permissões vigentes são **NÃO TESTÁVEL** ao vivo. A afirmação no script SQL sobre provisionamento prévio não substitui leitura atual do banco.
 - Hardening identificado: a migração define FKs individuais, enquanto consistência composta obra/versão/atividade/unidade é garantida no backend. O papel da aplicação tem política RLS ampla para escrita. Considerar FKs/constraints compostas em migração própria após conferir o estado real; não alterar o banco sem backup verificável e janela autorizada.
 - Alterações multilocais foram adicionadas à mesma PR #244 para revisão; permanecem sem merge e sem deploy.
+
+## Revisão da EAP — verificação de código
+
+- A estrutura verifica raiz única, órfãos, ciclos, níveis/códigos, duplicidades, folhas terminais e filhos abaixo de entregas. Campos do dicionário e evidência de escopo são validados separadamente da estrutura; discrepâncias de quantitativos comparáveis geram alerta, sem somar unidades diferentes.
+- A consulta de validação respondia `valid: true` quando não havia banco configurado, podendo anunciar sucesso sem dado. Agora retorna erro explícito de validação indisponível e não libera o gate.
+- A consulta do padrão do dicionário convertia `partially_approved` em `approved`. Agora preserva a decisão parcial; a interface só considera aprovado o estado explicitamente `approved`.
+- Testes das decisões do dicionário passaram. Após estas correções, a suíte completa passou (1.274 testes, 8 pulados), `pnpm check` e `pnpm build` passaram. O Playwright desktop/celular já havia passado após as alterações de renderização multilocal.
+- Nenhum estado da EAP da Aurora foi lido ao vivo: continua **NÃO TESTÁVEL** até haver conexão Supabase de leitura.
+
+## CPM, Gantt e baseline — auditoria de código
+
+- CPM é calculado sobre a rede da versão corrente. Testes existentes cobrem FS/SS/FF/SF, lags, dias úteis, restrições de início/término, folga total/livre, ciclos e caminhos paralelos. Dependências inválidas impedem cálculo e baseline.
+- Gantt e LOB recebem as atividades da consulta `planning.grade`; dependências/versão são lidas da mesma versão de planejamento. A LOB consome as datas calculadas dessa grade.
+- Baseline exige versão aprovada, CPM atual e viável, durações válidas e rede de dependências íntegra. Captura de cabeçalho/itens é transacional; índice parcial e migração limitam a uma baseline ativa, arquivando a anterior sem apagar fotografias históricas.
+- Validação da matriz de obra, calendário/exceções, dados de dependência e baseline vigentes da Aurora continua **NÃO TESTÁVEL** ao vivo. Migrações e consistência na base publicada ainda precisam de leitura autorizada.
 
 ## Próximos passos
 
