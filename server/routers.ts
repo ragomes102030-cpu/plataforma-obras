@@ -4208,7 +4208,10 @@ export const appRouter = router({
           // em que foi digitado. Sem isso, medição de versão anterior virava
           // "executado 0" no cronograma (o caso dos 10 lançamentos da AURORA).
           db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
-          db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
+          db.select().from(productionEntries).where(and(
+            eq(productionEntries.projectId,input.projectId),
+            eq(productionEntries.status,"confirmada"),
+          )).orderBy(productionEntries.productionDate,productionEntries.id),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
         const inicioIso = localIso(inicio);
@@ -4241,10 +4244,10 @@ export const appRouter = router({
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
         for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
         const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
-        const exemploPorCodigo = Object.fromEntries(
-          activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
-        );
-        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, execucaoPorCodigoLocal, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
+        const codigosExemplo=new Set(activities.filter(a=>a.exemplo===1).map(a=>a.wbsCode));
+        const exemploPorCodigo=Object.fromEntries([...codigosExemplo].map(codigo=>[codigo,true]));
+        const linhasOperacionais=linhasDerivadas.filter(l=>!codigosExemplo.has(l.codigo));
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, execucaoPorCodigoLocal, totalGeral, agregado:agregadoDoCronograma(linhasOperacionais), exemploPorCodigo };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({

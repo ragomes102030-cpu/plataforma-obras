@@ -7,9 +7,11 @@ describe("Grade e LOB — datas de projeto e atividades de demonstração",()=>{
   const home=readFileSync(resolve("client/src/pages/Home.tsx"),"utf8");
   const visual=readFileSync(resolve("client/src/components/VisualizacaoPlanejamento.tsx"),"utf8");
   it("marca no endpoint apenas as atividades realmente identificadas como exemplo no banco",()=>{
-    expect(routers).toContain('activities.filter(a => a.exemplo === 1)');
-    expect(routers).toContain('map(a => [a.wbsCode, true])');
+    expect(routers).toContain('activities.filter(a=>a.exemplo===1)');
+    expect(routers).toContain('Object.fromEntries([...codigosExemplo].map(codigo=>[codigo,true]))');
     expect(routers).toContain("exemploPorCodigo };");
+    expect(routers).toContain('const linhasOperacionais=linhasDerivadas.filter(l=>!codigosExemplo.has(l.codigo))');
+    expect(routers).toContain('agregado:agregadoDoCronograma(linhasOperacionais)');
   });
   it("propaga referência da obra e QA da grade sem alterar o plano",()=>{
     expect(home).toContain("codigosExemplo={exemploPorCodigo}");
