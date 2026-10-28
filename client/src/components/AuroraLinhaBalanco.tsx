@@ -530,6 +530,54 @@ export function LinhaBalancoEscadinha({
                     </div>
                   </div>
                 ))}
+
+                {linhasPendentes.map((linha,i)=>linha.tipo==="grupo" ? (
+                  <div key={"grupo-"+linha.grupo} className="lob-stairs-pending-group" role="row"
+                    data-testid="lob-pending-group" style={{height:linha.altura}}>
+                    <div className="lob-stairs-local" role="rowheader" title={linha.grupo}>Sem local · {linha.grupo}</div>
+                    <div className="lob-stairs-status-cell" role="cell">EAP</div>
+                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
+                      {semanas.map(w=><span key={w.inicio} className="lob-stairs-gridline" style={{left:w.x}}/>)}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={"pendente-"+linha.ponto.codigo} className={"lob-stairs-row lob-stairs-pending-row"+(i%2?" lob-stairs-row-alt":"")}
+                    role="row" data-testid="lob-pending-row" style={{height:linha.altura}}>
+                    <div className="lob-stairs-local" role="rowheader" title={linha.ponto.codigo+" · "+linha.ponto.nome}>
+                      <span className="lob-pending-code">{linha.ponto.codigo}</span>
+                      <span className="lob-pending-name">{linha.ponto.nome}</span>
+                    </div>
+                    <div className="lob-stairs-status-cell" role="cell">
+                      <button type="button" className="lob-pending-link" title="Confirmar local físico na EAP"
+                        aria-label={"Vincular local de "+linha.ponto.codigo} onClick={()=>{
+                          const painel=painelVinculo.current;
+                          if(painel){painel.open=true; painel.scrollIntoView({behavior:"smooth",block:"start"});}
+                        }}>Vincular local</button>
+                    </div>
+                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
+                      {semanas.map(w=><span key={w.inicio} className="lob-stairs-gridline" style={{left:w.x}}/>)}
+                      {diaUtc(linha.ponto.fim)>=diaUtc(eixoInicio)&&diaUtc(linha.ponto.inicio)<diaUtc(eixoFimExclusivo)&&(()=>{
+                        const inicioCortado=Math.max(diaUtc(linha.ponto.inicio),diaUtc(eixoInicio));
+                        const fimCortado=Math.min(diaUtc(linha.ponto.fim),diaUtc(eixoFimExclusivo)-DIA);
+                        const x=(inicioCortado-diaUtc(eixoInicio))/DIA*pxDia;
+                        const largura=Math.max(5,((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
+                        const ponto={...linha.ponto,local:""};
+                        const serie:SerieLob={chave:"pendente-"+ponto.codigo,nome:ponto.nome,pontos:[ponto],repetitiva:false};
+                        return <button type="button" className="lob-stairs-bar lob-pending-bar"
+                          data-testid="lob-unlocated-bar" style={{left:x,top:9,width:largura}}
+                          title={ponto.nome+" | EAP "+ponto.codigo+" | Sem local confirmado | "+formatoCompleto(ponto.inicio)+" a "+formatoCompleto(ponto.fim)}
+                          aria-label={ponto.codigo+" · "+ponto.nome+" · local pendente · "+formatoCompleto(ponto.inicio)+" a "+formatoCompleto(ponto.fim)}
+                          onClick={()=>setDetalhe({serie,ponto,cor:"#657d8f",indice:0})}>
+                          {ponto.quantidade!==null&&ponto.quantidade>0&&ponto.executado>0&&
+                            <i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,ponto.executado/ponto.quantidade*100))+"%"}}/>}
+                          <span>{largura>=52?ponto.codigo:""}</span>
+                        </button>;
+                      })()}
+                      {dataValida(hoje)&&diaUtc(hoje)>=diaUtc(eixoInicio)&&diaUtc(hoje)<diaUtc(eixoFimExclusivo)&&
+                        <span className="lob-stairs-today" title={"Hoje: "+formatoCompleto(hoje)} style={{left:dataX(hoje)}}/>}
+                    </div>
+                  </div>
+                ))}
                 {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
