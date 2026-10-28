@@ -24,11 +24,14 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
       atividade("3","Pintura","Acabamentos","2026-11-05"),
     ]);
     expect(html).not.toContain('data-testid="lob-step-bar"');
-    expect((html.match(/data-testid="lob-context-bar"/g)??[])).toHaveLength(3);
-    expect(html).toContain("lob-stairs-board");
-    expect(html).toContain('value="2026-11-03"');
-    expect(html).toContain("Sem sequência");
-    expect(html).toContain("Atividades sem sequência repetitiva");
+    expect(html).not.toContain('data-testid="lob-context-bar"');
+    expect(html).not.toContain('data-testid="lob-general-row"');
+    expect(html).toContain('data-testid="lob-previous-activities"');
+    expect(html).toContain("Demais atividades do cronograma");
+    expect(html).toContain("03/11/2026");
+    expect(html).toContain("Armadura");
+    expect(html).toContain("Chapisco");
+    expect(html).toContain("Pintura");
   });
 
   it("18 barras reais, três cores e seis pavimentos em ordem de cima para baixo",()=>{
@@ -62,12 +65,13 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
       atividade("1.2","Licenças","Infraestrutura","2026-10-02"),
     ]);
     expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(2);
-    expect((html.match(/data-testid="lob-context-bar"/g)??[])).toHaveLength(2);
+    expect(html).not.toContain('data-testid="lob-context-bar"');
+    expect(html).toContain('data-testid="lob-previous-activities"');
     expect(html).toContain('role="rowheader">P01');
     expect(html).toContain('role="rowheader">P02');
     expect(html).not.toContain('role="rowheader">Serviços Gerais');
     expect(html).not.toContain('role="rowheader">Infraestrutura');
-    expect(html).toContain('value="2026-10-01"');
+    expect(html).toContain('value="2026-11-03"');
     expect(html).toContain("atividades do cronograma fora das escadinhas");
   });
 
@@ -123,7 +127,7 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("Mostrar vínculos (1)");
     expect(html).toContain("Selecione uma barra");
     expect(html).toContain("Período das atividades visíveis");
-    expect(html).toContain("Atividades no gráfico");
+    expect(html).toContain("Atividades na escadinha");
     expect(html).not.toContain('aria-label="Vínculos cadastrados entre atividades visíveis"');
   });
 
@@ -164,8 +168,8 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("QA: 4 atividade(s) de demonstração");
     expect(html).toContain("não representam execução real");
     expect(html).toContain('data-testid="lob-toggle-obra-start"');
-    expect(html).toContain("Focar nas escadinhas");
-    expect(html).toContain('value="2026-10-01"');
+    expect(html).toContain("Mostrar desde início da obra");
+    expect(html).toContain('value="2028-02-08"');
     expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(4);
   });
 
