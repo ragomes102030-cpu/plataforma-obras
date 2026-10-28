@@ -106,16 +106,17 @@ export function atividadesForaDaEscadinhaLob(
   const codigosRepetitivos = new Set(seriesRepetitivas.flatMap(s=>s.pontos.map(p=>p.codigo)));
   const grupos = new Map<string,GrupoContextoLob>();
   for(const l of linhas) {
+    const fim=finsCalculados[l.codigo];
     if(l.marco || codigosRepetitivos.has(l.codigo) ||
-      !dataValida(l.inicio) || !dataValida(finsCalculados[l.codigo]) ||
-      finsCalculados[l.codigo]<l.inicio ||
+      !dataValida(l.inicio) || !dataValida(fim) ||
+      fim<l.inicio ||
       !Number.isFinite(l.duracao) || l.duracao<1) continue;
     const nome=(l.frente??"").trim()||"Outras atividades da EAP";
     const chave=nome.toLocaleLowerCase("pt-BR");
     if(!grupos.has(chave)) grupos.set(chave,{chave,nome,pontos:[]});
     grupos.get(chave)!.pontos.push({
       codigo:l.codigo,nome:l.atividade,local:String(l.pavimento??"").trim(),
-      inicio:l.inicio,fim:finsCalculados[l.codigo],
+      inicio:l.inicio,fim,
       executado:l.executado,quantidade:l.quantidade,unidade:l.unidade,
     });
   }
