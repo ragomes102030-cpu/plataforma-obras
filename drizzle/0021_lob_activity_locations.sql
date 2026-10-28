@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS "lob_activity_locations" (
   CONSTRAINT "lob_locations_quantity_positive" CHECK ("plannedQuantity" > 0),
   CONSTRAINT "lob_locations_dates_ordered" CHECK ("startDate" <= "finishDate"),
   CONSTRAINT "lob_locations_date_format" CHECK (
-    "startDate" ~ '^\\d{4}-\\d{2}-\\d{2}$'
-    AND "finishDate" ~ '^\\d{4}-\\d{2}-\\d{2}$')
+    "startDate" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    AND "finishDate" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "lob_activity_locations_unique_idx"
