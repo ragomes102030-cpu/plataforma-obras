@@ -279,6 +279,26 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("QA: 2 atividade(s) de demonstração — ocultas");
   });
 
+  it("Aurora: disciplinas iguais não simulam pavimentos sem vínculo EAP-local",()=>{
+    const linhas=[
+      atividade("1.1","Alvenaria","Serviços Gerais","2026-10-01"),
+      atividade("1.2","Alvenaria","Estrutura","2026-11-01"),
+      atividade("QA.1","Pintura","P01","2028-02-01"),
+      atividade("QA.2","Pintura","P02","2028-02-05"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      codigosExemplo:new Set(["QA.1","QA.2"]),inicioObra:"2026-10-01",
+      hoje:"2026-10-28",onAbrirAtividades:()=>{},
+    }));
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(0);
+    expect(html).not.toContain('role="rowheader">Serviços Gerais');
+    expect(html).not.toContain('role="rowheader">Estrutura');
+    expect(html).not.toContain('role="rowheader">P01');
+    expect(html).toContain("2 atividades com datas cadastradas");
+    expect(html).toContain('value="2026-10-01"');
+  });
+
   it("sem mapeamento validado: não inventa degraus de 2026",()=>{
     const html=renderizar([
       atividade("1.1.1","Mobilização e canteiro","Serviços Gerais","2026-10-01"),
