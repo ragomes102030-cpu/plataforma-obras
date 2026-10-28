@@ -324,7 +324,7 @@ export function LinhaBalancoEscadinha({
               {possuiQaSeparada && <label className="lob-stairs-qa-toggle">
                 <input type="checkbox" data-testid="lob-toggle-qa" checked={exibirQa} onChange={e=>{
                   setExibirQa(e.target.checked);
-                  setIncluirInicioObra(e.target.checked ? false : true);
+                  setIncluirInicioObra(false); // nunca voltar automaticamente à janela longa de 2028
                   setDataInicial("");setDataFinal("");setPxManual(null);setPavimento("todos");setDetalhe(null);
                 }}/>
                 Exibir simulação QA ({qtdQa} atividades)
