@@ -688,7 +688,7 @@ export function LinhaBalancoEscadinha({
             </section>
             <section className="lob-stairs-dashboard-card lob-stairs-dashboard-detail" aria-label="Detalhes da atividade selecionada">
               <h3>Detalhes da atividade</h3>
-              {!detalhe?<p className="lob-stairs-detail-hint">Selecione qualquer barra do gráfico para consultar o vínculo EAP, o período e os quantitativos.</p>:
+              {!detalhe?<p className="lob-stairs-detail-hint">Selecione uma barra da escadinha física ou das faixas sem local para consultar EAP, período e quantitativos.</p>:
                 <dl data-testid="lob-activity-detail">
                   <div><dt>Serviço</dt><dd>{detalhe.serie.nome}</dd></div>
                   <div><dt>Código EAP</dt><dd>{detalhe.ponto.codigo}</dd></div>
