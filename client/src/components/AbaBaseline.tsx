@@ -1,6 +1,7 @@
 import { Camera, CheckCircle2, LockKeyhole, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { selectOperationalPlanning } from "@shared/operational-planning";
 import { PainelDesviosBaseline } from "./PainelDesviosBaseline";
 
 type Props = { projetoId: number };
@@ -67,7 +68,13 @@ export function AbaBaseline({ projetoId }: Props) {
     onError: error => setMensagem(error.message),
   });
 
-  const activities = plano.data?.activities ?? [];
+  const todasAtividades = plano.data?.activities ?? [];
+  const todasDependencias = plano.data?.dependencies ?? [];
+  const planejamentoOperacional = useMemo(
+    () => selectOperationalPlanning(todasAtividades, todasDependencias),
+    [todasAtividades, todasDependencias]
+  );
+  const activities = planejamentoOperacional.activities;
   const baselines = plano.data?.baselines ?? [];
 
   const resumo = useMemo(() => {
@@ -172,6 +179,14 @@ export function AbaBaseline({ projetoId }: Props) {
         <div><span>Baselines</span><strong>{baselines.length}</strong><small>registros desta obra</small></div>
         <div><span>Estado</span><strong>{baselines.some(item => item.status === "ativa") ? "Ativa" : "Sem baseline"}</strong><small>uma baseline ativa pode ser mantida como referência</small></div>
       </div>
+
+      {(planejamentoOperacional.excludedExampleActivities > 0 || planejamentoOperacional.excludedExampleDependencies > 0) && (
+        <div className="pl-planejamento-box">
+          <p className="pl-tabela-legenda">
+            O gate considera {activities.length} atividade(s) operacionais. {planejamentoOperacional.excludedExampleActivities} atividade(s) e {planejamentoOperacional.excludedExampleDependencies} dependência(s) de QA ficam fora do CPM e da fotografia operacional da baseline; os dados de QA permanecem na obra.
+          </p>
+        </div>
+      )}
 
       {!resumo.cpmOk && (
         <div className="pl-planejamento-box">
