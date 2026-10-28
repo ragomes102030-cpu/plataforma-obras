@@ -6,7 +6,7 @@ Atualizado em 2026-10-28. Este arquivo acompanha a execução progressiva do pla
 
 - `main` e `develop` remotos foram consultados e estavam no mesmo commit: `e4ce608` (`feat(lob): distribuir atividades por múltiplos pavimentos com saldo e CPM (#243)`).
 - A correção atual parte desse commit na branch `fix/lob-local-row-density`.
-- Escopos de código concluídos nesta etapa: reduzir altura vazia na escadinha e preservar a execução real no fluxo multilocal.
+- Escopos de código concluídos nesta etapa: reduzir altura vazia na escadinha, preservar a execução real no fluxo multilocal e excluir linhas/atividades QA dos indicadores executivos.
 - Não foram alterados dados ao vivo, schema, migrações, baselines, CPM ou deploy.
 
 ## Diagnóstico e correção da LOB
@@ -20,7 +20,7 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Playwright local: um teste passou em desktop e celular; verificou linha de 64 px, faixa compartilhada e ausência de overflow horizontal da página.
 - Capturas locais: `test-results/lob-profissional/desktop-faixas-compactas.png` e `test-results/lob-profissional/mobile-faixas-compactas.png`.
 - `pnpm check`: passou. `pnpm build`: passou com avisos sobre as variáveis de analytics ausentes e o bundle JS acima de 500 kB.
-- `pnpm test`: 141 arquivos passaram; 1.276 testes passaram e 8 foram ignorados por falta da planilha de referência local.
+- `pnpm test`: 141 arquivos passaram; 1.277 testes passaram e 8 foram ignorados por falta da planilha de referência local.
 - Runtime disponível: Node.js 24.21.0; o projeto declara Node 22.x, portanto comandos reportam aviso de engine.
 - `git diff --check`: passou. PR #244 está aberta contra `develop`; CI não havia reportado verificações na última consulta. Código não incorporado nem publicado.
 
@@ -30,8 +30,8 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - O fork da versão clona atividades e remapeia as parcelas para os novos IDs, preservando a versão histórica. Os valores distribuídos seguem apenas os registros persistidos; não há rateio presumido.
 - Falha encontrada: ao integrar uma distribuição, cada barra recebia `executado: 0`, mesmo quando havia medição real na atividade. A LOB agora recebe a produção acumulada por código EAP e unidade. A parcela só recebe execução quando a medição possui `unitId`; a execução sem unidade aparece como item geral “execução sem local”, sem atribuição a pavimento.
 - Outra falha encontrada: `planning.grade` somava lançamentos em rascunho às quantidades executadas, embora as outras leituras de avanço usem apenas lançamentos confirmados. Corrigido o filtro na origem comum da grade (inclui Curva S/LOB); o teste de regressão reproduziu 67 em vez de 50 antes da correção e passou depois.
-- Atividades `exemplo=1` continuam na grade para comparação, mas agora não entram no agregado operacional do painel. O teste confirmou que a atividade de QA aparece na lista com seu marcador e é excluída da contagem operacional.
-- Testes locais para o saldo, a medição por unidade, rascunhos, atividades de QA e execução sem unidade passaram. Suíte completa atualizada: 141 arquivos, 1.276 testes passaram, 8 foram pulados; `pnpm check`, `pnpm e2e:lob-qa` (desktop/celular) e `pnpm build` passaram.
+- Atividades `exemplo=1` continuam na grade para comparação, mas não entram no agregado operacional do servidor nem nos indicadores executivos: linhas da grade são filtradas no Dashboard e atividades de demonstração não pesam nos indicadores por orçamento. O teste confirma que a linha permanece inspecionável e não afeta os totais.
+- Testes locais para o saldo, a medição por unidade, rascunhos, atividades de QA e execução sem unidade passaram. Suíte completa atualizada: 141 arquivos, 1.277 testes passaram, 8 foram pulados; `pnpm check`, `pnpm e2e:lob-qa` (desktop/celular) e `pnpm build` passaram.
 - Limite de evidência: a tentativa de consultar o Supabase pela integração MCP falhou porque a ferramenta não está disponível nesta sessão; o CLI `supabase` também não está instalado. Portanto, existência/aplicação da migração, contagens atuais da Aurora, dados multilocais reais e permissões vigentes são **NÃO TESTÁVEL** ao vivo. A afirmação no script SQL sobre provisionamento prévio não substitui leitura atual do banco.
 - Hardening identificado: a migração define FKs individuais, enquanto consistência composta obra/versão/atividade/unidade é garantida no backend. O papel da aplicação tem política RLS ampla para escrita. Considerar FKs/constraints compostas em migração própria após conferir o estado real; não alterar o banco sem backup verificável e janela autorizada.
 - Alterações multilocais foram adicionadas à mesma PR #244 para revisão; permanecem sem merge e sem deploy.

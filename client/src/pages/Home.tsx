@@ -742,7 +742,7 @@ function Obra({
         {aba === "dashboard" ? (
           <PainelDoCronograma
             agregado={agregado}
-            linhas={grade.data?.linhas}
+            linhas={(grade.data?.linhas ?? []).filter(l => !exemploPorCodigo.has(l.codigo))}
             projetoId={projetoId}
             nomeObra={obra}
             hojeReferencia={hoje}

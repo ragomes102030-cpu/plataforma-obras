@@ -111,7 +111,7 @@ export function PainelDoCronograma({
     { enabled: projetoId > 0, retry: false, staleTime: 5 * 60_000 }
   );
 
-  const atividades = (plano.data?.activities ?? []).map((a) => ({
+  const atividades = (plano.data?.activities ?? []).filter(a => a.exemplo !== 1).map((a) => ({
     id: a.id,
     wbsNodeId: a.wbsNodeId,
     wbsCode: a.wbsCode,
