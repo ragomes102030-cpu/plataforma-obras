@@ -14,6 +14,7 @@ describe("Regressão Gantt — Crítico e ligações",()=>{
  it("usa mesmo mapa filtrado nas barras, ligações e altura do SVG",()=>{
    expect(view).toContain("gerarSetasVisiveisGantt(dependencias, geometria, codigosCriticos)");
    expect(view).toContain("filtradas.forEach((no, indice)");
+   expect(view).toContain("const deslocamentoBaseline = baselinePronta");
    expect(view).toContain("height={Math.max(1, filtradas.length * alturaLinha)}");
    expect(view).toContain('data-testid="gantt-dependency-path"');
  });
