@@ -6699,3 +6699,10 @@ tr:hover .xl-codigo {
 .pg-baseline-resumo small{font-size:10px;color:#657f90}
 .pg-filtros .pg-chip:disabled{opacity:.52;cursor:not-allowed}
 @media(max-width:760px){.pg-baseline-resumo{gap:6px 11px;padding:9px}.pg-baseline-resumo small{flex-basis:100%}}
+
+/* Gantt: o SVG das ligações precisa ficar ACIMA dos fundos das linhas.
+   Antes z-index:1 empatava com .pg-linha e as barras encobriam os traços,
+   dando a impressão de segmentos desconectados. */
+.pg-corpo > .pg-setas:not(.pg-avancos){z-index:4;overflow:hidden}
+.pg-corpo > .pg-setas.pg-avancos{z-index:3;overflow:hidden}
+.pg-filtros .pg-chip:disabled{opacity:.52;cursor:not-allowed}
