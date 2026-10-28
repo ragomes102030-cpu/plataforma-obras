@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { linhasVisiveis, montarArvore } from "./gantt-arvore";
+import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore } from "./gantt-arvore";
 import type { EntradaDaLinha } from "./cronograma-colunas";
 import type { IsoDate } from "./work-calendar";
 
@@ -154,4 +154,25 @@ describe("linhasVisiveis", () => {
     const todas = new Set(arvore.filter(no => no.temFilhos).map(no => no.chave));
     expect(linhasVisiveis(arvore, todas).map(no => no.codigo)).toEqual(["1", "2"]);
   });
+});
+
+describe("Só crítico — mantém a EAP e barras críticas após recolhimento",()=>{
+ const arvore=montarArvore([
+   entrada("1.1","2026-11-01",4),
+   entrada("1.2","2026-11-05",4),
+   entrada("2.1","2026-11-12",3),
+   entrada("2.2","2026-11-20",5),
+ ],new Set(["1.2","2.1"]));
+ it("expande somente a visão filtrada sem alterar a árvore nem as escolhas de recolhimento",()=>{
+   const fechadas=new Set(["1","2"]);
+   expect(linhasVisiveis(arvore,fechadas).map(x=>x.codigo)).toEqual(["1","2"]);
+   expect(linhasCriticasVisiveisGantt(arvore).map(x=>x.codigo)).toEqual([
+     "1","1.2","2","2.1",
+   ]);
+   expect(linhasVisiveis(arvore,fechadas).map(x=>x.codigo)).toEqual(["1","2"]);
+ });
+ it("não inventa atividades críticas quando não há marcação",()=>{
+   const sem=montarArvore([entrada("3.1","2026-11-03",2)]);
+   expect(linhasCriticasVisiveisGantt(sem)).toEqual([]);
+ });
 });
