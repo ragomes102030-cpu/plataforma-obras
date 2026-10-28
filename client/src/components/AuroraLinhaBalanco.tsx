@@ -104,7 +104,10 @@ export function LinhaBalancoEscadinha({
   const [dataFinal, setDataFinal] = useState("");
   // A escadinha deve abrir no período de produção, sem anos vazios no gráfico.
   // O período completo da obra continua disponível sob demanda.
-  const [incluirInicioObra, setIncluirInicioObra] = useState(false);
+  // Automático: foco nas escadinhas QA se ainda não há local confirmado;
+  // período desde a obra assim que existir o primeiro vínculo EAP-local.
+  // O usuário pode alternar manualmente entre foco e obra completa.
+  const [incluirInicioObra, setIncluirInicioObra] = useState<boolean | null>(null);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
@@ -130,6 +133,8 @@ export function LinhaBalancoEscadinha({
     ...s, pontos: s.pontos.filter(p => locais.includes(p.local)),
   }));
   const periodoRepetitivo = selecionarPeriodoPelosServicos(pontosVisiveis);
+  const periodoFoco = selecionarPeriodoPelosServicos(pontosVisiveis.filter(s=>s.repetitiva))??periodoRepetitivo;
+  const periodoCompleto = incluirInicioObra ?? locaisConfirmados.codigosConfirmados.size > 0;
   const periodoAutomatico = selecionarPeriodoPelosServicos([
     ...pontosVisiveis,
     ...geraisVisiveis.map(g=>({...g,repetitiva:false})),
@@ -137,16 +142,16 @@ export function LinhaBalancoEscadinha({
   const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2026-01-01");
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
   const obraComecaAntesDaLob = dataValida(inicioObra) &&
-    periodoRepetitivo !== null && diaUtc(inicioObra) < diaUtc(periodoRepetitivo.primeiro);
+    periodoFoco !== null && diaUtc(inicioObra) < diaUtc(periodoFoco.primeiro);
   const exemplosNaLob = repetitivas.flatMap(serie => serie.pontos)
     .filter(ponto => codigosExemplo?.has(ponto.codigo)).length;
   const totalPontosRepetitivos = repetitivas.reduce((s, serie) => s + serie.pontos.length, 0);
   const todosServicosSaoQA = exemplosNaLob > 0 && exemplosNaLob === totalPontosRepetitivos;
   const inicioEscolhido = dataValida(dataInicial) ? dataInicial :
-    incluirInicioObra ? (dataValida(inicioObra) && inicioObra<baseInicio ? inicioObra : baseInicio)
-      : (periodoRepetitivo?.primeiro ?? baseInicio);
+    periodoCompleto ? (dataValida(inicioObra) && inicioObra<baseInicio ? inicioObra : baseInicio)
+      : (periodoFoco?.primeiro ?? baseInicio);
   const fimEscolhido = dataValida(dataFinal) ? dataFinal :
-    incluirInicioObra ? baseFim : (periodoRepetitivo?.ultimo ?? baseFim);
+    periodoCompleto ? baseFim : (periodoFoco?.ultimo ?? baseFim);
   const periodoInvalido = diaUtc(fimEscolhido) < diaUtc(inicioEscolhido);
   const eixoInicio = segundaDaSemana(adicionarDias(inicioEscolhido, -7));
   const eixoFim = segundaDaSemana(adicionarDias(fimEscolhido, 14));
@@ -296,14 +301,14 @@ export function LinhaBalancoEscadinha({
               </div>
               {obraComecaAntesDaLob && <button type="button"
                 data-testid="lob-toggle-obra-start"
-                aria-pressed={incluirInicioObra}
+                aria-pressed={periodoCompleto}
                 onClick={() => {
-                  setIncluirInicioObra(v => !v);
+                  setIncluirInicioObra(!periodoCompleto);
                   setDataInicial("");
                   setDataFinal("");
                   setPxManual(null);
                 }}>
-                {incluirInicioObra ? "Focar nas escadinhas" : "Mostrar desde início da obra"}
+                {periodoCompleto ? "Focar nas escadinhas" : "Mostrar desde início da obra"}
               </button>}
             </div>
           )}
