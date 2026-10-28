@@ -22,11 +22,11 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - `pnpm check`: passou. `pnpm build`: passou com avisos sobre as variáveis de analytics ausentes e o bundle JS acima de 500 kB.
 - `pnpm test`: 141 arquivos passaram; 1.271 testes passaram e 8 foram ignorados por falta da planilha de referência local.
 - Runtime disponível: Node.js 24.21.0; o projeto declara Node 22.x, portanto comandos reportam aviso de engine.
-- `git diff --check`: passou. PR ainda não aberta; código não incorporado nem publicado.
+- `git diff --check`: passou. PR #244 está aberta contra `develop`; CI não havia reportado verificações na última consulta. Código não incorporado nem publicado.
 
 ## Próximos passos
 
-1. Abrir PR para revisão desta correção; não incorporar sem aprovação e CI aprovados.
+1. Aguardar a revisão e o CI da PR #244; não incorporar sem aprovação e verificações aprovadas.
 2. Revisar o fluxo multilocal de ponta a ponta (persistência, limites quantitativos, saldo não distribuído, CPM, versões e isolamento por obra), sem preencher locais ou quantidades por hipótese.
 3. Auditar CPM, dependências, Gantt e baseline com dados e evidências atuais, sem criar ou aprovar baseline.
 4. Avançar para orçamento, produção, dashboard, segurança e UX com mudanças pequenas e rastreáveis.

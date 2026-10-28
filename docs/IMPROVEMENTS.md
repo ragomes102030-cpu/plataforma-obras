@@ -18,10 +18,11 @@
 - Capturas: `test-results/lob-profissional/desktop-faixas-compactas.png` e `mobile-faixas-compactas.png`.
 
 ### Estado
-- Código preparado na branch `fix/lob-local-row-density`, baseada no commit sincronizado `e4ce608` de `main`/`develop`; revisão pendente.
+- Código preparado na branch `fix/lob-local-row-density`, baseada no commit sincronizado `e4ce608` de `main`/`develop`; PR #244 aberta para revisão.
 - Sem alterações em dados da obra, banco, baseline ou implantação.
 - Build avisou que VITE_ANALYTICS_ENDPOINT e VITE_ANALYTICS_WEBSITE_ID não estão definidos e que o bundle JavaScript excede 500 kB. Comandos usaram Node 24, enquanto o projeto declara Node 22.
-- Próximo passo: abrir PR para revisão; depois revisar a LOB multilocal e as prioridades restantes por etapas.
+- PR #244 está aberta contra `develop`; no momento da consulta, CI ainda não havia reportado verificações.
+- Próximo passo: aguardar revisão/CI; depois revisar a LOB multilocal e as prioridades restantes por etapas.
 
 ## Sep/2026 — Migração Render → Vercel
 
