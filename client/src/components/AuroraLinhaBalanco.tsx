@@ -102,7 +102,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   const totalPontosRepetitivos = repetitivas.reduce((s, serie) => s + serie.pontos.length, 0);
   const todosServicosSaoQA = exemplosNaLob > 0 && exemplosNaLob === totalPontosRepetitivos;
   const inicioEscolhido = dataValida(dataInicial) ? dataInicial :
-    incluirInicioObra && obraComecaAntesDaLob ? inicioObra : baseInicio;
+    incluirInicioObra && obraComecaAntesDaLob && dataValida(inicioObra) ? inicioObra : baseInicio;
   const fimEscolhido = dataValida(dataFinal) ? dataFinal : baseFim;
   const periodoInvalido = diaUtc(fimEscolhido) < diaUtc(inicioEscolhido);
   const eixoInicio = segundaDaSemana(adicionarDias(inicioEscolhido, -7));
