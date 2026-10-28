@@ -187,4 +187,35 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(2);
   });
 
+  it("Aurora: 53 atividades anteriores acessíveis sem competir com as 18 escadinhas de 2028",()=>{
+    const gerais=Array.from({length:53},(_,i)=>
+      atividade("EAP."+(i+1),"Serviço geral "+(i+1),"Serviços Gerais",
+        add("2026-10-01",i%22),"Etapa "+(i%5+1))
+    );
+    const repetidas=["Alvenaria","Chapisco","Pintura"].flatMap((nome,k)=>
+      Array.from({length:6},(_,i)=>
+        atividade("QA."+(k+1)+"."+(i+1),nome,"P0"+(i+1),
+          add("2028-02-08",i*5+k*7),"Execução")
+      )
+    );
+    const linhas=[...gerais,...repetidas];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      hoje:"2026-10-28",inicioObra:"2026-10-01",
+      codigosExemplo:new Set(repetidas.map(l=>l.codigo)),
+      onAbrirAtividades:()=>{},
+    }));
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(18);
+    expect((html.match(/data-testid="lob-previous-activities"/g)??[])).toHaveLength(1);
+    expect((html.match(/data-testid="lob-context-bar"/g)??[])).toHaveLength(0);
+    expect((html.match(/data-testid="lob-general-row"/g)??[])).toHaveLength(0);
+    expect(html).toContain("53 atividades com datas cadastradas");
+    expect(html).toContain("01/10/2026");
+    expect(html).toContain("P06");
+    expect(html).toContain('value="2028-02-08"'); // foco inicial nas escadinhas
+    expect(html).toContain("Mostrar desde início da obra");
+    expect(html).toContain("Serviço geral 1");
+    expect(html).toContain("Serviço geral 53");
+  });
+
 });
