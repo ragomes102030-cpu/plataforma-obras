@@ -73,13 +73,35 @@ export function LinhaBalancoEscadinha({
   editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onCriarUnidade,
   onAbrirAtividades,dependencias=[],estadoVinculos="carregando"
 }: Props) {
+  // O cronograma pode conter serviços reais e atividades de QA em 2028.
+  // O modo padrão prioriza o plano real e mantém a simulação isolada.
+  const qtdQa = linhas.filter(l => codigosExemplo?.has(l.codigo)).length;
+  const qtdReais = linhas.length - qtdQa;
+  const possuiQaSeparada = qtdQa > 0 && qtdReais > 0;
+  const [exibirQa, setExibirQa] = useState(false);
+  const linhasDaVisualizacao = useMemo(
+    () => possuiQaSeparada && !exibirQa
+      ? linhas.filter(l => !codigosExemplo?.has(l.codigo)) : linhas,
+    [linhas, codigosExemplo, possuiQaSeparada, exibirQa]
+  );
   const locaisConfirmados = useMemo(
-    ()=>aplicarLocaisDaEapNaLob(linhas,nodosEap,unidades),
-    [linhas,nodosEap,unidades]
+    ()=>aplicarLocaisDaEapNaLob(linhasDaVisualizacao,nodosEap,unidades),
+    [linhasDaVisualizacao,nodosEap,unidades]
+  );
+  // Na versão mista (obra real + QA), disciplinas textuais do campo legado
+  // "pavimento" NÃO podem virar localizações fictícias da escadinha.
+  // Somente vínculos EAP → unidade física ou QA explicitamente habilitada.
+  const linhasFisicas = useMemo(
+    () => possuiQaSeparada
+      ? locaisConfirmados.linhas.filter(l =>
+          locaisConfirmados.codigosConfirmados.has(l.codigo) ||
+          (exibirQa && !!codigosExemplo?.has(l.codigo)))
+      : locaisConfirmados.linhas,
+    [locaisConfirmados, possuiQaSeparada, exibirQa, codigosExemplo]
   );
   const dados = useMemo(
-    () => prepararLinhaBalancoVertical(locaisConfirmados.linhas, finsCalculados, locaisConfirmados.codigosConfirmados),
-    [locaisConfirmados, finsCalculados],
+    () => prepararLinhaBalancoVertical(linhasFisicas, finsCalculados, locaisConfirmados.codigosConfirmados),
+    [linhasFisicas, finsCalculados, locaisConfirmados.codigosConfirmados],
   );
   const repetitivas = useMemo(
     () => dados.series.filter(s => s.repetitiva || s.localizada),
@@ -104,9 +126,8 @@ export function LinhaBalancoEscadinha({
   const [dataFinal, setDataFinal] = useState("");
   // A escadinha deve abrir no período de produção, sem anos vazios no gráfico.
   // O período completo da obra continua disponível sob demanda.
-  // Automático: foco nas escadinhas QA se ainda não há local confirmado;
-  // período desde a obra assim que existir o primeiro vínculo EAP-local.
-  // O usuário pode alternar manualmente entre foco e obra completa.
+  // Com plano real + QA, o período inicial privilegia os serviços localizados
+  // reais. "Período completo" continua disponível, sem deslocar nenhum prazo.
   const [incluirInicioObra, setIncluirInicioObra] = useState<boolean | null>(null);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
@@ -134,7 +155,7 @@ export function LinhaBalancoEscadinha({
   }));
   const periodoRepetitivo = selecionarPeriodoPelosServicos(pontosVisiveis);
   const periodoFoco = selecionarPeriodoPelosServicos(pontosVisiveis.filter(s=>s.repetitiva))??periodoRepetitivo;
-  const periodoCompleto = incluirInicioObra ?? locaisConfirmados.codigosConfirmados.size > 0;
+  const periodoCompleto = incluirInicioObra ?? (possuiQaSeparada ? false : locaisConfirmados.codigosConfirmados.size > 0);
   const periodoAutomatico = selecionarPeriodoPelosServicos([
     ...pontosVisiveis,
     ...geraisVisiveis.map(g=>({...g,repetitiva:false})),
@@ -289,16 +310,25 @@ export function LinhaBalancoEscadinha({
         </div>
       ) : (
         <>
-          {(obraComecaAntesDaLob || exemplosNaLob > 0 || atividadesGerais.length > 0) && (
+          {(obraComecaAntesDaLob || qtdQa > 0 || atividadesGerais.length > 0) && (
             <div className="lob-stairs-context" role="status" data-testid="lob-calendar-context">
               <div>
                 <strong>Referência das datas</strong>
                 {dataValida(inicioObra) && <span>Início cadastrado da obra: <b>{formatoCompleto(inicioObra)}</b></span>}
-                {periodoRepetitivo && <span>Primeira atividade repetitiva: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
+                {periodoRepetitivo && <span>{pontosVisiveis.some(s => s.repetitiva) ? "Primeira atividade repetitiva" : "Primeira atividade localizada"}: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
-                {exemplosNaLob > 0 && <span className="lob-stairs-qa">QA: {exemplosNaLob} atividade(s) de demonstração nas sequências repetitivas{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
+                {qtdQa > 0 && <span className="lob-stairs-qa">QA: {qtdQa} atividade(s) de demonstração {possuiQaSeparada && !exibirQa ? "— ocultas da visão principal" : "nas sequências repetitivas"}{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
+                {possuiQaSeparada && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{locaisConfirmados.codigosConfirmados.size}</b> localizadas · <b>{Math.max(0,qtdReais-locaisConfirmados.codigosConfirmados.size)}</b> pendentes de vínculo físico</span>}
                 <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
+              {possuiQaSeparada && <label className="lob-stairs-qa-toggle">
+                <input type="checkbox" data-testid="lob-toggle-qa" checked={exibirQa} onChange={e=>{
+                  setExibirQa(e.target.checked);
+                  setIncluirInicioObra(false); // nunca voltar automaticamente à janela longa de 2028
+                  setDataInicial("");setDataFinal("");setPxManual(null);setPavimento("todos");setDetalhe(null);
+                }}/>
+                Exibir simulação QA ({qtdQa} atividades)
+              </label>}
               {obraComecaAntesDaLob && <button type="button"
                 data-testid="lob-toggle-obra-start"
                 aria-pressed={periodoCompleto}

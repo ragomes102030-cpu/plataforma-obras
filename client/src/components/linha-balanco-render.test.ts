@@ -205,15 +205,20 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
       codigosExemplo:new Set(repetidas.map(l=>l.codigo)),
       onAbrirAtividades:()=>{},
     }));
-    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(18);
+    // Os 18 registros QA ficam fora do desenho por padrão: nenhum
+    // pavimento fictício toma o lugar das 53 atividades reais.
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(0);
+    expect(html).toContain('data-testid="lob-toggle-qa"');
+    expect(html).toContain('data-testid="lob-real-status"');
+    expect(html).toContain("53</b> atividades do plano real");
     expect((html.match(/data-testid="lob-previous-activities"/g)??[])).toHaveLength(1);
     expect((html.match(/data-testid="lob-context-bar"/g)??[])).toHaveLength(0);
     expect((html.match(/data-testid="lob-general-row"/g)??[])).toHaveLength(0);
     expect(html).toContain("53 atividades com datas cadastradas");
     expect(html).toContain("01/10/2026");
-    expect(html).toContain("P06");
-    expect(html).toContain('value="2028-02-08"'); // foco inicial nas escadinhas
-    expect(html).toContain("Mostrar desde início da obra");
+    expect(html).not.toContain('role="rowheader">P06');
+    expect(html).toContain('value="2026-10-01"'); // foco inicial no cronograma real
+    expect(html).toContain("QA: 18 atividade(s) de demonstração — ocultas");
     expect(html).toContain("Serviço geral 1");
     expect(html).toContain("Serviço geral 53");
   });
@@ -245,6 +250,53 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain('data-testid="lob-location-mapping"');
     expect(html).toContain("Drenagem externa");
     expect(html).not.toContain('data-testid="lob-context-bar"');
+  });
+
+  it("Aurora com local validado: exclui QA de 2028, mantém períodos oficiais de 2026",()=>{
+    const linhas=[
+      atividade("1.1.1","Mobilização e canteiro","Serviços Gerais","2026-10-01"),
+      atividade("1.13.2","Drenagem externa","Infraestrutura Externa","2026-10-03"),
+      atividade("QA.1","Alvenaria","P01","2028-02-08"),
+      atividade("QA.2","Alvenaria","P02","2028-02-14"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      hoje:"2026-10-28",inicioObra:"2026-10-01",
+      codigosExemplo:new Set(["QA.1","QA.2"]),
+      nodosEap:[{id:10,code:"1.1.1",location:"Canteiro de obras"},{id:11,code:"1.13.2",location:"Área externa"}],
+      unidades:[{id:1,code:"CANTEIRO",name:"Canteiro de obras",unitType:"setor"},{id:2,code:"AREA_EXT",name:"Área externa",unitType:"area"}],
+      onAbrirAtividades:()=>{},
+    }));
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(2);
+    expect(html).toContain('role="rowheader">Canteiro de obras');
+    expect(html).toContain('role="rowheader">Área externa');
+    expect(html).not.toContain('role="rowheader">P01');
+    expect(html).not.toContain('role="rowheader">P02');
+    expect(html).toContain('value="2026-10-01"');
+    expect(html).toContain('data-testid="lob-toggle-qa"');
+    expect(html).toContain('data-testid="lob-real-status"');
+    expect(html).toContain("2</b> atividades do plano real");
+    expect(html).toContain("QA: 2 atividade(s) de demonstração — ocultas");
+  });
+
+  it("Aurora: disciplinas iguais não simulam pavimentos sem vínculo EAP-local",()=>{
+    const linhas=[
+      atividade("1.1","Alvenaria","Serviços Gerais","2026-10-01"),
+      atividade("1.2","Alvenaria","Estrutura","2026-11-01"),
+      atividade("QA.1","Pintura","P01","2028-02-01"),
+      atividade("QA.2","Pintura","P02","2028-02-05"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      codigosExemplo:new Set(["QA.1","QA.2"]),inicioObra:"2026-10-01",
+      hoje:"2026-10-28",onAbrirAtividades:()=>{},
+    }));
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(0);
+    expect(html).not.toContain('role="rowheader">Serviços Gerais');
+    expect(html).not.toContain('role="rowheader">Estrutura');
+    expect(html).not.toContain('role="rowheader">P01');
+    expect(html).toContain("2 atividades com datas cadastradas");
+    expect(html).toContain('value="2026-10-01"');
   });
 
   it("sem mapeamento validado: não inventa degraus de 2026",()=>{
