@@ -6,7 +6,7 @@ Estado: **para aprovação**. Auditoria de 27/10/2026. Referência: AURORA TESTE
 
 A Linha de Balanço deve ser resultado de um **Location-Based Management System (LBMS)**. A EAP responde **o que entregar**; a LBS responde **onde executar**; a atividade CPM representa a unidade de execução e a rede contratual; o plano de produção descreve **quanto, por quem, com qual capacidade, em que ordem e quando**. Uma mesma atividade pode envolver vários locais; um mesmo local pode receber vários serviços e equipes.
 
-A interface de fluxo não deve ser um filtro de nomes repetidos nem transformar atividades administrativas em “pavimentos fictícios”. Para serviços sem localização de execução física, mostrar restrições, marcos e vínculos contextuais, sem inventar inclinação ou produtividade.
+**Decisão visual expressa do usuário: manter a ESCADINHA clássica como visualização principal. Não redesenhar a LOB em linhas diagonais/flowlines.** A escadinha tem patamares horizontais de início a término de cada serviço em cada local; transições verticais e deslocamentos só quando houver sequência física/operacional comprovada. A interface não deve ser um filtro de nomes repetidos nem transformar atividades administrativas em pavimentos fictícios. Para serviços sem localização de execução física, mostrar restrições, marcos e vínculos contextuais, sem inventar patamares ou produtividade.
 
 Fontes técnicas:
 - Kenley e Seppänen, Location-Based Management for Construction (2010), Routledge: https://www.routledge.com/Location-Based-Management-for-Construction-Planning-scheduling-and-control/Kenley-Seppanen/p/book/9780415370509
@@ -102,17 +102,20 @@ O modo manual deve funcionar sem IA e sem MCP. Agentes podem sugerir correspond�
 
 ## 5. Esboço funcional para aprovação
 
-**Uma tela: Planejamento por Localização.** Manter Gantt clássico como módulo distinto e reaproveitar a LOB existente como superfície de visualização; não criar outra “LOB automática” paralela.
+**Uma tela: Planejamento por Localização com ESCADINHA como gráfico principal.** Manter o Gantt clássico como módulo distinto e reaproveitar o componente atual da LOB e sua geometria de degraus; não criar outra LOB paralela nem converter os patamares em linhas diagonais.
 
 Cabeçalho: Obra | Versão | Calendário | CPM válido? | Cobertura de localizações | Modo leitura/rascunho.
 
-Controles: Fluxo por Localização / Matriz de Produção / Restrições / Controle; filtros de bloco, setor, equipe, período, serviço e camadas (planejado, realizado, previsão, baseline). Camadas não disponíveis devem informar motivo.
+Controles: Escadinha / Matriz de Produção / Restrições / Controle; filtros de bloco, setor, equipe, período, serviço e camadas (planejado, realizado, previsão, baseline). Camadas não disponíveis devem informar motivo.
 
-**Painel principal**
-- X: tempo civil em dias úteis e calendário oficial; Y: locais LBS ordenados pelo percurso construtivo.
-- Flowline por serviço/equipe, segmentos inclinados conforme duração real por local; cruzamentos, buffers e descontinuidades identificados.
-- Ao clicar em segmento: código EAP, local, quantidade, equipe, duração, vínculo CPM, restrição, realizado e origem de dados.
-- Sem quantidade/equipe/duração validada: segmento pode exibir somente período oficial existente com aviso, nunca produtividade inferida.
+**Painel principal — escadinha profissional (obrigatória)**
+- X: datas civis derivadas do calendário oficial (com semana/mês/ano); Y: localizações LBS na ordem física **configurada**.
+- Cada atividade-local é um **degrau/patamar horizontal**, com largura da data inicial à data final real do plano. Degraus sucessivos aparecem em pavimentos/locais distintos, formando a escadinha. **Não desenhar reta inclinada ligando centros das barras.**
+- Desenhar conexão entre patamares sucessivos **somente se existir vínculo real de deslocamento/precedência**. Em caso de intervalo de mobilização/buffer, deixar o vazio evidente e usar ligação ortogonal e/ou legenda técnica; jamais inventar continuidade ou equipe.
+- Durações e cadências desiguais produzem degraus de comprimentos e posições desiguais; serviço sem equipe ou produtividade pode ter patamar de calendário oficial com indicação de informação incompleta, nunca inclinação interpretada como produtividade.
+- Barras/patamares de serviços distintos têm cores e etiquetas. Progresso medido, baseline e previsão (quando fundamentados) aparecem como camadas discretas, sem substituir a escadinha.
+- Ao clicar no degrau: código EAP, unidade física, quantidade, equipe, duração útil, início/fim civis, vínculo CPM, restrição, realizado e origem de cada valor.
+- Quando não há local validado, manter serviço na lista de diagnóstico e em seus vínculos contextuais; não criar um degrau em local fictício.
 
 **Painel contextual separado**
 - Liberação de projetos, mobilização, aprovações, restrições e marcos que afetem locais. Só conectar a um local quando houver vínculo real, e não criar barras de pavimento fictícias.
@@ -124,20 +127,24 @@ Controles: Fluxo por Localização / Matriz de Produção / Restrições / Contr
 **Análise operacional**
 - Indicadores: ritmo planejado por equipe, variação de duração entre locais, buffers consumidos, equipe sem frente, equipe simultânea, local bloqueado, medições sem localização, diferenças do cenário com CPM/baseline.
 
-Wireframe de disposição (valores ilustrativos, nenhum dado real):
-    [LOCALIZAÇÕES / VERSÃO / CALENDÁRIO / COBERTURA DE DADOS]
-    [Fluxo] [Matriz] [Restrições] [Controle]       [Planejado | Real | Baseline]
-    ┌───────────────────────────────────────────────────────────────────┐
-    │ LBS / LOCAL     2026 ... 2027 ... 2028 ...       TEMPO CIVIL      │
-    │ BLOCO A / P04        ╱ Alvenaria     ╱ Chapisco    ╱ Pintura       │
-    │ BLOCO A / P03       ╱               ╱             ╱              │
-    │ BLOCO A / P02      ╱               ╱             ╱               │
-    │ BLOCO A / P01     ╱               ╱             ╱                │
-    └───────────────────────────────────────────────────────────────────┘
-    [LIBERAÇÕES / MARCOS / RESTRIÇÕES LIGADAS A LOCAIS CONHECIDOS]
-    [ALERTAS: 53 atividades sem local validado | 18 QA | 10 medições sem local]
+Wireframe estrutural — **escadinhas**, não linhas diagonais (dados inteiramente ilustrativos):
 
-Não desenhar retas uniformes quando as durações forem variáveis; preservar o ângulo e a forma efetivamente calculados por local.
+    [OBRA / VERSÃO / CALENDÁRIO / COBERTURA DE LOCAIS / STATUS CPM]
+    [Escadinha] [Matriz] [Restrições] [Controle] [Previsto | Real | Baseline]
+    ┌───────────────────────────────────────────────────────────────┐
+    │ LOCAIS       2026 → 2027 → 2028         TEMPO (DIAS / SEMANAS) │
+    │ P04                                       ┌───────┐           │
+    │ P03                              ┌────────┘       │           │
+    │ P02                    ┌─────────┘                │           │
+    │ P01           ┌────────┘                          │           │
+    └───────────────────────────────────────────────────────────────┘
+    [PATAMAR = JANELA DE PRODUÇÃO POR LOCAL; SUBIDA = TRANSIÇÃO VALIDADA]
+    [RESTRIÇÕES / MARCOS / LIBERAÇÕES]
+    [PENDÊNCIAS DE MAPEAMENTO / MEDIÇÕES SEM LOCAL]
+
+Os conectores do wireframe são apenas ilustrativos. **Na implementação, cada patamar tem início/fim próprios e toda transição deve possuir vínculo declarado; quando não há relação real, as barras permanecem separadas.** O renderizador deve suportar durações diferentes, gaps, buffers, marcos, progresso por patamar, informação ausente, zoom e exportação sem falsear datas.
+
+**Critério de aceite visual obrigatório:** mesmo quando o motor LBMS for evoluído, a Linha de Balanço continuará reconhecível como a escadinha já aprovada. Nenhum gráfico diagonal substituirá os patamares, e o Gantt seguirá módulo próprio.
 
 ## 6. Plano de implementação e gates
 
@@ -145,7 +152,7 @@ Não desenhar retas uniformes quando as durações forem variáveis; preservar o
 
 **Etapa 1 – LBS e associações:** reusar production_units; planejar migração segura com índices/estrangeiras, backfill somente validado, mapeamento 1:1 onde comprovado, diagnóstico dos 53 registros genéricos, sem escrever na AURORA de referência antes da aprovação. Testes de autorização e retrocompatibilidade.
 
-**Etapa 2 – motor read-only:** planning.lob com dados reais e proveniência; linha de fluxo por atividade-local, painel de vínculos e lacunas; validar contra Gantt/CPM e calendário.
+**Etapa 2 – motor read-only:** planning.lob com dados reais e proveniência; escadinha por atividade-local com patamares horizontais e transições verificadas, painel de vínculos e lacunas; validar contra Gantt/CPM e calendário.
 
 **Etapa 3 – motor de simulação:** equipes, quantidade/produtividade, buffers e restrições; prévia/aplicação explícita da nova versão com recálculo de CPM, sem alterar baseline anterior.
 
