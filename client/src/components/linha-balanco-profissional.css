@@ -202,3 +202,17 @@
  border:1px solid #dbc79b;border-radius:6px;background:#fffdf7;color:#684e18;
  font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap}
 .lob-stairs-qa-toggle input{margin:0;accent-color:#8e671c}
+
+/* Uma única régua: os serviços que ainda não têm unidade física entram
+   em faixas da EAP. Essas faixas não são pavimentos nem comprovam repetição. */
+.lob-stairs-pending-group{display:flex;min-width:100%;position:relative;background:#e8eef3;border-top:2px solid #b8c9d5;border-bottom:1px solid #cfdbe4}
+.lob-stairs-pending-group .lob-stairs-local{background:#e8eef3;color:#284d66;font-weight:780;font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.lob-stairs-pending-group .lob-stairs-status-cell{background:#e8eef3;color:#587287;font-size:10px}
+.lob-stairs-pending-group .lob-stairs-track{overflow:hidden}
+.lob-stairs-pending-row .lob-stairs-local{min-width:0;gap:5px;overflow:hidden;font-weight:500}
+.lob-pending-code{font-size:9px;font-weight:760;color:#536b7b;white-space:nowrap}
+.lob-pending-name{font-size:10px;color:#29465b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.lob-stairs-pending-row .lob-stairs-status-cell{padding:0 5px}
+.lob-stairs-pending-row .lob-pending-link{font-size:10px;color:#3e6a81;background:#edf4f8;border:1px solid #d2e0e8;border-radius:4px;padding:5px 4px;cursor:pointer;white-space:nowrap}
+.lob-stairs-pending-row .lob-pending-link:hover{background:#dceaf3}
+.lob-stairs-pending-row .lob-pending-bar{background:#657d8f;border-left:2px solid #455c6d;box-shadow:none}
