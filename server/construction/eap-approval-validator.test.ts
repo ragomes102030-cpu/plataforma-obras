@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateEapForBaseline } from "./eap-approval-validator";
+import { eapDictionaryDecisionStatus, validateEapForBaseline } from "./eap-approval-validator";
 import type { EapScopeNode } from "./eap-validator";
 
 function node(overrides: Partial<EapScopeNode> = {}): EapScopeNode {
@@ -28,6 +28,13 @@ function node(overrides: Partial<EapScopeNode> = {}): EapScopeNode {
 }
 
 describe("validateEapForBaseline", () => {
+  it("preserva a decisão parcial do padrão do dicionário", () => {
+    expect(eapDictionaryDecisionStatus("approved")).toBe("approved");
+    expect(eapDictionaryDecisionStatus("partially_approved")).toBe("partially_approved");
+    expect(eapDictionaryDecisionStatus("rejected")).toBe("rejected");
+    expect(eapDictionaryDecisionStatus(null)).toBe("pending");
+  });
+
   it("bloqueia baseline quando a folha não possui dicionário completo", () => {
     const result = validateEapForBaseline([
       node(),

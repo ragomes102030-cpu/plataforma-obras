@@ -7,6 +7,8 @@
 
 ## Comece aqui
 
+O checkpoint atual do plano mestre está em [CONTINUIDADE-AUDITORIA-ARQUIMEDES.md](CONTINUIDADE-AUDITORIA-ARQUIMEDES.md).
+
 | Documento | Para quê |
 | --- | --- |
 | [STACK-ATUAL.md](STACK-ATUAL.md) | Onde o sistema roda hoje: GitHub + Render (`plataforma-obras-3`) + Supabase, URLs, banco, o que **não** usamos mais |

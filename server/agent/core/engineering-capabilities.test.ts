@@ -6,6 +6,10 @@ describe("internal engineering capabilities", () => {
     expect(calculateActivityDuration({ plannedQuantity: 100, productivity: 20, quantityUnit: "m2", productivityUnit: "m2" }).durationDays).toBe(5);
   });
 
+  it("accepts productivity expressed as quantity unit per day", () => {
+    expect(calculateActivityDuration({ plannedQuantity: 100, productivity: 20, quantityUnit: "m2", productivityUnit: "m2/dia" }).durationDays).toBe(5);
+  });
+
   it("refuses incompatible units instead of inventing conversion", () => {
     expect(() => calculateActivityDuration({ plannedQuantity: 100, productivity: 20, quantityUnit: "m2", productivityUnit: "m" })).toThrow(/Unidades incompatíveis/);
   });

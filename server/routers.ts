@@ -70,6 +70,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateEapScope, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
+import { eapDictionaryDecisionStatus } from "./construction/eap-approval-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
   ScheduleEvidenceActivity,
@@ -2005,7 +2006,7 @@ export const appRouter = router({
       const rows=await db.select().from(agentDecisions).where(and(eq(agentDecisions.projectId,input.projectId),eq(agentDecisions.stage,"EAP_DICIONARIO"))).orderBy(desc(agentDecisions.createdAt)).limit(1);
       if(!rows[0]) return {status:"pending" as const,requiredFields:[],conditionalFields:[],summary:"Padrão do dicionário ainda não aprovado."};
       const scope=parseJsonValue(rows[0].scopeJson) as {requiredFields?:string[];conditionalFields?:string[]}|null;
-      return {status:rows[0].decision==="rejected"?"rejected" as const:"approved" as const,requiredFields:scope?.requiredFields??[],conditionalFields:scope?.conditionalFields??[],summary:rows[0].reason??""};
+      return {status:eapDictionaryDecisionStatus(rows[0].decision),requiredFields:scope?.requiredFields??[],conditionalFields:scope?.conditionalFields??[],summary:rows[0].reason??""};
     }),
     decideEapDictionaryStandard: protectedProcedure.input(z.object({projectId:z.number().int().positive(),decision:z.enum(["approved","partially_approved","rejected"]),requiredFields:z.array(z.string()).max(30),conditionalFields:z.array(z.string()).max(30),summary:z.string().max(2000)})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
@@ -2013,7 +2014,7 @@ export const appRouter = router({
       return {saved:true as const,decisionId:decision.id};
     }),
     validateWbsStructure: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{
-      const db=await getDb(); if(!db) return {valid:true,issues:[],summary:{errors:0,warnings:0,costErrors:0}};
+      const db=await getDb(); if(!db) return {valid:false,issues:[{code:"eap_validation_unavailable",severity:"error" as const,message:"Validação indisponível: banco de dados não configurado.",entityRef:"project"}],summary:{nodes:0,leaves:0,errors:1,warnings:0,costErrors:0}};
       await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const versionId=await getCurrentPlanVersionId(db,input.projectId);
       const nodes=await db.select().from(wbsNodes).where(
@@ -4196,7 +4197,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
+        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, execucaoPorCodigoLocal: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4207,7 +4208,10 @@ export const appRouter = router({
           // em que foi digitado. Sem isso, medição de versão anterior virava
           // "executado 0" no cronograma (o caso dos 10 lançamentos da AURORA).
           db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
-          db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
+          db.select().from(productionEntries).where(and(
+            eq(productionEntries.projectId,input.projectId),
+            eq(productionEntries.status,"confirmada"),
+          )).orderBy(productionEntries.productionDate,productionEntries.id),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
         const inicioIso = localIso(inicio);
@@ -4218,10 +4222,15 @@ export const appRouter = router({
         const codigoPorAtividade = new Map<number,string>();
         for (const atividade of todasAtividades) codigoPorAtividade.set(atividade.id, atividade.wbsCode);
         const executadoPorCodigo = new Map<string,number>();
+        const execucaoPorCodigoLocal:Record<string,number>={};
         for (const entry of entries) {
           const codigo = codigoPorAtividade.get(entry.activityId);
           if (!codigo) continue;
           executadoPorCodigo.set(codigo,(executadoPorCodigo.get(codigo)??0)+Number(entry.quantity));
+          if(entry.unitId!=null){
+            const chave=`${codigo}\t${entry.unitId}`;
+            execucaoPorCodigoLocal[chave]=(execucaoPorCodigoLocal[chave]??0)+Number(entry.quantity);
+          }
         }
         const entradas = activities.map(a => {
           // A régua é o CPM (dias úteis). Antes, `startOffset` zerado em todas as
@@ -4235,10 +4244,10 @@ export const appRouter = router({
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
         for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
         const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
-        const exemploPorCodigo = Object.fromEntries(
-          activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
-        );
-        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
+        const codigosExemplo=new Set(activities.filter(a=>a.exemplo===1).map(a=>a.wbsCode));
+        const exemploPorCodigo=Object.fromEntries([...codigosExemplo].map(codigo=>[codigo,true]));
+        const linhasOperacionais=linhasDerivadas.filter(l=>!codigosExemplo.has(l.codigo));
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, execucaoPorCodigoLocal, totalGeral, agregado:agregadoDoCronograma(linhasOperacionais), exemploPorCodigo };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({

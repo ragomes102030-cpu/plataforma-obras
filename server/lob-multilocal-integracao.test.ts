@@ -42,4 +42,15 @@ describe("LOB multi-local — contrato de persistência seguro",()=>{
     expect(ui).toContain("<LobDistribuicaoPainel");
     expect(ui).toContain("view === \"gantt\"");
   });
+  it("não perde execução ao distribuir e não atribui produção sem unidade a um local",()=>{
+    expect(router).toContain('eq(productionEntries.status,"confirmada")');
+    expect(router).toContain('activities.filter(a=>a.exemplo===1)');
+    expect(router).toContain('agregado:agregadoDoCronograma(linhasOperacionais)');
+    expect(router).toContain("execucaoPorCodigoLocal");
+    expect(router).toContain("if(entry.unitId!=null)");
+    expect(router).toContain("`${codigo}\\t${entry.unitId}`");
+    const modelo=readFileSync("client/src/components/lob-distribuicao-modelo.ts","utf8");
+    expect(modelo).toContain("(execução sem local)");
+    expect(modelo).toContain("quantidade:null,executado:executadoSemLocal");
+  });
 });

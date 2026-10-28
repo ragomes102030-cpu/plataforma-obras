@@ -51,6 +51,7 @@ describe("avanço real por código da EAP", () => {
   let atividadeAntigaId: number;
   let atividadeAtualId: number;
   let lancamentoId: number;
+  let versaoAtualId: number;
 
   beforeEach(async () => {
     pg = await pgliteComSchema();
@@ -91,6 +92,7 @@ describe("avanço real por código da EAP", () => {
         { projectId: obraId, versionId: v2.id, code: "1.2.3", name: "Alvenaria", level: 3, nodeType: "pacote" },
       ])
       .returning({ id: wbsNodes.id });
+    versaoAtualId = v2.id;
 
     const atividade = (versionId: number, wbsNodeId: number, planejado: string) => ({
       projectId: obraId,
@@ -159,6 +161,44 @@ describe("avanço real por código da EAP", () => {
     expect(lancamento.codigoEap).toBe("1.2.3");
     expect(lancamento.atividadeNome).toBe("Alvenaria de bloco");
     expect(lancamento.vinculo).toBe("versao_anterior");
+  });
+
+  it("a grade de planejamento não conta lançamento em rascunho como execução", async () => {
+    const db = drizzlePglite(pg);
+    await db.insert(productionEntries).values({
+      projectId: obraId,
+      activityId: atividadeAntigaId,
+      productionDate: new Date("2026-10-04T00:00:00Z"),
+      quantity: "17.000",
+      measurementUnit: "m2",
+      status: "rascunho",
+    });
+
+    const grade = await chamador().planning.grade({ projectId: obraId });
+    const linha = grade.linhas.find(item => item.codigo === "1.2.3");
+
+    expect(linha?.executado).toBe(50);
+    expect(grade.totalGeral).toBe("50.000");
+    expect(grade.porAtividade["1.2.3"]).toBe("50.000");
+  });
+
+  it("mantém atividades de QA na grade, mas fora dos totais operacionais", async () => {
+    const db = drizzlePglite(pg);
+    const [noQa] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: versaoAtualId, code: "1.2.4", name: "Atividade QA",
+      level: 3, nodeType: "pacote",
+    }).returning({ id: wbsNodes.id });
+    await db.insert(scheduleActivities).values({
+      projectId: obraId, versionId: versaoAtualId, wbsNodeId: noQa.id, wbsCode: "1.2.4",
+      name: "Atividade de demonstração", phase: "QA", startOffset: 30,
+      durationDays: 10, plannedQuantity: "1000.000", unit: "m2", exemplo: 1,
+    });
+
+    const grade = await chamador().planning.grade({ projectId: obraId });
+
+    expect(grade.linhas.some(item => item.codigo === "1.2.4")).toBe(true);
+    expect(grade.exemploPorCodigo["1.2.4"]).toBe(true);
+    expect(grade.agregado?.totalAtividades).toBe(1);
   });
 
   it("medição confirmada não pode ser editada nem excluída direto", async () => {

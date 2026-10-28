@@ -9,16 +9,19 @@ export type DistribuicaoLob={
 export type AtividadeIdLob={id:number;wbsCode:string};
 export type UnidadeLob={id:number;code:string;name:string;unitType:string};
 const MIL=1000;
+export const chaveExecucaoLocalLob=(codigo:string,unitId:number)=>`${codigo}\t${unitId}`;
 export function integrarDistribuicoesLob(
   linhas:readonly EntradaDaLinha[],
   ids:readonly AtividadeIdLob[],
   unidades:readonly UnidadeLob[],
-  distribuicoes:readonly DistribuicaoLob[]
+  distribuicoes:readonly DistribuicaoLob[],
+  executadoPorCodigoLocal:ReadonlyMap<string,number>=new Map()
 ){
   const codPorId=new Map(ids.map(a=>[a.id,a.wbsCode]));
   const porCodigo=new Map(linhas.map(l=>[l.codigo,l]));
   const nomePorUnidade=new Map(unidades.map(u=>[u.id,u.name]));
   const somaPorCodigo=new Map<string,number>();
+  const executadoDistribuidoPorCodigo=new Map<string,number>();
   const entradas:EntradaDaLinha[]=[];
   const fins:Record<string,string>={};
   const codigosConfirmados=new Set<string>();
@@ -31,10 +34,12 @@ export function integrarDistribuicoesLob(
     if(!fonte||!nomeLocal||fonte.marco||!dataValida(d.startDate)||!dataValida(d.finishDate)||
       d.finishDate<d.startDate||!Number.isFinite(quantidade)||quantidade<=0)continue;
     const chave="lob-segmento-"+d.activityId+"-"+d.unitId;
+    const executado=Math.max(0,executadoPorCodigoLocal.get(chaveExecucaoLocalLob(fonte.codigo,d.unitId))??0);
+    executadoDistribuidoPorCodigo.set(fonte.codigo,(executadoDistribuidoPorCodigo.get(fonte.codigo)??0)+executado);
     entradas.push({
       ...fonte,codigo:chave,pavimento:nomeLocal,inicio:d.startDate,
       duracao:Math.floor((diaUtc(d.finishDate)-diaUtc(d.startDate))/86400000)+1,
-      quantidade,executado:0,
+      quantidade,executado,
     });
     fins[chave]=d.finishDate;
     codigosConfirmados.add(chave);
@@ -43,16 +48,24 @@ export function integrarDistribuicoesLob(
   }
   const pendentes=linhas.flatMap(l=>{
     const distribuiddo=somaPorCodigo.get(l.codigo)??0;
+    const executadoNosLocais=executadoDistribuidoPorCodigo.get(l.codigo)??0;
+    const executadoSemLocal=Math.max(0,l.executado-executadoNosLocais);
     if(distribuiddo===0)return [l];
     const total=l.quantidade===null?null:Math.round(l.quantidade*MIL);
     const restante=total===null?null:Math.max(0,total-distribuiddo);
-    if(restante!==null&&restante<=0)return [];
-    return [{
+    const resultado:EntradaDaLinha[]=[];
+    if(restante===null||restante>0)resultado.push({
       ...l,
       atividade:l.atividade+" (saldo sem local)",
       quantidade:restante===null?null:restante/MIL,
       executado:0,
-    }];
+    });
+    if(executadoSemLocal>0)resultado.push({
+      ...l,codigo:"lob-execucao-sem-local-"+l.codigo,
+      atividade:l.atividade+" (execução sem local)",pavimento:null,
+      quantidade:null,executado:executadoSemLocal,
+    });
+    return resultado;
   });
   return {entradas,fins,codigosConfirmados,codigosDistribuidos,pendentes,somaPorCodigo};
 }
