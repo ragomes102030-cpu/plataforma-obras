@@ -9,6 +9,7 @@ import {
   productionFronts,
   productionTeams,
   productionUnits,
+  lobActivityLocations,
   mcpMutationOperations,
   mcpHomologationRuns,
   projectMcpIntegrations,
@@ -3867,6 +3868,126 @@ export const appRouter = router({
       }),
   }),
   planning: router({
+    /** Parcelas físicas do cronograma; ligadas à versão atual, nunca à baseline. */
+    listarDistribuicoesLob: protectedProcedure
+      .input(z.object({projectId:z.number().int().positive()}))
+      .query(async ({ctx,input})=>{
+        const db=await getDb();
+        if(!db)throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db,input.projectId,ctx.user.id);
+        const versionId=await getCurrentPlanVersionId(db,input.projectId);
+        if(!versionId)return [];
+        return db.select({
+          id:lobActivityLocations.id,activityId:lobActivityLocations.activityId,
+          unitId:lobActivityLocations.unitId,plannedQuantity:lobActivityLocations.plannedQuantity,
+          startDate:lobActivityLocations.startDate,finishDate:lobActivityLocations.finishDate,
+        }).from(lobActivityLocations).where(and(
+          eq(lobActivityLocations.projectId,input.projectId),
+          eq(lobActivityLocations.versionId,versionId)
+        )).orderBy(lobActivityLocations.activityId,lobActivityLocations.startDate,lobActivityLocations.unitId);
+      }),
+    /** Salva um segmento de UMA atividade em UMA unidade.
+     * Quantidades por atividade nunca podem exceder o total; nenhuma data do CPM é alterada.
+     */
+    salvarDistribuicaoLob: protectedProcedure
+      .input(z.object({
+        projectId:z.number().int().positive(),
+        activityId:z.number().int().positive(),
+        unitId:z.number().int().positive(),
+        plannedQuantity:z.number().finite().positive().max(1000000000000),
+        startDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        finishDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }))
+      .mutation(async ({ctx,input})=>{
+        const db=await getDb();
+        if(!db)throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db,input.projectId,ctx.user.id);
+        const validDate=(s:string)=>{const d=new Date(s+"T00:00:00.000Z");
+          return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s;};
+        if(!validDate(input.startDate)||!validDate(input.finishDate)||input.finishDate<input.startDate)
+          throw badRequest("Intervalo da distribuição inválido.");
+        const qtdMil=Math.round(input.plannedQuantity*1000);
+        if(qtdMil<1||Math.abs(input.plannedQuantity-qtdMil/1000)>1e-7)
+          throw badRequest("Informe quantidade positiva com até três casas decimais.");
+        return db.transaction(async tx=>{
+          const [version]=await tx.select({id:projectPlanVersions.id,status:projectPlanVersions.status})
+            .from(projectPlanVersions).where(eq(projectPlanVersions.projectId,input.projectId))
+            .orderBy(desc(projectPlanVersions.versionNumber)).limit(1).for("update");
+          if(!version||!["draft","proposed"].includes(version.status))
+            throw conflict("A versão aprovada/histórica não permite distribuir serviços.");
+          const [activity]=await tx.select({
+              id:scheduleActivities.id,quantity:scheduleActivities.plannedQuantity,
+              plannedQuantity:scheduleActivities.plannedQuantity,
+              exemplo:scheduleActivities.exemplo, earlyStart:scheduleActivities.earlyStart,
+              startOffset:scheduleActivities.startOffset, durationDays:scheduleActivities.durationDays,
+              cpmCalculatedAt:scheduleActivities.cpmCalculatedAt
+            }).from(scheduleActivities).where(and(
+              eq(scheduleActivities.id,input.activityId),
+              eq(scheduleActivities.projectId,input.projectId),
+              eq(scheduleActivities.versionId,version.id)
+            )).limit(1).for("update");
+          if(!activity||activity.exemplo===1)throw badRequest("Atividade real da versão corrente não encontrada.");
+          if(activity.quantity===null||Number(activity.quantity)<=0)
+            throw badRequest("Atividade sem quantitativo aprovado para distribuição. Complete a EAP.");
+          const [unit]=await tx.select({id:productionUnits.id}).from(productionUnits)
+            .where(and(eq(productionUnits.id,input.unitId),eq(productionUnits.projectId,input.projectId))).limit(1);
+          if(!unit)throw forbidden("Local físico não pertence à obra.");
+          const [project]=await tx.select({start:projects.plannedStart,finish:projects.plannedFinish})
+            .from(projects).where(eq(projects.id,input.projectId)).limit(1);
+          const obraInicio=project?.start?.toISOString().slice(0,10);
+          const obraFim=project?.finish?.toISOString().slice(0,10);
+          if((obraInicio&&input.startDate<obraInicio)||(obraFim&&input.finishDate>obraFim))
+            throw badRequest("Trecho fora do período cadastrado da obra.");
+          if(!project?.start)throw badRequest("Data inicial da obra indisponível.");
+          const cal=(await carregarCalendarioDaObra(db,input.projectId,project.start.getFullYear())).calendar;
+          const inicioOficial=dateAt(cal,localIso(project.start),deslocamentoEmDiasUteis(activity));
+          const fimOficial=dateAt(cal,inicioOficial,duracaoEmDiasUteis(activity)-1);
+          if(input.startDate<inicioOficial||input.finishDate>fimOficial)
+            throw badRequest("A parcela deve ficar dentro da janela oficial do CPM: "+inicioOficial+" a "+fimOficial+".");
+
+          const alocacoes=await tx.select({unitId:lobActivityLocations.unitId,quantity:lobActivityLocations.plannedQuantity})
+            .from(lobActivityLocations).where(and(
+              eq(lobActivityLocations.projectId,input.projectId),
+              eq(lobActivityLocations.versionId,version.id),
+              eq(lobActivityLocations.activityId,input.activityId)
+            ));
+          const usado=alocacoes.filter(a=>a.unitId!==input.unitId)
+            .reduce((total,a)=>total+Math.round(Number(a.quantity)*1000),0);
+          const total=Math.round(Number(activity.quantity)*1000);
+          if(usado+qtdMil>total)
+            throw badRequest("Soma das parcelas supera o quantitativo total da atividade.");
+          await tx.insert(lobActivityLocations).values({
+            projectId:input.projectId,versionId:version.id,activityId:input.activityId,
+            unitId:input.unitId,plannedQuantity:(qtdMil/1000).toFixed(3),
+            startDate:input.startDate,finishDate:input.finishDate,
+          }).onConflictDoUpdate({
+            target:[lobActivityLocations.activityId,lobActivityLocations.unitId],
+            set:{plannedQuantity:(qtdMil/1000).toFixed(3),
+              startDate:input.startDate,finishDate:input.finishDate,updatedAt:new Date()}
+          });
+          return {ok:true as const,versionId:version.id,
+            restante:Number(((total-usado-qtdMil)/1000).toFixed(3))};
+        });
+      }),
+    removerDistribuicaoLob: protectedProcedure
+      .input(z.object({projectId:z.number().int().positive(),id:z.number().int().positive()}))
+      .mutation(async ({ctx,input})=>{
+        const db=await getDb();
+        if(!db)throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db,input.projectId,ctx.user.id);
+        const versionId=await getCurrentPlanVersionId(db,input.projectId);
+        if(!versionId)throw conflict("Versão de planejamento não encontrada.");
+        const [version]=await db.select({status:projectPlanVersions.status})
+          .from(projectPlanVersions).where(and(eq(projectPlanVersions.id,versionId),eq(projectPlanVersions.projectId,input.projectId))).limit(1);
+        if(!version||!["draft","proposed"].includes(version.status))
+          throw conflict("A versão aprovada/histórica está congelada.");
+        const removed=await db.delete(lobActivityLocations).where(and(
+          eq(lobActivityLocations.id,input.id),eq(lobActivityLocations.projectId,input.projectId),
+          eq(lobActivityLocations.versionId,versionId)
+        )).returning({id:lobActivityLocations.id});
+        if(!removed.length)throw notFound("Distribuição não encontrada nesta obra e versão.");
+        return {ok:true as const};
+      }),
     /** Confirma uma ÚNICA localização física por pacote EAP da versão de trabalho.
      * Não mexe em atividade, CPM, datas, quantitativos ou baseline.
      * Pacotes distribuídos em vários locais exigem decomposição prévia.

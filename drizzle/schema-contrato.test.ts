@@ -65,6 +65,7 @@ const CONTRATO: Record<string, string[]> = {
     "updatedAt",
   ],
   error_events: ["commitSha", "codigo", "createdAt", "fingerprint", "id", "mensagem", "metodo", "origem", "rota", "stack", "status", "userId"],
+  lob_activity_locations: ["activityId", "createdAt", "finishDate", "id", "plannedQuantity", "projectId", "startDate", "unitId", "updatedAt", "versionId"],
   llm_provider_settings: ["createdAt", "encryptedConfig", "id", "updatedAt", "updatedBy"],
   mcp_homologation_runs: ["createdAt", "error", "finishedAt", "id", "planJson", "projectId", "readOnlyResultJson", "reconciliationJson", "requestId", "startedAt", "status", "updatedAt", "userId"],
   mcp_mutation_operations: ["argsJson", "confirmationToken", "confirmedAt", "createdAt", "error", "executedAt", "externalProjectId", "id", "idempotencyKey", "projectId", "provider", "resultJson", "status", "toolName", "updatedAt", "userId"],
@@ -122,7 +123,7 @@ function superficie(): Record<string, string[]> {
 }
 
 describe("contrato do schema", () => {
-  it("tem as 42 tabelas do contrato", () => {
+  it("tem as 43 tabelas do contrato", () => {
     const nomes = Object.keys(superficie()).sort();
     expect(nomes).toEqual(Object.keys(CONTRATO).sort());
   });
@@ -150,7 +151,7 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 489", () => {
+  it("o total de colunas contempla 10 colunas multilocais (499)", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
@@ -161,6 +162,6 @@ describe("contrato do schema", () => {
     // 464 -> 488 na medição (measurements + measurement_items).
     // 488 -> 489 no marco do cronograma (is_milestone em schedule_activities).
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(489);
+    expect(total).toBe(499);
   });
 });

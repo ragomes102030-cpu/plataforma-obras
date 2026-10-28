@@ -19,6 +19,7 @@ async function purgeProject(tx: Transaction, projectId: number, cutoff: Date) {
   await tx.execute(sql`DELETE FROM "mcp_homologation_runs" WHERE "projectId" = ${projectId}`);
 
   await tx.execute(sql`DELETE FROM "production_entries" WHERE "projectId" = ${projectId}`);
+  await tx.execute(sql`DELETE FROM "lob_activity_locations" WHERE "projectId" = ${projectId}`);
   await tx.execute(sql`
     DELETE FROM "schedule_baseline_items"
     WHERE "baselineId" IN (SELECT "id" FROM "schedule_baselines" WHERE "projectId" = ${projectId})

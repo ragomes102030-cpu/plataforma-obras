@@ -10,6 +10,7 @@ import {
 import { analisarFluxoLob } from "./lob-analise-fluxo";
 import { calcularVinculosExibidos, resumoLob, taxaPlanejadaLob, type VínculoLob } from "./lob-indicadores";
 import "./linha-balanco-profissional.css";
+import { integrarDistribuicoesLob, type DistribuicaoLob, type AtividadeIdLob } from "./lob-distribuicao-modelo";
 
 export { prepararLinhaBalancoVertical } from "./linha-balanco-modelo";
 
@@ -21,6 +22,8 @@ type Props = {
   codigosExemplo?: ReadonlySet<string>;
   nodosEap?: readonly {id:number;code:string;location:string|null}[];
   unidades?: readonly {id:number;code:string;name:string;unitType:string}[];
+  distribuicoes?:readonly DistribuicaoLob[];
+  atividadeIds?:readonly AtividadeIdLob[];
   editavel?: boolean;
   salvandoLocal?: boolean;
   erroLocal?: string|null;
@@ -72,7 +75,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  * Não cria nem altera versões do plano. Filtros e exportação são somente leitura.
  */
 export function LinhaBalancoEscadinha({
-  linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],
+  linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],
   editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onCriarUnidade,
   onAbrirAtividades,dependencias=[],estadoVinculos="carregando"
 }: Props) {
@@ -88,24 +91,38 @@ export function LinhaBalancoEscadinha({
       : linhas,
     [linhas, codigosExemplo, possuiQaSeparada, exibirQa]
   );
+  const integrado = useMemo(
+    ()=>integrarDistribuicoesLob(linhasDaVisualizacao,atividadeIds,unidades,distribuicoes),
+    [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes]
+  );
   const locaisConfirmados = useMemo(
-    ()=>aplicarLocaisDaEapNaLob(linhasDaVisualizacao,nodosEap,unidades),
-    [linhasDaVisualizacao,nodosEap,unidades]
+    ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades),
+    [integrado,nodosEap,unidades]
+  );
+  const todosConfirmados = useMemo(
+    ()=>new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosConfirmados]),
+    [locaisConfirmados,integrado]
+  );
+  const finsDistribuidos = useMemo(
+    ()=>({...finsCalculados,...integrado.fins}),
+    [finsCalculados,integrado]
   );
   // Na versão mista (obra real + QA), disciplinas textuais do campo legado
   // "pavimento" NÃO podem virar localizações fictícias da escadinha.
   // Somente vínculos EAP → unidade física ou QA explicitamente habilitada.
   const linhasFisicas = useMemo(
-    () => possuiQaSeparada
+    () => [...(possuiQaSeparada
       ? locaisConfirmados.linhas.filter(l =>
-          locaisConfirmados.codigosConfirmados.has(l.codigo) ||
-          (exibirQa && !!codigosExemplo?.has(l.codigo)))
-      : locaisConfirmados.linhas,
-    [locaisConfirmados, possuiQaSeparada, exibirQa, codigosExemplo]
+          !integrado.codigosDistribuidos.has(l.codigo) &&
+          (locaisConfirmados.codigosConfirmados.has(l.codigo) ||
+            (exibirQa && !!codigosExemplo?.has(l.codigo))))
+      : locaisConfirmados.linhas.filter(l=>!integrado.codigosDistribuidos.has(l.codigo))),
+      ...integrado.entradas],
+    [locaisConfirmados, possuiQaSeparada, exibirQa, codigosExemplo, integrado]
   );
   const dados = useMemo(
-    () => prepararLinhaBalancoVertical(linhasFisicas, finsCalculados, locaisConfirmados.codigosConfirmados),
-    [linhasFisicas, finsCalculados, locaisConfirmados.codigosConfirmados],
+    () => prepararLinhaBalancoVertical(linhasFisicas, finsDistribuidos, todosConfirmados),
+    [linhasFisicas, finsDistribuidos, todosConfirmados],
   );
   const repetitivas = useMemo(
     () => dados.series.filter(s => s.repetitiva || s.localizada),
@@ -239,7 +256,7 @@ export function LinhaBalancoEscadinha({
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
   const qtdGrafico = qtdBarras + pontosPendentes.length;
   const resumo = resumoLob(seriesVisiveis,locais,hoje);
-  const originais = new Map(linhas.map(l=>[l.codigo,l]));
+  const originais = new Map([...linhas,...integrado.entradas].map(l=>[l.codigo,l]));
   const ligacoes = estadoVinculos==="pronto"
     ? calcularVinculosExibidos(dependencias,[...resumo.pontos,...pontosPendentes]) : [];
   const coordenadas = new Map<string,{inicio:number;fim:number;y:number}>();
@@ -345,7 +362,7 @@ export function LinhaBalancoEscadinha({
                 {periodoRepetitivo && <span>{pontosVisiveis.some(s => s.repetitiva) ? "Primeira atividade repetitiva" : "Primeira atividade localizada"}: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {qtdQa > 0 && <span className="lob-stairs-qa">QA: {qtdQa} atividade(s) de demonstração {possuiQaSeparada && !exibirQa ? "— ocultas da visão principal" : "nas sequências repetitivas"}{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                {possuiQaSeparada && !exibirQa && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{locaisConfirmados.codigosConfirmados.size}</b> localizadas · <b>{Math.max(0,qtdReais-locaisConfirmados.codigosConfirmados.size)}</b> pendentes de vínculo físico</span>}
+                {possuiQaSeparada && !exibirQa && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size}</b> com ao menos um local · <b>{Math.max(0,qtdReais-new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size)}</b> sem vínculo físico</span>}
                 <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
               {possuiQaSeparada && <label className="lob-stairs-qa-toggle">

@@ -723,6 +723,30 @@ export const productionUnits = pgTable("production_units", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Distribuição da ATIVIDADE por várias unidades físicas (LOB).
+ * Cada parcela tem quantidade e datas próprias, sem duplicar o total da EAP.
+ * Nunca altera o CPM nem a baseline. O registro fica preso à versão do plano.
+ */
+export const lobActivityLocations = pgTable("lob_activity_locations", {
+  id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+  projectId: integer("projectId").notNull().references(() => projects.id),
+  versionId: integer("versionId").notNull().references(() => projectPlanVersions.id),
+  activityId: integer("activityId").notNull().references(() => scheduleActivities.id),
+  unitId: integer("unitId").notNull().references(() => productionUnits.id),
+  plannedQuantity: numeric("plannedQuantity", {precision:18,scale:3}).notNull(),
+  startDate: varchar("startDate",{length:10}).notNull(),
+  finishDate: varchar("finishDate",{length:10}).notNull(),
+  createdAt: timestamp("createdAt",{withTimezone:true}).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt",{withTimezone:true}).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("lob_activity_locations_unique_idx").on(table.activityId,table.unitId),
+  index("lob_activity_locations_project_version_idx").on(table.projectId,table.versionId),
+  index("lob_activity_locations_unit_idx").on(table.unitId),
+  check("lob_locations_quantity_positive",drizzleSql`"plannedQuantity" > 0`),
+  check("lob_locations_dates_ordered",drizzleSql`"startDate" <= "finishDate"`),
+]);
+
 export const productionEntries = pgTable("production_entries", {
   id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
   projectId: integer("projectId")

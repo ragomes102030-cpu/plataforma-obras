@@ -14,7 +14,8 @@ describe("Grade e LOB — datas de projeto e atividades de demonstração",()=>{
   it("propaga referência da obra e QA da grade sem alterar o plano",()=>{
     expect(home).toContain("codigosExemplo={exemploPorCodigo}");
     expect(home).toContain("inicioObra={grade.data?.inicioObra ?? null}");
-    expect(visual).toContain("inicioObra={inicioObra} codigosExemplo={codigosExemplo}");
+    expect(visual).toContain("inicioObra={inicioObra}");
+    expect(visual).toContain("codigosExemplo={codigosExemplo}");
     expect(visual).not.toContain("linhaBalanco.create");
   });
 });
