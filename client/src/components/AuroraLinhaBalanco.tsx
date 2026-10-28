@@ -17,6 +17,8 @@ type Props = {
   linhas: EntradaDaLinha[];
   finsCalculados: Record<string, string>;
   hoje: IsoDate;
+  inicioObra?: IsoDate | null;
+  codigosExemplo?: ReadonlySet<string>;
   onAbrirAtividades: () => void;
   dependencias?: VínculoLob[];
   estadoVinculos?: "pronto" | "carregando" | "erro";
@@ -59,7 +61,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  * exclusivamente datas da planning.grade, sem inventar produtividade ou execução.
  * Não cria nem altera versões do plano. Filtros e exportação são somente leitura.
  */
-export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAtividades, dependencias = [], estadoVinculos = "carregando" }: Props) {
+export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra, codigosExemplo, onAbrirAtividades, dependencias = [], estadoVinculos = "carregando" }: Props) {
   const dados = useMemo(
     () => prepararLinhaBalancoVertical(linhas, finsCalculados),
     [linhas, finsCalculados],
@@ -72,6 +74,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
   const [pxManual, setPxManual] = useState<number | null>(null);
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
+  const [incluirInicioObra, setIncluirInicioObra] = useState(false);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
@@ -93,7 +96,13 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
   const periodoAutomatico = selecionarPeriodoPelosServicos(pontosVisiveis);
   const baseInicio = periodoAutomatico?.primeiro ?? "2026-01-01";
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
-  const inicioEscolhido = dataValida(dataInicial) ? dataInicial : baseInicio;
+  const obraComecaAntesDaLob = dataValida(inicioObra) && diaUtc(inicioObra) < diaUtc(baseInicio);
+  const exemplosNaLob = repetitivas.flatMap(serie => serie.pontos)
+    .filter(ponto => codigosExemplo?.has(ponto.codigo)).length;
+  const totalPontosRepetitivos = repetitivas.reduce((s, serie) => s + serie.pontos.length, 0);
+  const todosServicosSaoQA = exemplosNaLob > 0 && exemplosNaLob === totalPontosRepetitivos;
+  const inicioEscolhido = dataValida(dataInicial) ? dataInicial :
+    incluirInicioObra && obraComecaAntesDaLob ? inicioObra : baseInicio;
   const fimEscolhido = dataValida(dataFinal) ? dataFinal : baseFim;
   const periodoInvalido = diaUtc(fimEscolhido) < diaUtc(inicioEscolhido);
   const eixoInicio = segundaDaSemana(adicionarDias(inicioEscolhido, -7));
@@ -229,6 +238,28 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, onAbrirAti
         </div>
       ) : (
         <>
+          {(obraComecaAntesDaLob || exemplosNaLob > 0) && (
+            <div className="lob-stairs-context" role="status" data-testid="lob-calendar-context">
+              <div>
+                <strong>Referência das datas</strong>
+                {dataValida(inicioObra) && <span>Início cadastrado da obra: <b>{formatoCompleto(inicioObra)}</b></span>}
+                {periodoAutomatico && <span>Primeira atividade repetitiva: <b>{formatoCompleto(periodoAutomatico.primeiro)}</b></span>}
+                {exemplosNaLob > 0 && <span className="lob-stairs-qa">QA: {exemplosNaLob} atividade(s) de demonstração nas sequências repetitivas{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
+                <small>O eixo acompanha as datas planejadas dos serviços repetitivos; não substitui o início da obra. Datas e precedências devem ser ajustadas no planejamento, nunca apenas no gráfico.</small>
+              </div>
+              {obraComecaAntesDaLob && <button type="button"
+                data-testid="lob-toggle-obra-start"
+                aria-pressed={incluirInicioObra}
+                onClick={() => {
+                  setIncluirInicioObra(v => !v);
+                  setDataInicial("");
+                  setDataFinal("");
+                  setPxManual(null);
+                }}>
+                {incluirInicioObra ? "Focar nas atividades" : "Mostrar desde início da obra"}
+              </button>}
+            </div>
+          )}
           <div className="lob-stairs-toolbar">
             <label className="lob-stairs-field lob-stairs-period">
               <span><CalendarDays size={13}/> Período inicial</span>
