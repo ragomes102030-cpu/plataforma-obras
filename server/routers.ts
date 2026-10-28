@@ -1327,11 +1327,24 @@ export const appRouter = router({
         cubUf: z.string().trim().toUpperCase().length(2).nullable().optional(),
         cubMes: z.string().trim().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use o formato AAAA-MM.").nullable().optional(),
         bdiDeclarado: z.number().min(0).max(1).nullable().optional(),
+        plannedStart: z.date().optional(),
+        plannedFinish: z.date().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        if (input.plannedStart !== undefined || input.plannedFinish !== undefined) {
+          const [periodoAtual] = await db
+            .select({ plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish })
+            .from(projects)
+            .where(eq(projects.id, input.projectId))
+            .limit(1);
+          if (!periodoAtual) throw notFound("Obra não encontrada para atualizar o período.");
+          const inicio = input.plannedStart ?? periodoAtual.plannedStart;
+          const termino = input.plannedFinish ?? periodoAtual.plannedFinish;
+          if (termino <= inicio) throw badRequest("O término da obra deve ser posterior ao início.");
+        }
         const [updated] = await db
           .update(projects)
           .set({
@@ -1343,6 +1356,8 @@ export const appRouter = router({
             cubUf: input.cubUf === undefined ? undefined : input.cubUf || null,
             cubMes: input.cubMes === undefined ? undefined : input.cubMes || null,
             bdiDeclarado: input.bdiDeclarado === undefined ? undefined : input.bdiDeclarado == null ? null : input.bdiDeclarado.toFixed(6),
+            plannedStart: input.plannedStart,
+            plannedFinish: input.plannedFinish,
             updatedAt: new Date(),
           })
           .where(and(
@@ -1350,7 +1365,7 @@ export const appRouter = router({
             eq(projects.ownerUserId, ctx.user.id),
             isNull(projects.deletedAt),
           ))
-          .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, cubValor: projects.cubValor, cubUf: projects.cubUf, cubMes: projects.cubMes, bdiDeclarado: projects.bdiDeclarado, updatedAt: projects.updatedAt });
+          .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, cubValor: projects.cubValor, cubUf: projects.cubUf, cubMes: projects.cubMes, bdiDeclarado: projects.bdiDeclarado, plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish, updatedAt: projects.updatedAt });
         if (!updated) throw notFound("Obra não encontrada para atualizar o escopo.");
         return updated;
       }),

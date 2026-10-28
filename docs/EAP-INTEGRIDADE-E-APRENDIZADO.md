@@ -159,6 +159,12 @@ Causa: estado de soft-delete e consulta da lista de obras não estavam alinhados
 Correção: somente Aurora permanece ativa; demais obras de teste foram para a lixeira, sem exclusão física.
 Lição: exclusão deve ser reversível por padrão e a lista ativa deve filtrar deletedAt IS NULL.
 
+### Incidente E — período cadastrado bloqueando trechos válidos da Linha de Balanço
+Causa: o período planejado da obra terminava antes de atividades que ainda possuíam janelas oficiais válidas no CPM, e o fluxo de edição do escopo não expunha essas datas.
+Correção: permitir ao dono atualizar início ou término previsto, validar o intervalo combinado com a outra data atual e manter o isolamento por obra; manter a validação de cada trecho dentro do CPM e do período cadastrado.
+Lição: ao preparar distribuições LOB, alinhar o período da obra ao cronograma vigente sem deslocar datas do CPM nem contornar suas validações.
+Regressão: `server/access-isolation.test.ts` cobre a atualização pelo dono, a rejeição de intervalo invertido e a tentativa de alteração por outro usuário.
+
 ## 12. Checklist obrigatório antes de qualquer próxima etapa
 - identificar projectId;
 - identificar versionId;

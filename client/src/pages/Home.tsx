@@ -61,6 +61,12 @@ import "@/escopo-eap-studio.css";
 
 type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
 
+function dataIsoDoProjeto(value: Date | string): string {
+  const data = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(data.getTime())) return "";
+  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}-${String(data.getUTCDate()).padStart(2, "0")}`;
+}
+
 /**
  * O fluxo do planejamento, na ordem em que ele acontece.
  *
@@ -103,8 +109,8 @@ export default function Home() {
     enabled: Boolean(user),
     retry: false,
   });
-  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> =
-    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null }> | undefined) ?? [];
+  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null; plannedStart: Date | string; plannedFinish: Date | string }> =
+    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null; plannedStart: Date | string; plannedFinish: Date | string }> | undefined) ?? [];
   const obra =
     idNaUrl == null || Number.isNaN(idNaUrl)
       ? undefined
@@ -324,7 +330,7 @@ export default function Home() {
         <SemObra carregando={obras.isPending} temObras={lista.length > 0} />
       ) : (
         <>
-          <Obra projetoId={projetoId} obra={obra!.name} codigoObra={obra!.code} layoutProfissional={layoutProfissional} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
+          <Obra projetoId={projetoId} obra={obra!.name} codigoObra={obra!.code} layoutProfissional={layoutProfissional} localizacao={obra!.location ?? ""} descricao={obra!.descricao ?? ""} tipoDeObra={obra!.tipoDeObra ?? ""} cubValor={obra!.cubValor == null ? "" : String(obra!.cubValor)} cubUf={obra!.cubUf ?? ""} cubMes={obra!.cubMes ?? ""} bdiDeclarado={obra!.bdiDeclarado == null ? "" : String(obra!.bdiDeclarado)} plannedStart={obra!.plannedStart} plannedFinish={obra!.plannedFinish} aba={aba} onAba={setAba} usuario={user} onLixeira={() => setLixeiraAberta(true)} lixeiraCount={(lixeira.data ?? []).length} />
           {/*
             O agente é janela flutuante sobre as abas, e não uma sétima aba: a
             pergunta "como está a minha obra?" não pode ser mais um lugar para
@@ -452,6 +458,8 @@ function Obra({
   cubUf,
   cubMes,
   bdiDeclarado,
+  plannedStart,
+  plannedFinish,
   aba,
   onAba,
   usuario,
@@ -469,6 +477,8 @@ function Obra({
   cubUf: string;
   cubMes: string;
   bdiDeclarado: string;
+  plannedStart: Date | string;
+  plannedFinish: Date | string;
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
   usuario: { name?: string | null; role?: string | null } | null;
@@ -749,7 +759,7 @@ function Obra({
             carregandoGrade={grade.isPending}
           />
         ) : aba === "escopo" ? (
-          <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} cubValor={cubValor} cubUf={cubUf} cubMes={cubMes} bdiDeclarado={bdiDeclarado} />
+          <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} cubValor={cubValor} cubUf={cubUf} cubMes={cubMes} bdiDeclarado={bdiDeclarado} plannedStart={plannedStart} plannedFinish={plannedFinish} />
         ) : aba === "eap" ? (
           <AbaEap projetoId={projetoId} />
         ) : aba === "atividades" ? (
@@ -816,7 +826,7 @@ function Obra({
 }
 
 /** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
-function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | ""; cubValor: string; cubUf: string; cubMes: string; bdiDeclarado: string }) {
+function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado, plannedStart, plannedFinish }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | ""; cubValor: string; cubUf: string; cubMes: string; bdiDeclarado: string; plannedStart: Date | string; plannedFinish: Date | string }) {
   const utils = trpc.useUtils();
   const [editando, setEditando] = useState(false);
   const [descricaoEditada, setDescricaoEditada] = useState(descricao);
@@ -826,6 +836,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const [cubUfEditada, setCubUfEditada] = useState(cubUf);
   const [cubMesEditado, setCubMesEditado] = useState(cubMes);
   const [bdiEditado, setBdiEditado] = useState(bdiDeclarado);
+  const [inicioObraEditado, setInicioObraEditado] = useState(() => dataIsoDoProjeto(plannedStart));
+  const [terminoObraEditado, setTerminoObraEditado] = useState(() => dataIsoDoProjeto(plannedFinish));
   useEffect(() => {
     setDescricaoEditada(descricao);
     setLocalizacaoEditada(localizacao);
@@ -834,7 +846,9 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     setCubUfEditada(cubUf);
     setCubMesEditado(cubMes);
     setBdiEditado(bdiDeclarado);
-  }, [descricao, localizacao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado]);
+    setInicioObraEditado(dataIsoDoProjeto(plannedStart));
+    setTerminoObraEditado(dataIsoDoProjeto(plannedFinish));
+  }, [descricao, localizacao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado, plannedStart, plannedFinish]);
   const salvarEscopo = trpc.projects.updateScope.useMutation({
     onSuccess: async () => {
       await utils.projects.list.invalidate();
@@ -855,6 +869,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const cubMesValido = cubMesEditado.trim() === "" || /^\d{4}-(0[1-9]|1[0-2])$/.test(cubMesEditado.trim());
   const cubBdiValidos = cubValorNum !== "invalido" && bdiNum !== "invalido"
     && (bdiNum === null || (bdiNum >= 0 && bdiNum <= 1));
+  const periodoObraValido = inicioObraEditado.trim() !== "" && terminoObraEditado.trim() !== "" && terminoObraEditado > inicioObraEditado;
   const formatarReal = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v; };
   const formatarPct = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? (n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + "%" : v; };
   // Quantidades em m², m³, un etc. não podem ser somadas em um total adimensional.
@@ -943,8 +958,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         <div className="scopo-header-actions">
           {editando ? (
             <>
-              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2 || !cubBdiValidos || !cubUfValida || !cubMesValido} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim(), cubValor: cubValorNum === "invalido" ? null : cubValorNum, cubUf: cubUfEditada.trim() === "" ? null : cubUfEditada.trim().toUpperCase(), cubMes: cubMesEditado.trim() === "" ? null : cubMesEditado.trim(), bdiDeclarado: bdiNum === "invalido" ? null : bdiNum })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
-              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setCubValorEditado(cubValor); setCubUfEditada(cubUf); setCubMesEditado(cubMes); setBdiEditado(bdiDeclarado); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2 || !cubBdiValidos || !cubUfValida || !cubMesValido || !periodoObraValido} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim(), cubValor: cubValorNum === "invalido" ? null : cubValorNum, cubUf: cubUfEditada.trim() === "" ? null : cubUfEditada.trim().toUpperCase(), cubMes: cubMesEditado.trim() === "" ? null : cubMesEditado.trim(), bdiDeclarado: bdiNum === "invalido" ? null : bdiNum, plannedStart: inicioObraEditado !== dataIsoDoProjeto(plannedStart) ? new Date(`${inicioObraEditado}T12:00:00`) : undefined, plannedFinish: terminoObraEditado !== dataIsoDoProjeto(plannedFinish) ? new Date(`${terminoObraEditado}T12:00:00`) : undefined })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setCubValorEditado(cubValor); setCubUfEditada(cubUf); setCubMesEditado(cubMes); setBdiEditado(bdiDeclarado); setInicioObraEditado(dataIsoDoProjeto(plannedStart)); setTerminoObraEditado(dataIsoDoProjeto(plannedFinish)); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
             </>
           ) : (
             <button type="button" className="scopo-btn secondary" onClick={() => setEditando(true)}><ClipboardList size={14}/> Editar escopo</button>
@@ -1016,6 +1031,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       {editando && (
         <section className="scopo-detail scopo-edit-form">
           <div className="scopo-detail-body">
+            <label><strong>Início previsto da obra</strong><input type="date" value={inicioObraEditado} onChange={event => setInicioObraEditado(event.target.value)} /></label>
+            <label><strong>Término previsto da obra</strong><input type="date" value={terminoObraEditado} onChange={event => setTerminoObraEditado(event.target.value)} /><small>O período cadastrado precisa abranger as janelas oficiais do CPM para aceitar os trechos da Linha de Balanço.</small>{!periodoObraValido && <small role="alert">Informe início e término, com o término posterior ao início.</small>}</label>
             <label><strong>Localização da obra</strong><input value={localizacaoEditada} onChange={event => setLocalizacaoEditada(event.target.value)} minLength={2} maxLength={180} placeholder="Cidade, endereço ou região" /></label>
             <label><strong>Natureza da obra</strong>
               <select value={tipoDeObraEditado} onChange={event => setTipoDeObraEditado(event.target.value as TipoDeObra | "")}>

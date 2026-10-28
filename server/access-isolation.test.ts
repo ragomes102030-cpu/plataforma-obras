@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { projects, users } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
@@ -96,13 +97,52 @@ describe("isolamento entre obras", () => {
         location: "Cidade do intruso",
         tipoDeObra: "edificio",
         descricao: "alteracao indevida",
+        plannedStart: new Date("2026-02-01T00:00:00Z"),
+        plannedFinish: new Date("2027-12-31T00:00:00Z"),
       })
     ).rejects.toThrow(/sem permiss/i);
 
     // E o dado continua intacto no banco — nao basta a chamada falhar depois de escrever.
     const db = drizzlePglite(pg);
-    const [obra] = await db.select({ location: projects.location }).from(projects);
+    const [obra] = await db.select({ location: projects.location, plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish }).from(projects);
     expect(obra.location).not.toBe("Cidade do intruso");
+    expect(obra.plannedStart.toISOString()).toBe("2026-01-05T00:00:00.000Z");
+    expect(obra.plannedFinish.toISOString()).toBe("2026-12-20T00:00:00.000Z");
+  });
+
+  it("o dono atualiza o periodo cadastrado da propria obra", async () => {
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "iso-dono", name: "Dono da obra" }));
+    const plannedStart = new Date("2026-01-05T00:00:00Z");
+    const plannedFinish = new Date("2028-12-28T00:00:00Z");
+
+    await dono.projects.updateScope({
+      projectId: obraDoDono,
+      location: "Cidade do dono",
+      tipoDeObra: "edificio",
+      descricao: "Escopo original confirmado para a obra de teste.",
+      plannedFinish,
+    });
+
+    const db = drizzlePglite(pg);
+    const [obra] = await db
+      .select({ plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish })
+      .from(projects)
+      .where(eq(projects.id, obraDoDono));
+    expect(obra.plannedStart.toISOString()).toBe(plannedStart.toISOString());
+    expect(obra.plannedFinish.toISOString()).toBe(plannedFinish.toISOString());
+  });
+
+  it("o periodo cadastrado exige termino posterior ao inicio", async () => {
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "iso-dono", name: "Dono da obra" }));
+
+    await expect(dono.projects.updateScope({
+      projectId: obraDoDono,
+      location: "Cidade do dono",
+      tipoDeObra: "edificio",
+      descricao: "Escopo original confirmado para a obra de teste.",
+      plannedStart: new Date("2028-12-29T00:00:00Z"),
+      plannedFinish: new Date("2028-12-28T00:00:00Z"),
+    })).rejects.toThrow(/término da obra deve ser posterior ao início/i);
   });
 
   it("obra inexistente responde igual a obra alheia (nao vaza existencia)", async () => {
