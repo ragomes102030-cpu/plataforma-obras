@@ -20,7 +20,7 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Playwright local: um teste passou em desktop e celular; verificou linha de 64 px, faixa compartilhada e ausência de overflow horizontal da página.
 - Capturas locais: `test-results/lob-profissional/desktop-faixas-compactas.png` e `test-results/lob-profissional/mobile-faixas-compactas.png`.
 - `pnpm check`: passou. `pnpm build`: passou com avisos sobre as variáveis de analytics ausentes e o bundle JS acima de 500 kB.
-- `pnpm test`: 141 arquivos passaram; 1.277 testes passaram e 8 foram ignorados por falta da planilha de referência local.
+- `pnpm test`: rodada final em 2026-10-28: 141 arquivos passaram; 1.278 testes passaram e 8 foram ignorados por falta da planilha de referência local.
 - Runtime disponível: Node.js 24.21.0; o projeto declara Node 22.x, portanto comandos reportam aviso de engine.
 - `git diff --check`: passou. PR #244 está aberta contra `develop`; CI não havia reportado verificações na última consulta. Código não incorporado nem publicado.
 
@@ -51,11 +51,18 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Baseline exige versão aprovada, CPM atual e viável, durações válidas e rede de dependências íntegra. Captura de cabeçalho/itens é transacional; índice parcial e migração limitam a uma baseline ativa, arquivando a anterior sem apagar fotografias históricas.
 - Validação da matriz de obra, calendário/exceções, dados de dependência e baseline vigentes da Aurora continua **NÃO TESTÁVEL** ao vivo. Migrações e consistência na base publicada ainda precisam de leitura autorizada.
 
+## Produtividade do motor interno — auditoria de código
+
+- Achado **P1** em `server/agent/core/engineering-capabilities.ts`: `calcular_duracao_atividade` comparava a unidade da quantidade diretamente com todo o texto de `productivityUnit`. Assim, `m2` e `m2/dia` eram tratados como incompatíveis e o agente recusava uma forma normal de informar produtividade.
+- A comparação agora valida o numerador da produtividade antes da barra, consistente com a validação do fluxo de criação de atividade no `orchestrator.ts`. Não faz conversão dimensional nem interpreta a base temporal além de manter a premissa existente de unidade por dia.
+- Teste primeiro reproduziu a falha para `100 m2 ÷ 20 m2/dia` e passou após a correção. O caso com numerador incompatível continua rejeitado. `pnpm check` e a suíte completa passaram (141 arquivos, 1.278 testes aprovados e 8 ignorados).
+- Limite: calendário, número de equipes/turnos e produtividade observada são premissas externas dessa ferramenta de cálculo; a fórmula permanece quantidade dividida pela produtividade diária fornecida.
+
 ## Próximos passos
 
 1. Aguardar review e CI da PR #244; não incorporar sem aprovação e verificações aprovadas.
 2. Obter uma sessão autorizada de leitura no Supabase e conferir migration/journal, contagens, medições por unidade, versões e permissões da Aurora; não preencher locais ou quantidades por hipótese.
-3. Auditar orçamento, quantitativos, produtividade, medições, dashboard, UX, agente e segurança com evidência de código e testes; registrar achados P0–P3 e corrigir o que for seguro em PRs pequenos.
+3. Continuar auditoria de orçamento, quantitativos, medições, UX, agente e segurança com evidência de código e testes; registrar achados P0–P3 e corrigir o que for seguro em PRs pequenos. Produtividade do motor interno teve uma correção P1 nesta etapa.
 4. Só afirmar estado de publicação depois de verificar o commit ativo no serviço e executar teste funcional publicado.
 
 ## Governança

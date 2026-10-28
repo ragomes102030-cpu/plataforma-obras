@@ -18,7 +18,7 @@ export function calculateActivityDuration(input: DurationEvidenceInput) {
   }
   if (!(input.plannedQuantity! > 0) || !(input.productivity! > 0)) throw new Error("Para calcular a duração são necessárias quantidade e produtividade positivas.");
   const quantityUnit = input.quantityUnit?.trim().toLowerCase();
-  const productivityUnit = input.productivityUnit?.trim().toLowerCase();
+  const productivityUnit = input.productivityUnit?.trim().toLowerCase().split("/")[0].trim();
   if (quantityUnit && productivityUnit && quantityUnit !== productivityUnit) throw new Error("Unidades incompatíveis; o Arquimedes não fará conversão automática sem regra de conversão validada.");
   return { durationDays: Math.max(1, Math.ceil(input.plannedQuantity! / input.productivity!)), method: "ceil(quantidade/produtividade)", evidenceLevel: input.source?.trim() ? "source_supported" : "engineer_informed", premise: "produtividade expressa na unidade da quantidade por dia para a equipe considerada", source: input.source ?? null, inputs: { plannedQuantity: input.plannedQuantity, productivity: input.productivity, quantityUnit: input.quantityUnit ?? null, productivityUnit: input.productivityUnit ?? null } };
 }
