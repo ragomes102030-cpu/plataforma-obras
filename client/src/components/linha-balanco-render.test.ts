@@ -17,16 +17,18 @@ function renderizar(linhas: EntradaDaLinha[]) {
 }
 
 describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>{
-  it("não inventa ritmo sem repetição; dá acesso à edição de atividades",()=>{
+  it("traz atividades não repetitivas desde o início da obra sem fabricar escadinha",()=>{
     const html=renderizar([
       atividade("1","Armadura","Estrutura","2026-11-03"),
       atividade("2","Chapisco","Revestimentos","2026-11-04"),
       atividade("3","Pintura","Acabamentos","2026-11-05"),
     ]);
-    expect(html).toContain("LINHA DE RITMO AINDA NÃO DISPONÍVEL");
-    expect(html).toContain("Revisar atividades e locais");
     expect(html).not.toContain('data-testid="lob-step-bar"');
-    expect(html).not.toContain("lob-stairs-board");
+    expect((html.match(/data-testid="lob-context-bar"/g)??[])).toHaveLength(3);
+    expect(html).toContain("lob-stairs-board");
+    expect(html).toContain('value="2026-11-03"');
+    expect(html).toContain("Sem sequência");
+    expect(html).toContain("Atividades sem sequência repetitiva");
   });
 
   it("18 barras reais, três cores e seis pavimentos em ordem de cima para baixo",()=>{
@@ -60,12 +62,13 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
       atividade("1.2","Licenças","Infraestrutura","2026-10-02"),
     ]);
     expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(2);
+    expect((html.match(/data-testid="lob-context-bar"/g)??[])).toHaveLength(2);
     expect(html).toContain('role="rowheader">P01');
     expect(html).toContain('role="rowheader">P02');
     expect(html).not.toContain('role="rowheader">Serviços Gerais');
     expect(html).not.toContain('role="rowheader">Infraestrutura');
-    expect(html).toContain('value="2026-11-03"');
-    expect(html).not.toContain('value="2026-10-01"');
+    expect(html).toContain('value="2026-10-01"');
+    expect(html).toContain("Atividades do cronograma fora das escadinhas".toLowerCase().slice(0,5)) || expect(html).toContain("atividades do cronograma fora das escadinhas");
   });
 
   it("preserva datas oficiais com feriados e dias úteis, sem recalcular fim por duração",()=>{
@@ -161,8 +164,8 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("QA: 4 atividade(s) de demonstração");
     expect(html).toContain("não representam execução real");
     expect(html).toContain('data-testid="lob-toggle-obra-start"');
-    expect(html).toContain("Mostrar desde início da obra");
-    expect(html).toContain('value="2028-02-08"');
+    expect(html).toContain("Focar nas escadinhas");
+    expect(html).toContain('value="2026-10-01"');
     expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(4);
   });
 
