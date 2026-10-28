@@ -39,7 +39,8 @@ export function LobDistribuicaoPainel({
     Number.isFinite(quantidadeNum)&&quantidadeNum>0&&
     Math.abs(quantidadeNum*1000-Math.round(quantidadeNum*1000))<1e-6&&
     (linha?.quantidade??0)>0&&quantidadeNum<=restante+0.0001&&
-    /^\d{4}-\d{2}-\d{2}$/.test(inicio)&&/^\d{4}-\d{2}-\d{2}$/.test(fim)&&fim>=inicio;
+    /^\d{4}-\d{2}-\d{2}$/.test(inicio)&&/^\d{4}-\d{2}-\d{2}$/.test(fim)&&fim>=inicio&&
+    !!linha&&inicio>=linha.inicio&&!!finsCalculados[linha.codigo]&&fim<=finsCalculados[linha.codigo]!;
   const comDistribuicao=new Set(distribuicoes.map(d=>d.activityId)).size;
   const totais=useMemo(()=>ativos.map(a=>{
     const l=linhasPorCodigo.get(a.wbsCode)!;
