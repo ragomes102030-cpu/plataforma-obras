@@ -5,7 +5,8 @@ import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBr
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import { prepararBarrasBaselineGantt, resumirBaselineNoGantt, type BarraBaselineGantt } from "@shared/gantt-baseline-visual";
-import { linhasVisiveis, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
+import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
+import { gerarSetasVisiveisGantt } from "@shared/gantt-dependencias-visuais";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
 import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
 import { LinhaBalancoEscadinha } from "./AuroraLinhaBalanco";
@@ -471,6 +472,12 @@ function Gantt({
   // Filtro de visão (não de edição): esconde linhas, nunca altera o plano.
   const [busca, setBusca] = useState("");
   const [soCritico, setSoCritico] = useState(false);
+  // Um cálculo parcial/desatualizado não pode apagar as linhas da obra.
+  const podeFiltrarCritico = cpmValido && totalCriticas > 0;
+  const soCriticoAtivo = soCritico && podeFiltrarCritico;
+  useEffect(() => {
+    if (!podeFiltrarCritico) setSoCritico(false);
+  }, [podeFiltrarCritico]);
   const [mostrarSetas, setMostrarSetas] = useState(true);
   const [selecionada, setSelecionada] = useState<string | null>(null);
   const [rotulos, setRotulos] = useState(true);
@@ -497,13 +504,9 @@ function Gantt({
   };
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const filtradas = useMemo(
-    () =>
-      visiveis.filter(
-        no =>
-          (!soCritico || Boolean(no.critica)) &&
-          (!termo || `${no.codigo} ${no.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
-      ),
-    [visiveis, soCritico, termo]
+    () => (soCriticoAtivo ? linhasCriticasVisiveisGantt(arvore) : visiveis)
+      .filter(no => !termo || `${no.codigo} ${no.nome}`.toLocaleLowerCase("pt-BR").includes(termo)),
+    [arvore, visiveis, soCriticoAtivo, termo]
   );
 
   // ---- Impressão / PDF -----------------------------------------------------
@@ -545,31 +548,12 @@ function Gantt({
     return mapa;
   }, [filtradas, px, dados.start, larguraDoTempo, alturaLinha]);
 
-  const setas = useMemo(() => {
-    if (!mostrarSetas) return [];
-    const lista: { chave: string; d: string; critica: boolean }[] = [];
-    for (const dependencia of dependencias) {
-      const origem = geometria.get(dependencia.de);
-      const destino = geometria.get(dependencia.para);
-      if (!origem || !destino) continue;
-      const tipo = dependencia.tipo.toUpperCase();
-      const sai = tipo === "SS" || tipo === "SF" ? origem.x0 : origem.x1;
-      const entra = tipo === "FF" || tipo === "SF" ? destino.x1 : destino.x0;
-      const canal =
-        tipo === "SS"
-          ? Math.max(2, Math.min(origem.x0, destino.x0) - 8)
-          : tipo === "FS"
-            ? Math.max(sai + 8, 2)
-            : Math.max(origem.x1, destino.x1, sai) + 8;
-      const ponta = tipo === "FF" || tipo === "SF" ? 4 : -4;
-      lista.push({
-        chave: `${dependencia.de}>${dependencia.para}`,
-        d: `M ${sai} ${origem.y} H ${canal} V ${destino.y} H ${entra + ponta}`,
-        critica: codigosCriticos.has(dependencia.de) && codigosCriticos.has(dependencia.para),
-      });
-    }
-    return lista;
-  }, [dependencias, geometria, mostrarSetas, codigosCriticos]);
+  const setas = useMemo(
+    () => mostrarSetas
+      ? gerarSetasVisiveisGantt(dependencias, geometria, codigosCriticos)
+      : [],
+    [dependencias, geometria, mostrarSetas, codigosCriticos]
+  );
 
   // Linha de avanço: passa pelo ponto em que cada atividade realmente está.
   // Trecho sem lançamento quebra a linha em vez de voltar ao início do gráfico.
@@ -723,10 +707,12 @@ function Gantt({
           </label>
           <button
             type="button"
-            className={`pg-chip${soCritico ? " ativo" : ""}`}
-            onClick={() => setSoCritico(valor => !valor)}
-            aria-pressed={soCritico}
-            title="Mostrar só o caminho crítico"
+            className={`pg-chip${soCriticoAtivo ? " ativo" : ""}`}
+            onClick={() => setSoCritico(valor => podeFiltrarCritico ? !valor : false)}
+            disabled={!podeFiltrarCritico}
+            aria-pressed={soCriticoAtivo}
+            title={podeFiltrarCritico ? "Mostrar atividades críticas e suas etapas, inclusive recolhidas" :
+              "Filtro indisponível: recalcule o CPM da versão atual antes de visualizar o caminho crítico"}
           >
             Só crítico
           </button>
@@ -895,6 +881,7 @@ function Gantt({
                 style={{ left: esquerda }}
                 aria-hidden="true"
                 data-export="gantt-svg"
+                data-testid="gantt-dependency-layer"
               >
                 <defs>
                   <marker id="pg-seta" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
@@ -908,6 +895,7 @@ function Gantt({
                   <path
                     key={seta.chave}
                     d={seta.d}
+                    data-testid="gantt-dependency-path"
                     className={`pg-seta${seta.critica ? " critica" : ""}`}
                     markerEnd={`url(#${seta.critica ? "pg-seta-critica" : "pg-seta"})`}
                   />
@@ -932,7 +920,9 @@ function Gantt({
 
             {filtradas.length === 0 && (
               <div className="pg-vazio-filtro">
-                Nenhuma atividade corresponde a este filtro. Limpe a busca ou desligue “Só crítico”.
+                {soCriticoAtivo
+                  ? "Nenhuma atividade crítica corresponde à busca. Limpe a busca ou desligue “Só crítico”."
+                  : "Nenhuma atividade corresponde à busca. Limpe o texto para mostrar a EAP."}
               </div>
             )}
 
@@ -973,14 +963,15 @@ function Gantt({
                             className="pg-toggle"
                             onClick={evento => {
                               evento.stopPropagation();
-                              alternar(no.chave);
+                              if (!soCriticoAtivo) alternar(no.chave);
                             }}
-                            aria-expanded={!colapsados.has(no.chave)}
-                            aria-label={`${colapsados.has(no.chave) ? "Abrir" : "Fechar"} etapa ${no.codigo}`}
-                            title={colapsados.has(no.chave) ? "Abrir etapa" : "Fechar etapa"}
+                            aria-expanded={soCriticoAtivo || !colapsados.has(no.chave)}
+                            aria-label={`${colapsados.has(no.chave) && !soCriticoAtivo ? "Abrir" : "Fechar"} etapa ${no.codigo}`}
+                            title={soCriticoAtivo ? "Filtro crítico: hierarquia expandida temporariamente" : colapsados.has(no.chave) ? "Abrir etapa" : "Fechar etapa"}
+                            disabled={soCriticoAtivo}
                             style={{ marginLeft: no.profundidade * 10 }}
                           >
-                            {colapsados.has(no.chave) ? "+" : "−"}
+                            {soCriticoAtivo || !colapsados.has(no.chave) ? "−" : "+"}
                           </button>
                         ) : (
                           <span className="pg-toggle-vazio" style={{ marginLeft: no.profundidade * 10 }} aria-hidden="true" />
@@ -1223,7 +1214,7 @@ function Gantt({
                   <span className="pgp-sub">
                     {impressao.linhas.length} linha{impressao.linhas.length === 1 ? "" : "s"}
                     {termo ? ` · busca “${termo}”` : ""}
-                    {soCritico ? " · só caminho crítico" : ""}
+                    {soCriticoAtivo ? " · só caminho crítico" : ""}
                   </span>
                 </th>
               </tr>
