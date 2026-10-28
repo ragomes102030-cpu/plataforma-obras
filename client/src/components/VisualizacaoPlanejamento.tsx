@@ -10,6 +10,7 @@ import { gerarSetasVisiveisGantt } from "@shared/gantt-dependencias-visuais";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
 import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
 import { LinhaBalancoEscadinha } from "./AuroraLinhaBalanco";
+import { LobDistribuicaoPainel } from "./LobDistribuicaoPainel";
 import "./aurora-piloto.css";
 
 type Props = {
@@ -76,6 +77,9 @@ export function VisualizacaoPlanejamento({
   const consultarLocaisLob = view === "lob" && projetoId > 0;
   const nodosEap = trpc.projects.wbs.useQuery({projectId:projetoId},{enabled:consultarLocaisLob});
   const unidadesProducao = trpc.production.units.useQuery({projectId:projetoId},{enabled:consultarLocaisLob});
+  const distribuicoesLob = trpc.planning.listarDistribuicoesLob.useQuery(
+    {projectId:projetoId},{enabled:consultarLocaisLob});
+
   const utilsLob = trpc.useUtils();
   const definirLocalLob = trpc.planning.definirLocalLob.useMutation({
     onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
@@ -83,7 +87,15 @@ export function VisualizacaoPlanejamento({
   const criarUnidadeLob = trpc.production.createUnit.useMutation({
     onSuccess:()=>utilsLob.production.units.invalidate({projectId:projetoId}),
   });
+  const salvarDistribuicaoLob=trpc.planning.salvarDistribuicaoLob.useMutation({
+    onSuccess:()=>utilsLob.planning.listarDistribuicoesLob.invalidate({projectId:projetoId})
+  });
+  const removerDistribuicaoLob=trpc.planning.removerDistribuicaoLob.useMutation({
+    onSuccess:()=>utilsLob.planning.listarDistribuicoesLob.invalidate({projectId:projetoId})
+  });
   const editavelLob = ["draft","proposed"].includes(planejamento.data?.currentVersionStatus??"");
+  const atividadesLob=atividades.filter(a=>!codigosExemplo?.has(a.wbsCode)).map(a=>({id:a.id,wbsCode:a.wbsCode}));
+
   const atividadePorCodigo = useMemo(
     () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
     [atividades]
@@ -210,12 +222,30 @@ export function VisualizacaoPlanejamento({
           nomeBaseline={comparacaoBaseline.data?.baseline.name ?? baselineVigente?.name ?? null}
           resumoBaseline={resumoBaseline} />
       ) : (
-        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra} codigosExemplo={codigosExemplo} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
-          editavel={editavelLob} salvandoLocal={definirLocalLob.isPending}
-          erroLocal={definirLocalLob.error?.message??criarUnidadeLob.error?.message??null}
-          onDefinirLocal={(nodeId,unitId)=>definirLocalLob.mutate({projectId:projetoId,nodeId,unitId})}
-          onCriarUnidade={(code,name,unitType)=>criarUnidadeLob.mutate({projectId:projetoId,code,name,unitType})}
-          onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
+        <>
+          <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra}
+            codigosExemplo={codigosExemplo} dependencias={dependencias}
+            estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"}
+            nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
+            distribuicoes={distribuicoesLob.data??[]} atividadeIds={atividadesLob}
+            editavel={editavelLob} salvandoLocal={definirLocalLob.isPending}
+            erroLocal={definirLocalLob.error?.message??criarUnidadeLob.error?.message??null}
+            onDefinirLocal={(nodeId,unitId)=>definirLocalLob.mutate({projectId:projetoId,nodeId,unitId})}
+            onCriarUnidade={(code,name,unitType)=>criarUnidadeLob.mutate({projectId:projetoId,code,name,unitType})}
+            onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))}/>
+          <LobDistribuicaoPainel
+            atividades={atividadesLob}
+            linhas={linhas.filter(l=>!codigosExemplo?.has(l.codigo))}
+            finsCalculados={finsCalculados}
+            unidades={unidadesProducao.data??[]}
+            distribuicoes={distribuicoesLob.data??[]}
+            editavel={editavelLob}
+            salvando={salvarDistribuicaoLob.isPending||removerDistribuicaoLob.isPending}
+            erro={salvarDistribuicaoLob.error?.message??removerDistribuicaoLob.error?.message??
+              distribuicoesLob.error?.message??null}
+            onSalvar={v=>salvarDistribuicaoLob.mutate({projectId:projetoId,...v})}
+            onRemover={id=>removerDistribuicaoLob.mutate({projectId:projetoId,id})}/>
+        </>
       )}
     </section>
   );
