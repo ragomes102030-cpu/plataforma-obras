@@ -1,7 +1,7 @@
 import { AlertTriangle, Calculator, CheckCircle2, Network, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { isStoredCpmCurrent } from "@shared/cpm-validity";
+import { selectOperationalPlanning } from "@shared/operational-planning";
 import { PainelMonteCarlo } from "./PainelMonteCarlo";
 
 type Props = { projetoId: number };
@@ -29,8 +29,14 @@ export function AbaCpm({ projetoId }: Props) {
     onError: error => setMensagem(error.message),
   });
 
-  const activities = plano.data?.activities ?? [];
-  const dependencies = plano.data?.dependencies ?? [];
+  const allActivities = plano.data?.activities ?? [];
+  const allDependencies = plano.data?.dependencies ?? [];
+  const planejamentoOperacional = useMemo(
+    () => selectOperationalPlanning(allActivities, allDependencies),
+    [allActivities, allDependencies]
+  );
+  const activities = planejamentoOperacional.activities;
+  const dependencies = planejamentoOperacional.dependencies;
 
   const resumo = useMemo(() => {
     const validas = activities.filter(activity => Number(activity.durationDays) >= 1);
@@ -156,6 +162,14 @@ export function AbaCpm({ projetoId }: Props) {
             </div>
           </div>
           <p className="pl-planejamento-vazio">{problemaRede}</p>
+        </div>
+      )}
+
+      {(planejamentoOperacional.excludedExampleActivities > 0 || planejamentoOperacional.excludedExampleDependencies > 0) && (
+        <div className="pl-planejamento-box">
+          <p className="pl-tabela-legenda">
+            Separação de QA: {planejamentoOperacional.excludedExampleActivities} atividade(s) de exemplo e {planejamentoOperacional.excludedExampleDependencies} dependência(s) ligada(s) a elas ficam fora do CPM operacional. Referências realmente ausentes continuam sendo validadas como erro.
+          </p>
         </div>
       )}
 

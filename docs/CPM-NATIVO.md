@@ -183,6 +183,8 @@ export async function persistCpmResult(
 
 **Diferença:** Além do CPM, aplica restrições de calendário (`mustStartOn`, `finishNoLaterThan`) e retorna informações de restrições declaradas vs aplicadas. Usa transação (`db.transaction`) para persistência.
 
+**Separação de dados de QA:** atividades marcadas `exemplo=1` e dependências ligadas a elas não entram no CPM operacional nem no gate da baseline. O filtro mantém dependências com referências realmente ausentes para que a validação continue apontando a rede inválida. A seleção compartilhada em `shared/operational-planning.ts` é coberta por `shared/operational-planning.test.ts`; a interface informa quantos registros de QA foram excluídos.
+
 ---
 
 ### 5. `server/agent/core/engineering-capabilities.ts` — Wrapper para Agentes

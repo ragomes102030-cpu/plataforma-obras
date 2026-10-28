@@ -2,6 +2,14 @@
 
 > **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
 
+## 28/out/2026 — Isolamento de QA no CPM operacional
+
+**Sintoma:** na AURORA TESTE, a rota de CPM excluía as atividades marcadas como exemplo, mas ainda carregava dependências ligadas a elas. O motor recebia pontas de dependência fora da rede operacional e recusava o recálculo com `Dependência aponta para atividade inexistente`.
+
+**Correção:** CPM e gate de baseline usam a mesma seleção operacional. Vínculos ligados a atividades de QA ficam explicitamente fora do cálculo e a interface mostra quantas atividades e dependências de exemplo foram excluídas. Dependências com endpoints realmente ausentes continuam no conjunto para que o validador as reporte; apenas vínculos que apontam para atividades de exemplo são removidos. Atividades de QA e seu histórico permanecem no banco.
+
+**Regressão:** `shared/operational-planning.test.ts` cobre a exclusão dos vínculos de QA, preservação dos vínculos reais e a validação de referências realmente ausentes.
+
 ---
 
 ## Sep/2026 — Migração Render → Vercel

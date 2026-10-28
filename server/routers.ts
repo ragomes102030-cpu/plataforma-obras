@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
+import { selectOperationalPlanning } from "../shared/operational-planning";
 import { z } from "zod";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import {
@@ -4888,14 +4889,16 @@ export const appRouter = router({
           ? eq(scheduleDependencies.versionId, currentVersion.id)
           : isNull(scheduleDependencies.versionId);
 
-        const activities = await db
+        const allActivities = await db
           .select()
           .from(scheduleActivities)
           .where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
-        const dependencies = await db
+        const allDependencies = await db
           .select()
           .from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
+        const planejamentoOperacional = selectOperationalPlanning(allActivities, allDependencies);
+        const activities = planejamentoOperacional.activities;
 
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
         const inicioProjeto = project?.plannedStart ?? new Date();
@@ -4913,7 +4916,7 @@ export const appRouter = router({
         });
         const result = calculateDeterministicCpm(
           enrichedActivities as ScheduleEvidenceActivity[],
-          dependencies as ScheduleEvidenceDependency[]
+          planejamentoOperacional.dependencies as ScheduleEvidenceDependency[]
         );
 
         if (!result.valid || !result.schedule) {
@@ -4922,6 +4925,8 @@ export const appRouter = router({
             schedule: null,
             issues: result.issues,
             persisted: 0,
+            atividadesExemploExcluidas: planejamentoOperacional.excludedExampleActivities,
+            dependenciasExemploExcluidas: planejamentoOperacional.excludedExampleDependencies,
           };
         }
 
@@ -4933,6 +4938,8 @@ export const appRouter = router({
           issues: result.issues,
           infeasible: result.infeasible,
           persisted,
+          atividadesExemploExcluidas: planejamentoOperacional.excludedExampleActivities,
+          dependenciasExemploExcluidas: planejamentoOperacional.excludedExampleDependencies,
         };
       }),
     calculateCpm: protectedProcedure
@@ -4945,13 +4952,14 @@ export const appRouter = router({
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
         const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
-        const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
+        const planejamentoOperacional = selectOperationalPlanning(
+          allActivities,
+          await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope))
+        );
+        const activities = planejamentoOperacional.activities;
         if (!activities.length) {
           throw badRequest("Não é possível calcular o CPM: a versão atual não possui atividades operacionais.");
         }
-        // Não descarte silenciosamente elos ligados a atividades de exemplo ou ausentes.
-        // A validação deve apontar a inconsistência em vez de calcular uma rede parcial.
-        const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
         const inicioCalendario = localIso(project?.plannedStart ?? new Date());
@@ -4967,8 +4975,8 @@ export const appRouter = router({
           };
         });
         const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
-        const result = calculateDeterministicCpm(enrichedActivities, dependencies);
-        if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
+        const result = calculateDeterministicCpm(enrichedActivities, planejamentoOperacional.dependencies);
+        if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, atividadesExemploExcluidas:planejamentoOperacional.excludedExampleActivities, dependenciasExemploExcluidas:planejamentoOperacional.excludedExampleDependencies, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
         const calculatedAt = new Date();
         const schedule = result.schedule;
         const items = schedule.activities;
@@ -5000,7 +5008,7 @@ export const appRouter = router({
             }
           });
         }
-        return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
+        return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},atividadesExemploExcluidas:planejamentoOperacional.excludedExampleActivities,dependenciasExemploExcluidas:planejamentoOperacional.excludedExampleDependencies,calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
       }),
     /**
      * Risco de prazo (Monte Carlo).
