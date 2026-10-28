@@ -150,7 +150,7 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas continua 489", () => {
+  it("o total de colunas contempla 10 colunas multilocais (499)", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
@@ -161,6 +161,6 @@ describe("contrato do schema", () => {
     // 464 -> 488 na medição (measurements + measurement_items).
     // 488 -> 489 no marco do cronograma (is_milestone em schedule_activities).
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(489);
+    expect(total).toBe(499);
   });
 });
