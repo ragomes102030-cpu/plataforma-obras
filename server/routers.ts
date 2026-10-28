@@ -3895,8 +3895,8 @@ export const appRouter = router({
         activityId:z.number().int().positive(),
         unitId:z.number().int().positive(),
         plannedQuantity:z.number().finite().positive().max(1000000000000),
-        startDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
-        finishDate:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+        startDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        finishDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       }))
       .mutation(async ({ctx,input})=>{
         const db=await getDb();
