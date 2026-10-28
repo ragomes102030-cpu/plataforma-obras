@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
-import { dataValida, faixasDeTempo, ocupacaoNaFaixa, prepararLinhaBalancoVertical, atividadesForaDaEscadinhaLob } from "./linha-balanco-modelo";
+import { dataValida, faixasDeTempo, ocupacaoNaFaixa, prepararLinhaBalancoVertical, atividadesForaDaEscadinhaLob, aplicarLocaisDaEapNaLob } from "./linha-balanco-modelo";
 
 const linha = (codigo: string, atividade: string, pavimento: string, inicio = "2026-10-15"): EntradaDaLinha => ({
   codigo, atividade, pavimento, frente: "", inicio, duracao: 20,
@@ -92,5 +92,44 @@ describe("LOB — todas as atividades na mesma régua desde o início da obra",(
     const r2=atividadesForaDaEscadinhaLob([m,x,y],{M:"2026-10-01",X:"2026-10-06",Y:"2026-10-08"},[]);
     expect(r2.flatMap(z=>z.pontos.map(p=>p.codigo))).toEqual(["X","Y"]);
     expect(r2.some(z=>z.nome==="Infraestrutura")).toBe(false);
+  });
+});
+
+describe("LOB — unidade física confirmada na EAP",()=>{
+  it("promove atividade original de 2026 a serviço localizado sem alterar prazo",()=>{
+    const entradas=[
+      {...linha("1.1.1","Mobilização","Serviços Gerais","2026-10-01"),frente:"Execução"},
+      {...linha("1.13.2","Drenagem externa","Infraestrutura Externa","2026-10-02"),frente:"Execução"},
+    ];
+    const m=aplicarLocaisDaEapNaLob(entradas,[
+      {code:"1.1.1",location:"Canteiro de obras"},
+      {code:"1.13.2",location:null},
+    ],[{code:"CANTEIRO",name:"Canteiro de obras"}]);
+    expect(m.codigosConfirmados.has("1.1.1")).toBe(true);
+    expect(m.codigosConfirmados.has("1.13.2")).toBe(false);
+    expect(m.linhas[0]).toMatchObject({pavimento:"Canteiro de obras",inicio:"2026-10-01",duracao:20});
+    expect(m.linhas[1]).toMatchObject({pavimento:"Infraestrutura Externa",inicio:"2026-10-02"});
+    expect(entradas[0]?.pavimento).toBe("Serviços Gerais");
+    const r=prepararLinhaBalancoVertical(m.linhas,
+      {"1.1.1":"2026-10-09","1.13.2":"2026-10-15"},m.codigosConfirmados);
+    expect(r.series.find(x=>x.nome==="Mobilização")).toMatchObject({localizada:true,repetitiva:false});
+    expect(r.series.find(x=>x.nome==="Mobilização")?.pontos[0]).toMatchObject({
+      local:"Canteiro de obras",inicio:"2026-10-01",fim:"2026-10-09"
+    });
+    expect(r.series.find(x=>x.nome==="Drenagem externa")?.localizada).toBe(false);
+  });
+  it("nunca confirma disciplina textual nem unidade inexistente",()=>{
+    const m=aplicarLocaisDaEapNaLob([linha("A","Fundação","Estrutura")],[
+      {code:"A",location:"Estrutura"}
+    ],[{code:"TERREO",name:"Térreo"}]);
+    expect(m.codigosConfirmados.size).toBe(0);
+    expect(m.linhas[0]?.pavimento).toBe("Estrutura");
+  });
+  it("respeita código da unidade física além de nome",()=>{
+    const m=aplicarLocaisDaEapNaLob([linha("A","Estrutura","Estrutura")],[
+      {code:"A",location:"1º PAV"}
+    ],[{code:"1º PAV",name:"1º Pavimento"}]);
+    expect(m.codigosConfirmados.has("A")).toBe(true);
+    expect(m.linhas[0]?.pavimento).toBe("1º Pavimento");
   });
 });
