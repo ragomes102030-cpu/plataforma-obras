@@ -3917,7 +3917,9 @@ export const appRouter = router({
             throw conflict("A versão aprovada/histórica não permite distribuir serviços.");
           const [activity]=await tx.select({
               id:scheduleActivities.id,quantity:scheduleActivities.plannedQuantity,
-              exemplo:scheduleActivities.exemplo
+              exemplo:scheduleActivities.exemplo, earlyStart:scheduleActivities.earlyStart,
+              startOffset:scheduleActivities.startOffset, durationDays:scheduleActivities.durationDays,
+              cpmCalculatedAt:scheduleActivities.cpmCalculatedAt
             }).from(scheduleActivities).where(and(
               eq(scheduleActivities.id,input.activityId),
               eq(scheduleActivities.projectId,input.projectId),
@@ -3935,6 +3937,13 @@ export const appRouter = router({
           const obraFim=project?.finish?.toISOString().slice(0,10);
           if((obraInicio&&input.startDate<obraInicio)||(obraFim&&input.finishDate>obraFim))
             throw badRequest("Trecho fora do período cadastrado da obra.");
+          if(!project?.start)throw badRequest("Data inicial da obra indisponível.");
+          const cal=(await carregarCalendarioDaObra(db,input.projectId,project.start.getFullYear())).calendar;
+          const inicioOficial=dateAt(cal,localIso(project.start),deslocamentoEmDiasUteis(activity));
+          const fimOficial=dateAt(cal,inicioOficial,duracaoEmDiasUteis(activity)-1);
+          if(input.startDate<inicioOficial||input.finishDate>fimOficial)
+            throw badRequest("A parcela deve ficar dentro da janela oficial do CPM: "+inicioOficial+" a "+fimOficial+".");
+
           const alocacoes=await tx.select({unitId:lobActivityLocations.unitId,quantity:lobActivityLocations.plannedQuantity})
             .from(lobActivityLocations).where(and(
               eq(lobActivityLocations.projectId,input.projectId),
