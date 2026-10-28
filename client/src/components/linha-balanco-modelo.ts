@@ -15,6 +15,8 @@ export type SerieLob = {
   nome: string;
   pontos: PontoLob[];
   repetitiva: boolean;
+  /** Serviço isolado com local físico da EAP validado contra unidade cadastrada. */
+  localizada?: boolean;
 };
 export type FaixaLob = { inicio: string; fimExclusivo: string; rotulo: string };
 const DIA = 86400000;
@@ -32,7 +34,7 @@ export function rotuloMes(iso: string): string {
   const nomes = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   return nomes[Number(mes) - 1] + "/" + ano.slice(2);
 }
-export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalculados: Record<string, string>) {
+export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalculados: Record<string, string>, codigosComLocalConfirmado: ReadonlySet<string> = new Set()) {
   const validas = linhas.filter(l => !l.marco && dataValida(l.inicio) &&
     dataValida(finsCalculados[l.codigo]) &&
     diaUtc(finsCalculados[l.codigo]) >= diaUtc(l.inicio) &&
@@ -56,7 +58,9 @@ export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalcu
   }
   const series = Array.from(agrupados.values()).map(serie => {
     const porLocal = new Set(serie.pontos.map(p => p.local));
-    return { ...serie, repetitiva: porLocal.size >= 2 && porLocal.size === serie.pontos.length };
+    return { ...serie, repetitiva: porLocal.size >= 2 && porLocal.size === serie.pontos.length,
+      localizada: serie.pontos.length > 0 && serie.pontos.every(p => codigosComLocalConfirmado.has(p.codigo)),
+    };
   }).sort((a,b) => a.nome.localeCompare(b.nome, "pt-BR", {numeric:true}));
   return {
     locais, series,
@@ -124,4 +128,35 @@ export function atividadesForaDaEscadinhaLob(
     ...grupo,pontos:grupo.pontos.sort((a,b)=>a.inicio.localeCompare(b.inicio)||a.codigo.localeCompare(b.codigo,"pt-BR",{numeric:true})),
   })).sort((a,b)=>a.pontos[0]!.inicio.localeCompare(b.pontos[0]!.inicio)||
     a.nome.localeCompare(b.nome,"pt-BR",{numeric:true}));
+}
+
+/**
+ * A EAP possui o local editável, mas o campo legado 'pavimento' de
+ * schedule_activities contém disciplinas. Só vinculamos uma atividade a uma
+ * unidade física se a EAP informar explicitamente o NOME ou CÓDIGO de uma
+ * production_unit da mesma obra. Nenhum agrupamento pelo nome da atividade.
+ * A versão da EAP deve ser a mesma das atividades exibidas.
+ */
+export function aplicarLocaisDaEapNaLob(
+  linhas: readonly EntradaDaLinha[],
+  nodos: readonly {code:string;location:string|null}[],
+  unidades: readonly {code:string;name:string}[],
+): {linhas:EntradaDaLinha[]; codigosConfirmados:Set<string>} {
+  const nomes = new Map<string,string>();
+  for (const u of unidades) {
+    for (const valor of [u.code,u.name]) {
+      const k=valor.trim().toLocaleLowerCase("pt-BR");
+      if(k && !nomes.has(k)) nomes.set(k,u.name);
+    }
+  }
+  const porCodigo = new Map(nodos.map(n=>[n.code,n.location]));
+  const codigosConfirmados = new Set<string>();
+  const saida = linhas.map(l=>{
+    const informado=porCodigo.get(l.codigo);
+    const local=informado?nomes.get(informado.trim().toLocaleLowerCase("pt-BR")):undefined;
+    if(!local) return {...l};
+    codigosConfirmados.add(l.codigo);
+    return {...l,pavimento:local};
+  });
+  return {linhas:saida,codigosConfirmados};
 }
