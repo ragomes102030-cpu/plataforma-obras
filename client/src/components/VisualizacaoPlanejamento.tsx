@@ -24,6 +24,7 @@ type Props = {
   /** Compatibilidade com o Gantt; a aplicação usa a interface clássica. */
   layoutProfissional?: boolean;
   finsCalculados?: Record<string,string>;
+  codigosExemplo?: ReadonlySet<string>;
 };
 
 type View = "gantt" | "lob";
@@ -63,6 +64,7 @@ export function VisualizacaoPlanejamento({
   localObra,
   layoutProfissional = true,
   finsCalculados = {},
+  codigosExemplo,
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
@@ -195,7 +197,7 @@ export function VisualizacaoPlanejamento({
           nomeBaseline={comparacaoBaseline.data?.baseline.name ?? baselineVigente?.name ?? null}
           resumoBaseline={resumoBaseline} />
       ) : (
-        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
+        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra} codigosExemplo={codigosExemplo} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       )}
     </section>
   );
