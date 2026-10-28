@@ -4065,7 +4065,10 @@ export const appRouter = router({
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
         for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
         const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
-        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo:{} };
+        const exemploPorCodigo = Object.fromEntries(
+          activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
+        );
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({
