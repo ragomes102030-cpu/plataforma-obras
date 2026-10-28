@@ -24,6 +24,7 @@ type Props = {
   unidades?: readonly {id:number;code:string;name:string;unitType:string}[];
   distribuicoes?:readonly DistribuicaoLob[];
   atividadeIds?:readonly AtividadeIdLob[];
+  execucaoPorCodigoLocal?:Readonly<Record<string,number>>;
   editavel?: boolean;
   salvandoLocal?: boolean;
   erroLocal?: string|null;
@@ -75,7 +76,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  * Não cria nem altera versões do plano. Filtros e exportação são somente leitura.
  */
 export function LinhaBalancoEscadinha({
-  linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],
+  linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],execucaoPorCodigoLocal={},
   editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onCriarUnidade,
   onAbrirAtividades,dependencias=[],estadoVinculos="carregando"
 }: Props) {
@@ -92,8 +93,8 @@ export function LinhaBalancoEscadinha({
     [linhas, codigosExemplo, possuiQaSeparada, exibirQa]
   );
   const integrado = useMemo(
-    ()=>integrarDistribuicoesLob(linhasDaVisualizacao,atividadeIds,unidades,distribuicoes),
-    [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes]
+    ()=>integrarDistribuicoesLob(linhasDaVisualizacao,atividadeIds,unidades,distribuicoes,new Map(Object.entries(execucaoPorCodigoLocal))),
+    [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes,execucaoPorCodigoLocal]
   );
   const locaisConfirmados = useMemo(
     ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades),

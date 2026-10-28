@@ -26,6 +26,7 @@ type Props = {
   layoutProfissional?: boolean;
   finsCalculados?: Record<string,string>;
   codigosExemplo?: ReadonlySet<string>;
+  execucaoPorCodigoLocal?: Readonly<Record<string,number>>;
 };
 
 type View = "gantt" | "lob";
@@ -66,6 +67,7 @@ export function VisualizacaoPlanejamento({
   layoutProfissional = true,
   finsCalculados = {},
   codigosExemplo,
+  execucaoPorCodigoLocal={},
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
@@ -225,6 +227,7 @@ export function VisualizacaoPlanejamento({
         <>
           <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra}
             codigosExemplo={codigosExemplo} dependencias={dependencias}
+            execucaoPorCodigoLocal={execucaoPorCodigoLocal}
             estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"}
             nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
             distribuicoes={distribuicoesLob.data??[]} atividadeIds={atividadesLob}

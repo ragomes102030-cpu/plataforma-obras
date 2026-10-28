@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {integrarDistribuicoesLob} from "./lob-distribuicao-modelo";
+import {chaveExecucaoLocalLob,integrarDistribuicoesLob} from "./lob-distribuicao-modelo";
 import type {EntradaDaLinha} from "@shared/cronograma-colunas";
 const parent:EntradaDaLinha={
  codigo:"1.4.3",atividade:"Lajes",frente:"Estrutura",pavimento:"Estrutura",
@@ -24,7 +24,10 @@ describe("Distribuição multilocal LOB — não duplica quantitativo, CPM ou EA
    const input=[parent];
    const r=integrarDistribuicoesLob(input,ids,units,d);
    expect(r.entradas).toHaveLength(4);
-   expect(r.pendentes).toHaveLength(0);
+   expect(r.pendentes).toHaveLength(1);
+   expect(r.pendentes[0]?.atividade).toContain("execução sem local");
+   expect(r.pendentes[0]?.executado).toBe(25);
+   expect(r.pendentes[0]?.quantidade).toBeNull();
    expect(r.codigosConfirmados.size).toBe(4);
    expect(r.somaPorCodigo.get("1.4.3")).toBe(100000);
    expect(r.entradas.map(l=>l.pavimento)).toEqual(["Térreo","1º Pavimento","2º Pavimento","3º Pavimento"]);
@@ -36,10 +39,20 @@ describe("Distribuição multilocal LOB — não duplica quantitativo, CPM ou EA
    const r=integrarDistribuicoesLob([parent],ids,units,[
      part(1,1,25,"2026-11-01","2026-11-05")]);
    expect(r.entradas).toHaveLength(1);
-   expect(r.pendentes).toHaveLength(1);
-   expect(r.pendentes[0]?.quantidade).toBe(75);
-   expect(r.pendentes[0]?.atividade).toContain("saldo sem local");
+   expect(r.pendentes).toHaveLength(2);
+   expect(r.pendentes.find(l=>l.quantidade===75)?.atividade).toContain("saldo sem local");
    expect(parent.quantidade).toBe(100);
+ });
+ it("mostra execução medida no local e preserva execução sem unidade no saldo",()=>{
+   const r=integrarDistribuicoesLob([parent],ids,units,[
+     part(1,1,25,"2026-11-01","2026-11-05")],
+     new Map([[chaveExecucaoLocalLob("1.4.3",1),10]]));
+   expect(r.entradas[0]?.executado).toBe(10);
+   expect(r.pendentes).toHaveLength(2);
+   const saldo=r.pendentes.find(l=>l.quantidade===75);
+   const execucaoSemLocal=r.pendentes.find(l=>l.atividade.includes("execução sem local"));
+   expect(saldo?.executado).toBe(0);
+   expect(execucaoSemLocal?.executado).toBe(15);
  });
  it("ignora referências órfãs, datas inválidas e quantidade ausente",()=>{
    const r=integrarDistribuicoesLob([parent],ids,units,[

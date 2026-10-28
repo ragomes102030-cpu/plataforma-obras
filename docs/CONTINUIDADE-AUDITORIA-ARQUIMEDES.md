@@ -6,8 +6,8 @@ Atualizado em 2026-10-28. Este arquivo acompanha a execução progressiva do pla
 
 - `main` e `develop` remotos foram consultados e estavam no mesmo commit: `e4ce608` (`feat(lob): distribuir atividades por múltiplos pavimentos com saldo e CPM (#243)`).
 - A correção atual parte desse commit na branch `fix/lob-local-row-density`.
-- Escopo concluído nesta etapa: reduzir altura vazia na escadinha da Linha de Balanço, mantendo a altura necessária para atividades simultâneas.
-- Não foram alterados dados, schema, migrações, baselines, CPM ou deploy.
+- Escopos de código concluídos nesta etapa: reduzir altura vazia na escadinha e preservar a execução real no fluxo multilocal.
+- Não foram alterados dados ao vivo, schema, migrações, baselines, CPM ou deploy.
 
 ## Diagnóstico e correção da LOB
 
@@ -24,10 +24,20 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Runtime disponível: Node.js 24.21.0; o projeto declara Node 22.x, portanto comandos reportam aviso de engine.
 - `git diff --check`: passou. PR #244 está aberta contra `develop`; CI não havia reportado verificações na última consulta. Código não incorporado nem publicado.
 
+## Auditoria multilocal — verificação de código
+
+- Backend e interface mantêm a distribuição limitada à versão corrente, obra autorizada e unidade da mesma obra. A gravação bloqueia versões aprovadas/históricas, quantidade acima do total, atividade de QA e datas fora da janela oficial do CPM; não altera o CPM nem baseline.
+- O fork da versão clona atividades e remapeia as parcelas para os novos IDs, preservando a versão histórica. Os valores distribuídos seguem apenas os registros persistidos; não há rateio presumido.
+- Falha encontrada: ao integrar uma distribuição, cada barra recebia `executado: 0`, mesmo quando havia medição real na atividade. A LOB agora recebe a produção acumulada por código EAP e unidade. A parcela só recebe execução quando a medição possui `unitId`; a execução sem unidade aparece como item geral “execução sem local”, sem atribuição a pavimento.
+- Testes locais para o saldo, a medição por unidade e a execução sem unidade passaram. Suíte completa atualizada: 141 arquivos, 1.272 testes passaram, 8 foram pulados; `pnpm check`, `pnpm e2e:lob-qa` (desktop/celular) e `pnpm build` passaram.
+- Limite de evidência: a tentativa de consultar o Supabase pela integração MCP falhou porque a ferramenta não está disponível nesta sessão; o CLI `supabase` também não está instalado. Portanto, existência/aplicação da migração, contagens atuais da Aurora, dados multilocais reais e permissões vigentes são **NÃO TESTÁVEL** ao vivo. A afirmação no script SQL sobre provisionamento prévio não substitui leitura atual do banco.
+- Hardening identificado: a migração define FKs individuais, enquanto consistência composta obra/versão/atividade/unidade é garantida no backend. O papel da aplicação tem política RLS ampla para escrita. Considerar FKs/constraints compostas em migração própria após conferir o estado real; não alterar o banco sem backup verificável e janela autorizada.
+- Alterações multilocais foram adicionadas à mesma PR #244 para revisão; permanecem sem merge e sem deploy.
+
 ## Próximos passos
 
 1. Aguardar a revisão e o CI da PR #244; não incorporar sem aprovação e verificações aprovadas.
-2. Revisar o fluxo multilocal de ponta a ponta (persistência, limites quantitativos, saldo não distribuído, CPM, versões e isolamento por obra), sem preencher locais ou quantidades por hipótese.
+2. Obter uma sessão autorizada de leitura no Supabase e conferir migration/journal, atividade real e unidade, medições por unidade, versões e permissões da Aurora; não preencher locais ou quantidades por hipótese.
 3. Auditar CPM, dependências, Gantt e baseline com dados e evidências atuais, sem criar ou aprovar baseline.
 4. Avançar para orçamento, produção, dashboard, segurança e UX com mudanças pequenas e rastreáveis.
 5. Só afirmar estado de publicação depois de verificar o commit ativo no serviço e executar teste funcional publicado.

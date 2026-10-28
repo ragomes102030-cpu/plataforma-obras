@@ -4196,7 +4196,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
+        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, execucaoPorCodigoLocal: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4218,10 +4218,15 @@ export const appRouter = router({
         const codigoPorAtividade = new Map<number,string>();
         for (const atividade of todasAtividades) codigoPorAtividade.set(atividade.id, atividade.wbsCode);
         const executadoPorCodigo = new Map<string,number>();
+        const execucaoPorCodigoLocal:Record<string,number>={};
         for (const entry of entries) {
           const codigo = codigoPorAtividade.get(entry.activityId);
           if (!codigo) continue;
           executadoPorCodigo.set(codigo,(executadoPorCodigo.get(codigo)??0)+Number(entry.quantity));
+          if(entry.unitId!=null){
+            const chave=`${codigo}\t${entry.unitId}`;
+            execucaoPorCodigoLocal[chave]=(execucaoPorCodigoLocal[chave]??0)+Number(entry.quantity);
+          }
         }
         const entradas = activities.map(a => {
           // A régua é o CPM (dias úteis). Antes, `startOffset` zerado em todas as
@@ -4238,7 +4243,7 @@ export const appRouter = router({
         const exemploPorCodigo = Object.fromEntries(
           activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
         );
-        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, execucaoPorCodigoLocal, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({
