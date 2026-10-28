@@ -68,7 +68,7 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).not.toContain('role="rowheader">Serviços Gerais');
     expect(html).not.toContain('role="rowheader">Infraestrutura');
     expect(html).toContain('value="2026-10-01"');
-    expect(html).toContain("Atividades do cronograma fora das escadinhas".toLowerCase().slice(0,5)) || expect(html).toContain("atividades do cronograma fora das escadinhas");
+    expect(html).toContain("atividades do cronograma fora das escadinhas");
   });
 
   it("preserva datas oficiais com feriados e dias úteis, sem recalcular fim por duração",()=>{
