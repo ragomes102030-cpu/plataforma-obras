@@ -80,7 +80,9 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   const [pxManual, setPxManual] = useState<number | null>(null);
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
-  const [incluirInicioObra, setIncluirInicioObra] = useState(true);
+  // A escadinha deve abrir no período de produção, sem anos vazios no gráfico.
+  // O período completo da obra continua disponível sob demanda.
+  const [incluirInicioObra, setIncluirInicioObra] = useState(false);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
@@ -91,13 +93,12 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
     !ocultas.has(s.chave) &&
     (s.nome + " " + s.pontos.map(p => p.codigo).join(" ")).toLocaleLowerCase("pt-BR").includes(termo)
   );
-  const geraisVisiveis = pavimento === "todos" ?
-    atividadesGerais.map(g => ({...g, pontos:g.pontos.filter(p =>
-      !termo || `${p.nome} ${p.codigo} ${g.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
-    })).filter(g=>g.pontos.length>0) : [];
+  // A lista de atividades gerais NÃO pertence ao eixo físico dos pavimentos.
+  // Por isso não obedece ao filtro de pavimento e fica fora do gráfico.
+  const geraisVisiveis = atividadesGerais.map(g => ({...g, pontos:g.pontos.filter(p =>
+    !termo || `${p.nome} ${p.codigo} ${g.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
+  })).filter(g=>g.pontos.length>0);
   const totalGerais = geraisVisiveis.reduce((s,g)=>s+g.pontos.length,0);
-  const alturaGrupo = (quantidade:number) => Math.max(36,14 + quantidade*15);
-  const alturaGrupos = geraisVisiveis.reduce((s,g)=>s+alturaGrupo(g.pontos.length),0);
   // Descarta categorias antigas usadas equivocadamente no campo pavimento:
   // apenas unidades de serviços repetitivos entram no eixo físico.
   const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
@@ -170,7 +171,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
     barrasPorLocal.set(local, barras);
   }
 
-  const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0) + totalGerais;
+  const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
   const resumo = resumoLob(seriesVisiveis,locais,hoje);
   const originais = new Map(linhas.map(l=>[l.codigo,l]));
   const ligacoes = estadoVinculos==="pronto" ? calcularVinculosExibidos(dependencias,resumo.pontos) : [];
@@ -245,7 +246,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
         </div>
         <div className="lob-stairs-heading-actions">
           <button type="button" onClick={onAbrirAtividades}><ListTodo size={16}/> Editar atividades</button>
-          <button type="button" onClick={exportarCsv} disabled={!qtdBarras} title="Exportar apenas serviços e pavimentos visíveis"><Download size={16}/> Exportar CSV</button>
+          <button type="button" onClick={exportarCsv} disabled={qtdBarras+totalGerais===0} title="Exportar escadinha e relação de atividades anteriores"><Download size={16}/> Exportar CSV</button>
         </div>
       </header>
 
@@ -269,7 +270,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                 {periodoRepetitivo && <span>Primeira atividade repetitiva: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {exemplosNaLob > 0 && <span className="lob-stairs-qa">QA: {exemplosNaLob} atividade(s) de demonstração nas sequências repetitivas{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                <small>A mesma régua apresenta atividades gerais da EAP e as escadinhas por pavimento. Etapas não repetitivas não são tratadas como locais físicos; os períodos e as precedências continuam vindo da grade oficial.</small>
+                <small>A escadinha mostra apenas serviços por pavimento. As outras atividades do cronograma, desde o início da obra, ficam na relação cronológica abaixo, sem alterar o gráfico nem inventar localizações.</small>
               </div>
               {obraComecaAntesDaLob && <button type="button"
                 data-testid="lob-toggle-obra-start"
@@ -338,7 +339,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
           </div>
 
           <div className="lob-stairs-zoom-actions" aria-label="Ajustes do gráfico">
-            <span><strong>{locais.length}</strong> pavimentos · <strong>{seriesVisiveis.length}</strong> serviços repetitivos · <strong>{totalGerais}</strong> atividades gerais · <strong>{qtdBarras}</strong> atividades</span>
+            <span><strong>{locais.length}</strong> pavimentos · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades na escadinha</span>
             <div>
               <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
               <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
@@ -395,11 +396,11 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
           </details>
 
           {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
-          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Nenhuma atividade neste filtro</h3><p>Verifique a busca, os serviços e os pavimentos selecionados.</p></div>
+          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Sem escadinha neste filtro</h3><p>Verifique os serviços e pavimentos selecionados. As demais atividades da obra estão na relação cronológica abaixo.</p></div>
           : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
               <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
                 <div className="lob-stairs-months" role="row">
-                  <div className="lob-stairs-sticky-head" role="columnheader">Pavimento / etapa</div>
+                  <div className="lob-stairs-sticky-head" role="columnheader">Pavimento</div>
                   <div className="lob-stairs-status-head" role="columnheader">Status</div>
                   <div className="lob-stairs-time" role="presentation" style={{ width: larguraTempo }}>
                     {meses.map(m=><span key={m.inicio} className="lob-stairs-month" style={{left:m.x,width:m.largura}}>{m.texto}</span>)}
@@ -413,31 +414,6 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                     {dataValida(hoje)&&diaUtc(hoje)>=diaUtc(eixoInicio)&&diaUtc(hoje)<diaUtc(eixoFimExclusivo)&&<span className="lob-stairs-today-label" style={{left:dataX(hoje)}}>Hoje</span>}
                   </div>
                 </div>
-                {geraisVisiveis.map((grupo,index)=>(
-                  <div key={"geral-"+grupo.chave} className={"lob-stairs-row lob-stairs-general-row"+(index%2?" lob-stairs-row-alt":"")} role="row"
-                    style={{height:alturaGrupo(grupo.pontos.length)}} data-testid="lob-general-row">
-                    <div className="lob-stairs-local" role="rowheader" title={"Etapa da EAP, não pavimento físico: "+grupo.nome}>{grupo.nome}</div>
-                    <div className="lob-stairs-status-cell" role="cell"><span className="lob-stairs-status-tag sem-medicao" title="Atividades sem sequência física repetitiva validada">Sem sequência</span></div>
-                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
-                      {semanas.map(w=><span key={w.inicio} className="lob-stairs-gridline" style={{left:w.x}}/>)}
-                      {grupo.pontos.map((p,i)=>{
-                        const inicioCortado=Math.max(diaUtc(p.inicio),diaUtc(eixoInicio));
-                        const fimCortado=Math.min(diaUtc(p.fim),diaUtc(eixoFimExclusivo)-DIA);
-                        if(fimCortado<inicioCortado)return null;
-                        const largura=Math.max(5,((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
-                        const x=((inicioCortado-diaUtc(eixoInicio))/DIA)*pxDia;
-                        return <button key={p.codigo} type="button" className="lob-stairs-bar lob-stairs-general-bar"
-                          data-testid="lob-context-bar" style={{left:x,top:8+i*15,width:largura,height:12,backgroundColor:"#667d91"}}
-                          aria-label={p.nome+" · EAP "+p.codigo+" · "+formatoCompleto(p.inicio)+" a "+formatoCompleto(p.fim)+" · sem sequência repetitiva"}
-                          title={p.nome+" | "+p.codigo+" | "+formatoCompleto(p.inicio)+" a "+formatoCompleto(p.fim)}
-                          onClick={()=>setDetalhe({ponto:p,serie:{chave:grupo.chave,nome:p.nome,pontos:[p],repetitiva:false},cor:"#667d91",indice:i})}>
-                          {p.quantidade!==null&&p.quantidade>0&&p.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,p.executado/p.quantidade*100))+"%"}}/>}
-                          <span>{largura>=85?p.nome:""}</span>
-                        </button>;
-                      })}
-                    </div>
-                  </div>
-                ))}
                 {locais.map((local, row) => (
                   <div key={local} className={"lob-stairs-row"+(row%2?" lob-stairs-row-alt":"")} role="row" style={{height:alturaLinha}}>
                     <div className="lob-stairs-local" role="rowheader">{local}
@@ -469,7 +445,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                     </div>
                   </div>
                 ))}
-                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71+alturaGrupos}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
+                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
                 </svg>}
@@ -478,9 +454,37 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
 
           <div className="lob-stairs-legend">
             {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
-            {totalGerais>0 && <span><i style={{background:"#667d91"}}/> Atividades sem sequência repetitiva</span>}
             <span className="lob-stairs-legend-note">Barras = períodos planejados · status = execução registrada · vínculos = somente cadastrados</span>
           </div>
+          {totalGerais>0 && (
+            <details className="lob-stairs-previous-activities" data-testid="lob-previous-activities">
+              <summary>
+                <strong>Demais atividades do cronograma</strong>
+                <span>{totalGerais} atividades com datas cadastradas · consultar desde o início da obra</span>
+                <ChevronDown size={15} aria-hidden="true"/>
+              </summary>
+              <div className="lob-stairs-previous-body">
+                <p>Relação cronológica por frente ou disciplina cadastrada. Estas atividades não têm sequência física repetitiva validada e não são transformadas em pavimentos da escadinha.</p>
+                {geraisVisiveis.map(grupo=>(
+                  <section key={grupo.chave} className="lob-stairs-previous-group">
+                    <h4>{grupo.nome} <small>({grupo.pontos.length})</small></h4>
+                    <table>
+                      <thead><tr><th scope="col">EAP</th><th scope="col">Atividade</th><th scope="col">Início</th><th scope="col">Término</th></tr></thead>
+                      <tbody>{grupo.pontos.map(p=>(
+                        <tr key={p.codigo}>
+                          <td>{p.codigo}</td>
+                          <td>{p.nome}</td>
+                          <td>{formatoCompleto(p.inicio)}</td>
+                          <td>{formatoCompleto(p.fim)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </section>
+                ))}
+                <p>As datas vêm da mesma grade do cronograma. Para posicionar esses serviços por pavimento na escadinha, é necessário cadastrar ou validar a localização física real.</p>
+              </div>
+            </details>
+          )}
           <div className="lob-stairs-dashboard" aria-label="Painel técnico da Linha de Balanço">
             <section className="lob-stairs-dashboard-card" aria-label="Resumo do planejamento">
               <h3>Resumo do planejamento</h3>
@@ -488,7 +492,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                 <div><dt>Período das atividades visíveis</dt><dd>{periodoAutomatico?formatoCompleto(periodoAutomatico.primeiro)+" – "+formatoCompleto(periodoAutomatico.ultimo):"Sem período"}</dd></div>
                 <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
                 <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
-                <div><dt>Atividades no gráfico</dt><dd>{qtdBarras}</dd></div>
+                <div><dt>Atividades na escadinha</dt><dd>{qtdBarras}</dd></div>
                 <div><dt>Janela total de calendário</dt><dd>{resumo.diasCalendario===null?"—":resumo.diasCalendario+" dias"}</dd></div>
                 <div><dt>Cadência média de inícios</dt><dd>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})+" dias/pavimento"}</dd></div>
               </dl>
