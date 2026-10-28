@@ -32,7 +32,7 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - Outra falha encontrada: `planning.grade` somava lançamentos em rascunho às quantidades executadas, embora as outras leituras de avanço usem apenas lançamentos confirmados. Corrigido o filtro na origem comum da grade (inclui Curva S/LOB); o teste de regressão reproduziu 67 em vez de 50 antes da correção e passou depois.
 - Atividades `exemplo=1` continuam na grade para comparação, mas não entram no agregado operacional do servidor nem nos indicadores executivos: linhas da grade são filtradas no Dashboard e atividades de demonstração não pesam nos indicadores por orçamento. O teste confirma que a linha permanece inspecionável e não afeta os totais.
 - Testes locais para o saldo, a medição por unidade, rascunhos, atividades de QA e execução sem unidade passaram. Suíte completa atualizada: 141 arquivos, 1.277 testes passaram, 8 foram pulados; `pnpm check`, `pnpm e2e:lob-qa` (desktop/celular) e `pnpm build` passaram.
-- Limite de evidência: a tentativa de consultar o Supabase pela integração MCP falhou porque a ferramenta não está disponível nesta sessão; o CLI `supabase` também não está instalado. Portanto, existência/aplicação da migração, contagens atuais da Aurora, dados multilocais reais e permissões vigentes são **NÃO TESTÁVEL** ao vivo. A afirmação no script SQL sobre provisionamento prévio não substitui leitura atual do banco.
+- Limite de evidência inicial: a ferramenta Supabase MCP não estava disponível ao modelo e o CLI `supabase` não está instalado. As primeiras tentativas não validaram migrações, contagens atuais da Aurora, dados multilocais ou permissões.
 - Hardening identificado: a migração define FKs individuais, enquanto consistência composta obra/versão/atividade/unidade é garantida no backend. O papel da aplicação tem política RLS ampla para escrita. Considerar FKs/constraints compostas em migração própria após conferir o estado real; não alterar o banco sem backup verificável e janela autorizada.
 - Alterações multilocais foram adicionadas à mesma PR #244 para revisão; permanecem sem merge e sem deploy.
 
@@ -57,6 +57,13 @@ A altura era definida pelo número de serviços selecionados globalmente. Cada l
 - A comparação agora valida o numerador da produtividade antes da barra, consistente com a validação do fluxo de criação de atividade no `orchestrator.ts`. Não faz conversão dimensional nem interpreta a base temporal além de manter a premissa existente de unidade por dia.
 - Teste primeiro reproduziu a falha para `100 m2 ÷ 20 m2/dia` e passou após a correção. O caso com numerador incompatível continua rejeitado. `pnpm check` e a suíte completa passaram (141 arquivos, 1.278 testes aprovados e 8 ignorados).
 - Limite: calendário, número de equipes/turnos e produtividade observada são premissas externas dessa ferramenta de cálculo; a fórmula permanece quantidade dividida pela produtividade diária fornecida.
+
+## Verificação de acesso ao vivo — 2026-10-28
+
+- O arquivo de credenciais local indicado pelo usuário foi consultado sem imprimir, copiar ou registrar seus valores. A URI de banco aponta pelo identificador de usuário ao projeto Supabase `tromrvfijbtihuilvnuk`; conexão TLS com CA oficial atingiu o Postgres, mas foi recusada com `28P01` (autenticação). Nenhuma consulta de aplicação foi executada nem qualquer escrita tentada; banco e dados da Aurora permanecem **NÃO TESTÁVEL**.
+- Render CLI v2.28.0 autenticou. A conta expôs um único workspace, `My Workspace`; sua listagem contém somente `mcp-cad-cloud`, não o serviço `plataforma-obras-3`. Portanto, não foi possível obter deploy/commit pelo Render para a plataforma. A consulta pública de `https://plataforma-obras-3.onrender.com/healthz` expirou após 15 s; commit publicado e estado funcional continuam **NÃO TESTÁVEL**.
+- Os conectores Supabase/Render listados pelo ambiente retornaram “tool is not available to the model”. Não foram usados para contornar a limitação.
+- Próximo passo: atualizar localmente a conexão de leitura Supabase com credencial válida e autenticar a conta/workspace Render que contém a Plataforma Obras, ou completar o login OAuth dos conectores autorizados. Não compartilhar segredos no chat.
 
 ## Próximos passos
 
