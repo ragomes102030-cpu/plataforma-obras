@@ -423,8 +423,9 @@ export function LinhaBalancoEscadinha({
           </div>
 
           <div className="lob-stairs-zoom-actions" aria-label="Ajustes do gráfico">
-            <span><strong>{locais.length}</strong> locais · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades localizadas</span>
+            <span data-testid="lob-total-timeline"><strong>{qtdGrafico}</strong> atividades no gráfico · <strong>{qtdBarras}</strong> com local físico · <strong>{pontosPendentes.length}</strong> aguardando localização</span>
             <div>
+              <label className="lob-stairs-show-links"><input type="checkbox" data-testid="lob-show-pending" checked={mostrarPendentes} onChange={e=>{setMostrarPendentes(e.target.checked);setDataInicial("");setDataFinal("");setPxManual(null);}}/> Atividades sem local ({totalGerais})</label>
               <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
               <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
               <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-STATUS_COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
@@ -480,9 +481,9 @@ export function LinhaBalancoEscadinha({
           </details>
 
           {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
-          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Sem escadinha neste filtro</h3><p>Verifique os serviços e pavimentos selecionados. As demais atividades da obra estão na relação cronológica abaixo.</p></div>
-          : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
-              <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
+          : qtdGrafico === 0 ? <div className="lob-stairs-empty"><h3>Sem atividades neste filtro</h3><p>Confira os filtros ou habilite as atividades sem localização. Nenhum pavimento é inferido automaticamente.</p></div>
+          : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Linha de Balanço integrada: tempo, locais físicos e atividades ainda sem local">
+              <div className="lob-stairs-board" role="table" aria-label="Cronograma completo: locais físicos e atividades ainda sem local" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
                 <div className="lob-stairs-months" role="row">
                   <div className="lob-stairs-sticky-head" role="columnheader">Local físico</div>
                   <div className="lob-stairs-status-head" role="columnheader">Status</div>
@@ -529,7 +530,7 @@ export function LinhaBalancoEscadinha({
                     </div>
                   </div>
                 ))}
-                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
+                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
                 </svg>}
@@ -538,10 +539,10 @@ export function LinhaBalancoEscadinha({
 
           <div className="lob-stairs-legend">
             {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
-            <span className="lob-stairs-legend-note">Barras = períodos planejados · status = execução registrada · vínculos = somente cadastrados</span>
+            <span className="lob-stairs-legend-note">Barras coloridas = local confirmado · barras cinzas = local pendente · vínculos = dependências cadastradas</span>
           </div>
           {totalGerais>0 && (
-            <details className="lob-stairs-mapping" data-testid="lob-location-mapping">
+            <details className="lob-stairs-mapping" data-testid="lob-location-mapping" ref={painelVinculo}>
               <summary><strong>Vincular serviços aos locais físicos</strong>
                 <span>{totalGerais} atividades sem sequência localizada · dados da EAP</span><ChevronDown size={15}/></summary>
               <div className="lob-stairs-mapping-body">
@@ -618,7 +619,9 @@ export function LinhaBalancoEscadinha({
                 <div><dt>Período das atividades visíveis</dt><dd>{periodoAutomatico?formatoCompleto(periodoAutomatico.primeiro)+" – "+formatoCompleto(periodoAutomatico.ultimo):"Sem período"}</dd></div>
                 <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
                 <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
-                <div><dt>Atividades na escadinha</dt><dd>{qtdBarras}</dd></div>
+                <div><dt>Atividades no gráfico integrado</dt><dd data-testid="lob-summary-total">{qtdGrafico}</dd></div>
+                <div><dt>Atividades na escadinha física</dt><dd>{qtdBarras}</dd></div>
+                <div><dt>Pendentes de localização</dt><dd>{pontosPendentes.length}</dd></div>
                 <div><dt>Janela total de calendário</dt><dd>{resumo.diasCalendario===null?"—":resumo.diasCalendario+" dias"}</dd></div>
                 <div><dt>Cadência média de inícios</dt><dd>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})+" dias/pavimento"}</dd></div>
               </dl>
@@ -637,7 +640,7 @@ export function LinhaBalancoEscadinha({
             </section>
             <section className="lob-stairs-dashboard-card lob-stairs-dashboard-detail" aria-label="Detalhes da atividade selecionada">
               <h3>Detalhes da atividade</h3>
-              {!detalhe?<p className="lob-stairs-detail-hint">Selecione uma barra na escadinha para consultar o vínculo EAP, o período e os quantitativos.</p>:
+              {!detalhe?<p className="lob-stairs-detail-hint">Selecione qualquer barra do gráfico para consultar o vínculo EAP, o período e os quantitativos.</p>:
                 <dl data-testid="lob-activity-detail">
                   <div><dt>Serviço</dt><dd>{detalhe.serie.nome}</dd></div>
                   <div><dt>Código EAP</dt><dd>{detalhe.ponto.codigo}</dd></div>
