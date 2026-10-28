@@ -6,6 +6,7 @@ describe("LOB multi-local — contrato de persistência seguro",()=>{
   const router=readFileSync("server/routers.ts","utf8");
   const schema=readFileSync("drizzle/schema.ts","utf8");
   const sql=readFileSync("drizzle/0021_lob_activity_locations.sql","utf8");
+  const perm=readFileSync("scripts/sql/lob-supabase-permissions.sql","utf8");
   const versions=readFileSync("server/construction/plan-versions.ts","utf8");
   const purge=readFileSync("server/trash-retention.ts","utf8");
   const ui=readFileSync("client/src/components/VisualizacaoPlanejamento.tsx","utf8");
@@ -30,9 +31,9 @@ describe("LOB multi-local — contrato de persistência seguro",()=>{
     expect(purge).toContain('DELETE FROM "lob_activity_locations"');
   });
   it("migração exclusiva do backend, sem acesso da Data API anônima",()=>{
-    expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
-    expect(sql).toContain("TO arquimedes_app");
-    expect(sql).toContain("FROM anon,authenticated,PUBLIC");
+    expect(perm).toContain("ENABLE ROW LEVEL SECURITY");
+    expect(perm).toContain("TO arquimedes_app");
+    expect(perm).toContain("FROM anon,authenticated,PUBLIC");
     expect(sql).toContain("lob_activity_locations_unique_idx");
     expect(schema).toContain("export const lobActivityLocations");
   });
