@@ -91,3 +91,37 @@ export function ocupacaoNaFaixa(pontos: PontoLob[], local: string, faixa: FaixaL
   const inicio = diaUtc(faixa.inicio), fim = diaUtc(faixa.fimExclusivo);
   return pontos.filter(p => p.local === local && diaUtc(p.inicio) < fim && diaUtc(p.fim) >= inicio);
 }
+
+/** Atividades existentes no cronograma que NÃO integram uma escadinha
+ * repetitiva. Continuam visíveis no MESMO eixo temporal, agrupadas pela
+ * frente cadastrada; nenhuma frente é convertida em pavimento fictício.
+ * Não inferimos localização, equipe ou continuidade entre elas.
+ */
+export type GrupoContextoLob = { chave:string; nome:string; pontos:PontoLob[] };
+export function atividadesForaDaEscadinhaLob(
+  linhas:EntradaDaLinha[],
+  finsCalculados:Record<string,string>,
+  seriesRepetitivas:readonly SerieLob[],
+):GrupoContextoLob[] {
+  const codigosRepetitivos = new Set(seriesRepetitivas.flatMap(s=>s.pontos.map(p=>p.codigo)));
+  const grupos = new Map<string,GrupoContextoLob>();
+  for(const l of linhas) {
+    const fim=finsCalculados[l.codigo];
+    if(l.marco || codigosRepetitivos.has(l.codigo) ||
+      !dataValida(l.inicio) || !dataValida(fim) ||
+      fim<l.inicio ||
+      !Number.isFinite(l.duracao) || l.duracao<1) continue;
+    const nome=(l.frente??"").trim()||"Outras atividades da EAP";
+    const chave=nome.toLocaleLowerCase("pt-BR");
+    if(!grupos.has(chave)) grupos.set(chave,{chave,nome,pontos:[]});
+    grupos.get(chave)!.pontos.push({
+      codigo:l.codigo,nome:l.atividade,local:String(l.pavimento??"").trim(),
+      inicio:l.inicio,fim,
+      executado:l.executado,quantidade:l.quantidade,unidade:l.unidade,
+    });
+  }
+  return [...grupos.values()].map(grupo=>({
+    ...grupo,pontos:grupo.pontos.sort((a,b)=>a.inicio.localeCompare(b.inicio)||a.codigo.localeCompare(b.codigo,"pt-BR",{numeric:true})),
+  })).sort((a,b)=>a.pontos[0]!.inicio.localeCompare(b.pontos[0]!.inicio)||
+    a.nome.localeCompare(b.nome,"pt-BR",{numeric:true}));
+}

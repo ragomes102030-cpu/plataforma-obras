@@ -22,7 +22,7 @@ describe("Linha de Balanço — única escadinha da interface clássica", () => 
     expect(component).toContain("locaisValidos");
     expect(component).toContain("Zoom do calendário");
     expect(component).toContain("Filtrar pavimento");
-    expect(component).toContain("Período dos serviços");
+    expect(component).toContain("Período completo");
     expect(component).toContain("Exportar CSV");
     expect(component).toContain("onAbrirAtividades");
   });

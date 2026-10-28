@@ -151,3 +151,10 @@
 .lob-stairs-context button{flex-shrink:0;white-space:normal;border:1px solid #bed3e2;border-radius:6px;padding:8px 10px;background:white;color:#245976;font-size:11px;font-weight:700;cursor:pointer}
 .lob-stairs-context button:hover{background:#e7f1f9}
 @media(max-width:780px){.lob-stairs-context{padding:12px}.lob-stairs-context button{width:100%}}
+
+/* Atividades com período oficial, porém sem sequência repetitiva: mesma régua
+   da escadinha, sem inventar pavimento ou ligar serviços diferentes. */
+.lob-stairs-general-row .lob-stairs-local{font-size:10px;font-weight:660;color:#526a7f;white-space:normal;line-height:1.3}
+.lob-stairs-general-row .lob-stairs-status-tag{font-size:9px;white-space:nowrap}
+.lob-stairs-general-row .lob-stairs-bar{border-radius:2px;font-size:9px!important;font-weight:560!important}
+.lob-stairs-general-row .lob-stairs-track{background-image:linear-gradient(0deg,#f3f7fa66,#ffffff00)}

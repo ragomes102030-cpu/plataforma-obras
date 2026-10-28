@@ -4,7 +4,7 @@ import { Activity, CalendarDays, ChevronDown, Download, ListTodo, Maximize2, Sea
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import {
-  dataValida, diaUtc, prepararLinhaBalancoVertical,
+  dataValida, diaUtc, prepararLinhaBalancoVertical, atividadesForaDaEscadinhaLob,
   type PontoLob, type SerieLob,
 } from "./linha-balanco-modelo";
 import { analisarFluxoLob } from "./lob-analise-fluxo";
@@ -67,6 +67,12 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
     [linhas, finsCalculados],
   );
   const repetitivas = useMemo(() => dados.series.filter(s => s.repetitiva), [dados.series]);
+  // Trazer TODAS as atividades com início/fim oficial, inclusive as não
+  // repetitivas do início da obra. Mantemos os patamares P01–P06 intocados.
+  const atividadesGerais = useMemo(
+    () => atividadesForaDaEscadinhaLob(linhas, finsCalculados, repetitivas),
+    [linhas, finsCalculados, repetitivas]
+  );
   const [busca, setBusca] = useState("");
   const [ocultas, setOcultas] = useState<Set<string>>(() => new Set());
   const [pavimento, setPavimento] = useState("todos");
@@ -74,7 +80,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   const [pxManual, setPxManual] = useState<number | null>(null);
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
-  const [incluirInicioObra, setIncluirInicioObra] = useState(false);
+  const [incluirInicioObra, setIncluirInicioObra] = useState(true);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
@@ -85,6 +91,13 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
     !ocultas.has(s.chave) &&
     (s.nome + " " + s.pontos.map(p => p.codigo).join(" ")).toLocaleLowerCase("pt-BR").includes(termo)
   );
+  const geraisVisiveis = pavimento === "todos" ?
+    atividadesGerais.map(g => ({...g, pontos:g.pontos.filter(p =>
+      !termo || `${p.nome} ${p.codigo} ${g.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
+    })).filter(g=>g.pontos.length>0) : [];
+  const totalGerais = geraisVisiveis.reduce((s,g)=>s+g.pontos.length,0);
+  const alturaGrupo = (quantidade:number) => Math.max(36,14 + quantidade*15);
+  const alturaGrupos = geraisVisiveis.reduce((s,g)=>s+alturaGrupo(g.pontos.length),0);
   // Descarta categorias antigas usadas equivocadamente no campo pavimento:
   // apenas unidades de serviços repetitivos entram no eixo físico.
   const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
@@ -93,17 +106,24 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   const pontosVisiveis = seriesVisiveis.map(s => ({
     ...s, pontos: s.pontos.filter(p => locais.includes(p.local)),
   }));
-  const periodoAutomatico = selecionarPeriodoPelosServicos(pontosVisiveis);
-  const baseInicio = periodoAutomatico?.primeiro ?? "2026-01-01";
+  const periodoRepetitivo = selecionarPeriodoPelosServicos(pontosVisiveis);
+  const periodoAutomatico = selecionarPeriodoPelosServicos([
+    ...pontosVisiveis,
+    ...geraisVisiveis.map(g=>({...g,repetitiva:false})),
+  ]);
+  const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2026-01-01");
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
-  const obraComecaAntesDaLob = dataValida(inicioObra) && diaUtc(inicioObra) < diaUtc(baseInicio);
+  const obraComecaAntesDaLob = dataValida(inicioObra) &&
+    periodoRepetitivo !== null && diaUtc(inicioObra) < diaUtc(periodoRepetitivo.primeiro);
   const exemplosNaLob = repetitivas.flatMap(serie => serie.pontos)
     .filter(ponto => codigosExemplo?.has(ponto.codigo)).length;
   const totalPontosRepetitivos = repetitivas.reduce((s, serie) => s + serie.pontos.length, 0);
   const todosServicosSaoQA = exemplosNaLob > 0 && exemplosNaLob === totalPontosRepetitivos;
   const inicioEscolhido = dataValida(dataInicial) ? dataInicial :
-    incluirInicioObra && obraComecaAntesDaLob && dataValida(inicioObra) ? inicioObra : baseInicio;
-  const fimEscolhido = dataValida(dataFinal) ? dataFinal : baseFim;
+    incluirInicioObra ? (dataValida(inicioObra) && inicioObra<baseInicio ? inicioObra : baseInicio)
+      : (periodoRepetitivo?.primeiro ?? baseInicio);
+  const fimEscolhido = dataValida(dataFinal) ? dataFinal :
+    incluirInicioObra ? baseFim : (periodoRepetitivo?.ultimo ?? baseFim);
   const periodoInvalido = diaUtc(fimEscolhido) < diaUtc(inicioEscolhido);
   const eixoInicio = segundaDaSemana(adicionarDias(inicioEscolhido, -7));
   const eixoFim = segundaDaSemana(adicionarDias(fimEscolhido, 14));
@@ -150,7 +170,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
     barrasPorLocal.set(local, barras);
   }
 
-  const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
+  const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0) + totalGerais;
   const resumo = resumoLob(seriesVisiveis,locais,hoje);
   const originais = new Map(linhas.map(l=>[l.codigo,l]));
   const ligacoes = estadoVinculos==="pronto" ? calcularVinculosExibidos(dependencias,resumo.pontos) : [];
@@ -195,12 +215,15 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   }
 
   function exportarCsv() {
-    const linhasCsv = [["Serviço", "EAP", "Pavimento", "Início", "Término", "Quantidade", "Unidade", "Executado"]];
+    const linhasCsv = [["Serviço", "EAP", "Local informado", "Início", "Término", "Quantidade", "Unidade", "Executado", "Classificação"]];
     seriesVisiveis.forEach(serie => {
       serie.pontos.filter(p => locais.includes(p.local)).forEach(p => {
-        linhasCsv.push([serie.nome, p.codigo, p.local, p.inicio, p.fim, String(p.quantidade ?? ""), p.unidade ?? "", String(p.executado)]);
+        linhasCsv.push([serie.nome, p.codigo, p.local, p.inicio, p.fim, String(p.quantidade ?? ""), p.unidade ?? "", String(p.executado), "Escadinha por pavimento"]);
       });
     });
+    geraisVisiveis.forEach(grupo=>grupo.pontos.forEach(p=>{
+      linhasCsv.push([p.nome,p.codigo,p.local,p.inicio,p.fim,String(p.quantidade??""),p.unidade??"",String(p.executado),"Sem sequência repetitiva"]);
+    }));
     const conteudo = "\uFEFF" + linhasCsv.map(celulas => celulas.map(normalizarCelulaCsv).join(";")).join("\r\n");
     const url = URL.createObjectURL(new Blob([conteudo], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -226,7 +249,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
         </div>
       </header>
 
-      {repetitivas.length === 0 ? (
+      {repetitivas.length === 0 && atividadesGerais.length === 0 ? (
         <div className="lob-stairs-empty" role="status">
           <h3>LINHA DE RITMO AINDA NÃO DISPONÍVEL</h3>
           <p>O cronograma ainda não contém o mesmo serviço em dois ou mais pavimentos físicos distintos. A escadinha não une atividades diferentes ou disciplinas como se fossem pavimentos.</p>
@@ -238,14 +261,15 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
         </div>
       ) : (
         <>
-          {(obraComecaAntesDaLob || exemplosNaLob > 0) && (
+          {(obraComecaAntesDaLob || exemplosNaLob > 0 || atividadesGerais.length > 0) && (
             <div className="lob-stairs-context" role="status" data-testid="lob-calendar-context">
               <div>
                 <strong>Referência das datas</strong>
                 {dataValida(inicioObra) && <span>Início cadastrado da obra: <b>{formatoCompleto(inicioObra)}</b></span>}
-                {periodoAutomatico && <span>Primeira atividade repetitiva: <b>{formatoCompleto(periodoAutomatico.primeiro)}</b></span>}
+                {periodoRepetitivo && <span>Primeira atividade repetitiva: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
+                {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {exemplosNaLob > 0 && <span className="lob-stairs-qa">QA: {exemplosNaLob} atividade(s) de demonstração nas sequências repetitivas{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                <small>O eixo acompanha as datas planejadas dos serviços repetitivos; não substitui o início da obra. Datas e precedências devem ser ajustadas no planejamento, nunca apenas no gráfico.</small>
+                <small>A mesma régua apresenta atividades gerais da EAP e as escadinhas por pavimento. Etapas não repetitivas não são tratadas como locais físicos; os períodos e as precedências continuam vindo da grade oficial.</small>
               </div>
               {obraComecaAntesDaLob && <button type="button"
                 data-testid="lob-toggle-obra-start"
@@ -256,7 +280,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                   setDataFinal("");
                   setPxManual(null);
                 }}>
-                {incluirInicioObra ? "Focar nas atividades" : "Mostrar desde início da obra"}
+                {incluirInicioObra ? "Focar nas escadinhas" : "Mostrar desde início da obra"}
               </button>}
             </div>
           )}
@@ -314,12 +338,12 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
           </div>
 
           <div className="lob-stairs-zoom-actions" aria-label="Ajustes do gráfico">
-            <span><strong>{locais.length}</strong> pavimentos · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades</span>
+            <span><strong>{locais.length}</strong> pavimentos · <strong>{seriesVisiveis.length}</strong> serviços repetitivos · <strong>{totalGerais}</strong> atividades gerais · <strong>{qtdBarras}</strong> atividades</span>
             <div>
               <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
               <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
               <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-STATUS_COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
-              <button type="button" onClick={()=>{setDataInicial("");setDataFinal("");setPxManual(null);}}>Período dos serviços</button>
+              <button type="button" onClick={()=>{setIncluirInicioObra(true);setDataInicial("");setDataFinal("");setPxManual(null);}}>Período completo</button>
               {estadoVinculos==="pronto" && ligacoes.length>0 && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarVinculos} onChange={e=>setMostrarVinculos(e.target.checked)}/> Mostrar vínculos ({ligacoes.length})</label>}
               {linhas.some(l=>l.marco&&dataValida(l.inicio)) && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarMarcos} onChange={e=>setMostrarMarcos(e.target.checked)}/> Mostrar marcos</label>}
             </div>
@@ -371,11 +395,11 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
           </details>
 
           {periodoInvalido ? <p className="lob-stairs-error" role="alert">A data final deve ser igual ou posterior à inicial.</p>
-          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Nenhum serviço neste filtro</h3><p>Selecione pelo menos um serviço e um pavimento com atividade cadastrada.</p></div>
+          : qtdBarras === 0 ? <div className="lob-stairs-empty"><h3>Nenhuma atividade neste filtro</h3><p>Verifique a busca, os serviços e os pavimentos selecionados.</p></div>
           : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
               <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
                 <div className="lob-stairs-months" role="row">
-                  <div className="lob-stairs-sticky-head" role="columnheader">Pavimento</div>
+                  <div className="lob-stairs-sticky-head" role="columnheader">Pavimento / etapa</div>
                   <div className="lob-stairs-status-head" role="columnheader">Status</div>
                   <div className="lob-stairs-time" role="presentation" style={{ width: larguraTempo }}>
                     {meses.map(m=><span key={m.inicio} className="lob-stairs-month" style={{left:m.x,width:m.largura}}>{m.texto}</span>)}
@@ -389,6 +413,31 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                     {dataValida(hoje)&&diaUtc(hoje)>=diaUtc(eixoInicio)&&diaUtc(hoje)<diaUtc(eixoFimExclusivo)&&<span className="lob-stairs-today-label" style={{left:dataX(hoje)}}>Hoje</span>}
                   </div>
                 </div>
+                {geraisVisiveis.map((grupo,index)=>(
+                  <div key={"geral-"+grupo.chave} className={"lob-stairs-row lob-stairs-general-row"+(index%2?" lob-stairs-row-alt":"")} role="row"
+                    style={{height:alturaGrupo(grupo.pontos.length)}} data-testid="lob-general-row">
+                    <div className="lob-stairs-local" role="rowheader" title={"Etapa da EAP, não pavimento físico: "+grupo.nome}>{grupo.nome}</div>
+                    <div className="lob-stairs-status-cell" role="cell"><span className="lob-stairs-status-tag sem-medicao" title="Atividades sem sequência física repetitiva validada">Sem sequência</span></div>
+                    <div className="lob-stairs-track" role="cell" style={{width:larguraTempo}}>
+                      {semanas.map(w=><span key={w.inicio} className="lob-stairs-gridline" style={{left:w.x}}/>)}
+                      {grupo.pontos.map((p,i)=>{
+                        const inicioCortado=Math.max(diaUtc(p.inicio),diaUtc(eixoInicio));
+                        const fimCortado=Math.min(diaUtc(p.fim),diaUtc(eixoFimExclusivo)-DIA);
+                        if(fimCortado<inicioCortado)return null;
+                        const largura=Math.max(5,((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
+                        const x=((inicioCortado-diaUtc(eixoInicio))/DIA)*pxDia;
+                        return <button key={p.codigo} type="button" className="lob-stairs-bar lob-stairs-general-bar"
+                          data-testid="lob-context-bar" style={{left:x,top:8+i*15,width:largura,height:12,backgroundColor:"#667d91"}}
+                          aria-label={p.nome+" · EAP "+p.codigo+" · "+formatoCompleto(p.inicio)+" a "+formatoCompleto(p.fim)+" · sem sequência repetitiva"}
+                          title={p.nome+" | "+p.codigo+" | "+formatoCompleto(p.inicio)+" a "+formatoCompleto(p.fim)}
+                          onClick={()=>setDetalhe({ponto:p,serie:{chave:grupo.chave,nome:p.nome,pontos:[p],repetitiva:false},cor:"#667d91",indice:i})}>
+                          {p.quantidade!==null&&p.quantidade>0&&p.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,p.executado/p.quantidade*100))+"%"}}/>}
+                          <span>{largura>=85?p.nome:""}</span>
+                        </button>;
+                      })}
+                    </div>
+                  </div>
+                ))}
                 {locais.map((local, row) => (
                   <div key={local} className={"lob-stairs-row"+(row%2?" lob-stairs-row-alt":"")} role="row" style={{height:alturaLinha}}>
                     <div className="lob-stairs-local" role="rowheader">{local}
@@ -420,7 +469,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                     </div>
                   </div>
                 ))}
-                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
+                {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={locais.length*alturaLinha} viewBox={`0 0 ${larguraTempo} ${locais.length*alturaLinha}`} style={{left:COLUNA+STATUS_COLUNA,top:71+alturaGrupos}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
                 </svg>}
@@ -429,16 +478,17 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
 
           <div className="lob-stairs-legend">
             {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
+            {totalGerais>0 && <span><i style={{background:"#667d91"}}/> Atividades sem sequência repetitiva</span>}
             <span className="lob-stairs-legend-note">Barras = períodos planejados · status = execução registrada · vínculos = somente cadastrados</span>
           </div>
           <div className="lob-stairs-dashboard" aria-label="Painel técnico da Linha de Balanço">
             <section className="lob-stairs-dashboard-card" aria-label="Resumo do planejamento">
               <h3>Resumo do planejamento</h3>
               <dl>
-                <div><dt>Período dos serviços visíveis</dt><dd>{resumo.inicio&&resumo.fim?formatoCompleto(resumo.inicio)+" – "+formatoCompleto(resumo.fim):"Sem período"}</dd></div>
+                <div><dt>Período das atividades visíveis</dt><dd>{periodoAutomatico?formatoCompleto(periodoAutomatico.primeiro)+" – "+formatoCompleto(periodoAutomatico.ultimo):"Sem período"}</dd></div>
                 <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
                 <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
-                <div><dt>Atividades no gráfico</dt><dd>{resumo.pontos.length}</dd></div>
+                <div><dt>Atividades no gráfico</dt><dd>{qtdBarras}</dd></div>
                 <div><dt>Janela total de calendário</dt><dd>{resumo.diasCalendario===null?"—":resumo.diasCalendario+" dias"}</dd></div>
                 <div><dt>Cadência média de inícios</dt><dd>{ritmoMedio===null?"—":ritmoMedio.toLocaleString("pt-BR",{maximumFractionDigits:1})+" dias/pavimento"}</dd></div>
               </dl>
@@ -461,7 +511,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                 <dl data-testid="lob-activity-detail">
                   <div><dt>Serviço</dt><dd>{detalhe.serie.nome}</dd></div>
                   <div><dt>Código EAP</dt><dd>{detalhe.ponto.codigo}</dd></div>
-                  <div><dt>Pavimento</dt><dd>{detalhe.ponto.local}</dd></div>
+                  <div><dt>{detalhe.serie.repetitiva?"Pavimento":"Local informado (não validado)"}</dt><dd>{detalhe.ponto.local||"Não informado"}</dd></div>
                   <div><dt>Início planejado</dt><dd>{formatoCompleto(detalhe.ponto.inicio)}</dd></div>
                   <div><dt>Término planejado</dt><dd>{formatoCompleto(detalhe.ponto.fim)}</dd></div>
                   <div><dt>Duração cadastrada</dt><dd>{originais.get(detalhe.ponto.codigo)?.duracao??"—"} dias</dd></div>
