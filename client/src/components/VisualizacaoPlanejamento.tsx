@@ -9,6 +9,7 @@ import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore, type NoDoGan
 import { gerarSetasVisiveisGantt } from "@shared/gantt-dependencias-visuais";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
 import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
+import { selectOperationalPlanning } from "@shared/operational-planning";
 import { LinhaBalancoEscadinha } from "./AuroraLinhaBalanco";
 import { LobDistribuicaoPainel } from "./LobDistribuicaoPainel";
 import "./aurora-piloto.css";
@@ -131,7 +132,11 @@ export function VisualizacaoPlanejamento({
   const resumoBaseline = baselinePronta && comparacaoBaseline.data
     ? resumirBaselineNoGantt(comparacaoBaseline.data.resumo)
     : null;
-  const estadoCpm = avaliarCpmGantt(atividades);
+  const planejamentoOperacional = useMemo(
+    () => selectOperationalPlanning(atividades, planejamento.data?.dependencies ?? []),
+    [atividades, planejamento.data?.dependencies]
+  );
+  const estadoCpm = avaliarCpmGantt(planejamentoOperacional.activities);
   const cpmValido = !planejamento.isPending && !planejamento.isError && estadoCpm.valido;
 
   // Dependências do cronograma traduzidas para os códigos da EAP, que é o que a
@@ -198,6 +203,11 @@ export function VisualizacaoPlanejamento({
       {view === "gantt" && !cpmValido && !planejamento.isPending && !planejamento.isError && atividades.length > 0 && (
         <div className="pl-gantt-cpm-aviso">
           CPM ausente, incompleto ou desatualizado em alguma atividade. O caminho crítico e as folgas não serão considerados válidos até recalcular a rede.
+        </div>
+      )}
+      {view === "gantt" && planejamentoOperacional.excludedExampleActivities > 0 && (
+        <div className="pl-gantt-cpm-aviso" role="status">
+          CPM operacional: {planejamentoOperacional.activities.length} atividades calculáveis; {planejamentoOperacional.excludedExampleActivities} atividades de exemplo ficam fora do cálculo.
         </div>
       )}
       {view === "gantt" && planejamento.isError && (
