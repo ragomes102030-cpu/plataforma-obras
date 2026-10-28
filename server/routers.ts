@@ -3917,6 +3917,7 @@ export const appRouter = router({
             throw conflict("A versão aprovada/histórica não permite distribuir serviços.");
           const [activity]=await tx.select({
               id:scheduleActivities.id,quantity:scheduleActivities.plannedQuantity,
+              plannedQuantity:scheduleActivities.plannedQuantity,
               exemplo:scheduleActivities.exemplo, earlyStart:scheduleActivities.earlyStart,
               startOffset:scheduleActivities.startOffset, durationDays:scheduleActivities.durationDays,
               cpmCalculatedAt:scheduleActivities.cpmCalculatedAt
