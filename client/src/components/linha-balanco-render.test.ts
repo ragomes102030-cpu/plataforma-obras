@@ -139,4 +139,45 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("Resumo do planejamento");
   });
 
+  it("distingue início da obra em 2026 das atividades repetitivas QA programadas para 2028",()=>{
+    const linhas=[
+      atividade("1.5.101","Alvenaria de vedação","P01","2028-02-08"),
+      atividade("1.5.102","Alvenaria de vedação","P02","2028-02-14"),
+      atividade("1.8.101","Chapisco interno","P01","2028-02-15"),
+      atividade("1.8.102","Chapisco interno","P02","2028-02-18"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas, finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      hoje:"2026-10-27",
+      inicioObra:"2026-10-01",
+      codigosExemplo:new Set(linhas.map(l=>l.codigo)),
+      onAbrirAtividades:()=>{},
+    }));
+    expect(html).toContain('data-testid="lob-calendar-context"');
+    expect(html).toContain("Início cadastrado da obra:");
+    expect(html).toContain("01/10/2026");
+    expect(html).toContain("Primeira atividade repetitiva:");
+    expect(html).toContain("08/02/2028");
+    expect(html).toContain("QA: 4 atividade(s) de demonstração");
+    expect(html).toContain("não representam execução real");
+    expect(html).toContain('data-testid="lob-toggle-obra-start"');
+    expect(html).toContain("Mostrar desde início da obra");
+    expect(html).toContain('value="2028-02-08"');
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(4);
+  });
+
+  it("não inventa uma data inicial de obra nem aviso QA sem dados correspondentes",()=>{
+    const linhas=[
+      atividade("1.1","Alvenaria","P01","2026-11-02"),
+      atividade("1.2","Alvenaria","P02","2026-11-06"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas, finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      hoje:"2026-10-27", onAbrirAtividades:()=>{},
+    }));
+    expect(html).not.toContain('data-testid="lob-calendar-context"');
+    expect(html).not.toContain("atividade(s) de demonstração");
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(2);
+  });
+
 });
