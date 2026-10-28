@@ -356,4 +356,39 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain('data-testid="lob-location-mapping"');
   });
 
+  it("mantém a linha compacta quando muitos serviços do mesmo local não se sobrepõem",()=>{
+    const linhas=Array.from({length:8},(_,i)=>atividade(
+      `1.20.${i+1}`,`Serviço ${i+1}`,"Frente externa",add("2026-10-01",i*7),"Frente externa"
+    ));
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,
+      finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,2)])),
+      hoje:"2026-10-28",inicioObra:"2026-10-01",
+      nodosEap:linhas.map((l,i)=>({id:i+1,code:l.codigo,location:"Área externa"})),
+      unidades:[{id:1,code:"AREA_EXT",name:"Área externa",unitType:"area"}],
+      onAbrirAtividades:()=>{},
+    }));
+
+    expect(html).toContain('class="lob-stairs-row" role="row" style="height:64px"');
+    expect((html.match(/class="lob-stairs-bar" style="[^"]*top:10px/g)??[])).toHaveLength(8);
+  });
+
+  it("reserva faixas verticais separadas apenas para serviços simultâneos no mesmo local",()=>{
+    const linhas=Array.from({length:3},(_,i)=>atividade(
+      `1.21.${i+1}`,`Serviço simultâneo ${i+1}`,"Frente externa","2026-10-01","Frente externa"
+    ));
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas,
+      finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,"2026-10-05"])),
+      hoje:"2026-10-28",inicioObra:"2026-10-01",
+      nodosEap:linhas.map((l,i)=>({id:i+1,code:l.codigo,location:"Área externa"})),
+      unidades:[{id:1,code:"AREA_EXT",name:"Área externa",unitType:"area"}],
+      onAbrirAtividades:()=>{},
+    }));
+
+    expect(html).toContain('class="lob-stairs-row" role="row" style="height:83px"');
+    expect(Array.from(html.matchAll(/class="lob-stairs-bar" style="[^"]*top:(\d+)px/g),m=>Number(m[1])))
+      .toEqual([10,33,56]);
+  });
+
 });

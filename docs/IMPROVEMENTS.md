@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-10-28 — reduzir altura excessiva das linhas da LOB
+
+### Problema e causa
+- Cada serviço selecionado reservava uma faixa vertical em todos os locais, ainda que as atividades fossem sequenciais ou estivessem fora do período visível.
+- A altura da linha era calculada pelo total de serviços, gerando espaço vazio como na captura recebida.
+
+### Correção e evidência
+- Reutilizar faixas por local para atividades sem sobreposição; simultaneidades mantêm faixas distintas.
+- Teste de renderização: oito atividades sequenciais ocupam 64 px; três simultâneas mantêm três faixas.
+- Teste Playwright local em desktop e celular; sem erros de console nem rolagem horizontal global no celular.
+- `pnpm check`, `pnpm build` e suíte completa passaram. Suíte: 141 arquivos, 1.271 testes aprovados e 8 ignorados por falta da planilha de referência local.
+- Capturas: `test-results/lob-profissional/desktop-faixas-compactas.png` e `mobile-faixas-compactas.png`.
+
+### Estado
+- Código preparado na branch `fix/lob-local-row-density`, baseada no commit sincronizado `e4ce608` de `main`/`develop`; revisão pendente.
+- Sem alterações em dados da obra, banco, baseline ou implantação.
+- Build avisou que VITE_ANALYTICS_ENDPOINT e VITE_ANALYTICS_WEBSITE_ID não estão definidos e que o bundle JavaScript excede 500 kB. Comandos usaram Node 24, enquanto o projeto declara Node 22.
+- Próximo passo: abrir PR para revisão; depois revisar a LOB multilocal e as prioridades restantes por etapas.
+
 ## Sep/2026 — Migração Render → Vercel
 
 ### O problema

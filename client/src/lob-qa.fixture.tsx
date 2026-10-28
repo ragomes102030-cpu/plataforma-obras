@@ -1,4 +1,46 @@
-import "./index.css"; import "./mobile.css"; import "./campo-tipografia.css"; import "./tipografia-desktop.css";
-import React,{useState} from "react"; import {createRoot} from "react-dom/client"; import {LinhaBalancoEscadinha} from "./components/AuroraLinhaBalanco"; import type {EntradaDaLinha} from "@shared/cronograma-colunas";
-type Linha=EntradaDaLinha&{id:string}; const base: Linha[]=[{id:"1",codigo:"QA.01",atividade:"Alvenaria",frente:"Vedação",pavimento:"",inicio:"2026-11-03",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},{id:"2",codigo:"QA.02",atividade:"Alvenaria",frente:"Vedação",pavimento:"",inicio:"2026-11-12",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},{id:"3",codigo:"QA.03",atividade:"Pintura",frente:"Acabamento",pavimento:"P03",inicio:"2026-11-18",duracao:5,quantidade:1,unidade:"m²",executado:0,marco:false}];
-function App(){const [linhas,setLinhas]=useState(base);const [ed,setEd]=useState(base);const [aba,setAba]=useState("lob");React.useEffect(()=>{const f=(e:Event)=>{if((e as CustomEvent<{aba?:string}>).detail.aba==="gantt")setAba("gantt")};window.addEventListener("abrir-aba",f);return()=>window.removeEventListener("abrir-aba",f)},[]);if(aba==="gantt")return <h1>Gantt QA</h1>;if(aba==="atividades")return <main><table><thead><tr><th>Frente / disciplina</th><th>Local físico</th></tr></thead><tbody>{ed.map((l,i)=><tr key={l.id}><td><input aria-label={`Frente ${l.codigo}`} value={l.frente??""} onChange={e=>setEd(x=>x.map((v,n)=>n===i?{...v,frente:e.target.value}:v))}/></td><td><input aria-label={`Local ${l.codigo}`} value={l.pavimento??""} onChange={e=>setEd(x=>x.map((v,n)=>n===i?{...v,pavimento:e.target.value}:v))}/></td></tr>)}</tbody></table><button onClick={()=>{localStorage.setItem("lob-qa",JSON.stringify(ed));setLinhas(ed);setAba("lob")}}>Salvar alterações</button></main>;return <LinhaBalancoEscadinha linhas={linhas} finsCalculados={{"QA.01":"2026-11-10","QA.02":"2026-11-19","QA.03":"2026-11-23"}} hoje="2026-11-08" onAbrirAtividades={()=>setAba("atividades")}/>};createRoot(document.getElementById("root")!).render(<App/>);
+import "./index.css";
+import "./mobile.css";
+import "./campo-tipografia.css";
+import "./tipografia-desktop.css";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import type { EntradaDaLinha } from "@shared/cronograma-colunas";
+import { LinhaBalancoEscadinha } from "./components/AuroraLinhaBalanco";
+
+const somarDias = (iso: string, dias: number) =>
+  new Date(Date.parse(`${iso}T12:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
+
+const linhas: EntradaDaLinha[] = Array.from({ length: 8 }, (_, indice) => ({
+  codigo: `1.20.${indice + 1}`,
+  atividade: `Serviço ${indice + 1}`,
+  frente: "Execução externa",
+  pavimento: "",
+  inicio: somarDias("2026-11-02", indice * 7),
+  duracao: 3,
+  quantidade: 10,
+  unidade: "m²",
+  executado: 0,
+  marco: false,
+}));
+
+const finsCalculados = Object.fromEntries(
+  linhas.map(linha => [linha.codigo, somarDias(linha.inicio, linha.duracao - 1)])
+);
+
+function App() {
+  return (
+    <main style={{ padding: 12 }}>
+      <LinhaBalancoEscadinha
+        linhas={linhas}
+        finsCalculados={finsCalculados}
+        hoje="2026-11-08"
+        inicioObra="2026-11-02"
+        nodosEap={linhas.map((linha, indice) => ({ id: indice + 1, code: linha.codigo, location: "Área externa" }))}
+        unidades={[{ id: 1, code: "AREA_EXT", name: "Área externa", unitType: "area" }]}
+        onAbrirAtividades={() => {}}
+      />
+    </main>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<App />);
