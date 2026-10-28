@@ -299,7 +299,7 @@ export function LinhaBalancoEscadinha({
         </div>
       ) : (
         <>
-          {(obraComecaAntesDaLob || qtdQa > 0 || atividadesGerais.length > 0 || qtdReais > 0) && (
+          {(obraComecaAntesDaLob || qtdQa > 0 || atividadesGerais.length > 0) && (
             <div className="lob-stairs-context" role="status" data-testid="lob-calendar-context">
               <div>
                 <strong>Referência das datas</strong>
