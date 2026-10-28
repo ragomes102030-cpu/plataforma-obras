@@ -122,7 +122,7 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain('aria-label="Detalhes da atividade selecionada"');
     expect(html).toContain("Mostrar vínculos (1)");
     expect(html).toContain("Selecione uma barra");
-    expect(html).toContain("Período dos serviços visíveis");
+    expect(html).toContain("Período das atividades visíveis");
     expect(html).toContain("Atividades no gráfico");
     expect(html).not.toContain('aria-label="Vínculos cadastrados entre atividades visíveis"');
   });
