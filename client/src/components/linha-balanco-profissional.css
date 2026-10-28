@@ -171,3 +171,28 @@
 .lob-stairs-previous-group th{background:#eef4f8;color:#486276;font-weight:700}
 .lob-stairs-previous-group td:nth-child(2){white-space:normal;min-width:150px}
 @media(max-width:780px){.lob-stairs-previous-activities{margin:10px}.lob-stairs-previous-body{padding:8px 10px}}
+
+
+/* Vinculação explícita das atividades aos locais reais: painel recolhível,
+   sem acrescentar barras genéricas ou substituir a escadinha. */
+.lob-stairs-mapping{margin:12px 19px;border:1px solid #cbdce8;border-radius:7px;background:#fff}
+.lob-stairs-mapping summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;padding:12px 14px;background:#f3f8fc;list-style:none}
+.lob-stairs-mapping summary::-webkit-details-marker{display:none}
+.lob-stairs-mapping summary strong{font-size:12px;color:#163e58}
+.lob-stairs-mapping summary span{flex:1;color:#607c8c;font-size:11px}
+.lob-stairs-mapping[open] summary svg{transform:rotate(180deg)}
+.lob-stairs-mapping-body{padding:12px 14px;max-height:530px;overflow:auto}
+.lob-stairs-mapping-body p{font-size:11px;line-height:1.6;color:#526e7d}
+.lob-stairs-mapping-body table{border-collapse:collapse;width:100%;min-width:680px;font-size:11px}
+.lob-stairs-mapping-body th,.lob-stairs-mapping-body td{border-bottom:1px solid #e4edf2;padding:8px;text-align:left}
+.lob-stairs-mapping-body th{background:#eef4f8;color:#405b70;white-space:nowrap}
+.lob-stairs-mapping-body td:first-child{min-width:230px}
+.lob-stairs-mapping-body td:nth-child(2){white-space:nowrap}
+.lob-stairs-mapping-body select,.lob-stairs-mapping-body input{border:1px solid #bdd0de;border-radius:5px;padding:7px;background:white;color:#25475c;max-width:100%}
+.lob-stairs-mapping-body button{border:1px solid #a8c6d8;background:#eff7fc;color:#1c5575;border-radius:5px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.lob-stairs-mapping-body button:disabled{opacity:.5;cursor:not-allowed}
+.lob-stairs-mapping-body small{display:block;color:#607c8a;font-size:10px;line-height:1.6;margin:10px 0}
+.lob-stairs-mapping-create{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0 16px;padding:12px;background:#f7fafc;border-radius:6px}
+.lob-stairs-mapping-create label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#57768a;min-width:145px;flex:1}
+.lob-stairs-mapping-create button{margin-bottom:1px}
+@media(max-width:780px){.lob-stairs-mapping{margin:10px}}

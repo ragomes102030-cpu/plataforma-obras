@@ -4,7 +4,7 @@ import { Activity, CalendarDays, ChevronDown, Download, ListTodo, Maximize2, Sea
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 import type { IsoDate } from "@shared/work-calendar";
 import {
-  dataValida, diaUtc, prepararLinhaBalancoVertical, atividadesForaDaEscadinhaLob,
+  dataValida, diaUtc, prepararLinhaBalancoVertical, atividadesForaDaEscadinhaLob, aplicarLocaisDaEapNaLob,
   type PontoLob, type SerieLob,
 } from "./linha-balanco-modelo";
 import { analisarFluxoLob } from "./lob-analise-fluxo";
@@ -19,6 +19,13 @@ type Props = {
   hoje: IsoDate;
   inicioObra?: IsoDate | null;
   codigosExemplo?: ReadonlySet<string>;
+  nodosEap?: readonly {id:number;code:string;location:string|null}[];
+  unidades?: readonly {id:number;code:string;name:string;unitType:string}[];
+  editavel?: boolean;
+  salvandoLocal?: boolean;
+  erroLocal?: string|null;
+  onDefinirLocal?: (nodeId:number,unitId:number|null)=>void;
+  onCriarUnidade?: (code:string,name:string,unitType:string)=>void;
   onAbrirAtividades: () => void;
   dependencias?: VínculoLob[];
   estadoVinculos?: "pronto" | "carregando" | "erro";
@@ -61,19 +68,34 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  * exclusivamente datas da planning.grade, sem inventar produtividade ou execução.
  * Não cria nem altera versões do plano. Filtros e exportação são somente leitura.
  */
-export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra, codigosExemplo, onAbrirAtividades, dependencias = [], estadoVinculos = "carregando" }: Props) {
-  const dados = useMemo(
-    () => prepararLinhaBalancoVertical(linhas, finsCalculados),
-    [linhas, finsCalculados],
+export function LinhaBalancoEscadinha({
+  linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],
+  editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onCriarUnidade,
+  onAbrirAtividades,dependencias=[],estadoVinculos="carregando"
+}: Props) {
+  const locaisConfirmados = useMemo(
+    ()=>aplicarLocaisDaEapNaLob(linhas,nodosEap,unidades),
+    [linhas,nodosEap,unidades]
   );
-  const repetitivas = useMemo(() => dados.series.filter(s => s.repetitiva), [dados.series]);
+  const dados = useMemo(
+    () => prepararLinhaBalancoVertical(locaisConfirmados.linhas, finsCalculados, locaisConfirmados.codigosConfirmados),
+    [locaisConfirmados, finsCalculados],
+  );
+  const repetitivas = useMemo(
+    () => dados.series.filter(s => s.repetitiva || s.localizada),
+    [dados.series]
+  );
   // Trazer TODAS as atividades com início/fim oficial, inclusive as não
   // repetitivas do início da obra. Mantemos os patamares P01–P06 intocados.
   const atividadesGerais = useMemo(
-    () => atividadesForaDaEscadinhaLob(linhas, finsCalculados, repetitivas),
-    [linhas, finsCalculados, repetitivas]
+    () => atividadesForaDaEscadinhaLob(locaisConfirmados.linhas, finsCalculados, repetitivas),
+    [locaisConfirmados, finsCalculados, repetitivas]
   );
   const [busca, setBusca] = useState("");
+  const [localSelecionado,setLocalSelecionado]=useState<Record<string,string>>({});
+  const [novoLocalCodigo,setNovoLocalCodigo]=useState("");
+  const [novoLocalNome,setNovoLocalNome]=useState("");
+  const [novoLocalTipo,setNovoLocalTipo]=useState("setor");
   const [ocultas, setOcultas] = useState<Set<string>>(() => new Set());
   const [pavimento, setPavimento] = useState("todos");
   const [escala, setEscala] = useState<Escala>("semana");
@@ -82,7 +104,10 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   const [dataFinal, setDataFinal] = useState("");
   // A escadinha deve abrir no período de produção, sem anos vazios no gráfico.
   // O período completo da obra continua disponível sob demanda.
-  const [incluirInicioObra, setIncluirInicioObra] = useState(false);
+  // Automático: foco nas escadinhas QA se ainda não há local confirmado;
+  // período desde a obra assim que existir o primeiro vínculo EAP-local.
+  // O usuário pode alternar manualmente entre foco e obra completa.
+  const [incluirInicioObra, setIncluirInicioObra] = useState<boolean | null>(null);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
@@ -108,6 +133,8 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
     ...s, pontos: s.pontos.filter(p => locais.includes(p.local)),
   }));
   const periodoRepetitivo = selecionarPeriodoPelosServicos(pontosVisiveis);
+  const periodoFoco = selecionarPeriodoPelosServicos(pontosVisiveis.filter(s=>s.repetitiva))??periodoRepetitivo;
+  const periodoCompleto = incluirInicioObra ?? locaisConfirmados.codigosConfirmados.size > 0;
   const periodoAutomatico = selecionarPeriodoPelosServicos([
     ...pontosVisiveis,
     ...geraisVisiveis.map(g=>({...g,repetitiva:false})),
@@ -115,16 +142,16 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
   const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2026-01-01");
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
   const obraComecaAntesDaLob = dataValida(inicioObra) &&
-    periodoRepetitivo !== null && diaUtc(inicioObra) < diaUtc(periodoRepetitivo.primeiro);
+    periodoFoco !== null && diaUtc(inicioObra) < diaUtc(periodoFoco.primeiro);
   const exemplosNaLob = repetitivas.flatMap(serie => serie.pontos)
     .filter(ponto => codigosExemplo?.has(ponto.codigo)).length;
   const totalPontosRepetitivos = repetitivas.reduce((s, serie) => s + serie.pontos.length, 0);
   const todosServicosSaoQA = exemplosNaLob > 0 && exemplosNaLob === totalPontosRepetitivos;
   const inicioEscolhido = dataValida(dataInicial) ? dataInicial :
-    incluirInicioObra ? (dataValida(inicioObra) && inicioObra<baseInicio ? inicioObra : baseInicio)
-      : (periodoRepetitivo?.primeiro ?? baseInicio);
+    periodoCompleto ? (dataValida(inicioObra) && inicioObra<baseInicio ? inicioObra : baseInicio)
+      : (periodoFoco?.primeiro ?? baseInicio);
   const fimEscolhido = dataValida(dataFinal) ? dataFinal :
-    incluirInicioObra ? baseFim : (periodoRepetitivo?.ultimo ?? baseFim);
+    periodoCompleto ? baseFim : (periodoFoco?.ultimo ?? baseFim);
   const periodoInvalido = diaUtc(fimEscolhido) < diaUtc(inicioEscolhido);
   const eixoInicio = segundaDaSemana(adicionarDias(inicioEscolhido, -7));
   const eixoFim = segundaDaSemana(adicionarDias(fimEscolhido, 14));
@@ -270,18 +297,18 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                 {periodoRepetitivo && <span>Primeira atividade repetitiva: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {exemplosNaLob > 0 && <span className="lob-stairs-qa">QA: {exemplosNaLob} atividade(s) de demonstração nas sequências repetitivas{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                <small>A escadinha mostra apenas serviços por pavimento. As outras atividades do cronograma, desde o início da obra, ficam na relação cronológica abaixo, sem alterar o gráfico nem inventar localizações.</small>
+                <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
               {obraComecaAntesDaLob && <button type="button"
                 data-testid="lob-toggle-obra-start"
-                aria-pressed={incluirInicioObra}
+                aria-pressed={periodoCompleto}
                 onClick={() => {
-                  setIncluirInicioObra(v => !v);
+                  setIncluirInicioObra(!periodoCompleto);
                   setDataInicial("");
                   setDataFinal("");
                   setPxManual(null);
                 }}>
-                {incluirInicioObra ? "Focar nas escadinhas" : "Mostrar desde início da obra"}
+                {periodoCompleto ? "Focar nas escadinhas" : "Mostrar desde início da obra"}
               </button>}
             </div>
           )}
@@ -323,7 +350,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
               </details>
             </div>
             <label className="lob-stairs-field">
-              <span>Pavimentos</span>
+              <span>Locais</span>
               <select aria-label="Filtrar pavimento" value={pavimento}
                 onChange={e => { setPavimento(e.target.value); setDetalhe(null); setPxManual(null); }}>
                 <option value="todos">Todos</option>
@@ -339,7 +366,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
           </div>
 
           <div className="lob-stairs-zoom-actions" aria-label="Ajustes do gráfico">
-            <span><strong>{locais.length}</strong> pavimentos · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades na escadinha</span>
+            <span><strong>{locais.length}</strong> locais · <strong>{seriesVisiveis.length}</strong> serviços · <strong>{qtdBarras}</strong> atividades localizadas</span>
             <div>
               <button type="button" aria-label="Diminuir zoom" onClick={()=>setPxManual(Math.max(3,pxDia/1.25))}><ZoomOut size={15}/></button>
               <button type="button" aria-label="Aumentar zoom" onClick={()=>setPxManual(Math.min(36,pxDia*1.25))}><ZoomIn size={15}/></button>
@@ -400,7 +427,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
           : <div className="lob-stairs-scroller" ref={rolagem} role="region" tabIndex={0} aria-label="Escadinha: datas horizontais e pavimentos verticais">
               <div className="lob-stairs-board" role="table" aria-label="Cronograma de serviços por pavimento" style={{width: COLUNA+STATUS_COLUNA+larguraTempo}}>
                 <div className="lob-stairs-months" role="row">
-                  <div className="lob-stairs-sticky-head" role="columnheader">Pavimento</div>
+                  <div className="lob-stairs-sticky-head" role="columnheader">Local físico</div>
                   <div className="lob-stairs-status-head" role="columnheader">Status</div>
                   <div className="lob-stairs-time" role="presentation" style={{ width: larguraTempo }}>
                     {meses.map(m=><span key={m.inicio} className="lob-stairs-month" style={{left:m.x,width:m.largura}}>{m.texto}</span>)}
@@ -456,6 +483,48 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
             {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
             <span className="lob-stairs-legend-note">Barras = períodos planejados · status = execução registrada · vínculos = somente cadastrados</span>
           </div>
+          {totalGerais>0 && (
+            <details className="lob-stairs-mapping" data-testid="lob-location-mapping">
+              <summary><strong>Vincular serviços aos locais físicos</strong>
+                <span>{totalGerais} atividades sem sequência localizada · dados da EAP</span><ChevronDown size={15}/></summary>
+              <div className="lob-stairs-mapping-body">
+                <p>Selecione uma unidade física cadastrada e confirme o local de execução do pacote da EAP. O vínculo salva SOMENTE o campo de localização no Dicionário da EAP da versão de trabalho; não altera prazos, CPM, quantidades ou baseline. Um pacote que abrange vários locais deve ser decomposto antes de associar um único local.</p>
+                {!editavel && <p role="status">Edição indisponível nesta versão. Abra uma versão de trabalho para localizar atividades.</p>}
+                {erroLocal && <p role="alert">{erroLocal}</p>}
+                <div className="lob-stairs-mapping-create">
+                  <label>Nome do local<input aria-label="Nome do novo local" value={novoLocalNome} maxLength={180}
+                    onChange={e=>setNovoLocalNome(e.target.value)} placeholder="Ex.: Canteiro de obras"/></label>
+                  <label>Código<input aria-label="Código do novo local" value={novoLocalCodigo} maxLength={32}
+                    onChange={e=>setNovoLocalCodigo(e.target.value)} placeholder="Ex.: CANTEIRO"/></label>
+                  <label>Tipo<select aria-label="Tipo de unidade" value={novoLocalTipo} onChange={e=>setNovoLocalTipo(e.target.value)}>
+                    <option value="setor">Setor</option><option value="pavimento">Pavimento</option><option value="area">Área</option>
+                  </select></label>
+                  <button type="button" disabled={!editavel||!onCriarUnidade||novoLocalNome.trim().length<2||!novoLocalCodigo.trim()}
+                    onClick={()=>{onCriarUnidade?.(novoLocalCodigo.trim(),novoLocalNome.trim(),novoLocalTipo);setNovoLocalNome("");setNovoLocalCodigo("");}}>
+                    Cadastrar local
+                  </button>
+                </div>
+                <table><thead><tr><th>Atividade / EAP</th><th>Início oficial</th><th>Local confirmado</th><th>Ação</th></tr></thead>
+                  <tbody>{geraisVisiveis.flatMap(g=>g.pontos).map(p=>{
+                    const node=nodosEap.find(n=>n.code===p.codigo);
+                    const valor=localSelecionado[p.codigo]??"";
+                    return <tr key={p.codigo}><td><strong>{p.codigo}</strong> {p.nome}</td>
+                      <td>{formatoCompleto(p.inicio)}</td>
+                      <td><select aria-label={"Selecionar local físico de "+p.codigo} value={valor}
+                        onChange={e=>setLocalSelecionado(v=>({...v,[p.codigo]:e.target.value}))}>
+                        <option value="">Selecionar local</option>
+                        {unidades.map(u=><option key={u.id} value={String(u.id)}>{u.name} ({u.code})</option>)}
+                      </select></td>
+                      <td><button type="button" disabled={!editavel||!node||!valor||salvandoLocal||!onDefinirLocal}
+                        onClick={()=>{if(node&&valor)onDefinirLocal?.(node.id,Number(valor));}}>
+                        {salvandoLocal?"Salvando…":"Vincular"}</button></td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+                <small>As sugestões baseadas apenas no nome da disciplina não são aplicadas automaticamente. Pacotes multi-local precisam ser decompostos no planejamento antes da distribuição.</small>
+              </div>
+            </details>
+          )}
           {totalGerais>0 && (
             <details className="lob-stairs-previous-activities" data-testid="lob-previous-activities">
               <summary>
@@ -515,7 +584,7 @@ export function LinhaBalancoEscadinha({ linhas, finsCalculados, hoje, inicioObra
                 <dl data-testid="lob-activity-detail">
                   <div><dt>Serviço</dt><dd>{detalhe.serie.nome}</dd></div>
                   <div><dt>Código EAP</dt><dd>{detalhe.ponto.codigo}</dd></div>
-                  <div><dt>{detalhe.serie.repetitiva?"Pavimento":"Local informado (não validado)"}</dt><dd>{detalhe.ponto.local||"Não informado"}</dd></div>
+                  <div><dt>{detalhe.serie.repetitiva||detalhe.serie.localizada?"Local físico":"Local informado (não validado)"}</dt><dd>{detalhe.ponto.local||"Não informado"}</dd></div>
                   <div><dt>Início planejado</dt><dd>{formatoCompleto(detalhe.ponto.inicio)}</dd></div>
                   <div><dt>Término planejado</dt><dd>{formatoCompleto(detalhe.ponto.fim)}</dd></div>
                   <div><dt>Duração cadastrada</dt><dd>{originais.get(detalhe.ponto.codigo)?.duracao??"—"} dias</dd></div>

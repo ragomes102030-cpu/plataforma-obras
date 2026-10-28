@@ -71,6 +71,19 @@ export function VisualizacaoPlanejamento({
     { enabled: Number(projetoId) > 0 }
   );
   const atividades = planejamento.data?.activities ?? [];
+  // A LOB usa somente locais físicos confirmados na EAP da versão corrente.
+  // Não alterar as atividades nem criar outro cronograma.
+  const consultarLocaisLob = view === "lob" && projetoId > 0;
+  const nodosEap = trpc.projects.wbs.useQuery({projectId:projetoId},{enabled:consultarLocaisLob});
+  const unidadesProducao = trpc.production.units.useQuery({projectId:projetoId},{enabled:consultarLocaisLob});
+  const utilsLob = trpc.useUtils();
+  const definirLocalLob = trpc.planning.definirLocalLob.useMutation({
+    onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
+  });
+  const criarUnidadeLob = trpc.production.createUnit.useMutation({
+    onSuccess:()=>utilsLob.production.units.invalidate({projectId:projetoId}),
+  });
+  const editavelLob = ["draft","proposed"].includes(planejamento.data?.currentVersionStatus??"");
   const atividadePorCodigo = useMemo(
     () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
     [atividades]
@@ -197,7 +210,12 @@ export function VisualizacaoPlanejamento({
           nomeBaseline={comparacaoBaseline.data?.baseline.name ?? baselineVigente?.name ?? null}
           resumoBaseline={resumoBaseline} />
       ) : (
-        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra} codigosExemplo={codigosExemplo} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
+        <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra} codigosExemplo={codigosExemplo} dependencias={dependencias} estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"} nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
+          editavel={editavelLob} salvandoLocal={definirLocalLob.isPending}
+          erroLocal={definirLocalLob.error?.message??criarUnidadeLob.error?.message??null}
+          onDefinirLocal={(nodeId,unitId)=>definirLocalLob.mutate({projectId:projetoId,nodeId,unitId})}
+          onCriarUnidade={(code,name,unitType)=>criarUnidadeLob.mutate({projectId:projetoId,code,name,unitType})}
+          onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))} />
       )}
     </section>
   );
