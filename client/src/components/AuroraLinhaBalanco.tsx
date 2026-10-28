@@ -32,6 +32,9 @@ type Props = {
 };
 type Escala = "dia" | "semana" | "quinzena" | "mes";
 type Barra = { serie: SerieLob; ponto: PontoLob; cor: string; indice: number };
+type LinhaPendente =
+  | { tipo: "grupo"; grupo: string; altura: number }
+  | { tipo: "atividade"; grupo: string; ponto: PontoLob; altura: number };
 const DIA = 86400000;
 const COLUNA = 168;
 const STATUS_COLUNA = 112;
@@ -80,8 +83,9 @@ export function LinhaBalancoEscadinha({
   const possuiQaSeparada = qtdQa > 0 && qtdReais > 0;
   const [exibirQa, setExibirQa] = useState(false);
   const linhasDaVisualizacao = useMemo(
-    () => possuiQaSeparada && !exibirQa
-      ? linhas.filter(l => !codigosExemplo?.has(l.codigo)) : linhas,
+    () => possuiQaSeparada
+      ? linhas.filter(l => exibirQa ? !!codigosExemplo?.has(l.codigo) : !codigosExemplo?.has(l.codigo))
+      : linhas,
     [linhas, codigosExemplo, possuiQaSeparada, exibirQa]
   );
   const locaisConfirmados = useMemo(
@@ -114,6 +118,7 @@ export function LinhaBalancoEscadinha({
     [locaisConfirmados, finsCalculados, repetitivas]
   );
   const [busca, setBusca] = useState("");
+  const [mostrarPendentes, setMostrarPendentes] = useState(true);
   const [localSelecionado,setLocalSelecionado]=useState<Record<string,string>>({});
   const [novoLocalCodigo,setNovoLocalCodigo]=useState("");
   const [novoLocalNome,setNovoLocalNome]=useState("");
@@ -133,6 +138,7 @@ export function LinhaBalancoEscadinha({
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
   const rolagem = useRef<HTMLDivElement | null>(null);
+  const painelVinculo = useRef<HTMLDetailsElement | null>(null);
 
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const seriesVisiveis = repetitivas.filter(s =>
@@ -145,6 +151,17 @@ export function LinhaBalancoEscadinha({
     !termo || `${p.nome} ${p.codigo} ${g.nome}`.toLocaleLowerCase("pt-BR").includes(termo))
   })).filter(g=>g.pontos.length>0);
   const totalGerais = geraisVisiveis.reduce((s,g)=>s+g.pontos.length,0);
+  // A EAP continua integral no MESMO eixo; sem confundir frente com local físico.
+  const linhasPendentes: LinhaPendente[] = [];
+  if (mostrarPendentes && pavimento === "todos") {
+    for (const grupo of geraisVisiveis) {
+      linhasPendentes.push({tipo:"grupo",grupo:grupo.nome,altura:30});
+      for (const ponto of grupo.pontos)
+        linhasPendentes.push({tipo:"atividade",grupo:grupo.nome,ponto,altura:38});
+    }
+  }
+  const pontosPendentes = linhasPendentes.flatMap(l=>l.tipo==="atividade" ? [l.ponto] : []);
+  const alturaPendentes = linhasPendentes.reduce((s,l)=>s+l.altura,0);
   // Descarta categorias antigas usadas equivocadamente no campo pavimento:
   // apenas unidades de serviços repetitivos entram no eixo físico.
   const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
@@ -155,10 +172,10 @@ export function LinhaBalancoEscadinha({
   }));
   const periodoRepetitivo = selecionarPeriodoPelosServicos(pontosVisiveis);
   const periodoFoco = selecionarPeriodoPelosServicos(pontosVisiveis.filter(s=>s.repetitiva))??periodoRepetitivo;
-  const periodoCompleto = incluirInicioObra ?? (possuiQaSeparada ? false : locaisConfirmados.codigosConfirmados.size > 0);
+  const periodoCompleto = incluirInicioObra ?? (totalGerais > 0 || locaisConfirmados.codigosConfirmados.size > 0);
   const periodoAutomatico = selecionarPeriodoPelosServicos([
     ...pontosVisiveis,
-    ...geraisVisiveis.map(g=>({...g,repetitiva:false})),
+    ...(mostrarPendentes && pavimento === "todos" ? geraisVisiveis.map(g=>({...g,repetitiva:false})) : []),
   ]);
   const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2026-01-01");
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
@@ -220,9 +237,11 @@ export function LinhaBalancoEscadinha({
   }
 
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
+  const qtdGrafico = qtdBarras + pontosPendentes.length;
   const resumo = resumoLob(seriesVisiveis,locais,hoje);
   const originais = new Map(linhas.map(l=>[l.codigo,l]));
-  const ligacoes = estadoVinculos==="pronto" ? calcularVinculosExibidos(dependencias,resumo.pontos) : [];
+  const ligacoes = estadoVinculos==="pronto"
+    ? calcularVinculosExibidos(dependencias,[...resumo.pontos,...pontosPendentes]) : [];
   const coordenadas = new Map<string,{inicio:number;fim:number;y:number}>();
   locais.forEach((local, linhaIndex)=>{
     for (const barra of barrasPorLocal.get(local) ?? []) coordenadas.set(barra.ponto.codigo,{
@@ -231,6 +250,14 @@ export function LinhaBalancoEscadinha({
       y:linhaIndex*alturaLinha+19+barra.indice*23,
     });
   });
+  let deslocamentoPendente = locais.length*alturaLinha;
+  for (const linha of linhasPendentes) {
+    if (linha.tipo==="atividade") coordenadas.set(linha.ponto.codigo,{
+      inicio:dataX(linha.ponto.inicio),fim:dataX(adicionarDias(linha.ponto.fim,1)),
+      y:deslocamentoPendente+19,
+    });
+    deslocamentoPendente += linha.altura;
+  }
   const setas = ligacoes.flatMap(v=>{
     const origem=coordenadas.get(v.de),destino=coordenadas.get(v.para);
     if(!origem||!destino)return [];
@@ -318,7 +345,7 @@ export function LinhaBalancoEscadinha({
                 {periodoRepetitivo && <span>{pontosVisiveis.some(s => s.repetitiva) ? "Primeira atividade repetitiva" : "Primeira atividade localizada"}: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {qtdQa > 0 && <span className="lob-stairs-qa">QA: {qtdQa} atividade(s) de demonstração {possuiQaSeparada && !exibirQa ? "— ocultas da visão principal" : "nas sequências repetitivas"}{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                {possuiQaSeparada && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{locaisConfirmados.codigosConfirmados.size}</b> localizadas · <b>{Math.max(0,qtdReais-locaisConfirmados.codigosConfirmados.size)}</b> pendentes de vínculo físico</span>}
+                {possuiQaSeparada && !exibirQa && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{locaisConfirmados.codigosConfirmados.size}</b> localizadas · <b>{Math.max(0,qtdReais-locaisConfirmados.codigosConfirmados.size)}</b> pendentes de vínculo físico</span>}
                 <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
               {possuiQaSeparada && <label className="lob-stairs-qa-toggle">
