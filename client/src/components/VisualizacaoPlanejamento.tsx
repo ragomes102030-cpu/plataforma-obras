@@ -543,10 +543,14 @@ function Gantt({
     filtradas.forEach((no, indice) => {
       const x0 = Math.max(0, ((dateMs(no.inicio) - dateMs(dados.start)) / 86400000) * px);
       const x1 = x0 + Math.max(6, Math.min(larguraDoTempo - x0, (Math.round((dateMs(no.fim)-dateMs(no.inicio))/86400000)+1) * px));
-      mapa.set(no.chave, { x0, x1, y: indice * alturaLinha + alturaLinha / 2 });
+      // A comparação com baseline desloca a barra atual 4,5 px para baixo
+      // (CSS .pg-comparando-baseline .pg-barra). As setas devem terminar
+      // no CENTRO VISUAL da barra, não no centro antigo da linha.
+      const deslocamentoBaseline = baselinePronta && !no.temFilhos && !no.marco ? 4.5 : 0;
+      mapa.set(no.chave, { x0, x1, y: indice * alturaLinha + alturaLinha / 2 + deslocamentoBaseline });
     });
     return mapa;
-  }, [filtradas, px, dados.start, larguraDoTempo, alturaLinha]);
+  }, [filtradas, px, dados.start, larguraDoTempo, alturaLinha, baselinePronta]);
 
   const setas = useMemo(
     () => mostrarSetas
