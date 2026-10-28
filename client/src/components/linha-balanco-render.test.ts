@@ -218,4 +218,44 @@ describe("LOB escadinha — renderização de calendário horizontal (SSR)",()=>
     expect(html).toContain("Serviço geral 53");
   });
 
+  it("com local EAP confirmado: mostra 2026 no MESMO gráfico e preserva a escadinha QA",()=>{
+    const linhas=[
+      atividade("1.1.1","Mobilização e canteiro","Serviços Gerais","2026-10-01"),
+      atividade("1.13.2","Drenagem externa","Infraestrutura Externa","2026-10-03"),
+      atividade("QA.1","Alvenaria","P01","2028-02-08"),
+      atividade("QA.2","Alvenaria","P02","2028-02-14"),
+    ];
+    const html=renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
+      linhas, finsCalculados:Object.fromEntries(linhas.map(l=>[l.codigo,add(l.inicio,3)])),
+      hoje:"2026-10-28",inicioObra:"2026-10-01",
+      nodosEap:[
+        {id:10,code:"1.1.1",location:"Canteiro de obras"},
+        {id:11,code:"1.13.2",location:null}
+      ],unidades:[{id:1,code:"CANTEIRO",name:"Canteiro de obras",unitType:"setor"}],
+      editavel:true,onDefinirLocal:()=>{},onCriarUnidade:()=>{},
+      onAbrirAtividades:()=>{},
+    }));
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(3);
+    expect(html).toContain('role="rowheader">Canteiro de obras');
+    expect(html).toContain('role="rowheader">P01');
+    expect(html).toContain('role="rowheader">P02');
+    expect(html).toContain('value="2026-10-01"');
+    expect(html).toContain("Mobilização e canteiro");
+    expect(html).toContain("01/10/2026 a 04/10/2026");
+    expect(html).toContain('data-testid="lob-location-mapping"');
+    expect(html).toContain("Drenagem externa");
+    expect(html).not.toContain('data-testid="lob-context-bar"');
+  });
+
+  it("sem mapeamento validado: não inventa degraus de 2026",()=>{
+    const html=renderizar([
+      atividade("1.1.1","Mobilização e canteiro","Serviços Gerais","2026-10-01"),
+      atividade("QA.1","Alvenaria","P01","2028-02-08"),
+      atividade("QA.2","Alvenaria","P02","2028-02-14"),
+    ]);
+    expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(2);
+    expect(html).not.toContain('role="rowheader">Serviços Gerais');
+    expect(html).toContain('data-testid="lob-location-mapping"');
+  });
+
 });
