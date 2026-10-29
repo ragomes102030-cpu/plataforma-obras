@@ -46,6 +46,8 @@ import { loadArquimedesBrainBootstrap, loadArquimedesOperationalSkills } from ".
 import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
 import { resolveLocalEapToolFallback } from "./agent/core/local-eap-tool-fallback";
 import { searchWebEvidence } from "./web-research";
+import type { ArquimedesEapProposal } from "./agent/core/types";
+import { applyEapProposalToDraft } from "./construction/eap-proposal-apply";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -238,6 +240,8 @@ export type OrchestratorDeps = {
     messages: LlmMessage[];
     tools: LlmTool[];
   }) => Promise<LlmResponse>;
+  applyLocalEapProposal?: (args: { projectId: number; userId: number; proposal: ArquimedesEapProposal }) => Promise<Awaited<ReturnType<typeof applyEapProposalToDraft>>>;
+  createLocalActivity?: (args: { projectId: number; userId: number; rawArgs: Record<string, unknown> }) => Promise<unknown>;
 };
 
 export type OrchestratorOptions = {
@@ -601,6 +605,60 @@ const LOCAL_ACTIVITY_TOOL: LlmTool = {
         source: { type: "string", maxLength: 500 },
       },
       required: ["eapRef", "name"],
+      additionalProperties: false,
+    },
+  },
+};
+
+const LOCAL_EAP_APPLY_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "aplicar_proposta_eap_local",
+    description: "Aplica alterações create/update na EAP da obra usando o banco local, mesmo sem MCP. Só pode ser chamada após uma ordem operacional explícita do engenheiro. Persiste apenas na versão de trabalho em rascunho; nunca aprova EAP nem cria baseline. Não invente área, quantidade, unidade, solução construtiva, duração ou produtividade: mantenha campos desconhecidos nulos e registre-os em missingInformation/assumptions. Não executa move/remove.",
+    parameters: {
+      type: "object",
+      properties: {
+        proposal: {
+          type: "object",
+          properties: {
+            action: { type: "string", enum: ["propose_eap"] },
+            basis: { type: "array", items: { type: "string" } },
+            assumptions: { type: "array", items: { type: "string" } },
+            missingInformation: { type: "array", items: { type: "string" } },
+            nodes: {
+              type: "array",
+              minItems: 1,
+              maxItems: 500,
+              items: {
+                type: "object",
+                properties: {
+                  operation: { type: "string", enum: ["create", "update"] },
+                  nodeId: { type: "integer", minimum: 1 },
+                  parentCode: { type: ["string", "null"] },
+                  code: { type: "string" },
+                  name: { type: "string", minLength: 2 },
+                  nodeType: { type: "string", enum: ["grupo", "pacote", "entrega"] },
+                  location: { type: ["string", "null"] },
+                  unit: { type: ["string", "null"], enum: ["m²", "m³", "ml", "un", "pt", "vb", "conj", "kg", null] },
+                  plannedQuantity: { type: ["number", "null"], minimum: 0 },
+                  description: { type: ["string", "null"] },
+                  inclusions: { type: ["string", "null"] },
+                  exclusions: { type: ["string", "null"] },
+                  responsible: { type: ["string", "null"] },
+                  acceptanceCriteria: { type: ["string", "null"] },
+                  decompositionBasis: { type: ["string", "null"], enum: ["project", "deliverable", "system", "discipline", "location", "phase", "component", "other", null] },
+                  rationale: { type: "string" },
+                },
+                required: ["operation", "parentCode", "name", "nodeType", "rationale"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["action", "basis", "assumptions", "missingInformation", "nodes"],
+          additionalProperties: false,
+        },
+      },
+      required: ["proposal"],
       additionalProperties: false,
     },
   },
@@ -1103,7 +1161,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, LOCAL_ACTIVITY_TOOL, WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_ACTIVITY_TOOL, LOCAL_EAP_APPLY_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1177,7 +1235,7 @@ function buildSystem(
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
     "Existe uma memória persistente do Arquimedes. Consulte-a quando a continuidade da análise exigir contexto anterior. Dentro da mesma rodada, não repita consultar_memoria se o resultado já respondeu à necessidade; só faça nova consulta quando houver uma lacuna materialmente diferente. Registre apenas memórias duráveis e úteis; memória não substitui evidência atual nem autoriza mutações.",
     "A validação estrutural determinística local da EAP faz parte das evidências confirmadas da obra e não depende do MCP. Quando ela estiver disponível no contexto, use seu resultado para relatar estrutura, órfãos, níveis, duplicidades e ciclos. A indisponibilidade do MCP só torna indisponíveis as verificações que realmente dependem dele.",
-    "As ferramentas de obra incluem consultas e operações de escrita controlada. Nunca altere dados na primeira análise: primeiro leia, diagnostique, apresente a alteração proposta e peça confirmação explícita ao engenheiro. Só depois de uma confirmação explícita nesta conversa execute a mutação. Após qualquer mutação, reconsulte a obra e valide o resultado. Exclusões são destrutivas e exigem confirmação explícita ainda mais clara.",
+    "Em consultas e análises, não altere dados: leia, diagnostique e apresente a recomendação. Uma ordem operacional explícita autoriza alterações reversíveis na versão de trabalho local da obra, sem pedir uma segunda confirmação; nesse caso, use a ferramenta local de rascunho, mantenha a EAP em elaboração e reconsulte os dados para validar a gravação. Aprovar EAP, criar baseline, excluir ou executar ações externas/destrutivas continua exigindo confirmação explícita separada.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
     responseIntent === "analise"
@@ -1520,7 +1578,7 @@ export async function runProjectOrchestrator(
       if (toolName === "criar_atividade_local") {
         const startedAt = Date.now();
         await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
-        if (!allowMutations || !hasExplicitMutationConfirmation(messages)) {
+        if (!allowMutations) {
           const message = "A criação da atividade ainda não foi autorizada. Aguarde uma ordem operacional explícita.";
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
@@ -1528,7 +1586,8 @@ export async function runProjectOrchestrator(
         }
         try {
           if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para criar atividade.");
-          const localResult = await createLocalAgentActivity({
+          const createActivity = deps.createLocalActivity ?? createLocalAgentActivity;
+          const localResult = await createActivity({
             projectId: options.localProjectId,
             userId: options.userId,
             rawArgs: {
@@ -1550,6 +1609,40 @@ export async function runProjectOrchestrator(
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: serialized };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "aplicar_proposta_eap_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!allowMutations) throw new Error("A aplicação de EAP local só é permitida após uma ordem operacional explícita.");
+          if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para alterar a EAP.");
+          if (!rawArgs.proposal || typeof rawArgs.proposal !== "object" || Array.isArray(rawArgs.proposal)) {
+            throw new Error("A proposta estruturada da EAP não foi enviada corretamente.");
+          }
+          const applyProposal = deps.applyLocalEapProposal ?? applyEapProposalToDraft;
+          const result = await applyProposal({
+            projectId: options.localProjectId,
+            userId: options.userId,
+            proposal: rawArgs.proposal as ArquimedesEapProposal,
+          });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return {
+            ok: true,
+            content: JSON.stringify({
+              status: result.verification.persistenceVerified ? "aplicada_e_conferida_no_banco" : "gravada_mas_conferencia_incompleta",
+              source: "local_db",
+              resultado: result,
+              limites: ["EAP não aprovada", "nenhuma baseline criada", "quantidades e premissas precisam de evidência de projeto ou validação do engenheiro"],
+            }).slice(0, MAX_TOOL_RESULT_CHARS),
+          };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });

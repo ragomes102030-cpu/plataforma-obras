@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   runProjectOrchestrator,
   toOpenAiTools,
@@ -234,8 +234,8 @@ describe("runProjectOrchestrator", () => {
       domain: "eap",
     });
     expect(llmCalls).toEqual([
-      { messages: 2, tools: 23 },
-      { messages: 4, tools: 23 },
+      { messages: 2, tools: 22 },
+      { messages: 4, tools: 22 },
     ]);
     // A evidência estruturada sai do rastro, não do texto do modelo.
     expect(result.evidence).toContainEqual({ source: "mcp_eap", toolName: "get_eap_tree" });
@@ -250,6 +250,84 @@ describe("runProjectOrchestrator", () => {
       "llm_response",
       "response_parsed",
     ]);
+  });
+
+  it("aplica a EAP no banco local após uma ordem de preenchimento, sem MCP", async () => {
+    const proposal = {
+      action: "propose_eap",
+      basis: ["escopo declarado"],
+      assumptions: [],
+      missingInformation: ["quantitativos dependem dos projetos executivos"],
+      nodes: [{ operation: "create", parentCode: "1", name: "Estrutura", nodeType: "grupo", rationale: "Organiza o escopo estrutural." }],
+    } as const;
+    const applyLocalEapProposal = vi.fn(async () => ({
+      applied: true as const,
+      created: 1,
+      updated: 0,
+      versionId: 12,
+      versionNumber: 1,
+      baselineCreated: false as const,
+      approved: false as const,
+      validation: { valid: true, issues: [] },
+      verification: { persistenceVerified: true, nodeCount: 2, leafCount: 1, structuralErrors: 0, structuralWarnings: 0 },
+    }));
+    let llmCallCount = 0;
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Preencha a EAP local com a estrutura suportada pelo escopo" }],
+      {
+        localProjectId: 25,
+        userId: 42,
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          applyLocalEapProposal,
+          callLlm: async ({ tools }) => {
+            llmCallCount++;
+            if (llmCallCount === 1) {
+              expect(tools.some(tool => tool.function.name === "aplicar_proposta_eap_local")).toBe(true);
+              return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "local-eap-1", type: "function", function: { name: "aplicar_proposta_eap_local", arguments: JSON.stringify({ proposal }) } }] } }] };
+            }
+            return { choices: [{ message: { role: "assistant", content: "A EAP foi atualizada como rascunho local. A aprovação e a baseline permanecem pendentes." } }] };
+          },
+        },
+      },
+    );
+
+    expect(applyLocalEapProposal).toHaveBeenCalledWith({ projectId: 25, userId: 42, proposal });
+    expect(result.readOnly).toBe(false);
+    expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "aplicar_proposta_eap_local", status: "success" }));
+    expect(result.content).toContain("rascunho local");
+  });
+
+  it("aceita ordem direta para criar atividade local sem exigir confirmação em duas mensagens", async () => {
+    const createLocalActivity = vi.fn(async () => ({ id: 9, name: "Execução de alvenaria", versionNumber: 2 }));
+    let llmCallCount = 0;
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Crie a atividade de alvenaria para a EAP aprovada" }],
+      {
+        localProjectId: 25,
+        userId: 42,
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          createLocalActivity,
+          callLlm: async () => {
+            llmCallCount++;
+            if (llmCallCount === 1) {
+              return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "activity-1", type: "function", function: { name: "criar_atividade_local", arguments: JSON.stringify({ eapRef: "1.1", name: "Execução de alvenaria", durationDays: 5 }) } }] } }] };
+            }
+            return { choices: [{ message: { role: "assistant", content: "Atividade registrada na versão de trabalho." } }] };
+          },
+        },
+      },
+    );
+
+    expect(createLocalActivity).toHaveBeenCalledWith({
+      projectId: 25,
+      userId: 42,
+      rawArgs: { eap_ref: "1.1", name: "Execução de alvenaria", durationDays: 5, plannedQuantity: undefined, unit: undefined, productivity: undefined, productivityUnit: undefined, source: undefined },
+    });
+    expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "criar_atividade_local", status: "success" }));
   });
 
   it("recusa uma resposta final sem conteúdo textual", async () => {
@@ -377,6 +455,19 @@ describe("runProjectOrchestrator", () => {
     }, true);
     expect(tools.map(tool => tool.function.name)).toContain("get_eap_tree");
     expect(tools.map(tool => tool.function.name)).toContain("criar_eap_node");
+  });
+
+  it("oferece ferramenta de proposta da EAP local somente em operação explícita", () => {
+    const readOnly = toOpenAiTools({ eap: [], cronograma: [], ganttLob: [] });
+    const operational = toOpenAiTools({ eap: [], cronograma: [], ganttLob: [] }, true);
+
+    expect(readOnly.map(tool => tool.function.name)).not.toContain("aplicar_proposta_eap_local");
+    const localEapTool = operational.find(tool => tool.function.name === "aplicar_proposta_eap_local");
+    expect(localEapTool).toBeDefined();
+    expect(localEapTool?.function.parameters).toMatchObject({
+      type: "object",
+      required: ["proposal"],
+    });
   });
 
   it("expõe o contrato completo da EAP publicado pelo MCP", () => {

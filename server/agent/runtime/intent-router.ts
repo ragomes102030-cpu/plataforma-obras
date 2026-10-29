@@ -8,7 +8,7 @@ const CASUAL_PATTERNS = [
 ];
 
 const OPERATION_PATTERNS = [
-  /\b(crie|criar|adicione|adicionar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|gere|gerar)\b/i,
+  /\b(crie|criar|adicione|adicionar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|gere|gerar|preencha|preencher|preencham|complete|completar|completem|construa|construir|vincule|vincular|planeje|planejar)\b/i,
 ];
 
 const ANALYSIS_PATTERNS = [
