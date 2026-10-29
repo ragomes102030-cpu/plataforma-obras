@@ -6494,6 +6494,9 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .scopo-trace-grid {
   display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;
 }
+/* O escopo declarado é um cartão único; ocupa a grade toda em vez de deixar
+   metade da área vazia ao lado de uma descrição longa. */
+.scopo-trace-grid > .scopo-detail:only-child { grid-column:1 / -1; }
 .scopo-detail {
   border:1px solid #d0dbe5; background:#fff;
 }
