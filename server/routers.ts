@@ -69,7 +69,12 @@ import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-his
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateEapScope, validateWbsCostCoverage, validateAndNormalizeEapProposal, eapNodeCanHaveChildren } from "./construction/eap-validator";
+import { validateEap, validateWbsCostCoverage, validateAndNormalizeEapProposal, eapNodeCanHaveChildren } from "./construction/eap-validator";
+import {
+  normalizeEapDictionaryFields,
+  validateEapForApproval,
+  validateEapForBaseline,
+} from "./construction/eap-approval-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
@@ -923,7 +928,7 @@ async function loadStageGateEvidence(
     currentVersionId == null
       ? and(eq(scheduleDependencies.projectId, projectId), isNull(scheduleDependencies.versionId))
       : and(eq(scheduleDependencies.projectId, projectId), eq(scheduleDependencies.versionId, currentVersionId));
-  const [project, eapNodes, activities, dependencies, blockerCount, activeBudgetVersion] =
+  const [project, eapNodes, activities, dependencies, blockerCount, activeBudgetVersion, dictionaryDecision] =
     await Promise.all([
       db
         .select({ name: projects.name, location: projects.location })
@@ -946,30 +951,23 @@ async function loadStageGateEvidence(
         .where(eq(budgetVersions.projectId, projectId))
         .orderBy(desc(budgetVersions.versionNumber))
         .limit(1),
+      db
+        .select({ decision: agentDecisions.decision, scopeJson: agentDecisions.scopeJson })
+        .from(agentDecisions)
+        .where(and(eq(agentDecisions.projectId, projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
+        .orderBy(desc(agentDecisions.createdAt))
+        .limit(1),
     ]);
   const eapValidation = validateEap(eapNodes);
-  const dictionaryValidation = validateEapScope(eapNodes, {
-    requireDictionaryForLeaves: true,
-    requiredDictionaryFields: [
-      "description",
-      "inclusions",
-      "exclusions",
-      "acceptanceCriteria",
-      "responsible",
-      "location",
-      "decompositionBasis",
-    ],
+  const dictionarySettings = dictionaryDecision[0]
+    ? (parseJsonValue(dictionaryDecision[0].scopeJson) as { requiredFields?: unknown } | null)
+    : null;
+  const dictionaryApproved = Boolean(dictionaryDecision[0] && dictionaryDecision[0].decision !== "rejected");
+  const eapApprovalValidation = validateEapForApproval(eapNodes, dictionarySettings?.requiredFields);
+  const eapBaselineValidation = validateEapForBaseline(eapNodes, {
+    requiredDictionaryFields: normalizeEapDictionaryFields(dictionarySettings?.requiredFields),
   });
-  const dictionaryBlockingIssues = new Set([
-    "eap_leaf_not_ready",
-    "eap_decomposition_basis_missing",
-    "eap_scope_coverage_not_evidenced",
-    "eap_child_scope_not_evidenced",
-  ]);
-  const eapDictionaryCompliant =
-    eapNodes.length > 0 &&
-    eapValidation.valid &&
-    !dictionaryValidation.issues.some(issue => issue.severity === "error" || dictionaryBlockingIssues.has(issue.code));
+  const eapDictionaryCompliant = dictionaryApproved && eapBaselineValidation.readyForBaseline;
   const cpm = calculateDeterministicCpm(activities, dependencies);
   const evidenceBudgetItems = activeBudgetVersion[0]
     ? await db
@@ -1034,8 +1032,9 @@ async function loadStageGateEvidence(
     cpmValid: cpm.valid && !cpm.infeasible,
     blockerCount,
     costCoverageValid: costCoverage.valid,
-    eapDictionaryStandardApproved: false,
+    eapDictionaryStandardApproved: dictionaryApproved,
     eapDictionaryCompliant,
+    eapApprovalReady: dictionaryApproved && eapApprovalValidation.valid,
     activitiesPlanned: activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
     activitiesWithoutQuantity: activities.filter(activity => activity.plannedQuantity == null).length,
     planningEvidence: { summary: evidenceSummary, activities: planningEvidence },
@@ -4819,7 +4818,7 @@ export const appRouter = router({
 
         // Mesmas condições que a tela da EAP exige, checadas no servidor.
         const [padrao] = await db
-          .select({ decision: agentDecisions.decision })
+          .select({ decision: agentDecisions.decision, scopeJson: agentDecisions.scopeJson })
           .from(agentDecisions)
           .where(and(eq(agentDecisions.projectId, input.projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
           .orderBy(desc(agentDecisions.createdAt))
@@ -4835,10 +4834,13 @@ export const appRouter = router({
           .from(wbsNodes)
           .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, versao.id)))
           .orderBy(wbsNodes.sortOrder, wbsNodes.id);
-        const bloqueios = validateEap(nos).issues.filter(issue => issue.severity === "error");
+        const dicionario = parseJsonValue(padrao.scopeJson) as { requiredFields?: unknown } | null;
+        const bloqueios = validateEapForApproval(nos, dicionario?.requiredFields).issues.filter(
+          issue => issue.severity === "error" || issue.code === "eap_leaf_not_ready"
+        );
         if (bloqueios.length > 0) {
           throw badRequest(
-            `A EAP ainda tem ${bloqueios.length} bloqueio(s) e não pode ser aprovada: ${bloqueios[0].message}`
+            `A EAP ainda tem ${bloqueios.length} bloqueio(s) e não pode ser aprovada: ${bloqueios.map(issue => issue.message).join(" ")}`
           );
         }
 
@@ -4921,6 +4923,39 @@ export const appRouter = router({
           throw badRequest(
             `A versão de trabalho v${currentVersion.versionNumber} está em "${frozenVersion?.status ?? "desconhecido"}". ` +
               `Só uma versão aprovada pode virar baseline — aprove a EAP primeiro.`
+          );
+        }
+        const [padraoDicionario] = await db
+          .select({ decision: agentDecisions.decision, scopeJson: agentDecisions.scopeJson })
+          .from(agentDecisions)
+          .where(and(eq(agentDecisions.projectId, input.projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
+          .orderBy(desc(agentDecisions.createdAt))
+          .limit(1);
+        if (!padraoDicionario || padraoDicionario.decision === "rejected") {
+          throw badRequest("Aprove o padrão do dicionário de escopo antes de capturar a baseline.");
+        }
+        const dicionarioBaseline = parseJsonValue(padraoDicionario.scopeJson) as { requiredFields?: unknown } | null;
+        const eapNodes = await db
+          .select()
+          .from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id)))
+          .orderBy(wbsNodes.sortOrder, wbsNodes.id);
+        const readiness = validateEapForBaseline(eapNodes, {
+          requiredDictionaryFields: normalizeEapDictionaryFields(dicionarioBaseline?.requiredFields),
+        });
+        if (!readiness.readyForBaseline) {
+          const blockers = readiness.issues.filter(issue =>
+            issue.severity === "error" || [
+              "eap_leaf_not_ready",
+              "eap_scope_coverage_not_evidenced",
+              "eap_child_scope_not_evidenced",
+              "eap_scope_overlap_evidence",
+              "eap_mixed_decomposition_basis",
+              "eap_group_without_decomposition",
+            ].includes(issue.code)
+          );
+          throw badRequest(
+            `EAP não está pronta para a baseline: ${blockers.map(issue => issue.message).join(" ")}`
           );
         }
         // A vigência do CPM acima é medida por atividade. Dependência não entra

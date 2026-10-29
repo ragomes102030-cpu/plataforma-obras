@@ -13,6 +13,8 @@ export type StageGateEvidence = {
   eapDictionaryStandardApproved: boolean;
   /** A EAP deve cumprir os campos obrigatórios do padrão aprovado. */
   eapDictionaryCompliant: boolean;
+  /** A EAP pode ser formalmente aprovada para iniciar o detalhamento do cronograma. */
+  eapApprovalReady: boolean;
   /**
    * Atividades na grade. Diz que a folha foi puxada da EAP, e nada mais.
    */
@@ -122,10 +124,11 @@ function checksForTarget(
           label: "A EAP está válida para receber atividades",
           valid: evidence.eapNodeCount > 0 && evidence.eapValid,
         },
-        // Cobertura do dicionário é evidência de qualidade da EAP, não um
-        // bloqueio estrutural para começar a planejar atividades. Campos como
-        // responsável/local podem ainda ser preenchidos durante o detalhamento.
-        // O gate continua exigindo EAP existente e estruturalmente válida.
+        {
+          code: "eap_approval_ready",
+          label: "O padrão do dicionário está aprovado e as folhas obrigatórias estão completas",
+          valid: evidence.eapApprovalReady,
+        },
       ];
     case "DEPENDENCIAS_PROPOSTA":
       return [

@@ -7,6 +7,7 @@ const validEvidence: StageGateEvidence = {
   eapValid: true,
   eapDictionaryStandardApproved: true,
   eapDictionaryCompliant: true,
+  eapApprovalReady: true,
   activityCount: 6,
   activitiesPlanned: 6,
   activitiesWithoutQuantity: 0,
@@ -31,7 +32,7 @@ describe("stage gates", () => {
   });
 
 
-  it("permite iniciar atividades quando a EAP é válida mesmo com cobertura do dicionário pendente", () => {
+  it("bloqueia aprovação da EAP quando o padrão ou os campos obrigatórios estão pendentes", () => {
     const result = evaluateStageTransition({
       currentStage: "EAP_REVISAO",
       targetStage: "ATIVIDADES_PROPOSTA",
@@ -40,13 +41,13 @@ describe("stage gates", () => {
         ...validEvidence,
         eapDictionaryStandardApproved: false,
         eapDictionaryCompliant: false,
+        eapApprovalReady: false,
       },
     });
 
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
     expect(result.checks.some(check => check.code === "eap_valid" && check.valid)).toBe(true);
-    expect(result.checks.some(check => check.code === "eap_dictionary_standard_approved")).toBe(false);
-    expect(result.checks.some(check => check.code === "eap_dictionary_compliant")).toBe(false);
+    expect(result.checks.some(check => check.code === "eap_approval_ready" && !check.valid)).toBe(true);
   });
 
   it("impede saltar diretamente para uma etapa posterior", () => {
