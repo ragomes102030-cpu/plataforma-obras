@@ -214,19 +214,26 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
 ]);
 
 export function createConstructionMcpClients() {
+  const client = (url: string, name: string) => {
+    if (url) {
+      return new McpClient(url, {
+        name,
+        timeoutMs: ENV.mcpTimeoutMs,
+      });
+    }
+
+    // Um domínio sem URL fica indisponível por conta própria; ele não deve
+    // impedir que os demais MCPs nem o motor local do Arquimedes funcionem.
+    const unavailable = async (): Promise<never> => {
+      throw new Error("URL do MCP não configurada");
+    };
+    return { listTools: unavailable, callTool: unavailable };
+  };
+
   return {
-    eap: new McpClient(ENV.mcpEapUrl, {
-      name: "plataforma-obras-eap",
-      timeoutMs: ENV.mcpTimeoutMs,
-    }),
-    cronograma: new McpClient(ENV.mcpCronogramaUrl, {
-      name: "plataforma-obras-cronograma",
-      timeoutMs: ENV.mcpTimeoutMs,
-    }),
-    ganttLob: new McpClient(ENV.mcpGanttLobUrl, {
-      name: "plataforma-obras-gantt-lob",
-      timeoutMs: ENV.mcpTimeoutMs,
-    }),
+    eap: client(ENV.mcpEapUrl, "plataforma-obras-eap"),
+    cronograma: client(ENV.mcpCronogramaUrl, "plataforma-obras-cronograma"),
+    ganttLob: client(ENV.mcpGanttLobUrl, "plataforma-obras-gantt-lob"),
   };
 }
 
