@@ -1282,6 +1282,21 @@ export async function runProjectOrchestrator(
   // captura de baseline continuam sujeitas a confirmação adicional no fluxo.
   const allowMutations = intent === "operacao";
   const allTools = toOpenAiTools(catalog, allowMutations);
+  const unavailableExternalDomains = Object.keys(catalog.errors ?? {});
+  const externalAvailabilityContext = unavailableExternalDomains.length
+    ? [
+        "FONTES EXTERNAS OPCIONAIS INDISPONÍVEIS NESTA EXECUÇÃO:",
+        ...unavailableExternalDomains.map(domain => {
+          const labels: Record<string, string> = {
+            eap: "consulta externa da EAP",
+            cronograma: "consulta externa de atividades e cronograma",
+            ganttLob: "consulta externa de Gantt e Linha de Balanço",
+          };
+          return `- ${labels[domain] ?? "consulta externa"}`;
+        }),
+        "Continue com o contexto da obra, dados locais e ferramentas internas disponíveis. Não alegue que consultou ou validou uma fonte externa indisponível. Se a resposta depender de dado ausente no registro local, explique a limitação e indique ao engenheiro o próximo dado ou conferência manual necessária. Não exponha URLs, variáveis de ambiente nem erros técnicos, salvo se perguntarem sobre a configuração do sistema.",
+      ].join("\n")
+    : "";
   const analysisToolAllowlist = new Set([
     "get_eap_tree",
     "get_eap_node",
@@ -1354,7 +1369,8 @@ export async function runProjectOrchestrator(
       role: "system",
       content: compactLlmContent(
         buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap, operationalSkills) +
-        (plannedAction ? `\n\n${plannedAction}` : "")
+        (plannedAction ? `\n\n${plannedAction}` : "") +
+        (externalAvailabilityContext ? `\n\n${externalAvailabilityContext}` : "")
       ),
     },
     ...messages.map(message => ({

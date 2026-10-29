@@ -302,7 +302,12 @@ describe("runProjectOrchestrator", () => {
       [{ role: "user", content: "Qual é a situação local?" }],
       {
         deps: {
-          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          listTools: async () => ({
+            eap: [],
+            cronograma: [],
+            ganttLob: [],
+            errors: { cronograma: "URL do MCP não configurada" },
+          }),
           callLlm: async ({ messages }) => {
             systemMessage = String(messages[0]?.content);
             return {
@@ -323,6 +328,13 @@ describe("runProjectOrchestrator", () => {
 
     expect(result.status).toBe("respondido");
     expect(systemMessage).toContain("Fonte de evidências: local_db");
+    expect(systemMessage).toContain(
+      "FONTES EXTERNAS OPCIONAIS INDISPONÍVEIS NESTA EXECUÇÃO"
+    );
+    expect(systemMessage).toContain(
+      "consulta externa de atividades e cronograma"
+    );
+    expect(systemMessage).not.toContain("URL do MCP não configurada");
     expect(systemMessage).toContain("Nós EAP locais: 4");
     expect(systemMessage).toContain("MCP Cronograma indisponível");
     expect(systemMessage).toContain("Validação determinística: blocked");

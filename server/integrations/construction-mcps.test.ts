@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { ENV } from "../_core/env";
+import { McpClient } from "./mcp-client";
 import {
   callControlledMcpTool,
   callMutationMcpTool,
   callReadOnlyMcpTool,
+  createConstructionMcpClients,
   getConstructionMcpStatus,
   MCP_TOOL_POLICY,
   resetMcpResilienceState,
@@ -17,7 +20,36 @@ import {
  * Cada um tem o caso que DEVE disparar e o caso legítimo que NÃO deve.
  */
 
-afterEach(() => resetMcpResilienceState());
+const originalMcpUrls = {
+  eap: ENV.mcpEapUrl,
+  cronograma: ENV.mcpCronogramaUrl,
+  ganttLob: ENV.mcpGanttLobUrl,
+};
+
+afterEach(() => {
+  resetMcpResilienceState();
+  ENV.mcpEapUrl = originalMcpUrls.eap;
+  ENV.mcpCronogramaUrl = originalMcpUrls.cronograma;
+  ENV.mcpGanttLobUrl = originalMcpUrls.ganttLob;
+});
+
+describe("construction-mcps — domínios opcionais", () => {
+  it("mantém domínios configurados quando outro MCP está sem URL", async () => {
+    ENV.mcpEapUrl = "https://eap.example";
+    ENV.mcpCronogramaUrl = "";
+    ENV.mcpGanttLobUrl = "";
+
+    const clients = createConstructionMcpClients();
+
+    expect(clients.eap).toBeInstanceOf(McpClient);
+    await expect(clients.cronograma.listTools()).rejects.toThrow(
+      "URL do MCP não configurada"
+    );
+    await expect(clients.ganttLob.callTool("listar_temas")).rejects.toThrow(
+      "URL do MCP não configurada"
+    );
+  });
+});
 
 describe("construction-mcps — política de ferramentas", () => {
   it("recusa ferramenta de escrita em modo somente leitura", async () => {
