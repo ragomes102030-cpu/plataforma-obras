@@ -45,6 +45,40 @@ describe("restoreAgentConversation", () => {
       content: "A proposta está pronta. Aguardo confirmação explícita.",
     });
   });
+
+  it("reconstrói snapshots sucessivos sem repetir todo o histórico anterior", () => {
+    const firstContext = JSON.stringify({
+      messages: [{ role: "user", content: "Diagnostique a EAP." }],
+    });
+    const secondContext = JSON.stringify({
+      messages: [
+        { role: "user", content: "Diagnostique a EAP." },
+        { role: "assistant", content: "Há 17 nós e 14 folhas." },
+        { role: "user", content: "Agora preencha o rascunho." },
+      ],
+    });
+    const result = mergeAgentConversations([
+      {
+        requestId: "run-2",
+        status: "respondido",
+        contextJson: secondContext,
+        resultJson: JSON.stringify({ content: "Vou propor alterações." }),
+      },
+      {
+        requestId: "run-1",
+        status: "respondido",
+        contextJson: firstContext,
+        resultJson: JSON.stringify({ content: "Há 17 nós e 14 folhas." }),
+      },
+    ]);
+
+    expect(result).toEqual([
+      { role: "user", content: "Diagnostique a EAP." },
+      { role: "assistant", content: "Há 17 nós e 14 folhas." },
+      { role: "user", content: "Agora preencha o rascunho." },
+      { role: "assistant", content: "Vou propor alterações." },
+    ]);
+  });
 });
 
 

@@ -81,13 +81,14 @@ export function mergeAgentConversations(
   const messages: PersistedAgentMessage[] = [];
   for (const run of [...runs].reverse()) {
     const restored = restoreAgentConversation(run.contextJson, run.resultJson, run.status);
-    for (const message of restored) {
-      const previous = messages[messages.length - 1];
-      if (previous?.role === message.role && previous.content === message.content) continue;
-      messages.push(message);
-    }
+    // `contextJson.messages` é um snapshot da conversa até o envio, não um
+    // delta. Mesclar mensagem por mensagem duplica todo o histórico em cada
+    // execução e faz instruções antigas dominarem os próximos pedidos.
+    // Sobreponha o sufixo já reconstruído ao prefixo do snapshot seguinte.
+    const merged = mergePersistedWithIncoming(messages, restored, 20);
+    messages.splice(0, messages.length, ...merged);
   }
-  return compactHistory(messages, 20);
+  return messages;
 }
 
 export function mergePersistedWithIncoming(
