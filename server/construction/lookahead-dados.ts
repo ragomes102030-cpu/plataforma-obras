@@ -98,9 +98,13 @@ export async function coletarDadosLookahead(
       durationDays: scheduleActivities.durationDays,
       earlyStart: scheduleActivities.earlyStart,
       startOffset: scheduleActivities.startOffset,
+      exemplo: scheduleActivities.exemplo,
     })
     .from(scheduleActivities)
     .where(and(eq(scheduleActivities.projectId, projectId), versionScope));
+  const idsDeAtividadesOperacionais = new Set(
+    linhasDeAtividade.filter(linha => Number(linha.exemplo ?? 0) !== 1).map(linha => linha.id),
+  );
 
   const asOf = isoToLocalDate(hojeIso);
   const entries = await db
@@ -120,7 +124,7 @@ export async function coletarDadosLookahead(
 
   const executadoPorAtividade = new Map<number, number>();
   for (const entry of entries) {
-    if (entry.activityId == null) continue;
+    if (entry.activityId == null || !idsDeAtividadesOperacionais.has(entry.activityId)) continue;
     executadoPorAtividade.set(
       entry.activityId,
       (executadoPorAtividade.get(entry.activityId) ?? 0) + Number(entry.quantity)
@@ -149,6 +153,7 @@ export async function coletarDadosLookahead(
 
   const abertasPorAtividade = new Map<number, number>();
   for (const restricao of restricoes) {
+    if (!idsDeAtividadesOperacionais.has(restricao.activityId)) continue;
     abertasPorAtividade.set(
       restricao.activityId,
       (abertasPorAtividade.get(restricao.activityId) ?? 0) + 1
@@ -158,6 +163,7 @@ export async function coletarDadosLookahead(
   let atividadesSemData = 0;
   const atividades: LookaheadActivity[] = [];
   for (const linha of linhasDeAtividade) {
+    if (!idsDeAtividadesOperacionais.has(linha.id)) continue;
     const duracao = Math.max(1, linha.durationDays ?? 1);
     const offset = linha.earlyStart ?? linha.startOffset ?? 0;
     if (!Number.isFinite(offset) || offset < 0) {
@@ -202,7 +208,9 @@ export async function coletarDadosLookahead(
       )
     );
 
-  const compromissosTipados: LookaheadCommitment[] = compromissos.map(compromisso => ({
+  const compromissosTipados: LookaheadCommitment[] = compromissos
+    .filter(compromisso => idsDeAtividadesOperacionais.has(compromisso.activityId))
+    .map(compromisso => ({
     id: compromisso.id,
     activityId: compromisso.activityId,
     weekStartIso: isoUtc(compromisso.weekStart),
@@ -213,7 +221,7 @@ export async function coletarDadosLookahead(
     executedQuantity:
       compromisso.executedQuantity === null ? null : Number(compromisso.executedQuantity),
     responsible: compromisso.responsible,
-  }));
+    }));
 
   return {
     input: {

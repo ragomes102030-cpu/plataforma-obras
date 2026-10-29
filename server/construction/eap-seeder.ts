@@ -2,7 +2,7 @@
  * Geração da EAP canônica a partir do escopo/template da obra.
  *
  * Regra arquitetural:
- *   escopo → EAP → dicionário/pacotes → quantitativos → orçamento → cronograma
+ *   escopo → EAP versionada e revisável → planejamento integrado de custos e cronograma
  *
  * Catálogos (SEINFRA/SINAPI) NÃO definem a árvore. Eles entram posteriormente
  * como fonte de preços, serviços, composições e apoio ao orçamento.
@@ -76,10 +76,10 @@ export async function semearEapDoCatalogo(
       name: projeto?.name?.trim() || "Escopo da obra",
       nodeType: "grupo",
       decompositionBasis: "project",
-      description: projeto?.descricao?.trim() || "Escopo consolidado da obra. Revisar e complementar com documentos e requisitos do projeto.",
-      inclusions: "Todo o escopo contratado e necessário para entregar a obra.",
-      exclusions: "Trabalhos explicitamente fora do escopo contratado.",
-      acceptanceCriteria: "Escopo da obra identificado, delimitado e aprovado antes da baseline.",
+      description: projeto?.descricao?.trim() || "Descrição de referência pendente de confirmação.",
+      inclusions: "",
+      exclusions: "",
+      acceptanceCriteria: "",
     },
     0
   );
@@ -88,13 +88,13 @@ export async function semearEapDoCatalogo(
   let ordem = 0;
 
   for (let i = 0; i < template.length; i++) {
-    const grupo = template[i]!;
+    const grupo = comCamposDeDicionarioPendentes(template[i]!);
     const codigoGrupo = "1." + (i + 1);
     const grupoId = await inserirNo(db, projectId, opcoes.versionId, raiz, codigoGrupo, grupo, ordem++);
     total += 1;
 
     for (let j = 0; j < (grupo.children ?? []).length; j++) {
-      const child = grupo.children![j]!;
+      const child = comCamposDeDicionarioPendentes(grupo.children![j]!);
       const codigo = codigoGrupo + "." + (j + 1);
       await inserirNo(db, projectId, opcoes.versionId, grupoId, codigo, child, ordem++);
       total += 1;
@@ -111,6 +111,16 @@ export async function semearEapDoCatalogo(
     itensDeOrcamentoCriados: 0,
     atividadesCriadas: 0,
     template: tipo,
+  };
+}
+
+function comCamposDeDicionarioPendentes(node: TemplateEapNode): TemplateEapNode {
+  return {
+    ...node,
+    description: `Sugestão de estrutura-base para revisão: ${node.name}. Confirme este item com o escopo e os documentos da obra.`,
+    inclusions: "",
+    exclusions: "",
+    acceptanceCriteria: "",
   };
 }
 

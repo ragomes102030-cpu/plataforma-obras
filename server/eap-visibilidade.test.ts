@@ -17,6 +17,13 @@ const catalogView = readFileSync(
   "utf-8"
 );
 
+function corpoDeGeracaoDaEap(): string {
+  const inicio = router.indexOf("generateEapFromCatalog: protectedProcedure");
+  expect(inicio, "generateEapFromCatalog não existe").toBeGreaterThan(-1);
+  const fim = router.indexOf("\n  }),\n  production:", inicio);
+  return router.slice(inicio, fim === -1 ? inicio + 5000 : fim);
+}
+
 function corpoDoCreate(): string {
   const inicio = router.indexOf("\n    create: protectedProcedure");
   expect(inicio, "projects.create não existe").toBeGreaterThan(-1);
@@ -41,6 +48,13 @@ describe("nova obra começa sem EAP genérica", () => {
 });
 
 describe("a EAP vazia prioriza a estrutura-base revisável", () => {
+  it("distingue falha da consulta de uma EAP vazia e permite tentar novamente", () => {
+    expect(abaEap).toMatch(/wbs\.isError/);
+    expect(abaEap).toMatch(/Não foi possível carregar a EAP/);
+    expect(abaEap).toMatch(/Tentar novamente/);
+    expect(abaEap).toMatch(/wbs\.refetch\(\)/);
+  });
+
   it("oferece a estrutura-base antes do template genérico", () => {
     expect(abaEap).toMatch(/analisarEapComArquimedes/);
     expect(abaEap).toMatch(/Gerar estrutura-base \(modelo\)/);
@@ -80,6 +94,15 @@ describe("a ausência de base é visível e diz o caminho", () => {
     expect(abaEap).toMatch(/generateEapFromCatalog/);
   });
 
+  it("fallback gera somente a EAP na versão de trabalho e respeita o tipo informado", () => {
+    const corpo = corpoDeGeracaoDaEap();
+    expect(corpo).toContain("ensureWritablePlanVersion");
+    expect(corpo).toContain("semearEapDoCatalogo");
+    expect(corpo).toContain("input.tipoDeObra");
+    expect(corpo).toMatch(/versionId\s*:\s*writable\.id/);
+    expect(corpo).not.toContain("seedStarterPlan");
+  });
+
   it("o Catálogo é alcançável pela navegação da obra", () => {
     // Onde o caminho é oferecido precisa existir. A tela já apontou
     // `setActiveNav("Catálogo")` (despacho de módulo) e depois
@@ -100,6 +123,16 @@ describe("o Catálogo se explica em termos do que destrava", () => {
     // Dizia "Importação CSV/XLSX entra na próxima evolução" ao lado de um
     // formulário de upload já funcional: a tela se contradizia.
     expect(catalogView).not.toMatch(/entra na próxima evolução/i);
+  });
+});
+
+describe("criação de atividades a partir da EAP", () => {
+  it("exige EAP aprovada e estimativa válida antes da mutação", () => {
+    expect(abaEap).toContain('versaoEmUso?.status === "approved"');
+    expect(abaEap).toContain("prepararEntradaDuracaoAtividade");
+    expect(abaEap).toContain("!entradaDuracaoAtividade.valid");
+    expect(abaEap).toContain("Após aprovação da EAP");
+    expect(abaEap).toContain("quantidade e produtividade");
   });
 });
 

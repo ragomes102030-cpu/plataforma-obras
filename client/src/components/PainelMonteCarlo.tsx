@@ -89,7 +89,7 @@ export function PainelMonteCarlo({ projetoId, activities, dependencies }: Props)
           </strong>
           <span>
             O CPM responde um prazo. Isto responde a chance de cumprir a data: distribuição de
-            duração, P50/P80 e as atividades que mais empurram o término.
+            duração conforme as premissas informadas, P50/P80 e as atividades que mais empurram o término.
           </span>
         </div>
         <button
@@ -132,7 +132,7 @@ export function PainelMonteCarlo({ projetoId, activities, dependencies }: Props)
             <div>
               <span>Determinístico</span>
               <strong>{dias(resultado.deterministicDuration)}</strong>
-              <small>se tudo sair como planejado (P50 aproximado)</small>
+              <small>prazo usando as durações mais prováveis</small>
             </div>
             <div>
               <span>P50</span>
@@ -142,7 +142,7 @@ export function PainelMonteCarlo({ projetoId, activities, dependencies }: Props)
             <div>
               <span>P80</span>
               <strong>{dias(resultado.p80)}</strong>
-              <small>data defensável para prometer ao cliente</small>
+              <small>80% das simulações terminam até aqui; confira as premissas</small>
             </div>
             <div>
               <span>P90</span>

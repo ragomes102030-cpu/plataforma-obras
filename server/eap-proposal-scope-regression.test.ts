@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 
 describe("proposta inicial de EAP sensível ao escopo", () => {
-  it("decompõe uma edificação residencial complexa em frentes macro", () => {
+  it("mantém sistemas construtivos declarados sem presumir contenções ou áreas externas", () => {
     const proposal = buildInitialEapProposal(
       {
         name: "Residencial Multifamiliar 6 Pavimentos",
@@ -13,7 +13,7 @@ describe("proposta inicial de EAP sensível ao escopo", () => {
       false
     );
 
-    expect(proposal.nodes).toHaveLength(9);
+    expect(proposal.nodes).toHaveLength(8);
     expect(proposal.nodes[0]).toMatchObject({
       code: "1",
       nodeType: "grupo",
@@ -21,21 +21,44 @@ describe("proposta inicial de EAP sensível ao escopo", () => {
     });
 
     const phases = proposal.nodes.slice(1);
-    expect(phases).toHaveLength(8);
+    expect(phases).toHaveLength(7);
     expect(phases.every((node) => node.parentCode === "1")).toBe(true);
     expect(phases.every((node) => node.nodeType === "pacote")).toBe(true);
 
     const names = phases.map((node) => node.name);
     expect(names).toEqual(
       expect.arrayContaining([
-        "Fundações e contenções",
+        "Infraestrutura e fundações",
         "Estrutura de concreto",
-        "Vedações e alvenarias",
-        "Instalações prediais",
-        "Revestimentos e acabamentos",
+        "Vedações em alvenaria",
+        "Instalações prediais (sistemas a confirmar)",
+        "Acabamentos e componentes internos (escopo a confirmar)",
         "Comissionamento, documentação e entrega",
       ])
     );
+    expect(names).not.toContain("Fundações e contenções");
+    expect(names).not.toContain("Áreas externas e urbanização");
+  });
+
+  it("deixa sistemas e serviços externos em aberto quando o escopo não os define", () => {
+    const proposal = buildInitialEapProposal(
+      {
+        name: "PROJETO ESCOLA ARQUIMEDES",
+        descricao: "Obra didática: edifício residencial, térreo e três pavimentos, 12 apartamentos, sem subsolo. Lote, projetos e sistemas construtivos não definidos.",
+        tipoDeObra: "Edificação / construção nova",
+      },
+      false
+    );
+
+    const names = proposal.nodes.map(node => node.name);
+    expect(names).toContain("Estrutura resistente (sistema a definir)");
+    expect(names).toContain("Vedações e envoltória (sistema a definir)");
+    expect(names).not.toContain("Estrutura de concreto");
+    expect(names).not.toContain("Vedações em alvenaria");
+    expect(names).not.toContain("Fundações e contenções");
+    expect(names).not.toContain("Áreas externas e urbanização");
+    expect(proposal.assumptions.join(" ")).toContain("não presume sistemas construtivos");
+    expect(proposal.missingInformation.join(" ")).toContain("lote e sondagem");
   });
 
   it("usa uma decomposição macro conservadora quando o escopo não identifica uma edificação", () => {

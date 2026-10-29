@@ -18,6 +18,12 @@ describe("Regressão Gantt — Crítico e ligações",()=>{
    expect(view).toContain("height={Math.max(1, filtradas.length * alturaLinha)}");
    expect(view).toContain('data-testid="gantt-dependency-path"');
  });
+ it("mantém atividades de exemplo fora da visão operacional do Gantt",()=>{
+   expect(view).toContain("selectOperationalScheduleRows(linhas, codigosDeExemploOperacionais)");
+   expect(view).toContain("<Gantt linhas={linhasGantt}");
+   expect(view).toContain("dependencias={dependenciasGantt}");
+   expect(view).toContain("atividades de exemplo ficam fora do Gantt, dos indicadores e do CPM");
+ });
  it("camada de ligações supera fundos das linhas, sem alterar barra ou EAP",()=>{
    expect(css).toContain(".pg-corpo > .pg-setas:not(.pg-avancos){z-index:4");
    expect(css).toContain(".pg-linha {");

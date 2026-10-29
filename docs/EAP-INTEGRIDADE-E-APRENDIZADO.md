@@ -17,7 +17,7 @@ Documento obrigatório antes de avançar da EAP para Atividades. Registra os inc
 7. Aplicação/seleção da versão aprovada
 8. Revalidação da mesma versão
 9. Só então liberar Atividades
-10. Depois: duração/quantitativos/produtividade → dependências → CPM → calendário/baseline → Gantt/LOB.
+10. Depois: planejamento detalhado integrado — atividades e durações fundamentadas, quantitativos/produtividade quando aplicáveis, orçamento, dependências e CPM; revisão do cronograma → baseline de prazo → Gantt/LOB.
 
 Não criar atividades antes de existir uma EAP aprovada e revalidada.
 

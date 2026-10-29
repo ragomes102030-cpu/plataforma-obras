@@ -14,9 +14,36 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
     expect(home).toContain("trpc.projects.updateScope.useMutation");
     expect(home).toContain('const irParaEap = () => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "eap" } }))');
     expect(home).toContain('className="ct-escopo-etapa"');
-    expect(home).toContain("escopoFormal");
+    expect(home).toContain("dadosMinimosEscopo");
     expect(home).toContain("versaoAprovada");
     expect(home).not.toMatch(/unidades\.toLocaleString/);
+  });
+  it("separa dados de entrada do escopo da rastreabilidade posterior do cronograma",()=>{
+    expect(home).toContain("Conferência do objeto para estruturar a EAP");
+    expect(home).toContain("Conexão do escopo ao custo e ao cronograma");
+    expect(home).toContain("não são pré-requisitos para declarar o escopo inicial");
+    expect(home).not.toContain("Critérios para aprovação do escopo");
+    expect(home).not.toContain("Escopo formal declarado");
+    expect(home).not.toContain("Objeto contratado");
+    expect(home).not.toContain("descrição contratual orienta");
+  });
+  it("não condiciona quantitativos e orçamento à criação prévia de atividades",()=>{
+    expect(home).not.toContain("Sem atividade não há quantidade");
+    expect(home).not.toContain("sem quantidade a cadeia escopo → EAP → orçamento não fecha");
+    expect(home).toContain("Quantidades podem ser levantadas por pacote da EAP antes das atividades do cronograma");
+  });
+  it("apresenta custos e cronograma como ramos integrados antes da baseline",()=>{
+    expect(home).toContain("Planejamento integrado");
+    expect(home).toContain("Quantitativos e orçamento + atividades e dependências");
+    expect(home).toContain("Revisão e baseline");
+    expect(home).not.toContain("EAP</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades");
+  });
+  it("não rotula dados derivados do cronograma como dimensões completas do escopo",()=>{
+    expect(home).toContain("Dados do escopo e do planejamento");
+    expect(home).toContain("ITENS COM DADOS");
+    expect(home).toContain("não representa completude do escopo");
+    expect(home).not.toContain("dimensões do escopo");
+    expect(home).not.toContain("? \"COMPLETA\"");
   });
   it("EAP separa modo inspeção de edição manual",()=>{
     expect(eap).toContain("const [selecionadoId, setSelecionadoId]");
@@ -36,6 +63,15 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
       "trpc.agent.recordDecision.useMutation"
     ]) expect(eap).toContain(term);
     expect(eap).toContain('CustomEvent("abrir-arquimedes")');
+  });
+  it("não confunde aprovação da EAP com baseline de cronograma",()=>{
+    expect(eap).toContain("Aprovar a versão da EAP; depois, estruturar atividades. A baseline do cronograma vem após o CPM, na aba Baseline.");
+    expect(eap).not.toContain("aprovar e criar baseline");
+  });
+  it("não cria inclusões e exclusões contratuais genéricas na raiz manual",()=>{
+    expect(eap).toContain("Nó-raiz da EAP. Defina objetivo e fronteiras do escopo antes de detalhar os entregáveis.");
+    expect(eap).not.toContain("Todo o trabalho necessário para entregar a obra conforme o escopo contratado.");
+    expect(eap).not.toContain("Trabalhos explicitamente fora do escopo contratado.");
   });
   it("inspetor só consulta e abre abas, sem editar ao clicar",()=>{
     expect(eap).toContain("onClick={() => aoSelecionar(no.id)}");

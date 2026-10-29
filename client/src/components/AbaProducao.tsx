@@ -4,17 +4,15 @@ import { localIsoDe } from "@/lib/datas";
 import { PainelLookahead } from "./PainelLookahead";
 import { ListaLancamentosProducao } from "./ListaLancamentosProducao";
 import { EstadoCarregando } from "./EstadoCarregando";
+import { selectConfirmedProductionEntries } from "@shared/production-entries";
 
 /**
  * A aba PRODUÇÃO: a fonte do `% Real`.
  *
  * POR QUE ESTA ABA É A FONSA
  *
- * Na planilha de referência, `% Real` é \`SUMIF(PRODUCAO!B:B, código,
- * PRODUCAO!C:C) / Quantidade\` — a soma do que foi executado, na aba
- * PRODUCAO, dividida pelo planejado. E o motor de colunas faz a mesma coisa,
- * lendo \`production_entries\`. Sem lançamento aqui, o avanço real é zero por
- * construção, sem erro e sem aviso: só a coluna em 0%.
+ * `% Real` soma apenas lançamentos confirmados; rascunhos ficam no histórico,
+ * mas ainda não representam execução medida.
  *
  * POR QUE A GRADE E LINHA × DATA
  *
@@ -56,7 +54,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   const [quantidade, setQuantidade] = useState("");
   const [unidade, setUnidade] = useState("");
   const [observacao, setObservacao] = useState("");
-  const [avisoOrçamentoExcedido, setAvisoOrçamentoExcedido] = useState(false);
+  const [confirmarExcedente, setConfirmarExcedente] = useState(false);
 
   const grade = trpc.production.entries.useQuery({ projectId: projetoId });
   const frentes = trpc.production.fronts.useQuery({ projectId: projetoId });
@@ -120,7 +118,11 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
     );
   }
 
-  const lancamentos = grade.data ?? [];
+  const todosLancamentos = grade.data ?? [];
+  const lancamentos = useMemo(
+    () => selectConfirmedProductionEntries(todosLancamentos),
+    [todosLancamentos]
+  );
   const datas = Array.from(new Set(lancamentos.map(l => new Date(l.productionDate).toISOString().slice(0, 10)))).sort();
   // A chave é o CÓDIGO da EAP, não o id da linha: lançamento antigo aponta para a
   // atividade de uma versão anterior do plano e nunca casava com a coluna de hoje
@@ -170,11 +172,6 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
     quantidadeNova > 0 &&
     totalComNova > planejadoSelecionado;
 
-  // Mantém o estado de aviso sincronizado com o cálculo (reage a quantidade e seleção).
-  if (excedeOrçamento !== avisoOrçamentoExcedido) {
-    setAvisoOrçamentoExcedido(excedeOrçamento);
-  }
-
   return (
     <div className="xl-painel">
       {erro && (
@@ -182,12 +179,18 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           {erro}
         </div>
       )}
-      {avisoOrçamentoExcedido && (
+      {excedeOrçamento && (
         <div className="xl-aviso-erro" role="alert">
           A quantidade informada ({quantidadeNova.toFixed(3)}) somada ao já
           lançado ({realizadoSelecionado.toFixed(3)}) excede a quantidade
           planejada da atividade ({planejadoSelecionado.toFixed(3)}).
-          Confirme mesmo assim se o lançamento for intencional.
+          Se a medição real estiver correta, confirme para registrá-la acima do
+          previsto.
+          <label className="prod-confirma-excedente">
+            <input type="checkbox" checked={confirmarExcedente}
+              onChange={e=>setConfirmarExcedente(e.target.checked)} />
+            Confirmo o excesso em relação ao quantitativo planejado.
+          </label>
         </div>
       )}
 
@@ -328,6 +331,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
               onChange={e => {
                 const id = Number(e.target.value) || null;
                 setSelecionada(id);
+                setConfirmarExcedente(false);
                 const l = linhas.find(x => x.atividadeId === id);
                 setUnidade(l?.unidade ?? "");
               }}
@@ -344,7 +348,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
             Quantidade
             <input
               value={quantidade}
-              onChange={e => setQuantidade(e.target.value)}
+              onChange={e => {setQuantidade(e.target.value);setConfirmarExcedente(false);}}
               placeholder="0"
               inputMode="decimal"
             />
@@ -354,6 +358,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
             <input
               value={unidade}
               onChange={e => setUnidade(e.target.value)}
+              readOnly={Boolean(atividadeSelecionada?.unit)}
               placeholder="un"
             />
           </label>
@@ -374,7 +379,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
               !selecionada ||
               registrar.isPending ||
               !quantidade.trim() ||
-              excedeOrçamento
+              (excedeOrçamento && !confirmarExcedente)
             }
             onClick={() => {
               if (!selecionada) return;
@@ -409,7 +414,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           confirme de novo.
         </p>
       </div>
-      <ListaLancamentosProducao projetoId={projetoId} lancamentos={lancamentos} />
+      <ListaLancamentosProducao projetoId={projetoId} lancamentos={todosLancamentos} />
     </div>
   );
 }

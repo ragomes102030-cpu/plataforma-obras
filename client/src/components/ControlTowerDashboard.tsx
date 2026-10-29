@@ -28,6 +28,8 @@ export type LancamentoControl = {
 type Props = {
   projetoId: number;
   nomeObra: string;
+  codigosExemplo: ReadonlySet<string>;
+  avancoEstado: "pendente" | "erro" | "indisponivel" | "ok";
   hoje: string;
   resumo: ResumoDoPainel;
   alertas: AlertaDoPainel[];
@@ -60,7 +62,7 @@ const destinos: Record<Detalhe, string> = {
 };
 
 export function ControlTowerDashboard({
-  projetoId, nomeObra, hoje, resumo, alertas, valorSemDestino,
+  projetoId, nomeObra, codigosExemplo, avancoEstado, hoje, resumo, alertas, valorSemDestino,
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
@@ -90,27 +92,37 @@ export function ControlTowerDashboard({
   }, [detalhe]);
 
   const atrasadaFisico = fisico.pontos < -0.5;
-  const tituloStatus = fisico.rotulo === "atrasada" ? "A execução está abaixo do planejado."
+  const fisicoDisponivel = avancoEstado === "ok";
+  const textoRealizado = fisicoDisponivel ? percentual(fisico.real) : "Indisponível";
+  const textoPlanejado = fisicoDisponivel ? percentual(fisico.planejado) : "Indisponível";
+  const textoDesvio = fisicoDisponivel ? ponto(fisico.pontos) : "Indisponível";
+  const tituloStatus = avancoEstado === "pendente" ? "Validando a régua do orçamento."
+    : avancoEstado === "erro" ? "Avanço físico indisponível."
+    : avancoEstado === "indisponivel" ? "Sem orçamento ligado às atividades."
+    : fisico.rotulo === "atrasada" ? "A execução está abaixo do planejado."
     : selo.tipo === "atrasada" ? "O planejamento exige correção."
     : selo.tipo === "sem_plano" ? "Planejamento ainda incompleto."
     : fisico.rotulo === "adiantada" ? "A execução supera o planejado."
     : "Acompanhe o desempenho da obra.";
-  const corStatus = atrasadaFisico || selo.tipo === "atrasada" ? "atrasada"
+  const corStatus = avancoEstado !== "ok" ? "atencao" : atrasadaFisico || selo.tipo === "atrasada" ? "atrasada"
     : selo.tipo === "atencao" || selo.tipo === "sem_plano" ? "atencao" : "em-dia";
-  const statusTexto = atrasadaFisico ? "Abaixo do planejado"
+  const statusTexto = avancoEstado === "pendente" ? "Validando orçamento"
+    : avancoEstado === "erro" ? "Falha na consulta do orçamento"
+    : avancoEstado === "indisponivel" ? "Avanço sem régua válida"
+    : atrasadaFisico ? "Abaixo do planejado"
     : selo.tipo === "atrasada" ? "Atraso identificado" : selo.rotulo;
   const comprometidos = semana?.compromissos ?? null;
   const totalContado = status.concluidas + status.emAndamento + status.atrasadas + status.naoIniciadas;
   const statusConfere = totalContado === status.total;
   const detalhes: Record<Detalhe, { titulo: string; desc: string; itens: [string, string][]; acao: string }> = {
     fisico: { titulo: "Avanço físico", desc: "Avanço ponderado pelo orçamento ligado às atividades. A diferença não demonstra, sozinha, atraso na conclusão da obra.", itens: [
-      ["Realizado", percentual(fisico.real)], ["Planejado", percentual(fisico.planejado)], ["Desvio", ponto(fisico.pontos)],
+      ["Realizado", textoRealizado], ["Planejado", textoPlanejado], ["Desvio", textoDesvio],
     ], acao: "Investigar na Curva S" },
     prazo: { titulo: "Prazo e cronograma", desc: "Datas do planejamento atual. Atraso no término exige comparação com a baseline aprovada.", itens: [
       ["Início", dataBr(prazo.inicio)], ["Término previsto", dataBr(prazo.fim)], ["Dias restantes", prazo.diasRestantes === null ? "Sem plano" : prazo.diasRestantes >= 0 ? String(prazo.diasRestantes) : "Prazo vencido"], ["Prazo decorrido", percentual(prazo.fracaoDecorrida)],
     ], acao: "Ver no Gantt" },
     valor: { titulo: "Valor agregado (EV)", desc: "Valor orçado do trabalho executado, não faturamento nem desembolso. Parte sem atividade não entra na ponderação.", itens: [
-      ["EV", orcamentoEstado !== "ok" ? "Não disponível" : valor.total > 0 ? dinheiro(valor.executado) : "Sem orçamento"], ["Orçamento ativo", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valor.total)], ["Valor sem atividade", dinheiro(valorSemDestino)], ["Percentual do total", valor.pctExecutado == null ? "Indisponível" : percentual(valor.pctExecutado)],
+      ["EV", orcamentoEstado !== "ok" ? "Não disponível" : valor.total > 0 ? dinheiro(valor.executado) : "Sem orçamento"], ["Orçamento ativo", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valor.total)], ["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valorSemDestino)], ["Percentual do total", valor.pctExecutado == null ? "Indisponível" : percentual(valor.pctExecutado)],
     ], acao: "Ver orçamento e custos" },
     atividades: { titulo: "Situação das atividades", desc: "Contagem de atividades, não ponderada por valor. Os estados vêm do cronograma ativo.", itens: [
       ["Total", String(status.total)], ["Concluídas", String(status.concluidas)], ["Em andamento", String(status.emAndamento)], ["Atrasadas", String(status.atrasadas)], ["Não iniciadas", String(status.naoIniciadas)],
@@ -119,7 +131,7 @@ export function ControlTowerDashboard({
       ["Compromissos", comprometidos == null ? "Carregando" : String(comprometidos)], ["PPC", ppc == null ? "Não apurado" : numero.format(ppc) + "%"], ["Restrições abertas", bloqueadas == null ? "Sem dado" : String(bloqueadas)], ["Pendentes", compromissosPendentes == null ? "Sem dado" : String(compromissosPendentes)],
     ], acao: "Ver controle da produção" },
     cpm: { titulo: "Impacto no caminho crítico", desc: "Desvio físico não comprova mudança no fim da obra. Verifique precedências, calendário, folgas e baseline no módulo CPM.", itens: [
-      ["Status do prazo", prazo.rotulo], ["Desvio de avanço", ponto(fisico.pontos)],
+      ["Status do prazo", prazo.rotulo], ["Desvio de avanço", textoDesvio],
     ], acao: "Abrir CPM" },
   };
 
@@ -138,19 +150,20 @@ export function ControlTowerDashboard({
         <div className="ct-hero-main">
           <span className="ct-status"><span className="ct-status-dot" aria-hidden="true"/>{statusTexto.toUpperCase()} · {dataBr(hoje)}</span>
           <h2>{tituloStatus}</h2>
-          <p>O avanço executado é comparado à meta acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano.</p>
-          <div className="ct-hero-bottom"><strong className="ct-delta">{ponto(fisico.pontos)}</strong><span>Desvio de avanço<br/>realizado − planejado</span><button type="button" onClick={() => abrir("fisico")}>Entender o desvio <ArrowRight size={15}/></button></div>
+          <p>{avancoEstado === "ok" ? "O avanço executado é comparado à meta acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano." : avancoEstado === "pendente" ? "Os percentuais serão exibidos depois de carregar o orçamento e confirmar uma régua comparável." : avancoEstado === "erro" ? "O orçamento não foi consultado. O painel não substitui essa régua por uma média de quantidades." : "Associe itens do orçamento às atividades para habilitar um avanço físico ponderado."}</p>
+          {avancoEstado === "ok" ? <div className="ct-hero-bottom"><strong className="ct-delta">{ponto(fisico.pontos)}</strong><span>Desvio de avanço<br/>realizado − planejado</span><button type="button" onClick={() => abrir("fisico")}>Entender o desvio <ArrowRight size={15}/></button></div>
+            : <div className="ct-hero-bottom ct-fisico-indisponivel" role="status"><strong>{avancoEstado === "pendente" ? "Consultando…" : "Sem dado"}</strong><span>Avanço comparável<br/>indisponível</span><button type="button" onClick={() => abrir("valor")}>Ver orçamento <ArrowRight size={15}/></button></div>}
         </div>
         <div className="ct-hero-side">
-          <div className="ct-gauge" role="img" aria-label={"Avanço realizado " + percentual(fisico.real)}>
+          {avancoEstado === "ok" ? <div className="ct-gauge" role="img" aria-label={"Avanço realizado " + percentual(fisico.real)}>
             <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="41" fill="none" stroke="#304859" strokeWidth="11" pathLength="100"/><circle cx="50" cy="50" r="41" fill="none" stroke="#58cbd0" strokeWidth="11" strokeLinecap="round" strokeDasharray={reduzir(fisico.real * 100) + " 100"} pathLength="100" transform="rotate(-90 50 50)"/></svg>
             <div><strong>{percentual(fisico.real)}</strong><small>EXECUTADO</small></div>
-          </div>
-          <div className="ct-hero-compare">
+          </div> : <div className="ct-gauge ct-gauge-indisponivel" role="status"><strong>{avancoEstado === "pendente" ? "…" : "—"}</strong><small>{avancoEstado === "pendente" ? "VALIDANDO" : "SEM DADO"}</small></div>}
+          {avancoEstado === "ok" && <div className="ct-hero-compare">
             <span>Meta até hoje</span><strong>{percentual(fisico.planejado)}</strong>
             <div className="ct-compare-line"><span>Planejado</span><b>{percentual(fisico.planejado)}</b></div><div className="ct-progress"><span style={{ width: reduzir(fisico.planejado * 100) + "%" }}/></div>
             <div className="ct-compare-line"><span>Realizado</span><b>{percentual(fisico.real)}</b></div><div className="ct-progress"><span className="real" style={{ width: reduzir(fisico.real * 100) + "%" }}/></div>
-          </div>
+          </div>}
         </div>
       </section>
 
@@ -162,7 +175,7 @@ export function ControlTowerDashboard({
       </section>
 
       <div className="ct-columns">
-        <CurvaSControlTower projetoId={projetoId} hoje={hoje} abrirAba={abrirAba} painelReal={fisico.real} painelPlanejado={fisico.planejado}/>
+        <CurvaSControlTower projetoId={projetoId} codigosExemplo={codigosExemplo} hoje={hoje} abrirAba={abrirAba} painelReal={fisico.real} painelPlanejado={fisico.planejado}/>
         <section className="ct-card ct-prioridades" aria-labelledby="ct-prioridades">
           <span className="ct-overline">RADAR DE DECISÕES</span><h3 id="ct-prioridades">Onde atuar primeiro</h3><p>A origem do alerta e o módulo indicado estão conectados aos dados da obra.</p>
           {alertas.length === 0 ? <div className="ct-nada"><CheckCircle2 size={22}/><strong>Sem alertas técnicos registrados</strong><span>Continue acompanhando avanço, prazo e lançamentos. Ausência de alerta não substitui conferência do planejamento.</span></div>

@@ -213,9 +213,13 @@ export function buildInitialEapProposal(
     .toLowerCase();
 
   const tipoNormalizado = normalizar(project.tipoDeObra ?? "");
+  const escopoNormalizado = normalizar(scopeText);
   const ehReforma = tipoNormalizado.includes("reforma") || /\breforma\b/.test(normalizar(scopeText));
   const exclusoes = extrairExclusoes(project.descricao);
   const hasBuildingCue = BUILDING_CUE.test(scopeText) && !INFRASTRUCTURE_CUE.test(scopeText);
+  const estruturaDeConcretoDeclarada = /\bconcreto\b/.test(escopoNormalizado);
+  const vedacaoDeAlvenariaDeclarada = /\balvenaria\b/.test(escopoNormalizado);
+  const incluiAreasExternas = /areas? externas?|urbanizacao|paisagismo|pavimentacao externa|calcadas?|drenagem externa|redes externas/.test(escopoNormalizado);
 
   if (ehReforma) {
     const nodes = hasExistingNodes ? [] : propostasReforma(project, exclusoes);
@@ -256,16 +260,16 @@ export function buildInitialEapProposal(
     };
   }
 
-  const phaseNodes = hasBuildingCue
+  const phaseNodes: Array<readonly [string, string, string]> = hasBuildingCue
     ? [
-        ["1.1", "Serviços preliminares e implantação", "Organiza mobilização, canteiro, locação e preparação inicial da obra."],
-        ["1.2", "Fundações e contenções", "Separa a infraestrutura de fundações e contenções, base física da estrutura."],
-        ["1.3", "Estrutura de concreto", "Representa a execução da estrutura resistente dos pavimentos e cobertura."],
-        ["1.4", "Vedações e alvenarias", "Representa o fechamento dos pavimentos e elementos de vedação."],
-        ["1.5", "Instalações prediais", "Agrupa sistemas hidrossanitários, elétricos, incêndio e demais instalações aplicáveis."],
-        ["1.6", "Revestimentos e acabamentos", "Agrupa revestimentos, pisos, forros, esquadrias e acabamentos."],
-        ["1.7", "Áreas externas e urbanização", "Mantém áreas externas, acessos e elementos de implantação separados das edificações."],
-        ["1.8", "Comissionamento, documentação e entrega", "Fecha a obra com testes, correções, documentação e aceite."],
+        ["1.1", "Implantação e suporte de obra", "Organiza canteiro, instalações provisórias e preparação do local; confirmar limites do contrato e condições do terreno."],
+        ["1.2", "Infraestrutura e fundações", "Abrange a infraestrutura e as fundações; solução e eventual necessidade de contenção dependem de sondagem e projeto."],
+        ["1.3", estruturaDeConcretoDeclarada ? "Estrutura de concreto" : "Estrutura resistente (sistema a definir)", estruturaDeConcretoDeclarada ? "O escopo menciona concreto; geometria, dimensionamento e método dependem do projeto estrutural." : "O sistema resistente não foi informado; manter a solução em aberto até o projeto estrutural."],
+        ["1.4", vedacaoDeAlvenariaDeclarada ? "Vedações em alvenaria" : "Vedações e envoltória (sistema a definir)", vedacaoDeAlvenariaDeclarada ? "O escopo menciona alvenaria; configuração e especificação dependem do projeto." : "O sistema de vedação e a composição da envoltória não foram informados; confirmar no projeto."],
+        ["1.5", "Instalações prediais (sistemas a confirmar)", "Agrupa somente os sistemas aplicáveis definidos no escopo e nos projetos complementares."],
+        ["1.6", "Acabamentos e componentes internos (escopo a confirmar)", "O nível de entrega e as especificações de acabamentos ainda precisam ser definidos."],
+        ...(incluiAreasExternas ? [["1.7", "Áreas externas e infraestrutura de implantação", "Mantém as áreas externas explicitamente citadas no escopo separadas da edificação; limites e interfaces dependem do levantamento do local."]] as const : []),
+        [incluiAreasExternas ? "1.8" : "1.7", "Comissionamento, documentação e entrega", "Organiza verificações, documentação final, correções e aceite conforme os requisitos definidos para a obra."],
       ]
     : [
         ["1.1", "Serviços preliminares e implantação", "Organiza mobilização, preparação e implantação inicial."],
@@ -286,7 +290,9 @@ export function buildInitialEapProposal(
           name: project.name?.trim() || "Escopo da obra",
           nodeType: "grupo" as const,
           parentCode: null,
-          rationale: "Raiz única da EAP. Abaixo dela o escopo é decomposto em frentes construtivas macro, evitando que a obra seja apresentada como um único bloco.",
+          rationale: hasBuildingCue
+            ? "Raiz única da EAP, decomposta em componentes do escopo. Sistemas e entregas não informados permanecem como decisões pendentes, sem serem presumidos pela tipologia."
+            : "Raiz única da EAP. Abaixo dela o escopo é organizado em componentes macro para revisão técnica.",
         },
         ...phaseNodes.map(([code, name, rationale]) => ({
           operation: "create" as const,
@@ -294,7 +300,7 @@ export function buildInitialEapProposal(
           name,
           nodeType: "pacote" as const,
           parentCode: "1",
-          decompositionBasis: "phase" as const,
+          decompositionBasis: hasBuildingCue ? "deliverable" as const : "phase" as const,
           rationale,
         })),
       ];
@@ -304,15 +310,22 @@ export function buildInitialEapProposal(
     nodes,
     basis: [
       "Descrição e identificação da obra cadastradas",
-      "Decomposição inicial por fases/frentes construtivas compatíveis com o tipo de obra",
+      hasBuildingCue
+        ? "Decomposição inicial em componentes de escopo; sistemas não declarados permanecem em aberto."
+        : "Decomposição inicial por frentes construtivas compatíveis com o tipo de obra",
       "Regra de raiz única com decomposição suficiente para revisão técnica",
     ],
     assumptions: hasBuildingCue
-      ? ["A descrição indica uma edificação; a decomposição detalhada por pavimento, sistema e serviço deve ser confirmada na revisão."]
+      ? ["A descrição indica uma edificação; a proposta não presume sistemas construtivos que não foram informados.", "A decomposição por pavimento, sistema e serviço depende dos projetos e do nível de entrega confirmado."]
       : ["A tipologia não foi identificada com segurança; a proposta usa uma decomposição macro conservadora para revisão do engenheiro."],
-    missingInformation: [
-      "Confirmar sistemas especiais, escopo de áreas externas e nível de decomposição desejado antes da aprovação final.",
-    ],
+    missingInformation: hasBuildingCue
+      ? [
+          "Confirmar lote e sondagem para definir fundações e eventual necessidade de contenção.",
+          "Confirmar sistema estrutural e de vedação nos projetos técnicos.",
+          "Confirmar instalações aplicáveis, nível de acabamento e critério de entrega.",
+          "Definir se projetos, licenças e áreas externas fazem parte do escopo contratado.",
+        ]
+      : ["Confirmar sistemas especiais, limites de escopo e nível de decomposição desejado antes da aprovação final."],
     validation: { valid: true, issues: [] },
     resolutionSummary: [],
     researchEvidence: [],

@@ -23,6 +23,7 @@ import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
 import { usarLayoutProfissional } from "@/modules/layout-planejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
+import { GRUPOS_DA_SIDEBAR } from "@/modules/navegacao-sidebar";
 import { VISTAS_DO_WORKSPACE, pertenceAoWorkspace } from "@/modules/navegacao-workspace";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
@@ -572,16 +573,6 @@ function Obra({
     comando: <Sparkles size={17} />,
   };
 
-  const grupos = [
-    { titulo: "VISÃO GERAL", ids: ["dashboard"] },
-    { titulo: "PLANEJAMENTO", ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"] },
-    { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
-    // O grupo se chamava "CONTROLE" e continha o item "CONTROLE": o menu
-    // mostrava a mesma palavra duas vezes seguidas e parecia item duplicado.
-    { titulo: "EXECUÇÃO E CONTROLE", ids: ["producao", "documentos", "suprimentos", "financeiro", "riscos", "curva-s"] },
-    { titulo: "SISTEMA", ids: ["catalogo", "comando"] },
-  ];
-
   const emWorkspacePlanejamento = pertenceAoWorkspace(aba);
   const etapaAtual = ({
     dashboard: "Painel da obra", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
@@ -635,7 +626,7 @@ function Obra({
       )}
       <aside className="xl-sidebar" aria-label="Navegação da obra">
         <nav className="xl-sidebar-nav">
-          {grupos.map(grupo => (
+          {GRUPOS_DA_SIDEBAR.map(grupo => (
             <div className="xl-sidebar-group" key={grupo.titulo}>
               {!sidebarRecolhida && <div className="xl-sidebar-label">{grupo.titulo}</div>}
               {grupo.ids.map(id => {
@@ -756,12 +747,15 @@ function Obra({
             projetoId={projetoId}
             nomeObra={obra}
             hojeReferencia={hoje}
+            codigosExemplo={exemploPorCodigo}
             carregandoGrade={grade.isPending}
+            erroGrade={grade.isError}
+            tentarNovamenteGrade={() => { void grade.refetch(); }}
           />
         ) : aba === "escopo" ? (
           <EscopoInicial projetoId={projetoId} obra={obra} localizacao={localizacao} descricao={descricao} tipoDeObra={tipoDeObra} cubValor={cubValor} cubUf={cubUf} cubMes={cubMes} bdiDeclarado={bdiDeclarado} plannedStart={plannedStart} plannedFinish={plannedFinish} />
         ) : aba === "eap" ? (
-          <AbaEap projetoId={projetoId} />
+          <AbaEap projetoId={projetoId} tipoDeObra={tipoDeObra} />
         ) : aba === "atividades" ? (
           <PainelPlanejamento projetoId={projetoId} />
         ) : aba === "dependencias" ? (
@@ -892,7 +886,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const temPlanejamento = atividades.length > 0;
   const comQuantidade = atividades.filter(l => (Number(l.quantidade) || 0) > 0).length;
   const naturezaDoObjeto = ({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? null;
-  const dimensoesComDados = [
+  const registrosComDados = [
     Boolean(descricao.trim() && naturezaDoObjeto && !/(n[ãa]o invente|proponha uma eap|ser[áa] revisada pelo engenheiro|com base nessa descri[çc][ãa]o)/i.test(descricao)),
     frentes.length > 0,
     pavimentos.length > 0,
@@ -901,19 +895,18 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
 
   // O campo descrição desta obra guarda o pedido feito ao assistente ("não
   // invente informações", "proponha uma EAP"). Isso não é declaração de escopo e
-  // não pode passar como se fosse: o painel avisa e o gate não fecha.
+  // não pode passar como se fosse: o painel identifica o pedido e orienta a revisão.
   const instrucoesNoTexto = /(n[ãa]o invente|proponha uma eap|ser[áa] revisada pelo engenheiro|com base nessa descri[çc][ãa]o)/i.test(descricao);
-  const escopoFormal = Boolean(naturezaDoObjeto && localizacao.trim() && descricao.trim() && !instrucoesNoTexto);
+  const dadosMinimosEscopo = Boolean(naturezaDoObjeto && localizacao.trim() && descricao.trim() && !instrucoesNoTexto);
   const plural = (quantidade: number, singular: string, varios: string) =>
     `${quantidade} ${quantidade === 1 ? singular : varios}`;
 
-  // Cada linha é uma dimensão do escopo com a situação real, apurada no
-  // cronograma e no cadastro — não uma lista de caixas para o engenheiro
-  // preencher. O que não está declarado aparece como pendência, com o número.
+  // São indicadores derivados do cadastro e do cronograma; não são campos
+  // obrigatórios nem critérios de completude do escopo do empreendimento.
   const elementos = [
     {
       codigo: "ESC-01",
-      nome: "Objeto contratado",
+      nome: "Objeto da obra",
       categoria: "DEFINIÇÃO",
       detalhe: naturezaDoObjeto
         ? `${naturezaDoObjeto}${localizacao ? ` · ${localizacao}` : " · localização não informada"}`
@@ -922,8 +915,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     },
     {
       codigo: "ESC-02",
-      nome: "Frentes de execução",
-      categoria: "ORGANIZAÇÃO",
+      nome: "Frentes no cronograma",
+      categoria: "PLANEJAMENTO",
       detalhe: frentes.length
         ? `${plural(frentes.length, "frente", "frentes")} no cronograma: ${frentes.slice(0, 3).join(", ")}${frentes.length > 3 ? "…" : ""}`
         : "Nenhuma frente identificada no cronograma",
@@ -931,8 +924,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     },
     {
       codigo: "ESC-03",
-      nome: "Locais de execução",
-      categoria: "ORGANIZAÇÃO",
+      nome: "Locais no cronograma",
+      categoria: "PLANEJAMENTO",
       detalhe: pavimentos.length
         ? `${plural(pavimentos.length, "local no cronograma", "locais no cronograma")}: ${pavimentos.slice(0, 3).join(", ")}${pavimentos.length > 3 ? "…" : ""}`
         : "Nenhum pavimento ou setor identificado no cronograma",
@@ -940,8 +933,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     },
     {
       codigo: "ESC-04",
-      nome: "Quantitativos",
-      categoria: "MEDIÇÃO",
+      nome: "Atividades com quantidade",
+      categoria: "PLANEJAMENTO",
       detalhe: `${plural(atividades.length, "atividade no cronograma", "atividades no cronograma")}, ${comQuantidade} com quantidade informada. Unidades diferentes não são somadas.`,
       status: comQuantidade === atividades.length && atividades.length > 0 ? "Completo" : comQuantidade > 0 ? "Parcial" : "Pendente",
     },
@@ -953,7 +946,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         <div className="scopo-workspace-title">
           <span className="scopo-kicker">PLANEJAMENTO · ESCOPO</span>
           <h1>Escopo da obra</h1>
-          <p>{obra} · objeto contratado, limites de execução e base da estrutura analítica do projeto.</p>
+          <p>{obra} · objeto, premissas e limites que orientarão a estrutura analítica do projeto.</p>
         </div>
         <div className="scopo-header-actions">
           {editando ? (
@@ -972,10 +965,10 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         <div>
           <span className="ct-escopo-etiqueta">ETAPA 01 · DEFINIÇÃO DO OBJETO</span>
           <h2 id="ct-escopo-titulo">Escopo antes da Estrutura Analítica</h2>
-          <p>A descrição contratual orienta a proposta do Arquimedes e o desenho manual da EAP. A geração é uma sugestão, nunca uma aprovação automática.</p>
+          <p>A descrição de referência e suas premissas orientam a proposta do Arquimedes e o desenho manual da EAP. A geração é uma sugestão, nunca uma aprovação automática.</p>
           <div className="ct-escopo-estados">
-            <span className={escopoFormal ? "ct-escopo-estado completo" : "ct-escopo-estado pendente"}>
-              {escopoFormal ? "Escopo formal declarado" : "Descrição formal precisa de revisão"}
+            <span className={dadosMinimosEscopo ? "ct-escopo-estado completo" : "ct-escopo-estado pendente"}>
+              {dadosMinimosEscopo ? "Dados de referência registrados" : "Revise o objeto antes da EAP"}
             </span>
             <span className="ct-escopo-estado informativo">
               {versaoAtual ? "EAP v" + versaoAtual.versionNumber + " · " + (versaoAtual.status === "approved" ? "aprovada" : "em elaboração") : "EAP ainda não criada"}
@@ -990,7 +983,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
           <button type="button" className="ct-escopo-analisar" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}>
             <Bot size={16} /> Analisar escopo com Arquimedes
           </button>
-          {!escopoFormal && <small>Revise o escopo declarado antes de solicitar uma nova proposta. A edição manual continua disponível.</small>}
+          {!dadosMinimosEscopo && <small>Informe natureza, localização e descrição do objeto antes de solicitar uma proposta. A edição manual continua disponível.</small>}
         </div>
       </section>
       <section className="scopo-trace-grid">
@@ -999,7 +992,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
           <div className="scopo-detail-body">
             <p><strong>Natureza:</strong> {({ edificio: "Edificação / construção nova", reforma: "Reforma", pavimentacao: "Pavimentação", saneamento: "Saneamento / infraestrutura", todos: "Múltiplas frentes" } as Record<string, string>)[tipoDeObra] ?? "Não declarada"}</p>
             <p><strong>Localização:</strong> {localizacao || "Não informada"}</p>
-            <p><strong>Descrição do escopo:</strong></p>
+            <p><strong>Descrição de referência da obra:</strong></p>
             {descricao.trim() ? (
               descricao.length > 700 ? (
                 <details className="scopo-descricao">
@@ -1010,11 +1003,11 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
                 <p>{descricao}</p>
               )
             ) : (
-              <p>Não declarada. A descrição deve registrar inclusões, exclusões e premissas do contrato.</p>
+              <p>Não informada. Registre entregas esperadas, limites, premissas e pendências conhecidas.</p>
             )}
             {instrucoesNoTexto && (
               <p className="scopo-alerta" role="alert">
-                <strong>Atenção:</strong> o texto registrado contém instruções de geração de EAP (pedido ao assistente), não uma declaração de escopo. Revise antes de aprovar.
+                <strong>Atenção:</strong> o texto registrado contém instruções de geração de EAP (pedido ao assistente), não uma descrição do empreendimento. Revise antes de estruturar a EAP.
               </p>
             )}
             <p><strong>CUB de referência (R$/m²):</strong> {cubCamposPreenchidos === 0
@@ -1044,9 +1037,9 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
                 <option value="todos">Múltiplas frentes</option>
               </select>
             </label>
-            <label><strong>Descrição formal do escopo</strong>
-              <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Inclusões, exclusões, premissas, limites contratuais e pendências." />
-              <small>{descricaoEditada.length}/4000 caracteres. Separe o que está confirmado do que é premissa.</small>
+            <label><strong>Descrição de referência e limites da obra</strong>
+              <textarea value={descricaoEditada} onChange={event => setDescricaoEditada(event.target.value)} maxLength={4000} rows={7} placeholder="Entregas esperadas, limites, premissas, exclusões e pendências." />
+              <small>{descricaoEditada.length}/4000 caracteres. Separe fatos informados, premissas didáticas e pendências.</small>
             </label>
             <label><strong>CUB de referência — valor (R$/m²)</strong>
               <input value={cubValorEditado} onChange={event => setCubValorEditado(event.target.value)} inputMode="decimal" placeholder="Ex.: 2850,00" />
@@ -1071,25 +1064,25 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         </section>
       )}
 
-      <div className="scopo-flow" aria-label="Fluxo do planejamento">
-        <strong>Obra</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP</span><span>→</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades</span>
+      <div className="scopo-flow" aria-label="Fluxo de planejamento da obra">
+        <strong>Objeto e requisitos</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP · entregáveis e pacotes</span><span>→</span><span>Planejamento integrado: Quantitativos e orçamento + atividades e dependências</span><span>→</span><span>Revisão e baseline</span><span>→</span><span>Execução e controle</span><span>→</span><span>Entrega e encerramento</span>
       </div>
 
-      <section className="scopo-metrics" aria-label="Indicadores do escopo">
-        <div><span>DIMENSÕES</span><strong>{elementos.length}</strong><small>dimensões avaliadas</small></div>
+      <section className="scopo-metrics" aria-label="Resumo dos dados de escopo e planejamento">
+        <div><span>ITENS ACOMPANHADOS</span><strong>{elementos.length}</strong><small>cadastro e cronograma</small></div>
         <div><span>FRENTES</span><strong>{frentes.length}</strong><small>no cronograma</small></div>
         <div><span>LOCAIS</span><strong>{pavimentos.length}</strong><small>no cronograma</small></div>
-        <div className={dimensoesComDados < elementos.length ? "attention" : ""}><span>RASTREABILIDADE</span><strong>{dimensoesComDados === elementos.length ? "COMPLETA" : dimensoesComDados > 0 ? "PARCIAL" : "PENDENTE"}</strong><small>{dimensoesComDados} de {elementos.length} dimensões com dados</small></div>
+        <div className={registrosComDados < elementos.length ? "attention" : ""}><span>ITENS COM DADOS</span><strong>{registrosComDados}/{elementos.length}</strong><small>não representa completude do escopo</small></div>
       </section>
 
       <div className="scopo-toolbar">
-        <div className="scopo-toolbar-title"><strong>Dimensões do escopo</strong><span>Situação apurada no cadastro da obra e no cronograma vigente.</span></div>
+        <div className="scopo-toolbar-title"><strong>Dados do escopo e do planejamento</strong><span>Frentes, locais e quantidades são evidências do cronograma, não itens declarados automaticamente no escopo.</span></div>
         <span className="scopo-readonly">BASE: CADASTRO + CRONOGRAMA</span>
       </div>
 
       <section className="scopo-table-wrap">
         <table className="scopo-table">
-          <thead><tr><th className="codigo-col">CÓD.</th><th className="elemento-col">DIMENSÃO</th><th>CATEGORIA</th><th>SITUAÇÃO</th><th>STATUS</th></tr></thead>
+          <thead><tr><th className="codigo-col">CÓD.</th><th className="elemento-col">DADO ACOMPANHADO</th><th>CATEGORIA</th><th>SITUAÇÃO</th><th>STATUS</th></tr></thead>
           <tbody>
             {elementos.map(item => (
               <tr key={item.codigo}>
@@ -1106,31 +1099,30 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
 
       <section className="scopo-trace-grid">
         <details open className="scopo-detail">
-          <summary>Critérios para aprovação do escopo</summary>
+          <summary>Conferência do objeto para estruturar a EAP</summary>
           <div className="scopo-detail-body">
-            <p><strong>{naturezaDoObjeto && localizacao ? "✓" : "○"} Objeto e local declarados</strong> — natureza {naturezaDoObjeto ? naturezaDoObjeto.toLowerCase() : "não informada"}; local {localizacao || "não informado"}.</p>
-            <p><strong>{descricao.trim() && !instrucoesNoTexto ? "✓" : "○"} Descrição formal registrada</strong> — {!descricao.trim()
-              ? "falta registrar inclusões, exclusões e premissas."
+            <p><strong>{naturezaDoObjeto && localizacao ? "✓" : "○"} Natureza e localização informadas</strong> — natureza {naturezaDoObjeto ? naturezaDoObjeto.toLowerCase() : "não informada"}; local {localizacao || "não informado"}.</p>
+            <p><strong>{descricao.trim() && !instrucoesNoTexto ? "✓" : "○"} Descrição de referência disponível</strong> — {!descricao.trim()
+              ? "registre entregas esperadas, limites, premissas e pendências conhecidas."
               : instrucoesNoTexto
-                ? "o texto atual é um pedido ao assistente, não uma declaração de escopo."
-                : "contém inclusões, exclusões e premissas."}</p>
-            <p><strong>{frentes.length && pavimentos.length ? "✓" : "○"} Organização da execução</strong> — {plural(frentes.length, "frente", "frentes")} e {plural(pavimentos.length, "local", "locais")} no cronograma.</p>
-            <p><strong>{atividades.length > 0 && comQuantidade === atividades.length ? "✓" : "○"} Quantitativos completos</strong> — {comQuantidade} de {plural(atividades.length, "atividade", "atividades")} com quantidade informada.</p>
+                ? "o texto atual é um pedido ao assistente, não uma descrição do empreendimento."
+                : "premissas, exclusões e pendências ainda precisam de revisão técnica."}</p>
+            <p>Frentes, locais e quantitativos são rastreados nas etapas do planejamento e dependem da decomposição e dos dados de projeto; não são pré-requisitos para declarar o escopo inicial.</p>
           </div>
         </details>
         <details open className="scopo-detail">
-          <summary>Rastreabilidade até o orçamento</summary>
+          <summary>Conexão do escopo ao custo e ao cronograma</summary>
           <div className="scopo-detail-body">
-            <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP</span><b>→</b><span>QUANTITATIVOS</span><b>→</b><span>ATIVIDADES</span></div>
+            <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP / PACOTES</span><b>→</b><span>QUANTITATIVOS E CUSTOS</span><b>+</b><span>ATIVIDADES E REDE</span></div>
             <p>{temPlanejamento
-              ? `${plural(atividades.length, "atividade", "atividades")} no cronograma, ${plural(frentes.length, "frente", "frentes")} e ${plural(pavimentos.length, "local", "locais")}. ${comQuantidade} têm quantidade informada — é a quantidade que liga a atividade ao orçamento e permite medir avanço.`
-              : "O cronograma ainda não tem atividades. Sem atividade não há quantidade, e sem quantidade a cadeia escopo → EAP → orçamento não fecha."}</p>
+              ? `${plural(atividades.length, "atividade", "atividades")} no cronograma, ${plural(frentes.length, "frente", "frentes")} e ${plural(pavimentos.length, "local", "locais")}. ${comQuantidade} têm quantidade informada. Confira unidade, critério de medição e vínculo de custo; a existência da atividade, sozinha, não comprova quantitativo nem orçamento.`
+              : "Quantidades podem ser levantadas por pacote da EAP antes das atividades do cronograma. Orçamento e cronograma são desenvolvidos a partir do escopo e refinados em conjunto; a medição exige unidade e critério definidos."}</p>
           </div>
         </details>
       </section>
 
       <footer className="scopo-footer">
-        <span><strong>Regra:</strong> o escopo define o que é entregue; a EAP organiza e controla a execução.</span>
+        <span><strong>Regra:</strong> o escopo define o que será entregue; a EAP organiza entregáveis e pacotes; o cronograma define sequência e prazos.</span>
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={13}/> Pedir análise do Arquimedes</button>
       </footer>
     </div>

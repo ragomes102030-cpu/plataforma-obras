@@ -9,6 +9,7 @@ import {
 } from "./linha-balanco-modelo";
 import { analisarFluxoLob } from "./lob-analise-fluxo";
 import { calcularVinculosExibidos, resumoLob, taxaPlanejadaLob, type VínculoLob } from "./lob-indicadores";
+import { empacotarFaixasVisiveis } from "./lob-lanes";
 import "./linha-balanco-profissional.css";
 import { integrarDistribuicoesLob, type DistribuicaoLob, type AtividadeIdLob } from "./lob-distribuicao-modelo";
 
@@ -177,8 +178,6 @@ export function LinhaBalancoEscadinha({
         linhasPendentes.push({tipo:"atividade",grupo:grupo.nome,ponto,altura:38});
     }
   }
-  const pontosPendentes = linhasPendentes.flatMap(l=>l.tipo==="atividade" ? [l.ponto] : []);
-  const alturaPendentes = linhasPendentes.reduce((s,l)=>s+l.altura,0);
   // Descarta categorias antigas usadas equivocadamente no campo pavimento:
   // apenas unidades de serviços repetitivos entram no eixo físico.
   const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
@@ -242,29 +241,62 @@ export function LinhaBalancoEscadinha({
     semanas.push({ inicio, x: i * pxDia });
   }
 
+  const cruzaJanelaExibida = (ponto: PontoLob) =>
+    ponto.fim >= eixoInicio && ponto.inicio < eixoFimExclusivo;
+  const seriesExibidas = seriesVisiveis.map(serie => ({
+    ...serie,
+    pontos: serie.pontos.filter(ponto => locais.includes(ponto.local) && cruzaJanelaExibida(ponto)),
+  })).filter(serie => serie.pontos.length > 0);
+  const linhasPendentesExibidas: LinhaPendente[] = [];
+  for (let indice = 0; indice < linhasPendentes.length;) {
+    const linha = linhasPendentes[indice]!;
+    if (linha.tipo === "atividade") {
+      if (cruzaJanelaExibida(linha.ponto)) linhasPendentesExibidas.push(linha);
+      indice++;
+      continue;
+    }
+    const atividadesDoGrupo: LinhaPendente[] = [];
+    let proximo = indice + 1;
+    while (proximo < linhasPendentes.length && linhasPendentes[proximo]!.tipo === "atividade") {
+      const atividade = linhasPendentes[proximo]!;
+      if (atividade.tipo === "atividade" && cruzaJanelaExibida(atividade.ponto)) atividadesDoGrupo.push(atividade);
+      proximo++;
+    }
+    if (atividadesDoGrupo.length) linhasPendentesExibidas.push(linha, ...atividadesDoGrupo);
+    indice = proximo;
+  }
+  const pontosPendentes = linhasPendentesExibidas.flatMap(linha =>
+    linha.tipo === "atividade" ? [linha.ponto] : []
+  );
+  const alturaPendentes = linhasPendentesExibidas.reduce((soma, linha) => soma + linha.altura, 0);
+  const periodoExibido = selecionarPeriodoPelosServicos([
+    ...seriesExibidas,
+    ...pontosPendentes.map(ponto => ({ chave: ponto.codigo, nome: ponto.nome, pontos: [ponto], repetitiva: false })),
+  ]);
+
   const barrasPorLocal = new Map<string, Barra[]>();
   const alturaPorLocal = new Map<string, number>();
   const deslocamentoPorLocal = new Map<string, number>();
   let alturaEscadinha = 0;
   for (const local of locais) {
     const barras: Barra[] = [];
-    seriesVisiveis.forEach((serie, indice) => {
+    seriesExibidas.forEach((serie, indice) => {
       const ponto = serie.pontos.find(p => p.local === local);
       if (ponto) barras.push({ serie, ponto, cor: CORES[repetitivas.findIndex(s => s.chave === serie.chave) % CORES.length]!, indice });
     });
-    // Reuse each visual lane after a bar finishes. Reserving one row per
-    // selected service made every physical location thousands of pixels tall.
-    const fimDasFaixas: number[] = [];
-    for (const barra of [...barras].sort((a,b) =>
-      diaUtc(a.ponto.inicio)-diaUtc(b.ponto.inicio) ||
-      diaUtc(a.ponto.fim)-diaUtc(b.ponto.fim) || a.ponto.codigo.localeCompare(b.ponto.codigo))) {
-      const inicio = diaUtc(barra.ponto.inicio);
-      let faixa = fimDasFaixas.findIndex(fim => fim < inicio);
-      if (faixa < 0) faixa = fimDasFaixas.length;
-      barra.indice = faixa;
-      fimDasFaixas[faixa] = diaUtc(barra.ponto.fim);
-    }
-    const altura = Math.max(64, 14 + fimDasFaixas.length * 23);
+    // Barras fora da janela não são desenhadas e não podem reservar faixas.
+    // Caso contrário, o filtro de datas deixa uma linha alta e quase vazia.
+    const faixas = empacotarFaixasVisiveis(
+      barras.map(barra => ({
+        codigo: barra.ponto.codigo,
+        inicio: barra.ponto.inicio,
+        fim: barra.ponto.fim,
+      })),
+      eixoInicio,
+      eixoFimExclusivo
+    );
+    for (const barra of barras) barra.indice = faixas.porCodigo.get(barra.ponto.codigo) ?? 0;
+    const altura = Math.max(64, 14 + faixas.quantidade * 23);
     deslocamentoPorLocal.set(local, alturaEscadinha);
     alturaPorLocal.set(local, altura);
     alturaEscadinha += altura;
@@ -273,7 +305,7 @@ export function LinhaBalancoEscadinha({
 
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
   const qtdGrafico = qtdBarras + pontosPendentes.length;
-  const resumo = resumoLob(seriesVisiveis,locais,hoje);
+  const resumo = resumoLob(seriesExibidas,locais,hoje);
   const originais = new Map([...linhas,...integrado.entradas].map(l=>[l.codigo,l]));
   const ligacoes = estadoVinculos==="pronto"
     ? calcularVinculosExibidos(dependencias,[...resumo.pontos,...pontosPendentes]) : [];
@@ -304,7 +336,7 @@ export function LinhaBalancoEscadinha({
   const marcos = mostrarMarcos?linhas.filter(l=>l.marco && dataValida(l.inicio) && locais.includes(String(l.pavimento??"").trim())):[];
   // Leitura analítica derivada apenas dos serviços e locais exibidos.
   // Não interpreta coincidência temporal como colisão ou infração de predecessora.
-  const analise = analisarFluxoLob(seriesVisiveis, locais);
+  const analise = analisarFluxoLob(seriesExibidas, locais);
   const taxaMedia = analise.ritmos.map(r=>r.diasPorTransferencia).filter((n):n is number=>n!==null);
   const ritmoMedio = taxaMedia.length?taxaMedia.reduce((a,b)=>a+b,0)/taxaMedia.length:null;
   const sobreposicoesPorLocal = new Map<string, number>();
@@ -559,14 +591,14 @@ export function LinhaBalancoEscadinha({
                           <span>{largura >= 62 ? nomeCurto : ""}</span>
                         </button>;
                       })}
-                      {marcos.filter(m=>m.pavimento===local).map(m=><span key={m.codigo} className="lob-stairs-milestone" style={{left:dataX(m.inicio)}} title={m.atividade+" · "+m.codigo+" · "+formatoCompleto(m.inicio)}>◆</span>)}
+                      {marcos.filter(m=>m.pavimento===local&&m.inicio>=eixoInicio&&m.inicio<eixoFimExclusivo).map(m=><span key={m.codigo} className="lob-stairs-milestone" style={{left:dataX(m.inicio)}} title={m.atividade+" · "+m.codigo+" · "+formatoCompleto(m.inicio)}>◆</span>)}
                       {dataValida(hoje) && diaUtc(hoje)>=diaUtc(eixoInicio) && diaUtc(hoje)<diaUtc(eixoFimExclusivo)
                         && <span className="lob-stairs-today" title={"Hoje: "+formatoCompleto(hoje)} style={{left:dataX(hoje)}}/>}
                     </div>
                   </div>
                 ))}
 
-                {linhasPendentes.map((linha,i)=>linha.tipo==="grupo" ? (
+                {linhasPendentesExibidas.map((linha,i)=>linha.tipo==="grupo" ? (
                   <div key={"grupo-"+linha.grupo} className="lob-stairs-pending-group" role="row"
                     data-testid="lob-pending-group" style={{height:linha.altura}}>
                     <div className="lob-stairs-local" role="rowheader" title={linha.grupo}>Sem local · {linha.grupo}</div>
@@ -621,7 +653,7 @@ export function LinhaBalancoEscadinha({
             </div>}
 
           <div className="lob-stairs-legend">
-            {seriesVisiveis.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
+            {seriesExibidas.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
             <span className="lob-stairs-legend-note">Barras coloridas = local confirmado · barras cinzas = local pendente · vínculos = dependências cadastradas</span>
           </div>
           {totalGerais>0 && (
@@ -699,9 +731,9 @@ export function LinhaBalancoEscadinha({
             <section className="lob-stairs-dashboard-card" aria-label="Resumo do planejamento">
               <h3>Resumo do planejamento</h3>
               <dl>
-                <div><dt>Período das atividades visíveis</dt><dd>{periodoAutomatico?formatoCompleto(periodoAutomatico.primeiro)+" – "+formatoCompleto(periodoAutomatico.ultimo):"Sem período"}</dd></div>
+                <div><dt>Período das atividades visíveis</dt><dd>{periodoExibido?formatoCompleto(periodoExibido.primeiro)+" – "+formatoCompleto(periodoExibido.ultimo):"Sem período"}</dd></div>
                 <div><dt>Pavimentos selecionados</dt><dd>{locais.length}</dd></div>
-                <div><dt>Serviços selecionados</dt><dd>{seriesVisiveis.length}</dd></div>
+                <div><dt>Serviços visíveis</dt><dd>{seriesExibidas.length}</dd></div>
                 <div><dt>Atividades no gráfico integrado</dt><dd data-testid="lob-summary-total">{qtdGrafico}</dd></div>
                 <div><dt>Atividades na escadinha física</dt><dd>{qtdBarras}</dd></div>
                 <div><dt>Pendentes de localização</dt><dd>{pontosPendentes.length}</dd></div>

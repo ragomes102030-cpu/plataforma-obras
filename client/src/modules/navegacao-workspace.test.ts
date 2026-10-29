@@ -32,7 +32,7 @@ describe("workspace manual do planejamento", () => {
     expect(home).toContain("VISTAS_DO_WORKSPACE.map");
     expect(home).toContain('className={`arquimedes-content${emWorkspacePlanejamento ? " planejamento-area" : ""}`}');
     expect(home).toContain("<PainelPlanejamento projetoId={projetoId} />");
-    expect(home).toContain("<AbaEap projetoId={projetoId} />");
+    expect(home).toContain("<AbaEap projetoId={projetoId} tipoDeObra={tipoDeObra} />");
     expect(home).toContain('<VisualizacaoPlanejamento projetoId={projetoId}');
   });
 

@@ -31,4 +31,11 @@ describe("isolamento de QA no CPM operacional", () => {
     expect(abaBaseline).toContain("selectOperationalPlanning(todasAtividades, todasDependencias)");
     expect(abaCpm).toContain("Referências realmente ausentes continuam sendo validadas como erro.");
   });
+
+  it("a captura valida conectividade somente na fotografia operacional", () => {
+    const capture = corpoDaRota("captureBaseline", "compararComBaseline");
+    expect(capture).toContain("selectOperationalPlanning(networkActivities, networkDependencies)");
+    expect(capture).toContain("planejamentoOperacional.activities");
+    expect(capture).toContain("planejamentoOperacional.dependencies");
+  });
 });

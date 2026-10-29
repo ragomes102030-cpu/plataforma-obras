@@ -138,6 +138,23 @@ describe("validateDependencies", () => {
     expect(result.issues[0].message).toContain("não têm nenhuma ligação");
   });
 
+  it("permite construir uma rede em etapas sem liberar o CPM desconectado", () => {
+    const activities = [activity("A"), activity("B"), activity("C")];
+    const dependencies = [dependency("A", "B")];
+
+    const incremental = validateDependencies(activities, dependencies, { allowIncomplete: true });
+    const final = validateDependencies(activities, dependencies);
+
+    expect(incremental.valid).toBe(true);
+    expect(incremental.issues).toMatchObject([
+      { code: "disconnected_network", severity: "warning" },
+    ]);
+    expect(final.valid).toBe(false);
+    expect(final.issues).toMatchObject([
+      { code: "disconnected_network", severity: "error" },
+    ]);
+  });
+
   it("aceita rede única a partir de uma raiz, com TTIs paralelas legítimas", () => {
     // Sobreposição é legítima em obra: duas frentes independentes que
     // partem do mesmo marco. Isso continua válido — só rede *desligada* é erro.

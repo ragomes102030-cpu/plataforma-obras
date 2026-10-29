@@ -63,7 +63,7 @@ export function AbaCpm({ projetoId }: Props) {
       : resumo.validas.length !== activities.length
         ? `${activities.length - resumo.validas.length} atividade(s) ainda possuem duração inválida.`
         : activities.length > 1 && dependencies.length === 0
-          ? "A rede ainda não possui dependências. O CPM pode calcular uma rede sem vínculos, mas isso não representa a lógica completa da obra."
+          ? "A rede ainda não possui dependências. Com mais de uma atividade, o CPM bloqueia redes desconectadas; registre as precedências e os marcos comuns que representem a lógica da obra."
           : null;
 
   if (plano.isPending) {
@@ -131,8 +131,8 @@ export function AbaCpm({ projetoId }: Props) {
         </div>
         <div>
           <span>Caminho crítico</span>
-          <strong>{resumo.criticas.length}</strong>
-          <small>folga total ≤ 0</small>
+          <strong>{resumo.hasStoredCpm ? resumo.criticas.length : "—"}</strong>
+          <small>{resumo.hasStoredCpm ? "folga total ≤ 0" : "aguardando CPM válido"}</small>
         </div>
         <div className={resumo.desatualizado ? "alerta" : ""}>
           <span>Estado do CPM</span>
@@ -181,7 +181,11 @@ export function AbaCpm({ projetoId }: Props) {
               <span>Atividades persistidas com folga total menor ou igual a zero.</span>
             </div>
           </div>
-          {resumo.criticas.length === 0 ? (
+          {!resumo.hasStoredCpm ? (
+            <p className="pl-planejamento-vazio">
+              {resumo.desatualizado ? "O resultado persistido está desatualizado; recalcule o CPM antes de usar estes dados." : "Ainda não há resultado válido persistido para a versão atual."}
+            </p>
+          ) : resumo.criticas.length === 0 ? (
             <p className="pl-planejamento-vazio">
               Ainda não há caminho crítico persistido. Calcule o CPM com uma rede válida.
             </p>
@@ -210,8 +214,8 @@ export function AbaCpm({ projetoId }: Props) {
               <span>Referência útil para revisão da lógica antes da baseline.</span>
             </div>
           </div>
-          {resumo.validas.length === 0 ? (
-            <p className="pl-planejamento-vazio">Sem atividades calculáveis.</p>
+          {!resumo.hasStoredCpm ? (
+            <p className="pl-planejamento-vazio">As folgas e datas calculadas só são exibidas após um CPM válido e atualizado.</p>
           ) : (
             <div className="pl-cpm-tabela">
               <div className="pl-cpm-linha pl-cpm-cabecalho">
@@ -244,7 +248,7 @@ export function AbaCpm({ projetoId }: Props) {
         </div>
         <div className="pl-planejamento-cards">
           <div><span>Duração</span><strong>{resumo.validas.length === activities.length && activities.length ? "OK" : "Pendente"}</strong><small>todas as atividades precisam de duração válida</small></div>
-          <div><span>Rede</span><strong>{dependencies.length > 0 || activities.length < 2 ? "OK" : "Pendente"}</strong><small>relações devem representar a lógica real da obra</small></div>
+          <div><span>Rede</span><strong>{resumo.hasStoredCpm ? "Validada" : activities.length < 2 ? "N/A" : dependencies.length ? "Revisar" : "Pendente"}</strong><small>{resumo.hasStoredCpm ? "conectividade aceita pelo CPM" : dependencies.length ? "vínculos presentes; conectividade ainda não validada" : "registre predecessoras e sucessoras"}</small></div>
           <div><span>Resultado</span><strong>{resumo.hasStoredCpm ? "Persistido" : "Não calculado"}</strong><small>o resultado fica registrado nas atividades da versão</small></div>
           <div><span>Próxima etapa</span><strong>{resumo.hasStoredCpm ? "Baseline" : "CPM"}</strong><small>baseline só depois de revisão do caminho crítico</small></div>
         </div>

@@ -33,6 +33,10 @@
 .ct-hero-bottom>button:hover{color:#fff}
 .ct-hero-side{position:relative;border-left:1px solid #ffffff24;padding:21px;display:flex;align-items:center;justify-content:center;gap:16px}
 .ct-gauge{width:148px;height:148px;flex:none;position:relative}
+.ct-gauge-indisponivel{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#fff;text-align:center}
+.ct-gauge-indisponivel strong{font-size:32px;line-height:1}
+.ct-gauge-indisponivel small{color:#9fbccc;font-size:10px;font-weight:800;letter-spacing:.08em}
+.ct-fisico-indisponivel>strong{font-size:16px}
 .ct-gauge svg{width:100%;height:100%}
 .ct-gauge>div{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .ct-gauge strong{font-size:27px;font-weight:800;letter-spacing:-.04em}

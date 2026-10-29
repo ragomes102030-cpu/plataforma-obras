@@ -99,8 +99,8 @@ A aprovação deve ocorrer somente depois da validação estrutural e da revisã
 
 ## Regra de passagem
 
-A sequência permanece:
+O encadeamento de governança da EAP é:
 
-**Escopo → EAP → Dicionário → Quantitativos → Orçamento → Atividades → Dependências → CPM → Baseline**
+**Escopo → proposta da EAP → revisão/dicionário → validação → aprovação da versão → revalidação da versão aprovada.**
 
-A EAP aprovada é a estrutura de referência das etapas seguintes.
+A EAP aprovada é a estrutura de referência do planejamento detalhado. Depois dela, quantitativos e custos são associados aos pacotes aplicáveis; atividades são definidas para programar a execução; duração pode ser fundamentada diretamente ou calculada com quantidade e produtividade válida. Dependências e CPM fecham a rede de prazo. Essas frentes são integradas e podem ser refinadas em ciclos; não há uma regra universal de que o orçamento inteiro precise preceder a definição de atividades ou o contrário. A baseline do cronograma só é capturada depois de revisar a rede e calcular um CPM consistente. A EAP aprovada não é, por si só, baseline do cronograma.

@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import type { AgregadoDoCronograma, LinhaDoCronograma } from "@shared/cronograma-colunas";
+import { agregadoDoCronograma, type AgregadoDoCronograma, type LinhaDoCronograma } from "@shared/cronograma-colunas";
 import { diasEntre, montarResumo, type AlertaDoPainel } from "@shared/painel-obra";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
+import { classificarEstadoAtividadesDashboard, excluirAtividadesDeDemonstracao } from "@/lib/dashboard-work-scope";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
 
@@ -22,6 +23,9 @@ type Props = {
   carregandoGrade?: boolean;
   nomeObra?: string;
   hojeReferencia?: string;
+  codigosExemplo?: ReadonlySet<string>;
+  erroGrade?: boolean;
+  tentarNovamenteGrade?: () => void;
 };
 
 const FORMATO_BRL = new Intl.NumberFormat("pt-BR", {
@@ -79,6 +83,9 @@ export function PainelDoCronograma({
   carregandoGrade,
   nomeObra,
   hojeReferencia,
+  codigosExemplo = new Set(),
+  erroGrade = false,
+  tentarNovamenteGrade,
 }: Props) {
   const hoje = hojeReferencia ?? hojeIso();
 
@@ -117,14 +124,25 @@ export function PainelDoCronograma({
     wbsCode: a.wbsCode,
     cpmCalculatedAt: a.cpmCalculatedAt ?? null,
     updatedAt: a.updatedAt ?? null,
-  }));
+  })).filter(a => !codigosExemplo.has(a.wbsCode ?? ""));
+  const linhasDaObra = useMemo(
+    () => excluirAtividadesDeDemonstracao(linhas ?? [], codigosExemplo),
+    [codigosExemplo, linhas],
+  );
+  const agregadoDaObra = linhas ? agregadoDoCronograma(linhasDaObra) : agregado;
+  const estadoAtividades = classificarEstadoAtividadesDashboard({
+    carregandoPlano: plano.isPending,
+    erroPlano: plano.isError,
+    atividadesOperacionais: atividades.length,
+    atividadesNaGrade: agregadoDaObra?.totalAtividades ?? 0,
+  });
 
   const dados = useMemo(() => {
     const custo = calcularPesosDaCurva(atividades, orcamento.data?.items ?? []);
 
     const pctPorCodigo = new Map<string, number>();
     const planejadoPorCodigo = new Map<string, number>();
-    for (const linha of linhas ?? []) {
+    for (const linha of linhasDaObra) {
       if (linha.codigo) {
         pctPorCodigo.set(linha.codigo, linha.pctReal);
         planejadoPorCodigo.set(linha.codigo, linha.pctPlanejado);
@@ -152,11 +170,15 @@ export function PainelDoCronograma({
     const total = Number(orcamento.data?.total ?? 0);
     const distribuido = Math.max(0, total - custo.valorSemDestino);
 
-    const lancamentos = producao.data ?? [];
+    const lancamentos = (producao.data ?? []).filter(l =>
+      Number(l.exemplo ?? 0) !== 1 &&
+      !codigosExemplo.has(l.codigoEap ?? "") &&
+      isoDoValor(l.productionDate) <= hoje
+    );
     const confirmados = lancamentos.filter((l) => l.status === "confirmada");
     const foraDoPlano = confirmados.filter((l) => l.vinculo && l.vinculo !== "atual").length;
 
-    const linhasAvaliadas = linhas ?? [];
+    const linhasAvaliadas = linhasDaObra;
     const maiorAtraso = linhasAvaliadas
       .filter((l) => l.status === "Atrasado" && l.fim)
       .map((l) => diasEntre(l.fim, hoje) ?? 0)
@@ -165,26 +187,26 @@ export function PainelDoCronograma({
 
     const resumo = montarResumo({
       hoje,
-      inicio: agregado?.inicio ?? null,
-      fim: agregado?.fim ?? null,
+      inicio: agregadoDaObra?.inicio ?? null,
+      fim: agregadoDaObra?.fim ?? null,
       fisico: pesoComOrcamento > 0
         ? avancoPorValor
         : {
-            real: agregado?.avancoFisico ?? 0,
-            planejado: agregado?.avancoPlanejado ?? 0,
+            real: agregadoDaObra?.avancoFisico ?? 0,
+            planejado: agregadoDaObra?.avancoPlanejado ?? 0,
           },
       status: {
-        total: agregado?.totalAtividades ?? 0,
-        concluidas: agregado?.contagemPorStatus.Concluido ?? 0,
-        emAndamento: agregado?.contagemPorStatus["Em andamento"] ?? 0,
-        atrasadas: agregado?.contagemPorStatus.Atrasado ?? 0,
-        naoIniciadas: agregado?.contagemPorStatus["Nao iniciado"] ?? 0,
+        total: agregadoDaObra?.totalAtividades ?? 0,
+        concluidas: agregadoDaObra?.contagemPorStatus.Concluido ?? 0,
+        emAndamento: agregadoDaObra?.contagemPorStatus["Em andamento"] ?? 0,
+        atrasadas: agregadoDaObra?.contagemPorStatus.Atrasado ?? 0,
+        naoIniciadas: agregadoDaObra?.contagemPorStatus["Nao iniciado"] ?? 0,
       },
       valor: { total, distribuido, executado },
       alertas: {
-        atrasadas: agregado?.contagemPorStatus.Atrasado ?? 0,
+        atrasadas: agregadoDaObra?.contagemPorStatus.Atrasado ?? 0,
         maiorAtrasoDias: maiorAtraso ?? null,
-        semQuantidade: agregado?.linhasSemQuantidade ?? 0,
+        semQuantidade: agregadoDaObra?.linhasSemQuantidade ?? 0,
         foraDoPlano,
         bloqueadas: lookahead.data?.totalBloqueadas ?? 0,
         valorSemAtividade: custo.valorSemDestino,
@@ -195,15 +217,54 @@ export function PainelDoCronograma({
 
     return {
       resumo,
+      avancoComReguaValida: pesoComOrcamento > 0,
       valorSemDestino: custo.valorSemDestino,
       ultimos: [...lancamentos]
         .sort((a, b) => isoDoValor(b.productionDate).localeCompare(isoDoValor(a.productionDate)))
         .slice(0, 5),
       semana: lookahead.data?.semanas?.find((s) => s.situacao === "corrente") ?? lookahead.data?.semanas?.[0],
     };
-  }, [agregado, baseline.data, hoje, linhas, lookahead.data, orcamento.data, plano.data, producao.data]);
+  }, [agregadoDaObra, baseline.data, codigosExemplo, hoje, linhasDaObra, lookahead.data, orcamento.data, plano.data, producao.data]);
 
-  const aindaCarregando = carregandoGrade || !agregado;
+  const aindaCarregando = carregandoGrade || !agregado || estadoAtividades === "carregando";
+
+  if (erroGrade && !agregado) {
+    return (
+      <div className="pd">
+        <div className="pd-cabecalho">
+          <div>
+            <p className="pd-sobretitulo">Painel da obra</p>
+            <h2 className="pd-titulo">{nomeObra ?? "Obra"}</h2>
+            <p className="pd-sub">Não foi possível consultar o cronograma.</p>
+          </div>
+        </div>
+        <div className="pd-vazio" role="alert">
+          <strong>Os indicadores não estão disponíveis.</strong>
+          <p>O cronograma não respondeu. Tente novamente; nenhum dado foi alterado.</p>
+          {tentarNovamenteGrade && <button type="button" className="pd-botao" onClick={tentarNovamenteGrade}>Tentar novamente</button>}
+        </div>
+      </div>
+    );
+  }
+
+  if (estadoAtividades === "erro") {
+    return (
+      <div className="pd">
+        <div className="pd-cabecalho">
+          <div>
+            <p className="pd-sobretitulo">Painel da obra</p>
+            <h2 className="pd-titulo">{nomeObra ?? "Obra"}</h2>
+            <p className="pd-sub">Não foi possível consultar as atividades do plano.</p>
+          </div>
+        </div>
+        <div className="pd-vazio" role="alert">
+          <strong>Os indicadores não estão disponíveis.</strong>
+          <p>A consulta do plano falhou. Tente novamente; nenhum dado foi alterado.</p>
+          <button type="button" className="pd-botao" onClick={() => void plano.refetch()}>Tentar novamente</button>
+        </div>
+      </div>
+    );
+  }
 
   if (aindaCarregando) {
     return (
@@ -224,7 +285,7 @@ export function PainelDoCronograma({
     );
   }
 
-  if (agregado.totalAtividades === 0) {
+  if (estadoAtividades === "sem-atividades") {
     return (
       <div className="pd">
         <div className="pd-cabecalho">
@@ -237,8 +298,9 @@ export function PainelDoCronograma({
         <div className="pd-vazio">
           <strong>O painel nasce da EAP.</strong>
           <p>
-            Monte a estrutura analítica e lance as atividades com duração e quantidade. O painel
-            mostra avanço, prazo, valor, compromissos e alertas em cima desse plano.
+            Monte a estrutura analítica e detalhe as atividades. Registre uma duração fundamentada
+            ou, quando aplicável, estime-a com quantidade e produtividade válida. O painel mostra
+            avanço, prazo, valor, compromissos e alertas a partir do plano.
           </p>
           <div className="pd-vazio-acoes">
             <button type="button" className="pd-botao" onClick={() => abrirAba("eap")}>
@@ -253,7 +315,29 @@ export function PainelDoCronograma({
     );
   }
 
-  const { resumo, valorSemDestino, ultimos, semana } = dados;
+  if (estadoAtividades === "sem-grade") {
+    return (
+      <div className="pd">
+        <div className="pd-cabecalho">
+          <div>
+            <p className="pd-sobretitulo">Painel da obra</p>
+            <h2 className="pd-titulo">{nomeObra ?? "Obra"}</h2>
+            <p className="pd-sub">Há {atividades.length} atividade(s) no plano, mas nenhuma aparece na grade do cronograma.</p>
+          </div>
+        </div>
+        <div className="pd-vazio" role="alert">
+          <strong>O painel ainda não consegue calcular os indicadores.</strong>
+          <p>Confira os vínculos das atividades com a EAP, as datas e durações, e se o CPM foi calculado. As atividades continuam no plano; a grade vazia não significa que a obra esteja sem atividades.</p>
+          <div className="pd-vazio-acoes">
+            <button type="button" className="pd-botao" onClick={() => abrirAba("atividades")}>Conferir atividades</button>
+            <button type="button" className="pd-botao pd-botao-fraco" onClick={() => abrirAba("cpm")}>Conferir CPM</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { resumo, avancoComReguaValida, valorSemDestino, ultimos, semana } = dados;
   const { prazo, fisico, valor, status, selo, alertas } = resumo;
 
   // Coerência: só entra quando há item que IMPEDE execução e valor em risco.
@@ -302,6 +386,8 @@ export function PainelDoCronograma({
     <ControlTowerDashboard
       projetoId={projetoId}
       nomeObra={nomeObra ?? "Obra"}
+      codigosExemplo={codigosExemplo}
+      avancoEstado={orcamento.isPending ? "pendente" : orcamento.isError ? "erro" : avancoComReguaValida ? "ok" : "indisponivel"}
       hoje={hoje}
       resumo={resumo}
       alertas={alertasVisiveis}

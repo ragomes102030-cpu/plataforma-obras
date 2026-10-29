@@ -9,7 +9,10 @@ import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore, type NoDoGan
 import { gerarSetasVisiveisGantt } from "@shared/gantt-dependencias-visuais";
 import { gerarSvgGantt } from "@shared/gantt-export-svg";
 import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
-import { selectOperationalPlanning } from "@shared/operational-planning";
+import {
+  selectOperationalPlanning,
+  selectOperationalScheduleRows,
+} from "@shared/operational-planning";
 import { LinhaBalancoEscadinha } from "./AuroraLinhaBalanco";
 import { LobDistribuicaoPainel } from "./LobDistribuicaoPainel";
 import "./aurora-piloto.css";
@@ -73,6 +76,15 @@ export function VisualizacaoPlanejamento({
     { enabled: Number(projetoId) > 0 }
   );
   const atividades = planejamento.data?.activities ?? [];
+  const codigosDeExemploOperacionais = useMemo(
+    () => new Set([
+      ...(codigosExemplo ?? []),
+      ...atividades
+        .filter(activity => Number(activity.exemplo ?? 0) === 1)
+        .map(activity => activity.wbsCode),
+    ]),
+    [atividades, codigosExemplo]
+  );
   // A LOB usa somente locais físicos confirmados na EAP da versão corrente.
   // Não alterar as atividades nem criar outro cronograma.
   const consultarLocaisLob = view === "lob" && projetoId > 0;
@@ -98,8 +110,12 @@ export function VisualizacaoPlanejamento({
   const atividadesLob=atividades.filter(a=>!codigosExemplo?.has(a.wbsCode)).map(a=>({id:a.id,wbsCode:a.wbsCode}));
 
   const atividadePorCodigo = useMemo(
-    () => new Map(atividades.map(activity => [activity.wbsCode, activity])),
-    [atividades]
+    () => new Map(
+      atividades
+        .filter(activity => !codigosDeExemploOperacionais.has(activity.wbsCode))
+        .map(activity => [activity.wbsCode, activity])
+    ),
+    [atividades, codigosDeExemploOperacionais]
   );
   // A baseline vigente é a única referência automática. Nunca utilizar
   // silenciosamente uma fotografia histórica quando não houver vigente.
@@ -152,12 +168,28 @@ export function VisualizacaoPlanejamento({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planejamento.data]);
 
+  // O Gantt operacional, seus indicadores e exportação usam a mesma população
+  // do CPM. Tarefas QA continuam disponíveis nas abas de atividades e na LOB
+  // (que tem seu próprio controle), mas não se misturam ao plano da obra.
+  const linhasGantt = useMemo(
+    () => selectOperationalScheduleRows(linhas, codigosDeExemploOperacionais),
+    [linhas, codigosDeExemploOperacionais]
+  );
+  const dependenciasGantt = useMemo(
+    () => dependencias.filter(
+      dependencia => !codigosDeExemploOperacionais.has(dependencia.de) &&
+        !codigosDeExemploOperacionais.has(dependencia.para)
+    ),
+    [dependencias, codigosDeExemploOperacionais]
+  );
+  const linhasDaVisao = view === "gantt" ? linhasGantt : linhas;
+
   const dados = useMemo(() => {
-    if (!linhas.length) return null;
+    if (!linhasDaVisao.length) return null;
     const baselineExibida = baselinePronta ? Array.from(barrasBaseline.values()) : [];
-    const minAtual = linhas.reduce((v,l) => Math.min(v,dateMs(l.inicio)),dateMs(linhas[0]!.inicio));
+    const minAtual = linhasDaVisao.reduce((v,l) => Math.min(v,dateMs(l.inicio)),dateMs(linhasDaVisao[0]!.inicio));
     const min = baselineExibida.reduce((v,b)=>Math.min(v,dateMs(b.inicio)),minAtual);
-    const max = linhas.reduce((v,l)=>{
+    const max = linhasDaVisao.reduce((v,l)=>{
       const fim = finsCalculados[l.codigo];
       const dataValida = typeof fim === "string" &&
         /^\d{4}-\d{2}-\d{2}$/.test(fim) &&
@@ -175,7 +207,7 @@ export function VisualizacaoPlanejamento({
     const end = fim.toISOString().slice(0, 10);
     const total = Math.max(1, Math.round((dateMs(end) - dateMs(start)) / 86400000));
     return { start, end, total };
-  }, [linhas, finsCalculados, barrasBaseline, baselinePronta]);
+  }, [linhasDaVisao, finsCalculados, barrasBaseline, baselinePronta]);
 
   if (!dados) {
     return (
@@ -207,7 +239,7 @@ export function VisualizacaoPlanejamento({
       )}
       {view === "gantt" && planejamentoOperacional.excludedExampleActivities > 0 && (
         <div className="pl-gantt-cpm-aviso" role="status">
-          CPM operacional: {planejamentoOperacional.activities.length} atividades calculáveis; {planejamentoOperacional.excludedExampleActivities} atividades de exemplo ficam fora do cálculo.
+          Visão operacional: {planejamentoOperacional.activities.length} atividades no plano; {planejamentoOperacional.excludedExampleActivities} atividades de exemplo ficam fora do Gantt, dos indicadores e do CPM.
         </div>
       )}
       {view === "gantt" && planejamento.isError && (
@@ -225,7 +257,7 @@ export function VisualizacaoPlanejamento({
         </div>
       )}
       {view === "gantt" ? (
-        <Gantt linhas={linhas} atividades={atividadePorCodigo} dependencias={dependencias} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
+        <Gantt linhas={linhasGantt} atividades={atividadePorCodigo} dependencias={dependenciasGantt} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
           compararBaseline={compararBaseline} onAlternarBaseline={() => setCompararBaseline(v=>!v)}
           baselineDisponivel={baselineVigente !== null && anoValido}
           baselinePronta={baselinePronta} barrasBaseline={barrasBaseline}

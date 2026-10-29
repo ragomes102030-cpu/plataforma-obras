@@ -43,8 +43,8 @@ describe("carregando nunca é igual a vazio", () => {
 
   it("o painel do cronograma não declara obra sem planejamento enquanto carrega", () => {
     const fonte = readFileSync("client/src/components/PainelDoCronograma.tsx", "utf-8");
-    const posicaoDoCarregando = fonte.indexOf("aindaCarregando");
-    const posicaoDoVazio = fonte.indexOf("agregado.totalAtividades === 0");
+    const posicaoDoCarregando = fonte.indexOf("if (aindaCarregando)");
+    const posicaoDoVazio = fonte.indexOf('if (estadoAtividades === "sem-atividades")');
     expect(posicaoDoCarregando).toBeGreaterThan(-1);
     expect(posicaoDoVazio).toBeGreaterThan(-1);
     // A checagem de carregamento tem de vir ANTES da de vazio, senão o vazio

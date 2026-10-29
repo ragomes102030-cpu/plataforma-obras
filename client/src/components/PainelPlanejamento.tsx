@@ -402,6 +402,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|quantidade"]: event.target.value }))}
                     onBlur={() => salvarEdicao(activity.id, "quantidade")}
                     aria-label={"Quantidade de " + activity.name}
+                    title={Number(activity.productivity) > 0 ? "Com produtividade informada, alterar a quantidade recalcula a duração e invalida o CPM se o prazo mudar." : "Quantidade planejada; sem produtividade, a duração permanece uma entrada manual."}
                   />
                 </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>

@@ -17,6 +17,7 @@ import { AlertTriangle, ArrowUpRight, ChartNoAxesCombined } from "lucide-react";
  */
 type Props = {
   projetoId: number;
+  codigosExemplo: ReadonlySet<string>;
   hoje: string;
   abrirAba: (aba: string) => void;
   /** Somente para expor divergência de régua, nunca corrigir a série artificialmente. */
@@ -30,7 +31,7 @@ const dataBr = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" +
 const inicioValido = (iso: string | null | undefined) => Boolean(iso && /^\d{4}-\d{2}-\d{2}$/.test(iso));
 const soFinito = (n: number) => Number.isFinite(n) ? n : 0;
 
-export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, painelPlanejado }: Props) {
+export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba, painelReal, painelPlanejado }: Props) {
   const [faixa, setFaixa] = useState<Faixa>("total");
   const [pontoSelecionado, setPontoSelecionado] = useState<number | null>(null);
   const planejamento = trpc.planning.list.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
@@ -47,13 +48,18 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
     { projectId: projetoId },
     { enabled: projetoId > 0 && (planejamento.data?.baselines?.length ?? 0) > 0, retry: false }
   );
+  const atividadesDaObra = useMemo(
+    () => (planejamento.data?.activities ?? []).filter(a => !codigosExemplo.has(a.wbsCode ?? "")),
+    [codigosExemplo, planejamento.data],
+  );
+  const idsDasAtividadesDaObra = useMemo(() => new Set(atividadesDaObra.map(a => a.id)), [atividadesDaObra]);
   const pesos = useMemo(
-    () => calcularPesosDaCurva(planejamento.data?.activities ?? [], budget.data?.items ?? []),
-    [planejamento.data, budget.data]
+    () => calcularPesosDaCurva(atividadesDaObra, budget.data?.items ?? []),
+    [atividadesDaObra, budget.data]
   );
   const serie = useMemo(() => {
     if (!planejamento.data || !budget.data?.items?.length || pesos.total <= 0) return null;
-    const insumos = planejamento.data.activities
+    const insumos = atividadesDaObra
       .filter(a => Boolean(a.cpmCalculatedAt) && a.durationDays > 0)
       .map(a => ({
         id: String(a.id),
@@ -64,12 +70,12 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
       }))
       .filter(a => a.plannedPercent > 0);
     return insumos.length > 0 ? buildSCurve(insumos) : null;
-  }, [planejamento.data, budget.data, pesos]);
+  }, [atividadesDaObra, budget.data, pesos]);
 
   const planoAprovado = useMemo(() => {
     if (!comparacao.data || pesos.total <= 0) return null;
     const insumos = (comparacao.data.linhas ?? [])
-      .filter(l => l.atividadeId != null && l.baselineInicio != null && l.baselineFim != null)
+      .filter(l => l.atividadeId != null && idsDasAtividadesDaObra.has(l.atividadeId) && l.baselineInicio != null && l.baselineFim != null)
       .map(l => ({
         id: String(l.atividadeId),
         duration: Math.max(1, l.baselineFim! - l.baselineInicio!),
@@ -79,7 +85,7 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
       }))
       .filter(a => a.plannedPercent > 0);
     return insumos.length > 0 ? buildSCurve(insumos) : null;
-  }, [comparacao.data, pesos]);
+  }, [comparacao.data, idsDasAtividadesDaObra, pesos]);
 
   const cal = calendario.data && inicioValido(inicio) ? {
     weekPattern: calendario.data.weekPattern,
@@ -90,7 +96,7 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
   const acumuladoConfirmado = useMemo(() => {
     if (!cal || !inicio || !serie || !producao.data || !planejamento.data) return null;
     const pesosPorCodigo = new Map<string, { peso: number; planejado: number }>();
-    for (const atividade of planejamento.data.activities) {
+    for (const atividade of atividadesDaObra) {
       const custo = pesos.custoPorAtividade.get(atividade.id) ?? 0;
       if (custo <= 0 || !atividade.wbsCode) continue;
       pesosPorCodigo.set(atividade.wbsCode, {
@@ -99,15 +105,15 @@ export function CurvaSControlTower({ projetoId, hoje, abrirAba, painelReal, pain
       });
     }
     const confirmados = producao.data
-      .filter(e => e.status === "confirmada")
+      .filter(e => e.status === "confirmada" && Number(e.exemplo ?? 0) !== 1)
       .map(e => {
         const data = e.productionDate instanceof Date ? e.productionDate.toISOString().slice(0, 10) : String(e.productionDate).slice(0, 10);
         return { codigo: e.codigoEap ?? null, quantidade: Number(e.quantity ?? 0), data };
       })
-      .filter(e => /^\d{4}-\d{2}-\d{2}$/.test(e.data) && Number.isFinite(e.quantidade));
+      .filter(e => /^\d{4}-\d{2}-\d{2}$/.test(e.data) && e.data <= hoje && Number.isFinite(e.quantidade));
     if (!confirmados.some(e => Boolean(e.codigo && pesosPorCodigo.has(e.codigo) && pesosPorCodigo.get(e.codigo)!.planejado > 0 && e.quantidade > 0))) return null;
     return acumularRealizado(confirmados, pesosPorCodigo, data => indexOf(cal, inicio, data));
-  }, [calendario.data, inicio, serie, producao.data, planejamento.data, pesos.total, pesos.custoPorAtividade]);
+  }, [calendario.data, inicio, serie, producao.data, atividadesDaObra, pesos.total, pesos.custoPorAtividade]);
 
   const curvaDados = useMemo(() => {
     if (!serie || !cal || !inicio) return null;
