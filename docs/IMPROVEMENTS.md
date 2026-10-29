@@ -1,6 +1,16 @@
 # Melhorias e Mudanças
 
-> **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
+> **Documento normativo.** Última atualização: 29/10/2026.
+
+## 29/out/2026 — Reconstruir conversa do Arquimedes sem duplicar snapshots
+
+**Sintoma:** o chat da PROJETO ESCOLA ARQUIMEDES repetia blocos inteiros de pedidos e respostas antigos. Instruções de análise e somente leitura reapareciam junto com a ordem mais recente, tornando imprevisível a escolha da ação do agente.
+
+**Causa:** cada execução persiste em `contextJson.messages` um snapshot completo da conversa. `mergeAgentConversations` tratava cada snapshot como novas mensagens e concatenava mensagem a mensagem. A conversa crescia com cópias dos históricos anteriores.
+
+**Correção:** reconstruir a conversa sobrepondo o sufixo já lido ao prefixo do snapshot seguinte, preservando a janela recente de até 20 mensagens. A execução continua usando apenas a última ordem do usuário para classificar intenção.
+
+**Regressão:** `server/agent-history.test.ts` reproduz duas execuções sucessivas, verifica que o histórico anterior aparece uma única vez e confirma a inclusão da resposta mais recente. Teste focalizado e `pnpm check` passaram. Ainda é necessário publicar a correção e conferir no ambiente ao vivo que o chat fica conciso e que a próxima operação usa a ordem atual.
 
 ## 29/out/2026 — Revalidar EAP após aplicar proposta inicial
 
