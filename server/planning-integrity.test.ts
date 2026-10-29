@@ -226,6 +226,15 @@ describe("aplicarPropostaEap", () => {
     expect(await db.select().from(wbsNodes)).toHaveLength(1);
   });
 
+  it("recusa unidade fora do vocabulário de medição mesmo em proposta da IA", async () => {
+    await expect(caller.eap.aplicarPropostaEap({
+      projectId,
+      confirm: true,
+      proposal: proposal([itemCriado({ unit: "kgf" })]),
+    })).rejects.toThrow();
+    expect(await db.select().from(wbsNodes)).toHaveLength(1);
+  });
+
   it("revalida no servidor e não aplica uma proposta estruturalmente inválida", async () => {
     await expect(caller.eap.aplicarPropostaEap({
       projectId,
@@ -256,7 +265,13 @@ describe("aplicarPropostaEap", () => {
       })]),
     });
 
-    expect(result).toMatchObject({ applied: true, created: 1, baselineCreated: false });
+    expect(result).toMatchObject({
+      applied: true,
+      created: 1,
+      baselineCreated: false,
+      approved: false,
+      verification: { persistenceVerified: true, nodeCount: 2, leafCount: 1, structuralErrors: 0 },
+    });
     const nodes = await db.select().from(wbsNodes);
     expect(nodes.find(node => node.name === "Estrutura")).toMatchObject({
       code: "1.1",
@@ -266,5 +281,43 @@ describe("aplicarPropostaEap", () => {
       decompositionBasis: "system",
       scopeStatus: "rascunho",
     });
+  });
+
+  it("confere no banco os campos de uma atualização antes de reportar sucesso", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [leaf] = await db.insert(wbsNodes).values({
+      projectId,
+      versionId: root!.versionId,
+      parentId: root!.id,
+      code: "1.1",
+      name: "Escopo pendente",
+      level: 2,
+      nodeType: "pacote",
+      sortOrder: 1,
+    }).returning({ id: wbsNodes.id });
+
+    const result = await caller.eap.aplicarPropostaEap({
+      projectId,
+      confirm: true,
+      proposal: proposal([{
+        operation: "update",
+        nodeId: leaf!.id,
+        parentCode: "1",
+        code: "1.1",
+        name: "Estrutura",
+        nodeType: "pacote",
+        description: "Elementos estruturais previstos no escopo registrado.",
+        rationale: "Completa a descrição do pacote sem criar quantidade.",
+      }]),
+    });
+
+    expect(result).toMatchObject({
+      applied: true,
+      created: 0,
+      updated: 1,
+      verification: { persistenceVerified: true, expectedChangesVerified: true, nodeCount: 2 },
+    });
+    const persisted = (await db.select().from(wbsNodes)).find(node => node.id === leaf!.id);
+    expect(persisted).toMatchObject({ name: "Estrutura", description: "Elementos estruturais previstos no escopo registrado." });
   });
 });

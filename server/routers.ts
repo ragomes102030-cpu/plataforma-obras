@@ -84,6 +84,7 @@ import type {
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
+import { applyEapProposalToDraft, eapProposalInput } from "./construction/eap-proposal-apply";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
 /**
@@ -105,33 +106,6 @@ const EXTENSOES_DE_DOCUMENTO = new Set([
   "png",
   "jpg",
 ]);
-
-const eapProposalInput = z.object({
-  action: z.literal("propose_eap"),
-  basis: z.array(z.string().max(500)).max(50),
-  assumptions: z.array(z.string().max(1000)).max(100),
-  missingInformation: z.array(z.string().max(1000)).max(100),
-  nodes: z.array(z.object({
-    operation: z.enum(["create", "update", "move", "remove"]),
-    nodeId: z.number().int().positive().optional(),
-    parentCode: z.string().trim().max(32).nullable(),
-    code: z.string().trim().max(32).optional(),
-    name: z.string().trim().min(2).max(220),
-    nodeType: z.enum(["grupo", "pacote", "entrega"]),
-    location: z.string().trim().max(180).nullable().optional(),
-    unit: z.string().trim().max(32).nullable().optional(),
-    plannedQuantity: z.number().min(0).max(99_999_999_999.999)
-      .refine(value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7)
-      .nullable().optional(),
-    description: z.string().trim().max(5000).nullable().optional(),
-    inclusions: z.string().trim().max(5000).nullable().optional(),
-    exclusions: z.string().trim().max(5000).nullable().optional(),
-    responsible: z.string().trim().max(180).nullable().optional(),
-    acceptanceCriteria: z.string().trim().max(5000).nullable().optional(),
-    decompositionBasis: z.enum(["project", "deliverable", "system", "discipline", "location", "phase", "component", "other"]).nullable().optional(),
-    rationale: z.string().trim().max(2000),
-  })).min(1).max(500),
-});
 
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -2132,89 +2106,10 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
-        const currentNodes = await db
-          .select()
-          .from(wbsNodes)
-          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
-        const proposal = validateAndNormalizeEapProposal(
-          currentNodes,
-          input.proposal as ArquimedesEapProposal,
-        );
-        if (!proposal.validation?.valid) {
-          throw badRequest("A proposta mudou ou contém inconsistências. Atualize a análise da EAP antes de aplicá-la.");
-        }
-
-        return db.transaction(async tx => {
-          const byCode = new Map(currentNodes.map(node => [node.code, node]));
-          let created = 0;
-          for (const item of proposal.nodes) {
-            if (item.operation === "create") {
-              const code = item.code;
-              if (!code || byCode.has(code)) {
-                throw conflict("O código proposto foi ocupado durante a revisão. Atualize a análise da EAP e tente novamente.");
-              }
-              const parent = item.parentCode ? byCode.get(item.parentCode) : null;
-              if (item.parentCode && !parent) {
-                throw conflict("O pai da proposta mudou durante a revisão. Atualize a análise da EAP e tente novamente.");
-              }
-              const [row] = await tx.insert(wbsNodes).values({
-                projectId: input.projectId,
-                parentId: parent?.id ?? null,
-                code,
-                name: item.name,
-                level: code.split(".").length,
-                nodeType: item.nodeType,
-                unit: item.unit ?? null,
-                plannedQuantity: item.plannedQuantity == null ? null : item.plannedQuantity.toFixed(3),
-                decompositionBasis: item.decompositionBasis ?? null,
-                description: item.description ?? null,
-                inclusions: item.inclusions ?? null,
-                exclusions: item.exclusions ?? null,
-                location: item.location ?? null,
-                responsible: item.responsible ?? null,
-                acceptanceCriteria: item.acceptanceCriteria ?? null,
-                scopeStatus: "rascunho",
-                sortOrder: currentNodes.length + created,
-                versionId: writable.id,
-              }).returning({ id: wbsNodes.id });
-              byCode.set(code, { id: row.id, code } as typeof currentNodes[number]);
-              created++;
-            } else if (item.operation === "update") {
-              const existing = item.nodeId == null
-                ? undefined
-                : currentNodes.find(node => node.id === item.nodeId);
-              if (!existing) {
-                throw conflict("O item da proposta não pertence mais à versão de trabalho. Atualize a análise da EAP.");
-              }
-              await tx.update(wbsNodes).set({
-                name: item.name,
-                nodeType: item.nodeType,
-                unit: item.unit !== undefined ? item.unit : existing.unit,
-                plannedQuantity: item.plannedQuantity !== undefined
-                  ? item.plannedQuantity == null ? null : item.plannedQuantity.toFixed(3)
-                  : existing.plannedQuantity,
-                description: item.description !== undefined ? item.description : existing.description,
-                inclusions: item.inclusions !== undefined ? item.inclusions : existing.inclusions,
-                exclusions: item.exclusions !== undefined ? item.exclusions : existing.exclusions,
-                location: item.location !== undefined ? item.location : existing.location,
-                responsible: item.responsible !== undefined ? item.responsible : existing.responsible,
-                acceptanceCriteria: item.acceptanceCriteria !== undefined ? item.acceptanceCriteria : existing.acceptanceCriteria,
-                decompositionBasis: item.decompositionBasis !== undefined ? item.decompositionBasis : existing.decompositionBasis,
-              }).where(and(
-                eq(wbsNodes.id, existing.id),
-                eq(wbsNodes.projectId, input.projectId),
-                eq(wbsNodes.versionId, writable.id),
-              ));
-            }
-          }
-          await tx.update(agentMemories).set({ status: "obsolete", updatedAt: new Date() }).where(and(
-            eq(agentMemories.projectId, input.projectId),
-            eq(agentMemories.ownerUserId, ctx.user.id),
-            eq(agentMemories.category, "eap_proposal"),
-            eq(agentMemories.status, "proposed"),
-          ));
-          return { applied: true as const, created, versionId: writable.id, versionNumber: writable.versionNumber, baselineCreated: false as const };
+        return applyEapProposalToDraft({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          proposal: input.proposal as ArquimedesEapProposal,
         });
       }),
     enviarEapParaRevisao: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).mutation(async({ctx,input})=>{

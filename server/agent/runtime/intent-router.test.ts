@@ -42,6 +42,11 @@ describe("Arquimedes intent router", () => {
     expect(classifyArquimedesIntent("Adicione 5 atividades")).toBe("operacao");
   });
 
+  it("trata pedidos para preencher ou completar planejamento como operação", () => {
+    expect(classifyArquimedesIntent("Preencha a EAP usando os dados da obra")).toBe("operacao");
+    expect(classifyArquimedesIntent("Complete os campos faltantes dos pacotes")).toBe("operacao");
+  });
+
   it("classifica confirmação explícita de proposta como operacao", () => {
     // Sem isto, o "confirmo" seria consulta e a mutação proposta nunca rodaria.
     expect(isExplicitConfirmation("confirmo")).toBe(true);
