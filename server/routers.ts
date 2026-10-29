@@ -7415,6 +7415,7 @@ export const appRouter = router({
             status: agentRuns.status,
             contextJson: agentRuns.contextJson,
             resultJson: agentRuns.resultJson,
+            errorMessage: agentRuns.errorMessage,
           })
           .from(agentRuns)
           .where(
@@ -7587,6 +7588,7 @@ export const appRouter = router({
               status: agentRuns.status,
               contextJson: agentRuns.contextJson,
               resultJson: agentRuns.resultJson,
+              errorMessage: agentRuns.errorMessage,
             })
             .from(agentRuns)
             .where(
@@ -7602,6 +7604,7 @@ export const appRouter = router({
             status: run.status,
             contextJson: run.contextJson,
             resultJson: run.resultJson,
+            errorMessage: run.errorMessage,
           })));
         }
         const messagesWithHistory = mergePersistedWithIncoming(

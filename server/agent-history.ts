@@ -32,6 +32,7 @@ export function restoreAgentConversation(
   contextJson: string,
   resultJson: string | null,
   status: string,
+  errorMessage: string | null = null,
 ): PersistedAgentMessage[] {
   let messages: PersistedAgentMessage[] = [];
   try {
@@ -50,6 +51,7 @@ export function restoreAgentConversation(
     messages = [];
   }
 
+  let restoredResult = false;
   if (status !== "executando" && resultJson) {
     try {
       const result = JSON.parse(resultJson) as { content?: unknown };
@@ -58,10 +60,18 @@ export function restoreAgentConversation(
           ...messages,
           { role: "assistant", content: result.content },
         ];
+        restoredResult = true;
       }
     } catch {
       // A conversa anterior continua recuperável mesmo com resultado inválido.
     }
+  }
+
+  if (status !== "executando" && !restoredResult && errorMessage?.trim()) {
+    messages = [
+      ...messages,
+      { role: "assistant", content: `A execução falhou: ${errorMessage.trim().slice(0, 1_000)}` },
+    ];
   }
 
   return messages;
@@ -73,6 +83,7 @@ export type PersistedAgentRun = {
   status: string;
   contextJson: string;
   resultJson: string | null;
+  errorMessage?: string | null;
 };
 
 export function mergeAgentConversations(
@@ -80,7 +91,7 @@ export function mergeAgentConversations(
 ): PersistedAgentMessage[] {
   const messages: PersistedAgentMessage[] = [];
   for (const run of [...runs].reverse()) {
-    const restored = restoreAgentConversation(run.contextJson, run.resultJson, run.status);
+    const restored = restoreAgentConversation(run.contextJson, run.resultJson, run.status, run.errorMessage);
     // `contextJson.messages` é um snapshot da conversa até o envio, não um
     // delta. Mesclar mensagem por mensagem duplica todo o histórico em cada
     // execução e faz instruções antigas dominarem os próximos pedidos.
