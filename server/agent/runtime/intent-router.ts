@@ -17,6 +17,25 @@ const ANALYSIS_PATTERNS = [
 
 const CONFIRMATION_PATTERN = /(?:^|\b)(confirmo|confirmado|pode aplicar|pode corrigir|aplique|pode executar|sim,?\s*(?:pode|aplique|corrija))(?:\b|$)/i;
 
+const READ_ONLY_PATTERNS = [
+  /\bREAD_ONLY\b/i,
+  /\b(?:somente|apenas)\s+leitura\b/i,
+  /\bsem\s+(?:alterar|modificar|gravar|escrever)\s+(?:dados|nada|qualquer\s+dado)\b/i,
+  /\bn[aã]o\s+(?:fa[cç]a|faca)\s+(?:nenhuma|qualquer)\s+altera[cç][aã]o\b/i,
+  /\bn[aã]o\s+(?:aplique|aplicar|altere|alterar|modifique|modificar|grave|gravar|crie|criar|atualize|atualizar|mova|mover|remova|remover|salve|salvar|gere|gerar)\s+(?:nada|nenhum(?:a)?\s+(?:dado|altera[cç][aã]o|n[oó]|item)|qualquer\s+(?:dado|altera[cç][aã]o)|a\s+proposta|a\s+EAP)\b/i,
+];
+
+function forbidsAllMutation(text: string) {
+  return READ_ONLY_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function removeNegatedMutationCommands(text: string) {
+  return text.replace(
+    /\bn[aã]o\s+(?:aplicar|aplique|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gerar|gere)\b(?:\s+[^,.;!?\n]{1,80})?/gi,
+    " ",
+  );
+}
+
 /**
  * Confirmação explícita de uma proposta ("confirmo", "pode aplicar"...).
  * É a resposta humana a uma proposta do agente — distinta de um pedido de
@@ -24,7 +43,8 @@ const CONFIRMATION_PATTERN = /(?:^|\b)(confirmo|confirmado|pode aplicar|pode cor
  * mutação proposta nunca rodaria.
  */
 export function isExplicitConfirmation(text: string): boolean {
-  return CONFIRMATION_PATTERN.test(stripUiContext(text).trim());
+  const normalized = stripUiContext(text).trim();
+  return !forbidsAllMutation(normalized) && CONFIRMATION_PATTERN.test(removeNegatedMutationCommands(normalized));
 }
 
 function stripUiContext(message: string) {
@@ -34,17 +54,17 @@ function stripUiContext(message: string) {
 export function classifyArquimedesIntent(message: string): ArquimedesIntent {
   const text = stripUiContext(message);
   if (CASUAL_PATTERNS.some(pattern => pattern.test(text))) return "casual";
-  // Mensagens que proíbem mutação (READ_ONLY, não aplicar/criar/remover) são
-  // análise, não operação — mesmo que contenham verbos de operação ou uma
-  // confirmação ("confirmo o diagnóstico, mas não aplique nada"). A proibição
-  // vence a confirmação: quem proíbe não está autorizando.
-  if (/\bREAD_ONLY\b/i.test(text) || /\bn[aã]o\s+(aplicar|aplique|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gerar|gere)\b/i.test(text)) {
+  // Uma restrição ampla de leitura impede mutação. Restrições pontuais como
+  // "não aprove" ou "não crie baseline" não anulam outra ação explicitamente
+  // solicitada (por exemplo, editar o rascunho da EAP).
+  if (forbidsAllMutation(text)) {
     return "analise";
   }
+  const intentText = removeNegatedMutationCommands(text);
   // Confirmação explícita de uma proposta é uma ordem de operação: destrava a
   // execução do que foi proposto (e só) na conversa.
   if (isExplicitConfirmation(text)) return "operacao";
-  if (OPERATION_PATTERNS.some(pattern => pattern.test(text))) return "operacao";
+  if (OPERATION_PATTERNS.some(pattern => pattern.test(intentText))) return "operacao";
   if (ANALYSIS_PATTERNS.some(pattern => pattern.test(text))) return "analise";
   return "consulta";
 }

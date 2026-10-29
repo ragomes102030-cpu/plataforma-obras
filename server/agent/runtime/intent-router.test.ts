@@ -61,4 +61,16 @@ describe("Arquimedes intent router", () => {
     expect(classifyArquimedesIntent("confirmo o diagnóstico, mas não aplique nada")).toBe("analise");
     expect(classifyArquimedesIntent("confirmo, READ_ONLY, não criar nem atualizar")).toBe("analise");
   });
+
+  it("permite a operação pedida quando a restrição é só não aprovar nem criar baseline", () => {
+    expect(classifyArquimedesIntent(
+      "Aplique as correções justificadas à EAP. Não aprove a EAP e não crie baseline.",
+    )).toBe("operacao");
+  });
+
+  it("mantém somente leitura quando o usuário proíbe qualquer alteração", () => {
+    expect(classifyArquimedesIntent(
+      "Confirmo o diagnóstico, mas não aplique nada e não altere dados.",
+    )).toBe("analise");
+  });
 });
