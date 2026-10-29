@@ -2,6 +2,16 @@
 
 > **Documento normativo.** Última atualização: 29/10/2026.
 
+## 29/out/2026 — Não confundir restrição de baseline com proibição de editar a EAP
+
+**Sintoma:** a operação autorizada para corrigir a EAP da PROJETO ESCOLA ARQUIMEDES recebeu uma resposta dizendo que a ferramenta de escrita não existia, embora o backend a registre. A aplicação não ocorreu.
+
+**Causa:** a classificação de intenção tratava qualquer ocorrência de “não crie” como proibição global de mutação. A frase “não aprove e não crie baseline” retirava do modelo a ferramenta local de edição, embora a ordem principal pedisse aplicar correções no rascunho.
+
+**Correção:** separar proibições globais de somente leitura de restrições específicas a aprovação/baseline, e remover comandos negativos antes de detectar verbos de operação. Assim, uma edição explicitamente solicitada continua operacional sem liberar aprovação ou baseline; instruções “READ_ONLY” e “não aplique nada/não altere dados” seguem bloqueando escrita.
+
+**Regressão:** testes do intent-router cobrem pedido de editar a EAP com baseline proibida, diagnóstico sem alteração e proibição global de escrita.
+
 ## 29/out/2026 — Recuperar chamadas de ferramenta inválidas e persistir diagnóstico do Arquimedes
 
 **Sintoma:** ao tentar aplicar a proposta local à EAP da PROJETO ESCOLA ARQUIMEDES, a execução encerrou com “Argumentos inválidos para a ferramenta aplicar_proposta_eap_local”, sem resposta final visível no histórico.
