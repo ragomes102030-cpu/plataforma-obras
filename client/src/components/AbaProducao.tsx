@@ -86,6 +86,11 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   }, [gradeCrono.data]);
 
   const erro = registrar.isError ? registrar.error.message : null;
+  const todosLancamentos = grade.data ?? [];
+  const lancamentos = useMemo(
+    () => selectConfirmedProductionEntries(todosLancamentos),
+    [todosLancamentos]
+  );
 
   // Carregando ≠ "não há atividades para medir". Esta aba dizia isso com 10-30 s
   // de espera pela frente, numa obra que tem 53 atividades.
@@ -118,11 +123,6 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
     );
   }
 
-  const todosLancamentos = grade.data ?? [];
-  const lancamentos = useMemo(
-    () => selectConfirmedProductionEntries(todosLancamentos),
-    [todosLancamentos]
-  );
   const datas = Array.from(new Set(lancamentos.map(l => new Date(l.productionDate).toISOString().slice(0, 10)))).sort();
   // A chave é o CÓDIGO da EAP, não o id da linha: lançamento antigo aponta para a
   // atividade de uma versão anterior do plano e nunca casava com a coluna de hoje

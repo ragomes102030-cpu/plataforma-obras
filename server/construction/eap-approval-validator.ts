@@ -5,6 +5,66 @@ export type EapBaselineValidationResult = EapValidationResult & {
   readyForBaseline: boolean;
 };
 
+const allowedDictionaryFields = new Set<EapDictionaryField>([
+  "description",
+  "inclusions",
+  "exclusions",
+  "acceptanceCriteria",
+  "responsible",
+  "location",
+  "unit",
+  "plannedQuantity",
+  "scopeStatus",
+  "decompositionBasis",
+]);
+
+export function normalizeEapDictionaryFields(fields: unknown): EapDictionaryField[] {
+  return Array.isArray(fields)
+    ? fields.filter(
+        (field): field is EapDictionaryField =>
+          typeof field === "string" && allowedDictionaryFields.has(field as EapDictionaryField)
+      )
+    : [];
+}
+
+/**
+ * Aprovação da EAP valida a estrutura e os campos que o padrão aprovado da
+ * própria obra tornou obrigatórios. Critérios de baseline, como cobertura de
+ * custo e CPM, pertencem a etapas posteriores.
+ */
+export function validateEapForApproval(
+  nodes: EapScopeNode[],
+  configuredRequiredFields: unknown = []
+): EapValidationResult {
+  const requiredDictionaryFields = normalizeEapDictionaryFields(configuredRequiredFields);
+  const structural = validateEap(
+    nodes.map(node => ({
+      id: Number(node.id),
+      projectId: Number(node.projectId),
+      externalId: node.externalId ?? null,
+      externalUid: node.externalUid ?? null,
+      parentId: node.parentId == null ? null : Number(node.parentId),
+      code: node.code,
+      name: node.name,
+      level: node.level,
+      nodeType: node.nodeType,
+      unit: node.unit ?? null,
+      plannedQuantity: node.plannedQuantity ?? null,
+      sortOrder: node.sortOrder,
+    }))
+  );
+  const scope = validateEapScope(nodes, {
+    requireDictionaryForLeaves: true,
+    requiredDictionaryFields,
+  });
+  const issues = [...structural.issues, ...scope.issues];
+  const blocking = issues.filter(
+    issue => issue.severity === "error" || issue.code === "eap_leaf_not_ready"
+  );
+
+  return { valid: blocking.length === 0, issues };
+}
+
 /**
  * Validação de aprovação/baseline.
  *

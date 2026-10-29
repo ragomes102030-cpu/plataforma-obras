@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentDecisions, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, users, wbsNodes } from "../drizzle/schema";
+import { agentDecisions, agentProjectStates, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
 import { pgliteComSchema } from "./test-helpers/pglite";
 
@@ -126,6 +126,125 @@ describe("versão aprovada x versão de trabalho", () => {
     expect(depois.status).toBe("draft");
   });
 
+  it("não aprova EAP com folhas sem os campos obrigatórios do dicionário", async () => {
+    const db = drizzlePglite(pg);
+    const [versao] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+    const [raiz] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      code: "1",
+      name: "Edificação",
+      level: 1,
+      nodeType: "grupo",
+      description: "Edificação da obra.",
+      inclusions: "Serviços previstos no escopo.",
+      exclusions: "Itens fora do escopo.",
+      responsible: "Engenheiro responsável",
+      acceptanceCriteria: "Inspeção e aceite registrados.",
+      decompositionBasis: "project",
+    }).returning({ id: wbsNodes.id });
+    await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      parentId: raiz.id,
+      code: "1.1",
+      name: "Fundação",
+      level: 2,
+      nodeType: "pacote",
+      // O plano aprovado exige estes campos para cada folha.
+      description: null,
+      inclusions: null,
+      exclusions: "Superestrutura.",
+      responsible: "Engenheiro de estruturas",
+      acceptanceCriteria: "Inspeção aprovada.",
+      decompositionBasis: "deliverable",
+    });
+    await db.insert(agentDecisions).values({
+      projectId: obraId,
+      userId: donoId,
+      stage: "EAP_DICIONARIO",
+      decision: "approved",
+      scopeJson: JSON.stringify({ requiredFields: ["description", "inclusions"] }),
+      reason: "Descrição e inclusões são obrigatórias nas folhas.",
+    });
+
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    await expect(dono.planning.aprovarVersaoDeTrabalho({ projectId: obraId })).rejects.toThrow(
+      /1\.1.*descrição\/escopo.*inclusões/i
+    );
+
+    const [depois] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+    expect(depois.status).toBe("draft");
+  });
+
+  it("não deixa a rota do coordenador aprovar uma EAP incompleta", async () => {
+    const db = drizzlePglite(pg);
+    const [versao] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+    const [raiz] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      code: "1",
+      name: "Edificação",
+      level: 1,
+      nodeType: "grupo",
+      description: "Edificação da obra.",
+      inclusions: "Serviços previstos no escopo.",
+      exclusions: "Itens fora do escopo.",
+      responsible: "Engenheiro responsável",
+      acceptanceCriteria: "Inspeção e aceite registrados.",
+      decompositionBasis: "project",
+    }).returning({ id: wbsNodes.id });
+    const [folha] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      parentId: raiz.id,
+      code: "1.1",
+      name: "Fundação",
+      level: 2,
+      nodeType: "pacote",
+      description: null,
+      inclusions: null,
+      exclusions: "Superestrutura.",
+      responsible: "Engenheiro de estruturas",
+      acceptanceCriteria: "Inspeção aprovada.",
+      decompositionBasis: "deliverable",
+    }).returning({ id: wbsNodes.id });
+    await db.insert(agentDecisions).values({
+      projectId: obraId,
+      userId: donoId,
+      stage: "EAP_DICIONARIO",
+      decision: "approved",
+      scopeJson: JSON.stringify({ requiredFields: ["description", "inclusions"] }),
+      reason: "Descrição e inclusões são obrigatórias nas folhas.",
+    });
+    await db.insert(agentProjectStates).values({ projectId: obraId, stage: "EAP_REVISAO" });
+
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    await expect(dono.agent.recordDecision({
+      projectId: obraId,
+      stage: "EAP_REVISAO",
+      decision: "approved",
+      nextStage: "ATIVIDADES_PROPOSTA",
+      scope: { kind: "eap" },
+      summary: "Aprovar EAP de teste.",
+    })).rejects.toThrow(/obrigatórios do gate/i);
+
+    const [depois] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+    expect(depois.status).toBe("draft");
+  });
+
   it("não anuncia EAP aprovada quando a versão de trabalho é rascunho", async () => {
     const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
     const planejamento = await dono.planning.list({ projectId: obraId });
@@ -191,5 +310,70 @@ describe("versão aprovada x versão de trabalho", () => {
     // E nada foi gravado.
     const baselines = await db.select().from(scheduleBaselines);
     expect(baselines).toHaveLength(0);
+  });
+
+  it("recusa captura direta de baseline quando uma folha não cumpre o dicionário aprovado", async () => {
+    const db = drizzlePglite(pg);
+    const [versao] = await db
+      .select()
+      .from(projectPlanVersions)
+      .where(eq(projectPlanVersions.versionNumber, 2));
+    await db.update(projectPlanVersions)
+      .set({ status: "approved", approvedAt: new Date() })
+      .where(eq(projectPlanVersions.id, versao.id));
+    const [raiz] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      code: "1",
+      name: "Edificação",
+      level: 1,
+      nodeType: "grupo",
+      description: "Edificação da obra.",
+      inclusions: "Serviços previstos no escopo.",
+      exclusions: "Itens fora do escopo.",
+      responsible: "Engenheiro responsável",
+      acceptanceCriteria: "Inspeção e aceite registrados.",
+      decompositionBasis: "project",
+    }).returning({ id: wbsNodes.id });
+    const [folha] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: versao.id,
+      parentId: raiz.id,
+      code: "1.1",
+      name: "Fundação",
+      level: 2,
+      nodeType: "pacote",
+      description: null,
+      inclusions: null,
+      exclusions: "Superestrutura.",
+      responsible: "Engenheiro de estruturas",
+      acceptanceCriteria: "Inspeção aprovada.",
+      decompositionBasis: "deliverable",
+    }).returning({ id: wbsNodes.id });
+    await db.insert(agentDecisions).values({
+      projectId: obraId,
+      userId: donoId,
+      stage: "EAP_DICIONARIO",
+      decision: "approved",
+      scopeJson: JSON.stringify({ requiredFields: ["description", "inclusions"] }),
+      reason: "Descrição e inclusões são obrigatórias nas folhas.",
+    });
+    await db.insert(scheduleActivities).values({
+      projectId: obraId,
+      versionId: versao.id,
+      wbsNodeId: folha.id,
+      wbsCode: "1.1",
+      name: "Fundação",
+      phase: "Teste",
+      startOffset: 0,
+      durationDays: 5,
+      cpmCalculatedAt: new Date(Date.now() + 60_000),
+    });
+
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    await expect(
+      dono.planning.captureBaseline({ projectId: obraId, name: "Baseline indevida" })
+    ).rejects.toThrow(/dicionário da EAP|Folha 1\.1/i);
+    expect(await db.select().from(scheduleBaselines)).toHaveLength(0);
   });
 });
