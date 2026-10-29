@@ -165,6 +165,13 @@ Correção: permitir ao dono atualizar início ou término previsto, validar o i
 Lição: ao preparar distribuições LOB, alinhar o período da obra ao cronograma vigente sem deslocar datas do CPM nem contornar suas validações.
 Regressão: `server/access-isolation.test.ts` cobre a atualização pelo dono, a rejeição de intervalo invertido e a tentativa de alteração por outro usuário.
 
+### Incidente F — validação em cache após aplicar proposta inicial
+Causa: o sucesso de `aplicarPropostaEap` atualizava a árvore, mas não invalidava as consultas de validação estrutural e proposta do Arquimedes que já estavam montadas na mesma tela.
+Efeito: a árvore mostrava 8 nós enquanto o validador ainda exibia 0 nós e o falso bloqueio “A EAP não pode estar vazia”.
+Correção: invalidar, em conjunto, `projects.wbs`, `eap.validateWbsStructure` e `eap.eapArquimedesReview` após aplicar a proposta como rascunho.
+Regressão: `client/src/components/escopo-eap-studio.test.ts` exige as três invalidações no fluxo de aplicação inicial.
+Lição: após mutação versionada, atualizar todas as leituras que compõem o estado visível antes de permitir aprovação ou passagem de etapa.
+
 ## 12. Checklist obrigatório antes de qualquer próxima etapa
 - identificar projectId;
 - identificar versionId;

@@ -832,7 +832,13 @@ function EapVazia({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObra: Ti
     },
   });
   const aplicarProposta = trpc.eap.aplicarPropostaEap.useMutation({
-    onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
+    onSuccess: async () => {
+      await Promise.all([
+        utils.projects.wbs.invalidate({ projectId: projetoId }),
+        utils.eap.validateWbsStructure.invalidate({ projectId: projetoId }),
+        utils.eap.eapArquimedesReview.invalidate({ projectId: projetoId }),
+      ]);
+    },
   });
   const criarRaiz = trpc.projects.createWbsNode.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
