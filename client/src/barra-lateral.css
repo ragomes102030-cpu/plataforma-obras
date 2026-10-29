@@ -65,6 +65,60 @@ html body .xl-pasta-sidebar .xl-sidebar-toggle:hover {
 /* --- rotulo de grupo: era #64798c, 3,93:1; o unico valor que precisou mudar --- */
 html body .xl-pasta-sidebar .xl-sidebar-label { color: #7b90a3; }            /*  5,37:1 */
 
+/* Navegacao: grupos distinguiveis sem competir com o item ativo. O menu
+   mantem a largura do shell e rola apenas no eixo vertical; isso elimina a
+   barra horizontal que surgia quando a soma de icone, texto e status excedia
+   a largura interna da sidebar. */
+html body .xl-pasta-sidebar .xl-sidebar-nav {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #405363 transparent;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-group {
+  min-width: 0;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-group + .xl-sidebar-group {
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid #263542;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 2px 10px 6px;
+  color: #95aaba;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-label::before {
+  content: "";
+  flex: 0 0 3px;
+  width: 3px;
+  height: 11px;
+  border-radius: 2px;
+  background: #3a8298;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-item {
+  min-width: 0;
+}
+
+html body .xl-pasta-sidebar .xl-sidebar-item > span:not(.xl-sidebar-status) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- itens de navegacao: o caso mais grave, 2,84:1 em 420 lugares --- */
 html body .xl-pasta-sidebar .xl-sidebar-item { color: #9eb0bf; }             /*  7,94:1 (6,84:1 no hover, 5,17:1 no ativo) */
 html body .xl-pasta-sidebar .xl-sidebar-item svg { color: #91a5b4; }         /*  6,96:1 */
