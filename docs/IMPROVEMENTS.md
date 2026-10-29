@@ -2,6 +2,16 @@
 
 > **Documento normativo.** Última atualização: 29/10/2026.
 
+## 29/out/2026 — Recuperar chamadas de ferramenta inválidas e persistir diagnóstico do Arquimedes
+
+**Sintoma:** ao tentar aplicar a proposta local à EAP da PROJETO ESCOLA ARQUIMEDES, a execução encerrou com “Argumentos inválidos para a ferramenta aplicar_proposta_eap_local”, sem resposta final visível no histórico.
+
+**Causa:** o runtime lançava exceção ao receber argumentos que não eram JSON válido. Isso encerrava o ciclo ReAct antes de o modelo poder corrigir a chamada ou explicar a falha. Além disso, a reconstrução do histórico ignorava `errorMessage` de execuções terminais sem resultado.
+
+**Correção:** o runtime responde à chamada malformada com um erro estruturado ligado ao `tool_call_id`, não executa a ferramenta e deixa o modelo continuar. O histórico recuperado inclui o diagnóstico terminal se não houver resultado final, evitando duplicação quando já há resposta persistida.
+
+**Regressão:** testes cobrem recuperação sem execução da ferramenta, persistência da falha no histórico e não duplicação de resposta. A EAP permanece sem aprovação e a correção não cria baseline.
+
 ## 29/out/2026 — Reconstruir conversa do Arquimedes sem duplicar snapshots
 
 **Sintoma:** o chat da PROJETO ESCOLA ARQUIMEDES repetia blocos inteiros de pedidos e respostas antigos. Instruções de análise e somente leitura reapareciam junto com a ordem mais recente, tornando imprevisível a escolha da ação do agente.

@@ -159,7 +159,9 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
         throw new Error(`Ferramenta não autorizada pelo runtime: ${toolName}`);
       }
 
+      await options.onEvent?.({ type: "tool_started", iteration, toolName });
       let args: Record<string, unknown>;
+      let result: AgentRuntimeToolResult | undefined;
       try {
         const parsed = JSON.parse(toolCall.function.arguments || "{}");
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -167,19 +169,27 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
         }
         args = parsed as Record<string, unknown>;
       } catch {
-        throw new Error(`Argumentos inválidos para a ferramenta ${toolName}.`);
-      }
-
-      await options.onEvent?.({ type: "tool_started", iteration, toolName });
-      let result: AgentRuntimeToolResult;
-      try {
-        result = await options.executeTool(toolName, args, iteration);
-      } catch (error) {
+        // Responde ao tool_call inválido sem executar a ferramenta. Assim o
+        // modelo pode corrigir a chamada ou explicar o bloqueio ao usuário.
+        // O conteúdo bruto não é ecoado, pois pode conter dados sensíveis.
+        args = {};
         result = {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: `Argumentos inválidos para a ferramenta ${toolName}; envie um objeto JSON válido.`,
           content: "",
         };
+      }
+
+      if (!result) {
+        try {
+          result = await options.executeTool(toolName, args, iteration);
+        } catch (error) {
+          result = {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+            content: "",
+          };
+        }
       }
       await options.onEvent?.({
         type: "tool_finished",

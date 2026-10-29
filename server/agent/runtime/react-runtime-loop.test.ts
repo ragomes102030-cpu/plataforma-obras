@@ -161,4 +161,43 @@ describe("runReActAgent", () => {
     expect(result.iterations).toBe(1);
     expect(calls).toEqual([1]);
   });
+
+  it("devolve argumentos malformados ao modelo para recuperação sem executar a ferramenta", async () => {
+    const modelInputs: Array<{ messages: Array<{ role: string; tool_call_id?: string; content: unknown }> }> = [];
+    let modelCalls = 0;
+    let executions = 0;
+    const result = await runReActAgent({
+      messages: [{ role: "user", content: "Atualize a EAP." }],
+      tools: [{
+        type: "function",
+        function: { name: "aplicar_proposta_eap_local", parameters: { type: "object" } },
+      }],
+      maxIterations: 3,
+      callModel: async input => {
+        modelInputs.push(input as typeof modelInputs[number]);
+        modelCalls += 1;
+        if (modelCalls === 1) {
+          return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{
+            id: "call-invalid",
+            type: "function",
+            function: { name: "aplicar_proposta_eap_local", arguments: "{proposal:" },
+          }] } }] };
+        }
+        return { choices: [{ message: { role: "assistant", content: "A chamada estava malformada; não alterei a EAP." } }] };
+      },
+      executeTool: async () => {
+        executions += 1;
+        return { ok: true, content: "alterado" };
+      },
+    });
+
+    expect(result.text).toContain("não alterei a EAP");
+    expect(modelCalls).toBe(2);
+    expect(executions).toBe(0);
+    expect(modelInputs[1]?.messages).toContainEqual(expect.objectContaining({
+      role: "tool",
+      tool_call_id: "call-invalid",
+      content: expect.stringContaining("Argumentos inválidos"),
+    }));
+  });
 });

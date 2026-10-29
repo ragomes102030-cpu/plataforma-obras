@@ -31,6 +31,30 @@ describe("restoreAgentConversation", () => {
     expect(restoreAgentConversation("não é json", null, "falhou")).toEqual([]);
   });
 
+  it("mantém visível a causa de uma execução terminal que falhou", () => {
+    expect(restoreAgentConversation(
+      JSON.stringify({ messages: [{ role: "user", content: "Aplique a EAP." }] }),
+      null,
+      "falhou",
+      "Argumentos inválidos para a ferramenta aplicar_proposta_eap_local.",
+    )).toEqual([
+      { role: "user", content: "Aplique a EAP." },
+      { role: "assistant", content: "A execução falhou: Argumentos inválidos para a ferramenta aplicar_proposta_eap_local." },
+    ]);
+  });
+
+  it("não repete a falha quando já existe resposta final persistida", () => {
+    expect(restoreAgentConversation(
+      JSON.stringify({ messages: [{ role: "user", content: "Aplique a EAP." }] }),
+      JSON.stringify({ content: "A operação não foi concluída." }),
+      "falhou",
+      "Erro interno bruto",
+    )).toEqual([
+      { role: "user", content: "Aplique a EAP." },
+      { role: "assistant", content: "A operação não foi concluída." },
+    ]);
+  });
+
   it("recupera também uma resposta que aguarda confirmação", () => {
     const messages = restoreAgentConversation(
       JSON.stringify({
