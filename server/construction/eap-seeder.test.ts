@@ -67,11 +67,17 @@ describe("semearEapDoCatalogo", () => {
       nodeType: "grupo",
       decompositionBasis: "project",
       name: "Obra Teste",
+      inclusions: "",
+      exclusions: "",
+      acceptanceCriteria: "",
     });
     expect(inserted.some(row => row.code === "1.1")).toBe(true);
     expect(inserted.every(row => row.projectId === 7 && row.versionId === 3)).toBe(true);
     expect(result.servicosUsados).toBe(0);
     expect(result.catalogo).toBeNull();
+    expect(result.atividadesCriadas).toBe(0);
+    expect(result.itensDeOrcamentoCriados).toBe(0);
+    expect(inserted.every(row => row.inclusions === "" && row.exclusions === "" && row.acceptanceCriteria === "")).toBe(true);
   });
 
   it("não recria uma EAP existente sem refazer", async () => {

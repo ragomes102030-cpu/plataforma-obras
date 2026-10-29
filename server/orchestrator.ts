@@ -1457,7 +1457,9 @@ export async function runProjectOrchestrator(
               const db = await getDb();
               if (db) {
                 const currentVersion = await getCurrentPlanVersion(options.localProjectId);
-                await persistCpmResult(db as any, options.localProjectId, currentVersion?.id ?? null, value.schedule);
+                await db.transaction(tx =>
+                  persistCpmResult(tx as any, options.localProjectId!, currentVersion?.id ?? null, value.schedule!)
+                );
               }
             } catch (persistError) {
               console.warn("cpm_persist_failed:", persistError instanceof Error ? persistError.message : String(persistError));

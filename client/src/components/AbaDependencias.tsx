@@ -34,8 +34,10 @@ export function AbaDependencias({ projetoId }: Props) {
   const [mensagem, setMensagem] = useState<string | null>(null);
 
   const criar = trpc.planning.createDependency.useMutation({
-    onSuccess: async () => {
-      setMensagem("Dependência adicionada. A rede ainda precisa ser recalculada no CPM.");
+    onSuccess: async result => {
+      setMensagem(result.warning
+        ? `Dependência adicionada, mas a rede ainda está incompleta. O CPM continuará bloqueado até conectar todos os blocos. ${result.warning}`
+        : "Dependência adicionada. A rede está conectada; recalcule o CPM para validar as datas.");
       await utils.planning.list.invalidate({ projectId: projetoId });
       await utils.planning.grade.invalidate({ projectId: projetoId });
     },

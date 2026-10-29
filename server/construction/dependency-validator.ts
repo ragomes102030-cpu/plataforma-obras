@@ -85,7 +85,8 @@ function networkComponents(
 
 export function validateDependencies(
   activities: ScheduleEvidenceActivity[],
-  dependencies: ScheduleEvidenceDependency[]
+  dependencies: ScheduleEvidenceDependency[],
+  options: { allowIncomplete?: boolean } = {}
 ): DependencyValidationResult {
   const issues: ValidationIssue[] = [];
   const byId = new Map(
@@ -218,7 +219,7 @@ export function validateDependencies(
           : "";
       issues.push({
         code: "disconnected_network",
-        severity: "error",
+        severity: options.allowIncomplete ? "warning" : "error",
         message:
           `A rede de dependências está desconectada em ${connected.components} blocos separados: ` +
           `${amostra}${restantes}. Cada bloco calcula o CPM como se começasse no dia zero da obra, ` +

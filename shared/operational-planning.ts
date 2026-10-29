@@ -8,6 +8,15 @@ export type PlanningDependencyIdentity = {
   successorId: number;
 };
 
+/** Hide QA schedule rows from operational schedule views such as Gantt. */
+export function selectOperationalScheduleRows<TRow extends { codigo: string }>(
+  rows: TRow[],
+  exampleCodes?: ReadonlySet<string>,
+): TRow[] {
+  if (!exampleCodes?.size) return rows;
+  return rows.filter(row => !exampleCodes.has(row.codigo));
+}
+
 /** Keep QA rows visible in their own views, but out of operational CPM gates. */
 export function selectOperationalPlanning<
   TActivity extends PlanningActivityIdentity,

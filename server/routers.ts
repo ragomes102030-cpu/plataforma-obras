@@ -69,7 +69,7 @@ import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-his
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
-import { validateEap, validateEapScope, validateWbsCostCoverage, eapNodeCanHaveChildren } from "./construction/eap-validator";
+import { validateEap, validateEapScope, validateWbsCostCoverage, validateAndNormalizeEapProposal, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { validarCoerenciaEngenharia, RESUMO_COERENCIA_VAZIO } from "./construction/coerencia-engenharia";
 import type {
@@ -78,6 +78,7 @@ import type {
 } from "./construction/domain-types";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
+import { semearEapDoCatalogo } from "./construction/eap-seeder";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
 /**
@@ -99,6 +100,33 @@ const EXTENSOES_DE_DOCUMENTO = new Set([
   "png",
   "jpg",
 ]);
+
+const eapProposalInput = z.object({
+  action: z.literal("propose_eap"),
+  basis: z.array(z.string().max(500)).max(50),
+  assumptions: z.array(z.string().max(1000)).max(100),
+  missingInformation: z.array(z.string().max(1000)).max(100),
+  nodes: z.array(z.object({
+    operation: z.enum(["create", "update", "move", "remove"]),
+    nodeId: z.number().int().positive().optional(),
+    parentCode: z.string().trim().max(32).nullable(),
+    code: z.string().trim().max(32).optional(),
+    name: z.string().trim().min(2).max(220),
+    nodeType: z.enum(["grupo", "pacote", "entrega"]),
+    location: z.string().trim().max(180).nullable().optional(),
+    unit: z.string().trim().max(32).nullable().optional(),
+    plannedQuantity: z.number().min(0).max(99_999_999_999.999)
+      .refine(value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7)
+      .nullable().optional(),
+    description: z.string().trim().max(5000).nullable().optional(),
+    inclusions: z.string().trim().max(5000).nullable().optional(),
+    exclusions: z.string().trim().max(5000).nullable().optional(),
+    responsible: z.string().trim().max(180).nullable().optional(),
+    acceptanceCriteria: z.string().trim().max(5000).nullable().optional(),
+    decompositionBasis: z.enum(["project", "deliverable", "system", "discipline", "location", "phase", "component", "other"]).nullable().optional(),
+    rationale: z.string().trim().max(2000),
+  })).min(1).max(500),
+});
 
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
@@ -129,6 +157,7 @@ import type { AtividadeConciliacao, ItemOrcamento } from "./construction/concili
 import { persistCpmResult } from "./construction/cpm-persister";
 import { coletarDadosEvms } from "./construction/evm-dados";
 import { coletarDadosLookahead } from "./construction/lookahead-dados";
+import { coletarLancamentosExecutados } from "./construction/grade-dados";
 import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
 import { consolidateControlProgress } from "./construction/control-summary";
@@ -695,6 +724,26 @@ async function getCurrentPlanVersionId(
   return version?.id ?? null;
 }
 
+async function assertCurrentPlanWbsLinks(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  nodeIds: number[],
+) {
+  const ids = [...new Set(nodeIds)];
+  if (!ids.length) return;
+  const versionId = await getCurrentPlanVersionId(db, projectId);
+  const scope = versionId == null
+    ? and(eq(wbsNodes.projectId, projectId), isNull(wbsNodes.versionId))
+    : and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, versionId));
+  const rows = await db
+    .select({ id: wbsNodes.id })
+    .from(wbsNodes)
+    .where(and(scope, inArray(wbsNodes.id, ids)));
+  if (rows.length !== ids.length) {
+    throw badRequest("Todo vínculo da EAP deve pertencer à versão de trabalho atual desta obra.");
+  }
+}
+
 async function assertAvailableWbsCode(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
@@ -1236,6 +1285,26 @@ function dayKeyAt(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+/** Ano final necessário para converter offsets e restrições civis no eixo CPM. */
+function anoFinalCalendarioCpm(
+  inicioProjeto: Date,
+  activities: Array<{
+    startOffset?: number | null;
+    mustStartOn?: Date | null;
+    finishNoLaterThan?: Date | null;
+  }>
+): number {
+  let anoFinal = inicioProjeto.getFullYear();
+  for (const activity of activities) {
+    const dataDeInicio = new Date(inicioProjeto);
+    dataDeInicio.setDate(dataDeInicio.getDate() + Number(activity.startOffset ?? 0));
+    anoFinal = Math.max(anoFinal, dataDeInicio.getFullYear());
+    if (activity.mustStartOn) anoFinal = Math.max(anoFinal, activity.mustStartOn.getFullYear());
+    if (activity.finishNoLaterThan) anoFinal = Math.max(anoFinal, activity.finishNoLaterThan.getFullYear());
+  }
+  return anoFinal;
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -1568,7 +1637,7 @@ export const appRouter = router({
           value => Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-7,
           "A quantidade deve ter no máximo 3 casas decimais."
         ).optional(),
-        decompositionBasis: z.string().trim().max(40).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
+        decompositionBasis: z.enum(["project", "deliverable", "system", "discipline", "location", "phase", "component", "other"]).optional(), description: z.string().trim().max(5000).optional(), inclusions: z.string().trim().max(5000).optional(), exclusions: z.string().trim().max(5000).optional(), location: z.string().trim().max(180).optional(), responsible: z.string().trim().max(180).optional(), acceptanceCriteria: z.string().trim().max(5000).optional(), scopeStatus: z.string().trim().max(40).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -2058,29 +2127,97 @@ export const appRouter = router({
       await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-estrutura-base-por-tipologia",confidence:"medium",status:"proposed"});
       return {proposal};
     }),
-    aplicarPropostaEap: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.literal(true),proposal:z.any()})).mutation(async({ctx,input})=>{
-      const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
-      if(!Array.isArray(input.proposal?.nodes)) throw badRequest("Proposta EAP inválida.");
-      const writable=await ensureWritablePlanVersion(input.projectId,ctx.user.id);
-      const nodes=await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,writable.id)));
-      const byCode=new Map(nodes.map(n=>[n.code,n])); let created=0;
-      for(const item of input.proposal.nodes){
-        if(item.operation==="create"){
-          const code=String(item.code??"").trim(); if(!code||byCode.has(code)) continue;
-          const parent=item.parentCode?byCode.get(item.parentCode):null;
-          if(item.parentCode && !parent) throw badRequest("A proposta referencia um pai EAP inexistente na versão de trabalho.");
-          const [row]=await db.insert(wbsNodes).values({projectId:input.projectId,parentId:parent?.id??null,code,name:String(item.name??"Novo item"),level:code.split(".").length,nodeType:["grupo","pacote","entrega"].includes(item.nodeType)?item.nodeType:"entrega",sortOrder:nodes.length+created,decompositionBasis:item.decompositionBasis??null,versionId:writable.id}).returning({id:wbsNodes.id});
-          byCode.set(code,{id:row.id,code} as typeof nodes[number]); created++;
-        } else if(item.operation==="update"){
-          const code=String(item.code??"").trim();
-          const existing=byCode.get(code);
-          if(!existing) continue;
-          await db.update(wbsNodes).set({name:String(item.name??existing.name),description:item.description??existing.description,inclusions:item.inclusions??existing.inclusions,exclusions:item.exclusions??existing.exclusions,responsible:item.responsible??existing.responsible,acceptanceCriteria:item.acceptanceCriteria??existing.acceptanceCriteria,decompositionBasis:item.decompositionBasis??existing.decompositionBasis}).where(and(eq(wbsNodes.id,existing.id),eq(wbsNodes.versionId,writable.id)));
+    aplicarPropostaEap: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), confirm: z.literal(true), proposal: eapProposalInput }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        const currentNodes = await db
+          .select()
+          .from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, writable.id)));
+        const proposal = validateAndNormalizeEapProposal(
+          currentNodes,
+          input.proposal as ArquimedesEapProposal,
+        );
+        if (!proposal.validation?.valid) {
+          throw badRequest("A proposta mudou ou contém inconsistências. Atualize a análise da EAP antes de aplicá-la.");
         }
-      }
-      await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
-      return {applied:true as const,created,versionId:writable.id,versionNumber:writable.versionNumber,baselineCreated:false as const};
-    }),
+
+        return db.transaction(async tx => {
+          const byCode = new Map(currentNodes.map(node => [node.code, node]));
+          let created = 0;
+          for (const item of proposal.nodes) {
+            if (item.operation === "create") {
+              const code = item.code;
+              if (!code || byCode.has(code)) {
+                throw conflict("O código proposto foi ocupado durante a revisão. Atualize a análise da EAP e tente novamente.");
+              }
+              const parent = item.parentCode ? byCode.get(item.parentCode) : null;
+              if (item.parentCode && !parent) {
+                throw conflict("O pai da proposta mudou durante a revisão. Atualize a análise da EAP e tente novamente.");
+              }
+              const [row] = await tx.insert(wbsNodes).values({
+                projectId: input.projectId,
+                parentId: parent?.id ?? null,
+                code,
+                name: item.name,
+                level: code.split(".").length,
+                nodeType: item.nodeType,
+                unit: item.unit ?? null,
+                plannedQuantity: item.plannedQuantity == null ? null : item.plannedQuantity.toFixed(3),
+                decompositionBasis: item.decompositionBasis ?? null,
+                description: item.description ?? null,
+                inclusions: item.inclusions ?? null,
+                exclusions: item.exclusions ?? null,
+                location: item.location ?? null,
+                responsible: item.responsible ?? null,
+                acceptanceCriteria: item.acceptanceCriteria ?? null,
+                scopeStatus: "rascunho",
+                sortOrder: currentNodes.length + created,
+                versionId: writable.id,
+              }).returning({ id: wbsNodes.id });
+              byCode.set(code, { id: row.id, code } as typeof currentNodes[number]);
+              created++;
+            } else if (item.operation === "update") {
+              const existing = item.nodeId == null
+                ? undefined
+                : currentNodes.find(node => node.id === item.nodeId);
+              if (!existing) {
+                throw conflict("O item da proposta não pertence mais à versão de trabalho. Atualize a análise da EAP.");
+              }
+              await tx.update(wbsNodes).set({
+                name: item.name,
+                nodeType: item.nodeType,
+                unit: item.unit !== undefined ? item.unit : existing.unit,
+                plannedQuantity: item.plannedQuantity !== undefined
+                  ? item.plannedQuantity == null ? null : item.plannedQuantity.toFixed(3)
+                  : existing.plannedQuantity,
+                description: item.description !== undefined ? item.description : existing.description,
+                inclusions: item.inclusions !== undefined ? item.inclusions : existing.inclusions,
+                exclusions: item.exclusions !== undefined ? item.exclusions : existing.exclusions,
+                location: item.location !== undefined ? item.location : existing.location,
+                responsible: item.responsible !== undefined ? item.responsible : existing.responsible,
+                acceptanceCriteria: item.acceptanceCriteria !== undefined ? item.acceptanceCriteria : existing.acceptanceCriteria,
+                decompositionBasis: item.decompositionBasis !== undefined ? item.decompositionBasis : existing.decompositionBasis,
+              }).where(and(
+                eq(wbsNodes.id, existing.id),
+                eq(wbsNodes.projectId, input.projectId),
+                eq(wbsNodes.versionId, writable.id),
+              ));
+            }
+          }
+          await tx.update(agentMemories).set({ status: "obsolete", updatedAt: new Date() }).where(and(
+            eq(agentMemories.projectId, input.projectId),
+            eq(agentMemories.ownerUserId, ctx.user.id),
+            eq(agentMemories.category, "eap_proposal"),
+            eq(agentMemories.status, "proposed"),
+          ));
+          return { applied: true as const, created, versionId: writable.id, versionNumber: writable.versionNumber, baselineCreated: false as const };
+        });
+      }),
     enviarEapParaRevisao: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const [state]=await db.select().from(agentProjectStates).where(eq(agentProjectStates.projectId,input.projectId)).limit(1);
@@ -2089,11 +2226,16 @@ export const appRouter = router({
     }),
     generateEapFromCatalog: protectedProcedure.input(z.object({projectId:z.number().int().positive(),confirm:z.boolean().optional(),refazer:z.boolean().optional(),tipoDeObra:z.enum(["edificio","reforma","pavimentacao","saneamento","todos"]).optional()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
-      const existing=await db.select({id:wbsNodes.id}).from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId)).limit(1);
-      if(existing.length) throw badRequest("A estrutura-base só pode ser usada em obra sem EAP. Para corrigir uma EAP existente, gere uma proposta do Arquimedes e aplique-a como rascunho após revisão.");
-      await seedStarterPlan(db,input.projectId);
-      const count=await db.select({id:wbsNodes.id}).from(wbsNodes).where(eq(wbsNodes.projectId,input.projectId));
-      return {semeadura:{nosCriados:count.length},message:"Estrutura-base criada como rascunho; ela ainda precisa ser revisada pelo engenheiro."};
+      const [project]=await db.select({tipoDeObra:projects.tipoDeObra}).from(projects).where(eq(projects.id,input.projectId)).limit(1);
+      if(!project) throw notFound("Obra não encontrada.");
+      const tiposValidos=["edificio","reforma","pavimentacao","saneamento","todos"] as const;
+      const tipoCadastrado=tiposValidos.find(tipo=>tipo===project.tipoDeObra);
+      const tipoDeObra=input.tipoDeObra ?? tipoCadastrado;
+      if(!tipoDeObra) throw badRequest("Informe a natureza da obra antes de gerar a estrutura-base.");
+      const writable=await ensureWritablePlanVersion(input.projectId,ctx.user.id);
+      const semeadura=await semearEapDoCatalogo(db,input.projectId,{tipoDeObra,versionId:writable.id});
+      if(semeadura.nosCriados===0) throw badRequest(semeadura.aviso ?? "A estrutura-base não foi criada.");
+      return {semeadura,message:"Estrutura-base da EAP criada como rascunho versionado. Nenhuma atividade, dependência ou item de orçamento foi criado; revise e complete o dicionário antes de aprovar."};
     }),
   }),
   production: router({
@@ -2314,7 +2456,7 @@ export const appRouter = router({
                 .limit(1)
             : Promise.resolve([{ id: 0 }]),
           db
-            .select({ id: scheduleActivities.id })
+            .select({ id: scheduleActivities.id, unit: scheduleActivities.unit })
             .from(scheduleActivities)
             .where(
               and(
@@ -2334,6 +2476,10 @@ export const appRouter = router({
         }
         if (!activity.length) {
           throw badRequest("A atividade do lançamento não pertence a esta obra.");
+        }
+        const unidadePlanejada = activity[0]?.unit?.trim();
+        if (unidadePlanejada && input.measurementUnit.trim().toLocaleLowerCase("pt-BR") !== unidadePlanejada.toLocaleLowerCase("pt-BR")) {
+          throw badRequest(`A unidade do lançamento deve corresponder à atividade (${unidadePlanejada}).`);
         }
         if (input.frontId && !front.length) throw badRequest("A frente informada não pertence a esta obra.");
         if (input.teamId && !team.length) throw badRequest("A equipe informada não pertence a esta obra.");
@@ -2803,6 +2949,11 @@ export const appRouter = router({
         if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "aprovado" || version.status === "arquivado")
           throw conflict("Esta versão não aceita novos itens.");
+        await assertCurrentPlanWbsLinks(
+          db,
+          input.projectId,
+          input.wbsNodeId == null ? [] : [input.wbsNodeId],
+        );
         let effectiveUnitPrice = input.unitPrice;
         let compositionNote: string | null = null;
         if (input.compositionId) {
@@ -2889,6 +3040,11 @@ export const appRouter = router({
         if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "aprovado" || version.status === "arquivado")
           throw conflict("Esta versão não aceita novos itens.");
+        await assertCurrentPlanWbsLinks(
+          db,
+          input.projectId,
+          input.items.flatMap(item => item.wbsNodeId == null ? [] : [item.wbsNodeId]),
+        );
         const compositionIds = Array.from(
           new Set(
             input.items
@@ -3955,7 +4111,12 @@ export const appRouter = router({
           if((obraInicio&&input.startDate<obraInicio)||(obraFim&&input.finishDate>obraFim))
             throw badRequest("Trecho fora do período cadastrado da obra.");
           if(!project?.start)throw badRequest("Data inicial da obra indisponível.");
-          const cal=(await carregarCalendarioDaObra(db,input.projectId,project.start.getFullYear())).calendar;
+          const cal=(await carregarCalendarioDoPeriodo(
+            db,
+            input.projectId,
+            project.start.getFullYear(),
+            project.finish?.getFullYear() ?? project.start.getFullYear()
+          )).calendar;
           const inicioOficial=dateAt(cal,localIso(project.start),deslocamentoEmDiasUteis(activity));
           const fimOficial=dateAt(cal,inicioOficial,duracaoEmDiasUteis(activity)-1);
           if(input.startDate<inicioOficial||input.finishDate>fimOficial)
@@ -4216,19 +4377,33 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
+        const hoje = hojeNoBrasil();
         const [project, activities, todasAtividades, entries] = await Promise.all([
-          db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1),
+          db.select({ plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish }).from(projects).where(eq(projects.id,input.projectId)).limit(1),
           db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder),
           // Todas as versões: o lançamento de produção aponta para a linha do dia
           // em que foi digitado. Sem isso, medição de versão anterior virava
           // "executado 0" no cronograma (o caso dos 10 lançamentos da AURORA).
           db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
-          db.select().from(productionEntries).where(eq(productionEntries.projectId,input.projectId)).orderBy(productionEntries.productionDate,productionEntries.id),
+          coletarLancamentosExecutados(db, input.projectId, hoje),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
         const inicioIso = localIso(inicio);
-        const calendarioDaGrade = (await carregarCalendarioDaObra(db, input.projectId, inicio.getFullYear())).calendar;
-        const hoje = localIso(new Date());
+        const maiorIndiceDoPlano = Math.max(0, ...activities.map(a =>
+          deslocamentoEmDiasUteis(a) + duracaoEmDiasUteis(a) - 1
+        ));
+        // Mesmo no calendário semanal mais restritivo (um dia de trabalho por
+        // semana), o índice CPM não pode avançar mais que sete dias corridos
+        // por dia útil. Incluímos também o término cadastrado da obra.
+        const horizonteCivil = new Date(inicio);
+        horizonteCivil.setDate(horizonteCivil.getDate() + maiorIndiceDoPlano * 7);
+        const anoFinalDaGrade = Math.max(
+          project[0]?.plannedFinish?.getFullYear() ?? inicio.getFullYear(),
+          horizonteCivil.getFullYear()
+        );
+        const calendarioDaGrade = (await carregarCalendarioDoPeriodo(
+          db, input.projectId, inicio.getFullYear(), anoFinalDaGrade
+        )).calendar;
         // Produção é somada pelo CÓDIGO da EAP (1.2.3), que sobrevive à regeração
         // do plano; o id da linha, não.
         const codigoPorAtividade = new Map<number,string>();
@@ -4461,11 +4636,20 @@ export const appRouter = router({
             patch[coluna] = days;
           }
         }
+        let quantityChangedDuration = false;
         if (input.campo === "quantidade") {
           if (input.valor.trim() && (!Number.isFinite(Number(input.valor)) || Number(input.valor) < 0)) {
             throw badRequest("A quantidade deve ser numérica e não negativa.");
           }
-          patch.plannedQuantity = input.valor.trim() ? Number(input.valor).toFixed(3) : null;
+          const quantity = input.valor.trim() ? Number(input.valor) : null;
+          patch.plannedQuantity = quantity == null ? null : quantity.toFixed(3);
+          const productivity = Number(activity.productivity ?? 0);
+          if (quantity != null && quantity > 0 && productivity > 0) {
+            const duration = resolveActivityDuration({ plannedQuantity: quantity, productivity });
+            patch.durationDays = duration;
+            quantityChangedDuration = duration !== activity.durationDays;
+            alargarFaixaPara(duration);
+          }
         }
         if (input.campo === "produtividade") {
           const productivity = Number(input.valor);
@@ -4494,7 +4678,7 @@ export const appRouter = router({
           patch.startOffset = Math.max(0, Math.floor((startDate.getTime() - project.plannedStart.getTime()) / 86400000));
         }
 
-        const invalidatesCpm = ["duracao", "inicio", "produtividade", "marco"].includes(input.campo);
+        const invalidatesCpm = ["duracao", "inicio", "produtividade", "marco"].includes(input.campo) || quantityChangedDuration;
         const before = {
           name: activity.name,
           phase: activity.phase,
@@ -4742,8 +4926,8 @@ export const appRouter = router({
         // A vigência do CPM acima é medida por atividade. Dependência não entra
         // nessa contagem: `calculateCpm` filtra por `versionId` e uma dependência
         // órfã (versionId nulo) simplesmente não participa do cálculo — o CPM fica
-        // "fresco" sem nunca ter visto a ligação. Validar a rede aqui fecha essa
-        // janela e impede congelar baseline sobre rede fragmentada.
+        // "fresco" sem nunca ter visto a ligação. Validar a rede operacional aqui
+        // fecha essa janela sem deixar atividades de QA interferirem na captura.
         const networkActivities = await db
           .select()
           .from(scheduleActivities)
@@ -4752,7 +4936,11 @@ export const appRouter = router({
           .select()
           .from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
-        const networkValidation = validateDependencies(networkActivities as ScheduleEvidenceActivity[], networkDependencies as ScheduleEvidenceDependency[]);
+        const planejamentoOperacional = selectOperationalPlanning(networkActivities, networkDependencies);
+        const networkValidation = validateDependencies(
+          planejamentoOperacional.activities as ScheduleEvidenceActivity[],
+          planejamentoOperacional.dependencies as ScheduleEvidenceDependency[]
+        );
         if (!networkValidation.valid) {
           const blocking = networkValidation.issues.find(issue => issue.severity === "error");
           throw badRequest(blocking?.message ?? "A rede de dependências é inválida para congelar uma baseline.");
@@ -4903,7 +5091,12 @@ export const appRouter = router({
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
         const inicioProjeto = project?.plannedStart ?? new Date();
         const inicioCalendario = localIso(inicioProjeto);
-        const calendarioObra = await carregarCalendarioDaObra(db, input.projectId, inicioProjeto.getFullYear());
+        const calendarioObra = await carregarCalendarioDoPeriodo(
+          db,
+          input.projectId,
+          inicioProjeto.getFullYear(),
+          anoFinalCalendarioCpm(inicioProjeto, activities)
+        );
         const enrichedActivities = activities.map(activity => {
           const dataInicioCivil = new Date(inicioProjeto);
           dataInicioCivil.setDate(dataInicioCivil.getDate() + Number(activity.startOffset ?? 0));
@@ -4930,7 +5123,9 @@ export const appRouter = router({
           };
         }
 
-        const persisted = await persistCpmResult(db as any, input.projectId, currentVersion?.id ?? null, result.schedule);
+        const persisted = await db.transaction(tx =>
+          persistCpmResult(tx as any, input.projectId, currentVersion?.id ?? null, result.schedule!)
+        );
 
         return {
           valid: true,
@@ -4963,7 +5158,12 @@ export const appRouter = router({
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
         const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
         const inicioCalendario = localIso(project?.plannedStart ?? new Date());
-        const calendarioObra = await carregarCalendarioDaObra(db,input.projectId,ano);
+        const calendarioObra = await carregarCalendarioDoPeriodo(
+          db,
+          input.projectId,
+          ano,
+          anoFinalCalendarioCpm(project?.plannedStart ?? new Date(), activities)
+        );
         const enrichedActivities = activities.map(activity => {
           const dataInicioCivil = new Date(project?.plannedStart ?? new Date());
           dataInicioCivil.setDate(dataInicioCivil.getDate() + Number(activity.startOffset ?? 0));
@@ -5181,6 +5381,11 @@ export const appRouter = router({
           .limit(1);
         if (!versao) throw badRequest("Esta obra não tem orçamento para vincular.");
 
+        const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const activityScope = currentPlanVersionId == null
+          ? and(eq(scheduleActivities.projectId, input.projectId), isNull(scheduleActivities.versionId))
+          : and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, currentPlanVersionId));
+
         // Um item de OUTRA obra não pode entrar por payload forjado.
         const itens = await db
           .select({ id: budgetItems.id, quantity: budgetItems.quantity })
@@ -5191,43 +5396,47 @@ export const appRouter = router({
         const atividades = await db
           .select({ id: scheduleActivities.id, name: scheduleActivities.name })
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId));
+          .where(activityScope);
         const atividadesPorId = new Map(atividades.map(atividade => [atividade.id, atividade]));
-
-        let aplicados = 0;
-        for (const vinculo of input.vinculos) {
+        if (new Set(input.vinculos.map(vinculo => vinculo.activityId)).size !== input.vinculos.length) {
+          throw badRequest("Cada atividade só pode receber um vínculo por aplicação.");
+        }
+        const preparados = input.vinculos.map(vinculo => {
           const item = porId.get(vinculo.budgetItemId);
           if (!item) throw badRequest("Item de orçamento não pertence a esta obra.");
           if (!atividadesPorId.has(vinculo.activityId)) {
-            throw badRequest("Atividade não pertence a esta obra.");
+            throw badRequest("Atividade não pertence à versão de trabalho atual desta obra.");
           }
           const quantidade = vinculo.plannedQuantity ?? Number(item.quantity ?? 0);
-          await db
-            .update(scheduleActivities)
-            .set({ budgetItemId: vinculo.budgetItemId, plannedQuantity: quantidade.toFixed(3) })
-            .where(and(
-              eq(scheduleActivities.id, vinculo.activityId),
-              eq(scheduleActivities.projectId, input.projectId),
-            ));
-          aplicados += 1;
-        }
-
-        await db.insert(projectAuditEvents).values({
-          projectId: input.projectId,
-          userId: ctx.user.id,
-          action: "schedule_budget_linked",
-          payload: {
-            versaoId: versao.id,
-            aplicados,
-            vinculos: input.vinculos.map(vinculo => ({
-              activityId: vinculo.activityId,
-              budgetItemId: vinculo.budgetItemId,
-            })),
-            at: new Date().toISOString(),
-          },
+          return { activityId: vinculo.activityId, budgetItemId: item.id, quantidade };
         });
 
-        return { aplicados };
+        return db.transaction(async tx => {
+          for (const vinculo of preparados) {
+            await tx
+              .update(scheduleActivities)
+              .set({ budgetItemId: vinculo.budgetItemId, plannedQuantity: vinculo.quantidade.toFixed(3) })
+              .where(and(
+                eq(scheduleActivities.id, vinculo.activityId),
+                eq(scheduleActivities.projectId, input.projectId),
+                currentPlanVersionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, currentPlanVersionId),
+              ));
+          }
+
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "schedule_budget_linked",
+            payload: {
+              versaoId: versao.id,
+              aplicados: preparados.length,
+              vinculos: preparados.map(({ activityId, budgetItemId }) => ({ activityId, budgetItemId })),
+              at: new Date().toISOString(),
+            },
+          });
+
+          return { aplicados: preparados.length };
+        });
       }),
     /**
      * Coerencia de engenharia.
@@ -5598,13 +5807,14 @@ export const appRouter = router({
         const validation = validateDependencies(activities, [
           ...current,
           candidate,
-        ]);
+        ], { allowIncomplete: true });
         if (!validation.valid) {
           throw badRequest(validation.issues.find(issue => issue.severity === "error")?.message ?? "A dependência criaria uma rede inválida.");
         }
         const [createdId] = await db.insert(scheduleDependencies).values({ projectId: input.projectId, predecessorId: input.predecessorId, successorId: input.successorId, type: input.type, lag: input.lag, versionId: writable.id }).returning({ id: scheduleDependencies.id });
         await markCpmStaleForVersion(db, input.projectId, writable.id);
-        return { id: createdId.id };
+        const warning = validation.issues.find(issue => issue.code === "disconnected_network")?.message ?? null;
+        return { id: createdId.id, warning };
       }),
     createDependencies: protectedProcedure
       .input(

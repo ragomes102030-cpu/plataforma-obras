@@ -65,16 +65,36 @@ describe("calculateCpm entrega as restrições ao motor", () => {
 });
 
 describe("calculateCpm usa o calendário da obra", () => {
-  it("lê o calendário, e não monta o padrão do ano", () => {
-    expect(corpoDoCpm()).toMatch(/carregarCalendarioDaObra\(/);
-    // O bug era `const calendar = defaultCalendar(ano)`. Casa a ATRIBUIÇÃO, e
-    // não a palavra: o comentário que documenta o bug também a menciona, e um
-    // teste que acusa o próprio comentário desativa-se sozinho.
+  it("combina calendários até o ano dos offsets e restrições", () => {
+    expect(corpoDoCpm()).toMatch(/carregarCalendarioDoPeriodo\(/);
+    expect(corpoDoCpm()).toMatch(/anoFinalCalendarioCpm\(/);
+    // A conversão precisa usar os feriados dos anos em que as atividades e
+    // restrições caem, não apenas os do início da obra.
     expect(corpoDoCpm()).not.toMatch(/=\s*defaultCalendar\(/);
   });
 
   it("devolve a origem do calendário, para a tela poder avisar", () => {
     expect(corpoDoCpm()).toMatch(/calendario: \{ origem:/);
+  });
+});
+
+describe("grade mantém as datas do CPM em calendários plurianuais", () => {
+  it("carrega feriados até o fim conservador do plano e o término cadastrado", () => {
+    const inicio = router.indexOf("grade: protectedProcedure");
+    const fim = router.indexOf("criarAtividadeDaFolha: protectedProcedure", inicio);
+    const grade = router.slice(inicio, fim);
+    expect(grade).toMatch(/maiorIndiceDoPlano/);
+    expect(grade).toMatch(/horizonteCivil\.setDate\(horizonteCivil\.getDate\(\) \+ maiorIndiceDoPlano \* 7\)/);
+    expect(grade).toMatch(/plannedFinish\?\.getFullYear\(\)/);
+    expect(grade).toMatch(/carregarCalendarioDoPeriodo\(/);
+  });
+
+  it("valida os trechos multilocais com o calendário até o término da obra", () => {
+    const inicio = router.indexOf("salvarDistribuicaoLob: protectedProcedure");
+    const fim = router.indexOf("removerDistribuicaoLob: protectedProcedure", inicio);
+    const distribuicao = router.slice(inicio, fim);
+    expect(distribuicao).toMatch(/carregarCalendarioDoPeriodo\(/);
+    expect(distribuicao).toMatch(/project\.finish\?\.getFullYear\(\)/);
   });
 });
 

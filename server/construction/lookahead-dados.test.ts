@@ -76,7 +76,7 @@ async function versaoDoPlano(projectId: number) {
 
 async function criarAtividade(
   projectId: number,
-  sobre: { wbsCode: string; startOffset: number; durationDays?: number; quantity?: number }
+  sobre: { wbsCode: string; startOffset: number; durationDays?: number; quantity?: number; exemplo?: number }
 ) {
   const [no] = await db
     .insert(wbsNodes)
@@ -95,6 +95,7 @@ async function criarAtividade(
       startOffset: sobre.startOffset,
       durationDays: sobre.durationDays ?? 5,
       plannedQuantity: (sobre.quantity ?? 100).toFixed(3),
+      exemplo: sobre.exemplo ?? 0,
     })
     .returning({ id: scheduleActivities.id });
   return atividade.id;
@@ -173,6 +174,39 @@ describe("coletarDadosLookahead — datas e janela", () => {
       "2026-01-12",
       "2026-01-19",
     ]);
+  });
+
+  it("mantém atividades e compromissos de demonstração fora do lookahead operacional", async () => {
+    const { projectId, userId } = await criarObra();
+    const realId = await criarAtividade(projectId, { wbsCode: "1.1", startOffset: 0 });
+    const qaId = await criarAtividade(projectId, { wbsCode: "QA.1", startOffset: 0, exemplo: 1 });
+    await db.insert(weeklyCommitments).values({
+      projectId,
+      activityId: qaId,
+      weekStart: new Date("2026-01-05T00:00:00Z"),
+      status: "nao_concluido",
+      reason: "material",
+      plannedQuantity: "100.000",
+      executedQuantity: "0.000",
+    });
+    await db.insert(planningConstraints).values({
+      projectId,
+      activityId: qaId,
+      type: "material",
+      description: "Restrição demonstrativa",
+      createdBy: userId,
+    });
+
+    const dados = await coletarDadosLookahead(
+      db,
+      projectId,
+      "2026-01-05",
+      "2026-01-07",
+      await versaoDoPlano(projectId),
+    );
+
+    expect(dados.input.atividades.map(atividade => atividade.id)).toEqual([realId]);
+    expect(dados.input.compromissos).toEqual([]);
   });
 
   it("conta produção confirmada só até hoje", async () => {

@@ -18,6 +18,20 @@ describe("activity editing regression contract", () => {
     expect(block).toContain("planVersionId: activity.versionId");
   });
 
+  it("recalculates duration when quantity changes against an existing productivity", () => {
+    const start = router.indexOf("atualizarAtividade: protectedProcedure");
+    const end = router.indexOf("control: protectedProcedure", start);
+    const block = router.slice(start, end);
+
+    const quantityStart = block.indexOf('if (input.campo === "quantidade")');
+    const productivityStart = block.indexOf('if (input.campo === "produtividade")', quantityStart);
+    const quantityBranch = block.slice(quantityStart, productivityStart);
+    expect(quantityBranch).toContain("activity.productivity");
+    expect(quantityBranch).toContain("resolveActivityDuration");
+    expect(block).toContain("quantityChangedDuration");
+    expect(block).toMatch(/invalidatesCpm\s*=\s*\[[^\]]*\]\.includes\(input\.campo\)\s*\|\|\s*quantityChangedDuration/);
+  });
+
   it("keeps existing activities editable in the real activities page", () => {
     expect(painel).toContain("atualizarAtividade.useMutation");
     expect(painel).toContain('aria-label={"Duração de " + activity.name}');

@@ -6,6 +6,7 @@ const control = readFileSync("client/src/components/ControlTowerDashboard.tsx", 
 const curva = readFileSync("client/src/components/CurvaSControlTower.tsx", "utf8");
 const styles = readFileSync("client/src/control-tower.css", "utf8");
 const home = readFileSync("client/src/pages/Home.tsx", "utf8");
+const scope = readFileSync("client/src/lib/dashboard-work-scope.ts", "utf8");
 
 describe("Control Tower — integração V1 somente leitura", () => {
   it("reaproveita cálculo do painel e dados da data de referência do cronograma", () => {
@@ -16,6 +17,17 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(painel).toContain("<ControlTowerDashboard");
     expect(home).toContain("hojeReferencia={hoje}");
     expect(painel).toContain('valorSemDestino={valorSemDestino}');
+    expect(home).toContain("codigosExemplo={exemploPorCodigo}");
+    expect(painel).toContain("agregadoDoCronograma(linhasDaObra)");
+    expect(painel).toContain("!codigosExemplo.has(a.wbsCode ?? \"\")");
+    expect(painel).toContain('avancoEstado={orcamento.isPending ? "pendente"');
+    expect(painel).toContain('Number(l.exemplo ?? 0) !== 1');
+    expect(painel).toContain('isoDoValor(l.productionDate) <= hoje');
+    expect(painel).toContain("erroGrade && !agregado");
+    expect(painel).toContain('role="alert"');
+    expect(painel).toContain("Tentar novamente");
+    expect(home).toContain("tentarNovamenteGrade={() => { void grade.refetch(); }}");
+    expect(scope).toContain("codigosExemplo.has(linha.codigo)");
   });
   it("mantém todos os destinos reais pelo evento do Home, sem escrita de dados", () => {
     expect(control).toContain('onClick={() => abrirAba(a.aba!)}');
@@ -34,8 +46,12 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(curva).toContain("buildSCurve(insumos)");
     expect(curva).toContain("acumularRealizado(confirmados, pesosPorCodigo");
     expect(curva).toContain('e.status === "confirmada"');
+    expect(curva).toContain('Number(e.exemplo ?? 0) !== 1');
+    expect(curva).toContain('e.data <= hoje');
     expect(curva).toContain("realizado: acumuladoConfirmado && dia <= hojeNum");
     expect(curva).toContain('approvedForCurve.useQuery');
+    expect(curva).toContain("!codigosExemplo.has(a.wbsCode ?? \"\")");
+    expect(curva).toContain("idsDasAtividadesDaObra.has(l.atividadeId)");
     expect(curva).toContain('getCalendarForCurve.useQuery');
     expect(curva).toContain("temBaseline && comparacao.isPending");
     expect(curva).toContain("Os percentuais desta curva");
@@ -43,6 +59,10 @@ describe("Control Tower — integração V1 somente leitura", () => {
   });
   it("trata estados vazios, dados parciais, teclado, celular e movimento reduzido", () => {
     expect(control).toContain("carregandoComplementos");
+    expect(control).toContain('avancoEstado === "ok"');
+    expect(control).toContain('fisicoDisponivel ? percentual(fisico.real) : "Indisponível"');
+    expect(control).toContain("Avanço comparável");
+    expect(control).toContain('["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível"');
     expect(control).toContain("erroComplementos");
     expect(control).toContain('role="dialog"');
     expect(control).toContain('e.key === "Escape"');

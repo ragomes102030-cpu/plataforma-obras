@@ -104,7 +104,8 @@ export const ABAS: readonly AbaDoSistema[] = [
   {
     id: "riscos",
     rotulo: "RISCOS",
-    status: "pronta",
+    status: "pendente",
+    falta: "O cadastro persistente de riscos ainda não existe; esta aba não grava nem consulta registros.",
   },
   {
     id: "curva-s",

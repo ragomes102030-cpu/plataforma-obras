@@ -161,6 +161,17 @@ describe("avanço real por código da EAP", () => {
     expect(lancamento.vinculo).toBe("versao_anterior");
   });
 
+  it("recusa medição em unidade diferente da atividade planejada", async () => {
+    await expect(chamador().production.createEntry({
+      projectId: obraId,
+      activityId: atividadeAtualId,
+      productionDate: new Date("2026-10-10T00:00:00.000Z"),
+      quantity: 5,
+      measurementUnit: "kg",
+      status: "confirmada",
+    })).rejects.toThrow(/unidade do lançamento deve corresponder à atividade/i);
+  });
+
   it("medição confirmada não pode ser editada nem excluída direto", async () => {
     const chamar = chamador();
     await expect(

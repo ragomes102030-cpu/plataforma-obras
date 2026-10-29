@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, Bot, Check, CheckCircle2, ClipboardCheck, DollarSign, FileCheck2, FileText, Info, Layers3, LockKeyhole, Maximize2, Minimize2, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { prepararEntradaDuracaoAtividade } from "@/lib/activity-duration-form";
 
 /**
  * A aba EAP: a estrutura analítica da obra.
@@ -42,7 +43,9 @@ type No = {
   sortOrder: number;
 };
 
-export function AbaEap({ projetoId }: { projetoId: number }) {
+type TipoDeObraEap = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
+
+export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObra: TipoDeObraEap | "" }) {
   const wbs = trpc.projects.wbs.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -58,6 +61,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   const [modoRevisao, setModoRevisao] = useState(false);
   const [selecionadoId, setSelecionadoId] = useState<number | null>(null);
   const [filtroEap, setFiltroEap] = useState<"todos" | "grupos" | "folhas" | "pendencias">("todos");
+  const [atividadeAlvoId, setAtividadeAlvoId] = useState<number | null>(null);
+  const [duracaoAtividade, setDuracaoAtividade] = useState("");
+  const [quantidadeAtividade, setQuantidadeAtividade] = useState("");
+  const [produtividadeAtividade, setProdutividadeAtividade] = useState("");
 
   const utils = trpc.useUtils();
   const dicionarioPadrao = trpc.eap.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
@@ -79,16 +86,10 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     onSuccess: async () => { setEditor(null); await recarregar(); await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId }); },
   });
 
-  /**
-   * Traz uma folha da EAP para o cronograma.
-   *
-   * A folha é o lugar natural de puxar a linha: é ela que tem o código oficial
-   * e a unidade, e é pelo código que o orçamento casa o preço. A atividade
-   * nasce com duração ZERO — prazo é informado por quem planeja, e a grade
-   * mostra "Não iniciado" até isso acontecer.
-   */
+  /** Cria uma atividade vinculada à folha somente com estimativa fundamentada. */
   const trazer = trpc.planning.criarAtividadeDaFolha.useMutation({
     onSuccess: async () => {
+      setAtividadeAlvoId(null);
       await recarregar();
       await utils.planning.grade.invalidate({ projectId: projetoId });
     },
@@ -133,10 +134,26 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
   );
   const jaNoCronograma = (codigo: string) => codigosNoCronograma.has(codigo);
   const nos = (wbs.data ?? []) as No[];
+  const atividadeAlvo = nos.find(no => no.id === atividadeAlvoId) ?? null;
+  const entradaDuracaoAtividade = prepararEntradaDuracaoAtividade({
+    duracaoDias: duracaoAtividade,
+    quantidade: quantidadeAtividade,
+    produtividade: produtividadeAtividade,
+  });
   const selecionado = nos.find(no => no.id === selecionadoId) ?? null;
   const versaoEmUso = versoes.data?.[0];
+  const podeCriarAtividade = versaoEmUso?.status === "approved";
   const versaoAprovada = versoes.data?.find(v => v.status === "approved");
   const navegar = (aba: string) => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }));
+  const abrirEstimativaAtividade = (id: number) => {
+    if (!podeCriarAtividade) return;
+    const no = nos.find(item => item.id === id);
+    if (!no) return;
+    setDuracaoAtividade("");
+    setQuantidadeAtividade(no.plannedQuantity ?? "");
+    setProdutividadeAtividade("");
+    setAtividadeAlvoId(id);
+  };
 
   const idsComFilhos = new Set(nos.filter(n => n.parentId !== null).map(n => n.parentId as number));
   const folhasEap = nos.filter(n => !idsComFilhos.has(n.id));
@@ -350,8 +367,20 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
     return <div className="xl-vazia-folha"><h3>Carregando a estrutura…</h3></div>;
   }
 
+  if (wbs.isError) {
+    return (
+      <div className="xl-vazia-folha" role="alert">
+        <h3>Não foi possível carregar a EAP.</h3>
+        <p>A estrutura não foi consultada. Tente novamente para conferir a obra sem criar uma EAP vazia por engano.</p>
+        <button type="button" className="eap-workspace-btn secondary" onClick={() => { void wbs.refetch(); }}>
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
+
   if (nos.length === 0) {
-    return <EapVazia projetoId={projetoId} />;
+    return <EapVazia projetoId={projetoId} tipoDeObra={tipoDeObra} />;
   }
 
   const total = nos.length;
@@ -390,7 +419,7 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
         <button type="button" className={modoRevisao ? "ativo" : ""} aria-pressed={modoRevisao} onClick={() => setModoRevisao(true)}><Pencil size={16}/> Editar manualmente</button>
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}><Bot size={16}/> Pedir revisão ao Arquimedes</button>
       </div>
-      <div className="eap-workspace-flow"><span className="done"><CheckCircle2 size={13} /> Escopo</span><span>→</span><strong>EAP</strong><span>→</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades</span></div>
+      <div className="eap-workspace-flow"><span className="done"><CheckCircle2 size={13} /> Escopo</span><span>→</span><strong>EAP</strong><span>→</span><span>Planejamento integrado: quantitativos e custos + atividades e dependências</span><span>→</span><span>CPM</span><span>→</span><span>Revisão e baseline do cronograma</span></div>
       <div className="eap-workspace-metrics">
         <div><span>Nós da EAP</span><strong>{total}</strong><small>estrutura completa</small></div>
         <div><span>Pacotes de trabalho</span><strong>{pacotesTrabalho.length}</strong><small>folhas controláveis</small></div>
@@ -411,11 +440,21 @@ export function AbaEap({ projetoId }: { projetoId: number }) {
       {coordenador.data?.stage==="EAP_PROPOSTA"&&<div className="eap-workspace-stage"><div><strong>Proposta pronta para revisão</strong><span>A EAP foi estruturada. O próximo passo é a revisão técnica antes da aprovação.</span></div><button type="button" className="eap-workspace-btn principal" disabled={!coordenador.data?.canAdvance||enviarEapParaRevisao.isPending} onClick={()=>enviarEapParaRevisao.mutate({projectId:projetoId})}>{enviarEapParaRevisao.isPending?"Enviando…":"Enviar para revisão"}</button></div>}
       {coordenador.data?.stage==="EAP_REVISAO"&&<div className="eap-workspace-stage review"><div><strong>EAP em revisão técnica</strong><span>Edite a estrutura e use o Arquimedes pelo chat para solicitar análises especializadas. A aprovação só ocorre quando os gates forem atendidos.</span></div>{propostaArquimedes?<span className="eap-stage-status"><CheckCircle2 size={13}/> Análise registrada</span>:<span className="eap-stage-status"><Info size={13}/> Aguardando análise coordenada</span>}</div>}
       {propostaArquimedes&&<details className="eap-workspace-details"><summary><Bot size={14}/> Revisão técnica do Arquimedes <span>{propostaArquimedes.nodes.length} ações · {propostaArquimedes.missingInformation.length} pendências</span></summary><div className="eap-workspace-details-body"><div className="eap-workspace-review-kpis"><div><span>Ações propostas</span><strong>{propostaArquimedes.nodes.length}</strong></div><div><span>Decisões pendentes</span><strong>{propostaArquimedes.missingInformation.length}</strong></div><div><span>Bloqueios após correção</span><strong>{bloqueiosAposCorrecao}</strong></div></div>{!!resumoCorrecao.length&&<div className="eap-workspace-review-list">{resumoCorrecao.slice(0,8).map((item,index)=><div key={index}><span>{String(index+1).padStart(2,"0")}</span><p>{item}</p></div>)}</div>}{propostaArquimedes.missingInformation.length>0&&<div className="eap-workspace-pending"><strong>Decisões do engenheiro</strong><span>{propostaArquimedes.missingInformation.join(" · ")}</span></div>}{!cicloRevisaoAplicado&&propostaArquimedes.validation?.valid!==false&&propostaArquimedes.nodes.every(item=>item.operation==="create"||item.operation==="update")&&<button type="button" className="eap-workspace-btn principal" disabled={aplicarPropostaEap.isPending} onClick={()=>{if(!window.confirm("Aplicar a proposta do Arquimedes como rascunho?\n\nA EAP continuará editável e não será aprovada nem congelada."))return;aplicarPropostaEap.mutate({projectId:projetoId,confirm:true,proposal:propostaArquimedes});}}>{aplicarPropostaEap.isPending?"Aplicando rascunho…":"Aplicar proposta como rascunho"}</button>}</div></details>}
+      {atividadeAlvo&&<form className="eap-activity-estimate" onSubmit={event=>{event.preventDefault();if(!podeCriarAtividade||!entradaDuracaoAtividade.valid)return;trazer.mutate({projectId:projetoId,wbsNodeId:atividadeAlvo.id,...entradaDuracaoAtividade.payload,...(atividadeAlvo.unit?{unit:atividadeAlvo.unit}:{})});}}>
+        <div className="eap-activity-estimate-copy"><strong>Estimativa da atividade · {atividadeAlvo.code} {atividadeAlvo.name}</strong><span>Informe duração em dias úteis ou quantidade e produtividade. A conversão depende de uma produtividade compatível com a unidade do pacote.</span></div>
+        <label>Duração (dias úteis)<input type="number" min="1" step="1" inputMode="numeric" value={duracaoAtividade} onChange={event=>setDuracaoAtividade(event.target.value)} placeholder="Ex.: 5" /></label>
+        <span className="eap-activity-estimate-or">ou</span>
+        <label>Quantidade {atividadeAlvo.unit?`(${atividadeAlvo.unit})`:""}<input type="number" min="0.001" step="any" value={quantidadeAtividade} onChange={event=>setQuantidadeAtividade(event.target.value)} placeholder="Quantidade do pacote" /></label>
+        <label>Produtividade / dia<input type="number" min="0.001" step="any" value={produtividadeAtividade} onChange={event=>setProdutividadeAtividade(event.target.value)} placeholder="Quantidade por dia" /></label>
+        {!entradaDuracaoAtividade.valid&&<span className="eap-activity-estimate-error" role="status">{entradaDuracaoAtividade.error}</span>}
+        {trazer.isError&&<span className="eap-activity-estimate-error" role="alert">{trazer.error.message}</span>}
+        <div className="eap-activity-estimate-actions"><button type="button" className="eap-workspace-btn secondary" onClick={()=>setAtividadeAlvoId(null)}>Cancelar</button><button type="submit" className="eap-workspace-btn principal" disabled={!podeCriarAtividade||!entradaDuracaoAtividade.valid||trazer.isPending}>{trazer.isPending?"Criando…":"Criar atividade"}</button></div>
+      </form>}
       <div className="ct-eap-inspection-layout">
       <div className="eap-workspace-grid">
         <div className="eap-workspace-grid-head"><span className="rownum">#</span><span className="tree-col"></span><span>EAP</span><span>ESCOPO / ENTREGÁVEL</span><span>TIPO</span><span>RESPONSÁVEL</span><span>LOCAL</span><span>STATUS</span></div>
         <div className="eap-workspace-grid-body" role="tree" aria-label="Estrutura analítica da obra">
-          {filtradaPorTipo.map(no=><NoDaArvore key={no.no.id} ramo={no} abertos={busca.trim()||filtroEap!=="todos"?new Set(nos.map(n=>n.id)):aberto} onAlternar={id=>setAberto(antigo=>{const novo=new Set(antigo);if(novo.has(id))novo.delete(id);else novo.add(id);return novo;})} aoTrazer={id=>trazer.mutate({projectId:projetoId,wbsNodeId:id})} aoAdicionar={id=>setEditor({mode:"create",parentId:id})} aoEditar={id=>setEditor({mode:"edit",nodeId:id})} modoRevisao={modoRevisao} jaNoCronograma={jaNoCronograma} profundidade={0} selecionadoId={selecionadoId} aoSelecionar={setSelecionadoId}/>)}
+          {filtradaPorTipo.map(no=><NoDaArvore key={no.no.id} ramo={no} abertos={busca.trim()||filtroEap!=="todos"?new Set(nos.map(n=>n.id)):aberto} onAlternar={id=>setAberto(antigo=>{const novo=new Set(antigo);if(novo.has(id))novo.delete(id);else novo.add(id);return novo;})} aoTrazer={abrirEstimativaAtividade} aoAdicionar={id=>setEditor({mode:"create",parentId:id})} aoEditar={id=>setEditor({mode:"edit",nodeId:id})} modoRevisao={modoRevisao} jaNoCronograma={jaNoCronograma} podeCriarAtividade={podeCriarAtividade} profundidade={0} selecionadoId={selecionadoId} aoSelecionar={setSelecionadoId}/>)}
           {filtradaPorTipo.length===0&&<div className="eap-workspace-empty"><strong>Nenhum item encontrado.</strong><span>Ajuste a pesquisa ou o filtro para localizar outra parte da EAP.</span></div>}
         </div>
       </div>
@@ -548,6 +587,7 @@ function NoDaArvore({
   aoEditar,
   modoRevisao,
   jaNoCronograma,
+  podeCriarAtividade,
   profundidade,
   selecionadoId,
   aoSelecionar,
@@ -560,6 +600,7 @@ function NoDaArvore({
   aoEditar: (id: number) => void;
   modoRevisao: boolean;
   jaNoCronograma: (codigo: string) => boolean;
+  podeCriarAtividade: boolean;
   profundidade: number;
   selecionadoId: number | null;
   aoSelecionar: (id: number) => void;
@@ -603,14 +644,16 @@ function NoDaArvore({
           {no.nodeType === "entrega" ? (
             jaNoCronograma(no.code) ? (
               <span className="eap-no-crono">No cronograma</span>
+            ) : !podeCriarAtividade ? (
+              <span className="eap-no-crono" title="Aprove a versão vigente da EAP antes de criar atividades">Após aprovação da EAP</span>
             ) : (
               <button
                 type="button"
                 className="eap-trazer"
                 onClick={() => aoTrazer(no.id)}
-                title="Trazer esta folha para o cronograma, com duração a informar"
+                title="Definir duração, ou quantidade e produtividade, para criar a atividade"
               >
-                + Cronograma
+                + Atividade
               </button>
             )
           ) : (
@@ -645,6 +688,7 @@ function NoDaArvore({
               aoEditar={aoEditar}
               modoRevisao={modoRevisao}
               jaNoCronograma={jaNoCronograma}
+              podeCriarAtividade={podeCriarAtividade}
               profundidade={profundidade + 1}
               selecionadoId={selecionadoId}
               aoSelecionar={aoSelecionar}
@@ -779,7 +823,7 @@ function EditorEapPanel({
 }
 
 /** Estado vazio: o escopo vem primeiro; o catálogo pode apenas sugerir uma semente. */
-function EapVazia({ projetoId }: { projetoId: number }) {
+function EapVazia({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObra: TipoDeObraEap | "" }) {
   const utils = trpc.useUtils();
   const revisaoArquimedes = trpc.eap.eapArquimedesReview.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
   const analisar = trpc.eap.analisarEapComArquimedes.useMutation({
@@ -796,8 +840,10 @@ function EapVazia({ projetoId }: { projetoId: number }) {
   const gerar = trpc.eap.generateEapFromCatalog.useMutation({
     onSuccess: () => utils.projects.wbs.invalidate({ projectId: projetoId }),
   });
-  const [tipo, setTipo] = useState<"edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos">("edificio");
+  const [tipo, setTipo] = useState<TipoDeObraEap | "">(tipoDeObra);
   const [pendenciasAbertas, setPendenciasAbertas] = useState(true);
+
+  useEffect(() => setTipo(tipoDeObra), [projetoId, tipoDeObra]);
 
   // Enquanto uma nova proposta é gerada, a anterior sai da tela: manter a
   // árvore antiga visível ao lado de "Montando..." faz o engenheiro revisar
@@ -856,9 +902,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
                 name: "Escopo da obra",
                 nodeType: "grupo",
                 decompositionBasis: "project",
-                description: "Escopo consolidado da obra. Preencher a descrição, inclusões, exclusões e critérios de aceitação antes da aprovação.",
-                inclusions: "Todo o trabalho necessário para entregar a obra conforme o escopo contratado.",
-                exclusions: "Trabalhos explicitamente fora do escopo contratado.",
+                description: "Nó-raiz da EAP. Defina objetivo e fronteiras do escopo antes de detalhar os entregáveis.",
               })
             }
           >
@@ -871,7 +915,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
         <Info size={14} />
         <div>
           <strong>Fluxo de aprovação</strong>
-          <span>Gerar → revisar estrutura → ajustar na EAP → pedir nova análise → aprovar e criar baseline.</span>
+          <span>Aprovar a versão da EAP; depois, estruturar atividades. A baseline do cronograma vem após o CPM, na aba Baseline.</span>
         </div>
       </div>
 
@@ -1050,6 +1094,7 @@ function EapVazia({ projetoId }: { projetoId: number }) {
         </div>
         <div className="eap-acoes">
           <select className="eap-select" value={tipo} onChange={e => setTipo(e.target.value as typeof tipo)} aria-label="Tipo de estrutura-base">
+            <option value="">Selecione a natureza da obra</option>
             <option value="edificio">Edifício / construção nova</option>
             <option value="reforma">Reforma</option>
             <option value="pavimentacao">Pavimentação</option>
@@ -1059,8 +1104,8 @@ function EapVazia({ projetoId }: { projetoId: number }) {
           <button
             type="button"
             className="eap-btn-secundario"
-            disabled={gerar.isPending}
-            onClick={() => gerar.mutate({ projectId: projetoId, tipoDeObra: tipo })}
+            disabled={gerar.isPending || !tipo}
+            onClick={() => gerar.mutate({ projectId: projetoId, tipoDeObra: tipo || undefined })}
             title="Usar somente como estrutura-base genérica. O Arquimedes deve ser preferido quando houver descrição da obra."
           >
             {gerar.isPending ? "Montando estrutura…" : "Usar estrutura-base"}
