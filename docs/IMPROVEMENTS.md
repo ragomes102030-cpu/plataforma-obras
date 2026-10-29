@@ -2,6 +2,16 @@
 
 > **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
 
+## 29/out/2026 — Revalidar EAP após aplicar proposta inicial
+
+**Sintoma:** na Escola Arquimedes, a árvore mostrava 8 nós após aplicar a proposta como rascunho, mas o cartão de validação continuava em 0 nós e bloqueava com “A EAP não pode estar vazia”.
+
+**Causa:** o estado vazio da tela invalidava somente a consulta `projects.wbs`; a validação e a proposta do Arquimedes ficavam com dados em cache.
+
+**Correção:** após aplicação, invalidar em paralelo a árvore, a validação estrutural e a leitura da proposta. A aplicação continua sendo apenas rascunho e não aprova a EAP nem cria baseline.
+
+**Regressão:** `client/src/components/escopo-eap-studio.test.ts` verifica as três invalidações. Teste focado (13), `pnpm check` e `pnpm build` passaram; warnings conhecidos: Node local 24 (projeto requer 22), variáveis de analytics ausentes e bundle acima de 500 kB. A validação visual pós-deploy ainda está pendente.
+
 ## 28/out/2026 — Dashboard: separar QA e evitar avanço provisório
 
 **Auditoria:** a AURORA TESTE mostrava 71 atividades na Dashboard, embora a LOB separasse 53 atividades reais e 18 de demonstração. Durante a carga do orçamento, o avanço também mudava de `+14,6 p.p.` por quantidade para `−14,1 p.p.` ponderado por valor, sem marcar o primeiro número como provisório.

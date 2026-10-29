@@ -64,6 +64,13 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
     ]) expect(eap).toContain(term);
     expect(eap).toContain('CustomEvent("abrir-arquimedes")');
   });
+  it("revalida a estrutura depois de aplicar a proposta inicial como rascunho",()=>{
+    const estadoVazio = eap.slice(eap.indexOf("function EapVazia"));
+    const aplicarRascunho = estadoVazio.match(/const aplicarProposta = ([\s\S]*?);\n  const criarRaiz/);
+    expect(aplicarRascunho?.[1]).toContain("utils.projects.wbs.invalidate({ projectId: projetoId })");
+    expect(aplicarRascunho?.[1]).toContain("utils.eap.validateWbsStructure.invalidate({ projectId: projetoId })");
+    expect(aplicarRascunho?.[1]).toContain("utils.eap.eapArquimedesReview.invalidate({ projectId: projetoId })");
+  });
   it("não confunde aprovação da EAP com baseline de cronograma",()=>{
     expect(eap).toContain("Aprovar a versão da EAP; depois, estruturar atividades. A baseline do cronograma vem após o CPM, na aba Baseline.");
     expect(eap).not.toContain("aprovar e criar baseline");
