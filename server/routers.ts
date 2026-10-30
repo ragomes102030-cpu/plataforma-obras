@@ -2079,12 +2079,22 @@ export const appRouter = router({
       const db=await getDb(); if(!db) return {valid:true,issues:[],summary:{errors:0,warnings:0,costErrors:0}};
       await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const versionId=await getCurrentPlanVersionId(db,input.projectId);
-      const nodes=await db.select().from(wbsNodes).where(
-        versionId == null
-          ? and(eq(wbsNodes.projectId,input.projectId),isNull(wbsNodes.versionId))
-          : and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId))
-      ).orderBy(wbsNodes.sortOrder,wbsNodes.id);
-      const result=validateEap(nodes); const errors=result.issues.filter(i=>i.severity==="error").length; const warnings=result.issues.filter(i=>i.severity==="warning").length;
+      const [nodes,dictionaryDecision]=await Promise.all([
+        db.select().from(wbsNodes).where(
+          versionId == null
+            ? and(eq(wbsNodes.projectId,input.projectId),isNull(wbsNodes.versionId))
+            : and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId))
+        ).orderBy(wbsNodes.sortOrder,wbsNodes.id),
+        db.select({scopeJson:agentDecisions.scopeJson}).from(agentDecisions)
+          .where(and(eq(agentDecisions.projectId,input.projectId),eq(agentDecisions.stage,"EAP_DICIONARIO"),eq(agentDecisions.decision,"approved")))
+          .orderBy(desc(agentDecisions.createdAt)).limit(1),
+      ]);
+      const dictionary=parseJsonValue(dictionaryDecision[0]?.scopeJson) as {requiredFields?:unknown}|null;
+      // A mesma validação de aprovação usada pelo gate deve ser visível ao
+      // engenheiro; a checagem estrutural sozinha escondia alertas de escopo.
+      const result=validateEapForApproval(nodes,dictionary?.requiredFields);
+      const errors=result.issues.filter(i=>i.severity==="error"||i.code==="eap_leaf_not_ready").length;
+      const warnings=result.issues.filter(i=>i.severity==="warning"&&i.code!=="eap_leaf_not_ready").length;
       return {...result,summary:{nodes:nodes.length,leaves:nodes.filter(n=>!nodes.some(child=>child.parentId===n.id)).length,errors,warnings,costErrors:0}};
     }),
     eapArquimedesReview: protectedProcedure.input(z.object({projectId:z.number().int().positive()})).query(async({ctx,input})=>{

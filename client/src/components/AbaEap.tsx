@@ -65,6 +65,7 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   const [duracaoAtividade, setDuracaoAtividade] = useState("");
   const [quantidadeAtividade, setQuantidadeAtividade] = useState("");
   const [produtividadeAtividade, setProdutividadeAtividade] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
   const dicionarioPadrao = trpc.eap.eapDictionaryStandard.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
@@ -113,10 +114,15 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   );
   const aprovarEap = trpc.agent.recordDecision.useMutation({
     onSuccess: async () => {
+      setErro(null);
       await coordenador.refetch();
       await versoes.refetch();
       await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
     },
+    // Approval has multiple server-side gates. Keep the rejection visible so
+    // an engineer can resolve the actual blocker instead of seeing a silent
+    // return to the draft button.
+    onError: error => setErro(error.message),
   });
   const enviarEapParaRevisao = trpc.eap.enviarEapParaRevisao.useMutation({
     onSuccess: async () => {
@@ -199,7 +205,6 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   });
 
   // Erro visível das duas ações. Sem isto: clique, nada acontece, silêncio.
-  const [erro, setErro] = useState<string | null>(null);
   useEffect(() => {
     if (trazer.isError) setErro(trazer.error.message);
   }, [trazer.isError, trazer.error]);
