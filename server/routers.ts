@@ -4241,7 +4241,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null };
+        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, hasApprovedEap: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4261,18 +4261,17 @@ export const appRouter = router({
           .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
           .orderBy(desc(projectPlanVersions.versionNumber))
           .limit(1);
-        // `eapApproved` responde sobre a versão de TRABALHO, não sobre "existe
-        // alguma versão aprovada no histórico". Com a v3 aprovada e a v4 em
-        // rascunho, a tela de baseline liberava a captura e o servidor recusava
-        // depois ("Só uma versão aprovada pode virar baseline"): o engenheiro
-        // gastava um clique — e uma dúvida — para descobrir um gate que já
-        // estava fechado antes de ele começar.
+        // `eapApproved` indica que a versão atual do plano pode virar baseline.
+        // A proposta de atividades usa a EAP aprovada como fonte mesmo depois
+        // de aberta uma versão de trabalho; por isso expomos também
+        // `hasApprovedEap`, sem enfraquecer o gate da baseline.
         return {
           activities,
           dependencies,
           resources,
           baselines,
           eapApproved: currentVersion?.status === "approved",
+          hasApprovedEap: approved != null,
           approvedVersionId: approved?.id ?? null,
           currentVersionNumber: currentVersion?.versionNumber ?? null,
           currentVersionStatus: currentVersion?.status ?? null,
@@ -5657,9 +5656,16 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const approved = await requireApprovedEapVersion(db, input.projectId);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        // Gerar a proposta é uma consulta: não deve abrir/forkar uma versão de
+        // trabalho antes de o engenheiro gravar a primeira atividade. Além de
+        // evitar mutação lateral num botão de prévia, isso mantém a EAP
+        // aprovada como referência após recarregar a tela.
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const activityVersionScope = currentVersion
+          ? eq(scheduleActivities.versionId, currentVersion.id)
+          : isNull(scheduleActivities.versionId);
         const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,approved.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
-        const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),eq(scheduleActivities.versionId,writable.id)));
+        const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),activityVersionScope));
         const existingCodes = new Set(existing.map(row=>row.wbsCode));
         const pending = nodes.filter(node=>!existingCodes.has(node.code)).map(node=>({
           eapNodeId:node.id,
@@ -5676,8 +5682,8 @@ export const appRouter = router({
           created:0,
           skipped:nodes.length-pending.length,
           pending:pending.length,
-          versionId:writable.id,
-          versionNumber:writable.versionNumber,
+          versionId:currentVersion?.id ?? null,
+          versionNumber:currentVersion?.versionNumber ?? null,
           sourceApprovedVersionId:approved.id,
           proposal:pending,
           message:pending.length?"Proposta de atividades criada em memória para revisão do engenheiro; nenhuma atividade foi persistida.":"A versão de trabalho já possui atividades para todas as folhas elegíveis; nenhuma nova proposta foi criada."
