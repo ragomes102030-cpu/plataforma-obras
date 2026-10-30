@@ -152,6 +152,11 @@ export function validateEapScope(
   const overlaps = (left: string[], right: string[]) =>
     left.some(a => right.some(b => clausesOverlap(a, b)));
 
+  const exclusionReferencesCode = (exclusions: string | null | undefined, code: string) => {
+    const escapedCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${escapedCode}([^a-z0-9]|$)`).test(normalized(exclusions ?? ""));
+  };
+
   const isPendingOrNonExclusionClause = (clause: string) =>
     /\b(pendente|pendentes|pendencia|pendencias|a definir|por definir|em definicao|nao constitui exclusao|nao constituem exclusoes|nao e exclusao|nao sao exclusoes|nenhuma exclusao definitiva|sem exclusao definitiva)\b/.test(clause);
 
@@ -297,7 +302,12 @@ export function validateEapScope(
 
       for (let i = 0; i < childNodes.length; i += 1) {
         for (let j = i + 1; j < childNodes.length; j += 1) {
-          if (overlaps(childScopeClauses[i]!, childScopeClauses[j]!)) {
+          const left = childNodes[i]!;
+          const right = childNodes[j]!;
+          const mutuallyExcluded =
+            exclusionReferencesCode(left.exclusions, right.code) &&
+            exclusionReferencesCode(right.exclusions, left.code);
+          if (!mutuallyExcluded && overlaps(childScopeClauses[i]!, childScopeClauses[j]!)) {
             issues.push({
               code: "eap_scope_overlap_evidence",
               // Evidência textual pede julgamento de escopo, mas não prova

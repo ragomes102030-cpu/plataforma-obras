@@ -408,6 +408,63 @@ describe("validateEapScope", () => {
     expect(result.issues.filter(issue => issue.code === "eap_scope_overlap_evidence")).toEqual([]);
   });
 
+  it("não alerta sobreposição quando irmãos excluem reciprocamente o escopo um do outro", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo" }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.3.3",
+        name: "Inspeção e controle",
+        nodeType: "pacote",
+        description: "Verificações de execução e registros da estrutura.",
+        inclusions: "Executar verificações e produzir registros de inspeção da estrutura.",
+        exclusions: "Consolidação de pendências e liberação formal pertencem a 1.3.4.",
+      }),
+      node({
+        id: 3,
+        parentId: 1,
+        code: "1.3.4",
+        name: "Registros e liberação",
+        nodeType: "pacote",
+        description: "Consolidação de registros e liberação da estrutura.",
+        inclusions: "Consolidar registros de inspeção e formalizar liberação da estrutura.",
+        exclusions: "Não executa verificações nem produz registros, que pertencem a 1.3.3.",
+      }),
+    ]);
+
+    expect(result.issues.filter(issue => issue.code === "eap_scope_overlap_evidence")).toEqual([]);
+  });
+
+  it("mantém alerta quando a exclusão entre irmãos não é recíproca", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo" }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.3.3",
+        name: "Inspeção e controle",
+        nodeType: "pacote",
+        description: "Verificações de execução e registros da estrutura.",
+        inclusions: "Executar verificações e produzir registros de inspeção da estrutura.",
+        exclusions: "Consolidação de pendências e liberação formal pertencem a 1.3.4.",
+      }),
+      node({
+        id: 3,
+        parentId: 1,
+        code: "1.3.4",
+        name: "Registros e liberação",
+        nodeType: "pacote",
+        description: "Consolidação de registros e liberação da estrutura.",
+        inclusions: "Consolidar registros de inspeção e formalizar liberação da estrutura.",
+      }),
+    ]);
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "eap_scope_overlap_evidence", severity: "warning" }),
+    ]));
+  });
+
   it("não bloqueia filho quando o pai marca o mesmo tema como pendência, não como exclusão", () => {
     const result = validateEapScope([
       node({
