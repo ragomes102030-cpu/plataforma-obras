@@ -162,6 +162,74 @@ describe("runReActAgent", () => {
     expect(calls).toEqual([1]);
   });
 
+  it("continua uma resposta truncada sem ferramentas e concatena o trecho final", async () => {
+    const calls: Array<{ toolCount: number; messages: Array<{ role: string; content: unknown }> }> = [];
+    let toolExecutions = 0;
+    const result = await runReActAgent({
+      messages: [{ role: "user", content: "Audite a EAP." }],
+      tools: [{
+        type: "function",
+        function: { name: "aplicar_proposta_eap_local", parameters: { type: "object" } },
+      }],
+      maxIterations: 1,
+      callModel: async input => {
+        calls.push({ toolCount: input.tools.length, messages: input.messages });
+        if (calls.length === 1) {
+          return {
+            choices: [{
+              finish_reason: "length",
+              message: { role: "assistant", content: "O achado principal é" },
+            }],
+          };
+        }
+        return {
+          choices: [{
+            finish_reason: "stop",
+            message: { role: "assistant", content: "a quantidade sem base comprovada." },
+          }],
+        };
+      },
+      executeTool: async () => {
+        toolExecutions++;
+        return { ok: true, content: "não deveria executar" };
+      },
+    });
+
+    expect(result.text).toBe("O achado principal é\n\na quantidade sem base comprovada.");
+    expect(result.iterations).toBe(2);
+    expect(calls.map(call => call.toolCount)).toEqual([0, 0]);
+    expect(calls[1]?.messages).toContainEqual(expect.objectContaining({
+      role: "assistant",
+      content: "O achado principal é",
+    }));
+    expect(calls[1]?.messages.at(-1)?.content).toContain("Continue exatamente");
+    expect(toolExecutions).toBe(0);
+  });
+
+  it("marca a resposta como parcial quando o provedor continua cortando após duas tentativas", async () => {
+    let modelCalls = 0;
+    const result = await runReActAgent({
+      messages: [{ role: "user", content: "Faça uma auditoria extensa." }],
+      tools: [],
+      maxIterations: 1,
+      callModel: async () => {
+        modelCalls++;
+        return {
+          choices: [{
+            finish_reason: "length",
+            message: { role: "assistant", content: `Trecho ${modelCalls}` },
+          }],
+        };
+      },
+      executeTool: async () => ({ ok: true, content: "sem ferramentas" }),
+    });
+
+    expect(modelCalls).toBe(3);
+    expect(result.text).toContain("Resposta ainda interrompida");
+    expect(result.text).toContain("Peça “continue”");
+    expect(result.text.length).toBeLessThanOrEqual(11_000);
+  });
+
   it("devolve argumentos malformados ao modelo para recuperação sem executar a ferramenta", async () => {
     const modelInputs: Array<{ messages: Array<{ role: string; tool_call_id?: string; content: unknown }> }> = [];
     let modelCalls = 0;

@@ -402,3 +402,13 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 **Correção:** adicionada `atualizar_escopo_obra_local`, exposta somente em intenção operacional e restrita a descrição, localização e natureza. A gravação verifica propriedade da obra, registra antes/depois na auditoria e relê os campos na mesma transação. Datas, orçamento, EAP, baseline e aprovações não fazem parte da ferramenta. Manual do agente atualizado para exigir releitura e auditoria do escopo antes de decompor a EAP.
 
 **Validação:** `server/orchestrator.test.ts` passou (21 testes), `pnpm check`, `pnpm build` e `git diff --check` passaram. Build local avisou que Node 24 está fora do requisito 22.x, que variáveis de analytics não estão configuradas e que o bundle principal excede 500 kB. Deploy e alteração de dados ao vivo ainda pendentes.
+
+## 30/out/2026 — Arquimedes continua respostas interrompidas e trabalha local primeiro
+
+**Achado:** uma resposta de auditoria do chat terminou exatamente no meio de uma frase. O runtime aceitava texto mesmo quando o provedor sinalizava limite de saída e encerrava a execução como respondida. A skill operacional ainda descrevia os MCPs como caminho principal, contrariando os motores e validadores locais já disponíveis.
+
+**Correção:** o runtime reconhece `finish_reason=length`, pede até duas continuações sem ferramentas e marca claramente a resposta como parcial se o limite persistir. Auditorias e decisões de planejamento agora pedem uma síntese curta com etapa, fonte/versão, achados com impacto, proposta, lacunas e próxima decisão. A skill define a Plataforma Obras como fonte e motor primários; MCPs complementam o trabalho e não bloqueiam capacidades locais.
+
+**Critérios operacionais:** análise somente leitura; proposta com evidência e impacto; ordem explícita do engenheiro antes de aplicar rascunho; releitura e validação após a gravação; auditoria com resultado. Aprovação da EAP e baseline continuam gates independentes.
+
+**Validação:** seis testes do runtime ReAct passaram, incluindo continuação sem ferramentas e aviso após duas tentativas; `pnpm check` e `git diff --check` passaram. Aviso de ambiente: projeto exige Node 22.x, sessão usa Node 24.21.0. Código local na branch `fix/arquimedes-continuation`; sem deploy ou alteração de dados ao vivo.
