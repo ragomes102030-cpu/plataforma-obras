@@ -47,6 +47,12 @@ describe("Arquimedes intent router", () => {
     expect(classifyArquimedesIntent("Complete os campos faltantes dos pacotes")).toBe("operacao");
   });
 
+  it("disponibiliza ferramentas de escrita quando o engenheiro manda executar uma atualização pontual", () => {
+    expect(classifyArquimedesIntent(
+      "Execute agora apenas a atualização reversível do pacote folha 1.6.1 na EAP v1: unit = un e plannedQuantity = 12. Preserve a EAP em rascunho; não aprove EAP e não crie baseline.",
+    )).toBe("operacao");
+  });
+
   it("classifica confirmação explícita de proposta como operacao", () => {
     // Sem isto, o "confirmo" seria consulta e a mutação proposta nunca rodaria.
     expect(isExplicitConfirmation("confirmo")).toBe(true);
@@ -71,6 +77,9 @@ describe("Arquimedes intent router", () => {
   it("mantém somente leitura quando o usuário proíbe qualquer alteração", () => {
     expect(classifyArquimedesIntent(
       "Confirmo o diagnóstico, mas não aplique nada e não altere dados.",
+    )).toBe("analise");
+    expect(classifyArquimedesIntent(
+      "Execute o diagnóstico, mas não execute nenhuma alteração.",
     )).toBe("analise");
   });
 });
