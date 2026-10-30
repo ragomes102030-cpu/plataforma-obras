@@ -1777,8 +1777,6 @@ function buildSystem(
   }
 
   base.push("SKILLS OPERACIONAIS SELECIONADAS PARA ESTA TAREFA:\n" + operationalSkills);
-  if (responseIntent !== "casual") base.push(formatEapScopeDiagnostics(context));
-
   return base.join("\n\n");
 }
 
@@ -1965,7 +1963,8 @@ export async function runProjectOrchestrator(
       content: compactLlmContent(
         buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap, operationalSkills) +
         (plannedAction ? `\n\n${plannedAction}` : "") +
-        (externalAvailabilityContext ? `\n\n${externalAvailabilityContext}` : "")
+        (externalAvailabilityContext ? `\n\n${externalAvailabilityContext}` : "") +
+        (intent !== "casual" ? `\n\n${formatEapScopeDiagnostics(context)}` : "")
       ),
     },
     ...messages.map(message => ({
