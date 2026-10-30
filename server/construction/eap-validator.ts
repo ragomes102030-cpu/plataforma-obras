@@ -118,8 +118,42 @@ export function validateEapScope(
       .map(item => normalized(item))
       .filter(Boolean);
 
+  // Short generic phrases such as "conforme projeto", "interfaces" and
+  // "instalações" appear across unrelated packages. Substring matching made
+  // those words look like scope conflicts and produced dozens of noisy alerts.
+  const genericScopeTerms = new Set([
+    "a", "as", "ao", "aos", "com", "conforme", "da", "das", "de", "do", "dos",
+    "e", "em", "entre", "inclui", "incluindo", "local", "locais", "na", "nas", "no",
+    "nos", "o", "os", "para", "por", "projeto", "projetos", "previsto", "prevista",
+    "previstos", "previstas", "quando", "que", "sem", "segundo", "sobre", "sua", "suas",
+    "seu", "seus", "aprovado", "aprovada", "aprovados", "aprovadas", "obra", "obras",
+    "edificacao", "edificacoes", "edificio", "edificios", "escola", "escolar", "escolares",
+    "escopo", "servico", "servicos", "elemento", "elementos", "componente", "componentes",
+    "sistema", "sistemas", "interface", "interfaces", "instalacao", "instalacoes",
+    "execucao", "documento", "documentos", "pacote", "pacotes", "etapa", "fase",
+  ]);
+  const meaningfulTokens = (clause: string) =>
+    normalized(clause)
+      .split(/[^a-z0-9]+/)
+      .filter(token => token.length > 2 && !genericScopeTerms.has(token));
+
+  const clausesOverlap = (left: string, right: string) => {
+    if (left === right) return true;
+    const leftTokens = new Set(meaningfulTokens(left));
+    const rightTokens = new Set(meaningfulTokens(right));
+    let sharedMeaningfulTokens = 0;
+    for (const token of leftTokens) {
+      if (rightTokens.has(token)) sharedMeaningfulTokens += 1;
+      if (sharedMeaningfulTokens >= 2) return true;
+    }
+    return false;
+  };
+
   const overlaps = (left: string[], right: string[]) =>
-    left.some(a => right.some(b => a === b || a.includes(b) || b.includes(a)));
+    left.some(a => right.some(b => clausesOverlap(a, b)));
+
+  const isPendingOrNonExclusionClause = (clause: string) =>
+    /\b(pendente|pendentes|pendencia|pendencias|a definir|por definir|em definicao|nao constitui exclusao|nao constituem exclusoes|nao e exclusao|nao sao exclusoes|nenhuma exclusao definitiva|sem exclusao definitiva)\b/.test(clause);
 
   for (const node of nodes) {
     const childNodes = children.get(String(node.id)) ?? [];
@@ -252,7 +286,12 @@ export function validateEapScope(
       }
 
       const childScopeClauses = childNodes.map(child => clauses(scopeText(child)));
-      const parentExclusions = clauses(node.exclusions);
+      // Pending scope is deliberately not an exclusion. Comparing it as one
+      // created false structural blockers when a child package covered the
+      // very item the parent said was awaiting definition.
+      const parentExclusions = clauses(node.exclusions).filter(
+        clause => !isPendingOrNonExclusionClause(clause)
+      );
 
       for (let i = 0; i < childNodes.length; i += 1) {
         for (let j = i + 1; j < childNodes.length; j += 1) {

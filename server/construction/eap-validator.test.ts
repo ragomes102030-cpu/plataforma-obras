@@ -382,6 +382,80 @@ describe("validateEapScope", () => {
     ]));
   });
 
+  it("não trata expressões genéricas de interface e projeto como sobreposição entre irmãos", () => {
+    const result = validateEapScope([
+      node({ id: 1, code: "1", name: "Obra", nodeType: "grupo" }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.3",
+        name: "Estrutura",
+        nodeType: "grupo",
+        description: "Projeto estrutural local conforme projeto aprovado.",
+        inclusions: "Interfaces com fundações, arquitetura, cobertura e instalações conforme projeto.",
+      }),
+      node({
+        id: 3,
+        parentId: 1,
+        code: "1.10",
+        name: "Esquadrias",
+        nodeType: "grupo",
+        description: "Esquadrias e componentes dos vãos conforme projeto aprovado.",
+        inclusions: "Interfaces com vedações, estrutura, acabamentos e instalações conforme projeto.",
+      }),
+    ]);
+
+    expect(result.issues.filter(issue => issue.code === "eap_scope_overlap_evidence")).toEqual([]);
+  });
+
+  it("não bloqueia filho quando o pai marca o mesmo tema como pendência, não como exclusão", () => {
+    const result = validateEapScope([
+      node({
+        id: 1,
+        code: "1",
+        name: "Obra",
+        nodeType: "grupo",
+        exclusions: "Topografia e sondagem pendentes de definição; não constituem exclusões do escopo.",
+      }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.1",
+        name: "Levantamentos do terreno",
+        nodeType: "pacote",
+        description: "Levantamento topográfico e sondagem do terreno conforme escopo técnico a definir.",
+        inclusions: "Topografia e sondagem do terreno, condicionadas à definição do lote.",
+      }),
+    ]);
+
+    expect(result.issues.filter(issue => issue.code === "eap_child_outside_parent_scope")).toEqual([]);
+  });
+
+  it("continua bloqueando pacote que coincide com uma exclusão definitiva do pai", () => {
+    const result = validateEapScope([
+      node({
+        id: 1,
+        code: "1",
+        name: "Obra",
+        nodeType: "grupo",
+        exclusions: "Poço artesiano fora do escopo desta obra.",
+      }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.1",
+        name: "Poço artesiano",
+        nodeType: "pacote",
+        description: "Execução de poço artesiano.",
+        inclusions: "Poço artesiano completo.",
+      }),
+    ]);
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "eap_child_outside_parent_scope", severity: "warning" }),
+    ]));
+  });
+
   it("aceita profundidade variável sem exigir quatro níveis fixos", () => {
     const result = validateEapScope([
       node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", decompositionBasis: "project" }),

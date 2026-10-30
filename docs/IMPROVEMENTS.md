@@ -412,3 +412,21 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 **Critérios operacionais:** análise somente leitura; proposta com evidência e impacto; ordem explícita do engenheiro antes de aplicar rascunho; releitura e validação após a gravação; auditoria com resultado. Aprovação da EAP e baseline continuam gates independentes.
 
 **Validação:** seis testes do runtime ReAct passaram, incluindo continuação sem ferramentas e aviso após duas tentativas; `pnpm check` e `git diff --check` passaram. Aviso de ambiente: projeto exige Node 22.x, sessão usa Node 24.21.0. Código local na branch `fix/arquimedes-continuation`; sem deploy ou alteração de dados ao vivo.
+
+## 30/out/2026 — reduzir falsos alertas lexicais na EAP
+
+### Problema e causa
+- A EAP da PROJETO ESCOLA ARQUIMEDES apresentou 33 apontamentos heurísticos; após corrigir fronteiras reais de escopo, a tela ainda mostrava 28.
+- O validador local tratava qualquer substring compartilhada como sobreposição e comparava pendências do pai como exclusões definitivas.
+- O Arquimedes não recuperou os 33 itens com os trechos necessários para classificação individual; esse limite foi registrado sem inferir resultado por item.
+
+### Correção e evidência
+- A comparação lexical passou a ignorar vocabulário genérico e exigir uma cláusula idêntica ou pelo menos dois termos significativos em comum.
+- Uma cláusula do pai que identifica pendência ou declara que não é exclusão deixa de gerar bloqueio contra o filho que cobre esse trabalho.
+- Exclusões definitivas com correspondência significativa continuam gerando aviso para revisão.
+- Testes de regressão: 40 testes em três arquivos passaram (`eap-validator`, `eap-approval-validator`, `eap-resolution-engine`); `git diff --check` sem erros.
+
+### Estado
+- Mudança local na branch limpa `fix/eap-overlap-noise`, baseada no commit publicado `2aff9ea`; sem commit, merge ou deploy.
+- A EAP online permanece v2 em elaboração; não foi aprovada nem recebeu baseline.
+- A tela online ainda mostrava 28 apontamentos após as edições de escopo; verificar novamente após integrar e publicar o código.
