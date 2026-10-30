@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, X, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { Sparkles, X, ChevronDown, ChevronUp, Settings, MessageSquarePlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { deveRevalidarDadosDaObraAposExecucao } from "@/lib/agent-run-cache";
 
@@ -18,9 +18,10 @@ import { deveRevalidarDadosDaObraAposExecucao } from "@/lib/agent-run-cache";
  *
  * A resposta vem de `agent.chat`, que monta a evidência pelo `EvidenceSourceRouter`
  * — banco local primeiro, MCP só como resgate — e a entrega ao orquestrador como
- * contexto. O número do cronograma é do motor (`shared/cronograma-colunas.ts` e
- * `calculateDeterministicCpm`), não do modelo. O agente explica, aponta e sugere;
- * ele não decide prazo, não recalcula CPM e não preenche quantitativo.
+ * contexto. O agente pode propor e registrar dados sustentados pelas fontes da
+ * obra, sempre com releitura da gravação. O prazo e o CPM são responsabilidade
+ * do motor (`shared/cronograma-colunas.ts` e `calculateDeterministicCpm`), não
+ * do modelo.
  *
  * O QUE ESTA JANELA AINDA NÃO MOSTRA
  *
@@ -37,6 +38,53 @@ type Props = {
 };
 
 type Mensagem = { role: "user" | "assistant"; content: string };
+type Conversa = { id: string; nome: string };
+const CONVERSA_LEGADA = "legacy";
+const LIMITE_MENSAGENS_VISIVEIS = 6;
+
+function chaveConversa(projetoId: number, sufixo: string) {
+  return `arquimedes-chat:v1:${projetoId}:${sufixo}`;
+}
+
+function carregarConversaAtual(projetoId: number) {
+  if (typeof window === "undefined") return CONVERSA_LEGADA;
+  try {
+    return window.localStorage.getItem(chaveConversa(projetoId, "current")) ?? CONVERSA_LEGADA;
+  } catch {
+    return CONVERSA_LEGADA;
+  }
+}
+
+function carregarConversas(projetoId: number): Conversa[] {
+  const legado = { id: CONVERSA_LEGADA, nome: "Histórico anterior" };
+  if (typeof window === "undefined") return [legado];
+  let conversas: Conversa[] = [legado];
+  try {
+    const raw = window.localStorage.getItem(chaveConversa(projetoId, "sessions"));
+    const parsed = raw ? JSON.parse(raw) as unknown : null;
+    if (Array.isArray(parsed)) {
+      const salvas = parsed.filter((item): item is Conversa =>
+        Boolean(item) && typeof item === "object" &&
+        typeof (item as Conversa).id === "string" && typeof (item as Conversa).nome === "string"
+      );
+      conversas = salvas.some(item => item.id === CONVERSA_LEGADA) ? salvas : [legado, ...salvas];
+    }
+  } catch {
+    // A conversa legada continua acessível se os metadados locais estiverem inválidos.
+  }
+  const atual = carregarConversaAtual(projetoId);
+  return atual === CONVERSA_LEGADA || conversas.some(item => item.id === atual)
+    ? conversas
+    : [...conversas, { id: atual, nome: "Conversa atual" }];
+}
+
+function salvarConversaAtual(projetoId: number, conversationId: string) {
+  try {
+    window.localStorage.setItem(chaveConversa(projetoId, "current"), conversationId);
+  } catch {
+    // A conversa continua funcionando na sessão atual mesmo sem armazenamento local.
+  }
+}
 
 /**
  * O único estado que ainda está em execução é `executando`. Os outros cinco de
@@ -63,17 +111,26 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
   const [expandida, setExpandida] = useState(true);
   const [texto, setTexto] = useState("");
   const [historico, setHistorico] = useState<Mensagem[]>([]);
+  const [conversaId, setConversaId] = useState(() => carregarConversaAtual(projetoId));
+  const [conversas, setConversas] = useState(() => carregarConversas(projetoId));
+  const [mostrarHistoricoCompleto, setMostrarHistoricoCompleto] = useState(false);
   const historicoPersistido = trpc.agent.history.useQuery(
-    { projectId: projetoId },
+    { projectId: projetoId, conversationId: conversaId },
     { staleTime: 0, refetchOnMount: true, refetchOnWindowFocus: false },
   );
   const [aguardando, setAguardando] = useState(false);
   const fim = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!historicoPersistido.data) return;
+    setConversaId(carregarConversaAtual(projetoId));
+    setConversas(carregarConversas(projetoId));
+    setHistorico([]);
+  }, [projetoId]);
+
+  useEffect(() => {
+    if (!historicoPersistido.data || historicoPersistido.data.conversationId !== conversaId) return;
     setHistorico(historicoPersistido.data.messages);
-  }, [historicoPersistido.data]);
+  }, [historicoPersistido.data, conversaId]);
 
   useEffect(() => {
     const abrir = () => {
@@ -158,11 +215,13 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
     // depois dela, no laço de polling — por isso o `aguardando`, senão uma
     // segunda pergunta sairia enquanto a primeira ainda não respondeu.
     if (!limpa || aguardando) return;
+    setMostrarHistoricoCompleto(false);
     setHistorico(antigo => [...antigo, { role: "user", content: limpa }]);
     setTexto("");
     setAguardando(true);
     chat.mutate({
       projectId: projetoId,
+      conversationId: conversaId,
       // A aba entra na PRIMEIRA mensagem de cada chamada, e não num campo do
       // input: o histórico que fica no log continua legível sem precisar saber
       // que existe contexto. O zod limita a 20 mensagens, então o histórico
@@ -172,6 +231,22 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
         { role: "user", content: `[aba: ${abaAtual}] ${limpa}` },
       ],
     });
+  }
+
+  function iniciarNovaConversa() {
+    if (ocupado) return;
+    const id = window.crypto?.randomUUID?.() ?? `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const proxima = [...conversas.filter(item => item.id !== id), { id, nome: `Conversa ${conversas.length}` }];
+    try {
+      window.localStorage.setItem(chaveConversa(projetoId, "sessions"), JSON.stringify(proxima));
+    } catch {
+      // A sessão atual permanece disponível mesmo se o navegador bloquear armazenamento local.
+    }
+    salvarConversaAtual(projetoId, id);
+    setConversas(proxima);
+    setHistorico([]);
+    setTexto("");
+    setConversaId(id);
   }
 
   // Rola para o fim a cada mensagem nova, senão a janela cresce para cima e a
@@ -246,6 +321,36 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
                   confirmar. A janela não pode destravar esse run — ela diz que
                   parou e por quê. Ver `textoDoRun`. */}
 
+              <div className="janela-agente-conversa-controles">
+                <select
+                  aria-label="Conversas do Arquimedes"
+                  value={conversaId}
+                  disabled={ocupado}
+                  onChange={e => {
+                    const id = e.target.value;
+                    salvarConversaAtual(projetoId, id);
+                    setHistorico([]);
+                    setTexto("");
+                    setConversaId(id);
+                    setMostrarHistoricoCompleto(false);
+                  }}
+                >
+                  {conversas.map(conversa => (
+                    <option key={conversa.id} value={conversa.id}>{conversa.nome}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="janela-agente-nova-conversa"
+                  onClick={iniciarNovaConversa}
+                  disabled={ocupado}
+                  title="Começar uma conversa sem misturar o contexto anterior"
+                >
+                  <MessageSquarePlus size={13} />
+                  Nova conversa
+                </button>
+              </div>
+
               <div className="janela-agente-fala">
                 {historico.length === 0 && (
                   <p className="janela-agente-vazio">
@@ -255,7 +360,22 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
                     o motor.
                   </p>
                 )}
-                {historico.map((m, i) => (
+                {historico.length > LIMITE_MENSAGENS_VISIVEIS && (
+                  <button
+                    type="button"
+                    className="janela-agente-historico-toggle"
+                    aria-expanded={mostrarHistoricoCompleto}
+                    onClick={() => setMostrarHistoricoCompleto(value => !value)}
+                  >
+                    {mostrarHistoricoCompleto
+                      ? "Ocultar mensagens anteriores"
+                      : `Ver ${historico.length - LIMITE_MENSAGENS_VISIVEIS} mensagens anteriores`}
+                  </button>
+                )}
+                {(mostrarHistoricoCompleto
+                  ? historico
+                  : historico.slice(-LIMITE_MENSAGENS_VISIVEIS)
+                ).map((m, i) => (
                   <div key={i} className={`janela-msg janela-msg-${m.role}`}>
                     {m.content}
                   </div>

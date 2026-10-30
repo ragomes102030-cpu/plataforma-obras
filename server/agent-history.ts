@@ -3,6 +3,8 @@ export type PersistedAgentMessage = {
   content: string;
 };
 
+export const LEGACY_AGENT_CONVERSATION_ID = "legacy";
+
 const MAX_HISTORY_MESSAGE_CHARS = 9_000;
 
 function compactHistoryMessage(message: PersistedAgentMessage): PersistedAgentMessage {
@@ -85,6 +87,25 @@ export type PersistedAgentRun = {
   resultJson: string | null;
   errorMessage?: string | null;
 };
+
+/** Old runs predate sessions and remain available as one recoverable history. */
+export function filterAgentRunsByConversation(
+  runs: PersistedAgentRun[],
+  conversationId = LEGACY_AGENT_CONVERSATION_ID,
+): PersistedAgentRun[] {
+  return runs.filter(run => {
+    let storedConversationId = LEGACY_AGENT_CONVERSATION_ID;
+    try {
+      const context = JSON.parse(run.contextJson) as { conversationId?: unknown };
+      if (typeof context.conversationId === "string" && context.conversationId.trim()) {
+        storedConversationId = context.conversationId;
+      }
+    } catch {
+      // Malformed historical contexts stay in the recoverable legacy session.
+    }
+    return storedConversationId === conversationId;
+  });
+}
 
 export function mergeAgentConversations(
   runs: PersistedAgentRun[],

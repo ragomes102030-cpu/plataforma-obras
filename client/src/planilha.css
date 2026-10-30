@@ -953,6 +953,59 @@ tr:hover .xl-codigo {
   gap: 8px;
 }
 
+.janela-agente-conversa-controles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #e2e7ec;
+  background: #fafbfc;
+}
+
+.janela-agente-conversa-controles select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid #d5dbe1;
+  border-radius: 4px;
+  color: #40505f;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+}
+
+.janela-agente-nova-conversa,
+.janela-agente-historico-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #c8d5dd;
+  border-radius: 4px;
+  padding: 5px 7px;
+  color: #176c83;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.janela-agente-nova-conversa:hover,
+.janela-agente-historico-toggle:hover {
+  border-color: #176c83;
+  background: #f0f8fa;
+}
+
+.janela-agente-nova-conversa:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.janela-agente-historico-toggle {
+  align-self: center;
+  margin-bottom: 2px;
+}
+
 .janela-agente-vazio {
   margin: 0;
   font-size: 12px;
