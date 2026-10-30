@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { invokeLlmGateway, type GatewayRequest, type LlmTool } from "../../llm-provider-gateway";
 import { getDb } from "../../db";
 import { projects, wbsNodes } from "../../../drizzle/schema";
@@ -189,6 +189,11 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       }).from(projects).where(eq(projects.id, context.projectId)).limit(1);
       if (!project) throw new Error("Obra não encontrada.");
 
+      const versionScope = context.versionId === undefined
+        ? eq(wbsNodes.projectId, context.projectId)
+        : context.versionId === null
+          ? and(eq(wbsNodes.projectId, context.projectId), isNull(wbsNodes.versionId))
+          : and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.versionId, context.versionId));
       const eap = await db.select({
         id: wbsNodes.id,
         code: wbsNodes.code,
@@ -207,7 +212,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         decompositionBasis: wbsNodes.decompositionBasis,
         scopeStatus: wbsNodes.scopeStatus,
       }).from(wbsNodes)
-        .where(eq(wbsNodes.projectId, context.projectId))
+        .where(versionScope)
         .orderBy(wbsNodes.level, wbsNodes.sortOrder, wbsNodes.id);
 
       const resolutionIds = new Set(

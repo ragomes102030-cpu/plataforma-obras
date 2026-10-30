@@ -154,7 +154,10 @@ export function buildEapRequest(
     user,
     skills,
     maxTokens: mode === "resolver_bloqueios" ? 16384 : 4096,
-    databaseContext: { projectId: context.projectId },
+    databaseContext: {
+      projectId: context.projectId,
+      ...(context.planVersionId !== undefined ? { versionId: context.planVersionId } : {}),
+    },
     eapReviewMode: mode,
     agentId: specialist.id as "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia",
     orchestratorId: "arquimedes",

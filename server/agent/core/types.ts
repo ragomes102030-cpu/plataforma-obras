@@ -7,6 +7,7 @@ export type ArquimedesFindingSeverity = "blocker" | "alert" | "recommendation";
 
 export interface ArquimedesProjectContext {
   projectId: number;
+  planVersionId?: number | null;
   name: string;
   description?: string | null;
   tipoDeObra?: string | null;
@@ -96,7 +97,7 @@ export interface ArquimedesLlmRequest {
   user: string;
   skills: ArquimedesSkill[];
   maxTokens?: number;
-  databaseContext?: { projectId: number };
+  databaseContext?: { projectId: number; versionId?: number | null };
   eapReviewMode?: "analisar" | "resolver_bloqueios";
   agentId?: "euclides" | "newton" | "fibonacci" | "gauss" | "hipatia";
   orchestratorId?: "arquimedes";
