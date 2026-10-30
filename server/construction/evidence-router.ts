@@ -2,7 +2,6 @@ import type {
   EapEvidenceNode,
   EvidenceResult,
   EvidenceSource,
-  EvidenceWarning,
   ScheduleEvidenceActivity,
   ScheduleEvidenceDependency,
 } from "./domain-types";
@@ -44,14 +43,11 @@ export class EvidenceSourceRouter implements EvidenceSource {
       return {
         ...local,
         source: "local_db+mcp",
-        errors: [
-          ...local.errors,
+        warnings: [
+          ...local.warnings,
           {
             code: "mcp_fallback_unavailable",
-            message: `Fonte de enriquecimento MCP indisponível (${
-              error instanceof Error ? error.message : String(error)
-            }); dados locais preservados.`,
-            retryable: true,
+            message: `Fonte de enriquecimento MCP indisponível (${error instanceof Error ? error.message : String(error)}); dados locais preservados.`,
           },
         ],
       };
@@ -61,8 +57,15 @@ export class EvidenceSourceRouter implements EvidenceSource {
       return {
         ...local,
         source: "local_db+mcp",
-        warnings: [...local.warnings, ...fallback.warnings],
-        errors: [...local.errors, ...fallback.errors],
+        warnings: [
+          ...local.warnings,
+          ...fallback.warnings,
+          ...fallback.errors.map(error => ({
+            code: error.code,
+            message: `Enriquecimento MCP indisponível (${error.message}); os dados locais continuam sendo a fonte da obra.`,
+          })),
+        ],
+        errors: local.errors,
       };
     }
 

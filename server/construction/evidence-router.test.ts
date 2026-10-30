@@ -145,7 +145,7 @@ describe("EvidenceSourceRouter", () => {
     expect(result.errors[0]?.code).toBe("local_database_unavailable");
   });
 
-  it("preserva o erro do MCP quando o local está vazio e o fallback falha", async () => {
+  it("classifica falha do MCP opcional como aviso e mantém a fonte local", async () => {
     const router = new EvidenceSourceRouter(
       source(),
       source({
@@ -170,8 +170,9 @@ describe("EvidenceSourceRouter", () => {
 
     expect(result.source).toBe("local_db+mcp");
     expect(result.data).toEqual([]);
-    expect(result.errors).toMatchObject([
-      { code: "mcp_eap_unavailable", message: "MCP 502: Bad Gateway" },
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toMatchObject([
+      { code: "mcp_eap_unavailable", message: expect.stringContaining("MCP 502: Bad Gateway") },
     ]);
   });
 
@@ -281,10 +282,10 @@ describe("EvidenceSourceRouter", () => {
 
     expect(result.source).toBe("local_db+mcp");
     expect(result.data).toEqual([]);
-    expect(result.errors).toMatchObject([
-      { code: "mcp_fallback_unavailable", retryable: true },
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toMatchObject([
+      { code: "mcp_fallback_unavailable", message: expect.stringContaining("ECONNREFUSED") },
     ]);
-    expect(result.errors[0]?.message).toContain("ECONNREFUSED");
   });
 
   it("respeita allowFallback desligado explicitamente", async () => {

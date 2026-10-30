@@ -11,7 +11,7 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 1. **EAP antes do cronograma.** Nenhuma atividade deve ser aceita sem `eap_ref` para um pacote ou folha da EAP.
 2. **Revisão humana por marco.** O agente pode propor, explicar e validar; a aprovação do cliente é necessária para avançar.
 3. **Rastreabilidade.** Toda conclusão deve indicar o nó EAP, atividade, dependência, baseline ou unidade de repetição que a sustenta.
-4. **Não inventar.** Ausência de quantidade, duração, precedência, recurso, unidade ou vínculo externo vira lacuna explícita.
+4. **Não inventar.** Ausência de quantidade, duração, precedência, recurso ou unidade vira lacuna explícita. Falta de vínculo externo MCP é limitação de integração, não bloqueio para o planejamento local.
 5. **Revisão localizada.** Uma divergência em um nó não deve apagar silenciosamente o que já foi aprovado.
 6. **Separação de domínios.** EAP, cronograma e Gantt/LOB possuem bancos e responsabilidades diferentes; a coordenação ocorre por `project_id` e referências.
 7. **Escrita controlada.** Uma ordem operacional explícita do engenheiro autoriza gravações reversíveis na versão local de trabalho, com validação, idempotência e releitura. Aprovação de EAP, criação de baseline, exclusão e ações externas/destrutivas continuam sendo gates separados.
@@ -101,7 +101,7 @@ O agente deve preservar as partes aprovadas e reabrir somente o subconjunto afet
 
 Cada atividade deve conter, no mínimo, `eap_ref`, nome operacional, duração determinística ou trio PERT, unidade/escopo, premissas e status. O agente deve apresentar um quadro de sequenciação antes de distribuir datas. O MCP de cronograma aceita `eap_ref` opaco e não valida automaticamente o nó no MCP EAP; por isso a skill deve executar uma checagem cruzada de evidência e apontar referências não encontradas.
 
-Sem MCP de cronograma, o agente consulta `consultar_atividades_locais` e pode criar atividade com `criar_atividade_local` depois de uma ordem operacional explícita. A EAP precisa estar aprovada e a referência precisa ser uma folha terminal tanto na versão aprovada quanto na versão de trabalho. Quantidade, produtividade e duração sem evidência não podem ser inventadas. Repetir uma gravação idêntica deve ser idempotente; divergência com uma atividade já existente bloqueia nova duplicata e exige revisão.
+Sem MCP de cronograma, o agente consulta `consultar_atividades_locais` e pode criar atividade com `criar_atividade_local` depois de uma ordem operacional explícita. Vínculo externo do cronograma não é requisito para gravar na fonte local. A EAP precisa estar aprovada e a referência precisa ser uma folha terminal tanto na versão aprovada quanto na versão de trabalho. Quantidade e produtividade sem evidência não podem ser inventadas. Sem quantidade/unidade, não há cálculo quantitativo nem medição; se o engenheiro pedir um cenário didático, uma duração estimada pode ser usada, desde que registrada como estimativa, com premissa e validação pendente — nunca como duração calculada ou fato. Repetir uma gravação idêntica deve ser idempotente; divergência com uma atividade já existente bloqueia nova duplicata e exige revisão.
 
 ### 5. Precedências e CPM
 
@@ -115,7 +115,7 @@ A sequência deve usar somente dependências justificadas. As relações dispon�
 
 Antes do CPM, o agente deve confirmar que todas as atividades têm duração ou PERT completo, que as dependências não fecham ciclos e que as atividades estão vinculadas à EAP. Depois de `calcular_caminho_critico`, deve explicar duração total, caminho crítico, folga total, folga livre, atividades sem sucessoras e premissas que podem alterar o resultado.
 
-Sem MCP, consultar os IDs reais com `consultar_atividades_locais` e gravar dependências com `criar_dependencias_locais`. A gravação só é permitida após ordem operacional explícita e apenas em versão `draft`/`proposed`; auto dependência, atividade de outra obra/versão, ciclo e referência inválida bloqueiam a transação. Repetições exatas são ignoradas, a rede incompleta é reportada como aviso e qualquer alteração invalida o CPM até novo cálculo. A ausência de MCP não deve interromper o planejamento nem ser ocultada.
+Sem MCP, consultar os IDs reais com `consultar_atividades_locais` e gravar dependências com `criar_dependencias_locais`. Não é necessário vínculo externo de cronograma para esse fluxo local. A gravação só é permitida após ordem operacional explícita e apenas em versão `draft`/`proposed`; auto dependência, atividade de outra obra/versão, ciclo e referência inválida bloqueiam a transação. Repetições exatas são ignoradas, a rede incompleta é reportada como aviso e qualquer alteração invalida o CPM até novo cálculo. A ausência de MCP não deve interromper o planejamento nem ser ocultada.
 
 ### 6. Cronograma, Gantt e baseline
 
