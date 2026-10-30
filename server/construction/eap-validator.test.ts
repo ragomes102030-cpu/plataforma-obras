@@ -431,6 +431,38 @@ describe("validateEapScope", () => {
     expect(result.issues.filter(issue => issue.code === "eap_child_outside_parent_scope")).toEqual([]);
   });
 
+  it("trata toda a lista subordinada como pendência quando a raiz declara não haver exclusões definitivas", () => {
+    const result = validateEapScope([
+      node({
+        id: 1,
+        code: "1",
+        name: "Obra",
+        nodeType: "grupo",
+        exclusions: "Nenhuma exclusão definitiva estabelecida nesta versão. São PENDÊNCIAS de definição, execução ou quantificação — e não exclusões, pois existem pacotes correspondentes na EAP: lote/endereço/implantação e seus limites; topografia e sondagem; geometria e solução de fundações/estrutura; projetos locais e aprovações; sistemas, especificações e método executivo.",
+      }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.3",
+        name: "Estrutura",
+        nodeType: "grupo",
+        description: "Projeto estrutural local conforme projeto aprovado.",
+        inclusions: "Definição da geometria e solução de fundações/estrutura conforme projetos locais.",
+      }),
+      node({
+        id: 3,
+        parentId: 1,
+        code: "1.5",
+        name: "Sistemas prediais",
+        nodeType: "grupo",
+        description: "Sistemas previstos nos projetos prediais locais.",
+        inclusions: "Definição de sistemas, especificações e método executivo nos projetos locais.",
+      }),
+    ]);
+
+    expect(result.issues.filter(issue => issue.code === "eap_child_outside_parent_scope")).toEqual([]);
+  });
+
   it("continua bloqueando pacote que coincide com uma exclusão definitiva do pai", () => {
     const result = validateEapScope([
       node({
