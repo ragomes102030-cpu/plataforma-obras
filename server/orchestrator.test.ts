@@ -234,8 +234,8 @@ describe("runProjectOrchestrator", () => {
       domain: "eap",
     });
     expect(llmCalls).toEqual([
-      { messages: 2, tools: 22 },
-      { messages: 4, tools: 22 },
+      { messages: 2, tools: 23 },
+      { messages: 4, tools: 23 },
     ]);
     // A evidência estruturada sai do rastro, não do texto do modelo.
     expect(result.evidence).toContainEqual({ source: "mcp_eap", toolName: "get_eap_tree" });
@@ -334,31 +334,110 @@ describe("runProjectOrchestrator", () => {
     expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "criar_atividade_local", status: "success" }));
   });
 
-  it("retorna diagnóstico quando não há texto nem alteração confirmada", async () => {
+  it("consulta atividades locais sem MCP e fornece IDs para o agente montar dependências", async () => {
+    const listLocalActivities = vi.fn(async () => ({
+      versionId: 18,
+      status: "draft",
+      activities: [{ id: 41, wbsCode: "1.1", name: "Fundação", durationDays: 5 }],
+    }));
+    let llmCallCount = 0;
+    const result = await runProjectOrchestrator(context, [{ role: "user", content: "Mostre as atividades cadastradas nesta obra" }], {
+      localProjectId: 25,
+      userId: 42,
+      deps: {
+        listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+        listLocalActivities,
+        callLlm: async ({ tools }) => {
+          llmCallCount++;
+          expect(tools.some(tool => tool.function.name === "consultar_atividades_locais")).toBe(true);
+          expect(tools.some(tool => tool.function.name === "criar_dependencias_locais")).toBe(false);
+          if (llmCallCount === 1) return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "list-activities", type: "function", function: { name: "consultar_atividades_locais", arguments: JSON.stringify({}) } }] } }] };
+          return { choices: [{ message: { role: "assistant", content: "Atividade 41: Fundação." } }] };
+        },
+      },
+    });
+
+    expect(listLocalActivities).toHaveBeenCalledWith({ projectId: 25, limit: undefined });
+    expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "consultar_atividades_locais", status: "success" }));
+    expect(result.content).toContain("Atividade 41");
+  });
+
+  it("grava dependências locais somente após ordem operacional explícita", async () => {
+    const createLocalDependencies = vi.fn(async () => ({ created: 1, skipped: 0, verified: true, warning: null }));
+    let llmCallCount = 0;
+    const result = await runProjectOrchestrator(context, [{ role: "user", content: "Crie a dependência FS da atividade 41 para a 42" }], {
+      localProjectId: 25,
+      userId: 42,
+      deps: {
+        listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+        createLocalDependencies,
+        callLlm: async ({ tools }) => {
+          llmCallCount++;
+          expect(tools.some(tool => tool.function.name === "criar_dependencias_locais")).toBe(true);
+          if (llmCallCount === 1) return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "create-dependencies", type: "function", function: { name: "criar_dependencias_locais", arguments: JSON.stringify({ dependencies: [{ predecessorId: 41, successorId: 42, type: "FS", lag: 0 }] }) } }] } }] };
+          return { choices: [{ message: { role: "assistant", content: "Dependência gravada e conferida." } }] };
+        },
+      },
+    });
+
+    expect(createLocalDependencies).toHaveBeenCalledWith({
+      projectId: 25,
+      userId: 42,
+      dependencies: [{ predecessorId: 41, successorId: 42, type: "FS", lag: 0 }],
+    });
+    expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "criar_dependencias_locais", status: "success" }));
+    expect(result.readOnly).toBe(false);
+  });
+
+  it("preserva o resultado da EAP quando a síntese vem vazia, sem MCP", async () => {
+    const proposal = {
+      action: "propose_eap",
+      basis: ["escopo declarado"],
+      assumptions: [],
+      missingInformation: ["quantitativos dependem dos projetos executivos"],
+      nodes: [{ operation: "create", parentCode: "1", name: "Estrutura", nodeType: "grupo", rationale: "Organiza o escopo estrutural." }],
+    } as const;
+    const applyLocalEapProposal = vi.fn(async () => ({
+      applied: true as const,
+      created: 1,
+      updated: 0,
+      versionId: 12,
+      versionNumber: 1,
+      baselineCreated: false as const,
+      approved: false as const,
+      validation: { valid: true, issues: [] },
+      verification: { persistenceVerified: true, nodeCount: 2, leafCount: 1, structuralErrors: 0, structuralWarnings: 0 },
+    }));
+    let llmCallCount = 0;
     const result = await runProjectOrchestrator(
       context,
-      [{ role: "user", content: "Resuma a situação." }],
+      [{ role: "user", content: "Preencha a EAP local com a estrutura suportada pelo escopo" }],
       {
+        localProjectId: 25,
+        userId: 42,
         deps: {
-          listTools: async () => catalog,
-          callLlm: async () => ({
-            choices: [
-              {
-                message: {
-                  role: "assistant",
-                  content: null,
-                  reasoning:
-                    "Analisei os dados, mas não gerei uma conclusão.",
-                },
-              },
-            ],
-          }),
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          applyLocalEapProposal,
+          callLlm: async ({ tools }) => {
+            llmCallCount++;
+            if (llmCallCount === 1) {
+              expect(tools.some(tool => tool.function.name === "aplicar_proposta_eap_local")).toBe(true);
+              return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "local-eap-1", type: "function", function: { name: "aplicar_proposta_eap_local", arguments: JSON.stringify({ proposal }) } }] } }] };
+            }
+            return { choices: [{ message: { role: "assistant", content: null } }] };
+          },
         },
-      }
+      },
     );
 
-    expect(result.content).toContain("nenhuma alteração de EAP foi confirmada");
-    expect(result.readOnly).toBe(true);
+    expect(applyLocalEapProposal).toHaveBeenCalledWith({ projectId: 25, userId: 42, proposal });
+    expect(result.readOnly).toBe(false);
+    expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "aplicar_proposta_eap_local", status: "success" }));
+    expect(result.content).toContain("A EAP foi atualizada na versão de trabalho 1");
+    expect(result.content).toContain("releitura confirmou 2 nós e 1 folhas");
+    expect(result.content).toContain("nenhuma aprovação nem baseline foi criada");
+    expect(applyLocalEapProposal).toHaveBeenCalledTimes(1);
+    expect(llmCallCount).toBe(3);
   });
 
   it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
@@ -719,3 +798,4 @@ describe("runProjectOrchestrator", () => {
     expect(event?.error ?? "").not.toContain("confirmação explícita");
   });
 });
+

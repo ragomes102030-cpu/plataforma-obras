@@ -1,8 +1,9 @@
 import { ENV } from "./_core/env";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "./db";
-import { projectAuditEvents, projectPlanVersions, scheduleActivities, wbsNodes } from "../drizzle/schema";
+import { projectAuditEvents, projectPlanVersions, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
+import { validateDependencies } from "./construction/dependency-validator";
 import { ensureWritablePlanVersion, getCurrentPlanVersion } from "./construction/plan-versions";
 import { persistCpmResult } from "./construction/cpm-persister";
 import { resolveActivityDuration } from "./construction/activity-planning";
@@ -48,6 +49,7 @@ import { resolveLocalEapToolFallback } from "./agent/core/local-eap-tool-fallbac
 import { searchWebEvidence } from "./web-research";
 import type { ArquimedesEapProposal } from "./agent/core/types";
 import { applyEapProposalToDraft } from "./construction/eap-proposal-apply";
+import type { ScheduleEvidenceActivity, ScheduleEvidenceDependency } from "./construction/domain-types";
 
 const MAX_ITERATIONS = 8;
 const MAX_TOOL_RESULT_CHARS = 8_000;
@@ -242,6 +244,15 @@ export type OrchestratorDeps = {
   }) => Promise<LlmResponse>;
   applyLocalEapProposal?: (args: { projectId: number; userId: number; proposal: ArquimedesEapProposal }) => Promise<Awaited<ReturnType<typeof applyEapProposalToDraft>>>;
   createLocalActivity?: (args: { projectId: number; userId: number; rawArgs: Record<string, unknown> }) => Promise<unknown>;
+  listLocalActivities?: (args: { projectId: number; limit?: number }) => Promise<unknown>;
+  createLocalDependencies?: (args: { projectId: number; userId: number; dependencies: LocalDependencyInput[] }) => Promise<unknown>;
+};
+
+type LocalDependencyInput = {
+  predecessorId: number;
+  successorId: number;
+  type: "FS" | "SS" | "FF" | "SF";
+  lag: number;
 };
 
 export type OrchestratorOptions = {
@@ -610,6 +621,205 @@ const LOCAL_ACTIVITY_TOOL: LlmTool = {
   },
 };
 
+const LOCAL_ACTIVITIES_READ_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "consultar_atividades_locais",
+    description: "Consulta o cronograma salvo no banco local, sem depender do MCP. Retorna IDs reais de atividades da versão atual para inspeção e para montar dependências; não altera a obra.",
+    parameters: {
+      type: "object",
+      properties: { limit: { type: "integer", minimum: 1, maximum: 200 } },
+      additionalProperties: false,
+    },
+  },
+};
+
+const LOCAL_DEPENDENCIES_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "criar_dependencias_locais",
+    description: "Grava relações entre atividades no banco local, sem depender do MCP. Use somente após ordem operacional explícita e depois de consultar IDs reais com consultar_atividades_locais. Só grava na versão de trabalho rascunho/proposta; bloqueia referências inválidas, ciclos e versão aprovada; relações duplicadas são ignoradas com segurança. Dependências novas podem deixar a rede incompleta; o retorno informa avisos para continuidade e o CPM fica marcado como desatualizado.",
+    parameters: {
+      type: "object",
+      properties: {
+        dependencies: {
+          type: "array",
+          minItems: 1,
+          maxItems: 500,
+          items: {
+            type: "object",
+            properties: {
+              predecessorId: { type: "integer", minimum: 1 },
+              successorId: { type: "integer", minimum: 1 },
+              type: { type: "string", enum: ["FS", "SS", "FF", "SF"], default: "FS" },
+              lag: { type: "integer", default: 0 },
+            },
+            required: ["predecessorId", "successorId"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["dependencies"],
+      additionalProperties: false,
+    },
+  },
+};
+
+async function listLocalAgentActivities(args: { projectId: number; limit?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+  const limit = Math.min(Math.max(Math.floor(args.limit ?? 100), 1), 200);
+  const [workingVersion] = await db
+    .select({ id: projectPlanVersions.id, versionNumber: projectPlanVersions.versionNumber, status: projectPlanVersions.status })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, args.projectId), inArray(projectPlanVersions.status, ["draft", "proposed"])))
+    .orderBy(desc(projectPlanVersions.versionNumber))
+    .limit(1);
+  const [approvedVersion] = workingVersion ? [] : await db
+    .select({ id: projectPlanVersions.id, versionNumber: projectPlanVersions.versionNumber, status: projectPlanVersions.status })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, args.projectId), eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber))
+    .limit(1);
+  const version = workingVersion ?? approvedVersion;
+  if (!version) return { version: null, activities: [], returned: 0, truncated: false };
+  const activities = await db
+    .select({
+      id: scheduleActivities.id,
+      wbsCode: scheduleActivities.wbsCode,
+      name: scheduleActivities.name,
+      phase: scheduleActivities.phase,
+      durationDays: scheduleActivities.durationDays,
+      progress: scheduleActivities.progress,
+      status: scheduleActivities.status,
+      sortOrder: scheduleActivities.sortOrder,
+    })
+    .from(scheduleActivities)
+    .where(and(eq(scheduleActivities.projectId, args.projectId), eq(scheduleActivities.versionId, version.id)))
+    .orderBy(scheduleActivities.sortOrder)
+    .limit(limit);
+  return { version: { id: version.id, number: version.versionNumber, status: version.status }, activities, returned: activities.length, truncated: activities.length === limit };
+}
+
+async function createLocalAgentDependencies(args: {
+  projectId: number;
+  userId: number;
+  dependencies: LocalDependencyInput[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+  if (!args.dependencies.length || args.dependencies.length > 500) throw new Error("Informe de 1 a 500 dependências por operação.");
+  for (const [index, item] of args.dependencies.entries()) {
+    if (!Number.isInteger(item.predecessorId) || item.predecessorId < 1 || !Number.isInteger(item.successorId) || item.successorId < 1) {
+      throw new Error(`A dependência ${index + 1} precisa conter IDs inteiros positivos de atividades.`);
+    }
+    if (!["FS", "SS", "FF", "SF"].includes(item.type) || !Number.isInteger(item.lag)) {
+      throw new Error(`A dependência ${index + 1} tem tipo ou defasagem inválida.`);
+    }
+  }
+
+  const ids = [...new Set(args.dependencies.flatMap(item => [item.predecessorId, item.successorId]))];
+  return db.transaction(async tx => {
+    const activities = await tx
+      .select()
+      .from(scheduleActivities)
+      .where(and(eq(scheduleActivities.projectId, args.projectId), inArray(scheduleActivities.id, ids)));
+    if (activities.length !== ids.length) throw new Error("Uma ou mais atividades não pertencem a esta obra. Consulte novamente as atividades locais antes de ligar.");
+    if (activities.some(activity => activity.versionId == null) || new Set(activities.map(activity => activity.versionId)).size !== 1) {
+      throw new Error("Todas as atividades precisam estar na mesma versão de trabalho.");
+    }
+    const versionId = activities[0]!.versionId!;
+    const [version] = await tx
+      .select({ status: projectPlanVersions.status, versionNumber: projectPlanVersions.versionNumber })
+      .from(projectPlanVersions)
+      .where(and(eq(projectPlanVersions.id, versionId), eq(projectPlanVersions.projectId, args.projectId)))
+      .limit(1);
+    if (!version || !["draft", "proposed"].includes(version.status)) throw new Error("As atividades pertencem a uma versão aprovada/histórica. Crie ou use uma versão de trabalho antes de ligar dependências.");
+    if (activities.some(activity => Number(activity.durationDays) < 1)) throw new Error("Todas as atividades precisam ter duração válida antes de criar dependências.");
+
+    const current = await tx
+      .select()
+      .from(scheduleDependencies)
+      .where(and(eq(scheduleDependencies.projectId, args.projectId), eq(scheduleDependencies.versionId, versionId)));
+    const currentKeys = new Set(current.map(item => `${item.predecessorId}:${item.successorId}:${item.type}:${item.lag}`));
+    const seen = new Set<string>();
+    const pending = args.dependencies.filter(item => {
+      const key = `${item.predecessorId}:${item.successorId}:${item.type}:${item.lag}`;
+      if (currentKeys.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const networkActivities = await tx.select().from(scheduleActivities)
+      .where(and(eq(scheduleActivities.projectId, args.projectId), eq(scheduleActivities.versionId, versionId)));
+    const activityEvidence = networkActivities.map(activity => ({
+      id: activity.id,
+      projectId: activity.projectId,
+      externalId: activity.externalId,
+      eapRef: activity.eapRef,
+      wbsCode: activity.wbsCode,
+      name: activity.name,
+      phase: activity.phase,
+      startOffset: activity.startOffset,
+      durationDays: activity.durationDays,
+      progress: activity.progress,
+      status: activity.status,
+      critical: activity.critical,
+      sortOrder: activity.sortOrder,
+    })) as ScheduleEvidenceActivity[];
+    const dependencyEvidence = current.map(item => ({
+      id: item.id,
+      projectId: item.projectId,
+      externalId: item.externalId,
+      predecessorId: item.predecessorId,
+      successorId: item.successorId,
+      type: item.type,
+      lag: item.lag,
+    })) as ScheduleEvidenceDependency[];
+    const validation = validateDependencies(activityEvidence, [
+      ...dependencyEvidence,
+      ...pending.map((item, index) => ({ id: `agent-${index}`, projectId: args.projectId, externalId: null, ...item })),
+    ], { allowIncomplete: true });
+    if (!validation.valid) throw new Error(validation.issues.find(issue => issue.severity === "error")?.message ?? "A rede de dependências ficaria inválida.");
+
+    const inserted = pending.length
+      ? await tx.insert(scheduleDependencies).values(pending.map(item => ({ ...item, projectId: args.projectId, versionId }))).returning({ id: scheduleDependencies.id })
+      : [];
+    if (inserted.length) {
+      await tx.update(scheduleActivities).set({ critical: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null, totalFloat: null, freeFloat: null })
+        .where(and(eq(scheduleActivities.projectId, args.projectId), eq(scheduleActivities.versionId, versionId)));
+    }
+    const verified = inserted.length === 0 ? true : (await tx
+      .select({ id: scheduleDependencies.id })
+      .from(scheduleDependencies)
+      .where(and(eq(scheduleDependencies.projectId, args.projectId), eq(scheduleDependencies.versionId, versionId), inArray(scheduleDependencies.id, inserted.map(item => item.id))))).length === inserted.length;
+    if (!verified) throw new Error("As dependências foram enviadas ao banco, mas a releitura não confirmou todas as gravações.");
+    if (inserted.length) {
+      await tx.insert(projectAuditEvents).values({
+        projectId: args.projectId,
+        userId: args.userId,
+        action: "dependencies_created_by_arquimedes",
+        payload: {
+          dependencyIds: inserted.map(item => item.id),
+          dependencies: pending,
+          versionId,
+          versionNumber: version.versionNumber,
+          verified,
+          warning: validation.issues.find(issue => issue.code === "disconnected_network")?.message ?? null,
+        },
+      });
+    }
+    return {
+      created: inserted.length,
+      skipped: args.dependencies.length - pending.length,
+      verified,
+      versionId,
+      versionNumber: version.versionNumber,
+      warning: validation.issues.find(issue => issue.code === "disconnected_network")?.message ?? null,
+      cpm: inserted.length ? "desatualizado; recalcular após concluir as ligações" : "sem alteração",
+    };
+  });
+}
+
 const LOCAL_EAP_APPLY_TOOL: LlmTool = {
   type: "function",
   function: {
@@ -973,6 +1183,12 @@ async function createLocalAgentActivity(args: {
   if (approvedNode.nodeType !== "entrega" && approvedNode.nodeType !== "pacote") {
     throw new Error(`O código de EAP ${eapRef} não é uma folha terminal e não pode originar atividade.`);
   }
+  const [approvedChild] = await db
+    .select({ id: wbsNodes.id })
+    .from(wbsNodes)
+    .where(and(eq(wbsNodes.projectId, args.projectId), eq(wbsNodes.versionId, approved.id), eq(wbsNodes.parentId, approvedNode.id)))
+    .limit(1);
+  if (approvedChild) throw new Error(`O código de EAP ${eapRef} possui filhos na versão aprovada; atividades devem partir das folhas terminais.`);
 
   const resolvedDuration = resolveActivityDuration({ durationDays });
   const writable = await ensureWritablePlanVersion(args.projectId, args.userId);
@@ -986,6 +1202,34 @@ async function createLocalAgentActivity(args: {
     ))
     .limit(1);
   if (!writableNode) throw new Error(`A referência de EAP ${eapRef} não foi encontrada na versão de trabalho.`);
+  const [writableChild] = await db
+    .select({ id: wbsNodes.id })
+    .from(wbsNodes)
+    .where(and(eq(wbsNodes.projectId, args.projectId), eq(wbsNodes.versionId, writable.id), eq(wbsNodes.parentId, writableNode.id)))
+    .limit(1);
+  if (writableChild) throw new Error(`O código de EAP ${eapRef} foi decomposto na versão atual; vincule a atividade a uma de suas folhas filhas.`);
+
+  const existingCandidates = await db
+    .select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode, name: scheduleActivities.name, durationDays: scheduleActivities.durationDays, plannedQuantity: scheduleActivities.plannedQuantity, unit: scheduleActivities.unit, productivity: scheduleActivities.productivity, versionId: scheduleActivities.versionId })
+    .from(scheduleActivities)
+    .where(and(eq(scheduleActivities.projectId, args.projectId), eq(scheduleActivities.versionId, writable.id), eq(scheduleActivities.wbsCode, writableNode.code)));
+  const existing = existingCandidates.find(activity => activity.name.trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"));
+  if (existing) {
+    const samePlanningData = Number(existing.durationDays) === Number(resolvedDuration)
+      && Number(existing.plannedQuantity ?? 0) === Number(plannedQuantity ?? 0)
+      && existing.unit === (unit ?? null)
+      && Number(existing.productivity ?? 0) === Number(productivity ?? 0);
+    if (!samePlanningData) throw new Error(`Já existe uma atividade chamada "${name}" na EAP ${eapRef}, mas com dados diferentes. Revise a atividade existente antes de criar outra.`);
+    return {
+      source: "local_db_fallback",
+      created: existing,
+      verification: existing,
+      evidence: null,
+      approvedEapVersionId: approved.id,
+      writableVersionId: writable.id,
+      idempotent: true,
+    };
+  }
 
   const [created] = await db
     .insert(scheduleActivities)
@@ -1032,6 +1276,12 @@ async function createLocalAgentActivity(args: {
       eq(scheduleActivities.projectId, args.projectId)
     ))
     .limit(1);
+  if (!created || !verification || verification.versionId !== writable.id || Number(verification.durationDays) !== Number(resolvedDuration)) {
+    throw new Error("A atividade foi enviada ao banco, mas a releitura não confirmou o vínculo e a duração gravados.");
+  }
+  await db.update(scheduleActivities)
+    .set({ critical: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null, totalFloat: null, freeFloat: null })
+    .where(and(eq(scheduleActivities.projectId, args.projectId), eq(scheduleActivities.versionId, writable.id)));
 
   const evidenceRecord = {
     activityId: created.id,
@@ -1100,6 +1350,7 @@ async function createLocalAgentActivity(args: {
     evidence: evidenceRecord,
     approvedEapVersionId: approved.id,
     writableVersionId: writable.id,
+    idempotent: false,
   };
 }
 
@@ -1161,7 +1412,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_ACTIVITY_TOOL, LOCAL_EAP_APPLY_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1236,6 +1487,7 @@ function buildSystem(
     "Existe uma memória persistente do Arquimedes. Consulte-a quando a continuidade da análise exigir contexto anterior. Dentro da mesma rodada, não repita consultar_memoria se o resultado já respondeu à necessidade; só faça nova consulta quando houver uma lacuna materialmente diferente. Registre apenas memórias duráveis e úteis; memória não substitui evidência atual nem autoriza mutações.",
     "A validação estrutural determinística local da EAP faz parte das evidências confirmadas da obra e não depende do MCP. Quando ela estiver disponível no contexto, use seu resultado para relatar estrutura, órfãos, níveis, duplicidades e ciclos. A indisponibilidade do MCP só torna indisponíveis as verificações que realmente dependem dele.",
     "Em consultas e análises, não altere dados: leia, diagnostique e apresente a recomendação. Uma ordem operacional explícita autoriza alterações reversíveis na versão de trabalho local da obra, sem pedir uma segunda confirmação; nesse caso, use a ferramenta local de rascunho, mantenha a EAP em elaboração e reconsulte os dados para validar a gravação. Aprovar EAP, criar baseline, excluir ou executar ações externas/destrutivas continua exigindo confirmação explícita separada.",
+    "Se o MCP de cronograma estiver indisponível, trabalhe com as ferramentas locais: consulte atividades com consultar_atividades_locais para obter IDs reais; para dependências, use criar_dependencias_locais somente com ordem operacional explícita e valide o retorno. Não invente IDs nem declare gravação sem releitura confirmada. A rede pode ficar incompleta durante a montagem; reporte o aviso e continue apenas dentro do escopo pedido.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
     responseIntent === "analise"
@@ -1602,14 +1854,63 @@ export async function runProjectOrchestrator(
               source: rawArgs.source,
             },
           });
+          const alreadyPresent = Boolean(localResult && typeof localResult === "object" && (localResult as { idempotent?: unknown }).idempotent === true);
           const serialized = compactLlmContent(JSON.stringify({
-            status: "created_and_verified",
+            status: alreadyPresent ? "already_present_and_verified" : "created_and_verified",
             source: "local_db",
             resultado: localResult,
           }), MAX_TOOL_RESULT_CHARS);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: serialized };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "consultar_atividades_locais") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.localProjectId) throw new Error("Identificador local da obra indisponível para consultar atividades.");
+          const listActivities = deps.listLocalActivities ?? listLocalAgentActivities;
+          const result = await listActivities({ projectId: options.localProjectId, limit: rawArgs.limit == null ? undefined : Number(rawArgs.limit) });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: compactLlmContent(JSON.stringify({ fonte: "local_db", resultado: result }), MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "criar_dependencias_locais") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!allowMutations) throw new Error("A criação de dependências locais exige ordem operacional explícita.");
+          if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para criar dependências.");
+          if (!Array.isArray(rawArgs.dependencies) || rawArgs.dependencies.length === 0) throw new Error("Informe as dependências que devem ser criadas.");
+          const dependencies = rawArgs.dependencies.map((item: any, index) => {
+            const type = item?.type ?? "FS";
+            if (!["FS", "SS", "FF", "SF"].includes(type)) throw new Error(`Tipo inválido na dependência ${index + 1}.`);
+            return {
+              predecessorId: Number(item?.predecessorId),
+              successorId: Number(item?.successorId),
+              type: type as LocalDependencyInput["type"],
+              lag: Number(item?.lag ?? 0),
+            };
+          });
+          const createDependencies = deps.createLocalDependencies ?? createLocalAgentDependencies;
+          const result = await createDependencies({ projectId: options.localProjectId, userId: options.userId, dependencies });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: compactLlmContent(JSON.stringify({ status: "gravada_e_conferida", fonte: "local_db", resultado: result }), MAX_TOOL_RESULT_CHARS) };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
