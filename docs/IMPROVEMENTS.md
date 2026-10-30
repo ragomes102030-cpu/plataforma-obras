@@ -374,3 +374,13 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 **Base:** os módulos de Risk Register e Cost/Cash Flow do Primavera Cloud são áreas próprias e relacionam risco com impactos em custo/prazo; o Project Operations documenta orçamento, custos reais/comprometidos e controle como partes relacionadas, mas distintas. Isso apoia a separação por domínio sem forçar orçamento e custo real em uma única fase.
 
 **Validação:** teste de integridade dos grupos (sem duplicação ou destinos órfãos) e estado pendente de Riscos; `pnpm check`, `pnpm build` e `git diff --check`.
+
+## 30/out/2026 — Arquimedes preserva resultados quando o chat não finaliza
+
+**Achado:** respostas finais vazias ou só com reasoning faziam o runtime lançar erro e descartar o resultado das ferramentas. Isso podia ocultar uma aplicação local da EAP já gravada. A instrução final também podia pedir nova confirmação após o engenheiro já ter autorizado uma operação reversível.
+
+**Correção:** o runtime solicita uma síntese adicional sem ferramentas. Se o modelo continuar sem texto, apresenta uma resposta de contingência baseada no retorno verificado da aplicação EAP; erros e persistência não confirmada são reportados sem declarar sucesso nem repetir a mutação. A instrução de encerramento respeita a ordem operacional e continua proibindo aprovação e baseline automáticas.
+
+**Documentação:** política de decomposição e registro de integridade do Arquimedes atualizados com a regra de síntese vazia, sem repetição de mutação e com conferência da persistência.
+
+**Validação:** `pnpm check` passou; Node local 24.21.0 gerou o aviso de engine porque o projeto exige Node 22.x. Nenhum teste foi adicionado ou executado nesta alteração. Código local na branch `feat/eap-hierarchy-guidance`; sem commit novo, merge, deploy ou mutação no banco ao vivo.

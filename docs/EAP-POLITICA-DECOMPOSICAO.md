@@ -76,6 +76,17 @@ Antes de dizer que uma EAP está consolidada, o Arquimedes deve:
 
 Decomposição provisória é aceitável quando o próprio escopo nomeia os entregáveis, mas o projeto ainda não define suas soluções. Nesses casos, os filhos registram apenas os limites conhecidos e ficam explicitamente pendentes. Não criar sistemas típicos, materiais, métodos, pavimentos, quantidades ou critérios de aceitação que o escopo não sustenta.
 
+## Falha de síntese depois de uma operação
+
+Uma resposta final vazia do modelo não desfaz nem invalida o resultado de uma ferramenta. O runtime deve fazer uma única tentativa adicional de síntese, sem ferramentas. Se ela também não produzir texto:
+
+1. Para aplicação de EAP, informar sucesso somente quando o retorno confirmar a gravação e a releitura persistida; usar contagens e validação desse retorno.
+2. Se a persistência não foi confirmada ou a ferramenta retornou erro, dizer isso com clareza e orientar a recarregar a EAP antes de repetir, para evitar duplicidade.
+3. Nunca repetir automaticamente uma mutação por causa de resposta vazia do modelo.
+4. Manter aprovação da EAP e criação de baseline fora da síntese automática.
+
+Esse comportamento permite ao engenheiro continuar o planejamento mesmo quando o provedor não redige a conclusão, sem transformar uma falha de linguagem em sucesso presumido ou em uma segunda gravação.
+
 ## Exemplo correto
 
 ```text

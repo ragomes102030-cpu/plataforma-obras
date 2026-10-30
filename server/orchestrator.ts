@@ -1456,6 +1456,7 @@ export async function runProjectOrchestrator(
     messages: conversation,
     tools,
     maxIterations,
+    mutationAuthorized: allowMutations,
     allowedTools: new Set(tools.map(tool => tool.function.name)),
     maxToolResultChars: MAX_TOOL_RESULT_CHARS,
     maxToolResultBudget: MAX_TOOL_RESULT_BUDGET,
