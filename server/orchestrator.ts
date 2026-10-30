@@ -1,7 +1,7 @@
 import { ENV } from "./_core/env";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "./db";
-import { projectAuditEvents, projectPlanVersions, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
+import { planningConstraints, projectAuditEvents, projectPlanVersions, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { ensureWritablePlanVersion, getCurrentPlanVersion } from "./construction/plan-versions";
@@ -680,6 +680,35 @@ const LOCAL_ACTIVITIES_READ_TOOL: LlmTool = {
   },
 };
 
+const LOCAL_CONSTRAINTS_READ_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "consultar_restricoes_locais",
+    description: "Consulta restrições abertas da obra e suas atividades vinculadas diretamente no banco local, sem depender de MCP. Não altera dados.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+  },
+};
+
+const LOCAL_CONSTRAINT_CREATE_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "criar_restricao_local",
+    description: "Registra uma restrição de planejamento vinculada a uma atividade da obra no banco local. Use somente após ordem operacional explícita. Confere duplicatas abertas, valida vínculo com a obra e relê o registro após gravar. Não invente responsável ou prazo.",
+    parameters: {
+      type: "object",
+      properties: {
+        activityId: { type: "integer", minimum: 1 },
+        type: { type: "string", enum: ["material", "mao_de_obra", "equipamento", "projeto", "permissao", "frente_trabalho", "seguranca", "outro"] },
+        description: { type: "string", minLength: 3, maxLength: 400 },
+        responsible: { type: "string", maxLength: 160 },
+        neededBy: { type: "string", description: "Opcional, somente quando uma data real tiver sido fornecida." },
+      },
+      required: ["activityId", "type", "description"],
+      additionalProperties: false,
+    },
+  },
+};
+
 const LOCAL_DEPENDENCIES_TOOL: LlmTool = {
   type: "function",
   function: {
@@ -745,6 +774,109 @@ async function listLocalAgentActivities(args: { projectId: number; limit?: numbe
     .orderBy(scheduleActivities.sortOrder)
     .limit(limit);
   return { version: { id: version.id, number: version.versionNumber, status: version.status }, activities, returned: activities.length, truncated: activities.length === limit };
+}
+
+async function listLocalAgentConstraints(args: { projectId: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+  const items = await db.select({
+    id: planningConstraints.id,
+    activityId: planningConstraints.activityId,
+    type: planningConstraints.type,
+    description: planningConstraints.description,
+    responsible: planningConstraints.responsible,
+    neededBy: planningConstraints.neededBy,
+    status: planningConstraints.status,
+    createdAt: planningConstraints.createdAt,
+    wbsCode: scheduleActivities.wbsCode,
+    activityName: scheduleActivities.name,
+  }).from(planningConstraints)
+    .leftJoin(scheduleActivities, eq(scheduleActivities.id, planningConstraints.activityId))
+    .where(and(
+      eq(planningConstraints.projectId, args.projectId),
+      inArray(planningConstraints.status, ["aberta", "em_andamento"])
+    ))
+    .orderBy(desc(planningConstraints.createdAt))
+    .limit(500);
+  return { source: "local_db", available: true, items };
+}
+
+async function createLocalAgentConstraint(args: {
+  projectId: number;
+  userId: number;
+  activityId: number;
+  type: "material" | "mao_de_obra" | "equipamento" | "projeto" | "permissao" | "frente_trabalho" | "seguranca" | "outro";
+  description: string;
+  responsible?: string;
+  neededBy?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+  const description = args.description.trim();
+  if (!Number.isInteger(args.activityId) || args.activityId < 1) throw new Error("Informe o ID real da atividade vinculada.");
+  if (description.length < 3 || description.length > 400) throw new Error("A descrição deve ter de 3 a 400 caracteres.");
+  let neededBy: Date | null = null;
+  if (args.neededBy) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.neededBy)) throw new Error("Prazo deve estar no formato AAAA-MM-DD.");
+    neededBy = new Date(`${args.neededBy}T00:00:00.000Z`);
+    if (Number.isNaN(neededBy.getTime()) || neededBy.toISOString().slice(0, 10) !== args.neededBy) throw new Error("Prazo inválido.");
+  }
+
+  return db.transaction(async tx => {
+    const [activity] = await tx.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode, name: scheduleActivities.name })
+      .from(scheduleActivities)
+      .where(and(eq(scheduleActivities.id, args.activityId), eq(scheduleActivities.projectId, args.projectId)))
+      .limit(1);
+    if (!activity) throw new Error("Atividade não pertence a esta obra. Consulte novamente as atividades locais.");
+
+    const [existing] = await tx.select({
+      id: planningConstraints.id,
+      activityId: planningConstraints.activityId,
+      type: planningConstraints.type,
+      description: planningConstraints.description,
+      status: planningConstraints.status,
+    }).from(planningConstraints)
+      .where(and(
+        eq(planningConstraints.projectId, args.projectId),
+        eq(planningConstraints.activityId, args.activityId),
+        eq(planningConstraints.type, args.type),
+        eq(planningConstraints.description, description),
+        inArray(planningConstraints.status, ["aberta", "em_andamento"])
+      ))
+      .limit(1);
+    if (existing) return { operation: "already_present_and_verified", ...existing, wbsCode: activity.wbsCode, activityName: activity.name };
+
+    const [created] = await tx.insert(planningConstraints).values({
+      projectId: args.projectId,
+      activityId: args.activityId,
+      type: args.type,
+      description,
+      responsible: args.responsible?.trim() || null,
+      neededBy,
+      createdBy: args.userId,
+    }).returning({ id: planningConstraints.id });
+    const [verified] = await tx.select({
+      id: planningConstraints.id,
+      activityId: planningConstraints.activityId,
+      type: planningConstraints.type,
+      description: planningConstraints.description,
+      responsible: planningConstraints.responsible,
+      neededBy: planningConstraints.neededBy,
+      status: planningConstraints.status,
+    }).from(planningConstraints)
+      .where(and(eq(planningConstraints.id, created.id), eq(planningConstraints.projectId, args.projectId)))
+      .limit(1);
+    if (!verified || verified.activityId !== args.activityId || verified.type !== args.type || verified.description !== description) {
+      throw new Error("A gravação da restrição não passou na releitura; a transação foi cancelada.");
+    }
+    await tx.insert(projectAuditEvents).values({
+      projectId: args.projectId,
+      userId: args.userId,
+      action: "planning_constraint_created_by_arquimedes",
+      payload: { constraintId: verified.id, activityId: verified.activityId, type: verified.type, description: verified.description, verified: true },
+    });
+    return { operation: "created_and_verified", ...verified, wbsCode: activity.wbsCode, activityName: activity.name, verified: true };
+  });
 }
 
 async function updateLocalAgentProjectScope(args: { projectId: number; userId: number; rawArgs: Record<string, unknown> }) {
@@ -1527,7 +1659,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, LOCAL_CONSTRAINTS_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL, LOCAL_CONSTRAINT_CREATE_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -2016,6 +2148,52 @@ export async function runProjectOrchestrator(
           if (!options.localProjectId) throw new Error("Identificador local da obra indisponível para consultar atividades.");
           const listActivities = deps.listLocalActivities ?? listLocalAgentActivities;
           const result = await listActivities({ projectId: options.localProjectId, limit: rawArgs.limit == null ? undefined : Number(rawArgs.limit) });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: compactLlmContent(JSON.stringify({ fonte: "local_db", resultado: result }), MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "consultar_restricoes_locais") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.localProjectId) throw new Error("Identificador local da obra indisponível para consultar restrições.");
+          const result = await listLocalAgentConstraints({ projectId: options.localProjectId });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: compactLlmContent(JSON.stringify(result), MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "criar_restricao_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!allowMutations || !hasExplicitMutationConfirmation(messages)) throw new Error("A criação da restrição exige ordem operacional explícita nesta conversa.");
+          if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para criar restrições.");
+          const allowedTypes = ["material", "mao_de_obra", "equipamento", "projeto", "permissao", "frente_trabalho", "seguranca", "outro"];
+          if (!allowedTypes.includes(String(rawArgs.type))) throw new Error("Tipo de restrição inválido.");
+          if (typeof rawArgs.description !== "string") throw new Error("Informe a descrição da restrição.");
+          const result = await createLocalAgentConstraint({
+            projectId: options.localProjectId,
+            userId: options.userId,
+            activityId: Number(rawArgs.activityId),
+            type: String(rawArgs.type) as "material" | "mao_de_obra" | "equipamento" | "projeto" | "permissao" | "frente_trabalho" | "seguranca" | "outro",
+            description: rawArgs.description,
+            responsible: typeof rawArgs.responsible === "string" ? rawArgs.responsible : undefined,
+            neededBy: typeof rawArgs.neededBy === "string" ? rawArgs.neededBy : undefined,
+          });
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: compactLlmContent(JSON.stringify({ fonte: "local_db", resultado: result }), MAX_TOOL_RESULT_CHARS) };
