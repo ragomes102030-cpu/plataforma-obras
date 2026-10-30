@@ -1545,7 +1545,7 @@ function buildSystem(
           "Memória persistente disponível:\n" + memoryContext,
         ]
       : []),
-    "Converse naturalmente com o usuário. Escolha o formato que melhor serve à pergunta. Não existe formato obrigatório de resposta.",
+    "Converse naturalmente. Perguntas casuais e pontuais não exigem formato fixo. Para auditoria, proposta ou decisão de planejamento, organize a resposta em: etapa atual; evidências consultadas (fonte e versão); achados comprovados (severidade, referência e impacto); proposta/premissas; lacunas; próxima decisão. Seja conciso e priorize o que pode mudar uma decisão. Não esconda achados adicionais: se a lista for longa, agrupe apenas causas realmente comuns e ofereça continuar por grupos.",
     "Responda diretamente ao que foi perguntado. Não despeje o contexto da obra, métricas ou diagnósticos que o usuário não pediu.",
     "Quando a pergunta puder ser respondida com o contexto disponível, responda sem chamar ferramentas só para preencher a conversa.",
     "Quando precisar de dados atuais ou mais completos, consulte as ferramentas disponíveis. Use ferramentas como instrumentos de consulta, não como roteiro rígido.",

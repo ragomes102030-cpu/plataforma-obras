@@ -407,6 +407,6 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 
 **Achado:** uma resposta de auditoria do chat terminou exatamente no meio de uma frase. O runtime aceitava texto mesmo quando o provedor sinalizava limite de saída e encerrava a execução como respondida. A skill operacional ainda descrevia os MCPs como caminho principal, contrariando os motores e validadores locais já disponíveis.
 
-**Correção:** o runtime reconhece `finish_reason=length`, pede até duas continuações sem ferramentas e marca claramente a resposta como parcial se o limite persistir. A skill agora define a Plataforma Obras como fonte e motor primários; MCPs complementam o trabalho e não bloqueiam capacidades locais.
+**Correção:** o runtime reconhece `finish_reason=length`, pede até duas continuações sem ferramentas e marca claramente a resposta como parcial se o limite persistir. Auditorias e decisões de planejamento agora pedem uma síntese curta com etapa, fonte/versão, achados com impacto, proposta, lacunas e próxima decisão. A skill define a Plataforma Obras como fonte e motor primários; MCPs complementam o trabalho e não bloqueiam capacidades locais.
 
 **Validação:** revisão estática da alteração e `git diff --check`; testes não executados nesta rodada. Código local na branch `fix/arquimedes-continuation`; sem commit, deploy ou alteração de dados ao vivo.
