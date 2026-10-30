@@ -828,7 +828,7 @@ const LOCAL_EAP_APPLY_TOOL: LlmTool = {
   type: "function",
   function: {
     name: "aplicar_proposta_eap_local",
-    description: "Aplica alterações create/update na EAP da obra usando o banco local, mesmo sem MCP. Só pode ser chamada após uma ordem operacional explícita do engenheiro. Persiste apenas na versão de trabalho em rascunho; nunca aprova EAP nem cria baseline. Não invente área, quantidade, unidade, solução construtiva, duração ou produtividade: mantenha campos desconhecidos nulos e registre-os em missingInformation/assumptions. Não executa move/remove.",
+    description: "Aplica alterações create/update na EAP da obra usando o banco local, mesmo sem MCP. Só pode ser chamada após uma ordem operacional explícita do engenheiro. Persiste apenas na versão de trabalho em rascunho; nunca aprova EAP nem cria baseline. Para atualizar um nó existente, use o código EAP estável em `code` e o pai atual em `parentCode`; `nodeId` é interno, opcional e nunca deve ser inventado. Toda proposta exige os campos de topo `basis`, `assumptions`, `missingInformation` e `nodes`; cada nó exige `operation`, `parentCode`, `name`, `nodeType` e `rationale`. Em update, repita nome/tipo atuais quando não forem mudar e omita campos que devem permanecer intactos. Não invente área, quantidade, unidade, solução construtiva, duração ou produtividade: mantenha campos desconhecidos nulos e registre-os em missingInformation/assumptions. Não executa move/remove.",
     parameters: {
       type: "object",
       properties: {
