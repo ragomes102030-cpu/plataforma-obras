@@ -158,6 +158,7 @@ describe("runProjectOrchestrator", () => {
     expect(systemPrompt).toContain("Fundação A");
     expect(systemPrompt).toContain("Fundação B");
     expect(systemPrompt).toContain("não significa aprovação");
+    expect(systemPrompt.trimEnd()).toMatch(/Folha 1\.2 \(Fundação B\).*critério de aceitação\.$/);
   });
 
   it("uses local EAP validation when the project has no external MCP mapping", async () => {
