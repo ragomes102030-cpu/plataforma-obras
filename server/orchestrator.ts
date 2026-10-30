@@ -1806,7 +1806,9 @@ function formatEapScopeDiagnostics(context: AgentProjectContext) {
     `Diagnóstico determinístico local da EAP: ${complete ? "snapshot completo" : `snapshot parcial (${nodes.length}/${total ?? "total desconhecido"} nós; não extrapolar)`}; analisados=${result.totalNodes}; avisos=${result.warnings}. É independente da validação estrutural e não significa aprovação.`,
     `Achados determinísticos de estrutura, dicionário e escopo: ${issues.length ? issues.join(" | ") : "nenhum no snapshot analisado."}`,
   ].join("\n");
-  const limit = 3_200;
+  // Keep all findings visible to the agent for realistic EAPs with many
+  // sibling-scope warnings; 3,200 characters cut complete diagnostic lists.
+  const limit = 20_000;
   return report.length <= limit
     ? report
     : `${report.slice(0, limit)}\n[lista de achados truncada; contagens acima referem-se ao snapshot completo informado]`;
@@ -1963,10 +1965,12 @@ export async function runProjectOrchestrator(
       content: compactLlmContent(
         buildSystem(context, mcpProjectIds, intent, memoryContext, brainBootstrap, operationalSkills) +
         (plannedAction ? `\n\n${plannedAction}` : "") +
-        (externalAvailabilityContext ? `\n\n${externalAvailabilityContext}` : "") +
-        (intent !== "casual" ? `\n\n${formatEapScopeDiagnostics(context)}` : "")
+        (externalAvailabilityContext ? `\n\n${externalAvailabilityContext}` : "")
       ),
     },
+    ...(intent !== "casual"
+      ? [{ role: "system" as const, content: compactLlmContent(formatEapScopeDiagnostics(context)) }]
+      : []),
     ...messages.map(message => ({
       role: message.role,
       content: compactLlmContent(message.content),

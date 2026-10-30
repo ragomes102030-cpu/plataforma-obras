@@ -161,6 +161,52 @@ describe("runProjectOrchestrator", () => {
     expect(systemPrompt.trimEnd()).toMatch(/Folha 1\.2 \(Fundação B\).*critério de aceitação\.$/);
   });
 
+  it("preserva todos os avisos da EAP quando o relatório excede o limite antigo de 3.200 caracteres", async () => {
+    const nodes = [
+      { id: 1, code: "1", name: "Obra", parentId: null, level: 1, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: "Execução da escola.", inclusions: "Execução da escola.", exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        id: index + 2,
+        code: `1.${index + 1}`,
+        name: `Pacote ${index + 1}`,
+        parentId: 1,
+        level: 2,
+        nodeType: "pacote",
+        location: null,
+        responsible: "Responsável didático",
+        unit: "m²",
+        plannedQuantity: 10,
+        description: "Formas, armaduras, concretagem e cura da estrutura escolar.",
+        inclusions: "Formas, armaduras, concretagem e cura da estrutura escolar.",
+        exclusions: "Serviços distintos deste pacote.",
+        acceptanceCriteria: "Escopo executado e inspecionado conforme registro didático.",
+        scopeStatus: "rascunho",
+        decompositionBasis: "deliverable",
+      })),
+    ];
+    const sentMessages: any[] = [];
+    const localContext: AgentProjectContext = {
+      ...context,
+      evidence: { source: "local_db", eapNodeCount: nodes.length, activityCount: 0, dependencyCount: 0, warnings: [], errors: [], eapSnapshot: nodes },
+    };
+
+    await runProjectOrchestrator(localContext, [{ role: "user", content: "Revise todos os avisos da EAP." }], {
+      mcpProjectIds: {},
+      deps: {
+        listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+        callTool: async () => { throw new Error("não deveria chamar MCP"); },
+        callLlm: async input => {
+          sentMessages.push(...input.messages);
+          return { model: "test-model", choices: [{ message: { role: "assistant", content: "Revisão concluída." } }] };
+        },
+      },
+    });
+
+    const systemPrompt = sentMessages.filter(message => message.role === "system").map(message => String(message.content)).join("\n");
+    expect(systemPrompt).toMatch(/analisados=11; avisos=\d+/);
+    expect(systemPrompt).toContain("irmãos 1.9 e 1.10");
+    expect(systemPrompt).not.toContain("[lista de achados truncada");
+  });
+
   it("uses local EAP validation when the project has no external MCP mapping", async () => {
     const localContext: AgentProjectContext = {
       ...context,
@@ -192,7 +238,7 @@ describe("runProjectOrchestrator", () => {
             throw new Error("não deveria chamar o MCP sem mapeamento");
           },
           callLlm: async ({ messages }) => {
-            if (messages.length === 2) {
+            if (messages.length === 3) {
               return {
                 model: "test-model",
                 choices: [{
@@ -253,7 +299,7 @@ describe("runProjectOrchestrator", () => {
             return { content: [{ type: "text", text: JSON.stringify({ toolName, issues: toolName === "validar_estrutura" ? ["múltiplas raízes"] : [] }) }] };
           },
           callLlm: async ({ messages, tools }) => {
-            if (messages.length === 2) {
+            if (messages.length === 3) {
               expect(tools.some(tool => tool.function.name === "engineering_gap_analysis")).toBe(true);
               return {
                 model: "test-model",
@@ -358,8 +404,8 @@ describe("runProjectOrchestrator", () => {
       domain: "eap",
     });
     expect(llmCalls).toEqual([
-      { messages: 2, tools: 24 },
-      { messages: 4, tools: 24 },
+      { messages: 3, tools: 24 },
+      { messages: 5, tools: 24 },
     ]);
     // A evidência estruturada sai do rastro, não do texto do modelo.
     expect(result.evidence).toContainEqual({ source: "mcp_eap", toolName: "get_eap_tree" });
@@ -820,7 +866,7 @@ describe("runProjectOrchestrator", () => {
         deps: {
           listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
           callLlm: async ({ messages }) => {
-            if (messages.length === 2) {
+            if (messages.length === 3) {
               return {
                 model: "test-model",
                 choices: [{
@@ -862,7 +908,7 @@ describe("runProjectOrchestrator", () => {
         deps: {
           listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
           callLlm: async ({ messages }) => {
-            if (messages.length === 2) {
+            if (messages.length === 3) {
               return {
                 model: "test-model",
                 choices: [{
@@ -907,7 +953,7 @@ describe("runProjectOrchestrator", () => {
             ganttLob: [],
           }),
           callLlm: async ({ messages }) => {
-            if (messages.length === 2) {
+            if (messages.length === 3) {
               return {
                 model: "test-model",
                 choices: [{
@@ -949,7 +995,7 @@ describe("runProjectOrchestrator", () => {
             ganttLob: [],
           }),
           callLlm: async ({ messages }) => {
-            if (messages.length === 2) {
+            if (messages.length === 3) {
               return {
                 model: "test-model",
                 choices: [{
