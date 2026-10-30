@@ -423,6 +423,7 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 ### Correção e evidência
 - A comparação lexical passou a ignorar vocabulário genérico e exigir uma cláusula idêntica ou pelo menos dois termos significativos em comum.
 - Uma cláusula do pai que identifica pendência ou declara que não é exclusão deixa de gerar bloqueio contra o filho que cobre esse trabalho.
+- Quando a raiz declara “Nenhuma exclusão definitiva”, a lista explicativa completa é tratada como pendências, preservando esse contexto apesar das vírgulas.
 - Exclusões definitivas com correspondência significativa continuam gerando aviso para revisão.
 - Testes de regressão: 40 testes em três arquivos passaram (`eap-validator`, `eap-approval-validator`, `eap-resolution-engine`); `git diff --check` sem erros.
 

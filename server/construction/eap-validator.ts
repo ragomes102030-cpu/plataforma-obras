@@ -289,9 +289,11 @@ export function validateEapScope(
       // Pending scope is deliberately not an exclusion. Comparing it as one
       // created false structural blockers when a child package covered the
       // very item the parent said was awaiting definition.
-      const parentExclusions = clauses(node.exclusions).filter(
-        clause => !isPendingOrNonExclusionClause(clause)
-      );
+      const parentExclusionText = normalized(node.exclusions ?? "");
+      const parentDeclaresNoDefinitiveExclusions = /^nenhuma exclusao definitiva\b/.test(parentExclusionText);
+      const parentExclusions = parentDeclaresNoDefinitiveExclusions
+        ? []
+        : clauses(node.exclusions).filter(clause => !isPendingOrNonExclusionClause(clause));
 
       for (let i = 0; i < childNodes.length; i += 1) {
         for (let j = i + 1; j < childNodes.length; j += 1) {

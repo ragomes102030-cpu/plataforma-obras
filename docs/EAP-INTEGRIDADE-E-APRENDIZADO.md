@@ -221,11 +221,12 @@ Na EAP de teste PROJETO ESCOLA ARQUIMEDES, a interface mostrou dezenas de aponta
 ### Regra corrigida
 - Alertas lexicais exigem cláusula idêntica ou ao menos dois termos significativos compartilhados, após retirar vocabulário genérico de projeto/obra.
 - Cláusulas do pai que identificam pendência ou declaram que o item não constitui exclusão não são comparadas como exclusões definitivas.
+- Se o campo começar por “Nenhuma exclusão definitiva”, a lista inteira que o segue é tratada como pendência explicativa, não como uma lista de exclusões separáveis por vírgulas.
 - Uma coincidência lexical continua sendo evidência para revisão; não prova nem descarta conflito semântico.
 - Se não houver trecho/campos individuais recuperáveis, o agente declara essa limitação e não classifica os alertas individualmente.
 
 ### Regressão
-`server/construction/eap-validator.test.ts` cobre: frases genéricas compartilhadas sem conflito, pendência do pai coberta por filho sem bloqueio e exclusão definitiva ainda bloqueando o pacote filho.
+`server/construction/eap-validator.test.ts` cobre: frases genéricas compartilhadas sem conflito, lista da raiz iniciada por “Nenhuma exclusão definitiva” coberta por pacotes filhos sem alertas de exclusão e exclusão definitiva ainda sinalizada para revisão.
 
 ### Limite de implantação
 Validar o número e o teor dos alertas no sistema online após integrar esta correção à linha publicada; não declarar o alerta corrigido em produção somente por testes locais.
