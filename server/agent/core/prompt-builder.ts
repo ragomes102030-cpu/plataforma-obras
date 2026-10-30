@@ -26,10 +26,14 @@ function engineeringReasoningKernel() {
     "4. Escolha o critério de decomposição que melhor represente o empreendimento. Use fase, sistema, localização, disciplina, componente ou outro critério coerente; não misture critérios sem necessidade.",
     "5. Decomponha de forma hierárquica e rastreável. Cada nó deve ter um único lugar lógico na estrutura e o conjunto de filhos deve representar integralmente o escopo do pai.",
     "6. Pare no ponto de controle. Um pacote deve ser detalhado o suficiente para ser planejado, orçado, medido e acompanhado, sem virar catálogo de serviços ou lista excessivamente granular.",
-    "7. Faça uma verificação final de coerência antes de responder: hierarquia, códigos, duplicidades, cobertura de escopo, nível de detalhe, nomenclatura e aderência às informações fornecidas.",
-    "8. Quando houver conflito ou ambiguidade real, sinalize-a em missingInformation ou assumptions em vez de fabricar uma decisão.",
-    "9. Use conhecimento de engenharia para organizar e questionar o escopo, não para inventar quantitativos, métodos executivos, normas específicas ou decisões de projeto ausentes.",
-    "10. Aplique o método internamente e devolva somente o contrato solicitado. Não exponha cadeia de pensamento detalhada, rascunhos ou raciocínio interno."
+    "7. Na criação de uma EAP completa, não pare na macroestrutura: expanda cada ramo até folhas controláveis sempre que o escopo sustentar a fronteira entre os filhos.",
+    "8. Em toda revisão ou consolidação, examine cada folha. Se o título ou dicionário reunir entregáveis, componentes ou locais que exigem controle separado e a divisão estiver sustentada, transforme o pai em grupo e crie os filhos. Não deixe um pacote-guarda-chuva terminal por conveniência.",
+    "9. Se faltarem projetos para definir a solução, mantenha provisória a decomposição que já estiver sustentada pelos entregáveis declarados e registre a pendência em cada filho. Se não houver fronteira sustentada, mantenha a folha e diga exatamente por que e qual dado falta.",
+    "10. Uma validação estrutural sem erros ou um dicionário preenchido não prova que a EAP está consolidada. Informe separadamente a revisão de cobertura, adequação das folhas terminais e pendências de projeto.",
+    "11. Faça uma verificação final de coerência antes de responder: hierarquia, códigos, duplicidades, cobertura de escopo, nível de detalhe, nomenclatura e aderência às informações fornecidas.",
+    "12. Quando houver conflito ou ambiguidade real, sinalize-a em missingInformation ou assumptions em vez de fabricar uma decisão.",
+    "13. Use conhecimento de engenharia para organizar e questionar o escopo, não para inventar quantitativos, métodos executivos, normas específicas ou decisões de projeto ausentes.",
+    "14. Aplique o método internamente e devolva somente o contrato solicitado. Não exponha cadeia de pensamento detalhada, rascunhos ou raciocínio interno."
   ].join("\n");
 }
 
@@ -223,6 +227,8 @@ export function buildEapSubtreeRequest(
     "Cada node deve ter code descendente do código-raiz, como 1.1, 1.2 ou 1.1.1, e parentCode deve apontar para o pai imediato.",
     "Para grupos que possuem filhos, informe description e inclusions para evidenciar a cobertura do escopo. Para folhas, informe description, inclusions, exclusions, responsible e acceptanceCriteria quando sustentados pelo escopo.",
     "Você pode usar grupo, pacote ou entrega. Pare quando o pacote estiver controlável sem precisar alterar o escopo.",
+    "Não retorne apenas um pacote terminal com o mesmo nome do ramo se o nome, a descrição ou o escopo registrado já identificar entregáveis distintos controláveis separadamente. Nesse caso, retorne um grupo coerente e os filhos correspondentes.",
+    "Revise todas as folhas candidatas. A rationale de cada folha proposta deve explicar por que ela já é controlável; registre em missingInformation a informação específica que ainda falta para decidir uma subdivisão não sustentada.",
     "Não transforme cada serviço de catálogo em um nó. Agrupe trabalhos que serão controlados juntos.",
     "Não invente quantitativos. Só preencha unit/plannedQuantity quando forem sustentados pelo texto da obra.",
     "Mantenha o ramo compacto. Não ultrapasse o orçamento de nós indicado na solicitação.",

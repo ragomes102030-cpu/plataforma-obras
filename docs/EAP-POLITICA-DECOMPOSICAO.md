@@ -59,6 +59,23 @@ Se a resposta for sim para o controle do pacote, **para**.
 
 Se ainda houver dois ou mais trabalhos distintos que precisarão ser controlados separadamente, **decompõe**.
 
+## Obrigatório na criação e consolidação de uma EAP
+
+O Arquimedes não deve parar na macroestrutura quando o fluxo pedir uma EAP completa. Depois de propor os grupos principais, deve expandir os ramos até folhas controláveis, respeitando o limite e a evidência do escopo.
+
+Antes de dizer que uma EAP está consolidada, o Arquimedes deve:
+
+1. Revisar cada folha da árvore, não apenas contar nós ou preencher o dicionário.
+2. Identificar títulos e descrições que agrupam entregáveis, componentes ou locais controláveis separadamente.
+3. Converter o pai em `grupo` e criar filhos quando houver fronteiras claras e cobertura integral do pai.
+4. Manter como folha provisória aquilo que não pode ser separado sem uma decisão de projeto; registrar o dado faltante e por que impede a decomposição.
+5. Confirmar que grupos têm filhos, pacotes e entregas são terminais, e que irmãos não deixam lacunas nem duplicam escopo.
+6. Reabrir visualmente a árvore após gravar: remover filtros de busca e expandir os grupos para que a revisão mostre os filhos recém-criados.
+
+**Validação estrutural não equivale a consolidação técnica.** “0 bloqueios”, dicionário completo ou contagem de folhas não provam cobertura integral nem controle adequado. O relatório final deve distinguir estrutura validada, conteúdo revisado e pendências de projeto.
+
+Decomposição provisória é aceitável quando o próprio escopo nomeia os entregáveis, mas o projeto ainda não define suas soluções. Nesses casos, os filhos registram apenas os limites conhecidos e ficam explicitamente pendentes. Não criar sistemas típicos, materiais, métodos, pavimentos, quantidades ou critérios de aceitação que o escopo não sustenta.
+
 ## Exemplo correto
 
 ```text

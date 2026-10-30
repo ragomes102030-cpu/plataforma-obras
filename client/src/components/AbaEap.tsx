@@ -217,10 +217,14 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
     if (jaViu.current === nos) return;
     jaViu.current = nos;
     if (nos.length === 0) return;
+    const paisComFilhos = new Set(nos.flatMap(no => no.parentId === null ? [] : [no.parentId]));
+    const idsDosGrupos = nos
+      .filter(no => paisComFilhos.has(no.id) && no.nodeType !== "entrega")
+      .map(no => no.id);
     setAberto(antigo => {
-      if (antigo.size > 0) return antigo;
-      const primeiroNivel = nos.filter(n => n.parentId === null).map(n => n.id);
-      return primeiroNivel.length ? new Set(primeiroNivel) : antigo;
+      const expandido = new Set(antigo);
+      for (const id of idsDosGrupos) expandido.add(id);
+      return expandido;
     });
   }, [nos]);
 
