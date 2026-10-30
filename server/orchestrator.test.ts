@@ -325,8 +325,8 @@ describe("runProjectOrchestrator", () => {
       domain: "eap",
     });
     expect(llmCalls).toEqual([
-      { messages: 2, tools: 23 },
-      { messages: 4, tools: 23 },
+      { messages: 2, tools: 24 },
+      { messages: 4, tools: 24 },
     ]);
     // A evidência estruturada sai do rastro, não do texto do modelo.
     expect(result.evidence).toContainEqual({ source: "mcp_eap", toolName: "get_eap_tree" });

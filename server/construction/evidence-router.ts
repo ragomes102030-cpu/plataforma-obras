@@ -36,8 +36,19 @@ export class EvidenceSourceRouter implements EvidenceSource {
     if (!this.allowFallback || !this.fallback) return local;
 
     let fallback: EvidenceResult<T>;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      fallback = await fallbackResult();
+      // MCP é enriquecimento opcional. Uma integração lenta não pode prender
+      // o chat nem impedir o engenheiro de trabalhar com os dados locais.
+      fallback = await Promise.race([
+        fallbackResult(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("MCP excedeu o limite de espera do enriquecimento opcional (8s).")),
+            8_000
+          );
+        }),
+      ]);
     } catch (error) {
       // Enriquecimento indisponível é degradação, não falha: o local continua valendo.
       return {
@@ -51,6 +62,10 @@ export class EvidenceSourceRouter implements EvidenceSource {
           },
         ],
       };
+    }
+
+    finally {
+      if (timeout) clearTimeout(timeout);
     }
 
     if (!hasData(fallback)) {

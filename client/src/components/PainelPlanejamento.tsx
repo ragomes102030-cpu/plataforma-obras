@@ -124,12 +124,10 @@ export function PainelPlanejamento({ projetoId }: Props) {
       gerarProposta.isPending
     ) return;
 
-    // Não dispara para uma obra sem EAP aprovada. O gate do servidor rejeitaria
-    // com "A EAP precisa estar aprovada antes de gerar atividades", e o
-    // `onError` colocaria isso na tela como se o engenheiro tivesse feito algo
-    // errado — quando a etapa pendente é a anterior. Aqui a mensagem aponta a
-    // etapa certa e o campo fica disponível para o botão manual.
-    if (!plano.data?.eapApproved) return;
+    // A proposta sempre parte da última EAP aprovada. Uma versão de trabalho
+    // aberta para editar o cronograma não invalida a fonte aprovada; o gate da
+    // baseline continua usando `eapApproved` (status da versão atual).
+    if (!plano.data?.hasApprovedEap) return;
 
     propostaAutoDisparada.current = true;
     gerarProposta.mutate({ projectId: projetoId });
@@ -137,7 +135,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
     activities.length,
     gerarProposta.isPending,
     gerarProposta.mutate,
-    plano.data?.eapApproved,
+    plano.data?.hasApprovedEap,
     plano.isError,
     plano.isPending,
     proposta.length,
@@ -279,7 +277,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
       </div>
 
-      {plano.data && !plano.data.eapApproved && resumo.total === 0 && (
+      {plano.data && !plano.data.hasApprovedEap && resumo.total === 0 && (
         <div className="pl-atividades-alerta">
           A EAP desta obra ainda não foi aprovada. Aprove a EAP na aba{" "}
           <strong>EAP</strong> para liberar a proposta de atividades — a etapa
@@ -407,7 +405,16 @@ export function PainelPlanejamento({ projetoId }: Props) {
                 </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
                 <td className="action-col">
-                  <span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span>
+                  {activity.planningEvidence?.source ? (
+                    <details className="pl-row-evidence">
+                      <summary>{Number(activity.critical) === 1 ? "Crítica · premissa" : "Premissa registrada"}</summary>
+                      <p>{String(activity.planningEvidence.source)}</p>
+                      {typeof activity.planningEvidence.premise === "string" && <p><strong>Base:</strong> {activity.planningEvidence.premise}</p>}
+                      {typeof activity.planningEvidence.evidenceLevel === "string" && <p><strong>Nível:</strong> {activity.planningEvidence.evidenceLevel}</p>}
+                    </details>
+                  ) : (
+                    <span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span>
+                  )}
                 </td>
               </tr>
             ))}

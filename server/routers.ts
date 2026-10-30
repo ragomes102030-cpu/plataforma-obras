@@ -4241,7 +4241,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null };
+        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, hasApprovedEap: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4250,6 +4250,34 @@ export const appRouter = router({
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
+        // A origem e as premissas da duracao sao registradas pelo Arquimedes
+        // no log de auditoria, mas a grade tambem precisa exibi-las para que
+        // o engenheiro consiga revisar a estimativa sem depender da conversa.
+        const evidenceRows = activities.length
+          ? await db.select({ payload: projectAuditEvents.payload })
+              .from(projectAuditEvents)
+              .where(and(
+                eq(projectAuditEvents.projectId, input.projectId),
+                eq(projectAuditEvents.action, "activity_planning_evidence_recorded"),
+                inArray(
+                  sql<number>`(${projectAuditEvents.payload}->>'activityId')::int`,
+                  activities.map(activity => activity.id)
+                )
+              ))
+              .orderBy(desc(projectAuditEvents.createdAt))
+          : [];
+        const evidenceByActivity = new Map<number, Record<string, unknown>>();
+        for (const row of evidenceRows) {
+          const payload = row.payload as Record<string, unknown> | null;
+          const activityId = Number(payload?.activityId);
+          if (Number.isInteger(activityId) && !evidenceByActivity.has(activityId)) {
+            evidenceByActivity.set(activityId, payload ?? {});
+          }
+        }
+        const activitiesWithEvidence = activities.map(activity => ({
+          ...activity,
+          planningEvidence: evidenceByActivity.get(activity.id) ?? null,
+        }));
         // A tela de Atividades auto-dispara `generateFromEap` ao montar. Sem isto,
         // uma obra ainda não aprovada recebe o erro "A EAP precisa estar aprovada
         // antes de gerar atividades" como se fosse falha do usuário, em vez da
@@ -4261,18 +4289,17 @@ export const appRouter = router({
           .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
           .orderBy(desc(projectPlanVersions.versionNumber))
           .limit(1);
-        // `eapApproved` responde sobre a versão de TRABALHO, não sobre "existe
-        // alguma versão aprovada no histórico". Com a v3 aprovada e a v4 em
-        // rascunho, a tela de baseline liberava a captura e o servidor recusava
-        // depois ("Só uma versão aprovada pode virar baseline"): o engenheiro
-        // gastava um clique — e uma dúvida — para descobrir um gate que já
-        // estava fechado antes de ele começar.
+        // `eapApproved` indica que a versão atual do plano pode virar baseline.
+        // A proposta de atividades usa a EAP aprovada como fonte mesmo depois
+        // de aberta uma versão de trabalho; por isso expomos também
+        // `hasApprovedEap`, sem enfraquecer o gate da baseline.
         return {
-          activities,
+          activities: activitiesWithEvidence,
           dependencies,
           resources,
           baselines,
           eapApproved: currentVersion?.status === "approved",
+          hasApprovedEap: approved != null,
           approvedVersionId: approved?.id ?? null,
           currentVersionNumber: currentVersion?.versionNumber ?? null,
           currentVersionStatus: currentVersion?.status ?? null,
@@ -5657,9 +5684,16 @@ export const appRouter = router({
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const approved = await requireApprovedEapVersion(db, input.projectId);
-        const writable = await ensureWritablePlanVersion(input.projectId, ctx.user.id);
+        // Gerar a proposta é uma consulta: não deve abrir/forkar uma versão de
+        // trabalho antes de o engenheiro gravar a primeira atividade. Além de
+        // evitar mutação lateral num botão de prévia, isso mantém a EAP
+        // aprovada como referência após recarregar a tela.
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const activityVersionScope = currentVersion
+          ? eq(scheduleActivities.versionId, currentVersion.id)
+          : isNull(scheduleActivities.versionId);
         const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,approved.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
-        const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),eq(scheduleActivities.versionId,writable.id)));
+        const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),activityVersionScope));
         const existingCodes = new Set(existing.map(row=>row.wbsCode));
         const pending = nodes.filter(node=>!existingCodes.has(node.code)).map(node=>({
           eapNodeId:node.id,
@@ -5676,8 +5710,8 @@ export const appRouter = router({
           created:0,
           skipped:nodes.length-pending.length,
           pending:pending.length,
-          versionId:writable.id,
-          versionNumber:writable.versionNumber,
+          versionId:currentVersion?.id ?? null,
+          versionNumber:currentVersion?.versionNumber ?? null,
           sourceApprovedVersionId:approved.id,
           proposal:pending,
           message:pending.length?"Proposta de atividades criada em memória para revisão do engenheiro; nenhuma atividade foi persistida.":"A versão de trabalho já possui atividades para todas as folhas elegíveis; nenhuma nova proposta foi criada."
@@ -5760,6 +5794,57 @@ export const appRouter = router({
         await markCpmStaleForVersion(db, input.projectId, writable.id);
         const warning = validation.issues.find(issue => issue.code === "disconnected_network")?.message ?? null;
         return { id: createdId.id, warning };
+      }),
+    deleteDependency: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), dependencyId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
+        if (versionId == null) throw conflict("Não há versão de trabalho ativa para editar dependências.");
+        const [version] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, versionId), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!version || !["draft", "proposed"].includes(version.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de editar dependências.");
+        }
+        const result = await db.transaction(async tx => {
+          const [removed] = await tx
+            .delete(scheduleDependencies)
+            .where(and(
+              eq(scheduleDependencies.id, input.dependencyId),
+              eq(scheduleDependencies.projectId, input.projectId),
+              eq(scheduleDependencies.versionId, versionId),
+            ))
+            .returning({
+              id: scheduleDependencies.id,
+              predecessorId: scheduleDependencies.predecessorId,
+              successorId: scheduleDependencies.successorId,
+              type: scheduleDependencies.type,
+              lag: scheduleDependencies.lag,
+            });
+          if (!removed) throw notFound("Dependência não encontrada na versão de trabalho desta obra.");
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "schedule_dependency_removed",
+            payload: {
+              dependencyId: removed.id,
+              predecessorId: removed.predecessorId,
+              successorId: removed.successorId,
+              type: removed.type,
+              lag: removed.lag,
+              versionId,
+              at: new Date().toISOString(),
+            },
+          });
+          return removed;
+        });
+        await markCpmStaleForVersion(db, input.projectId, versionId);
+        return { deleted: true as const, dependency: result };
       }),
     createDependencies: protectedProcedure
       .input(
@@ -7530,7 +7615,7 @@ export const appRouter = router({
                 localDatabaseEvidenceSource,
                 new ConstructionMcpEvidenceSource(mcpProjectIds)
               );
-              const [eapResult, activityResult, dependencyResult, dictionaryRows] =
+              const [eapResult, activityResult, dependencyResult, dictionaryRows, approvedVersion, currentVersion] =
                 await Promise.all([
                   evidenceSource.getEapTree(input.projectId),
                   evidenceSource.listActivities(input.projectId),
@@ -7539,6 +7624,16 @@ export const appRouter = router({
                     .from(agentDecisions)
                     .where(and(eq(agentDecisions.projectId, input.projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
                     .orderBy(desc(agentDecisions.createdAt))
+                    .limit(1),
+                  db.select({ versionNumber: projectPlanVersions.versionNumber, approvedAt: projectPlanVersions.approvedAt })
+                    .from(projectPlanVersions)
+                    .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
+                    .orderBy(desc(projectPlanVersions.versionNumber))
+                    .limit(1),
+                  db.select({ versionNumber: projectPlanVersions.versionNumber, status: projectPlanVersions.status })
+                    .from(projectPlanVersions)
+                    .where(eq(projectPlanVersions.projectId, input.projectId))
+                    .orderBy(desc(projectPlanVersions.versionNumber))
                     .limit(1),
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
@@ -7625,6 +7720,13 @@ export const appRouter = router({
                     : null,
                   totalLeafCount: eapLeafCount,
                   leavesMissingRequiredFields: leavesMissingRequiredFields.slice(0, 120),
+                },
+                eapApproval: {
+                  approved: approvedVersion.length > 0,
+                  approvedVersionNumber: approvedVersion[0]?.versionNumber ?? null,
+                  approvedAt: approvedVersion[0]?.approvedAt?.toISOString() ?? null,
+                  currentVersionNumber: currentVersion[0]?.versionNumber ?? null,
+                  currentVersionStatus: currentVersion[0]?.status ?? null,
                 },
                 eapSnapshot: eapNodes.slice(0, 120).map(node => ({
                   id: node.id,
