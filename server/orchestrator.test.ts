@@ -252,7 +252,7 @@ describe("runProjectOrchestrator", () => {
     ]);
   });
 
-  it("aplica a EAP no banco local após uma ordem de preenchimento, sem MCP", async () => {
+  it("preserva o resultado da EAP quando a síntese vem vazia, sem MCP", async () => {
     const proposal = {
       action: "propose_eap",
       basis: ["escopo declarado"],
@@ -287,7 +287,7 @@ describe("runProjectOrchestrator", () => {
               expect(tools.some(tool => tool.function.name === "aplicar_proposta_eap_local")).toBe(true);
               return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "local-eap-1", type: "function", function: { name: "aplicar_proposta_eap_local", arguments: JSON.stringify({ proposal }) } }] } }] };
             }
-            return { choices: [{ message: { role: "assistant", content: "A EAP foi atualizada como rascunho local. A aprovação e a baseline permanecem pendentes." } }] };
+            return { choices: [{ message: { role: "assistant", content: null } }] };
           },
         },
       },
@@ -296,7 +296,11 @@ describe("runProjectOrchestrator", () => {
     expect(applyLocalEapProposal).toHaveBeenCalledWith({ projectId: 25, userId: 42, proposal });
     expect(result.readOnly).toBe(false);
     expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "aplicar_proposta_eap_local", status: "success" }));
-    expect(result.content).toContain("rascunho local");
+    expect(result.content).toContain("A EAP foi atualizada na versão de trabalho 1");
+    expect(result.content).toContain("releitura confirmou 2 nós e 1 folhas");
+    expect(result.content).toContain("nenhuma aprovação nem baseline foi criada");
+    expect(applyLocalEapProposal).toHaveBeenCalledTimes(1);
+    expect(llmCallCount).toBe(3);
   });
 
   it("aceita ordem direta para criar atividade local sem exigir confirmação em duas mensagens", async () => {
@@ -330,30 +334,31 @@ describe("runProjectOrchestrator", () => {
     expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "criar_atividade_local", status: "success" }));
   });
 
-  it("recusa uma resposta final sem conteúdo textual", async () => {
-    await expect(
-      runProjectOrchestrator(
-        context,
-        [{ role: "user", content: "Resuma a situação." }],
-        {
-          deps: {
-            listTools: async () => catalog,
-            callLlm: async () => ({
-              choices: [
-                {
-                  message: {
-                    role: "assistant",
-                    content: null,
-                    reasoning:
-                      "Analisei os dados, mas não gerei uma conclusão.",
-                  },
+  it("retorna diagnóstico quando não há texto nem alteração confirmada", async () => {
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Resuma a situação." }],
+      {
+        deps: {
+          listTools: async () => catalog,
+          callLlm: async () => ({
+            choices: [
+              {
+                message: {
+                  role: "assistant",
+                  content: null,
+                  reasoning:
+                    "Analisei os dados, mas não gerei uma conclusão.",
                 },
-              ],
-            }),
-          },
-        }
-      )
-    ).rejects.toThrow("sem conteúdo final textual");
+              },
+            ],
+          }),
+        },
+      }
+    );
+
+    expect(result.content).toContain("nenhuma alteração de EAP foi confirmada");
+    expect(result.readOnly).toBe(true);
   });
 
   it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
