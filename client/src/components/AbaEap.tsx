@@ -261,6 +261,33 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   const resumoCorrecao = propostaArquimedes?.resolutionSummary ?? [];
   const evidenciasPesquisa = propostaArquimedes?.researchEvidence ?? [];
   const planoResolucao = propostaArquimedes?.resolutionPlan ?? [];
+  const propostaMudancas = useMemo(() => {
+    const campos = [
+      ["name", "Nome"],
+      ["description", "Descrição"],
+      ["inclusions", "Inclusões"],
+      ["exclusions", "Exclusões"],
+      ["acceptanceCriteria", "Critério de aceitação"],
+      ["responsible", "Responsável"],
+      ["location", "Local"],
+      ["unit", "Unidade"],
+      ["plannedQuantity", "Quantidade planejada"],
+      ["decompositionBasis", "Base de decomposição"],
+    ] as const;
+    const mostrar = (value: unknown) => value == null || String(value).trim() === "" ? "Não informado" : String(value);
+
+    return (propostaArquimedes?.nodes ?? []).map(item => {
+      const atual = item.nodeId == null ? undefined : nos.find(node => node.id === item.nodeId);
+      const mudancas = campos.flatMap(([key, label]) => {
+        const depois = item[key];
+        if (depois === undefined) return [];
+        const antes = atual?.[key];
+        if (atual && String(antes ?? "") === String(depois ?? "")) return [];
+        return [{ label, antes: atual ? mostrar(antes) : null, depois: mostrar(depois) }];
+      });
+      return { item, atual, mudancas };
+    });
+  }, [nos, propostaArquimedes]);
   const cicloRevisao = revisaoArquimedes.data?.resolutionCycle as {
     before?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
     after?: { summary?: { errors?: number; warnings?: number }; issues?: Array<{ code: string; message: string; entityRef?: string }> };
@@ -456,7 +483,12 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
       {validacaoAberta&&!!validacao.data?.issues.length&&<div className="eap-workspace-issues">{validacao.data.issues.slice(0,12).map((issue,index)=><div key={`${issue.code}-${issue.entityRef??"obra"}-${index}`}><span>{issue.severity==="error"?"BLOQUEIO":"ATENÇÃO"}</span><p>{issue.message}</p></div>)}{validacao.data.issues.length>12&&<small>+ {validacao.data.issues.length-12} apontamentos adicionais.</small>}</div>}
       {coordenador.data?.stage==="EAP_PROPOSTA"&&<div className="eap-workspace-stage"><div><strong>Proposta pronta para revisão</strong><span>A EAP foi estruturada. O próximo passo é a revisão técnica antes da aprovação.</span></div><button type="button" className="eap-workspace-btn principal" disabled={!coordenador.data?.canAdvance||enviarEapParaRevisao.isPending} onClick={()=>enviarEapParaRevisao.mutate({projectId:projetoId})}>{enviarEapParaRevisao.isPending?"Enviando…":"Enviar para revisão"}</button></div>}
       {coordenador.data?.stage==="EAP_REVISAO"&&<div className="eap-workspace-stage review"><div><strong>EAP em revisão técnica</strong><span>Gere uma proposta do Arquimedes, revise as alterações e aplique somente como rascunho. O chat orienta, mas não grava mudanças diretamente.</span></div>{propostaArquimedes?<span className="eap-stage-status"><CheckCircle2 size={13}/> Análise registrada</span>:<span className="eap-stage-status"><Info size={13}/> Aguardando análise coordenada</span>}</div>}
-      {propostaArquimedes&&<details className="eap-workspace-details"><summary><Bot size={14}/> Revisão técnica do Arquimedes <span>{propostaArquimedes.nodes.length} ações · {propostaArquimedes.missingInformation.length} pendências</span></summary><div className="eap-workspace-details-body"><div className="eap-workspace-review-kpis"><div><span>Ações propostas</span><strong>{propostaArquimedes.nodes.length}</strong></div><div><span>Decisões pendentes</span><strong>{propostaArquimedes.missingInformation.length}</strong></div><div><span>Bloqueios após correção</span><strong>{bloqueiosAposCorrecao}</strong></div></div>{!!resumoCorrecao.length&&<div className="eap-workspace-review-list">{resumoCorrecao.slice(0,8).map((item,index)=><div key={index}><span>{String(index+1).padStart(2,"0")}</span><p>{item}</p></div>)}</div>}{propostaArquimedes.missingInformation.length>0&&<div className="eap-workspace-pending"><strong>Decisões do engenheiro</strong><span>{propostaArquimedes.missingInformation.join(" · ")}</span></div>}{propostaArquimedes.nodes.length>0&&!cicloRevisaoAplicado&&propostaArquimedes.validation?.valid!==false&&propostaArquimedes.nodes.every(item=>item.operation==="create"||item.operation==="update")&&<button type="button" className="eap-workspace-btn principal" disabled={aplicarPropostaEap.isPending} onClick={()=>{if(!window.confirm("Aplicar a proposta do Arquimedes como rascunho?\n\nA EAP continuará editável e não será aprovada nem congelada."))return;aplicarPropostaEap.mutate({projectId:projetoId,confirm:true,proposal:propostaArquimedes});}}>{aplicarPropostaEap.isPending?"Aplicando rascunho…":"Aplicar proposta como rascunho"}</button>}</div></details>}
+      {propostaArquimedes&&<details className="eap-workspace-details"><summary><Bot size={14}/> Revisão técnica do Arquimedes <span>{propostaArquimedes.nodes.length} ações · {propostaArquimedes.missingInformation.length} pendências</span></summary><div className="eap-workspace-details-body">
+        <div className="eap-workspace-review-kpis"><div><span>Ações propostas</span><strong>{propostaArquimedes.nodes.length}</strong></div><div><span>Decisões pendentes</span><strong>{propostaArquimedes.missingInformation.length}</strong></div><div><span>Bloqueios após correção</span><strong>{bloqueiosAposCorrecao}</strong></div></div>
+        {propostaMudancas.length>0&&<section className="eap-workspace-proposal-changes" aria-label="Alterações propostas antes de aplicar"><h3>Confira cada alteração antes de aplicar</h3>{propostaMudancas.map(({item,atual,mudancas},index)=><article key={`${item.operation}-${item.nodeId??item.code??index}`}><header><strong>{atual?.code??item.code??`Novo item sob ${item.parentCode??"raiz"}`} · {atual?.name??item.name}</strong><span>{item.operation==="create"?"CRIAR":"ATUALIZAR"}</span></header>{mudancas.length>0?<ul>{mudancas.map(mudanca=><li key={mudanca.label}><b>{mudanca.label}</b>{mudanca.antes!==null&&<><span className="eap-proposal-before">{mudanca.antes}</span><span aria-hidden="true">→</span></>}<span className="eap-proposal-after">{mudanca.depois}</span></li>)}</ul>:<p>Sem diferença de campo em relação ao cadastro atual.</p>}<p className="eap-proposal-rationale">Motivo: {item.rationale}</p></article>)}</section>}
+        {!!resumoCorrecao.length&&<div className="eap-workspace-review-list">{resumoCorrecao.map((item,index)=><div key={index}><span>{String(index+1).padStart(2,"0")}</span><p>{item}</p></div>)}</div>}
+        {propostaArquimedes.missingInformation.length>0&&<div className="eap-workspace-pending"><strong>Decisões do engenheiro</strong><span>{propostaArquimedes.missingInformation.join(" · ")}</span></div>}
+        {propostaArquimedes.nodes.length>0&&!cicloRevisaoAplicado&&propostaArquimedes.validation?.valid!==false&&propostaArquimedes.nodes.every(item=>item.operation==="create"||item.operation==="update")&&<button type="button" className="eap-workspace-btn principal" disabled={aplicarPropostaEap.isPending} onClick={()=>{if(!window.confirm("Aplicar a proposta do Arquimedes como rascunho?\n\nA EAP continuará editável e não será aprovada nem congelada."))return;aplicarPropostaEap.mutate({projectId:projetoId,confirm:true,proposal:propostaArquimedes});}}>{aplicarPropostaEap.isPending?"Aplicando rascunho…":"Aplicar proposta como rascunho"}</button>}</div></details>}
       {atividadeAlvo&&<form className="eap-activity-estimate" onSubmit={event=>{event.preventDefault();if(!podeCriarAtividade||!entradaDuracaoAtividade.valid)return;trazer.mutate({projectId:projetoId,wbsNodeId:atividadeAlvo.id,...entradaDuracaoAtividade.payload,...(atividadeAlvo.unit?{unit:atividadeAlvo.unit}:{})});}}>
         <div className="eap-activity-estimate-copy"><strong>Estimativa da atividade · {atividadeAlvo.code} {atividadeAlvo.name}</strong><span>Informe duração em dias úteis ou quantidade e produtividade. A conversão depende de uma produtividade compatível com a unidade do pacote.</span></div>
         <label>Duração (dias úteis)<input type="number" min="1" step="1" inputMode="numeric" value={duracaoAtividade} onChange={event=>setDuracaoAtividade(event.target.value)} placeholder="Ex.: 5" /></label>

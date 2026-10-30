@@ -65,6 +65,9 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
     expect(eap).toContain('CustomEvent("abrir-arquimedes")');
     expect(eap).toContain('gerarPropostaEap.mutate({ projectId: projetoId, mode: "resolver_bloqueios" })');
     expect(eap).toContain("Aplicar proposta como rascunho");
+    expect(eap).toContain('aria-label="Alterações propostas antes de aplicar"');
+    expect(eap).toContain("eap-proposal-before");
+    expect(eap).toContain("eap-proposal-after");
   });
   it("revalida a estrutura depois de aplicar a proposta inicial como rascunho",()=>{
     const estadoVazio = eap.slice(eap.indexOf("function EapVazia"));
