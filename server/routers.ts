@@ -7536,7 +7536,7 @@ export const appRouter = router({
                 localDatabaseEvidenceSource,
                 new ConstructionMcpEvidenceSource(mcpProjectIds)
               );
-              const [eapResult, activityResult, dependencyResult, dictionaryRows] =
+              const [eapResult, activityResult, dependencyResult, dictionaryRows, approvedVersion, currentVersion] =
                 await Promise.all([
                   evidenceSource.getEapTree(input.projectId),
                   evidenceSource.listActivities(input.projectId),
@@ -7545,6 +7545,16 @@ export const appRouter = router({
                     .from(agentDecisions)
                     .where(and(eq(agentDecisions.projectId, input.projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
                     .orderBy(desc(agentDecisions.createdAt))
+                    .limit(1),
+                  db.select({ versionNumber: projectPlanVersions.versionNumber, approvedAt: projectPlanVersions.approvedAt })
+                    .from(projectPlanVersions)
+                    .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
+                    .orderBy(desc(projectPlanVersions.versionNumber))
+                    .limit(1),
+                  db.select({ versionNumber: projectPlanVersions.versionNumber, status: projectPlanVersions.status })
+                    .from(projectPlanVersions)
+                    .where(eq(projectPlanVersions.projectId, input.projectId))
+                    .orderBy(desc(projectPlanVersions.versionNumber))
                     .limit(1),
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
@@ -7631,6 +7641,13 @@ export const appRouter = router({
                     : null,
                   totalLeafCount: eapLeafCount,
                   leavesMissingRequiredFields: leavesMissingRequiredFields.slice(0, 120),
+                },
+                eapApproval: {
+                  approved: approvedVersion.length > 0,
+                  approvedVersionNumber: approvedVersion[0]?.versionNumber ?? null,
+                  approvedAt: approvedVersion[0]?.approvedAt?.toISOString() ?? null,
+                  currentVersionNumber: currentVersion[0]?.versionNumber ?? null,
+                  currentVersionStatus: currentVersion[0]?.status ?? null,
                 },
                 eapSnapshot: eapNodes.slice(0, 120).map(node => ({
                   id: node.id,

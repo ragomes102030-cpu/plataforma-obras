@@ -88,6 +88,13 @@ export type AgentProjectContext = {
       totalLeafCount: number;
       leavesMissingRequiredFields: Array<{ code: string; fields: string[] }>;
     };
+    eapApproval?: {
+      approved: boolean;
+      approvedVersionNumber: number | null;
+      approvedAt: string | null;
+      currentVersionNumber: number | null;
+      currentVersionStatus: string | null;
+    };
     localBudget?: {
       versionId: number | null;
       versionStatus: string | null;
@@ -161,6 +168,9 @@ function formatContext(context: AgentProjectContext) {
     `Início planejado: ${new Date(project.plannedStart).toISOString().slice(0, 10)}`,
     `Término planejado: ${new Date(project.plannedFinish).toISOString().slice(0, 10)}`,
     `EAP canônica atual (fonte: evidence/banco): ${context.evidence?.eapNodeCount ?? 0} nós`,
+    context.evidence?.eapApproval
+      ? `Estado da EAP: ${context.evidence.eapApproval.approved ? `APROVADA v${context.evidence.eapApproval.approvedVersionNumber} em ${context.evidence.eapApproval.approvedAt ?? "data não registrada"}` : "sem versão aprovada"}. Versão de trabalho atual: ${context.evidence.eapApproval.currentVersionNumber ?? "nenhuma"} (${context.evidence.eapApproval.currentVersionStatus ?? "sem status"}). Não confundir rascunho de cronograma com a EAP aprovada.`
+      : "Estado de aprovação da EAP não consultado nesta execução; não inferir aprovação ou reprovação.",
     ...(context.evidence?.eapSnapshot?.slice(0, 120).map(node => `${node.code} | ${node.name} | ${node.nodeType} | pai=${node.parentId ?? "-"} | nível=${node.level}`) ?? ["EAP sem nós no snapshot canônico."]),
     "Atividades (WBS | nome | fase | status | avanço | duração | criticidade):",
     activityLines || "Nenhuma atividade cadastrada.",
@@ -209,6 +219,7 @@ export async function runProjectAgent(
     "Use os conceitos de EAP, linha de base, precedências, caminho crítico, folgas, medição, produtividade, restrições e Linha de Balanço.",
     "Não invente medições, custos, contratos ou datas que não estejam no contexto.",
     "O snapshot EAP atual vindo do banco/evidence é a fonte canônica do estado atual. O histórico da conversa é apenas contexto narrativo e NUNCA pode substituir ou contradizer esse snapshot.",
+    "Use explicitamente o estado de aprovação da EAP fornecido no contexto. Uma versão de trabalho em rascunho pode coexistir com uma EAP aprovada anterior; não afirme que a EAP está em rascunho se o contexto registrar uma versão aprovada.",
     "A descrição formal do escopo e a natureza cadastrada são evidências declaradas da obra. Preserve a distinção entre fato informado, premissa e dado ausente; não trate frentes ou locais derivados do cronograma como substitutos do escopo formal. Nunca complete lacunas com sistemas, quantidades ou características presumidas.",
     "Quando faltar dado, diga exatamente qual registro deve ser lançado para permitir a análise.",
     "Priorize decisões rastreáveis: evidência, impacto, responsável, prazo e próxima ação.",
