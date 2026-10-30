@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, X, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { deveRevalidarDadosDaObraAposExecucao } from "@/lib/agent-run-cache";
 
 /**
  * O agente, como janela flutuante sobre as abas.
@@ -122,6 +123,12 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
       const s = await utils.agent.status.fetch({ requestId: requestId });
 
       if (s && ESTADO_TERMINAL.has(s.status)) {
+        if (deveRevalidarDadosDaObraAposExecucao(s)) {
+          // O agente grava no servidor sem passar pelas mutations do cliente.
+          // Revalidar as queries observadas atualiza a aba e os painéis da obra
+          // sem exigir que o engenheiro recarregue a página.
+          void utils.invalidate();
+        }
         setHistorico(antigo => [...antigo, { role: "assistant", content: textoDoRun(s) }]);
         await historicoPersistido.refetch();
         setAguardando(false);
