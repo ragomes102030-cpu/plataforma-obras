@@ -344,6 +344,9 @@ function formatContext(context: AgentProjectContext) {
     ? [
         `Fonte de evidências: ${context.evidence.source}`,
         `Nós EAP locais: ${context.evidence.eapNodeCount ?? "indisponível"}`,
+        context.evidence.eapApproval
+          ? `Estado de aprovação da EAP: ${context.evidence.eapApproval.approved ? `APROVADA v${context.evidence.eapApproval.approvedVersionNumber} em ${context.evidence.eapApproval.approvedAt ?? "data não registrada"}` : "sem versão aprovada"}. Versão de trabalho atual: ${context.evidence.eapApproval.currentVersionNumber ?? "nenhuma"} (${context.evidence.eapApproval.currentVersionStatus ?? "sem status"}). Uma versão de trabalho em rascunho pode coexistir com EAP aprovada anterior; não as confunda.`
+          : "Estado de aprovação da EAP não consultado nesta execução; não inferir aprovação ou reprovação.",
         context.evidence.eapStructuralValidation
           ? `Validação estrutural local da EAP: ${context.evidence.eapStructuralValidation.status === "valid" ? "válida" : context.evidence.eapStructuralValidation.status === "invalid" ? "inválida" : "não executada"} | ${context.evidence.eapStructuralValidation.nodeCount} nós; raízes=${context.evidence.eapStructuralValidation.rootCount}; folhas=${context.evidence.eapStructuralValidation.leafCount}; bloqueadores=${context.evidence.eapStructuralValidation.blockerCount}; avisos=${context.evidence.eapStructuralValidation.warningCount}`
           : "Validação estrutural da EAP: não executada nesta consulta.",
