@@ -4250,6 +4250,34 @@ export const appRouter = router({
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
+        // A origem e as premissas da duracao sao registradas pelo Arquimedes
+        // no log de auditoria, mas a grade tambem precisa exibi-las para que
+        // o engenheiro consiga revisar a estimativa sem depender da conversa.
+        const evidenceRows = activities.length
+          ? await db.select({ payload: projectAuditEvents.payload })
+              .from(projectAuditEvents)
+              .where(and(
+                eq(projectAuditEvents.projectId, input.projectId),
+                eq(projectAuditEvents.action, "activity_planning_evidence_recorded"),
+                inArray(
+                  sql<number>`(${projectAuditEvents.payload}->>'activityId')::int`,
+                  activities.map(activity => activity.id)
+                )
+              ))
+              .orderBy(desc(projectAuditEvents.createdAt))
+          : [];
+        const evidenceByActivity = new Map<number, Record<string, unknown>>();
+        for (const row of evidenceRows) {
+          const payload = row.payload as Record<string, unknown> | null;
+          const activityId = Number(payload?.activityId);
+          if (Number.isInteger(activityId) && !evidenceByActivity.has(activityId)) {
+            evidenceByActivity.set(activityId, payload ?? {});
+          }
+        }
+        const activitiesWithEvidence = activities.map(activity => ({
+          ...activity,
+          planningEvidence: evidenceByActivity.get(activity.id) ?? null,
+        }));
         // A tela de Atividades auto-dispara `generateFromEap` ao montar. Sem isto,
         // uma obra ainda não aprovada recebe o erro "A EAP precisa estar aprovada
         // antes de gerar atividades" como se fosse falha do usuário, em vez da
@@ -4266,7 +4294,7 @@ export const appRouter = router({
         // de aberta uma versão de trabalho; por isso expomos também
         // `hasApprovedEap`, sem enfraquecer o gate da baseline.
         return {
-          activities,
+          activities: activitiesWithEvidence,
           dependencies,
           resources,
           baselines,

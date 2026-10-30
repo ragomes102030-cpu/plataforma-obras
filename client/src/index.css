@@ -6377,6 +6377,9 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
 .pl-row-action:hover { background:#edf4f9; border-color:#718aa1; }
 .pl-row-action:disabled { opacity:.55; cursor:wait; }
 .pl-row-note { color:#617282; font-size:9px; }
+.pl-row-evidence { min-width:120px; max-width:260px; color:#506477; font-size:9px; }
+.pl-row-evidence summary { color:#245a78; font-size:9px; font-weight:750; cursor:pointer; }
+.pl-row-evidence p { margin:5px 0 0; white-space:normal; overflow-wrap:anywhere; line-height:1.4; }
 .pl-atividades-empty { height:100px !important; text-align:center; background:#fbfcfd !important; }
 .pl-atividades-empty strong,.pl-atividades-empty span { display:block; }
 .pl-atividades-empty strong { color:#52697e; font-size:11px; }

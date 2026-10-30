@@ -405,7 +405,16 @@ export function PainelPlanejamento({ projetoId }: Props) {
                 </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
                 <td className="action-col">
-                  <span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span>
+                  {activity.planningEvidence?.source ? (
+                    <details className="pl-row-evidence">
+                      <summary>{Number(activity.critical) === 1 ? "Crítica · premissa" : "Premissa registrada"}</summary>
+                      <p>{String(activity.planningEvidence.source)}</p>
+                      {typeof activity.planningEvidence.premise === "string" && <p><strong>Base:</strong> {activity.planningEvidence.premise}</p>}
+                      {typeof activity.planningEvidence.evidenceLevel === "string" && <p><strong>Nível:</strong> {activity.planningEvidence.evidenceLevel}</p>}
+                    </details>
+                  ) : (
+                    <span className="pl-row-note">{Number(activity.critical) === 1 ? "Crítica" : "Cronograma"}</span>
+                  )}
                 </td>
               </tr>
             ))}
