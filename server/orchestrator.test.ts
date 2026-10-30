@@ -440,7 +440,7 @@ describe("runProjectOrchestrator", () => {
     expect(llmCallCount).toBe(3);
   });
 
-  it("inclui a fonte local e os erros de evidência no contexto do modelo", async () => {
+  it("inclui a fonte local e os avisos de integração no contexto do modelo", async () => {
     let systemMessage = "";
     const result = await runProjectOrchestrator(
       {
@@ -450,8 +450,8 @@ describe("runProjectOrchestrator", () => {
           eapNodeCount: 4,
           activityCount: 3,
           dependencyCount: null,
-          warnings: ["Nenhuma dependência cadastrada para a obra."],
-          errors: ["MCP Cronograma indisponível; fallback local utilizado."],
+          warnings: ["Nenhuma dependência cadastrada para a obra.", "MCP Cronograma indisponível; fallback local utilizado."],
+          errors: [],
           validation: {
             status: "blocked",
             blockerCount: 1,
@@ -499,6 +499,7 @@ describe("runProjectOrchestrator", () => {
     expect(systemMessage).not.toContain("URL do MCP não configurada");
     expect(systemMessage).toContain("Nós EAP locais: 4");
     expect(systemMessage).toContain("MCP Cronograma indisponível");
+    expect(systemMessage).toContain("Planejamento de cronograma local não depende de vínculo MCP externo");
     expect(systemMessage).toContain("Validação determinística: blocked");
     expect(systemMessage).toContain("A rede possui ciclo.");
   });

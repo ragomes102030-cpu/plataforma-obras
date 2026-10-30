@@ -602,18 +602,22 @@ const LOCAL_ACTIVITY_TOOL: LlmTool = {
   function: {
     name: "criar_atividade_local",
     description:
-      "Cria uma atividade diretamente na fonte local da obra quando o MCP de cronograma/EAP não consegue resolver o contexto externo. Use somente em uma ordem operacional explícita. Exige eapRef de uma folha terminal da EAP aprovada, nome e duração. A operação é verificada após a gravação.",
+      "Cria uma atividade diretamente na fonte local da obra sem exigir vínculo externo de MCP. Use somente em uma ordem operacional explícita. Exige eapRef de uma folha terminal da EAP aprovada, nome e base válida para duração. Quantidade/produtividade exigem evidência; duração didática estimada só pode ser registrada quando o engenheiro pedir e precisa ter premissa explícita em source. A operação é verificada após a gravação.",
     parameters: {
       type: "object",
       properties: {
         eapRef: { type: "string", minLength: 1, maxLength: 80 },
         name: { type: "string", minLength: 2, maxLength: 220 },
-        durationDays: { type: "integer", minimum: 1 },
+        durationDays: {
+          type: "integer",
+          minimum: 1,
+          description: "Duração calculada com evidência ou estimativa didática explicitamente solicitada; registre a base em source.",
+        },
         plannedQuantity: { type: "number", exclusiveMinimum: 0 },
         unit: { type: "string", minLength: 1, maxLength: 16 },
         productivity: { type: "number", exclusiveMinimum: 0 },
         productivityUnit: { type: "string", minLength: 1, maxLength: 32 },
-        source: { type: "string", maxLength: 500 },
+        source: { type: "string", maxLength: 500, description: "Fonte/premissa da duração e indicação de que se trata de estimativa, quando aplicável." },
       },
       required: ["eapRef", "name"],
       additionalProperties: false,
@@ -1448,6 +1452,7 @@ function buildSystem(
 
   const base = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    "Planejamento de cronograma local não depende de vínculo MCP externo. Trate falhas de enriquecimento MCP como avisos, não como bloqueadores dos dados locais. Quantidade/unidade ausente impede cálculo quantitativo, mas não todo cenário de cronograma: se o engenheiro pedir, durações estimadas didáticas podem ser usadas, sempre rotuladas com base e validação pendente, nunca como fato ou produtividade medida.",
     "BOOTSTRAP DO CÉREBRO MESTRE:\n" + bootstrapEnxuto,
     `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,
     "Use essa referência quando o usuário perguntar sobre data, dia ou hora atuais. Não diga que não possui relógio.",
@@ -1494,6 +1499,7 @@ function buildSystem(
       ? "Quando a intenção for análise no chat, continue sendo o Arquimedes: use consultas MCP somente leitura e, quando a pergunta exigir uma varredura ampla, use engineering_gap_analysis. Não convoque Euclides nem outros revisores silenciosamente; a Análise/Revisão formal de EAP pertence ao fluxo próprio de revisão."
       : "Em consultas pontuais, não faça uma varredura completa sem necessidade.",
     "Os MCPs de EAP, cronograma e Gantt/Linha de Balanço são capacidades opcionais. Nunca trate a indisponibilidade, queda, timeout, erro ou ausência de vínculo de um MCP como morte, bloqueio ou encerramento do Arquimedes. Continue usando o contexto e as evidências locais da obra e informe objetivamente quais evidências externas não puderam ser confirmadas.",
+    "A ausência de vínculo externo do domínio cronograma não é pré-requisito nem bloqueador para consultar, criar atividades e dependências na fonte local. Trate falhas de enriquecimento MCP como avisos de integração opcional; bloqueadores de planejamento devem vir de validações do cronograma local ou de dados realmente ausentes. Quantidade/unidade faltante impede cálculo quantitativo e medição, mas uma duração estimada pode ser usada em cenário didático quando o engenheiro pedir, sempre rotulada como estimativa, com base e validação pendente. Não transforme estimativa em fato nem em produtividade medida.",
     "A natureza cadastrada e a descrição formal do escopo vêm do registro local do projeto. Quando o MCP de escopo estiver indisponível, use essa evidência local e diga claramente o que ela confirma e o que não confirma; a falha do MCP não prova ausência de escopo. Separe fatos declarados, premissas e lacunas, sem inventar quantidades ou sistemas.",
     "Quando uma consulta MCP somente leitura falhar, tente outra fonte somente se houver uma alternativa útil. Se o MCP continuar indisponível, prossiga com as fontes locais disponíveis; não conclua que a obra não pode ser analisada apenas por causa do MCP.",
     "Ao classificar apontamentos por categoria, conte apenas problemas efetivamente evidenciados. Não use '1 problema por grupo' como preenchimento. Quando uma categoria não puder ser auditada com as evidências disponíveis, escreva 'não verificável nesta rodada' e não invente uma quantidade.",
