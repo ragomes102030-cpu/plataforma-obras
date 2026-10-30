@@ -14,7 +14,7 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 4. **Não inventar.** Ausência de quantidade, duração, precedência, recurso, unidade ou vínculo externo vira lacuna explícita.
 5. **Revisão localizada.** Uma divergência em um nó não deve apagar silenciosamente o que já foi aprovado.
 6. **Separação de domínios.** EAP, cronograma e Gantt/LOB possuem bancos e responsabilidades diferentes; a coordenação ocorre por `project_id` e referências.
-7. **Escrita controlada.** Toda mutação deve ser apresentada como intenção, com idempotência e confirmação transacional; na fase somente leitura, nenhuma escrita é alegada.
+7. **Escrita controlada.** Uma ordem operacional explícita do engenheiro autoriza gravações reversíveis na versão local de trabalho, com validação, idempotência e releitura. Aprovação de EAP, criação de baseline, exclusão e ações externas/destrutivas continuam sendo gates separados.
 8. **Auditoria ativa.** O agente deve procurar erros e contradições mesmo quando o cliente não perguntar, antes que o dado avance para a próxima etapa.
 
 ## Estados e gates
@@ -101,6 +101,8 @@ O agente deve preservar as partes aprovadas e reabrir somente o subconjunto afet
 
 Cada atividade deve conter, no mínimo, `eap_ref`, nome operacional, duração determinística ou trio PERT, unidade/escopo, premissas e status. O agente deve apresentar um quadro de sequenciação antes de distribuir datas. O MCP de cronograma aceita `eap_ref` opaco e não valida automaticamente o nó no MCP EAP; por isso a skill deve executar uma checagem cruzada de evidência e apontar referências não encontradas.
 
+Sem MCP de cronograma, o agente consulta `consultar_atividades_locais` e pode criar atividade com `criar_atividade_local` depois de uma ordem operacional explícita. A EAP precisa estar aprovada e a referência precisa ser uma folha terminal tanto na versão aprovada quanto na versão de trabalho. Quantidade, produtividade e duração sem evidência não podem ser inventadas. Repetir uma gravação idêntica deve ser idempotente; divergência com uma atividade já existente bloqueia nova duplicata e exige revisão.
+
 ### 5. Precedências e CPM
 
 A sequência deve usar somente dependências justificadas. As relações disponíveis são:
@@ -112,6 +114,8 @@ A sequência deve usar somente dependências justificadas. As relações dispon�
 - `lag_dias`: defasagem ou sobreposição quando aplicável.
 
 Antes do CPM, o agente deve confirmar que todas as atividades têm duração ou PERT completo, que as dependências não fecham ciclos e que as atividades estão vinculadas à EAP. Depois de `calcular_caminho_critico`, deve explicar duração total, caminho crítico, folga total, folga livre, atividades sem sucessoras e premissas que podem alterar o resultado.
+
+Sem MCP, consultar os IDs reais com `consultar_atividades_locais` e gravar dependências com `criar_dependencias_locais`. A gravação só é permitida após ordem operacional explícita e apenas em versão `draft`/`proposed`; auto dependência, atividade de outra obra/versão, ciclo e referência inválida bloqueiam a transação. Repetições exatas são ignoradas, a rede incompleta é reportada como aviso e qualquer alteração invalida o CPM até novo cálculo. A ausência de MCP não deve interromper o planejamento nem ser ocultada.
 
 ### 6. Cronograma, Gantt e baseline
 
@@ -171,7 +175,7 @@ Mutações futuras, sempre com prévia, aprovação e `request_id`: `criar_proje
 
 Consultas: `listar_atividades`, `listar_dependencias`, `validar_dependencias`, `calcular_caminho_critico`, `listar_baselines`, `comparar_baseline`, `curva_s`.
 
-Mutações futuras: `criar_atividade`, `atualizar_atividade`, `deletar_atividade`, `criar_dependencia`, `deletar_dependencia`, `salvar_baseline`.
+Mutações: `criar_atividade`, `atualizar_atividade`, `deletar_atividade`, `criar_dependencia`, `deletar_dependencia`, `salvar_baseline`. Quando o MCP falhar ou não estiver vinculado, usar a fonte local suportada: `consultar_atividades_locais`, `criar_atividade_local` e `criar_dependencias_locais`. A versão de trabalho, as regras de EAP aprovada e a validação do CPM permanecem obrigatórias.
 
 ### Gantt/LOB
 
