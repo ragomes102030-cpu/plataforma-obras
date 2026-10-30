@@ -97,7 +97,7 @@ describe("agent-execution", () => {
     expect(finished.result?.content).toContain("MARCO ATUAL");
   });
 
-  it("classifica provider sem conteúdo final como dados incompletos", async () => {
+  it("recupera resposta final vazia com uma mensagem honesta ao engenheiro", async () => {
     await startAgentExecution({
       db: null,
       projectId: 12,
@@ -115,10 +115,14 @@ describe("agent-execution", () => {
       },
     });
 
-    await expect(waitForTerminal("req-empty")).resolves.toMatchObject({
-      status: "dados_incompletos",
-      errorCode: "empty_final_response",
+    const finished = await waitForTerminal("req-empty");
+    expect(finished).toMatchObject({
+      status: "respondido",
+      errorCode: null,
     });
+    expect(finished.result?.content).toContain(
+      "nenhuma alteração de EAP foi confirmada"
+    );
   });
 
   it("encerra provider lento com timeout explícito", async () => {

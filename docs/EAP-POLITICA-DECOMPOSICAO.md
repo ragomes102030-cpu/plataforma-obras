@@ -59,6 +59,34 @@ Se a resposta for sim para o controle do pacote, **para**.
 
 Se ainda houver dois ou mais trabalhos distintos que precisarão ser controlados separadamente, **decompõe**.
 
+## Obrigatório na criação e consolidação de uma EAP
+
+O Arquimedes não deve parar na macroestrutura quando o fluxo pedir uma EAP completa. Depois de propor os grupos principais, deve expandir os ramos até folhas controláveis, respeitando o limite e a evidência do escopo.
+
+Antes de dizer que uma EAP está consolidada, o Arquimedes deve:
+
+1. Revisar cada folha da árvore, não apenas contar nós ou preencher o dicionário.
+2. Identificar títulos e descrições que agrupam entregáveis, componentes ou locais controláveis separadamente.
+3. Converter o pai em `grupo` e criar filhos quando houver fronteiras claras e cobertura integral do pai.
+4. Manter como folha provisória aquilo que não pode ser separado sem uma decisão de projeto; registrar o dado faltante e por que impede a decomposição.
+5. Confirmar que grupos têm filhos, pacotes e entregas são terminais, e que irmãos não deixam lacunas nem duplicam escopo.
+6. Reabrir visualmente a árvore após gravar: remover filtros de busca e expandir os grupos para que a revisão mostre os filhos recém-criados.
+
+**Validação estrutural não equivale a consolidação técnica.** “0 bloqueios”, dicionário completo ou contagem de folhas não provam cobertura integral nem controle adequado. O relatório final deve distinguir estrutura validada, conteúdo revisado e pendências de projeto.
+
+Decomposição provisória é aceitável quando o próprio escopo nomeia os entregáveis, mas o projeto ainda não define suas soluções. Nesses casos, os filhos registram apenas os limites conhecidos e ficam explicitamente pendentes. Não criar sistemas típicos, materiais, métodos, pavimentos, quantidades ou critérios de aceitação que o escopo não sustenta.
+
+## Falha de síntese depois de uma operação
+
+Uma resposta final vazia do modelo não desfaz nem invalida o resultado de uma ferramenta. O runtime deve fazer uma única tentativa adicional de síntese, sem ferramentas. Se ela também não produzir texto:
+
+1. Para aplicação de EAP, informar sucesso somente quando o retorno confirmar a gravação e a releitura persistida; usar contagens e validação desse retorno.
+2. Se a persistência não foi confirmada ou a ferramenta retornou erro, dizer isso com clareza e orientar a recarregar a EAP antes de repetir, para evitar duplicidade.
+3. Nunca repetir automaticamente uma mutação por causa de resposta vazia do modelo.
+4. Manter aprovação da EAP e criação de baseline fora da síntese automática.
+
+Esse comportamento permite ao engenheiro continuar o planejamento mesmo quando o provedor não redige a conclusão, sem transformar uma falha de linguagem em sucesso presumido ou em uma segunda gravação.
+
 ## Exemplo correto
 
 ```text

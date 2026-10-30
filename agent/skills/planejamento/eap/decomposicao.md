@@ -18,6 +18,10 @@ Use ao criar, revisar ou aprofundar uma EAP.
 6. Uma entrega terminal não deve possuir filhos.
 7. Um pacote de trabalho deve ter escopo suficientemente claro para medição e responsabilidade.
 8. Evitar decomposição artificial: se a folha já for controlável, não criar níveis apenas para aumentar a árvore.
+9. Na criação ou consolidação, revisar cada folha individualmente. Uma EAP não está consolidada só porque passou na validação estrutural ou porque todos os campos do dicionário estão preenchidos.
+10. Quando o escopo registrado nomear entregáveis distintos que precisam de controle separado, o pai deve ser `grupo` e os filhos devem representar esses entregáveis. Não deixe um pacote-guarda-chuva terminal por conveniência.
+11. Se o dado de projeto estiver pendente, ainda pode haver decomposição provisória quando a fronteira entre entregáveis estiver explícita. Marque a pendência nos filhos; não invente conteúdo técnico, quantidades, unidades ou critérios dependentes de projeto.
+12. Registre por que cada folha terminal pode permanecer sem filhos. Se faltar informação para separar, mantenha-a provisória e indique exatamente qual decisão ou documento falta.
 
 ## Perguntas de raciocínio
 
@@ -31,6 +35,8 @@ Antes de parar a decomposição, avaliar:
 - Seus filhos seriam mutuamente exclusivos?
 - Os filhos fechariam 100% do escopo do pai?
 - A decomposição melhora o controle ou apenas aumenta a complexidade?
+- O título ou o dicionário já reúne entregáveis, locais ou componentes que serão controlados separadamente?
+- Se a folha permanecer terminal, qual é a evidência de que é um pacote controlável? Se não houver evidência, qual informação falta para decidir?
 
 ## Exemplo estrutural
 
@@ -49,3 +55,4 @@ Pare quando o elemento representar uma unidade de escopo controlável pelo plane
 ## Saída
 
 A proposta deve conter código, pai, nome, tipo, localização quando aplicável e justificativa curta para cada nível relevante.
+Ao revisar uma árvore existente, informe a avaliação de todas as folhas: filhos criados, folha mantida com justificativa ou pendência específica. Não descreva a estrutura como consolidada apenas com base em contagens ou validação estrutural.

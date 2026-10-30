@@ -165,6 +165,12 @@ Correção: permitir ao dono atualizar início ou término previsto, validar o i
 Lição: ao preparar distribuições LOB, alinhar o período da obra ao cronograma vigente sem deslocar datas do CPM nem contornar suas validações.
 Regressão: `server/access-isolation.test.ts` cobre a atualização pelo dono, a rejeição de intervalo invertido e a tentativa de alteração por outro usuário.
 
+### Incidente G — chat encerrava sem texto depois de usar ferramentas
+Causa: quando o provedor devolvia resposta vazia ou apenas reasoning na síntese final, o runtime lançava erro e descartava a resposta da ferramenta. Isso podia esconder uma gravação local da EAP já confirmada; a instrução genérica do turno final também pedia nova confirmação mesmo depois de uma ordem operacional explícita.
+Correção: fazer uma tentativa de síntese final sem ferramentas; se continuar vazia, apresentar um resumo determinístico apenas a partir do retorno da ferramenta. Para EAP, declarar sucesso somente com persistência relida e confirmada. Nunca repetir uma mutação por falha de síntese. A instrução final respeita a ordem operacional já dada, sem liberar aprovação ou baseline.
+Barreira: o runtime não executa ferramentas durante a recuperação da síntese e orienta recarregar a EAP antes de repetir quando a persistência não foi confirmada.
+Regressão automatizada: pendente; não executada nesta alteração.
+
 ### Incidente F — validação em cache após aplicar proposta inicial
 Causa: o sucesso de `aplicarPropostaEap` atualizava a árvore, mas não invalidava as consultas de validação estrutural e proposta do Arquimedes que já estavam montadas na mesma tela.
 Efeito: a árvore mostrava 8 nós enquanto o validador ainda exibia 0 nós e o falso bloqueio “A EAP não pode estar vazia”.
@@ -193,6 +199,9 @@ Primeiro verificar o escopo da consulta.
 Pergunta obrigatória: "Estou lendo uma única versão de planejamento ou estou misturando histórico?"
 
 Essa regra impede que o Arquimedes altere uma EAP correta para corrigir um erro causado pelo próprio leitor.
+
+### Regra para síntese vazia
+Se uma chamada de ferramenta foi executada e o provedor não retornou texto final, preserve o resultado da ferramenta. Tente uma síntese sem ferramentas uma vez. Se ainda não houver texto, reporte o resultado persistido confirmado ou a falha concreta; nunca reexecute a mutação nem afirme sucesso sem releitura do banco.
 
 ## Estado em 2026-10-05
 AURORA TESTE: EAP estruturalmente sem bloqueios na interface.
