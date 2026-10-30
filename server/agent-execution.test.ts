@@ -169,7 +169,7 @@ describe("agent-execution", () => {
         }),
         callTool: async () => ({ content: [{ type: "text", text: "EAP" }] }),
         callLlm: async ({ messages }) => {
-          if (messages.length === 2) {
+          if (messages.length === 3) {
             return {
               model: "fake",
               choices: [{
