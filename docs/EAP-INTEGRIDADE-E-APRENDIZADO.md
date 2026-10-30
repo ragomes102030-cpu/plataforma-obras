@@ -209,3 +209,23 @@ AURORA TESTE: EAP estruturalmente sem bloqueios na interface.
 Próxima etapa: somente após confirmação automatizada e backend/UI alinhados, iniciar definição de Atividades.
 
 Não alterar a estrutura da Aurora para mascarar falhas de leitura ou validação.
+
+## 14. Incidente E — coincidência lexical tratada como conflito de escopo
+
+### Sintoma observado
+Na EAP de teste PROJETO ESCOLA ARQUIMEDES, a interface mostrou dezenas de apontamentos de possível sobreposição entre pacotes. A consulta do Arquimedes não conseguiu recuperar a evidência individual (campos comparados e trechos), então não foi possível classificar os apontamentos item a item. Depois de corrigir fronteiras reais entre estrutura, cobertura e esquadrias, a interface ainda mostrava alertas genéricos.
+
+### Causa no validador
+`validateEapScope` tratava qualquer substring comum como sobreposição. Expressões genéricas como “conforme projeto” e “interfaces” podiam sinalizar pacotes independentes. A mesma comparação entre exclusões do pai e escopo do filho não distinguia uma exclusão definitiva de uma pendência explicitamente marcada como “não é exclusão”, permitindo falsos alertas de conflito.
+
+### Regra corrigida
+- Alertas lexicais exigem cláusula idêntica ou ao menos dois termos significativos compartilhados, após retirar vocabulário genérico de projeto/obra.
+- Cláusulas do pai que identificam pendência ou declaram que o item não constitui exclusão não são comparadas como exclusões definitivas.
+- Uma coincidência lexical continua sendo evidência para revisão; não prova nem descarta conflito semântico.
+- Se não houver trecho/campos individuais recuperáveis, o agente declara essa limitação e não classifica os alertas individualmente.
+
+### Regressão
+`server/construction/eap-validator.test.ts` cobre: frases genéricas compartilhadas sem conflito, pendência do pai coberta por filho sem bloqueio e exclusão definitiva ainda bloqueando o pacote filho.
+
+### Limite de implantação
+Validar o número e o teor dos alertas no sistema online após integrar esta correção à linha publicada; não declarar o alerta corrigido em produção somente por testes locais.
