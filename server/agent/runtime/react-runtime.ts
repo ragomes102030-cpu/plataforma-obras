@@ -22,6 +22,7 @@ export type AgentRuntimeTool = {
 
 export type AgentRuntimeResponse = {
   choices?: Array<{
+    finish_reason?: string | null;
     message?: {
       role?: "assistant";
       content?: string | null | Array<{ type?: string; text?: string }>;
@@ -33,6 +34,9 @@ export type AgentRuntimeResponse = {
   model?: string;
   provider?: string;
 };
+
+const MAX_FINAL_CONTINUATIONS = 2;
+const MAX_FINAL_RESPONSE_CHARS = 11_000;
 
 export type AgentRuntimeToolResult = {
   content: string;
@@ -251,14 +255,59 @@ export async function runReActAgent(options: AgentRuntimeOptions) {
     });
 
     if (!toolCalls.length) {
-      const text = extractText(response);
+      let text = extractText(response);
       if (!text) {
         return recoverEmptyFinal(iteration, response);
       }
+      let finalResponse = response;
+      let finalIteration = iteration;
+
+      // Providers mark a cut-off completion with finish_reason="length".
+      // Preserve the partial answer and ask for a tools-disabled continuation;
+      // otherwise the UI presents an incomplete audit as if it were complete.
+      for (
+        let continuation = 0;
+        finalResponse.choices?.[0]?.finish_reason === "length" &&
+        continuation < MAX_FINAL_CONTINUATIONS &&
+        text.length < MAX_FINAL_RESPONSE_CHARS;
+        continuation++
+      ) {
+        const previousPart = extractText(finalResponse);
+        if (!previousPart) break;
+        conversation.push(
+          { role: "assistant", content: previousPart },
+          {
+            role: "user",
+            content:
+              "Continue exatamente do ponto em que a resposta anterior parou. Não repita o que já foi dito. Conclua os itens pendentes de forma concisa, usando apenas as evidências já consultadas. Não use ferramentas nem faça alterações.",
+          },
+        );
+        finalIteration++;
+        await options.onEvent?.({ type: "model_started", iteration: finalIteration });
+        try {
+          finalResponse = await options.callModel({ messages: conversation, tools: [] });
+        } catch {
+          break;
+        }
+        await options.onEvent?.({
+          type: "model_finished",
+          iteration: finalIteration,
+          toolCallCount: finalResponse.choices?.[0]?.message?.tool_calls?.length ?? 0,
+          provider: finalResponse.provider,
+        });
+        const continuationText = extractText(finalResponse);
+        if (!continuationText) break;
+        const remaining = MAX_FINAL_RESPONSE_CHARS - text.length;
+        text += `\n\n${continuationText.slice(0, Math.max(0, remaining))}`;
+      }
+
+      if (finalResponse.choices?.[0]?.finish_reason === "length") {
+        text = `${text.slice(0, MAX_FINAL_RESPONSE_CHARS - 100).trimEnd()}\n\n[Resposta ainda interrompida pelo limite de geração. Peça “continue” para receber o restante.]`;
+      }
       return {
         text,
-        response,
-        iterations: iteration,
+        response: finalResponse,
+        iterations: finalIteration,
       };
     }
 

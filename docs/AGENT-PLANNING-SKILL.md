@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Conduzir o cliente desde o descritivo da obra até o controle da execução usando os três MCPs de planejamento. A skill segue a filosofia de **Aldo Dórea Mattos** e trata a **EAP como estrutura-mãe**: atividades, precedências, CPM, cronograma, Gantt, produção, curva S e Linha de Balanço devem ser rastreáveis à EAP.
+Conduzir o engenheiro desde o descritivo da obra até o controle da execução usando primeiro os dados, validadores e motores nativos da Plataforma Obras. MCPs e outras integrações são fontes complementares quando conectadas; sua ausência nunca impede o trabalho que pode ser feito localmente. A skill segue a filosofia de **Aldo Dórea Mattos** e trata a **EAP como estrutura-mãe**: atividades, precedências, CPM, cronograma, Gantt, produção, curva S e Linha de Balanço devem ser rastreáveis à EAP.
 
 O agente atua como coordenador técnico e facilitador de revisão. Ele não deve apenas responder perguntas isoladas nem disparar ferramentas em ordem arbitrária. Deve identificar o marco atual, consultar as fontes necessárias, apresentar evidências, registrar divergências e pedir aprovação explícita antes de avançar.
 
@@ -13,7 +13,7 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 3. **Rastreabilidade.** Toda conclusão deve indicar o nó EAP, atividade, dependência, baseline ou unidade de repetição que a sustenta.
 4. **Não inventar.** Ausência de quantidade, duração, precedência, recurso ou unidade vira lacuna explícita. Falta de vínculo externo MCP é limitação de integração, não bloqueio para o planejamento local.
 5. **Revisão localizada.** Uma divergência em um nó não deve apagar silenciosamente o que já foi aprovado.
-6. **Separação de domínios.** EAP, cronograma e Gantt/LOB possuem bancos e responsabilidades diferentes; a coordenação ocorre por `project_id` e referências.
+6. **Fonte local primeiro.** Consulte e valide o estado persistido da própria obra. Use MCPs para complementar ou comparar dados; identifique a origem de cada evidência e não declare uma capacidade indisponível sem verificar a ferramenta local correspondente.
 7. **Escrita controlada.** Uma ordem operacional explícita do engenheiro autoriza gravações reversíveis na versão local de trabalho, com validação, idempotência e releitura. Aprovação de EAP, criação de baseline, exclusão e ações externas/destrutivas continuam sendo gates separados.
 8. **Auditoria ativa.** O agente deve procurar erros e contradições mesmo quando o cliente não perguntar, antes que o dado avance para a próxima etapa.
 
@@ -22,10 +22,10 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 | Estado | Entrada | Consultas obrigatórias | Saída | Gate do cliente |
 |---|---|---|---|---|
 | `DESCRITIVO` | Texto do cliente e contexto local | Dados locais; `listar_templates` apenas como referência | Premissas, dúvidas e proposta inicial | Confirmar entendimento da obra |
-| `EAP_PROPOSTA` | Descritivo entendido | `get_eap_tree`, `get_eap_node`, `listar_por_tipo_frente`, `buscar_eap_node`, `listar_templates` | EAP decomposta com exemplos e rastreabilidade | Revisar todos os nós |
-| `EAP_REVISAO` | Comentários do cliente | Consultas dos nós afetados; `validar_estrutura` | Lista de divergências, impactos e versão revisada | Aprovar EAP |
-| `ATIVIDADES` | EAP aprovada | `listar_atividades`; dados locais; referências da EAP | Atividades por pacote, duração/PERT, unidade e premissas | Aprovar atividades e quadro de sequência |
-| `CPM` | Atividades aprovadas | `listar_dependencias`, `validar_dependencias`, `calcular_caminho_critico` | Rede, prazo, caminho crítico, folgas e ciclos | Aprovar lógica e premissas |
+| `EAP_PROPOSTA` | Descritivo entendido | Árvore e validador locais; MCP de EAP se conectado | EAP decomposta com exemplos e rastreabilidade | Revisar todos os nós |
+| `EAP_REVISAO` | Comentários do cliente | Consultas locais dos nós afetados e validador determinístico; MCP como complemento | Lista de divergências, impactos e versão revisada | Aprovar EAP |
+| `ATIVIDADES` | EAP aprovada | Atividades locais, folhas EAP e referências; MCP de cronograma se conectado | Atividades por pacote, duração/PERT, unidade e premissas | Aprovar atividades e quadro de sequência |
+| `CPM` | Atividades aprovadas | Validação local de atividades/dependências e motor CPM; MCP como comparação opcional | Rede, prazo, caminho crítico, folgas e ciclos | Aprovar lógica e premissas |
 | `CRONOGRAMA` | CPM válido | `calcular_caminho_critico`, `listar_baselines`, `curva_s` | Cronograma, datas, marcos, baseline candidata | Aprovar cronograma/base |
 | `GANTT_LOB` | Cronograma aprovado | Geração Gantt; `calcular_linha_balanco` quando aplicável; `balancear_ritmos_lob`; `dimensionar_equipes_lob` | Arquivo/visão Gantt, ritmo, interferências e recomendações | Aprovar plano de produção |
 | `CONTROLE` | Baseline e produção disponíveis | `comparar_baseline`, `curva_s`, LOB e dados realizados | Desvios, riscos, causas e ações | Decidir replanejamento |
@@ -83,7 +83,7 @@ O agente consulta a EAP existente e usa templates apenas como exemplo histórico
 
 A apresentação deve permitir que o cliente revise **todos os nós**. Divergências devem ser tabeladas com `EAP_ID`, `uid`, descrição atual, proposta, motivo e impacto.
 
-Antes de pedir aprovação, o agente chama `validar_estrutura`. `problemas` bloqueiam o gate; `avisos` não invalidam automaticamente, mas precisam ser exibidos para decisão. Quantidade em nó agregador, folha sem quantidade/N/A, tipo de frente divergente e múltiplas raízes devem ser tratados de acordo com a severidade retornada pelo MCP.
+Antes de pedir aprovação, o agente executa o validador estrutural local. Se o MCP de EAP estiver conectado, pode usá-lo como uma verificação complementar, registrando divergências entre fontes. Erros locais bloqueiam o gate; avisos precisam ser exibidos para decisão. Quantidade em nó agregador, folha sem quantidade/N/A, tipo de frente divergente e múltiplas raízes devem ser tratados conforme a regra de validação aplicável, sem transformar ausência de dado em erro automaticamente.
 
 ### 3. Revisão e aprovação da EAP
 
@@ -160,6 +160,8 @@ DIVERGÊNCIAS E LACUNAS
 IMPACTO DE APROVAR
 PRÓXIMA DECISÃO DO CLIENTE
 ```
+
+Se a geração do provedor terminar por limite de saída, o runtime deve continuar a resposta sem ferramentas, sem repetir o conteúdo anterior e sem executar mutações. Se não conseguir concluí-la, deve marcar claramente a resposta como parcial e orientar a continuação; nunca apresentar o trecho incompleto como auditoria encerrada.
 
 A última seção deve ter uma pergunta inequívoca, por exemplo:
 
