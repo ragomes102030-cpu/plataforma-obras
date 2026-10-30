@@ -128,6 +128,38 @@ describe("runProjectOrchestrator", () => {
     expect(systemPrompt).not.toContain("Validação estrutural da EAP: não executada");
   });
 
+  it("injeta automaticamente no contexto os avisos de escopo vistos na EAP", async () => {
+    const nodes = [
+      { id: 1, code: "1", name: "Obra", parentId: null, level: 1, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+      { id: 2, code: "1.1", name: "Fundação A", parentId: 1, level: 2, nodeType: "entrega", location: null, responsible: null, unit: null, plannedQuantity: null, description: "Formas, armaduras, concretagem e cura.", inclusions: "Formas, armaduras, concretagem e cura.", exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+      { id: 3, code: "1.2", name: "Fundação B", parentId: 1, level: 2, nodeType: "entrega", location: null, responsible: null, unit: null, plannedQuantity: null, description: "Formas, armaduras, concretagem e cura.", inclusions: "Formas, armaduras, concretagem e cura.", exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+    ];
+    const sentMessages: any[] = [];
+    const localContext: AgentProjectContext = {
+      ...context,
+      evidence: { source: "local_db", eapNodeCount: nodes.length, activityCount: 0, dependencyCount: 0, warnings: [], errors: [], eapSnapshot: nodes },
+    };
+
+    await runProjectOrchestrator(localContext, [{ role: "user", content: "Revise a EAP." }], {
+      mcpProjectIds: {},
+      deps: {
+        listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+        callTool: async () => { throw new Error("não deveria chamar MCP"); },
+        callLlm: async input => {
+          sentMessages.push(...input.messages);
+          return { model: "test-model", choices: [{ message: { role: "assistant", content: "Revisão concluída." } }] };
+        },
+      },
+    });
+
+    const systemPrompt = sentMessages.filter(message => message.role === "system").map(message => String(message.content)).join("\n");
+    expect(systemPrompt).toContain("Diagnóstico determinístico local da EAP: snapshot completo; analisados=3; avisos=6");
+    expect(systemPrompt).toContain("eap_scope_overlap_evidence");
+    expect(systemPrompt).toContain("Fundação A");
+    expect(systemPrompt).toContain("Fundação B");
+    expect(systemPrompt).toContain("não significa aprovação");
+  });
+
   it("uses local EAP validation when the project has no external MCP mapping", async () => {
     const localContext: AgentProjectContext = {
       ...context,

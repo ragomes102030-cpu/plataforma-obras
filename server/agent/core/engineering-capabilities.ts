@@ -47,11 +47,11 @@ export function validateDependencyNetwork(dependencies: DependencyInput[]) {
   return { valid:true, nodeCount:nodes.size, dependencyCount:dependencies.length, cycle:[], rule:"rede acíclica; uma atividade não pode depender de si mesma nem formar ciclo" };
 }
 
-export function analyzeEapLocally(nodes: EapScopeNode[]) {
+export function analyzeEapLocally(nodes: EapScopeNode[], requiredDictionaryFields: string[] = []) {
   // Use the same tree + dictionary/scope gate shown in the EAP screen. The
   // structural-only validator hid overlap and dictionary warnings from the
   // assistant even while the engineer could see them in the module.
-  const validation = validateEapForApproval(nodes);
+  const validation = validateEapForApproval(nodes, requiredDictionaryFields);
   const issues = Array.from(new Map(validation.issues.map(issue => [
     `${issue.code}|${issue.entityRef ?? ""}|${issue.message.trim()}`,
     issue,

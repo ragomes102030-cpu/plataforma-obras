@@ -45,6 +45,7 @@ import { localDatabaseEvidenceSource } from "./construction/local-database-sourc
 import { buildArquimedesMemoryContext, recallArquimedes, rememberArquimedes, rememberArquimedesLearning, rememberArquimedesConversation } from "./agent/memory";
 import { loadArquimedesBrainBootstrap, loadArquimedesOperationalSkills } from "./agent/core/brain-context";
 import { calculateActivityDuration, validateDependencyNetwork, analyzeEapLocally, calculateCpmLocally } from "./agent/core/engineering-capabilities";
+import type { EapScopeNode } from "./construction/eap-validator";
 import { resolveLocalEapToolFallback } from "./agent/core/local-eap-tool-fallback";
 import { searchWebEvidence } from "./web-research";
 import type { ArquimedesEapProposal } from "./agent/core/types";
@@ -1776,8 +1777,41 @@ function buildSystem(
   }
 
   base.push("SKILLS OPERACIONAIS SELECIONADAS PARA ESTA TAREFA:\n" + operationalSkills);
+  if (responseIntent !== "casual") base.push(formatEapScopeDiagnostics(context));
 
   return base.join("\n\n");
+}
+
+function formatEapScopeDiagnostics(context: AgentProjectContext) {
+  const evidence = context.evidence;
+  const nodes = evidence?.eapSnapshot ?? [];
+  const total = evidence?.eapNodeCount;
+  if (!nodes.length) return "Diagnóstico local de escopo da EAP não calculado: snapshot de nós indisponível.";
+  const complete = total !== null && total !== undefined && nodes.length >= total;
+  const requiredFields = evidence?.eapDictionaryStandard?.status === "approved"
+    ? evidence.eapDictionaryStandard.requiredFields
+    : [];
+  const result = analyzeEapLocally(nodes.map((node, index) => ({
+    ...node,
+    projectId: 0,
+    externalId: null,
+    externalUid: null,
+    sortOrder: index,
+    nodeType: node.nodeType as EapScopeNode["nodeType"],
+    unit: node.unit ?? null,
+    plannedQuantity: node.plannedQuantity ?? null,
+  })), requiredFields);
+  const issues = result.issues.map(issue =>
+    `${issue.severity} ${issue.code}${issue.entityRef ? ` [${issue.entityRef}]` : ""}: ${issue.message}`
+  );
+  const report = [
+    `Diagnóstico determinístico local da EAP: ${complete ? "snapshot completo" : `snapshot parcial (${nodes.length}/${total ?? "total desconhecido"} nós; não extrapolar)`}; analisados=${result.totalNodes}; avisos=${result.warnings}. É independente da validação estrutural e não significa aprovação.`,
+    `Achados determinísticos de estrutura, dicionário e escopo: ${issues.length ? issues.join(" | ") : "nenhum no snapshot analisado."}`,
+  ].join("\n");
+  const limit = 3_200;
+  return report.length <= limit
+    ? report
+    : `${report.slice(0, limit)}\n[lista de achados truncada; contagens acima referem-se ao snapshot completo informado]`;
 }
 
 function validateMessages(messages: AgentMessage[]) {
