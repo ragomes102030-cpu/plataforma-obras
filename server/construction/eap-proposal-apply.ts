@@ -46,7 +46,13 @@ export async function applyEapProposalToDraft(args: {
   proposal: ArquimedesEapProposal;
 }) {
   const validatedInput = eapProposalInput.safeParse(args.proposal);
-  if (!validatedInput.success) throw badRequest("A proposta estruturada da EAP está incompleta ou fora do contrato.");
+  if (!validatedInput.success) {
+    const details = validatedInput.error.issues
+      .slice(0, 8)
+      .map(issue => `${issue.path.length ? issue.path.join(".") : "proposal"}: ${issue.message}`)
+      .join("; ");
+    throw badRequest(`A proposta estruturada da EAP está incompleta ou fora do contrato. Corrija: ${details}`);
+  }
   args = { ...args, proposal: validatedInput.data as ArquimedesEapProposal };
   const db = await getDb();
   if (!db) throw new Error("Banco de dados não configurado.");
