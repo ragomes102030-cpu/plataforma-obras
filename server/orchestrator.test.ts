@@ -303,6 +303,62 @@ describe("runProjectOrchestrator", () => {
     expect(llmCallCount).toBe(3);
   });
 
+  it("permite ao Arquimedes atualizar somente os campos de escopo autorizados no banco local", async () => {
+    const updateLocalProjectScope = vi.fn(async () => ({
+      status: "updated_and_verified",
+      updatedFields: ["descricao"],
+      after: { name: "PROJETO ESCOLA ARQUIMEDES", descricao: "Escopo escolar didático." },
+      verified: true,
+    }));
+    let llmCallCount = 0;
+    const patch = { descricao: "Escopo escolar didático." };
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "Atualize o escopo da obra para: Escopo escolar didático. Preserve nome, local, datas, orçamento, EAP e governança." }],
+      {
+        localProjectId: 25,
+        userId: 42,
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          updateLocalProjectScope,
+          callLlm: async ({ tools }) => {
+            llmCallCount++;
+            if (llmCallCount === 1) {
+              expect(tools.some(tool => tool.function.name === "atualizar_escopo_obra_local")).toBe(true);
+              return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "scope-update-1", type: "function", function: { name: "atualizar_escopo_obra_local", arguments: JSON.stringify(patch) } }] } }] };
+            }
+            return { choices: [{ message: { role: "assistant", content: "Escopo atualizado e conferido no registro da obra." } }] };
+          },
+        },
+      },
+    );
+
+    expect(updateLocalProjectScope).toHaveBeenCalledWith({ projectId: 25, userId: 42, rawArgs: patch });
+    expect(result.readOnly).toBe(false);
+    expect(result.audit).toContainEqual(expect.objectContaining({ toolName: "atualizar_escopo_obra_local", status: "success" }));
+    expect(result.content).toContain("Escopo atualizado e conferido");
+  });
+
+  it("não expõe a ferramenta local de atualização de escopo durante uma consulta", async () => {
+    const result = await runProjectOrchestrator(
+      context,
+      [{ role: "user", content: "O que consta no escopo desta obra?" }],
+      {
+        localProjectId: 25,
+        userId: 42,
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          callLlm: async ({ tools }) => {
+            expect(tools.some(tool => tool.function.name === "atualizar_escopo_obra_local")).toBe(false);
+            return { choices: [{ message: { role: "assistant", content: "O registro contém o escopo atual." } }] };
+          },
+        },
+      },
+    );
+
+    expect(result.readOnly).toBe(true);
+  });
+
   it("aceita ordem direta para criar atividade local sem exigir confirmação em duas mensagens", async () => {
     const createLocalActivity = vi.fn(async () => ({ id: 9, name: "Execução de alvenaria", versionNumber: 2 }));
     let llmCallCount = 0;

@@ -1,7 +1,7 @@
 import { ENV } from "./_core/env";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "./db";
-import { projectAuditEvents, projectPlanVersions, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
+import { projectAuditEvents, projectPlanVersions, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { ensureWritablePlanVersion, getCurrentPlanVersion } from "./construction/plan-versions";
@@ -243,6 +243,7 @@ export type OrchestratorDeps = {
     tools: LlmTool[];
   }) => Promise<LlmResponse>;
   applyLocalEapProposal?: (args: { projectId: number; userId: number; proposal: ArquimedesEapProposal }) => Promise<Awaited<ReturnType<typeof applyEapProposalToDraft>>>;
+  updateLocalProjectScope?: (args: { projectId: number; userId: number; rawArgs: Record<string, unknown> }) => Promise<unknown>;
   createLocalActivity?: (args: { projectId: number; userId: number; rawArgs: Record<string, unknown> }) => Promise<unknown>;
   listLocalActivities?: (args: { projectId: number; limit?: number }) => Promise<unknown>;
   createLocalDependencies?: (args: { projectId: number; userId: number; dependencies: LocalDependencyInput[] }) => Promise<unknown>;
@@ -705,6 +706,57 @@ async function listLocalAgentActivities(args: { projectId: number; limit?: numbe
   return { version: { id: version.id, number: version.versionNumber, status: version.status }, activities, returned: activities.length, truncated: activities.length === limit };
 }
 
+async function updateLocalAgentProjectScope(args: { projectId: number; userId: number; rawArgs: Record<string, unknown> }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+
+  const allowedKeys = new Set(["descricao", "location", "tipoDeObra"]);
+  const keys = Object.keys(args.rawArgs);
+  if (!keys.length || keys.some(key => !allowedKeys.has(key))) {
+    throw new Error("Informe somente descricao, location ou tipoDeObra para atualizar o escopo.");
+  }
+  const patch: { descricao?: string | null; location?: string; tipoDeObra?: string | null; updatedAt: Date } = { updatedAt: new Date() };
+  if (args.rawArgs.descricao !== undefined) {
+    if (typeof args.rawArgs.descricao !== "string" || args.rawArgs.descricao.trim().length > 4000) throw new Error("A descrição deve ser um texto de até 4.000 caracteres.");
+    patch.descricao = args.rawArgs.descricao.trim() || null;
+  }
+  if (args.rawArgs.location !== undefined) {
+    if (typeof args.rawArgs.location !== "string" || args.rawArgs.location.trim().length < 2 || args.rawArgs.location.trim().length > 180) throw new Error("A localização deve conter de 2 a 180 caracteres.");
+    patch.location = args.rawArgs.location.trim();
+  }
+  if (args.rawArgs.tipoDeObra !== undefined) {
+    const allowedTypes = ["edificio", "reforma", "pavimentacao", "saneamento", "todos"];
+    if (args.rawArgs.tipoDeObra !== null && (typeof args.rawArgs.tipoDeObra !== "string" || !allowedTypes.includes(args.rawArgs.tipoDeObra))) throw new Error("Natureza da obra inválida.");
+    patch.tipoDeObra = args.rawArgs.tipoDeObra as string | null;
+  }
+
+  return db.transaction(async tx => {
+    const [before] = await tx.select({ id: projects.id, name: projects.name, location: projects.location, tipoDeObra: projects.tipoDeObra, descricao: projects.descricao })
+      .from(projects)
+      .where(and(eq(projects.id, args.projectId), eq(projects.ownerUserId, args.userId), isNull(projects.deletedAt)))
+      .limit(1);
+    if (!before) throw new Error("Obra não encontrada ou sem acesso para atualizar o escopo.");
+    const [updated] = await tx.update(projects).set(patch)
+      .where(and(eq(projects.id, args.projectId), eq(projects.ownerUserId, args.userId), isNull(projects.deletedAt)))
+      .returning({ id: projects.id });
+    if (!updated) throw new Error("A atualização do escopo não foi persistida.");
+    const [after] = await tx.select({ id: projects.id, name: projects.name, location: projects.location, tipoDeObra: projects.tipoDeObra, descricao: projects.descricao })
+      .from(projects)
+      .where(and(eq(projects.id, args.projectId), eq(projects.ownerUserId, args.userId), isNull(projects.deletedAt)))
+      .limit(1);
+    if (!after || (patch.descricao !== undefined && after.descricao !== patch.descricao) || (patch.location !== undefined && after.location !== patch.location) || (patch.tipoDeObra !== undefined && after.tipoDeObra !== patch.tipoDeObra)) {
+      throw new Error("A releitura do escopo divergiu dos campos solicitados; a transação foi cancelada.");
+    }
+    await tx.insert(projectAuditEvents).values({
+      projectId: args.projectId,
+      userId: args.userId,
+      action: "project_scope_updated_by_arquimedes",
+      payload: { changedFields: keys, before, after, verified: true },
+    });
+    return { status: "updated_and_verified", updatedFields: keys, before, after, verified: true };
+  });
+}
+
 async function createLocalAgentDependencies(args: {
   projectId: number;
   userId: number;
@@ -873,6 +925,24 @@ const LOCAL_EAP_APPLY_TOOL: LlmTool = {
         },
       },
       required: ["proposal"],
+      additionalProperties: false,
+    },
+  },
+};
+
+const LOCAL_PROJECT_SCOPE_UPDATE_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "atualizar_escopo_obra_local",
+    description: "Atualiza somente os dados declarados do escopo da obra na fonte local e confere a gravação por releitura. Exige ordem operacional explícita. Informe descricao; location e tipoDeObra são opcionais e só mudam se forem enviados. Não atualiza nome, datas, orçamento, EAP, atividades, baseline ou aprovações. Preserve dados não enviados e não invente informação de projeto.",
+    parameters: {
+      type: "object",
+      properties: {
+        descricao: { type: "string", maxLength: 4000 },
+        location: { type: "string", minLength: 2, maxLength: 180 },
+        tipoDeObra: { type: ["string", "null"], enum: ["edificio", "reforma", "pavimentacao", "saneamento", "todos", null] },
+      },
+      required: ["descricao"],
       additionalProperties: false,
     },
   },
@@ -1416,7 +1486,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1491,7 +1561,7 @@ function buildSystem(
     "Não invente dados, consultas, resultados, aprovações ou alterações. Diferencie fatos confirmados, inferências e informações que ainda faltam.",
     "Existe uma memória persistente do Arquimedes. Consulte-a quando a continuidade da análise exigir contexto anterior. Dentro da mesma rodada, não repita consultar_memoria se o resultado já respondeu à necessidade; só faça nova consulta quando houver uma lacuna materialmente diferente. Registre apenas memórias duráveis e úteis; memória não substitui evidência atual nem autoriza mutações.",
     "A validação estrutural determinística local da EAP faz parte das evidências confirmadas da obra e não depende do MCP. Quando ela estiver disponível no contexto, use seu resultado para relatar estrutura, órfãos, níveis, duplicidades e ciclos. A indisponibilidade do MCP só torna indisponíveis as verificações que realmente dependem dele.",
-    "Em consultas e análises, não altere dados: leia, diagnostique e apresente a recomendação. Uma ordem operacional explícita autoriza alterações reversíveis na versão de trabalho local da obra, sem pedir uma segunda confirmação; nesse caso, use a ferramenta local de rascunho, mantenha a EAP em elaboração e reconsulte os dados para validar a gravação. Aprovar EAP, criar baseline, excluir ou executar ações externas/destrutivas continua exigindo confirmação explícita separada.",
+    "Em consultas e análises, não altere dados: leia, diagnostique e apresente a recomendação. Uma ordem operacional explícita autoriza alterações reversíveis na fonte local, sem pedir uma segunda confirmação; para o escopo, atualize somente os campos informados com atualizar_escopo_obra_local e confirme a releitura; para EAP use a ferramenta local de rascunho, mantenha a EAP em elaboração e reconsulte os dados. Aprovar EAP, criar baseline, excluir ou executar ações externas/destrutivas continua exigindo confirmação explícita separada.",
     "Se o MCP de cronograma estiver indisponível, trabalhe com as ferramentas locais: consulte atividades com consultar_atividades_locais para obter IDs reais; para dependências, use criar_dependencias_locais somente com ordem operacional explícita e valide o retorno. Não invente IDs nem declare gravação sem releitura confirmada. A rede pode ficar incompleta durante a montagem; reporte o aviso e continue apenas dentro do escopo pedido.",
     "Resultados determinísticos de EAP, dependências e CPM devem ser tratados como cálculo do sistema. Não substitua esses resultados por estimativas suas quando o dado calculado estiver disponível.",
     "Para dúvidas técnicas de planejamento, use EAP, atividades, precedências, CPM, caminho crítico, folgas, Gantt, Linha de Balanço, produção e controle.",
@@ -1826,6 +1896,25 @@ export async function runProjectOrchestrator(
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: JSON.stringify({ source: "arquimedes_internal_engine", ...value }).slice(0, MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "atualizar_escopo_obra_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!allowMutations) throw new Error("A atualização do escopo exige uma ordem operacional explícita.");
+          if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para atualizar o escopo.");
+          const updateScope = deps.updateLocalProjectScope ?? updateLocalAgentProjectScope;
+          const result = await updateScope({ projectId: options.localProjectId, userId: options.userId, rawArgs });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: compactLlmContent(JSON.stringify({ fonte: "local_db", ...((result && typeof result === "object") ? result as Record<string, unknown> : { resultado: result }) }), MAX_TOOL_RESULT_CHARS) };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });

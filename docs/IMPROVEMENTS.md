@@ -394,3 +394,11 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 **Documentação:** política de decomposição e registro de integridade do Arquimedes atualizados com a regra de síntese vazia, sem repetição de mutação e com conferência da persistência.
 
 **Validação:** `pnpm check` passou; Node local 24.21.0 gerou o aviso de engine porque o projeto exige Node 22.x. Nenhum teste foi adicionado ou executado nesta alteração. Código local na branch `feat/eap-hierarchy-guidance`; sem commit novo, merge, deploy ou mutação no banco ao vivo.
+
+## 30/out/2026 — Arquimedes atualiza o escopo declarado pela fonte local
+
+**Achado:** o agente conseguia consultar o escopo local, mas não tinha uma ferramenta de escrita para corrigir um escopo autorizado; o MCP de escopo não estava disponível. A tela humana possuía a mutação, mas isso não a tornava acessível ao agente.
+
+**Correção:** adicionada `atualizar_escopo_obra_local`, exposta somente em intenção operacional e restrita a descrição, localização e natureza. A gravação verifica propriedade da obra, registra antes/depois na auditoria e relê os campos na mesma transação. Datas, orçamento, EAP, baseline e aprovações não fazem parte da ferramenta. Manual do agente atualizado para exigir releitura e auditoria do escopo antes de decompor a EAP.
+
+**Validação:** `server/orchestrator.test.ts` passou (21 testes), `pnpm check`, `pnpm build` e `git diff --check` passaram. Build local avisou que Node 24 está fora do requisito 22.x, que variáveis de analytics não estão configuradas e que o bundle principal excede 500 kB. Deploy e alteração de dados ao vivo ainda pendentes.

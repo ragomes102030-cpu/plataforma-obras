@@ -103,6 +103,10 @@ Cada atividade deve conter, no mínimo, `eap_ref`, nome operacional, duração d
 
 Sem MCP de cronograma, o agente consulta `consultar_atividades_locais` e pode criar atividade com `criar_atividade_local` depois de uma ordem operacional explícita. Vínculo externo do cronograma não é requisito para gravar na fonte local. A EAP precisa estar aprovada e a referência precisa ser uma folha terminal tanto na versão aprovada quanto na versão de trabalho. Quantidade e produtividade sem evidência não podem ser inventadas. Sem quantidade/unidade, não há cálculo quantitativo nem medição; se o engenheiro pedir um cenário didático, uma duração estimada pode ser usada, desde que registrada como estimativa, com premissa e validação pendente — nunca como duração calculada ou fato. Repetir uma gravação idêntica deve ser idempotente; divergência com uma atividade já existente bloqueia nova duplicata e exige revisão.
 
+### Atualização do escopo local
+
+Quando o engenheiro der uma ordem operacional para corrigir o escopo, `atualizar_escopo_obra_local` pode gravar somente `descricao`, `location` e `tipoDeObra` explicitamente enviados. A ferramenta valida o acesso à obra, registra valores anteriores e novos na auditoria e relê o registro dentro da transação antes de confirmar. Ela não altera nome, datas, custos, EAP, atividades, baseline ou aprovações. Sem ordem operacional, o agente apenas analisa e recomenda. Depois de uma correção, deve reler e auditar o escopo antes de começar a EAP; a EAP existente deve ser tratada como pendente quando contradiz o novo objeto da obra.
+
 ### 5. Precedências e CPM
 
 A sequência deve usar somente dependências justificadas. As relações disponíveis são:
