@@ -1,4 +1,5 @@
-import { validateEap, type EapScopeNode } from "../../construction/eap-validator";
+import { validateEapForApproval } from "../../construction/eap-approval-validator";
+import type { EapScopeNode } from "../../construction/eap-validator";
 import { calculateDeterministicCpm, type DeterministicCpmResult } from "../../construction/cpm-calculator";
 import type { ScheduleEvidenceActivity, ScheduleEvidenceDependency } from "../../construction/domain-types";
 
@@ -47,17 +48,26 @@ export function validateDependencyNetwork(dependencies: DependencyInput[]) {
 }
 
 export function analyzeEapLocally(nodes: EapScopeNode[]) {
-  const structural = validateEap(nodes);
-  const warnings = structural.issues.filter(issue => issue.severity === "warning");
-  const blockers = structural.issues.filter(issue => issue.severity === "error");
+  // Use the same tree + dictionary/scope gate shown in the EAP screen. The
+  // structural-only validator hid overlap and dictionary warnings from the
+  // assistant even while the engineer could see them in the module.
+  const validation = validateEapForApproval(nodes);
+  const issues = Array.from(new Map(validation.issues.map(issue => [
+    `${issue.code}|${issue.entityRef ?? ""}|${issue.message.trim()}`,
+    issue,
+  ])).values());
+  const warnings = issues.filter(issue => issue.severity === "warning");
+  const blockers = issues.filter(
+    issue => issue.severity === "error" || issue.code === "eap_leaf_not_ready"
+  );
   return {
-    valid: structural.valid,
+    valid: validation.valid,
     totalNodes: nodes.length,
     blockers: blockers.length,
     warnings: warnings.length,
-    issues: structural.issues.slice(0, 80),
+    issues: issues.slice(0, 80),
     engine: "arquimedes_internal_engine",
-    rule: "a validação estrutural da EAP é interna e não depende de MCP; lacunas de cobertura devem ser tratadas como evidência/alerta quando não forem bloqueios determinísticos.",
+    rule: "a análise local combina as mesmas validações estrutural, de dicionário e de escopo exibidas no módulo EAP; avisos semânticos não são bloqueios automáticos e não dependem de MCP.",
   };
 }
 

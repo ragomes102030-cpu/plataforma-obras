@@ -1125,7 +1125,7 @@ const INTERNAL_EAP_TOOL: LlmTool = {
   type: "function",
   function: {
     name: "analisar_eap_localmente",
-    description: "Analisa estruturalmente a EAP diretamente no motor interno do Arquimedes, sem depender de MCP. Use com dados da EAP local para detectar raiz, níveis, órfãos, códigos, duplicidades e ciclos.",
+    description: "Analisa localmente a EAP sem depender de MCP, combinando estrutura, dicionário e escopo como no módulo da obra. Use para identificar bloqueios e avisos de decomposição, cobertura e possível sobreposição; trate avisos semânticos como indícios que exigem julgamento de engenharia.",
     parameters: {
       type: "object",
       properties: {
