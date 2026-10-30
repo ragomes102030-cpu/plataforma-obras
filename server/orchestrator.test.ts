@@ -63,6 +63,14 @@ describe("runProjectOrchestrator", () => {
           leavesWithoutQuantity: 0,
           structureValidation: { status: "valid", issueCount: 0 },
         },
+        eapDictionaryStandard: {
+          status: "approved",
+          requiredFields: ["description", "inclusions", "exclusions", "responsible", "acceptanceCriteria"],
+          conditionalFields: ["unit", "plannedQuantity"],
+          compliantLeafCount: 1,
+          totalLeafCount: 1,
+          leavesMissingRequiredFields: [],
+        },
         eapStructuralValidation: {
           status: "valid",
           nodeCount: nodes.length,
@@ -110,10 +118,12 @@ describe("runProjectOrchestrator", () => {
     expect(systemPrompt).toContain("3 nós; raízes=1; folhas=1; bloqueadores=0; avisos=0");
     expect(systemPrompt).toContain("1.1.1 | Fundação | pacote | pai=2 | nível=3");
     expect(systemPrompt).toContain("1.1.1 | Fundação | pacote | pai=2 | nível=3 | unidade=m³ | quantidade=12");
-    expect(systemPrompt).toContain("folhas com unidade e quantidade positiva=1; folhas sem ambos=0; dicionário completo=1/1");
+    expect(systemPrompt).toContain("folhas com unidade e quantidade positiva=1; folhas sem ambos=0");
     expect(systemPrompt).toContain("1.1.1 (m³ 12)");
     expect(systemPrompt).toContain("preenchimento, não conformidade");
     expect(systemPrompt).toContain("origem não verificada nesta consulta");
+    expect(systemPrompt).toContain("Dicionário de escopo: padrão aprovado; folhas conformes=1/1 segundo a regra registrada");
+    expect(systemPrompt).toContain("campos condicionais=unit, plannedQuantity");
     expect(systemPrompt).toContain("Prontidão do cronograma (EAP + atividades/CPM): insufficient");
     expect(systemPrompt).not.toContain("Validação estrutural da EAP: não executada");
   });
