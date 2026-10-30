@@ -319,12 +319,7 @@ function formatContext(context: AgentProjectContext) {
     node.plannedQuantity !== null && node.plannedQuantity !== undefined &&
     Number.isFinite(Number(node.plannedQuantity)) && Number(node.plannedQuantity) > 0
   );
-  const dictionaryFields = ["description", "inclusions", "exclusions", "location", "responsible", "acceptanceCriteria", "unit"] as const;
-  const dictionaryCompleteLeaves = eapLeaves.filter(node =>
-    dictionaryFields.every(field => typeof node[field] === "string" && node[field]!.trim().length > 0) &&
-    node.plannedQuantity !== null && node.plannedQuantity !== undefined &&
-    Number.isFinite(Number(node.plannedQuantity)) && Number(node.plannedQuantity) > 0
-  );
+  const dictionaryStandard = context.evidence?.eapDictionaryStandard;
   const eapInventory = eapSnapshot.length
     ? [
         `Inventário EAP enviado ao chat: ${eapSnapshot.length} de ${eapNodeCount ?? "quantidade total desconhecida"} nós${eapSnapshotComplete ? " (completo)" : " (parcial; não conclua sobre os nós não incluídos)"}.`,
@@ -333,10 +328,18 @@ function formatContext(context: AgentProjectContext) {
     : [`Inventário EAP enviado ao chat: nenhum nó; total local=${eapNodeCount ?? "indisponível"}.`];
   const eapCoverage = eapSnapshot.length
     ? [
-        `Cobertura observada nas folhas da EAP${eapSnapshotComplete ? " (inventário completo)" : " (somente nos nós recebidos; amostra parcial)"}: folhas no snapshot=${eapLeaves.length}; folhas com unidade e quantidade positiva=${quantityLeaves.length}; folhas sem ambos=${eapLeaves.length - quantityLeaves.length}; dicionário completo=${dictionaryCompleteLeaves.length}/${eapLeaves.length}. Esses números medem preenchimento, não conformidade; não presuma que unidade/quantidade sejam obrigatórias para todas as folhas sem regra aplicável.`,
+        dictionaryStandard?.status === "approved"
+          ? `Dicionário de escopo: padrão aprovado; folhas conformes=${dictionaryStandard.compliantLeafCount ?? "indisponível"}/${dictionaryStandard.totalLeafCount} segundo a regra registrada; campos obrigatórios=${dictionaryStandard.requiredFields.join(", ") || "nenhum registrado"}; campos condicionais=${dictionaryStandard.conditionalFields.join(", ") || "nenhum registrado"}. Folhas com campos obrigatórios ausentes: ${dictionaryStandard.leavesMissingRequiredFields.map(node => `${node.code} [${node.fields.join(", ")}]`).join("; ") || "nenhuma"}.`
+          : `Dicionário de escopo: padrão ${dictionaryStandard?.status ?? "não consultado"}; conformidade não calculada sem padrão aprovado.`,
+        `Cobertura quantitativa observada nas folhas da EAP${eapSnapshotComplete ? " (inventário completo)" : " (amostra parcial; não extrapole)"}: folhas no snapshot=${eapLeaves.length}; folhas com unidade e quantidade positiva=${quantityLeaves.length}; folhas sem ambos=${eapLeaves.length - quantityLeaves.length}. Cobertura mede preenchimento, não conformidade; só considere ausência um problema quando houver regra aplicável.`,
         `Folhas com unidade e quantidade positiva: ${quantityLeaves.length ? quantityLeaves.map(node => `${node.code} (${node.unit} ${node.plannedQuantity})`).join("; ") : "nenhuma no snapshot recebido"}.`,
       ]
-    : ["Cobertura de unidade/quantidade e dicionário da EAP: não calculável sem snapshot de nós."];
+    : [
+        dictionaryStandard?.status === "approved"
+          ? `Dicionário de escopo: padrão aprovado; folhas conformes=${dictionaryStandard.compliantLeafCount ?? "indisponível"}/${dictionaryStandard.totalLeafCount}.`
+          : `Dicionário de escopo: padrão ${dictionaryStandard?.status ?? "não consultado"}; conformidade não calculada sem padrão aprovado.`,
+        "Cobertura de unidade/quantidade da EAP: não calculável sem snapshot de nós.",
+      ];
   const evidence = context.evidence
     ? [
         `Fonte de evidências: ${context.evidence.source}`,

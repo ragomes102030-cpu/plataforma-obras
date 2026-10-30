@@ -80,6 +80,14 @@ export type AgentProjectContext = {
         issueCount: number;
       };
     };
+    eapDictionaryStandard?: {
+      status: "approved" | "pending" | "rejected";
+      requiredFields: string[];
+      conditionalFields: string[];
+      compliantLeafCount: number | null;
+      totalLeafCount: number;
+      leavesMissingRequiredFields: Array<{ code: string; fields: string[] }>;
+    };
     localBudget?: {
       versionId: number | null;
       versionStatus: string | null;

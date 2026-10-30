@@ -7520,11 +7520,16 @@ export const appRouter = router({
                 localDatabaseEvidenceSource,
                 new ConstructionMcpEvidenceSource(mcpProjectIds)
               );
-              const [eapResult, activityResult, dependencyResult] =
+              const [eapResult, activityResult, dependencyResult, dictionaryRows] =
                 await Promise.all([
                   evidenceSource.getEapTree(input.projectId),
                   evidenceSource.listActivities(input.projectId),
                   evidenceSource.listDependencies(input.projectId),
+                  db.select({ decision: agentDecisions.decision, scopeJson: agentDecisions.scopeJson })
+                    .from(agentDecisions)
+                    .where(and(eq(agentDecisions.projectId, input.projectId), eq(agentDecisions.stage, "EAP_DICIONARIO")))
+                    .orderBy(desc(agentDecisions.createdAt))
+                    .limit(1),
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
               const eapValidation = validateEap(eapResult.data ?? []);
@@ -7537,6 +7542,27 @@ export const appRouter = router({
               );
               const eapRootCount = eapNodes.filter(node => node.parentId === null || node.parentId === undefined).length;
               const eapLeafCount = eapNodes.filter(node => !eapParentIds.has(String(node.id))).length;
+              const dictionaryRow = dictionaryRows[0];
+              const dictionarySettings = dictionaryRow
+                ? parseJsonValue(dictionaryRow.scopeJson) as { requiredFields?: unknown; conditionalFields?: unknown } | null
+                : null;
+              const dictionaryStatus = !dictionaryRow
+                ? "pending" as const
+                : dictionaryRow.decision === "rejected"
+                  ? "rejected" as const
+                  : "approved" as const;
+              const requiredDictionaryFields = normalizeEapDictionaryFields(dictionarySettings?.requiredFields);
+              const conditionalDictionaryFields = Array.isArray(dictionarySettings?.conditionalFields)
+                ? dictionarySettings.conditionalFields.filter((field): field is string => typeof field === "string")
+                : [];
+              const dictionaryLeaves = eapNodes.filter(node => !eapParentIds.has(String(node.id)));
+              const leavesMissingRequiredFields = dictionaryLeaves.map(node => ({
+                code: node.code,
+                fields: requiredDictionaryFields.filter(field => {
+                  const value = node[field as keyof typeof node];
+                  return value === null || value === undefined || String(value).trim().length === 0;
+                }),
+              })).filter(node => node.fields.length > 0);
               const eapStructuralIssues = eapValidation.issues.map(issue =>
                 `${issue.severity} ${issue.code}${issue.entityRef ? ` [${issue.entityRef}]` : ""}: ${issue.message}`
               );
@@ -7579,6 +7605,16 @@ export const appRouter = router({
                   blockerCount: eapValidation.issues.filter(issue => issue.severity === "error").length,
                   warningCount: eapValidation.issues.filter(issue => issue.severity === "warning").length,
                   issues: eapStructuralIssues,
+                },
+                eapDictionaryStandard: {
+                  status: dictionaryStatus,
+                  requiredFields: requiredDictionaryFields,
+                  conditionalFields: conditionalDictionaryFields,
+                  compliantLeafCount: dictionaryStatus === "approved"
+                    ? dictionaryLeaves.length - leavesMissingRequiredFields.length
+                    : null,
+                  totalLeafCount: eapLeafCount,
+                  leavesMissingRequiredFields: leavesMissingRequiredFields.slice(0, 120),
                 },
                 eapSnapshot: eapNodes.slice(0, 120).map(node => ({
                   id: node.id,
