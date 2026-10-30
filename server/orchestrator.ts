@@ -306,30 +306,47 @@ function formatContext(context: AgentProjectContext) {
     .join("\n");
 
   const coordinator = context.coordinator;
+  const eapSnapshot = context.evidence?.eapSnapshot ?? [];
+  const eapNodeCount = context.evidence?.eapNodeCount;
+  const eapSnapshotComplete = eapNodeCount !== null && eapNodeCount !== undefined && eapSnapshot.length >= eapNodeCount;
+  const eapInventory = eapSnapshot.length
+    ? [
+        `Inventário EAP enviado ao chat: ${eapSnapshot.length} de ${eapNodeCount ?? "quantidade total desconhecida"} nós${eapSnapshotComplete ? " (completo)" : " (parcial; não conclua sobre os nós não incluídos)"}.`,
+        ...eapSnapshot.map(node => `${node.code} | ${node.name} | ${node.nodeType} | pai=${node.parentId ?? "-"} | nível=${node.level}`),
+      ]
+    : [`Inventário EAP enviado ao chat: nenhum nó; total local=${eapNodeCount ?? "indisponível"}.`];
   const evidence = context.evidence
     ? [
         `Fonte de evidências: ${context.evidence.source}`,
         `Nós EAP locais: ${context.evidence.eapNodeCount ?? "indisponível"}`,
+        context.evidence.eapStructuralValidation
+          ? `Validação estrutural local da EAP: ${context.evidence.eapStructuralValidation.status === "valid" ? "válida" : context.evidence.eapStructuralValidation.status === "invalid" ? "inválida" : "não executada"} | ${context.evidence.eapStructuralValidation.nodeCount} nós; raízes=${context.evidence.eapStructuralValidation.rootCount}; folhas=${context.evidence.eapStructuralValidation.leafCount}; bloqueadores=${context.evidence.eapStructuralValidation.blockerCount}; avisos=${context.evidence.eapStructuralValidation.warningCount}`
+          : "Validação estrutural da EAP: não executada nesta consulta.",
+        ...(context.evidence.eapStructuralValidation?.issues.length
+          ? [`Achados da validação estrutural da EAP: ${context.evidence.eapStructuralValidation.issues.join(" | ")}`]
+          : []),
         `Atividades locais consultadas: ${context.evidence.activityCount ?? "indisponível"}`,
         `Dependências locais consultadas: ${context.evidence.dependencyCount ?? "indisponível"}`,
         `Avisos de evidência: ${context.evidence.warnings.join(" | ") || "nenhum"}`,
         `Erros de evidência: ${context.evidence.errors.join(" | ") || "nenhum"}`,
         context.evidence.validation
-          ? `Validação determinística: ${context.evidence.validation.status} | bloqueadores=${context.evidence.validation.blockerCount} | duração=${context.evidence.validation.projectDuration ?? "indisponível"} | caminho crítico=${context.evidence.validation.criticalPath.join(" → ") || "indisponível"}`
-          : "Validação determinística ainda não executada.",
+          ? `Prontidão do cronograma (EAP + atividades/CPM): ${context.evidence.validation.status} | bloqueadores=${context.evidence.validation.blockerCount} | duração=${context.evidence.validation.projectDuration ?? "indisponível"} | caminho crítico=${context.evidence.validation.criticalPath.join(" → ") || "indisponível"}`
+          : "Prontidão conjunta EAP + cronograma ainda não calculada.",
         context.evidence.validation?.issues.length
-          ? `Problemas determinísticos: ${context.evidence.validation.issues.join(" | ")}`
-          : "Problemas determinísticos: nenhum.",
+          ? `Apontamentos determinísticos (EAP + CPM): ${context.evidence.validation.issues.join(" | ")}`
+          : "Apontamentos determinísticos (EAP + CPM): nenhum.",
         context.evidence.localEap
           ? [
               `EAP local: folhas=${context.evidence.localEap.leafCount}; folhas com dicionário completo=${context.evidence.localEap.leavesWithDictionary}; folhas sem dicionário completo=${context.evidence.localEap.leavesWithoutDictionary}; folhas com unidade+quantidade=${context.evidence.localEap.leavesWithQuantity}; folhas sem unidade+quantidade=${context.evidence.localEap.leavesWithoutQuantity}; validação estrutural local=${context.evidence.localEap.structureValidation.status} (${context.evidence.localEap.structureValidation.issueCount} apontamento(s))`,
             ].join("\n")
-          : "Resumo detalhado da EAP local: indisponível.",
+          : "Cobertura complementar do dicionário EAP: não calculada nesta consulta.",
         context.evidence.localBudget
           ? context.evidence.localBudget.versionId
             ? `Orçamento local: versão=${context.evidence.localBudget.versionId}; status=${context.evidence.localBudget.versionStatus ?? "não informado"}; itens=${context.evidence.localBudget.itemCount ?? "não informado"}; itens vinculados à EAP=${context.evidence.localBudget.mappedItemCount ?? "não informado"}; itens sem vínculo=${context.evidence.localBudget.unmappedItemCount ?? "não informado"}`
             : "Orçamento local: nenhuma versão de orçamento registrada para esta obra."
           : "Resumo do orçamento local: indisponível.",
+        "Inventário estrutural (código | nome | tipo | pai | nível):",
+        ...eapInventory,
       ].join("\n")
     : "Resumo de evidências locais ainda não carregado.";
   const coordinatorLines = coordinator

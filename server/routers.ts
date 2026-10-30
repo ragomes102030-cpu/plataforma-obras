@@ -7528,6 +7528,18 @@ export const appRouter = router({
                 ]);
               const results = [eapResult, activityResult, dependencyResult];
               const eapValidation = validateEap(eapResult.data ?? []);
+              const eapNodes = eapResult.data ?? [];
+              const eapParentIds = new Set(
+                eapNodes
+                  .map(node => node.parentId)
+                  .filter((parentId): parentId is number | string => parentId !== null && parentId !== undefined)
+                  .map(String)
+              );
+              const eapRootCount = eapNodes.filter(node => node.parentId === null || node.parentId === undefined).length;
+              const eapLeafCount = eapNodes.filter(node => !eapParentIds.has(String(node.id))).length;
+              const eapStructuralIssues = eapValidation.issues.map(issue =>
+                `${issue.severity} ${issue.code}${issue.entityRef ? ` [${issue.entityRef}]` : ""}: ${issue.message}`
+              );
               const cpmResult = calculateDeterministicCpm(
                 activityResult.data ?? [],
                 dependencyResult.data ?? []
@@ -7558,8 +7570,17 @@ export const appRouter = router({
                 source: Array.from(
                   new Set(results.map(result => result.source))
                 ).join("+"),
-                eapNodeCount: eapResult.data?.length ?? null,
-                eapSnapshot: (eapResult.data ?? []).slice(0, 120).map(node => ({
+                eapNodeCount: eapNodes.length,
+                eapStructuralValidation: {
+                  status: eapValidation.valid ? "valid" as const : "invalid" as const,
+                  nodeCount: eapNodes.length,
+                  rootCount: eapRootCount,
+                  leafCount: eapLeafCount,
+                  blockerCount: eapValidation.issues.filter(issue => issue.severity === "error").length,
+                  warningCount: eapValidation.issues.filter(issue => issue.severity === "warning").length,
+                  issues: eapStructuralIssues,
+                },
+                eapSnapshot: eapNodes.slice(0, 120).map(node => ({
                   id: node.id,
                   code: node.code,
                   name: node.name,

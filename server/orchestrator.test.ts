@@ -37,6 +37,73 @@ const catalog = {
 };
 
 describe("runProjectOrchestrator", () => {
+  it("separa a validação estrutural da EAP da prontidão do cronograma no contexto do chat", async () => {
+    const sentMessages: any[] = [];
+    const nodes = [
+      { id: 1, code: "1", name: "Edifício", parentId: null, level: 1, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+      { id: 2, code: "1.1", name: "Estrutura", parentId: 1, level: 2, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+      { id: 3, code: "1.1.1", name: "Fundação", parentId: 2, level: 3, nodeType: "pacote", location: null, responsible: null, unit: "m³", plannedQuantity: 12, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+    ];
+    const localContext: AgentProjectContext = {
+      ...context,
+      evidence: {
+        source: "local_db",
+        eapNodeCount: nodes.length,
+        activityCount: 0,
+        dependencyCount: 0,
+        warnings: [],
+        errors: [],
+        eapSnapshot: nodes,
+        eapStructuralValidation: {
+          status: "valid",
+          nodeCount: nodes.length,
+          rootCount: 1,
+          leafCount: 1,
+          blockerCount: 0,
+          warningCount: 0,
+          issues: [],
+        },
+        validation: {
+          status: "insufficient",
+          blockerCount: 0,
+          issues: [],
+          projectDuration: null,
+          criticalPath: [],
+        },
+      },
+    };
+
+    const result = await runProjectOrchestrator(
+      localContext,
+      [{ role: "user", content: "Audite a EAP atual, somente leitura." }],
+      {
+        mcpProjectIds: {},
+        deps: {
+          listTools: async () => ({ eap: [], cronograma: [], ganttLob: [] }),
+          callTool: async () => { throw new Error("não deveria chamar MCP"); },
+          callLlm: async input => {
+            sentMessages.push(...input.messages);
+            return {
+              model: "test-model",
+              choices: [{ message: { role: "assistant", content: "Auditoria concluída." } }],
+            };
+          },
+        },
+      }
+    );
+
+    const systemPrompt = sentMessages
+      .filter(message => message.role === "system")
+      .map(message => String(message.content))
+      .join("\n");
+    expect(result.status).toBe("respondido");
+    expect(systemPrompt).toContain("Validação estrutural local da EAP: válida");
+    expect(systemPrompt).toContain("3 nós; raízes=1; folhas=1; bloqueadores=0; avisos=0");
+    expect(systemPrompt).toContain("1.1.1 | Fundação | pacote | pai=2 | nível=3");
+    expect(systemPrompt).toContain("Prontidão do cronograma (EAP + atividades/CPM): insufficient");
+    expect(systemPrompt).not.toContain("Validação estrutural da EAP: não executada");
+  });
+
   it("uses local EAP validation when the project has no external MCP mapping", async () => {
     const localContext: AgentProjectContext = {
       ...context,
@@ -556,7 +623,7 @@ describe("runProjectOrchestrator", () => {
     expect(systemMessage).toContain("Nós EAP locais: 4");
     expect(systemMessage).toContain("MCP Cronograma indisponível");
     expect(systemMessage).toContain("Planejamento de cronograma local não depende de vínculo MCP externo");
-    expect(systemMessage).toContain("Validação determinística: blocked");
+    expect(systemMessage).toContain("Prontidão do cronograma (EAP + atividades/CPM): blocked");
     expect(systemMessage).toContain("A rede possui ciclo.");
   });
 

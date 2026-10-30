@@ -34,6 +34,15 @@ export type AgentProjectContext = {
     dependencyCount: number | null;
     warnings: string[];
     errors: string[];
+    eapStructuralValidation?: {
+      status: "valid" | "invalid" | "not_checked";
+      nodeCount: number;
+      rootCount: number;
+      leafCount: number;
+      blockerCount: number;
+      warningCount: number;
+      issues: string[];
+    };
     validation?: {
       status: "valid" | "blocked" | "insufficient";
       blockerCount: number;
