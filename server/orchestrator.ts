@@ -309,12 +309,34 @@ function formatContext(context: AgentProjectContext) {
   const eapSnapshot = context.evidence?.eapSnapshot ?? [];
   const eapNodeCount = context.evidence?.eapNodeCount;
   const eapSnapshotComplete = eapNodeCount !== null && eapNodeCount !== undefined && eapSnapshot.length >= eapNodeCount;
+  const eapParentIds = new Set(eapSnapshot
+    .map(node => node.parentId)
+    .filter((parentId): parentId is number | string => parentId !== null && parentId !== undefined)
+    .map(String));
+  const eapLeaves = eapSnapshot.filter(node => !eapParentIds.has(String(node.id)));
+  const quantityLeaves = eapLeaves.filter(node =>
+    typeof node.unit === "string" && node.unit.trim().length > 0 &&
+    node.plannedQuantity !== null && node.plannedQuantity !== undefined &&
+    Number.isFinite(Number(node.plannedQuantity)) && Number(node.plannedQuantity) > 0
+  );
+  const dictionaryFields = ["description", "inclusions", "exclusions", "location", "responsible", "acceptanceCriteria", "unit"] as const;
+  const dictionaryCompleteLeaves = eapLeaves.filter(node =>
+    dictionaryFields.every(field => typeof node[field] === "string" && node[field]!.trim().length > 0) &&
+    node.plannedQuantity !== null && node.plannedQuantity !== undefined &&
+    Number.isFinite(Number(node.plannedQuantity)) && Number(node.plannedQuantity) > 0
+  );
   const eapInventory = eapSnapshot.length
     ? [
         `Inventário EAP enviado ao chat: ${eapSnapshot.length} de ${eapNodeCount ?? "quantidade total desconhecida"} nós${eapSnapshotComplete ? " (completo)" : " (parcial; não conclua sobre os nós não incluídos)"}.`,
-        ...eapSnapshot.map(node => `${node.code} | ${node.name} | ${node.nodeType} | pai=${node.parentId ?? "-"} | nível=${node.level}`),
+        ...eapSnapshot.map(node => `${node.code} | ${node.name} | ${node.nodeType} | pai=${node.parentId ?? "-"} | nível=${node.level} | unidade=${node.unit?.trim() || "não cadastrada"} | quantidade=${node.plannedQuantity ?? "não cadastrada"}`),
       ]
     : [`Inventário EAP enviado ao chat: nenhum nó; total local=${eapNodeCount ?? "indisponível"}.`];
+  const eapCoverage = eapSnapshot.length
+    ? [
+        `Cobertura observada nas folhas da EAP${eapSnapshotComplete ? " (inventário completo)" : " (somente nos nós recebidos; amostra parcial)"}: folhas no snapshot=${eapLeaves.length}; folhas com unidade e quantidade positiva=${quantityLeaves.length}; folhas sem ambos=${eapLeaves.length - quantityLeaves.length}; dicionário completo=${dictionaryCompleteLeaves.length}/${eapLeaves.length}. Esses números medem preenchimento, não conformidade; não presuma que unidade/quantidade sejam obrigatórias para todas as folhas sem regra aplicável.`,
+        `Folhas com unidade e quantidade positiva: ${quantityLeaves.length ? quantityLeaves.map(node => `${node.code} (${node.unit} ${node.plannedQuantity})`).join("; ") : "nenhuma no snapshot recebido"}.`,
+      ]
+    : ["Cobertura de unidade/quantidade e dicionário da EAP: não calculável sem snapshot de nós."];
   const evidence = context.evidence
     ? [
         `Fonte de evidências: ${context.evidence.source}`,
@@ -335,11 +357,7 @@ function formatContext(context: AgentProjectContext) {
         context.evidence.validation?.issues.length
           ? `Apontamentos determinísticos (EAP + CPM): ${context.evidence.validation.issues.join(" | ")}`
           : "Apontamentos determinísticos (EAP + CPM): nenhum.",
-        context.evidence.localEap
-          ? [
-              `EAP local: folhas=${context.evidence.localEap.leafCount}; folhas com dicionário completo=${context.evidence.localEap.leavesWithDictionary}; folhas sem dicionário completo=${context.evidence.localEap.leavesWithoutDictionary}; folhas com unidade+quantidade=${context.evidence.localEap.leavesWithQuantity}; folhas sem unidade+quantidade=${context.evidence.localEap.leavesWithoutQuantity}; validação estrutural local=${context.evidence.localEap.structureValidation.status} (${context.evidence.localEap.structureValidation.issueCount} apontamento(s))`,
-            ].join("\n")
-          : "Cobertura complementar do dicionário EAP: não calculada nesta consulta.",
+        ...eapCoverage,
         context.evidence.localBudget
           ? context.evidence.localBudget.versionId
             ? `Orçamento local: versão=${context.evidence.localBudget.versionId}; status=${context.evidence.localBudget.versionStatus ?? "não informado"}; itens=${context.evidence.localBudget.itemCount ?? "não informado"}; itens vinculados à EAP=${context.evidence.localBudget.mappedItemCount ?? "não informado"}; itens sem vínculo=${context.evidence.localBudget.unmappedItemCount ?? "não informado"}`
@@ -1539,6 +1557,8 @@ function buildSystem(
 
   const base = [
     "Você é Arquimedes, agente de engenharia de planejamento da Plataforma Obras.",
+    "Não afirme histórico da obra, versão anterior, origem residencial/comercial, causa de mudança ou premissa passada sem citar uma evidência rastreável da consulta atual (registro, documento, código ou mensagem do engenheiro). Memória e mensagens antigas não comprovam o estado atual nem a origem do escopo. Sem fonte, diga 'origem não verificada nesta consulta'.",
+    "Ao informar cobertura de unidade/quantidade, use somente a contagem e os códigos explícitos no contexto atual; identifique população e completude do inventário. Cobertura mede preenchimento, não conformidade. Não classifique ausência como problema sem regra aplicável registrada; com amostra parcial, não extrapole para toda a EAP.",
     "Planejamento de cronograma local não depende de vínculo MCP externo. Trate falhas de enriquecimento MCP como avisos, não como bloqueadores dos dados locais. Quantidade/unidade ausente impede cálculo quantitativo, mas não todo cenário de cronograma: se o engenheiro pedir, durações estimadas didáticas podem ser usadas, sempre rotuladas com base e validação pendente, nunca como fato ou produtividade medida.",
     "BOOTSTRAP DO CÉREBRO MESTRE:\n" + bootstrapEnxuto,
     `Data e hora atuais fornecidas pelo runtime: ${now.human} (${now.iso}).`,

@@ -42,7 +42,7 @@ describe("runProjectOrchestrator", () => {
     const nodes = [
       { id: 1, code: "1", name: "Edifício", parentId: null, level: 1, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
       { id: 2, code: "1.1", name: "Estrutura", parentId: 1, level: 2, nodeType: "grupo", location: null, responsible: null, unit: null, plannedQuantity: null, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
-      { id: 3, code: "1.1.1", name: "Fundação", parentId: 2, level: 3, nodeType: "pacote", location: null, responsible: null, unit: "m³", plannedQuantity: 12, description: null, inclusions: null, exclusions: null, acceptanceCriteria: null, scopeStatus: "rascunho", decompositionBasis: null },
+      { id: 3, code: "1.1.1", name: "Fundação", parentId: 2, level: 3, nodeType: "pacote", location: "Bloco A", responsible: "Engenharia", unit: "m³", plannedQuantity: 12, description: "Execução de fundações", inclusions: "Blocos e baldrames", exclusions: "Estacas", acceptanceCriteria: "Conforme projeto", scopeStatus: "rascunho", decompositionBasis: null },
     ];
     const localContext: AgentProjectContext = {
       ...context,
@@ -54,6 +54,15 @@ describe("runProjectOrchestrator", () => {
         warnings: [],
         errors: [],
         eapSnapshot: nodes,
+        localEap: {
+          nodeCount: 3,
+          leafCount: 1,
+          leavesWithDictionary: 1,
+          leavesWithoutDictionary: 0,
+          leavesWithQuantity: 1,
+          leavesWithoutQuantity: 0,
+          structureValidation: { status: "valid", issueCount: 0 },
+        },
         eapStructuralValidation: {
           status: "valid",
           nodeCount: nodes.length,
@@ -100,6 +109,11 @@ describe("runProjectOrchestrator", () => {
     expect(systemPrompt).toContain("Validação estrutural local da EAP: válida");
     expect(systemPrompt).toContain("3 nós; raízes=1; folhas=1; bloqueadores=0; avisos=0");
     expect(systemPrompt).toContain("1.1.1 | Fundação | pacote | pai=2 | nível=3");
+    expect(systemPrompt).toContain("1.1.1 | Fundação | pacote | pai=2 | nível=3 | unidade=m³ | quantidade=12");
+    expect(systemPrompt).toContain("folhas com unidade e quantidade positiva=1; folhas sem ambos=0; dicionário completo=1/1");
+    expect(systemPrompt).toContain("1.1.1 (m³ 12)");
+    expect(systemPrompt).toContain("preenchimento, não conformidade");
+    expect(systemPrompt).toContain("origem não verificada nesta consulta");
     expect(systemPrompt).toContain("Prontidão do cronograma (EAP + atividades/CPM): insufficient");
     expect(systemPrompt).not.toContain("Validação estrutural da EAP: não executada");
   });
