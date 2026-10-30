@@ -431,3 +431,11 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 - Mudança local na branch limpa `fix/eap-overlap-noise`, baseada no commit publicado `2aff9ea`; sem commit, merge ou deploy.
 - A EAP online permanece v2 em elaboração; não foi aprovada nem recebeu baseline.
 - A tela online ainda mostrava 28 apontamentos após as edições de escopo; verificar novamente após integrar e publicar o código.
+
+## 30/out/2026 — alinhar o diagnóstico do Arquimedes à tela da EAP
+
+- Incidente: na EAP v2 da PROJETO ESCOLA ARQUIMEDES, a tela mostrava 22 apontamentos enquanto a análise local do Arquimedes declarou zero.
+- Causa: `analyzeEapLocally` chamava apenas `validateEap` (estrutura); o painel usa `validateEapForApproval`, que também verifica dicionário e escopo.
+- Correção: o agente passa a receber o mesmo conjunto estrutural, de dicionário e escopo da tela. Os avisos são mantidos como indícios para julgamento de engenharia, sem bloqueio automático por semântica.
+- Regra permanente: “zero estrutural” não equivale a “zero apontamentos”. Toda auditoria deve citar os códigos e mensagens da lista do painel ou declarar que não conseguiu recuperá-los.
+- Regressão: `server/agent/core/engineering-capabilities.test.ts` cobre alerta de possível sobreposição no resultado da análise local.

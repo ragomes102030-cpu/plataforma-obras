@@ -29,8 +29,18 @@ describe("internal engineering capabilities", () => {
 
   it("accepts a valid single-root EAP locally", () => {
     const result = analyzeEapLocally([
-      { id: 1, projectId: 1, parentId: null, code: "1", name: "Obra", level: 1, nodeType: "grupo", unit: null, plannedQuantity: null },
-      { id: 2, projectId: 1, parentId: 1, code: "1.1", name: "Fundação", level: 2, nodeType: "pacote", unit: null, plannedQuantity: null },
+      {
+        id: 1, projectId: 1, parentId: null, code: "1", name: "Obra", level: 1,
+        nodeType: "grupo", unit: null, plannedQuantity: null, decompositionBasis: "project",
+        description: "Obra-modelo.", inclusions: "Implantação e fundações.",
+      },
+      {
+        id: 2, projectId: 1, parentId: 1, code: "1.1", name: "Fundação", level: 2,
+        nodeType: "pacote", unit: null, plannedQuantity: null, decompositionBasis: "deliverable",
+        description: "Execução das fundações previstas no projeto aprovado.",
+        inclusions: "Elementos de fundação previstos em projeto.", exclusions: "Estrutura acima das fundações.",
+        responsible: "Responsável a designar", acceptanceCriteria: "Conforme projeto aprovado.",
+      },
     ]);
     expect(result.valid).toBe(true);
     expect(result.blockers).toBe(0);
@@ -43,6 +53,36 @@ describe("internal engineering capabilities", () => {
     ]);
     expect(result.valid).toBe(false);
     expect(result.blockers).toBeGreaterThan(0);
+  });
+
+  it("returns scope overlap warnings alongside structural EAP validation", () => {
+    const result = analyzeEapLocally([
+      {
+        id: 1, projectId: 1, parentId: null, code: "1", name: "Obra", level: 1,
+        nodeType: "grupo", unit: null, plannedQuantity: null,
+        description: "Escopo da obra", inclusions: "Paredes internas e externas.",
+        decompositionBasis: "project",
+      },
+      {
+        id: 2, projectId: 1, parentId: 1, code: "1.1", name: "Parede A", level: 2,
+        nodeType: "pacote", unit: null, plannedQuantity: null,
+        description: "Execução de revestimento e pintura da parede.",
+        inclusions: "Aplicar revestimento e pintura da parede.",
+        decompositionBasis: "deliverable",
+      },
+      {
+        id: 3, projectId: 1, parentId: 1, code: "1.2", name: "Parede B", level: 2,
+        nodeType: "pacote", unit: null, plannedQuantity: null,
+        description: "Execução de revestimento e pintura da parede.",
+        inclusions: "Aplicar revestimento e pintura da parede.",
+        decompositionBasis: "deliverable",
+      },
+    ]);
+
+    expect(result.warnings).toBeGreaterThan(0);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "eap_scope_overlap_evidence", severity: "warning" }),
+    ]));
   });
 });
 
