@@ -409,4 +409,6 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 
 **Correção:** o runtime reconhece `finish_reason=length`, pede até duas continuações sem ferramentas e marca claramente a resposta como parcial se o limite persistir. Auditorias e decisões de planejamento agora pedem uma síntese curta com etapa, fonte/versão, achados com impacto, proposta, lacunas e próxima decisão. A skill define a Plataforma Obras como fonte e motor primários; MCPs complementam o trabalho e não bloqueiam capacidades locais.
 
-**Validação:** revisão estática da alteração e `git diff --check`; testes não executados nesta rodada. Código local na branch `fix/arquimedes-continuation`; sem commit, deploy ou alteração de dados ao vivo.
+**Critérios operacionais:** análise somente leitura; proposta com evidência e impacto; ordem explícita do engenheiro antes de aplicar rascunho; releitura e validação após a gravação; auditoria com resultado. Aprovação da EAP e baseline continuam gates independentes.
+
+**Validação:** seis testes do runtime ReAct passaram, incluindo continuação sem ferramentas e aviso após duas tentativas; `pnpm check` e `git diff --check` passaram. Aviso de ambiente: projeto exige Node 22.x, sessão usa Node 24.21.0. Código local na branch `fix/arquimedes-continuation`; sem deploy ou alteração de dados ao vivo.

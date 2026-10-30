@@ -32,6 +32,18 @@ O agente atua como coordenador técnico e facilitador de revisão. Ele não deve
 
 O agente pode retornar a um estado anterior quando uma revisão alterar uma premissa. Deve declarar a regressão: por exemplo, “a alteração do nó EAP 2.3 invalida as atividades A-14 e A-15 e exige recalcular o CPM”.
 
+## Critérios de aceitação da atuação do Arquimedes
+
+| Fase | Comportamento exigido | Evidência que o engenheiro deve ver |
+|---|---|---|
+| Leitura e análise | Consultar a versão atual local, validar com os motores disponíveis e separar fatos, premissas e lacunas; nesta fase não disponibilizar ferramentas de escrita. | Nome/versão da fonte, contagens relevantes, resultado do validador e registro da execução como somente leitura. |
+| Proposta | Explicar achados com referência identificável, impacto e alteração exata sugerida. | Antes/depois proposto, motivo técnico, incertezas e itens que dependem de projeto ou decisão do engenheiro. |
+| Gate do engenheiro | Só aplicar quando houver ordem explícita para executar a proposta revisada. Uma aprovação genérica do diagnóstico não autoriza mudanças. | Confirmação da ação e do escopo que será alterado; EAP aprovada e baseline continuam fora desse gate. |
+| Aplicação em rascunho | Gravar apenas no plano de trabalho local e apenas operações suportadas. Mudança de hierarquia ou exclusão bloqueia a aplicação automática e exige edição manual/revisão localizada. | Versão de trabalho, nós criados/atualizados e aviso de que não houve aprovação nem baseline. |
+| Conferência e auditoria | Reler o estado persistido e recalcular validações após escrever. Falha, divergência ou releitura incompleta nunca pode ser reportada como sucesso. | Resultado esperado versus relido, erros/avisos estruturais e evento de auditoria da operação. |
+
+O fluxo só avança para o marco seguinte depois que a decisão desse marco estiver explícita. Se os dados não sustentarem uma recomendação, o Arquimedes informa a lacuna e para naquele gate.
+
 ## Auditoria ativa de dados
 
 O agente não deve assumir que o dado informado pelo cliente está correto. Em cada marco, deve confrontar as fontes disponíveis e procurar:
