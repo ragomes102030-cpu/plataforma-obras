@@ -1,4 +1,4 @@
-import { GitBranch, RefreshCw } from "lucide-react";
+import { GitBranch, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 
@@ -38,6 +38,15 @@ export function AbaDependencias({ projetoId }: Props) {
       setMensagem(result.warning
         ? `Dependência adicionada, mas a rede ainda está incompleta. O CPM continuará bloqueado até conectar todos os blocos. ${result.warning}`
         : "Dependência adicionada. A rede está conectada; recalcule o CPM para validar as datas.");
+      await utils.planning.list.invalidate({ projectId: projetoId });
+      await utils.planning.grade.invalidate({ projectId: projetoId });
+    },
+    onError: error => setMensagem(error.message),
+  });
+
+  const remover = trpc.planning.deleteDependency.useMutation({
+    onSuccess: async () => {
+      setMensagem("Dependência removida e registrada na auditoria. O CPM ficou desatualizado; recalcule depois de revisar a rede.");
       await utils.planning.list.invalidate({ projectId: projetoId });
       await utils.planning.grade.invalidate({ projectId: projetoId });
     },
@@ -188,6 +197,7 @@ export function AbaDependencias({ projetoId }: Props) {
                       <th>Tipo</th>
                       <th>Lag</th>
                       <th>Sucessora</th>
+                      <th aria-label="Ações" />
                     </tr>
                   </thead>
                   <tbody>
@@ -202,6 +212,19 @@ export function AbaDependencias({ projetoId }: Props) {
                         </td>
                         <td title={nomeAtividade(activities, dependency.successorId)}>
                           {nomeAtividade(activities, dependency.successorId)}
+                        </td>
+                        <td className="pl-dep-acoes">
+                          <button
+                            type="button"
+                            className="pl-dep-remover"
+                            aria-label={`Remover vínculo ${nomeAtividade(activities, dependency.predecessorId)} para ${nomeAtividade(activities, dependency.successorId)}`}
+                            title="Remover este vínculo da versão de trabalho"
+                            disabled={remover.isPending}
+                            onClick={() => remover.mutate({ projectId: projetoId, dependencyId: dependency.id })}
+                          >
+                            <Trash2 size={14} />
+                            <span>Remover</span>
+                          </button>
                         </td>
                       </tr>
                     ))}

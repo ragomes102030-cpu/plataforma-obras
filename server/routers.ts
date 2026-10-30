@@ -5795,6 +5795,57 @@ export const appRouter = router({
         const warning = validation.issues.find(issue => issue.code === "disconnected_network")?.message ?? null;
         return { id: createdId.id, warning };
       }),
+    deleteDependency: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), dependencyId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
+        if (versionId == null) throw conflict("Não há versão de trabalho ativa para editar dependências.");
+        const [version] = await db
+          .select({ status: projectPlanVersions.status })
+          .from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id, versionId), eq(projectPlanVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!version || !["draft", "proposed"].includes(version.status)) {
+          throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho antes de editar dependências.");
+        }
+        const result = await db.transaction(async tx => {
+          const [removed] = await tx
+            .delete(scheduleDependencies)
+            .where(and(
+              eq(scheduleDependencies.id, input.dependencyId),
+              eq(scheduleDependencies.projectId, input.projectId),
+              eq(scheduleDependencies.versionId, versionId),
+            ))
+            .returning({
+              id: scheduleDependencies.id,
+              predecessorId: scheduleDependencies.predecessorId,
+              successorId: scheduleDependencies.successorId,
+              type: scheduleDependencies.type,
+              lag: scheduleDependencies.lag,
+            });
+          if (!removed) throw notFound("Dependência não encontrada na versão de trabalho desta obra.");
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "schedule_dependency_removed",
+            payload: {
+              dependencyId: removed.id,
+              predecessorId: removed.predecessorId,
+              successorId: removed.successorId,
+              type: removed.type,
+              lag: removed.lag,
+              versionId,
+              at: new Date().toISOString(),
+            },
+          });
+          return removed;
+        });
+        await markCpmStaleForVersion(db, input.projectId, versionId);
+        return { deleted: true as const, dependency: result };
+      }),
     createDependencies: protectedProcedure
       .input(
         z.object({
