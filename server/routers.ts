@@ -65,7 +65,12 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { buildAgentProjectContext } from "./agent/context-builder";
-import { mergeAgentConversations, mergePersistedWithIncoming } from "./agent-history";
+import {
+  filterAgentRunsByConversation,
+  LEGACY_AGENT_CONVERSATION_ID,
+  mergeAgentConversations,
+  mergePersistedWithIncoming,
+} from "./agent-history";
 import { localDatabaseEvidenceSource } from "./construction/local-database-source";
 import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
@@ -7404,10 +7409,14 @@ export const appRouter = router({
         return { approved: true as const };
       }),
     history: protectedProcedure
-      .input(z.object({ projectId: z.number().int().positive() }))
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        conversationId: z.string().trim().min(1).max(80).optional(),
+      }))
       .query(async ({ ctx, input }) => {
+        const conversationId = input.conversationId ?? LEGACY_AGENT_CONVERSATION_ID;
         const db = await getDb();
-        if (!db) return { messages: [], requestId: null, status: null as string | null };
+        if (!db) return { messages: [], requestId: null, status: null as string | null, conversationId };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const runs = await db
           .select({
@@ -7426,17 +7435,19 @@ export const appRouter = router({
           )
           .orderBy(desc(agentRuns.createdAt))
           .limit(100);
-        if (runs.length === 0) {
-          return { messages: [], requestId: null, status: null as string | null };
+        const conversationRuns = filterAgentRunsByConversation(runs, conversationId);
+        if (conversationRuns.length === 0) {
+          return { messages: [], requestId: null, status: null as string | null, conversationId };
         }
-        const messages = mergeAgentConversations(runs);
-        const latest = runs[0];
-        return { messages, requestId: latest.requestId, status: latest.status };
+        const messages = mergeAgentConversations(conversationRuns);
+        const latest = conversationRuns[0];
+        return { messages, requestId: latest.requestId, status: latest.status, conversationId };
       }),
     chat: protectedProcedure
       .input(
         z.object({
           projectId: z.number().int().positive(),
+          conversationId: z.string().trim().min(1).max(80).optional(),
           messages: z
             .array(
               z.object({
@@ -7449,6 +7460,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const conversationId = input.conversationId ?? LEGACY_AGENT_CONVERSATION_ID;
         const db = await getDb();
         let project;
         let activities;
@@ -7599,13 +7611,14 @@ export const appRouter = router({
             )
             .orderBy(desc(agentRuns.createdAt))
             .limit(100);
-          persistedMessages = mergeAgentConversations(previousRuns.map(run => ({
+          const conversationRuns = filterAgentRunsByConversation(previousRuns.map(run => ({
             requestId: "",
             status: run.status,
             contextJson: run.contextJson,
             resultJson: run.resultJson,
             errorMessage: run.errorMessage,
-          })));
+          })), conversationId);
+          persistedMessages = mergeAgentConversations(conversationRuns);
         }
         const messagesWithHistory = mergePersistedWithIncoming(
           persistedMessages,
@@ -7625,6 +7638,7 @@ export const appRouter = router({
             evidence
           ),
           messages: messagesWithHistory,
+          conversationId,
           mcpProjectIds,
           requestId: requestIdFrom(ctx),
         });

@@ -77,6 +77,7 @@ type StartAgentExecutionInput = {
   userIsAdmin?: boolean;
   context: AgentProjectContext;
   messages: AgentMessage[];
+  conversationId?: string;
   mcpProjectIds: Partial<Record<ToolDomain, string>>;
   requestId?: string;
   deps?: OrchestratorDeps;
@@ -313,6 +314,7 @@ export async function startAgentExecution(input: StartAgentExecutionInput) {
       contextJson: safeJson({
         context: input.context,
         messages: input.messages,
+        conversationId: input.conversationId,
         mcpProjectIds: input.mcpProjectIds,
       }),
       startedAt,

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mergeAgentConversations, restoreAgentConversation } from "./agent-history";
+import {
+  filterAgentRunsByConversation,
+  LEGACY_AGENT_CONVERSATION_ID,
+  mergeAgentConversations,
+  restoreAgentConversation,
+} from "./agent-history";
 
 describe("restoreAgentConversation", () => {
   it("recupera a conversa persistida e a resposta final sem alterar o estado da obra", () => {
@@ -148,5 +153,33 @@ describe("mergePersistedWithIncoming", () => {
       ...persisted,
       { role: "user", content: "Pergunta 2" },
     ]);
+  });
+});
+
+describe("isolamento das conversas do Arquimedes", () => {
+  const runs = [
+    {
+      requestId: "newer",
+      status: "respondido",
+      contextJson: JSON.stringify({ conversationId: "sessao-nova", messages: [] }),
+      resultJson: JSON.stringify({ content: "Resposta nova" }),
+    },
+    {
+      requestId: "older",
+      status: "respondido",
+      contextJson: JSON.stringify({ messages: [{ role: "user", content: "Histórico antigo" }] }),
+      resultJson: JSON.stringify({ content: "Resposta antiga" }),
+    },
+  ];
+
+  it("mantém o histórico de sessões novas isolado das execuções antigas", () => {
+    expect(filterAgentRunsByConversation(runs, "sessao-nova").map(run => run.requestId)).toEqual(["newer"]);
+    expect(filterAgentRunsByConversation(runs, LEGACY_AGENT_CONVERSATION_ID).map(run => run.requestId)).toEqual(["older"]);
+  });
+
+  it("mantém contexto inválido na sessão legada sem contaminar sessões novas", () => {
+    const malformed = [{ requestId: "broken", status: "falhou", contextJson: "não é json", resultJson: null }];
+    expect(filterAgentRunsByConversation(malformed, LEGACY_AGENT_CONVERSATION_ID)).toEqual(malformed);
+    expect(filterAgentRunsByConversation(malformed, "sessao-nova")).toEqual([]);
   });
 });

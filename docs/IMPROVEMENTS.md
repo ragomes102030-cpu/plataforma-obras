@@ -1,6 +1,16 @@
 # Melhorias e Mudanças
 
-> **Documento normativo.** Última atualização: 29/10/2026.
+> **Documento normativo.** Última atualização: 30/10/2026.
+
+## 30/out/2026 — Separar conversas do Arquimedes por sessão
+
+**Sintoma:** a janela do Arquimedes continuava exibindo respostas longas de etapas antigas e levava instruções anteriores para novas perguntas, como uma revisão de escopo depois de trabalhar na EAP.
+
+**Causa:** o histórico era reconstruído por obra e usuário, sem identificador de conversa. O limite de 20 mensagens reduzia o tamanho, mas não isolava etapas nem evitava que mensagens recentes de outra etapa ocupassem o contexto.
+
+**Correção:** cada conversa recebe um identificador salvo no navegador e no contexto dos runs. A consulta e a reconstrução do contexto filtram por esse identificador. O histórico legado continua acessível como “Histórico anterior”; novas conversas começam sem misturar as mensagens antigas. A janela mostra as seis mensagens mais recentes por padrão e permite expandir as anteriores.
+
+**Regressão:** testes do histórico verificam o isolamento de sessões novas e a preservação do legado; testes da janela verificam a retomada por sessão e o recolhimento das mensagens antigas. Testes focados e `pnpm check` passaram. A validação visual e o deploy ainda dependem da publicação desta alteração.
 
 ## 29/out/2026 — Não confundir restrição de baseline com proibição de editar a EAP
 
