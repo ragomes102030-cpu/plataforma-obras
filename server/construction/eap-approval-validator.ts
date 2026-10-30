@@ -120,6 +120,7 @@ export function validateEapForBaseline(
       issue.code === "eap_scope_coverage_not_evidenced" ||
       issue.code === "eap_child_scope_not_evidenced" ||
       issue.code === "eap_scope_overlap_evidence" ||
+      issue.code === "eap_child_outside_parent_scope" ||
       issue.code === "eap_mixed_decomposition_basis" ||
       issue.code === "eap_group_without_decomposition"
     ))

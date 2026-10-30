@@ -274,8 +274,11 @@ export function validateEapScope(
         if (parentExclusions.length && overlaps(parentExclusions, childScopeClauses[i]!)) {
           issues.push({
             code: "eap_child_outside_parent_scope",
-            severity: "error",
-            message: `O filho ${childNodes[i]!.code} contém escopo textual que coincide com uma exclusão do pai ${node.code}. Isso indica trabalho fora do escopo aprovado do pai.`,
+            // Correspondência lexical é indício para revisão, não prova de que
+            // o pacote está fora do escopo. Exclusões e inclusões longas podem
+            // compartilhar termos genéricos sem contradizer seus limites.
+            severity: "warning",
+            message: `Há possível coincidência textual entre o filho ${childNodes[i]!.code} e uma exclusão do pai ${node.code}. Revise as fronteiras de escopo antes de congelar a baseline; a coincidência de palavras, sozinha, não prova conflito.`,
             entityRef: String(childNodes[i]!.id),
           });
         }
