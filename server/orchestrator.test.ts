@@ -274,7 +274,7 @@ describe("runProjectOrchestrator", () => {
     let llmCallCount = 0;
     const result = await runProjectOrchestrator(
       context,
-      [{ role: "user", content: "Preencha a EAP local com a estrutura suportada pelo escopo" }],
+      [{ role: "user", content: "Execute agora apenas a atualização reversível do pacote folha 1.6.1 na EAP local, preservando o rascunho sem aprovar a EAP ou criar baseline." }],
       {
         localProjectId: 25,
         userId: 42,
