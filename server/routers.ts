@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { selectOperationalPlanning } from "../shared/operational-planning";
 import { z } from "zod";
-import type { ArquimedesEapProposal } from "./agent/core/types";
+import type { ArquimedesEapProposal, ArquimedesProjectContext } from "./agent/core/types";
+import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
+import { GatewayArquimedesProvider } from "./agent/providers/gateway-provider";
 import {
   projects,
   productionEntries,
@@ -90,6 +92,7 @@ import { isTerminalEapNode, resolveActivityDuration } from "./construction/activ
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
 import { applyEapProposalToDraft, eapProposalInput } from "./construction/eap-proposal-apply";
+import { buildEapResolutionPlan } from "./construction/eap-resolution-engine";
 import { resolveWbsNodeInVersion } from "./construction/versioned-wbs";
 
 /**
@@ -2101,7 +2104,7 @@ export const appRouter = router({
       const db=await getDb(); if(!db) return {proposal:null,createdAt:null,mode:"analisar",resolutionCycle:null};
       await assertAccessibleProject(db,input.projectId,ctx.user.id);
       const rows=await db.select().from(agentMemories).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed"))).orderBy(desc(agentMemories.updatedAt)).limit(1);
-      return {proposal:rows[0]?(parseJsonValue(rows[0].valueJson) as ArquimedesEapProposal):null,createdAt:rows[0]?.updatedAt??null,mode:"analisar",resolutionCycle:null};
+      return {proposal:rows[0]?(parseJsonValue(rows[0].valueJson) as ArquimedesEapProposal):null,createdAt:rows[0]?.updatedAt??null,mode:rows[0]?.sourceRef==="arquimedes-eap-review"?"resolver_bloqueios":"analisar",resolutionCycle:null};
     }),
     analisarEapComArquimedes: protectedProcedure.input(z.object({projectId:z.number().int().positive(),mode:z.enum(["analisar","resolver_bloqueios"]).optional()})).mutation(async({ctx,input})=>{
       const db=await getDb(); if(!db) throw new Error("Banco de dados não configurado."); await assertAccessibleProject(db,input.projectId,ctx.user.id);
@@ -2110,9 +2113,88 @@ export const appRouter = router({
         ? await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,current.id))).orderBy(wbsNodes.sortOrder,wbsNodes.id)
         : [];
       const [project]=await db.select({name:projects.name,descricao:projects.descricao,tipoDeObra:projects.tipoDeObra}).from(projects).where(eq(projects.id,input.projectId)).limit(1);
-      const proposal=buildInitialEapProposal(project ?? {}, nodes.length > 0);
+      if(!project) throw notFound("Obra não encontrada.");
+      let proposal: ArquimedesEapProposal;
+      if (nodes.length > 0) {
+        const codeById = new Map(nodes.map(node => [node.id, node.code]));
+        const currentNodes = nodes.map(node => ({
+          id: node.id,
+          code: node.code,
+          name: node.name,
+          parentId: node.parentId,
+          level: node.level,
+          nodeType: node.nodeType,
+          unit: node.unit,
+          plannedQuantity: node.plannedQuantity,
+          location: node.location,
+          responsible: node.responsible,
+          description: node.description,
+          inclusions: node.inclusions,
+          exclusions: node.exclusions,
+          acceptanceCriteria: node.acceptanceCriteria,
+          decompositionBasis: node.decompositionBasis,
+        }));
+        const validation = validateEapForApproval(nodes);
+        const resolutionIssues = validation.issues.map(issue => ({
+          code: issue.code,
+          message: issue.message,
+          entityRef: issue.entityRef,
+        }));
+        const resolutionPlan = buildEapResolutionPlan(
+          nodes.map(node => ({
+            nodeId: node.id,
+            code: node.code,
+            name: node.name,
+            parentCode: node.parentId == null ? null : codeById.get(node.parentId) ?? null,
+            description: node.description,
+            inclusions: node.inclusions,
+            exclusions: node.exclusions,
+            responsible: node.responsible,
+            acceptanceCriteria: node.acceptanceCriteria,
+          })),
+          resolutionIssues,
+        );
+        const resolutionTargets = Array.from(new Set(resolutionPlan.flatMap(group => group.affectedNodeIds)))
+          .map(nodeId => {
+            const node = nodes.find(item => item.id === nodeId);
+            if (!node) return null;
+            return {
+              nodeId: node.id,
+              code: node.code,
+              name: node.name,
+              parentCode: node.parentId == null ? null : codeById.get(node.parentId) ?? null,
+              description: node.description,
+              inclusions: node.inclusions,
+              exclusions: node.exclusions,
+            };
+          })
+          .filter((node): node is NonNullable<typeof node> => node !== null);
+        const context: ArquimedesProjectContext = {
+          projectId: input.projectId,
+          planVersionId: current?.id ?? null,
+          name: project.name,
+          description: project.descricao,
+          tipoDeObra: project.tipoDeObra,
+          stage: "EAP_REVISAO",
+          wbs: currentNodes.map(node => ({
+            ...node,
+            plannedQuantity: node.plannedQuantity == null ? null : String(node.plannedQuantity),
+          })),
+        };
+        const generated = await proposeEapWithArquimedes(context, new GatewayArquimedesProvider(), {
+          mode: input.mode === "resolver_bloqueios" ? "resolver_bloqueios" : "analisar",
+          resolutionIssues,
+          resolutionTargets,
+          resolutionPlan,
+        });
+        proposal = parseEapProposal(generated.raw);
+        proposal.resolutionPlan = resolutionPlan;
+        proposal = validateAndNormalizeEapProposal(nodes, proposal);
+      } else {
+        proposal=buildInitialEapProposal(project, false);
+      }
       await db.update(agentMemories).set({status:"obsolete",updatedAt:new Date()}).where(and(eq(agentMemories.projectId,input.projectId),eq(agentMemories.ownerUserId,ctx.user.id),eq(agentMemories.category,"eap_proposal"),eq(agentMemories.status,"proposed")));
-      await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:"eap-estrutura-base-por-tipologia",confidence:"medium",status:"proposed"});
+      await db.insert(agentMemories).values({projectId:input.projectId,ownerUserId:ctx.user.id,scope:"project",category:"eap_proposal",memoryKey:"latest",valueJson:JSON.stringify(proposal),sourceType:"arquimedes",sourceRef:nodes.length>0?"arquimedes-eap-review":"eap-estrutura-base-por-tipologia",confidence:"medium",status:"proposed"});
       return {proposal};
     }),
     aplicarPropostaEap: protectedProcedure
