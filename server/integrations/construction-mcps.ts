@@ -75,6 +75,15 @@ export type ConstructionMcpHomologationResult = {
 
 export const MCP_TOOL_POLICY = {
   readOnly: new Set([
+    // Public MCP contract: stateless engineering calculations, no project writes.
+    "avaliar_evidencia_eap",
+    "validar_estrutura_eap",
+    "propor_eap_por_prompt",
+    "calcular_duracao_com_evidencia",
+    "calcular_cpm_com_evidencia",
+    "calcular_cpm_com_calendario",
+    "comparar_baseline_sem_persistencia",
+    "calcular_lob_com_vinculos",
     "get_eap_tree",
     "get_eap_node",
     "listar_por_tipo_frente",
