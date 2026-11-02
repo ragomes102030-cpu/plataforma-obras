@@ -89,14 +89,34 @@ GITHUB_CLIENT_ID=...
 GITHUB_CLIENT_SECRET=...
 # Front, back e banco debaixo do mesmo domínio.
 PUBLIC_APP_URL=https://plataforma-obras-3.onrender.com
-MCP_EAP_URL=https://mcp-eap-server-rafael-5864.vercel.app
-MCP_CRONOGRAMA_URL=https://mcp-cronograma-server-rafael-5864.vercel.app
-MCP_GANTT_LOB_URL=https://mcp-gantt-lob-server-rafael-5864.vercel.app
+MCP_EAP_URL=https://arquimedes-mcp-eap.vercel.app/public-mcp
+MCP_CRONOGRAMA_URL=https://arquimedes-mcp-cronograma.vercel.app/public-mcp
+MCP_GANTT_LOB_URL=https://arquimedes-mcp-gantt-lob.vercel.app/public-mcp
 ```
 
 As três `MCP_*_URL` apontam para servidores MCP externos que continuam no ar e
 não fazem parte do deploy principal. O resto da stack é só GitHub + Render +
 Supabase (`docs/STACK-ATUAL.md`).
+
+**Endpoint exato, sem sufixo adicional**: o cliente aceita `/public-mcp`
+sem autenticação (cálculos em memória) ou `/mcp` com credencial de acesso
+privada. Os caminhos públicos acima foram testados com `initialize` e
+`tools/list` em 02/11/2026. Cada servidor é independente.
+
+Para funcionalidades privadas persistentes, usar explicitamente os endpoints
+`https://arquimedes-mcp-eap.vercel.app/mcp`,
+`https://arquimedes-mcp-cronograma.vercel.app/mcp` e
+`https://arquimedes-mcp-gantt-lob.vercel.app/mcp` e configurar as variáveis
+**somente no backend** `MCP_EAP_TOKEN`, `MCP_CRONOGRAMA_TOKEN` e
+`MCP_GANTT_LOB_TOKEN`. Os tokens pertencem aos servidores MCP; não são
+`TURSO_AUTH_TOKEN`. Nunca enviar tokens para a interface.
+
+A consulta de status MCP da Central de Comando exige que as URLs existam
+no ambiente Render e que a aplicação esteja publicada com o cliente corrigido.
+O chat do agente em `server/agent.ts` ainda não executa tools MCP:
+o gateway LLM é chamado com `tools: []`. **MCP online não equivale a
+agente usando ferramentas**, e essa integração demanda um fluxo próprio com
+permissões, escopo de obra, logs e confirmações de mutação.
 
 ### Login com GitHub: o campo que trava tudo
 
