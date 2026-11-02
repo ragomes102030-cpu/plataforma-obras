@@ -22,6 +22,7 @@ type McpClientOptions = {
   version?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  bearerToken?: string;
 };
 
 export const DEFAULT_MCP_TIMEOUT_MS = 60_000;
@@ -36,8 +37,18 @@ function parseSseOrJson(body: string): JsonRpcResponse {
 }
 
 function endpoint(baseUrl: string) {
-  const normalized = baseUrl.replace(/\/$/, "");
-  return normalized.endsWith("/mcp") ? normalized : `${normalized}/mcp`;
+  const parsed = new URL(baseUrl.trim());
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("MCP exige URL HTTP(S)");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("MCP não permite credenciais embutidas na URL");
+  }
+  const pathname = parsed.pathname.replace(/\\/+$/, "");
+  if (!pathname.endsWith("/mcp") && !pathname.endsWith("/public-mcp")) {
+    parsed.pathname = `${pathname}/mcp`;
+  }
+  return parsed.toString();
 }
 
 export class McpClient {
@@ -47,6 +58,7 @@ export class McpClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
   private readonly clientInfo: { name: string; version: string };
+  private readonly bearerToken?: string;
 
   constructor(
     private readonly baseUrl: string,
@@ -54,6 +66,7 @@ export class McpClient {
   ) {
     if (!baseUrl) throw new Error("URL do MCP não configurada");
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.bearerToken = options.bearerToken?.trim() || undefined;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
     this.clientInfo = {
       name: options.name ?? "plataforma-obras",
@@ -70,6 +83,7 @@ export class McpClient {
         headers: {
           "content-type": "application/json",
           accept: "application/json, text/event-stream",
+          ...(this.bearerToken ? { authorization: `Bearer ${this.bearerToken}` } : {}),
           ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
         },
         body: JSON.stringify(payload),
