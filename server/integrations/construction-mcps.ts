@@ -214,11 +214,12 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
 ]);
 
 export function createConstructionMcpClients() {
-  const client = (url: string, name: string) => {
+  const client = (url: string, name: string, bearerToken: string) => {
     if (url) {
       return new McpClient(url, {
         name,
         timeoutMs: ENV.mcpTimeoutMs,
+        bearerToken,
       });
     }
 
@@ -231,9 +232,9 @@ export function createConstructionMcpClients() {
   };
 
   return {
-    eap: client(ENV.mcpEapUrl, "plataforma-obras-eap"),
-    cronograma: client(ENV.mcpCronogramaUrl, "plataforma-obras-cronograma"),
-    ganttLob: client(ENV.mcpGanttLobUrl, "plataforma-obras-gantt-lob"),
+    eap: client(ENV.mcpEapUrl, "plataforma-obras-eap", ENV.mcpEapToken),
+    cronograma: client(ENV.mcpCronogramaUrl, "plataforma-obras-cronograma", ENV.mcpCronogramaToken),
+    ganttLob: client(ENV.mcpGanttLobUrl, "plataforma-obras-gantt-lob", ENV.mcpGanttLobToken),
   };
 }
 
