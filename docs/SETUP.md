@@ -113,10 +113,14 @@ Para funcionalidades privadas persistentes, usar explicitamente os endpoints
 
 A consulta de status MCP da Central de Comando exige que as URLs existam
 no ambiente Render e que a aplicação esteja publicada com o cliente corrigido.
-O chat do agente em `server/agent.ts` ainda não executa tools MCP:
-o gateway LLM é chamado com `tools: []`. **MCP online não equivale a
-agente usando ferramentas**, e essa integração demanda um fluxo próprio com
-permissões, escopo de obra, logs e confirmações de mutação.
+O **agente operacional** utiliza `server/agent-execution.ts` e
+`server/orchestrator.ts`, que consultam o catálogo e chamam ferramentas
+MCP autorizadas. `server/agent.ts` contém um caminho simplificado com
+`tools: []`, mas não deve ser confundido com o orquestrador principal.
+Os nomes atuais das ferramentas públicas (EAP/Cronograma/Gantt-LOB) estão
+na allowlist de cálculos em memória. O acesso a dados persistidos de obras
+requer URL `/mcp`, token válido, `project_id` coerente e política de
+permissões; ferramentas públicas não substituem os módulos locais.
 
 ### Login com GitHub: o campo que trava tudo
 
