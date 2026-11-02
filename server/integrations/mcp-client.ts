@@ -45,7 +45,9 @@ function endpoint(baseUrl: string) {
     throw new Error("MCP não permite credenciais embutidas na URL");
   }
   const pathname = parsed.pathname.replace(/[/]+$/, "");
-  if (!pathname.endsWith("/mcp") && !pathname.endsWith("/public-mcp")) {
+  if (pathname.endsWith("/mcp") || pathname.endsWith("/public-mcp")) {
+    parsed.pathname = pathname;
+  } else {
     parsed.pathname = `${pathname}/mcp`;
   }
   return parsed.toString();
