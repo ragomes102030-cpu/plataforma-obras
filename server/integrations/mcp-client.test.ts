@@ -266,6 +266,37 @@ describe("runConstructionMcpHomologation", () => {
     ]);
   });
 });
+describe("homologação dos MCPs públicos reais", () => {
+  it("usa dados sintéticos e não exige project_id externo", async () => {
+    const calls: Array<{ domain: string; name: string; args: Record<string, unknown> }> = [];
+    const tool = (name: string) => ({ name });
+    const mk = (domain: string, names: string[]) => ({
+      listTools: async () => names.map(tool),
+      callTool: async (name: string, args: Record<string, unknown>) => {
+        calls.push({ domain, name, args });
+        return { content: [{ type: "text", text: JSON.stringify({ persistido: false }) }] };
+      },
+    });
+    const response = await runConstructionMcpHomologation(
+      { eap: "nao-usado-eap", cronograma: "nao-usado-cron", ganttLob: "nao-usado-lob" },
+      "req-public-qa",
+      {
+        eap: mk("eap", ["validar_estrutura_eap"]),
+        cronograma: mk("cronograma", ["calcular_duracao_com_evidencia"]),
+        ganttLob: mk("ganttLob", ["listar_temas"]),
+      }
+    );
+    expect(Object.values(response.servers).every(s => s.status === "passed")).toBe(true);
+    expect(calls).toEqual([
+      { domain: "eap", name: "validar_estrutura_eap", args: { nos: [] } },
+      { domain: "cronograma", name: "calcular_duracao_com_evidencia",
+        args: { quantidade: 10, produtividade: 2, unidade: "m²",
+          unidade_produtividade: "m²/dia", fonte: "homologacao_sintetica_sem_persistencia" } },
+      { domain: "ganttLob", name: "listar_temas", args: {} },
+    ]);
+  });
+});
+
 describe("toCentralCommandMcpDomains", () => {
   it("preserva estado, latência, tentativas e ferramentas dos três MCPs", () => {
     const domains = toCentralCommandMcpDomains({
