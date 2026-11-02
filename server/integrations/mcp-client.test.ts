@@ -51,6 +51,47 @@ data: {"jsonrpc":"2.0","id":1,"result":{}}`,
     );
   });
 
+  it.each([
+    ["https://example.test", "https://example.test/mcp"],
+    ["https://example.test/mcp", "https://example.test/mcp"],
+    ["https://example.test/public-mcp", "https://example.test/public-mcp"],
+    ["https://example.test/public-mcp/", "https://example.test/public-mcp"],
+  ])("preserva endpoint MCP %s", async (configured, expected) => {
+    const requests: string[] = [];
+    const client = new McpClient(configured, {
+      fetchImpl: (async (input, init) => {
+        requests.push(String(input));
+        const payload = JSON.parse(String(init?.body));
+        if (payload.method === "initialize") {
+          return response('{"jsonrpc":"2.0","id":1,"result":{}}');
+        }
+        if (payload.method === "notifications/initialized") return response("");
+        return response('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}');
+      }) as typeof fetch,
+    });
+    await expect(client.listTools()).resolves.toEqual([]);
+    expect(requests).toEqual([expected, expected, expected]);
+  });
+
+  it("manda Bearer somente quando o backend configurou token", async () => {
+    const observed: Array<Record<string, string>> = [];
+    const client = new McpClient("https://private.example.test/mcp", {
+      bearerToken: "teste-credencial",
+      fetchImpl: (async (_url, init) => {
+        observed.push(init?.headers as Record<string, string>);
+        const payload = JSON.parse(String(init?.body));
+        if (payload.method === "initialize") {
+          return response('{"jsonrpc":"2.0","id":1,"result":{}}');
+        }
+        if (payload.method === "notifications/initialized") return response("");
+        return response('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}');
+      }) as typeof fetch,
+    });
+    await client.listTools();
+    expect(observed).toHaveLength(3);
+    expect(observed.every(headers => headers.authorization === "Bearer teste-credencial")).toBe(true);
+  });
+
   it("extrai texto de resultado MCP", () => {
     expect(
       extractMcpText({
