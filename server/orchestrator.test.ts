@@ -36,6 +36,40 @@ const catalog = {
   ganttLob: [],
 };
 
+describe("MCP público — contrato real", () => {
+  it("exibe as ferramentas de cálculo publicadas em cada domínio, sem mutações", () => {
+    const published = {
+      eap: ["avaliar_evidencia_eap", "validar_estrutura_eap", "propor_eap_por_prompt"],
+      cronograma: [
+        "calcular_duracao_com_evidencia",
+        "calcular_cpm_com_evidencia",
+        "calcular_cpm_com_calendario",
+        "comparar_baseline_sem_persistencia",
+      ],
+      ganttLob: [
+        "calcular_linha_balanco",
+        "balancear_ritmos_lob",
+        "dimensionar_equipes_lob",
+        "calcular_lob_com_vinculos",
+        "listar_temas",
+      ],
+    };
+    const toEntries = (names: string[]) =>
+      names.map(name => ({ name, description: "Cálculo somente leitura", inputSchema: { type: "object", properties: {} } }));
+    const tools = toOpenAiTools({
+      eap: toEntries(published.eap),
+      cronograma: toEntries(published.cronograma),
+      ganttLob: toEntries(published.ganttLob),
+    });
+    const names = new Set(tools.map(tool => tool.function.name));
+    for (const name of Object.values(published).flat()) {
+      expect(names.has(name), `Ferramenta ausente: ${name}`).toBe(true);
+    }
+    expect(names.has("criar_atividade")).toBe(false);
+    expect(names.has("deletar_projeto")).toBe(false);
+  });
+});
+
 describe("runProjectOrchestrator", () => {
   it("separa a validação estrutural da EAP da prontidão do cronograma no contexto do chat", async () => {
     const sentMessages: any[] = [];
