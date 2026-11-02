@@ -365,12 +365,23 @@ function errorMessage(error: unknown) {
 }
 
 const homologationProbes: Record<ConstructionMcpDomain, string[]> = {
-  eap: ["get_eap_tree", "get_eap_node", "listar_templates"],
-  cronograma: ["listar_atividades", "listar_dependencias", "listar_baselines"],
+  eap: ["get_eap_tree", "get_eap_node", "listar_templates", "validar_estrutura_eap"],
+  cronograma: ["listar_atividades", "listar_dependencias", "listar_baselines", "calcular_duracao_com_evidencia"],
   ganttLob: ["listar_temas", "calcular_linha_balanco"],
 };
 
 function probeArguments(toolName: string, externalProjectId: string) {
+  // Projetos não são acessados ao homologar os MCPs públicos.
+  if (toolName === "validar_estrutura_eap") return { nos: [] };
+  if (toolName === "calcular_duracao_com_evidencia") {
+    return {
+      quantidade: 10,
+      produtividade: 2,
+      unidade: "m²",
+      unidade_produtividade: "m²/dia",
+      fonte: "homologacao_sintetica_sem_persistencia",
+    };
+  }
   return [
     "get_eap_tree",
     "get_eap_node",
