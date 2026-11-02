@@ -51,6 +51,64 @@ data: {"jsonrpc":"2.0","id":1,"result":{}}`,
     );
   });
 
+  it.each([
+    ["https://example.test", "https://example.test/mcp"],
+    ["https://example.test/mcp", "https://example.test/mcp"],
+    ["https://example.test/public-mcp", "https://example.test/public-mcp"],
+    ["https://example.test/public-mcp/", "https://example.test/public-mcp"],
+  ])("preserva endpoint MCP %s", async (configured, expected) => {
+    const requests: string[] = [];
+    const client = new McpClient(configured, {
+      fetchImpl: (async (input, init) => {
+        requests.push(String(input));
+        const payload = JSON.parse(String(init?.body));
+        if (payload.method === "initialize") {
+          return response('{"jsonrpc":"2.0","id":1,"result":{}}');
+        }
+        if (payload.method === "notifications/initialized") return response("");
+        return response('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}');
+      }) as typeof fetch,
+    });
+    await expect(client.listTools()).resolves.toEqual([]);
+    expect(requests).toEqual([expected, expected, expected]);
+  });
+
+  it("manda Bearer somente quando o backend configurou token", async () => {
+    const observed: Array<Record<string, string>> = [];
+    const client = new McpClient("https://private.example.test/mcp", {
+      bearerToken: "teste-credencial",
+      fetchImpl: (async (_url, init) => {
+        observed.push(init?.headers as Record<string, string>);
+        const payload = JSON.parse(String(init?.body));
+        if (payload.method === "initialize") {
+          return response('{"jsonrpc":"2.0","id":1,"result":{}}');
+        }
+        if (payload.method === "notifications/initialized") return response("");
+        return response('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}');
+      }) as typeof fetch,
+    });
+    await client.listTools();
+    expect(observed).toHaveLength(3);
+    expect(observed.every(headers => headers.authorization === "Bearer teste-credencial")).toBe(true);
+  });
+
+  it("não adiciona credenciais aos servidores públicos", async () => {
+    const headers: Array<Record<string, string>> = [];
+    const client = new McpClient("https://public.example.test/public-mcp", {
+      fetchImpl: (async (_url, init) => {
+        headers.push(init?.headers as Record<string, string>);
+        const payload = JSON.parse(String(init?.body));
+        if (payload.method === "initialize") {
+          return response('{"jsonrpc":"2.0","id":1,"result":{}}');
+        }
+        if (payload.method === "notifications/initialized") return response("");
+        return response('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}');
+      }) as typeof fetch,
+    });
+    await client.listTools();
+    expect(headers.every(value => !("authorization" in value))).toBe(true);
+  });
+
   it("extrai texto de resultado MCP", () => {
     expect(
       extractMcpText({
@@ -208,6 +266,37 @@ describe("runConstructionMcpHomologation", () => {
     ]);
   });
 });
+describe("homologação dos MCPs públicos reais", () => {
+  it("usa dados sintéticos e não exige project_id externo", async () => {
+    const calls: Array<{ domain: string; name: string; args: Record<string, unknown> }> = [];
+    const tool = (name: string) => ({ name });
+    const mk = (domain: string, names: string[]) => ({
+      listTools: async () => names.map(tool),
+      callTool: async (name: string, args: Record<string, unknown>) => {
+        calls.push({ domain, name, args });
+        return { content: [{ type: "text", text: JSON.stringify({ persistido: false }) }] };
+      },
+    });
+    const response = await runConstructionMcpHomologation(
+      { eap: "nao-usado-eap", cronograma: "nao-usado-cron", ganttLob: "nao-usado-lob" },
+      "req-public-qa",
+      {
+        eap: mk("eap", ["validar_estrutura_eap"]),
+        cronograma: mk("cronograma", ["calcular_duracao_com_evidencia"]),
+        ganttLob: mk("ganttLob", ["listar_temas"]),
+      }
+    );
+    expect(Object.values(response.servers).every(s => s.status === "passed")).toBe(true);
+    expect(calls).toEqual([
+      { domain: "eap", name: "validar_estrutura_eap", args: { nos: [] } },
+      { domain: "cronograma", name: "calcular_duracao_com_evidencia",
+        args: { quantidade: 10, produtividade: 2, unidade: "m²",
+          unidade_produtividade: "m²/dia", fonte: "homologacao_sintetica_sem_persistencia" } },
+      { domain: "ganttLob", name: "listar_temas", args: {} },
+    ]);
+  });
+});
+
 describe("toCentralCommandMcpDomains", () => {
   it("preserva estado, latência, tentativas e ferramentas dos três MCPs", () => {
     const domains = toCentralCommandMcpDomains({

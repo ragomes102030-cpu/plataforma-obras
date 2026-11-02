@@ -75,6 +75,15 @@ export type ConstructionMcpHomologationResult = {
 
 export const MCP_TOOL_POLICY = {
   readOnly: new Set([
+    // Public MCP contract: stateless engineering calculations, no project writes.
+    "avaliar_evidencia_eap",
+    "validar_estrutura_eap",
+    "propor_eap_por_prompt",
+    "calcular_duracao_com_evidencia",
+    "calcular_cpm_com_evidencia",
+    "calcular_cpm_com_calendario",
+    "comparar_baseline_sem_persistencia",
+    "calcular_lob_com_vinculos",
     "get_eap_tree",
     "get_eap_node",
     "listar_por_tipo_frente",
@@ -214,11 +223,12 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
 ]);
 
 export function createConstructionMcpClients() {
-  const client = (url: string, name: string) => {
+  const client = (url: string, name: string, bearerToken: string) => {
     if (url) {
       return new McpClient(url, {
         name,
         timeoutMs: ENV.mcpTimeoutMs,
+        bearerToken,
       });
     }
 
@@ -231,9 +241,9 @@ export function createConstructionMcpClients() {
   };
 
   return {
-    eap: client(ENV.mcpEapUrl, "plataforma-obras-eap"),
-    cronograma: client(ENV.mcpCronogramaUrl, "plataforma-obras-cronograma"),
-    ganttLob: client(ENV.mcpGanttLobUrl, "plataforma-obras-gantt-lob"),
+    eap: client(ENV.mcpEapUrl, "plataforma-obras-eap", ENV.mcpEapToken),
+    cronograma: client(ENV.mcpCronogramaUrl, "plataforma-obras-cronograma", ENV.mcpCronogramaToken),
+    ganttLob: client(ENV.mcpGanttLobUrl, "plataforma-obras-gantt-lob", ENV.mcpGanttLobToken),
   };
 }
 
@@ -355,12 +365,23 @@ function errorMessage(error: unknown) {
 }
 
 const homologationProbes: Record<ConstructionMcpDomain, string[]> = {
-  eap: ["get_eap_tree", "get_eap_node", "listar_templates"],
-  cronograma: ["listar_atividades", "listar_dependencias", "listar_baselines"],
+  eap: ["get_eap_tree", "get_eap_node", "listar_templates", "validar_estrutura_eap"],
+  cronograma: ["listar_atividades", "listar_dependencias", "listar_baselines", "calcular_duracao_com_evidencia"],
   ganttLob: ["listar_temas", "calcular_linha_balanco"],
 };
 
 function probeArguments(toolName: string, externalProjectId: string) {
+  // Projetos não são acessados ao homologar os MCPs públicos.
+  if (toolName === "validar_estrutura_eap") return { nos: [] };
+  if (toolName === "calcular_duracao_com_evidencia") {
+    return {
+      quantidade: 10,
+      produtividade: 2,
+      unidade: "m²",
+      unidade_produtividade: "m²/dia",
+      fonte: "homologacao_sintetica_sem_persistencia",
+    };
+  }
   return [
     "get_eap_tree",
     "get_eap_node",

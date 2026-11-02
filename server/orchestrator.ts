@@ -96,6 +96,14 @@ function compactLlmContent(content: string, maxChars = MAX_LLM_MESSAGE_CHARS) {
 }
 
 const TOOL_DOMAINS = {
+  avaliar_evidencia_eap: "eap",
+  validar_estrutura_eap: "eap",
+  propor_eap_por_prompt: "eap",
+  calcular_duracao_com_evidencia: "cronograma",
+  calcular_cpm_com_evidencia: "cronograma",
+  calcular_cpm_com_calendario: "cronograma",
+  comparar_baseline_sem_persistencia: "cronograma",
+  calcular_lob_com_vinculos: "ganttLob",
   get_eap_tree: "eap",
   get_eap_node: "eap",
   listar_por_tipo_frente: "eap",

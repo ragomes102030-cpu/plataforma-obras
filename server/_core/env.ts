@@ -44,6 +44,10 @@ export const ENV = {
   mcpEapUrl: process.env.MCP_EAP_URL ?? "",
   mcpCronogramaUrl: process.env.MCP_CRONOGRAMA_URL ?? "",
   mcpGanttLobUrl: process.env.MCP_GANTT_LOB_URL ?? "",
+  // Server-only secrets; never forwarded to the browser or logged.
+  mcpEapToken: process.env.MCP_EAP_TOKEN ?? "",
+  mcpCronogramaToken: process.env.MCP_CRONOGRAMA_TOKEN ?? "",
+  mcpGanttLobToken: process.env.MCP_GANTT_LOB_TOKEN ?? "",
   priceVariationThresholdPct: Number(process.env.PRICE_VARIATION_THRESHOLD_PCT ?? "30"),
   arquimedesCodeRepository:
     process.env.ARQUIMEDES_CODE_REPOSITORY?.trim() || "ragomes102030-cpu/plataforma-obras",
