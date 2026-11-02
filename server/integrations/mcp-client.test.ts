@@ -92,6 +92,23 @@ data: {"jsonrpc":"2.0","id":1,"result":{}}`,
     expect(observed.every(headers => headers.authorization === "Bearer teste-credencial")).toBe(true);
   });
 
+  it("não adiciona credenciais aos servidores públicos", async () => {
+    const headers: Array<Record<string, string>> = [];
+    const client = new McpClient("https://public.example.test/public-mcp", {
+      fetchImpl: (async (_url, init) => {
+        headers.push(init?.headers as Record<string, string>);
+        const payload = JSON.parse(String(init?.body));
+        if (payload.method === "initialize") {
+          return response('{"jsonrpc":"2.0","id":1,"result":{}}');
+        }
+        if (payload.method === "notifications/initialized") return response("");
+        return response('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}');
+      }) as typeof fetch,
+    });
+    await client.listTools();
+    expect(headers.every(value => !("authorization" in value))).toBe(true);
+  });
+
   it("extrai texto de resultado MCP", () => {
     expect(
       extractMcpText({
