@@ -14,8 +14,8 @@ name: Backup diario do banco
 #   1. tira um dump logico do schema `public` (pg_dump 17, formato custom);
 #   2. confere que o dump tem as 40+ tabelas esperadas — dump truncado falha
 #      aqui, e nao na hora de restaurar;
-#   3. RESTAURA o dump num Postgres 17 descartavel e compara contagem de linhas
-#      com o banco de origem (`backup que nao restaura nao e backup`);
+#   3. RESTAURA o dump num Postgres 17 descartavel, confere as tabelas e as
+#      contagens. O banco de origem continua recebendo escritas durante o dump.
 #   4. criptografa o arquivo (AES256) e publica como artifact por 90 dias.
 #
 # POR QUE CRIPTOGRAFADO
@@ -225,19 +225,33 @@ jobs:
           echo "SEGUNDOS_RESTORE=$((fim - inicio))" >> "${GITHUB_ENV}"
 
           docker cp backup/linhas.sql alvo:/tmp/linhas.sql
-          docker exec alvo psql -U postgres -d postgres -t -A -F'|' -f /tmp/linhas.sql \
+          docker exec alvo psql -U postgres -d postgres -v ON_ERROR_STOP=1 -t -A -F'|' -f /tmp/linhas.sql \
             | sort > backup/linhas-restaurado.txt
 
+          restauradas="$(wc -l < backup/linhas-restaurado.txt)"
+          if [ "${restauradas}" -lt 40 ]; then
+            echo "::error::A restauracao expoe apenas ${restauradas} tabelas public."
+            exit 1
+          fi
+          for tabela in projects project_plan_versions wbs_nodes schedule_activities; do
+            linhas="$(awk -F'|' -v t="${tabela}" '$1 == t { print $2 }' backup/linhas-restaurado.txt)"
+            if [ -z "${linhas}" ] || [ "${linhas}" -le 0 ]; then
+              echo "::error::Tabela essencial ${tabela} ausente ou vazia na restauracao."
+              exit 1
+            fi
+          done
+
           docker run --rm -e "CONN=${PGCONN}" -v "${PWD}/backup:/backup" "${PGIMAGE}" \
-            sh -c 'psql "${CONN}" -t -A -F"|" -f /backup/linhas.sql' \
+            sh -c 'psql "${CONN}" -v ON_ERROR_STOP=1 -t -A -F"|" -f /backup/linhas.sql' \
             | sort > backup/linhas-origem.txt
 
           if ! diff -q backup/linhas-origem.txt backup/linhas-restaurado.txt > /dev/null; then
-            echo "::error::Contagem de linhas diverge entre origem e restaurado:"
+            # A origem e consultada DEPOIS do dump; escritas posteriores nao
+            # invalidam o snapshot restaurado.
+            echo "::warning::A origem mudou desde o dump; diferencas informativas:"
             diff backup/linhas-origem.txt backup/linhas-restaurado.txt || true
-            exit 1
           fi
-          echo "Contagem de linhas identica em $(wc -l < backup/linhas-origem.txt) tabelas."
+          echo "Restauracao consultavel em ${restauradas} tabelas; tabelas essenciais com dados."
           docker rm -f alvo > /dev/null
 
       - name: Criptografar

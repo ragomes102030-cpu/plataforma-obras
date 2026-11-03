@@ -30,8 +30,11 @@ então o que importa para reconstruir o negócio está no `public`.
    a conta `arquimedes_app` do aplicativo não consegue exportar todas as linhas.
 2. Confere o índice do dump: menos de 40 tabelas ou menos de 40 blocos de dados
    ⇒ falha. Isso pega o caso "dump saiu truncado mas com tamanho plausível".
-3. **Restaura** o dump num Postgres 17 descartável e compara a contagem de
-   linhas tabela por tabela com a origem. Divergência ⇒ falha.
+3. **Restaura** o dump num Postgres 17 descartável, consulta pelo menos 40
+   tabelas e exige dados em `projects`, `project_plan_versions`, `wbs_nodes` e
+   `schedule_activities`. Compara as contagens com a origem apenas para
+   diagnóstico: a origem continua recebendo escritas durante o dump, portanto
+   uma diferença posterior não prova defeito no arquivo.
 4. Cifra com GPG simétrico (AES256) e publica como artifact por 90 dias.
 
 O repositório é **público**. Por isso o artifact é sempre cifrado: ele contém
