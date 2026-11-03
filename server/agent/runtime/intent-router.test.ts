@@ -62,6 +62,13 @@ describe("Arquimedes intent router", () => {
     expect(classifyArquimedesIntent("pode aplicar")).toBe("operacao");
   });
 
+  it("expõe escrita local quando o engenheiro manda gravar um ajuste da EAP", () => {
+    expect(classifyArquimedesIntent(
+      '[aba: dashboard] Grave agora somente o nome da folha 1.5.3 na EAP v2. Não aprove EAP, não crie baseline e não use MCP.',
+    )).toBe("operacao");
+    expect(classifyArquimedesIntent("Não grave nada; apenas proponha o novo nome.")).toBe("analise");
+  });
+
   it("a proibição de mutação vence a confirmação", () => {
     // "confirmo, mas não aplique nada" não pode destravar mutação.
     expect(classifyArquimedesIntent("confirmo o diagnóstico, mas não aplique nada")).toBe("analise");

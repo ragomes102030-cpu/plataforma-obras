@@ -8,7 +8,7 @@ const CASUAL_PATTERNS = [
 ];
 
 const OPERATION_PATTERNS = [
-  /\b(crie|criar|adicione|adicionar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|gere|gerar|preencha|preencher|preencham|complete|completar|completem|construa|construir|vincule|vincular|planeje|planejar|execute|executar)\b/i,
+  /\b(crie|criar|adicione|adicionar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|grave|gravar|aplique|aplicar|renomeie|renomear|gere|gerar|preencha|preencher|preencham|complete|completar|completem|construa|construir|vincule|vincular|planeje|planejar|execute|executar)\b/i,
 ];
 
 const ANALYSIS_PATTERNS = [
@@ -31,7 +31,7 @@ function forbidsAllMutation(text: string) {
 
 function removeNegatedMutationCommands(text: string) {
   return text.replace(
-    /\bn[aã]o\s+(?:aplicar|aplique|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gerar|gere|executar|execute)\b(?:\s+[^,.;!?\n]{1,80})?/gi,
+    /\bn[aã]o\s+(?:aplicar|aplique|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gravar|grave|renomear|renomeie|gerar|gere|executar|execute)\b(?:\s+[^,.;!?\n]{1,80})?/gi,
     " ",
   );
 }
