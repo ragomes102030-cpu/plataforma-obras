@@ -4,6 +4,7 @@ import { agregadoDoCronograma, type AgregadoDoCronograma, type LinhaDoCronograma
 import { diasEntre, montarResumo, type AlertaDoPainel } from "@shared/painel-obra";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { classificarEstadoAtividadesDashboard, excluirAtividadesDeDemonstracao } from "@/lib/dashboard-work-scope";
+import { avaliarPrazoDashboard } from "@/lib/prazo-dashboard";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
 
@@ -339,6 +340,11 @@ export function PainelDoCronograma({
 
   const { resumo, avancoComReguaValida, valorSemDestino, ultimos, semana } = dados;
   const { prazo, fisico, valor, status, selo, alertas } = resumo;
+  const prazoConfianca = avaliarPrazoDashboard({
+    fim: prazo.fim,
+    eapApproved: plano.data?.eapApproved === true,
+    atividades,
+  });
 
   // Coerência: só entra quando há item que IMPEDE execução e valor em risco.
   // Percentual é sempre sobre o valor do orçamento, a mesma régua do painel.
@@ -390,6 +396,7 @@ export function PainelDoCronograma({
       avancoEstado={orcamento.isPending ? "pendente" : orcamento.isError ? "erro" : avancoComReguaValida ? "ok" : "indisponivel"}
       hoje={hoje}
       resumo={resumo}
+      prazoConfianca={prazoConfianca}
       alertas={alertasVisiveis}
       valorSemDestino={valorSemDestino}
       semana={semana ? {
