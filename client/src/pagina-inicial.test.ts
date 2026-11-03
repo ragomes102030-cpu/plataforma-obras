@@ -147,8 +147,9 @@ describe("transição EAP aprovada → atividades", () => {
     const painel = readFileSync("client/src/components/PainelPlanejamento.tsx", "utf-8");
     expect(painel).toMatch(/trpc\.planning\.generateFromEap\.useMutation/);
     expect(painel).toMatch(/Atualizar proposta/);
-    expect(painel).toMatch(/Transforme os pacotes da EAP aprovada/i);
-    expect(painel).toMatch(/aguardando revisão e duração/i);
+    expect(painel).toMatch(/Revise as folhas da EAP vigente/i);
+    expect(painel).toMatch(/A prévia mostra as lacunas da EAP/i);
+    expect(painel).toMatch(/depois da aprovação desta versão/i);
   });
 
   it("a proposta usa IDs da mesma versão EAP que a criação valida", () => {
@@ -156,7 +157,10 @@ describe("transição EAP aprovada → atividades", () => {
     expect(routers).toMatch(/generateFromEap:\s*protectedProcedure/);
     expect(routers).toMatch(/criarAtividadeDaFolha:\s*protectedProcedure/);
     expect(routers).toMatch(/const approved = await requireApprovedEapVersion\(db, input\.projectId\);/);
-    expect(routers).toMatch(/eq\(wbsNodes\.versionId,approved\.id\).*inArray\(wbsNodes\.nodeType,\["entrega","pacote"\]\)/);
+    expect(routers).toMatch(/const sourceVersion = currentVersion \?\? approvedVersion/);
+    expect(routers).toMatch(/sameEapContent\(allNodes, approvedNodes\)/);
+    expect(routers).toMatch(/approvedNodeByCode\.get\(node\.code\)\?\.id/);
+    expect(routers).toMatch(/sameEapContent\(currentNodes, approvedNodes\)/);
     expect(routers).toMatch(/eq\(wbsNodes\.versionId, approved\.id\)/);
     expect(routers).toMatch(/Somente uma folha terminal da EAP pode virar atividade/);
   });

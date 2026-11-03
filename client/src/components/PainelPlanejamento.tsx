@@ -37,6 +37,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
   );
 
   const [proposta, setProposta] = useState<ProposalItem[]>([]);
+  const [propostaAprovada, setPropostaAprovada] = useState(false);
+  const [fonteAprovada, setFonteAprovada] = useState(false);
+  const [versaoDaProposta, setVersaoDaProposta] = useState<number | null>(null);
   const [duracoes, setDuracoes] = useState<Record<number, string>>({});
   const [edicoes, setEdicoes] = useState<Record<string, string>>({});
   const [busca, setBusca] = useState("");
@@ -47,12 +50,11 @@ export function PainelPlanejamento({ projetoId }: Props) {
   const gerarProposta = trpc.planning.generateFromEap.useMutation({
     onSuccess: result => {
       setProposta(result.proposal as ProposalItem[]);
+      setPropostaAprovada(result.canCreateFromApprovedEap);
+      setFonteAprovada(result.sourceApproved);
+      setVersaoDaProposta(result.sourceVersionNumber);
       setDuracoes({});
-      setMensagem(
-        result.pending
-          ? `${result.pending} pacote(s) da EAP aguardando revisão e duração.`
-          : result.message
-      );
+      setMensagem(result.message);
     },
     onError: error => setMensagem(error.message),
   });
@@ -124,10 +126,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
       gerarProposta.isPending
     ) return;
 
-    // A proposta sempre parte da última EAP aprovada. Uma versão de trabalho
-    // aberta para editar o cronograma não invalida a fonte aprovada; o gate da
-    // baseline continua usando `eapApproved` (status da versão atual).
-    if (!plano.data?.hasApprovedEap) return;
+    // A prévia também mostra as lacunas da EAP em elaboração. A gravação
+    // continua bloqueada até que essa versão seja aprovada.
+    if (plano.data?.currentVersionNumber == null) return;
 
     propostaAutoDisparada.current = true;
     gerarProposta.mutate({ projectId: projetoId });
@@ -135,7 +136,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
     activities.length,
     gerarProposta.isPending,
     gerarProposta.mutate,
-    plano.data?.hasApprovedEap,
+    plano.data?.currentVersionNumber,
     plano.isError,
     plano.isPending,
     proposta.length,
@@ -167,6 +168,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
   }, [activities, busca]);
 
   const adicionarAtividade = (item: ProposalItem) => {
+    if (!propostaAprovada) return;
     const raw = duracoes[item.eapNodeId]?.trim() ?? "";
     const durationDays = raw ? Number(raw) : undefined;
     if (!durationDays || !Number.isInteger(durationDays) || durationDays < 1) {
@@ -211,7 +213,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         <div className="pl-atividades-title">
           <div className="pl-atividades-kicker"><Activity size={13} /> CRONOGRAMA · ATIVIDADES</div>
           <h1>Atividades</h1>
-          <p>Transforme os pacotes da EAP aprovada em unidades executáveis do cronograma.</p>
+          <p>Revise as folhas da EAP vigente e transforme as aprovadas em atividades do cronograma.</p>
         </div>
         <div className="pl-atividades-header-actions">
           <button
@@ -230,7 +232,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
       </header>
 
       <div className="pl-atividades-flow">
-        <span className="done"><CheckCircle2 size={13} /> EAP aprovada</span>
+        <span className={propostaAprovada ? "done" : ""}><CheckCircle2 size={13} /> {fonteAprovada ? "EAP aprovada" : propostaAprovada ? "EAP igual à versão aprovada" : `EAP v${versaoDaProposta ?? plano.data?.currentVersionNumber ?? "—"} em elaboração`}</span>
         <span>→</span>
         <strong>Atividades</strong>
         <span>→</span>
@@ -285,6 +287,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
       )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
+      {!propostaAprovada && proposta.length > 0 && <div className="pl-atividades-alerta">A prévia mostra as lacunas da EAP v{versaoDaProposta}. As atividades ficam disponíveis para criação depois da aprovação desta versão.</div>}
 
       <div className="pl-atividades-table-wrap">
         <table className="pl-atividades-table">
@@ -441,6 +444,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     step={1}
                     value={duracoes[item.eapNodeId] ?? ""}
                     onChange={event => setDuracoes(atual => ({ ...atual, [item.eapNodeId]: event.target.value }))}
+                    disabled={!propostaAprovada}
                     placeholder="dias"
                     aria-label={`Duração de ${item.name}`}
                   />
@@ -454,8 +458,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     type="button"
                     className="pl-row-action"
                     onClick={() => adicionarAtividade(item)}
-                    disabled={criarAtividade.isPending}
-                    title="Criar atividade com a duração informada"
+                    disabled={criarAtividade.isPending || !propostaAprovada}
+                    title={propostaAprovada ? "Criar atividade com a duração informada" : "Aprove esta versão da EAP antes de criar a atividade"}
                   >
                     <Plus size={13} /> Adicionar
                   </button>

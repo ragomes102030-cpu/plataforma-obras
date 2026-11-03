@@ -89,6 +89,7 @@ import type {
   ScheduleEvidenceDependency,
 } from "./construction/domain-types";
 import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
+import { sameEapContent } from "./construction/eap-content";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
 import { applyEapProposalToDraft, eapProposalInput } from "./construction/eap-proposal-apply";
@@ -137,6 +138,7 @@ async function requireApprovedEapVersion(
   }
   return approved;
 }
+
 import { calculateDeterministicCpm } from "./construction/cpm-calculator";
 import { simulateScheduleRisk } from "./construction/monte-carlo-service";
 import { resumirCobertura, sugerirVinculos } from "./construction/conciliacao";
@@ -4479,6 +4481,21 @@ export const appRouter = router({
         if (!isTerminalEapNode(node.nodeType)) {
           throw badRequest("Somente uma folha terminal da EAP pode virar atividade.");
         }
+        const [child] = await db.select({ id: wbsNodes.id }).from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, approved.id), eq(wbsNodes.parentId, node.id)))
+          .limit(1);
+        if (child) throw badRequest("Somente uma folha sem filhos da EAP pode virar atividade.");
+
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        if (currentVersion && currentVersion.id !== approved.id) {
+          const [currentNodes, approvedNodes] = await Promise.all([
+            db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id))),
+            db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, approved.id))),
+          ]);
+          if (!sameEapContent(currentNodes, approvedNodes)) {
+            throw badRequest("A EAP em elaboração difere da aprovada. Aprove esta versão antes de criar atividades.");
+          }
+        }
 
         let durationDays: number;
         try {
@@ -5765,20 +5782,33 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const approved = await requireApprovedEapVersion(db, input.projectId);
-        // Gerar a proposta é uma consulta: não deve abrir/forkar uma versão de
-        // trabalho antes de o engenheiro gravar a primeira atividade. Além de
-        // evitar mutação lateral num botão de prévia, isso mantém a EAP
-        // aprovada como referência após recarregar a tela.
         const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const [approvedVersion] = await db.select().from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
+          .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
+        // A prévia acompanha a EAP exibida ao engenheiro. Se uma versão de
+        // trabalho foi aberta apenas para atividades, sua EAP continua igual à
+        // aprovada e pode originar novas atividades. Uma EAP alterada aguarda
+        // aprovação antes de qualquer gravação.
+        const sourceVersion = currentVersion ?? approvedVersion;
+        if (!sourceVersion) throw badRequest("Crie uma EAP antes de gerar a prévia de atividades.");
+        const sourceApproved = sourceVersion.status === "approved";
         const activityVersionScope = currentVersion
           ? eq(scheduleActivities.versionId, currentVersion.id)
           : isNull(scheduleActivities.versionId);
-        const nodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,approved.id),inArray(wbsNodes.nodeType,["entrega","pacote"]))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+        const allNodes = await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,sourceVersion.id))).orderBy(wbsNodes.sortOrder,wbsNodes.id);
+        const approvedNodes = approvedVersion && !sourceApproved
+          ? await db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,approvedVersion.id)))
+          : allNodes;
+        const canCreateFromApprovedEap = Boolean(approvedVersion && (sourceApproved || sameEapContent(allNodes, approvedNodes)));
+        if (canCreateFromApprovedEap) await requireApprovedEapVersion(db, input.projectId);
+        const approvedNodeByCode = new Map(approvedNodes.map(node => [node.code, node]));
+        const parentIds = new Set(allNodes.map(node=>node.parentId).filter((id): id is number=>id != null));
+        const nodes = allNodes.filter(node=>!parentIds.has(node.id) && isTerminalEapNode(node.nodeType));
         const existing = await db.select({wbsCode:scheduleActivities.wbsCode}).from(scheduleActivities).where(and(eq(scheduleActivities.projectId,input.projectId),activityVersionScope));
         const existingCodes = new Set(existing.map(row=>row.wbsCode));
         const pending = nodes.filter(node=>!existingCodes.has(node.code)).map(node=>({
-          eapNodeId:node.id,
+          eapNodeId:canCreateFromApprovedEap ? approvedNodeByCode.get(node.code)?.id ?? node.id : node.id,
           wbsCode:node.code,
           name:node.name,
           phase:node.level>2?node.code.split(".").slice(0,2).join("."):node.code,
@@ -5794,9 +5824,17 @@ export const appRouter = router({
           pending:pending.length,
           versionId:currentVersion?.id ?? null,
           versionNumber:currentVersion?.versionNumber ?? null,
-          sourceApprovedVersionId:approved.id,
+          sourceVersionId:sourceVersion.id,
+          sourceVersionNumber:sourceVersion.versionNumber,
+          sourceApproved,
+          canCreateFromApprovedEap,
+          sourceApprovedVersionId:canCreateFromApprovedEap?approvedVersion?.id ?? null:null,
           proposal:pending,
-          message:pending.length?"Proposta de atividades criada em memória para revisão do engenheiro; nenhuma atividade foi persistida.":"A versão de trabalho já possui atividades para todas as folhas elegíveis; nenhuma nova proposta foi criada."
+          message:pending.length
+            ? canCreateFromApprovedEap
+              ? "Proposta de atividades criada para revisão do engenheiro; nenhuma atividade foi persistida."
+              : "A EAP em elaboração tem folhas sem atividade. Revise a proposta; a criação depende da aprovação desta EAP."
+            : "Todas as folhas da EAP exibida possuem ao menos uma atividade nesta versão; nenhuma nova proposta foi criada."
         };
       }),
     createDependency: protectedProcedure
