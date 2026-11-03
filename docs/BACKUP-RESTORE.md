@@ -25,8 +25,9 @@ então o que importa para reconstruir o negócio está no `public`.
 (06:00 UTC):
 
 1. `pg_dump 17` (imagem `postgres:17-alpine`) com `--no-owner --no-acl`,
-   formato custom, compressão 9 — conectando com o usuário **de leitura**
-   (`arquimedes_app`), o mesmo do runtime. O dump não precisa de superusuário.
+   formato custom, compressão 9 — conectando com o usuário administrativo
+   `postgres` pelo Session Pooler. O workflow confirma `BYPASSRLS` antes do dump;
+   a conta `arquimedes_app` do aplicativo não consegue exportar todas as linhas.
 2. Confere o índice do dump: menos de 40 tabelas ou menos de 40 blocos de dados
    ⇒ falha. Isso pega o caso "dump saiu truncado mas com tamanho plausível".
 3. **Restaura** o dump num Postgres 17 descartável e compara a contagem de
@@ -40,7 +41,7 @@ nome de cliente, valor de contrato e preço de insumo.
 
 | Secret | Uso |
 | --- | --- |
-| `SUPABASE_DB_URL` | conexão de leitura do banco |
+| `SUPABASE_BACKUP_DB_URL` | conexão administrativa de backup pelo Session Pooler, separada da conexão do aplicativo |
 | `BACKUP_GPG_PASSPHRASE` | senha do backup. **Sem ela ninguém restaura.** |
 
 A senha do backup também precisa estar no gerenciador de senhas do dono do

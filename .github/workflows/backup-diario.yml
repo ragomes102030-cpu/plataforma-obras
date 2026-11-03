@@ -26,8 +26,9 @@ name: Backup diario do banco
 #
 # SECRETS NECESSARIOS
 #
-#   secrets.SUPABASE_DB_URL        conexao de LEITURA do banco (usuario
-#                                  arquimedes_app — o mesmo do runtime).
+#   secrets.SUPABASE_BACKUP_DB_URL conexao administrativa de backup pelo
+#                                  Session Pooler. O usuario do aplicativo
+#                                  esta sujeito a RLS e nao cobre todos os dados.
 #   secrets.BACKUP_GPG_PASSPHRASE  senha do backup. Sem ela ninguem restaura.
 #                                  Precisa estar tambem no gerenciador de
 #                                  senhas do dono do sistema.
@@ -65,7 +66,7 @@ jobs:
     timeout-minutes: 25
 
     env:
-      PGCONN: ${{ secrets.SUPABASE_DB_URL }}
+      PGCONN: ${{ secrets.SUPABASE_BACKUP_DB_URL }}
       PGIMAGE: postgres:17-alpine
 
     steps:
@@ -74,7 +75,7 @@ jobs:
           set -euo pipefail
           faltando=0
           if [ -z "${PGCONN:-}" ]; then
-            echo "::error::Secret SUPABASE_DB_URL nao configurado."
+            echo "::error::Secret SUPABASE_BACKUP_DB_URL nao configurado."
             faltando=1
           fi
           if [ -z "${{ secrets.BACKUP_GPG_PASSPHRASE }}" ]; then
@@ -85,6 +86,18 @@ jobs:
 
       - name: Baixar a imagem do Postgres 17
         run: docker pull "${PGIMAGE}"
+
+      - name: Conferir acesso completo para backup
+        run: |
+          set -euo pipefail
+          # pg_dump desliga RLS por padrao para obter todas as linhas. Se o
+          # usuario nao puder ignorar RLS, falhamos antes de iniciar o dump.
+          bypass="$(docker run --rm -e "CONN=${PGCONN}" "${PGIMAGE}" \
+            sh -c 'psql "${CONN}" -X -t -A -v ON_ERROR_STOP=1 -c "select rolbypassrls from pg_roles where rolname = current_user"')"
+          if [ "${bypass}" != "t" ]; then
+            echo "::error::Conexao de backup nao possui BYPASSRLS; dump completo nao e possivel."
+            exit 1
+          fi
 
       - name: Tirar o dump
         run: |
