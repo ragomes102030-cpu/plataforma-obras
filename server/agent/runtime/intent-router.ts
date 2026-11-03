@@ -8,7 +8,7 @@ const CASUAL_PATTERNS = [
 ];
 
 const OPERATION_PATTERNS = [
-  /\b(crie|criar|adicione|adicionar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|grave|gravar|aplique|aplicar|renomeie|renomear|gere|gerar|preencha|preencher|preencham|complete|completar|completem|construa|construir|vincule|vincular|planeje|planejar|execute|executar)\b/i,
+  /\b(crie|criar|adicione|adicionar|acrescente|acrescentar|insira|inserir|registre|registrar|altere|alterar|atualize|atualizar|mova|mover|remova|remover|exclua|excluir|salve|salvar|grave|gravar|aplique|aplicar|renomeie|renomear|gere|gerar|preencha|preencher|preencham|complete|completar|completem|construa|construir|vincule|vincular|planeje|planejar|execute|executar)\b/i,
 ];
 
 const ANALYSIS_PATTERNS = [
@@ -22,7 +22,7 @@ const READ_ONLY_PATTERNS = [
   /\b(?:somente|apenas)\s+leitura\b/i,
   /\bsem\s+(?:alterar|modificar|gravar|escrever)\s+(?:dados|nada|qualquer\s+dado)\b/i,
   /\bn[aã]o\s+(?:fa[cç]a|faca|execute|executar)\s+(?:nenhuma|qualquer)\s+altera[cç][aã]o\b/i,
-  /\bn[aã]o\s+(?:aplique|aplicar|altere|alterar|modifique|modificar|grave|gravar|crie|criar|atualize|atualizar|mova|mover|remova|remover|salve|salvar|gere|gerar|execute|executar)\s+(?:nada|nenhum(?:a)?\s+(?:dado|altera[cç][aã]o|n[oó]|item)|qualquer\s+(?:dado|altera[cç][aã]o)|a\s+proposta|a\s+EAP)\b/i,
+  /\bn[aã]o\s+(?:aplique|aplicar|acrescente|acrescentar|insira|inserir|registre|registrar|altere|alterar|modifique|modificar|grave|gravar|crie|criar|atualize|atualizar|mova|mover|remova|remover|salve|salvar|gere|gerar|execute|executar)\s+(?:nada|nenhum(?:a)?\s+(?:dado|altera[cç][aã]o|n[oó]|item)|qualquer\s+(?:dado|altera[cç][aã]o)|a\s+proposta|a\s+EAP)\b/i,
 ];
 
 function forbidsAllMutation(text: string) {
@@ -31,7 +31,7 @@ function forbidsAllMutation(text: string) {
 
 function removeNegatedMutationCommands(text: string) {
   return text.replace(
-    /\bn[aã]o\s+(?:aplicar|aplique|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gravar|grave|renomear|renomeie|gerar|gere|executar|execute)\b(?:\s+[^,.;!?\n]{1,80})?/gi,
+    /\bn[aã]o\s+(?:aplicar|aplique|acrescentar|acrescente|inserir|insira|registrar|registre|criar|crie|atualizar|atualize|mover|mova|remover|remova|alterar|altere|salvar|salve|gravar|grave|renomear|renomeie|gerar|gere|executar|execute)\b(?:\s+[^,.;!?\n]{1,80})?/gi,
     " ",
   );
 }
