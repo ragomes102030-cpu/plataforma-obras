@@ -14,8 +14,8 @@ name: Backup diario do banco
 #   1. tira um dump logico do schema `public` (pg_dump 17, formato custom);
 #   2. confere que o dump tem as 40+ tabelas esperadas — dump truncado falha
 #      aqui, e nao na hora de restaurar;
-#   3. RESTAURA o dump num Postgres 17 descartavel e compara contagem de linhas
-#      com o banco de origem (`backup que nao restaura nao e backup`);
+#   3. RESTAURA o dump num Postgres 17 descartavel, confere as tabelas e as
+#      contagens. O banco de origem continua recebendo escritas durante o dump.
 #   4. criptografa o arquivo (AES256) e publica como artifact por 90 dias.
 #
 # POR QUE CRIPTOGRAFADO
@@ -26,8 +26,9 @@ name: Backup diario do banco
 #
 # SECRETS NECESSARIOS
 #
-#   secrets.SUPABASE_DB_URL        conexao de LEITURA do banco (usuario
-#                                  arquimedes_app — o mesmo do runtime).
+#   secrets.SUPABASE_BACKUP_DB_URL conexao administrativa de backup pelo
+#                                  Session Pooler. O usuario do aplicativo
+#                                  esta sujeito a RLS e nao cobre todos os dados.
 #   secrets.BACKUP_GPG_PASSPHRASE  senha do backup. Sem ela ninguem restaura.
 #                                  Precisa estar tambem no gerenciador de
 #                                  senhas do dono do sistema.
@@ -44,12 +45,6 @@ on:
     # 06:00 UTC = 03:00 em Brasilia. Fora do horario de obra.
     - cron: "0 6 * * *"
   workflow_dispatch:
-    inputs:
-      verificar_restauracao:
-        description: "Restaurar o dump num Postgres descartavel antes de publicar"
-        required: false
-        type: boolean
-        default: true
 
 concurrency:
   group: backup-diario
@@ -65,7 +60,7 @@ jobs:
     timeout-minutes: 25
 
     env:
-      PGCONN: ${{ secrets.SUPABASE_DB_URL }}
+      PGCONN: ${{ secrets.SUPABASE_BACKUP_DB_URL }}
       PGIMAGE: postgres:17-alpine
 
     steps:
@@ -74,7 +69,7 @@ jobs:
           set -euo pipefail
           faltando=0
           if [ -z "${PGCONN:-}" ]; then
-            echo "::error::Secret SUPABASE_DB_URL nao configurado."
+            echo "::error::Secret SUPABASE_BACKUP_DB_URL nao configurado."
             faltando=1
           fi
           if [ -z "${{ secrets.BACKUP_GPG_PASSPHRASE }}" ]; then
@@ -85,6 +80,18 @@ jobs:
 
       - name: Baixar a imagem do Postgres 17
         run: docker pull "${PGIMAGE}"
+
+      - name: Conferir acesso completo para backup
+        run: |
+          set -euo pipefail
+          # pg_dump desliga RLS por padrao para obter todas as linhas. Se o
+          # usuario nao puder ignorar RLS, falhamos antes de iniciar o dump.
+          bypass="$(docker run --rm -e "CONN=${PGCONN}" "${PGIMAGE}" \
+            sh -c 'psql "${CONN}" -X -t -A -v ON_ERROR_STOP=1 -c "select rolbypassrls from pg_roles where rolname = current_user"')"
+          if [ "${bypass}" != "t" ]; then
+            echo "::error::Conexao de backup nao possui BYPASSRLS; dump completo nao e possivel."
+            exit 1
+          fi
 
       - name: Tirar o dump
         run: |
@@ -134,7 +141,6 @@ jobs:
           fi
 
       - name: Restaurar num Postgres descartavel e comparar
-        if: github.event_name != 'workflow_dispatch' || inputs.verificar_restauracao
         run: |
           set -euo pipefail
 
@@ -177,6 +183,12 @@ jobs:
           # (o dump recria o schema, entao aqui so se derruba)
           docker exec alvo psql -U postgres -d postgres -q -c 'drop schema public cascade'
 
+          # O dump inclui uma politica RLS concedida a este papel, mas nao
+          # inclui papeis globais do cluster. Recriamos o nome sem LOGIN no
+          # destino descartavel para testar a restauracao integral da policy.
+          docker exec alvo psql -U postgres -d postgres -q \
+            -c 'create role arquimedes_app nologin'
+
           inicio="$(date +%s)"
           # `set +e` para o erro aparecer no log ANTES de o job morrer: sem
           # isso o `set -e` aborta e o stderr fica preso dentro do arquivo.
@@ -206,19 +218,33 @@ jobs:
           echo "SEGUNDOS_RESTORE=$((fim - inicio))" >> "${GITHUB_ENV}"
 
           docker cp backup/linhas.sql alvo:/tmp/linhas.sql
-          docker exec alvo psql -U postgres -d postgres -t -A -F'|' -f /tmp/linhas.sql \
+          docker exec alvo psql -U postgres -d postgres -v ON_ERROR_STOP=1 -t -A -F'|' -f /tmp/linhas.sql \
             | sort > backup/linhas-restaurado.txt
 
+          restauradas="$(wc -l < backup/linhas-restaurado.txt)"
+          if [ "${restauradas}" -lt 40 ]; then
+            echo "::error::A restauracao expoe apenas ${restauradas} tabelas public."
+            exit 1
+          fi
+          for tabela in projects project_plan_versions wbs_nodes schedule_activities; do
+            linhas="$(awk -F'|' -v t="${tabela}" '$1 == t { print $2 }' backup/linhas-restaurado.txt)"
+            if [ -z "${linhas}" ] || [ "${linhas}" -le 0 ]; then
+              echo "::error::Tabela essencial ${tabela} ausente ou vazia na restauracao."
+              exit 1
+            fi
+          done
+
           docker run --rm -e "CONN=${PGCONN}" -v "${PWD}/backup:/backup" "${PGIMAGE}" \
-            sh -c 'psql "${CONN}" -t -A -F"|" -f /backup/linhas.sql' \
+            sh -c 'psql "${CONN}" -v ON_ERROR_STOP=1 -t -A -F"|" -f /backup/linhas.sql' \
             | sort > backup/linhas-origem.txt
 
           if ! diff -q backup/linhas-origem.txt backup/linhas-restaurado.txt > /dev/null; then
-            echo "::error::Contagem de linhas diverge entre origem e restaurado:"
+            # A origem e consultada DEPOIS do dump; escritas posteriores nao
+            # invalidam o snapshot restaurado.
+            echo "::warning::A origem mudou desde o dump; diferencas informativas:"
             diff backup/linhas-origem.txt backup/linhas-restaurado.txt || true
-            exit 1
           fi
-          echo "Contagem de linhas identica em $(wc -l < backup/linhas-origem.txt) tabelas."
+          echo "Restauracao consultavel em ${restauradas} tabelas; tabelas essenciais com dados."
           docker rm -f alvo > /dev/null
 
       - name: Criptografar

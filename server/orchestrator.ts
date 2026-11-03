@@ -1737,6 +1737,7 @@ function buildSystem(
     "Não fique preso aos MCPs. Se um MCP estiver indisponível, use dados locais e, quando útil, pesquisa externa. Se uma fonte externa divergir dos dados da obra, preserve o dado da obra e apresente a divergência para decisão do engenheiro.",
     "Ao usar pesquisa externa, cite no texto da conclusão o título/domínio da fonte quando relevante e classifique cada conclusão como fato da obra, referência externa ou inferência. Não invente conteúdo de uma fonte nem transforme recomendação genérica em requisito contratual da obra.",
     "Quando houver contagens locais da EAP, mas faltar leitura dos nomes, agrupamentos ou folhas, use consultar_eap_local antes de declarar o escopo ou a decomposição semântica como não verificáveis. Prefira consultas direcionadas e amostragem representativa; só peça muitos nós quando isso for realmente necessário para concluir a análise.",
+    "Informe a versão e os IDs retornados pela consulta local. Cobertura de campos preenchidos não comprova conformidade técnica: não diga que examinou todos os pacotes se fez apenas amostragem. Não atribua impacto em custo ou prazo sem orçamento ou cronograma verificado.",
     "Depois das consultas, interprete os resultados e responda com suas próprias palavras. Não descreva seu raciocínio interno e não revele detalhes de implementação do runtime.",
     "Para análises complexas, não conclua na primeira consulta: use os resultados para decidir quais ferramentas consultar em seguida, faça verificações cruzadas e só finalize quando houver evidência suficiente.",
     "Ao usar engineering_gap_analysis, escolha consultas específicas com base nas lacunas observadas naquele momento. Não faça uma varredura fixa por EAP, cronograma, produção ou LOB. Não repita uma consulta cujo resultado já seja suficiente. Cada nova rodada deve ter uma justificativa factual na evidência anterior e pode selecionar de uma a poucas ferramentas diretamente relacionadas ao que falta confirmar.",
@@ -2397,6 +2398,7 @@ export async function runProjectOrchestrator(
           }
 
           const nodes = result.data;
+          const planVersion = await getCurrentPlanVersion(options.localProjectId);
           const childrenByParent = new Map<string, number>();
           const byRef = new Map<string, (typeof nodes)[number]>();
           for (const node of nodes) {
@@ -2473,6 +2475,11 @@ export async function runProjectOrchestrator(
           const payload = {
             status: "ok",
             fonte: "local_db",
+            versao: planVersion ? {
+              id: planVersion.id,
+              numero: planVersion.versionNumber,
+              status: planVersion.status,
+            } : null,
             totalNodes: nodes.length,
             totalLeaves: nodes.filter(node => (childrenByParent.get(String(node.id)) ?? 0) === 0).length,
             filtros: {
@@ -2533,6 +2540,7 @@ export async function runProjectOrchestrator(
                 })()
               : null,
             nos: selected.map(node => ({
+              id: node.id,
               code: node.code,
               name: node.name,
               path: pathFor(node),

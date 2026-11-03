@@ -69,6 +69,15 @@ describe("Arquimedes intent router", () => {
     expect(classifyArquimedesIntent("Não grave nada; apenas proponha o novo nome.")).toBe("analise");
   });
 
+  it("entende acrescentar como operação mesmo com uma restrição pontual", () => {
+    expect(classifyArquimedesIntent(
+      "Na EAP v2, acrescente esta nota ao campo exclusões do nó 1.9 e confira o registro. Se houver dúvida, não grave e explique.",
+    )).toBe("operacao");
+    expect(classifyArquimedesIntent(
+      "Analise a EAP e não acrescente nada.",
+    )).toBe("analise");
+  });
+
   it("a proibição de mutação vence a confirmação", () => {
     // "confirmo, mas não aplique nada" não pode destravar mutação.
     expect(classifyArquimedesIntent("confirmo o diagnóstico, mas não aplique nada")).toBe("analise");

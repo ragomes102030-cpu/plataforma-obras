@@ -1,7 +1,7 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { invokeLlmGateway, type GatewayRequest, type LlmTool } from "../../llm-provider-gateway";
 import { getDb } from "../../db";
-import { projects, wbsNodes } from "../../../drizzle/schema";
+import { projectPlanVersions, projects, wbsNodes } from "../../../drizzle/schema";
 import type { ArquimedesLlmProvider, ArquimedesLlmRequest } from "../core/types";
 
 function tryParseJsonObject(candidate: string) {
@@ -168,12 +168,22 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
     ];
 
     let messages: GatewayRequest["messages"] = baseMessages;
+    let scopedVersionId: number | null | undefined;
 
     // Consulta única ao banco antes do LLM: evita o ciclo lento LLM -> tool -> LLM.
     if (request.databaseContext) {
       const context = request.databaseContext;
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
+      scopedVersionId = context.versionId;
+      if (scopedVersionId === undefined) {
+        const [current] = await db.select({ id: projectPlanVersions.id })
+          .from(projectPlanVersions)
+          .where(eq(projectPlanVersions.projectId, context.projectId))
+          .orderBy(desc(projectPlanVersions.versionNumber))
+          .limit(1);
+        scopedVersionId = current?.id ?? null;
+      }
       const [project] = await db.select({
         id: projects.id,
         code: projects.code,
@@ -189,11 +199,9 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       }).from(projects).where(eq(projects.id, context.projectId)).limit(1);
       if (!project) throw new Error("Obra não encontrada.");
 
-      const versionScope = context.versionId === undefined
-        ? eq(wbsNodes.projectId, context.projectId)
-        : context.versionId === null
-          ? and(eq(wbsNodes.projectId, context.projectId), isNull(wbsNodes.versionId))
-          : and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.versionId, context.versionId));
+      const versionScope = scopedVersionId === null
+        ? and(eq(wbsNodes.projectId, context.projectId), isNull(wbsNodes.versionId))
+        : and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.versionId, scopedVersionId));
       const eap = await db.select({
         id: wbsNodes.id,
         code: wbsNodes.code,
@@ -237,6 +245,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
 
       const snapshot = {
         source: "banco_de_dados_read_only",
+        versionId: scopedVersionId,
         project,
         eap: scopedEap.slice(0, 180),
         eapTruncated: scopedEap.length > 180,
@@ -304,6 +313,10 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
       if (!context) throw new Error("Ferramentas de banco não habilitadas nesta requisição.");
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
+      if (scopedVersionId === undefined) throw new Error("Versão da EAP não definida para a consulta.");
+      const versionScope = scopedVersionId === null
+        ? and(eq(wbsNodes.projectId, context.projectId), isNull(wbsNodes.versionId))
+        : and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.versionId, scopedVersionId));
       let args: Record<string, unknown> = {};
       try { args = rawArgs ? JSON.parse(rawArgs) : {}; } catch { throw new Error("Argumentos inválidos para ferramenta de banco."); }
 
@@ -337,7 +350,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
           plannedQuantity: wbsNodes.plannedQuantity,
           location: wbsNodes.location,
         }).from(wbsNodes)
-          .where(eq(wbsNodes.projectId, context.projectId))
+          .where(versionScope)
           .orderBy(wbsNodes.level, wbsNodes.sortOrder, wbsNodes.id);
         return rows;
       }
@@ -361,7 +374,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         acceptanceCriteria: wbsNodes.acceptanceCriteria,
         decompositionBasis: wbsNodes.decompositionBasis,
         scopeStatus: wbsNodes.scopeStatus,
-      }).from(wbsNodes).where(and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.code, code))).limit(1);
+      }).from(wbsNodes).where(and(versionScope, eq(wbsNodes.code, code))).limit(1);
       if (!node) throw new Error(`Nó EAP ${code} não encontrado.`);
 
       if (name === "consultar_no_eap") return node;
@@ -377,7 +390,7 @@ export class GatewayArquimedesProvider implements ArquimedesLlmProvider {
         location: wbsNodes.location,
         scopeStatus: wbsNodes.scopeStatus,
       }).from(wbsNodes)
-        .where(and(eq(wbsNodes.projectId, context.projectId), eq(wbsNodes.parentId, node.id)))
+        .where(and(versionScope, eq(wbsNodes.parentId, node.id)))
         .orderBy(wbsNodes.sortOrder, wbsNodes.id);
     };
 

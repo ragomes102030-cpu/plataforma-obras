@@ -25,12 +25,16 @@ então o que importa para reconstruir o negócio está no `public`.
 (06:00 UTC):
 
 1. `pg_dump 17` (imagem `postgres:17-alpine`) com `--no-owner --no-acl`,
-   formato custom, compressão 9 — conectando com o usuário **de leitura**
-   (`arquimedes_app`), o mesmo do runtime. O dump não precisa de superusuário.
+   formato custom, compressão 9 — conectando com o usuário administrativo
+   `postgres` pelo Session Pooler. O workflow confirma `BYPASSRLS` antes do dump;
+   a conta `arquimedes_app` do aplicativo não consegue exportar todas as linhas.
 2. Confere o índice do dump: menos de 40 tabelas ou menos de 40 blocos de dados
    ⇒ falha. Isso pega o caso "dump saiu truncado mas com tamanho plausível".
-3. **Restaura** o dump num Postgres 17 descartável e compara a contagem de
-   linhas tabela por tabela com a origem. Divergência ⇒ falha.
+3. **Restaura** o dump num Postgres 17 descartável, consulta pelo menos 40
+   tabelas e exige dados em `projects`, `project_plan_versions`, `wbs_nodes` e
+   `schedule_activities`. Compara as contagens com a origem apenas para
+   diagnóstico: a origem continua recebendo escritas durante o dump, portanto
+   uma diferença posterior não prova defeito no arquivo.
 4. Cifra com GPG simétrico (AES256) e publica como artifact por 90 dias.
 
 O repositório é **público**. Por isso o artifact é sempre cifrado: ele contém
@@ -40,7 +44,7 @@ nome de cliente, valor de contrato e preço de insumo.
 
 | Secret | Uso |
 | --- | --- |
-| `SUPABASE_DB_URL` | conexão de leitura do banco |
+| `SUPABASE_BACKUP_DB_URL` | conexão administrativa de backup pelo Session Pooler, separada da conexão do aplicativo |
 | `BACKUP_GPG_PASSPHRASE` | senha do backup. **Sem ela ninguém restaura.** |
 
 A senha do backup também precisa estar no gerenciador de senhas do dono do
@@ -60,6 +64,14 @@ gpg --decrypt --output backup.dump backup-2026-10-22.dump.gpg
 # 2. criar um banco VAZIO num servidor separado (nunca no de produção)
 createdb -h 127.0.0.1 -p 5439 -U postgres restaurado
 
+# 2a. preparar o papel referenciado por uma política RLS do schema public
+psql -h 127.0.0.1 -p 5439 -U postgres -d restaurado \
+  -c 'create role arquimedes_app nologin'
+
+# 2b. remover o schema public inicial; o dump o recria
+psql -h 127.0.0.1 -p 5439 -U postgres -d restaurado \
+  -c 'drop schema public cascade'
+
 # 3. restaurar
 pg_restore --no-owner --no-acl -d "host=127.0.0.1 port=5439 user=postgres dbname=restaurado" backup.dump
 
@@ -67,8 +79,9 @@ pg_restore --no-owner --no-acl -d "host=127.0.0.1 port=5439 user=postgres dbname
 psql -h 127.0.0.1 -p 5439 -U postgres -d restaurado -c '\dt' | wc -l   # 40+
 ```
 
-O aviso `schema "public" already exists` na restauração é esperado e inofensivo:
-todo banco novo já nasce com esse schema.
+O ensaio de restauração deve terminar com código zero e sem erros. O papel
+`arquimedes_app` é criado sem login apenas para restaurar a política RLS; as
+credenciais de produção não são copiadas para o banco descartável.
 
 Para devolver o sistema ao ar a partir do dump, o destino é um banco Postgres
 novo (Supabase ou outro), com `DATABASE_URL`/`SUPABASE_DB_URL` do Render

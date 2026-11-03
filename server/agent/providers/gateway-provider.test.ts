@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeLlmGateway } from "../../llm-provider-gateway";
+import { getDb } from "../../db";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   extractJsonObject,
   GatewayArquimedesProvider,
@@ -8,8 +10,10 @@ import {
 vi.mock("../../llm-provider-gateway", () => ({
   invokeLlmGateway: vi.fn(),
 }));
+vi.mock("../../db", () => ({ getDb: vi.fn() }));
 
 const mockedGateway = vi.mocked(invokeLlmGateway);
+const mockedDb = vi.mocked(getDb);
 
 describe("extractJsonObject", () => {
   it("encontra JSON depois de texto e ignora chaves dentro de strings", () => {
@@ -38,6 +42,48 @@ describe("extractJsonObject", () => {
 describe("GatewayArquimedesProvider", () => {
   beforeEach(() => {
     mockedGateway.mockReset();
+    mockedDb.mockReset();
+  });
+
+  it("limita a consulta inicial da EAP à versão corrente", async () => {
+    const clauses: Array<{ kind: string; sql: string; params: unknown[] }> = [];
+    const dialect = new PgDialect();
+    const fakeDb = {
+      select: (fields: Record<string, unknown>) => {
+        const kind = "nodeType" in fields ? "eap" : "name" in fields ? "project" : "versions";
+        return {
+          from: () => ({
+            where: (condition: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+              const query = dialect.sqlToQuery(condition);
+              clauses.push({ kind, sql: query.sql, params: query.params });
+              return {
+                limit: async () => kind === "versions" ? [{ id: 22 }] : [{ id: 25, name: "Escola" }],
+                orderBy: () => kind === "versions"
+                  ? { limit: async () => [{ id: 22 }] }
+                  : Promise.resolve([{ id: 501, code: "1.1", name: "Pacote", parentId: null, level: 1, nodeType: "pacote" }]),
+              };
+            },
+          }),
+        };
+      },
+    };
+    mockedDb.mockResolvedValue(fakeDb as never);
+    mockedGateway.mockResolvedValueOnce({
+      choices: [{ finish_reason: "stop", message: { role: "assistant", content: '{"basis":[],"assumptions":[],"missingInformation":[],"nodes":[]}' } }],
+      provider: "deepseek",
+      attempts: 1,
+    });
+
+    await new GatewayArquimedesProvider().complete({
+      system: "Revise a EAP.", user: "Analise a obra.", skills: [],
+      databaseContext: { projectId: 25 },
+    });
+
+    const eapQuery = clauses.find(clause => clause.kind === "eap");
+    expect(eapQuery?.sql).toContain('"versionId"');
+    expect(eapQuery?.params).toContain(22);
+    const messages = mockedGateway.mock.calls[0]?.[0].messages ?? [];
+    expect(messages.at(-1)?.content).toContain('"versionId":22');
   });
 
   it("aumenta o orçamento na recuperação de uma resposta truncada", async () => {
