@@ -213,7 +213,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         <div className="pl-atividades-title">
           <div className="pl-atividades-kicker"><Activity size={13} /> CRONOGRAMA · ATIVIDADES</div>
           <h1>Atividades</h1>
-          <p>Transforme os pacotes da EAP aprovada em unidades executáveis do cronograma.</p>
+          <p>Revise as folhas da EAP vigente e transforme as aprovadas em atividades do cronograma.</p>
         </div>
         <div className="pl-atividades-header-actions">
           <button
