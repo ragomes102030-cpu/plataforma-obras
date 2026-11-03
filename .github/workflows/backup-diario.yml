@@ -190,6 +190,12 @@ jobs:
           # (o dump recria o schema, entao aqui so se derruba)
           docker exec alvo psql -U postgres -d postgres -q -c 'drop schema public cascade'
 
+          # O dump inclui uma politica RLS concedida a este papel, mas nao
+          # inclui papeis globais do cluster. Recriamos o nome sem LOGIN no
+          # destino descartavel para testar a restauracao integral da policy.
+          docker exec alvo psql -U postgres -d postgres -q \
+            -c 'create role arquimedes_app nologin'
+
           inicio="$(date +%s)"
           # `set +e` para o erro aparecer no log ANTES de o job morrer: sem
           # isso o `set -e` aborta e o stderr fica preso dentro do arquivo.

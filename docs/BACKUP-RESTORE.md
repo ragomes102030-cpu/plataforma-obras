@@ -61,6 +61,14 @@ gpg --decrypt --output backup.dump backup-2026-10-22.dump.gpg
 # 2. criar um banco VAZIO num servidor separado (nunca no de produção)
 createdb -h 127.0.0.1 -p 5439 -U postgres restaurado
 
+# 2a. preparar o papel referenciado por uma política RLS do schema public
+psql -h 127.0.0.1 -p 5439 -U postgres -d restaurado \
+  -c 'create role arquimedes_app nologin'
+
+# 2b. remover o schema public inicial; o dump o recria
+psql -h 127.0.0.1 -p 5439 -U postgres -d restaurado \
+  -c 'drop schema public cascade'
+
 # 3. restaurar
 pg_restore --no-owner --no-acl -d "host=127.0.0.1 port=5439 user=postgres dbname=restaurado" backup.dump
 
@@ -68,8 +76,9 @@ pg_restore --no-owner --no-acl -d "host=127.0.0.1 port=5439 user=postgres dbname
 psql -h 127.0.0.1 -p 5439 -U postgres -d restaurado -c '\dt' | wc -l   # 40+
 ```
 
-O aviso `schema "public" already exists` na restauração é esperado e inofensivo:
-todo banco novo já nasce com esse schema.
+O ensaio de restauração deve terminar com código zero e sem erros. O papel
+`arquimedes_app` é criado sem login apenas para restaurar a política RLS; as
+credenciais de produção não são copiadas para o banco descartável.
 
 Para devolver o sistema ao ar a partir do dump, o destino é um banco Postgres
 novo (Supabase ou outro), com `DATABASE_URL`/`SUPABASE_DB_URL` do Render
