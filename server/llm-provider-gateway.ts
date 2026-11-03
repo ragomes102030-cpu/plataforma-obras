@@ -71,6 +71,7 @@ export type GatewayRequest = {
 };
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429]);
+const BUSY_RETRY_DELAY_MS = 400;
 const DEFAULT_MODEL = "gpt-5-mini";
 
 function normalizeChatCompletionsUrl(baseUrl: string) {
@@ -265,24 +266,35 @@ export async function invokeLlmGateway(
       ? Math.min(Math.floor(ENV.llmMaxAttempts), configuredProviders.length)
       : configuredProviders.length;
 
+  let attempts = 0;
+  let stopFallback = false;
   for (let index = 0; index < maxAttempts; index++) {
     const provider = configuredProviders[index];
-    try {
-      const response = await callProvider(provider, request);
-      return {
-        ...response,
-        model: response.model || provider.model,
-        provider: provider.name,
-        attempts: index + 1,
-      };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Falha desconhecida";
-      errors.push(`${provider.name}: ${message}`);
-      const statusMatch = message.match(/respondeu (\d{3})/);
-      const status = statusMatch ? Number(statusMatch[1]) : undefined;
-      if (!shouldTryFallback(status)) break;
+    for (let providerAttempt = 0; providerAttempt < 2; providerAttempt++) {
+      attempts += 1;
+      try {
+        const response = await callProvider(provider, request);
+        return {
+          ...response,
+          model: response.model || provider.model,
+          provider: provider.name,
+          attempts,
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Falha desconhecida";
+        const statusMatch = message.match(/respondeu (\d{3})/);
+        const status = statusMatch ? Number(statusMatch[1]) : undefined;
+        if (status === 503 && providerAttempt === 0) {
+          await new Promise(resolve => setTimeout(resolve, BUSY_RETRY_DELAY_MS));
+          continue;
+        }
+        errors.push(`${provider.name}: ${message}`);
+        stopFallback = !shouldTryFallback(status);
+        break;
+      }
     }
+    if (stopFallback) break;
   }
 
   throw new Error(`Todos os provedores LLM falharam. ${errors.join(" | ")}`);
