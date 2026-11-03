@@ -67,6 +67,41 @@ describe("llm-provider-gateway", () => {
     );
   });
 
+  it("repete uma vez no mesmo provedor quando ele responde 503", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+          status: 200,
+        })
+      );
+
+    const result = await invokeLlmGateway(
+      { messages: [{ role: "user", content: "teste" }], tools: [] },
+      [providers[0]]
+    );
+
+    expect(result.provider).toBe("openrouter");
+    expect(result.attempts).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("encerra a retentativa após dois 503 quando há somente um provedor", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+      .mockResolvedValueOnce(new Response("busy", { status: 503 }));
+
+    await expect(
+      invokeLlmGateway(
+        { messages: [{ role: "user", content: "teste" }], tools: [] },
+        [providers[0]]
+      )
+    ).rejects.toThrow("503");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("tenta fallback quando o provedor primário está sem autorização", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
