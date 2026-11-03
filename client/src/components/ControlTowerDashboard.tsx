@@ -32,6 +32,7 @@ type Props = {
   avancoEstado: "pendente" | "erro" | "indisponivel" | "ok";
   hoje: string;
   resumo: ResumoDoPainel;
+  prazoConfianca: { confiavel: boolean; motivo: string };
   alertas: AlertaDoPainel[];
   valorSemDestino: number;
   semana?: SemanaControl;
@@ -62,7 +63,7 @@ const destinos: Record<Detalhe, string> = {
 };
 
 export function ControlTowerDashboard({
-  projetoId, nomeObra, codigosExemplo, avancoEstado, hoje, resumo, alertas, valorSemDestino,
+  projetoId, nomeObra, codigosExemplo, avancoEstado, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
@@ -118,8 +119,8 @@ export function ControlTowerDashboard({
     fisico: { titulo: "Avanço físico", desc: "Avanço ponderado pelo orçamento ligado às atividades. A diferença não demonstra, sozinha, atraso na conclusão da obra.", itens: [
       ["Realizado", textoRealizado], ["Planejado", textoPlanejado], ["Desvio", textoDesvio],
     ], acao: "Investigar na Curva S" },
-    prazo: { titulo: "Prazo e cronograma", desc: "Datas do planejamento atual. Atraso no término exige comparação com a baseline aprovada.", itens: [
-      ["Início", dataBr(prazo.inicio)], ["Término previsto", dataBr(prazo.fim)], ["Dias restantes", prazo.diasRestantes === null ? "Sem plano" : prazo.diasRestantes >= 0 ? String(prazo.diasRestantes) : "Prazo vencido"], ["Prazo decorrido", percentual(prazo.fracaoDecorrida)],
+    prazo: { titulo: "Prazo e cronograma", desc: prazoConfianca.confiavel ? "Data calculada no plano atual; atraso no término exige comparação com a baseline aprovada." : "A data exibida na grade é provisória. Ela não deve orientar decisões de prazo até a EAP e o CPM estarem válidos.", itens: [
+      ["Início da grade", dataBr(prazo.inicio)], ["Término da grade", dataBr(prazo.fim)], ["Estado", prazoConfianca.motivo], ["Dias restantes", prazoConfianca.confiavel && prazo.diasRestantes !== null ? String(prazo.diasRestantes) : "Não validado"], ["Prazo decorrido", prazoConfianca.confiavel ? percentual(prazo.fracaoDecorrida) : "Não validado"],
     ], acao: "Ver no Gantt" },
     valor: { titulo: "Valor agregado (EV)", desc: "Valor orçado do trabalho executado, não faturamento nem desembolso. Parte sem atividade não entra na ponderação.", itens: [
       ["EV", orcamentoEstado !== "ok" ? "Não disponível" : valor.total > 0 ? dinheiro(valor.executado) : "Sem orçamento"], ["Orçamento ativo", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valor.total)], ["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valorSemDestino)], ["Percentual do total", valor.pctExecutado == null ? "Indisponível" : percentual(valor.pctExecutado)],
@@ -168,7 +169,7 @@ export function ControlTowerDashboard({
       </section>
 
       <section className="ct-kpis" aria-label="Indicadores essenciais">
-        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">TÉRMINO PREVISTO <CalendarDays size={18}/></span><strong>{dataBr(prazo.fim)}</strong><small>{prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido"} · {percentual(prazo.fracaoDecorrida)} transcorrido</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
+        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">{prazoConfianca.confiavel ? "TÉRMINO CALCULADO" : "PRAZO EM REVISÃO"} <CalendarDays size={18}/></span><strong>{prazoConfianca.confiavel ? dataBr(prazo.fim) : "Não validado"}</strong><small>{prazoConfianca.confiavel ? (prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido") + " · " + percentual(prazo.fracaoDecorrida) + " transcorrido" : prazoConfianca.motivo}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{orcamentoEstado === "pendente" ? "Consultando…" : orcamentoEstado === "erro" ? "Indisponível" : valor.total > 0 ? dinheiro(valor.executado) : "Sem orçamento"}</strong><small>{orcamentoEstado !== "ok" ? "Orçamento ainda não validado" : valor.total > 0 ? "Orçamento: " + dinheiro(valor.total) : "Conectar itens à EAP e ao plano"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("atividades")}><span className="ct-kpi-head">ATIVIDADES DO PLANO <ListChecks size={18}/></span><strong>{status.total} atividades</strong><small>{statusConfere ? status.atrasadas + " atrasadas · " + status.concluidas + " concluídas" : "Distribuição de status inconsistente"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">COMPROMISSOS DA SEMANA <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Sem registro" : comprometidos + " compromissos"}</strong><small>{ppc != null ? "PPC avaliado: " + numero.format(ppc) + "%" : "PPC não apurado"}{bloqueadas != null ? " · " + bloqueadas + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
