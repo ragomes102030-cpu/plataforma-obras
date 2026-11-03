@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles, X, ChevronDown, ChevronUp, Settings, MessageSquarePlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { deveRevalidarDadosDaObraAposExecucao } from "@/lib/agent-run-cache";
+import { acompanharRun } from "@/lib/agent-run-polling";
 
 /**
  * O agente, como janela flutuante sobre as abas.
@@ -173,39 +174,26 @@ export function JanelaAgente({ projetoId, obra, abaAtual }: Props) {
    * faz a janela parecer quebrada, e menos que isso martela a API sem ganho.
    */
   async function aguardarExecucao(requestId: string) {
-    const inicio = Date.now();
-    const LIMITE_MS = 120_000;
-
-    for (;;) {
-      const s = await utils.agent.status.fetch({ requestId: requestId });
-
-      if (s && ESTADO_TERMINAL.has(s.status)) {
-        if (deveRevalidarDadosDaObraAposExecucao(s)) {
-          // O agente grava no servidor sem passar pelas mutations do cliente.
-          // Revalidar as queries observadas atualiza a aba e os painéis da obra
-          // sem exigir que o engenheiro recarregue a página.
-          void utils.invalidate();
-        }
-        setHistorico(antigo => [...antigo, { role: "assistant", content: textoDoRun(s) }]);
-        await historicoPersistido.refetch();
-        setAguardando(false);
-        return;
+    try {
+      const s = await acompanharRun(
+        () => utils.agent.status.fetch({ requestId }),
+        status => ESTADO_TERMINAL.has(status),
+      );
+      if (deveRevalidarDadosDaObraAposExecucao(s)) {
+        // O agente grava no servidor sem passar pelas mutations do cliente.
+        // Revalidar as queries observadas atualiza a aba e os painéis da obra
+        // sem exigir que o engenheiro recarregue a página.
+        void utils.invalidate();
       }
-
-      if (Date.now() - inicio > LIMITE_MS) {
-        setHistorico(antigo => [
-          ...antigo,
-          {
-            role: "assistant",
-            content:
-              "A execução passou de 2 minutos e a janela parou de acompanhar. O run continua registrado por este requestId, no log do agente.",
-          },
-        ]);
-        setAguardando(false);
-        return;
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      setHistorico(antigo => [...antigo, { role: "assistant", content: textoDoRun(s) }]);
+      try { await historicoPersistido.refetch(); } catch { /* A resposta já foi exibida. */ }
+    } catch (error) {
+      setHistorico(antigo => [...antigo, {
+        role: "assistant",
+        content: `${error instanceof Error ? error.message : "Não foi possível acompanhar a execução."} Código da execução: ${requestId}.`,
+      }]);
+    } finally {
+      setAguardando(false);
     }
   }
 

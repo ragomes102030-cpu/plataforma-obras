@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { AgentMessage, AgentProjectContext } from "./agent";
 import { agentRunEvents, agentRuns, agentProjectStates, projectAuditEvents, type AgentRun } from "../drizzle/schema";
@@ -115,6 +115,26 @@ const TERMINAL_STATUSES = new Set<AgentRunStatus>([
 
 function isTerminal(status: AgentRunStatus) {
   return TERMINAL_STATUSES.has(status);
+}
+
+/** Um reinício do serviço pode matar a tarefa em memória e deixar o registro como "executando". */
+export async function recoverStaleAgentRuns(db: RunDb, projectId: number, userId: number) {
+  const configuredTimeout = Number.isFinite(ENV.agentTotalTimeoutMs) && ENV.agentTotalTimeoutMs > 0
+    ? ENV.agentTotalTimeoutMs
+    : 120_000;
+  const cutoff = new Date(Date.now() - configuredTimeout - 15_000);
+  await db.update(agentRuns).set({
+    status: "timeout",
+    currentStep: "Execução interrompida sem estado final",
+    errorCode: "execution_interrupted",
+    errorMessage: "A execução não registrou um estado final. Ela pode ter sido interrompida por reinício do serviço. Confira os dados da obra antes de repetir qualquer comando.",
+    finishedAt: new Date(),
+  }).where(and(
+    eq(agentRuns.projectId, projectId),
+    eq(agentRuns.userId, userId),
+    eq(agentRuns.status, "executando"),
+    lt(agentRuns.startedAt, cutoff),
+  ));
 }
 
 function compactError(error: unknown) {
@@ -521,6 +541,11 @@ export async function getAgentExecutionStatus(
     )
     .orderBy(desc(agentRuns.createdAt))
     .limit(1);
+  if (row?.status === "executando") {
+    await recoverStaleAgentRuns(db, row.projectId, userId);
+    const [updated] = await db.select().from(agentRuns).where(eq(agentRuns.id, row.id)).limit(1);
+    return updated ? toView(updated) : null;
+  }
   return row ? toView(row) : null;
 }
 
@@ -540,6 +565,7 @@ export async function listAgentRuns(
   limit = 20
 ): Promise<AgentRunView[]> {
   if (!db) return [];
+  await recoverStaleAgentRuns(db, projectId, userId);
   const safeLimit = Math.min(Math.max(limit, 1), 50);
   const rows = await db
     .select()

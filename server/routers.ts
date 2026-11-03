@@ -191,6 +191,7 @@ import { derivePlanningEvidence } from "./construction/planning-evidence";
 import {
   getAgentExecutionStatus,
   listAgentRuns,
+  recoverStaleAgentRuns,
   startAgentExecution,
 } from "./agent-execution";
 import {
@@ -7633,6 +7634,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return { messages: [], requestId: null, status: null as string | null, conversationId };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        await recoverStaleAgentRuns(db, input.projectId, ctx.user.id);
         const runs = await db
           .select({
             requestId: agentRuns.requestId,
