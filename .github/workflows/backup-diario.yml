@@ -45,12 +45,6 @@ on:
     # 06:00 UTC = 03:00 em Brasilia. Fora do horario de obra.
     - cron: "0 6 * * *"
   workflow_dispatch:
-    inputs:
-      verificar_restauracao:
-        description: "Restaurar o dump num Postgres descartavel antes de publicar"
-        required: false
-        type: boolean
-        default: true
 
 concurrency:
   group: backup-diario
@@ -147,7 +141,6 @@ jobs:
           fi
 
       - name: Restaurar num Postgres descartavel e comparar
-        if: github.event_name != 'workflow_dispatch' || inputs.verificar_restauracao
         run: |
           set -euo pipefail
 
