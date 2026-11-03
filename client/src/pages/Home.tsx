@@ -872,6 +872,22 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const totalPacotes = (wbsEscopo.data ?? []).filter(n => n.nodeType === "pacote").length;
   const versaoAtual = versoesEscopo.data?.[0];
   const versaoAprovada = versoesEscopo.data?.find(v => v.status === "approved");
+  const estadoEap = versoesEscopo.isPending || wbsEscopo.isPending
+    ? "Consultando EAP…"
+    : versoesEscopo.isError || wbsEscopo.isError
+      ? "Status da EAP indisponível"
+      : versaoAtual
+        ? `EAP v${versaoAtual.versionNumber} · ${versaoAtual.status === "approved" ? "aprovada" : "em elaboração"}`
+        : (wbsEscopo.data?.length ?? 0) > 0
+          ? "EAP registrada · versão indisponível"
+          : "EAP ainda não criada";
+  const acaoEap = wbsEscopo.isPending
+    ? "Consultando EAP…"
+    : wbsEscopo.isError
+      ? "Abrir EAP"
+      : totalPacotes > 0
+        ? `Inspecionar EAP · ${totalPacotes} pacotes`
+        : "Estruturar EAP";
   const irParaEap = () => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "eap" } }));
   const cubCamposPreenchidos = [cubValor.trim(), cubUf.trim(), cubMes.trim()].filter(v => v !== "").length;
   const cubCompleto = cubCamposPreenchidos === 3;
@@ -971,14 +987,14 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
               {dadosMinimosEscopo ? "Dados de referência registrados" : "Revise o objeto antes da EAP"}
             </span>
             <span className="ct-escopo-estado informativo">
-              {versaoAtual ? "EAP v" + versaoAtual.versionNumber + " · " + (versaoAtual.status === "approved" ? "aprovada" : "em elaboração") : "EAP ainda não criada"}
+              {estadoEap}
             </span>
             {versaoAprovada && <span className="ct-escopo-estado informativo">Referência aprovada: v{versaoAprovada.versionNumber}</span>}
           </div>
         </div>
         <div className="ct-escopo-acoes">
           <button type="button" className="ct-escopo-avancar" onClick={irParaEap}>
-            <TreePine size={17} /> {totalPacotes > 0 ? "Inspecionar EAP · " + totalPacotes + " pacotes" : "Estruturar EAP"} <ArrowRight size={16} />
+            <TreePine size={17} /> {acaoEap} <ArrowRight size={16} />
           </button>
           <button type="button" className="ct-escopo-analisar" onClick={() => window.dispatchEvent(new CustomEvent("abrir-arquimedes"))}>
             <Bot size={16} /> Analisar escopo com Arquimedes
