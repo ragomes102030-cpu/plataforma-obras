@@ -5262,6 +5262,7 @@ export const appRouter = router({
                 earlyStart: scheduleActivities.earlyStart,
                 earlyFinish: scheduleActivities.earlyFinish,
                 durationDays: scheduleActivities.durationDays,
+                exemplo: scheduleActivities.exemplo,
               })
               .from(scheduleActivities)
               .where(
@@ -5283,12 +5284,18 @@ export const appRouter = router({
             earlyStart: scheduleBaselineItems.earlyStart,
             earlyFinish: scheduleBaselineItems.earlyFinish,
             durationDays: scheduleBaselineItems.durationDays,
+            exemplo: scheduleActivities.exemplo,
           })
           .from(scheduleBaselineItems)
           .innerJoin(scheduleActivities, eq(scheduleActivities.id, scheduleBaselineItems.activityId))
           .where(eq(scheduleBaselineItems.baselineId, baseline.id));
 
-        const comparacao = compararComBaseline(itens, atuais);
+        // A baseline operacional exclui atividades marcadas como exemplo/QA.
+        // Aplicar a mesma regra na comparação evita que os registros de QA
+        // apareçam como "escopo novo" em uma obra real.
+        const atuaisOperacionais = atuais.filter(activity => Number(activity.exemplo ?? 0) !== 1);
+        const itensOperacionais = itens.filter(item => Number(item.exemplo ?? 0) !== 1);
+        const comparacao = compararComBaseline(itensOperacionais, atuaisOperacionais);
         return {
           baseline: {
             id: baseline.id,
