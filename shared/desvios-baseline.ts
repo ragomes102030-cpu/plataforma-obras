@@ -25,6 +25,7 @@ export type AtividadeComparavel = {
   earlyStart: number | null;
   earlyFinish: number | null;
   durationDays: number;
+  exemplo?: number | null;
 };
 
 export type ItemDaBaseline = {
@@ -34,6 +35,7 @@ export type ItemDaBaseline = {
   earlyStart: number | null;
   earlyFinish: number | null;
   durationDays: number;
+  exemplo?: number | null;
 };
 
 export type SituacaoDesvio =
