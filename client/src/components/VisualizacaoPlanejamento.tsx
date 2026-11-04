@@ -101,14 +101,15 @@ export function VisualizacaoPlanejamento({
     onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
   });
   const definirTodosLocaisLob = async (unitId:number) => {
-    const nodePorCodigo = new Map((nodosEap.data??[]).map(node=>[node.code,node]));
     const codigos = new Set(atividadesLob.map(activity=>activity.wbsCode));
-    const pendentes = linhas
+    const codigosPendentes = [...new Set(linhas
       .filter(linha=>codigos.has(linha.codigo))
-      .map(linha=>nodePorCodigo.get(linha.codigo))
-      .filter((node): node is NonNullable<typeof node> => Boolean(node && !node.location));
-    if (pendentes.length) {
-      await definirLocaisLobEmLote.mutateAsync({projectId:projetoId,nodeCodes:pendentes.map(node=>node.code),unitId});
+      .map(linha=>linha.codigo))];
+    if (codigosPendentes.length) {
+      // Envie os códigos diretamente. O servidor resolve todas as ocorrências
+      // da versão atual e filtra folhas; isso evita perder atividades quando
+      // há códigos repetidos na grade (ex.: pacotes 1.8.1/1.8.2).
+      await definirLocaisLobEmLote.mutateAsync({projectId:projetoId,nodeCodes:codigosPendentes,unitId});
     }
     await utilsLob.projects.wbs.invalidate({projectId:projetoId});
   };
