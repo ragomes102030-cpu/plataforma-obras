@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { selectOperationalPlanning } from "../shared/operational-planning";
@@ -2800,6 +2800,54 @@ export const appRouter = router({
             .where(eq(budgetItems.budgetVersionId, existing[0].id))
             .limit(1);
           if (items.length) return { id: existing[0].id, created: false };
+        }
+
+        // Para obras novas, sem orçamento, semear um rascunho rastreável a
+        // partir das folhas da EAP corrente. Os valores são deliberadamente
+        // didáticos (1 vb / R$ 0,00), nunca apresentados como medição ou preço
+        // real; o engenheiro precisa substituir cada linha antes da aprovação.
+        const eapVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        if (eapVersionId) {
+          const eapRows = await db
+            .select({
+              id: wbsNodes.id,
+              code: wbsNodes.code,
+              name: wbsNodes.name,
+              parentId: wbsNodes.parentId,
+              nodeType: wbsNodes.nodeType,
+              versionId: wbsNodes.versionId,
+            })
+            .from(wbsNodes)
+            .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, eapVersionId)))
+            .orderBy(asc(wbsNodes.sortOrder), asc(wbsNodes.id));
+          const parentIds = new Set(eapRows.map(row => row.parentId).filter((id): id is number => id != null));
+          const leaves = eapRows.filter(row => row.nodeType === "pacote" && !parentIds.has(row.id));
+          if (leaves.length > 0) {
+            const [createdDidactic] = await db
+              .insert(budgetVersions)
+              .values({
+                projectId: input.projectId,
+                name: "Orçamento didático inicial — substituir premissas",
+                versionNumber: 1,
+                status: "rascunho",
+                currency: "BRL",
+                notes: "Linhas semeadas das folhas da EAP corrente. Quantidade, unidade e preço são placeholders didáticos e precisam de validação do engenheiro.",
+                createdBy: ctx.user.id,
+              })
+              .returning({ id: budgetVersions.id });
+            await db.insert(budgetItems).values(leaves.map((leaf, index) => ({
+              budgetVersionId: createdDidactic.id,
+              wbsNodeId: leaf.id,
+              code: leaf.code,
+              description: leaf.name,
+              unit: "vb",
+              quantity: "1.000",
+              unitPrice: "0.00",
+              source: "PENDÊNCIA DIDÁTICA — unidade, quantidade e preço não validados",
+              sortOrder: index,
+            })));
+            return { id: createdDidactic.id, created: true };
+          }
         }
         const wbsRows = await db
           .select({ id: wbsNodes.id, code: wbsNodes.code })
