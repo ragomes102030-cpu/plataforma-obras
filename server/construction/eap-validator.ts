@@ -298,7 +298,13 @@ export function validateEapScope(
       const parentDeclaresNoDefinitiveExclusions = /^nenhuma exclusao definitiva\b/.test(parentExclusionText);
       const parentExclusions = parentDeclaresNoDefinitiveExclusions
         ? []
-        : clauses(node.exclusions).filter(clause => !isPendingOrNonExclusionClause(clause));
+        : clauses(node.exclusions).filter(clause =>
+            !isPendingOrNonExclusionClause(clause) &&
+            // Uma exclusão que nomeia explicitamente um filho documenta a
+            // fronteira do pacote; não é evidência de que esse filho esteja
+            // fora do escopo do pai. Ex.: "não executa 1.3.2".
+            !childNodes.some(child => exclusionReferencesCode(clause, child.code))
+          );
 
       for (let i = 0; i < childNodes.length; i += 1) {
         for (let j = i + 1; j < childNodes.length; j += 1) {
