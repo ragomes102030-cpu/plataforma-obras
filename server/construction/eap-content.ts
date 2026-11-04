@@ -17,7 +17,6 @@ export function sameEapContent(left: EapNode[], right: EapNode[]) {
       responsible: node.responsible,
       acceptanceCriteria: node.acceptanceCriteria,
       decompositionBasis: node.decompositionBasis,
-      scopeStatus: node.scopeStatus,
       level: node.level,
       nodeType: node.nodeType,
       unit: node.unit,
