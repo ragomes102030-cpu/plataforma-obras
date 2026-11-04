@@ -56,6 +56,7 @@ import {
   type ComparableRecord,
 } from "@shared/price-sources/matching";
 import { unitsCompatible } from "@shared/price-sources/reconciliation";
+import { findBudgetApprovalBlockers } from "@shared/budget-readiness";
 import { badRequest, conflict, forbidden, notFound } from "./_core/errors";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -2851,8 +2852,14 @@ export const appRouter = router({
         if (input.status === "aprovado") {
           const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
           if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
-          const pendencias = items.filter(item => Number(item.unitPrice) <= 0 || !item.source?.trim() || item.source.trim().toLowerCase() === "a preencher");
-          if (pendencias.length) throw badRequest(`O orçamento ainda tem ${pendencias.length} item(ns) sem preço ou fonte validada: ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.`);
+          const pendencias = findBudgetApprovalBlockers(items);
+          if (pendencias.length) {
+            const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
+            throw badRequest(
+              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação (sem preço ou fonte validada): ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.` +
+              (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "")
+            );
+          }
           await db.update(budgetVersions).set({ status: "arquivado", updatedAt: new Date() }).where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado"), ne(budgetVersions.id, input.budgetVersionId)));
         }
         const [updated] = await db.update(budgetVersions).set({ status: input.status, updatedAt: new Date() }).where(eq(budgetVersions.id, input.budgetVersionId)).returning({ id: budgetVersions.id, status: budgetVersions.status });
@@ -5134,6 +5141,30 @@ export const appRouter = router({
         const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
         if (!activities.length) throw badRequest("Não há atividades operacionais para congelar como baseline.");
+        // A baseline precisa congelar prazo e custo da mesma versão lógica. Se já
+        // existe orçamento aprovado, nenhuma atividade operacional pode ficar
+        // sem item correspondente e o orçamento não pode ser apenas didático.
+        const [budgetApproved] = await db
+          .select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado")))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (budgetApproved) {
+          const approvedItems = await db
+            .select({ id: budgetItems.id, code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source })
+            .from(budgetItems)
+            .where(eq(budgetItems.budgetVersionId, budgetApproved.id));
+          const itemIds = new Set(approvedItems.map(item => item.id));
+          const semOrcamento = activities.filter(activity => activity.budgetItemId == null || !itemIds.has(activity.budgetItemId));
+          if (semOrcamento.length) {
+            throw badRequest(`A baseline exige vínculo orçamentário em todas as atividades; ${semOrcamento.length} ainda estão sem item aprovado (${semOrcamento.slice(0, 5).map(activity => activity.wbsCode).join(", ")}).`);
+          }
+          const bloqueiosOrcamento = findBudgetApprovalBlockers(approvedItems);
+          if (bloqueiosOrcamento.length) {
+            throw badRequest("A baseline está bloqueada porque o orçamento aprovado ainda contém itens sem fonte de custo real ou com fonte didática. Revise o orçamento e crie uma nova versão aprovada.");
+          }
+        }
         const semCpm = activities.filter(activity => !activity.cpmCalculatedAt);
         if (semCpm.length) {
           throw badRequest(`O CPM precisa ser calculado para todas as atividades antes da baseline; ${semCpm.length} ainda não possuem resultado.`);
