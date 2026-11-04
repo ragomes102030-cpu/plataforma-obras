@@ -4440,7 +4440,8 @@ export const appRouter = router({
     definirLocaisLobEmLote: protectedProcedure
       .input(z.object({
         projectId:z.number().int().positive(),
-        nodeIds:z.array(z.number().int().positive()).min(1).max(200),
+        nodeIds:z.array(z.number().int().positive()).min(1).max(200).optional(),
+        nodeCodes:z.array(z.string().trim().min(1).max(80)).min(1).max(200).optional(),
         unitId:z.number().int().positive().nullable(),
       }))
       .mutation(async ({ctx,input})=>{
@@ -4459,13 +4460,17 @@ export const appRouter = router({
           if(!unit)throw forbidden("Unidade física não pertence a esta obra.");
           location=unit.name;
         }
-        const ids=[...new Set(input.nodeIds)];
+        const ids=[...new Set(input.nodeIds??[])];
+        const codes=[...new Set(input.nodeCodes??[])];
+        if(!ids.length&&!codes.length)throw badRequest("Informe as folhas EAP a vincular.");
         const nodes=await db.select({id:wbsNodes.id,nodeType:wbsNodes.nodeType}).from(wbsNodes)
-          .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),inArray(wbsNodes.id,ids)));
-        if(nodes.length!==ids.length||nodes.some(node=>!isTerminalEapNode(node.nodeType)))throw badRequest("Todos os itens precisam ser folhas da EAP da versão de trabalho.");
+          .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),
+            codes.length?inArray(wbsNodes.code,codes):inArray(wbsNodes.id,ids)));
+        if(nodes.length===0||nodes.some(node=>!isTerminalEapNode(node.nodeType)))throw badRequest("Todos os itens precisam ser folhas da EAP da versão de trabalho.");
+        const resolvedIds=nodes.map(node=>node.id);
         await db.update(wbsNodes).set({location,updatedAt:new Date()})
-          .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),inArray(wbsNodes.id,ids)));
-        return {ok:true as const,versionId,location,updated:ids.length};
+          .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),inArray(wbsNodes.id,resolvedIds)));
+        return {ok:true as const,versionId,location,updated:resolvedIds.length};
       }),
     // ---------------------------------------------------------- calendário
     // A ESCRITA do calendário vive em server/construction/calendario-obra.ts,

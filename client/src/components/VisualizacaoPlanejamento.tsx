@@ -108,7 +108,7 @@ export function VisualizacaoPlanejamento({
       .map(linha=>nodePorCodigo.get(linha.codigo))
       .filter((node): node is NonNullable<typeof node> => Boolean(node && !node.location));
     if (pendentes.length) {
-      await definirLocaisLobEmLote.mutateAsync({projectId:projetoId,nodeIds:pendentes.map(node=>node.id),unitId});
+      await definirLocaisLobEmLote.mutateAsync({projectId:projetoId,nodeCodes:pendentes.map(node=>node.code),unitId});
     }
     await utilsLob.projects.wbs.invalidate({projectId:projetoId});
   };
