@@ -127,7 +127,11 @@ export function PainelConciliacao({ projetoId }: { projetoId: number }) {
   });
 
   const semComposicao = (reconciliacao.data?.items ?? []).filter(item => item.match);
-  const confiaveis = semComposicao.filter(item => (item.match?.score ?? 0) >= 0.9);
+  const confiaveis = semComposicao.filter(item =>
+    (item.match?.score ?? 0) >= 0.9 &&
+    item.match?.unit?.trim().toLowerCase().replaceAll("²", "2").replaceAll("³", "3") ===
+      item.unit.trim().toLowerCase().replaceAll("²", "2").replaceAll("³", "3")
+  );
 
   const aplicarComposicoes = (itens: typeof semComposicao) => {
     if (!itens.length) return;
@@ -335,7 +339,7 @@ export function PainelConciliacao({ projetoId }: { projetoId: number }) {
                 onClick={() => aplicarComposicoes(confiaveis)}
                 disabled={aplicarReconciliacao.isPending}
               >
-                <CheckCheck size={13} /> Aplicar as {confiaveis.length} de confiança ≥ 90%
+                <CheckCheck size={13} /> Aplicar as {confiaveis.length} de confiança ≥ 90% e unidade compatível
               </button>
             </div>
           )}
@@ -353,6 +357,7 @@ export function PainelConciliacao({ projetoId }: { projetoId: number }) {
                     <small> · {Math.round(item.match!.score * 100)}%</small>
                   </span>
                   <span>{item.match!.unitPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                  {item.match!.unit !== item.unit && <em>Unidade incompatível</em>}
                   <button
                     type="button"
                     className="pl-planejamento-cpm"
