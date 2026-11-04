@@ -72,7 +72,7 @@ describe("validateEapForBaseline", () => {
     expect(result.valid).toBe(true);
   });
 
-  it("bloqueia sobreposição de escopo na aprovação", () => {
+  it("mantém possível sobreposição textual como aviso sem bloquear a baseline", () => {
     const leaf = {
       description: "Execução de formas e concretagem.",
       inclusions: "Formas e concretagem.",
@@ -87,7 +87,7 @@ describe("validateEapForBaseline", () => {
       node({ id: 3, parentId: 1, code: "1.2", name: "Fundação B", nodeType: "pacote", ...leaf }),
     ]);
 
-    expect(result.readyForBaseline).toBe(false);
+    expect(result.readyForBaseline).toBe(true);
     expect(result.issues.some(issue => issue.code === "eap_scope_overlap_evidence")).toBe(true);
   });
 });
