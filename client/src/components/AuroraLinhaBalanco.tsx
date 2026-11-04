@@ -9,7 +9,6 @@ import {
 } from "./linha-balanco-modelo";
 import { analisarFluxoLob } from "./lob-analise-fluxo";
 import { calcularVinculosExibidos, resumoLob, taxaPlanejadaLob, type VínculoLob } from "./lob-indicadores";
-import { empacotarFaixasVisiveis } from "./lob-lanes";
 import "./linha-balanco-profissional.css";
 import { integrarDistribuicoesLob, type DistribuicaoLob, type AtividadeIdLob } from "./lob-distribuicao-modelo";
 
@@ -285,19 +284,12 @@ export function LinhaBalancoEscadinha({
       const ponto = serie.pontos.find(p => p.local === local);
       if (ponto) barras.push({ serie, ponto, cor: CORES[repetitivas.findIndex(s => s.chave === serie.chave) % CORES.length]!, indice });
     });
-    // Barras fora da janela não são desenhadas e não podem reservar faixas.
-    // Caso contrário, o filtro de datas deixa uma linha alta e quase vazia.
-    const faixas = empacotarFaixasVisiveis(
-      barras.map(barra => ({
-        codigo: barra.ponto.codigo,
-        inicio: barra.ponto.inicio,
-        fim: barra.ponto.fim,
-      })),
-      eixoInicio,
-      eixoFimExclusivo
-    );
-    for (const barra of barras) barra.indice = faixas.porCodigo.get(barra.ponto.codigo) ?? 0;
-    const altura = Math.max(64, 14 + faixas.quantidade * 23);
+    // Cada atividade recebe uma faixa própria. O empacotamento por sobreposição
+    // economizava altura, mas fazia dezenas de tarefas do mesmo local parecerem
+    // duas ou três barras sobrepostas. A escadinha precisa ser auditável: uma
+    // linha por atividade, com rolagem vertical no quadro quando necessário.
+    barras.forEach((barra, indice) => { barra.indice = indice; });
+    const altura = Math.max(64, 14 + barras.length * 23);
     deslocamentoPorLocal.set(local, alturaEscadinha);
     alturaPorLocal.set(local, altura);
     alturaEscadinha += altura;
@@ -583,7 +575,7 @@ export function LinhaBalancoEscadinha({
                         const largura = Math.max(5, ((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
                         const x = ((inicioCortado-diaUtc(eixoInicio))/DIA)*pxDia;
                         const nomeCurto = b.serie.nome.split(" ")[0] ?? b.serie.nome;
-                        return <button type="button" key={b.ponto.codigo} data-testid="lob-step-bar"
+                        return <button type="button" key={b.serie.chave+"|"+b.ponto.codigo+"|"+b.ponto.inicio} data-testid="lob-step-bar"
                           className="lob-stairs-bar" style={{left:x,top:10+b.indice*23,width:largura,backgroundColor:b.cor}}
                           aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
                           title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
