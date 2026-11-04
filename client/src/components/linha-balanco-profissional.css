@@ -196,6 +196,12 @@
 .lob-stairs-mapping-create{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0 16px;padding:12px;background:#f7fafc;border-radius:6px}
 .lob-stairs-mapping-create label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#57768a;min-width:145px;flex:1}
 .lob-stairs-mapping-create button{margin-bottom:1px}
+.lob-stairs-mapping-bulk{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:11px 12px;border:1px solid #c8e1e5;border-radius:6px;background:var(--lob-accent-soft)}
+.lob-stairs-mapping-bulk div{display:flex;flex-direction:column;gap:3px;min-width:220px}
+.lob-stairs-mapping-bulk strong{font-size:11px;color:#14566a}
+.lob-stairs-mapping-bulk span{font-size:10px;color:#547985;line-height:1.45}
+.lob-stairs-mapping-bulk button{background:#087c95;color:#fff;border-color:#087c95}
+.lob-stairs-mapping-bulk button:hover{background:#066b80}
 @media(max-width:780px){.lob-stairs-mapping{margin:10px}}
 
 /* QA é opt-in quando há planejamento real na mesma versão. Não muda a escadinha. */

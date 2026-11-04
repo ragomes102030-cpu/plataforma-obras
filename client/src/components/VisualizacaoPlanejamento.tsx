@@ -97,6 +97,16 @@ export function VisualizacaoPlanejamento({
   const definirLocalLob = trpc.planning.definirLocalLob.useMutation({
     onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
   });
+  const definirTodosLocaisLob = async (unitId:number) => {
+    const nodePorCodigo = new Map((nodosEap.data??[]).map(node=>[node.code,node]));
+    const codigos = new Set(atividadesLob.map(activity=>activity.wbsCode));
+    const pendentes = linhas
+      .filter(linha=>codigos.has(linha.codigo))
+      .map(linha=>nodePorCodigo.get(linha.codigo))
+      .filter((node): node is NonNullable<typeof node> => Boolean(node && !node.location));
+    await Promise.all(pendentes.map(node=>definirLocalLob.mutateAsync({projectId:projetoId,nodeId:node.id,unitId})));
+    await utilsLob.projects.wbs.invalidate({projectId:projetoId});
+  };
   const criarUnidadeLob = trpc.production.createUnit.useMutation({
     onSuccess:()=>utilsLob.production.units.invalidate({projectId:projetoId}),
   });
@@ -273,6 +283,7 @@ export function VisualizacaoPlanejamento({
             editavel={editavelLob} salvandoLocal={definirLocalLob.isPending}
             erroLocal={definirLocalLob.error?.message??criarUnidadeLob.error?.message??null}
             onDefinirLocal={(nodeId,unitId)=>definirLocalLob.mutate({projectId:projetoId,nodeId,unitId})}
+            onDefinirTodosLocais={(unitId)=>{void definirTodosLocaisLob(unitId);}}
             onCriarUnidade={(code,name,unitType)=>criarUnidadeLob.mutate({projectId:projetoId,code,name,unitType})}
             onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))}/>
           <LobDistribuicaoPainel
