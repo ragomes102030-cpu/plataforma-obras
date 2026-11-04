@@ -85,8 +85,8 @@ export type EvidenceResult<T> = {
 };
 
 export type LocalDatabaseReader = {
-  listEapNodes(projectId: number): Promise<EapEvidenceNode[]>;
-  getEapNode(projectId: number, ref: string): Promise<EapEvidenceNode | null>;
+  listEapNodes(projectId: number, versionId?: number): Promise<EapEvidenceNode[]>;
+  getEapNode(projectId: number, ref: string, versionId?: number): Promise<EapEvidenceNode | null>;
   listActivities(projectId: number): Promise<ScheduleEvidenceActivity[]>;
   listDependencies(projectId: number): Promise<ScheduleEvidenceDependency[]>;
 };

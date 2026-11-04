@@ -12,10 +12,11 @@ export class LocalDatabaseEvidenceSource implements EvidenceSource {
   constructor(private readonly reader: LocalDatabaseReader) {}
 
   async getEapTree(
-    projectId: number
+    projectId: number,
+    versionId?: number
   ): Promise<EvidenceResult<EapEvidenceNode[]>> {
     try {
-      const data = await this.reader.listEapNodes(projectId);
+      const data = await this.reader.listEapNodes(projectId, versionId);
       return {
         source: "local_db",
         projectId,
@@ -38,10 +39,11 @@ export class LocalDatabaseEvidenceSource implements EvidenceSource {
 
   async getEapNode(
     projectId: number,
-    ref: string
+    ref: string,
+    versionId?: number
   ): Promise<EvidenceResult<EapEvidenceNode | null>> {
     try {
-      const data = await this.reader.getEapNode(projectId, ref);
+      const data = await this.reader.getEapNode(projectId, ref, versionId);
       return {
         source: "local_db",
         projectId,

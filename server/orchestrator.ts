@@ -607,6 +607,11 @@ const LOCAL_EAP_TOOL: LlmTool = {
           maxLength: 80,
           description: "Retorna os nós filhos diretos deste código."
         },
+        versionId: {
+          type: "integer",
+          minimum: 1,
+          description: "ID explícito da versão da EAP a consultar. Quando omitido, usa a versão de trabalho atual.",
+        },
         leafOnly: {
           type: "boolean",
           description: "Quando verdadeiro, retorna somente nós terminais."
@@ -2386,7 +2391,10 @@ export async function runProjectOrchestrator(
           if (!options.localProjectId) {
             throw new Error("Identificador local da obra indisponível para consulta da EAP.");
           }
-          const result = await localDatabaseEvidenceSource.getEapTree(options.localProjectId);
+          const requestedVersionId = Number.isInteger(Number(rawArgs.versionId)) && Number(rawArgs.versionId) > 0
+            ? Number(rawArgs.versionId)
+            : undefined;
+          const result = await localDatabaseEvidenceSource.getEapTree(options.localProjectId, requestedVersionId);
           if (!result.data) {
             const message = result.errors.map(error => error.message).join(" | ") || "EAP local indisponível.";
             audit.push({
@@ -2398,7 +2406,9 @@ export async function runProjectOrchestrator(
           }
 
           const nodes = result.data;
-          const planVersion = await getCurrentPlanVersion(options.localProjectId);
+          const planVersion = requestedVersionId
+            ? { id: requestedVersionId, versionNumber: null, status: "explicit" }
+            : await getCurrentPlanVersion(options.localProjectId);
           const childrenByParent = new Map<string, number>();
           const byRef = new Map<string, (typeof nodes)[number]>();
           for (const node of nodes) {
@@ -2490,6 +2500,7 @@ export async function runProjectOrchestrator(
               limit,
               field,
               fieldState,
+              versionId: requestedVersionId ?? null,
             },
             encontrados: selected.length,
             coverage: includeCoverage
