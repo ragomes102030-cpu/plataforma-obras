@@ -29,6 +29,7 @@ type Props = {
   salvandoLocal?: boolean;
   erroLocal?: string|null;
   onDefinirLocal?: (nodeId:number,unitId:number|null)=>void;
+  onDefinirTodosLocais?: (unitId:number)=>void;
   onCriarUnidade?: (code:string,name:string,unitType:string)=>void;
   onAbrirAtividades: () => void;
   dependencias?: VínculoLob[];
@@ -77,7 +78,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  */
 export function LinhaBalancoEscadinha({
   linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],
-  editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onCriarUnidade,
+  editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onDefinirTodosLocais,onCriarUnidade,
   onAbrirAtividades,dependencias=[],estadoVinculos="carregando"
 }: Props) {
   // O cronograma pode conter serviços reais e atividades de QA em 2028.
@@ -677,6 +678,14 @@ export function LinhaBalancoEscadinha({
                     Cadastrar local
                   </button>
                 </div>
+                {editavel && unidades.length > 0 && onDefinirTodosLocais && totalGerais > 0 && (
+                  <div className="lob-stairs-mapping-bulk">
+                    <div><strong>Fechamento rápido da demonstração</strong><span>Vincula as atividades pendentes ao primeiro local abaixo, sem alterar datas, durações ou quantidades.</span></div>
+                    <button type="button" disabled={salvandoLocal} onClick={()=>onDefinirTodosLocais(unidades[0]!.id)}>
+                      {salvandoLocal ? "Gravando vínculos…" : `Vincular ${totalGerais} pendentes a ${unidades[0]!.name}`}
+                    </button>
+                  </div>
+                )}
                 <table><thead><tr><th>Atividade / EAP</th><th>Início oficial</th><th>Local confirmado</th><th>Ação</th></tr></thead>
                   <tbody>{geraisVisiveis.flatMap(g=>g.pontos).map(p=>{
                     const node=nodosEap.find(n=>n.code===p.codigo);

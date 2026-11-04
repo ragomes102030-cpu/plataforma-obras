@@ -1,10 +1,11 @@
 /* Linha de Balanço em escadinha, única visualização do cronograma clássico.
    Datas horizontais e pavimentos verticais, em grade rolável (sem SVG ilustrativo). */
-.lob-stairs{--lob-border:#dce5ec;--lob-ink:#132d45;--lob-muted:#667e91;border:1px solid var(--lob-border);background:#fff;color:var(--lob-ink);border-radius:10px;overflow:hidden;font-family:inherit;box-shadow:0 3px 14px #1235470a}
+.lob-stairs{--lob-border:#d5e1e9;--lob-ink:#102b43;--lob-muted:#60798d;--lob-accent:#087c95;--lob-accent-soft:#e7f5f7;border:1px solid var(--lob-border);background:#fff;color:var(--lob-ink);border-radius:12px;overflow:hidden;font-family:inherit;box-shadow:0 8px 26px #12354712}
 .lob-stairs *{box-sizing:border-box}
-.lob-stairs-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;padding:20px 22px 16px;border-bottom:1px solid #e5ebef}
+.lob-stairs-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;padding:20px 22px 16px;border-bottom:1px solid #e5ebef;background:linear-gradient(110deg,#fff 0%,#f7fbfc 100%)}
 .lob-stairs-eyebrow{font-size:10px;font-weight:750;letter-spacing:.08em;color:#4e7b96}
 .lob-stairs-heading h2{font-size:24px;line-height:1.2;letter-spacing:-.03em;color:#112b43;margin:6px 0 5px;font-weight:780}
+.lob-stairs-heading h2::before{content:"";display:inline-block;width:4px;height:22px;margin:0 9px 0 0;vertical-align:-3px;border-radius:4px;background:var(--lob-accent)}
 .lob-stairs-heading p{font-size:12px;color:#648096;margin:0}
 .lob-stairs-heading-actions{display:flex;gap:9px;flex-wrap:wrap}
 .lob-stairs button,.lob-stairs select,.lob-stairs input{font:inherit}
@@ -12,7 +13,7 @@
 .lob-stairs-heading-actions button,.lob-stairs-zoom-actions button,.lob-stairs-empty-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;border:1px solid #cbdce8;border-radius:6px;background:white;color:#265674;cursor:pointer;font-size:11px;font-weight:650;white-space:nowrap}
 .lob-stairs-heading-actions button:hover,.lob-stairs-zoom-actions button:hover,.lob-stairs-empty-actions button:hover{background:#edf5fc}
 .lob-stairs-heading-actions button:disabled{opacity:.5;cursor:not-allowed}
-.lob-stairs-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:12px;padding:15px 20px;background:#f8fafc;border-bottom:1px solid var(--lob-border)}
+.lob-stairs-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:12px;padding:15px 20px;background:#f4f9fb;border-bottom:1px solid var(--lob-border)}
 .lob-stairs-field{min-width:120px;max-width:240px;flex:1;display:flex;flex-direction:column;gap:6px;position:relative;font-size:11px;font-weight:720;color:#29465c}
 .lob-stairs-field>span:first-child{display:flex;align-items:center;gap:6px}
 .lob-stairs-field input[type="date"],.lob-stairs-field select,.lob-stairs-field summary,.lob-stairs-search-input{height:37px;padding:0 9px;border-radius:6px;border:1px solid #cedae4;background:#fff;font-size:12px;font-weight:500;color:#182f47;min-width:0;width:100%}
@@ -176,7 +177,7 @@
 /* Vinculação explícita das atividades aos locais reais: painel recolhível,
    sem acrescentar barras genéricas ou substituir a escadinha. */
 .lob-stairs-mapping{margin:12px 19px;border:1px solid #cbdce8;border-radius:7px;background:#fff}
-.lob-stairs-mapping summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;padding:12px 14px;background:#f3f8fc;list-style:none}
+.lob-stairs-mapping summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;padding:12px 14px;background:linear-gradient(90deg,#eef8fa,#f7fbfc);list-style:none}
 .lob-stairs-mapping summary::-webkit-details-marker{display:none}
 .lob-stairs-mapping summary strong{font-size:12px;color:#163e58}
 .lob-stairs-mapping summary span{flex:1;color:#607c8c;font-size:11px}
@@ -195,6 +196,12 @@
 .lob-stairs-mapping-create{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0 16px;padding:12px;background:#f7fafc;border-radius:6px}
 .lob-stairs-mapping-create label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#57768a;min-width:145px;flex:1}
 .lob-stairs-mapping-create button{margin-bottom:1px}
+.lob-stairs-mapping-bulk{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:11px 12px;border:1px solid #c8e1e5;border-radius:6px;background:var(--lob-accent-soft)}
+.lob-stairs-mapping-bulk div{display:flex;flex-direction:column;gap:3px;min-width:220px}
+.lob-stairs-mapping-bulk strong{font-size:11px;color:#14566a}
+.lob-stairs-mapping-bulk span{font-size:10px;color:#547985;line-height:1.45}
+.lob-stairs-mapping-bulk button{background:#087c95;color:#fff;border-color:#087c95}
+.lob-stairs-mapping-bulk button:hover{background:#066b80}
 @media(max-width:780px){.lob-stairs-mapping{margin:10px}}
 
 /* QA é opt-in quando há planejamento real na mesma versão. Não muda a escadinha. */
