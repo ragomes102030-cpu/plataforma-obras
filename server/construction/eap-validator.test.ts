@@ -545,6 +545,29 @@ describe("validateEapScope", () => {
     ]));
   });
 
+  it("não gera falso alerta quando a exclusão do pai referencia explicitamente o filho", () => {
+    const result = validateEapScope([
+      node({
+        id: 1,
+        code: "1",
+        name: "Obra",
+        nodeType: "grupo",
+        exclusions: "A execução da estrutura pertence ao pacote 1.3.2 e não faz parte deste grupo de projeto.",
+      }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.3.2",
+        name: "Execução da estrutura",
+        nodeType: "pacote",
+        description: "Execução da estrutura conforme projeto liberado.",
+        inclusions: "Execução da estrutura da edificação.",
+      }),
+    ]);
+
+    expect(result.issues.filter(issue => issue.code === "eap_child_outside_parent_scope")).toEqual([]);
+  });
+
   it("aceita profundidade variável sem exigir quatro níveis fixos", () => {
     const result = validateEapScope([
       node({ id: 1, code: "1", name: "Obra", nodeType: "grupo", decompositionBasis: "project" }),
