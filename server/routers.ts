@@ -3092,6 +3092,55 @@ export const appRouter = router({
           .returning({ id: budgetItems.id });
         return { id: createdId.id };
       }),
+    updateItem: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        budgetItemId: z.number().int().positive(),
+        code: z.string().trim().min(1).max(48).optional(),
+        description: z.string().trim().min(2).max(240).optional(),
+        unit: z.string().trim().min(1).max(32).optional(),
+        quantity: z.number().positive().optional(),
+        unitPrice: z.number().nonnegative().optional(),
+        source: z.string().trim().max(80).nullable().optional(),
+        referencePeriod: z.string().trim().max(20).nullable().optional(),
+        productivity: z.number().positive().nullable().optional(),
+        plannedDurationDays: z.number().int().positive().nullable().optional(),
+        wbsNodeId: z.number().int().positive().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [item] = await db
+          .select({
+            id: budgetItems.id,
+            budgetVersionId: budgetItems.budgetVersionId,
+            status: budgetVersions.status,
+          })
+          .from(budgetItems)
+          .innerJoin(budgetVersions, eq(budgetVersions.id, budgetItems.budgetVersionId))
+          .where(and(eq(budgetItems.id, input.budgetItemId), eq(budgetVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!item) throw notFound("Item de orçamento não encontrado.");
+        if (item.status === "aprovado" || item.status === "arquivado")
+          throw conflict("Esta versão não aceita edição.");
+        if (input.wbsNodeId != null) {
+          await assertCurrentPlanWbsLinks(db, input.projectId, [input.wbsNodeId]);
+        }
+        const values: Partial<typeof budgetItems.$inferInsert> = { updatedAt: new Date() };
+        if (input.code !== undefined) values.code = input.code;
+        if (input.description !== undefined) values.description = input.description;
+        if (input.unit !== undefined) values.unit = input.unit;
+        if (input.quantity !== undefined) values.quantity = input.quantity.toFixed(3);
+        if (input.unitPrice !== undefined) values.unitPrice = input.unitPrice.toFixed(2);
+        if (input.source !== undefined) values.source = input.source;
+        if (input.referencePeriod !== undefined) values.referencePeriod = input.referencePeriod;
+        if (input.productivity !== undefined) values.productivity = input.productivity == null ? null : input.productivity.toFixed(3);
+        if (input.plannedDurationDays !== undefined) values.plannedDurationDays = input.plannedDurationDays;
+        if (input.wbsNodeId !== undefined) values.wbsNodeId = input.wbsNodeId;
+        const [updated] = await db.update(budgetItems).set(values).where(eq(budgetItems.id, input.budgetItemId)).returning({ id: budgetItems.id });
+        return { id: updated.id };
+      }),
     createItems: protectedProcedure
       .input(
         z.object({
