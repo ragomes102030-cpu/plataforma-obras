@@ -29,7 +29,7 @@ function normalizeUnit(unit: string | null | undefined): string {
     .replace(/\s+/g, "");
 }
 
-function compatibleUnit(left: string | null | undefined, right: string | null | undefined): boolean {
+export function unitsCompatible(left: string | null | undefined, right: string | null | undefined): boolean {
   const a = normalizeUnit(left);
   const b = normalizeUnit(right);
   return Boolean(a && b && a === b);
@@ -48,7 +48,7 @@ export function reconcilePriceItem(
   const query = input.code?.trim() || input.description;
   const raw = findCandidates(query, records, options);
   const candidates = raw.map(candidate => {
-    const unitCompatible = compatibleUnit(input.unit, candidate.unit);
+    const unitCompatible = unitsCompatible(input.unit, candidate.unit);
     const variation = relativeVariation(input.manualPrice, candidate.unitPrice);
     return {
       ...candidate,

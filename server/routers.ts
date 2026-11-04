@@ -55,6 +55,7 @@ import {
   priceVariation,
   type ComparableRecord,
 } from "@shared/price-sources/matching";
+import { unitsCompatible } from "@shared/price-sources/reconciliation";
 import { badRequest, conflict, forbidden, notFound } from "./_core/errors";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -3731,6 +3732,10 @@ export const appRouter = router({
           if (!suggested || suggested.unitPrice <= 0)
             throw notFound(
               `Match ${decision.matchKind}:${decision.matchId} não encontrado ou sem preço.`
+            );
+          if (!unitsCompatible(item.unit, suggested.unit))
+            throw conflict(
+              `Unidade incompatível: orçamento ${item.unit} × sugestão SEINFRA ${suggested.unit}. Conversão automática não é permitida.`
             );
           const variation = priceVariation(manualPrice, suggested.unitPrice);
           const alert = exceedsPriceThreshold(
