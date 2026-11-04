@@ -5141,6 +5141,30 @@ export const appRouter = router({
         const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
         if (!activities.length) throw badRequest("Não há atividades operacionais para congelar como baseline.");
+        // A baseline precisa congelar prazo e custo da mesma versão lógica. Se já
+        // existe orçamento aprovado, nenhuma atividade operacional pode ficar
+        // sem item correspondente e o orçamento não pode ser apenas didático.
+        const [budgetApproved] = await db
+          .select({ id: budgetVersions.id })
+          .from(budgetVersions)
+          .where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado")))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (budgetApproved) {
+          const approvedItems = await db
+            .select({ id: budgetItems.id, code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source })
+            .from(budgetItems)
+            .where(eq(budgetItems.budgetVersionId, budgetApproved.id));
+          const itemIds = new Set(approvedItems.map(item => item.id));
+          const semOrcamento = activities.filter(activity => activity.budgetItemId == null || !itemIds.has(activity.budgetItemId));
+          if (semOrcamento.length) {
+            throw badRequest(`A baseline exige vínculo orçamentário em todas as atividades; ${semOrcamento.length} ainda estão sem item aprovado (${semOrcamento.slice(0, 5).map(activity => activity.wbsCode).join(", ")}).`);
+          }
+          const bloqueiosOrcamento = findBudgetApprovalBlockers(approvedItems);
+          if (bloqueiosOrcamento.length) {
+            throw badRequest("A baseline está bloqueada porque o orçamento aprovado ainda contém itens sem fonte de custo real ou com fonte didática. Revise o orçamento e crie uma nova versão aprovada.");
+          }
+        }
         const semCpm = activities.filter(activity => !activity.cpmCalculatedAt);
         if (semCpm.length) {
           throw badRequest(`O CPM precisa ser calculado para todas as atividades antes da baseline; ${semCpm.length} ainda não possuem resultado.`);
