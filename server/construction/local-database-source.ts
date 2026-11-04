@@ -36,10 +36,16 @@ async function getCurrentPlanVersionId(
   return version?.id ?? null;
 }
 
+function versionScope(projectId: number, versionId: number | undefined) {
+  return versionId == null
+    ? eq(wbsNodes.projectId, projectId)
+    : and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, versionId));
+}
+
 export class DrizzleLocalDatabaseReader implements LocalDatabaseReader {
-  async listEapNodes(projectId: number): Promise<EapEvidenceNode[]> {
+  async listEapNodes(projectId: number, versionId?: number): Promise<EapEvidenceNode[]> {
     const db = requireDatabase(await getDb());
-    const currentVersionId = await getCurrentPlanVersionId(db, projectId);
+    const currentVersionId = versionId ?? await getCurrentPlanVersionId(db, projectId);
     const rows = await db
       .select()
       .from(wbsNodes)
@@ -79,10 +85,11 @@ export class DrizzleLocalDatabaseReader implements LocalDatabaseReader {
 
   async getEapNode(
     projectId: number,
-    ref: string
+    ref: string,
+    versionId?: number
   ): Promise<EapEvidenceNode | null> {
     const db = requireDatabase(await getDb());
-    const currentVersionId = await getCurrentPlanVersionId(db, projectId);
+    const currentVersionId = versionId ?? await getCurrentPlanVersionId(db, projectId);
     const rows = await db
       .select()
       .from(wbsNodes)
