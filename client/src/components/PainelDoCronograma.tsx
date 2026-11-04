@@ -384,6 +384,22 @@ export function PainelDoCronograma({
     };
   })();
 
+  const alertaOrcamentoDidatico: AlertaDoPainel | null = (() => {
+    const itens = orcamento.data?.items ?? [];
+    const aprovado = orcamento.data?.versions?.some((version) => version.status === "aprovado");
+    if (!aprovado || itens.length === 0) return null;
+    const didatico = itens.filter((item) => /rateio uniforme did[aá]tico/i.test(String(item.source ?? "")));
+    if (didatico.length !== itens.length) return null;
+    return {
+      id: "orcamento-didatico",
+      nivel: "atencao",
+      titulo: "Orçamento aprovado é apenas didático",
+      detalhe: "Todos os itens estão marcados como rateio uniforme didático. Ele serve para testar o fluxo, não para controlar custo real ou valor agregado.",
+      aba: "financeiro",
+      acao: "Revisar orçamento",
+    };
+  })();
+
   // CPM desatualizado: cpmCalculatedAt anterior a updatedAt ou nulo em atividades com cpmCalculatedAt.
   const alertaCpmDesatualizado: AlertaDoPainel | null = (() => {
     const comCpm = atividades.filter((a) => a.cpmCalculatedAt);
@@ -402,7 +418,7 @@ export function PainelDoCronograma({
     };
   })();
 
-  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...(alertaCoberturaOrcamentaria ? [alertaCoberturaOrcamentaria] : []), ...(alertaCpmDesatualizado ? [alertaCpmDesatualizado] : []), ...alertas].slice(0, 6);
+  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...(alertaCoberturaOrcamentaria ? [alertaCoberturaOrcamentaria] : []), ...(alertaOrcamentoDidatico ? [alertaOrcamentoDidatico] : []), ...(alertaCpmDesatualizado ? [alertaCpmDesatualizado] : []), ...alertas].slice(0, 6);
   // Campos que chegam do backend, sem mutações. Zero só quando a fonte confirmou zero.
   const carregandoComplementos = plano.isPending || orcamento.isPending || producao.isPending || lookahead.isPending || baseline.isPending || coerencia.isPending;
   const erroComplementos = plano.isError || orcamento.isError || producao.isError || lookahead.isError || baseline.isError || coerencia.isError;
