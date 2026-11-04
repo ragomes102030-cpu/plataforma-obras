@@ -29,6 +29,22 @@ describe("LocalDatabaseEvidenceSource", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("encaminha o ID explícito da versão para comparação histórica", async () => {
+    const calls: Array<[number, number | undefined]> = [];
+    const source = new LocalDatabaseEvidenceSource(
+      makeReader({
+        listEapNodes: async (projectId, versionId) => {
+          calls.push([projectId, versionId]);
+          return [];
+        },
+      })
+    );
+
+    await source.getEapTree(7, 33);
+
+    expect(calls).toEqual([[7, 33]]);
+  });
+
   it("preserva os dados locais e declara a origem", async () => {
     const source = new LocalDatabaseEvidenceSource(
       makeReader({
