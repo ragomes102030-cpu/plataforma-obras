@@ -90,4 +90,5 @@ describe("validateEapForBaseline", () => {
     expect(result.readyForBaseline).toBe(true);
     expect(result.issues.some(issue => issue.code === "eap_scope_overlap_evidence")).toBe(true);
   });
+
 });

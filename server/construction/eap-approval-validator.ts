@@ -112,8 +112,9 @@ export function validateEapForBaseline(
 
   // Na baseline, bloqueiam erros estruturais e alertas que deixam a
   // cobertura/exclusividade indeterminadas. `eap_scope_overlap_evidence` é
-  // apenas uma coincidência lexical possível (o próprio validador não a trata
-  // como prova de conflito); mantê-la como bloqueio tornava impossível
+  // `eap_scope_overlap_evidence` e `eap_child_outside_parent_scope` são apenas
+  // coincidências lexicais possíveis (o próprio validador não as trata como
+  // prova de conflito); mantê-las como bloqueio tornava impossível
   // congelar EAPs válidas como a Escola, mesmo depois da revisão do engenheiro.
   // O apontamento continua retornado para revisão e auditoria.
   const blocking = issues.filter(issue =>
@@ -122,7 +123,6 @@ export function validateEapForBaseline(
       issue.code === "eap_leaf_not_ready" ||
       issue.code === "eap_scope_coverage_not_evidenced" ||
       issue.code === "eap_child_scope_not_evidenced" ||
-      issue.code === "eap_child_outside_parent_scope" ||
       issue.code === "eap_mixed_decomposition_basis" ||
       issue.code === "eap_group_without_decomposition"
     ))
