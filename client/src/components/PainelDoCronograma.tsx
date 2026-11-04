@@ -123,6 +123,7 @@ export function PainelDoCronograma({
     id: a.id,
     wbsNodeId: a.wbsNodeId,
     wbsCode: a.wbsCode,
+    budgetItemId: a.budgetItemId ?? null,
     cpmCalculatedAt: a.cpmCalculatedAt ?? null,
     updatedAt: a.updatedAt ?? null,
   })).filter(a => !codigosExemplo.has(a.wbsCode ?? ""));
@@ -365,6 +366,24 @@ export function PainelDoCronograma({
     };
   })();
 
+  // Cobertura incompleta não invalida automaticamente o plano: há atividades
+  // deliberadamente sem custo (por exemplo, licenças ou marcos). Mas, com um
+  // orçamento aprovado, a ausência de vínculo precisa ficar visível para não
+  // apresentar um controle financeiro parcial como se fosse integral.
+  const alertaCoberturaOrcamentaria: AlertaDoPainel | null = (() => {
+    if (!orcamento.data?.versions?.some((version) => version.status === "aprovado")) return null;
+    const semItem = atividades.filter((atividade) => atividade.budgetItemId == null);
+    if (semItem.length === 0) return null;
+    return {
+      id: "orcamento-cobertura-incompleta",
+      nivel: "atencao",
+      titulo: `${semItem.length} atividade(s) sem item de orçamento vinculado`,
+      detalhe: "O orçamento aprovado não cobre todo o plano atual. Valide se são marcos sem custo ou se faltam quantitativos e preços antes de usar o avanço financeiro.",
+      aba: "financeiro",
+      acao: "Revisar cobertura",
+    };
+  })();
+
   // CPM desatualizado: cpmCalculatedAt anterior a updatedAt ou nulo em atividades com cpmCalculatedAt.
   const alertaCpmDesatualizado: AlertaDoPainel | null = (() => {
     const comCpm = atividades.filter((a) => a.cpmCalculatedAt);
@@ -383,7 +402,7 @@ export function PainelDoCronograma({
     };
   })();
 
-  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...(alertaCpmDesatualizado ? [alertaCpmDesatualizado] : []), ...alertas].slice(0, 6);
+  const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...(alertaCoberturaOrcamentaria ? [alertaCoberturaOrcamentaria] : []), ...(alertaCpmDesatualizado ? [alertaCpmDesatualizado] : []), ...alertas].slice(0, 6);
   // Campos que chegam do backend, sem mutações. Zero só quando a fonte confirmou zero.
   const carregandoComplementos = plano.isPending || orcamento.isPending || producao.isPending || lookahead.isPending || baseline.isPending || coerencia.isPending;
   const erroComplementos = plano.isError || orcamento.isError || producao.isError || lookahead.isError || baseline.isError || coerencia.isError;
