@@ -2856,7 +2856,7 @@ export const appRouter = router({
           if (pendencias.length) {
             const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
             throw badRequest(
-              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação: ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.` +
+              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação (sem preço ou fonte validada): ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.` +
               (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "")
             );
           }
