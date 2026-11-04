@@ -1,7 +1,7 @@
 import { ENV } from "./_core/env";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "./db";
-import { budgetItems, budgetVersions, planningConstraints, projectAuditEvents, projectPlanVersions, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
+import { budgetItems, budgetVersions, planningConstraints, projectAuditEvents, projectPlanVersions, projectRisks, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { ensureWritablePlanVersion, getCurrentPlanVersion } from "./construction/plan-versions";
@@ -712,6 +712,15 @@ const LOCAL_CONSTRAINTS_READ_TOOL: LlmTool = {
   },
 };
 
+const LOCAL_RISKS_READ_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "consultar_riscos_locais",
+    description: "Consulta os riscos persistentes cadastrados para a obra no banco local, incluindo probabilidade, impacto, responsável, plano de resposta e status. Não cria nem altera riscos.",
+    parameters: { type: "object", properties: { status: { type: "string", enum: ["aberto", "mitigado", "encerrado"] } }, additionalProperties: false },
+  },
+};
+
 const LOCAL_CONSTRAINT_CREATE_TOOL: LlmTool = {
   type: "function",
   function: {
@@ -822,6 +831,25 @@ async function listLocalAgentConstraints(args: { projectId: number }) {
     .orderBy(desc(planningConstraints.createdAt))
     .limit(500);
   return { source: "local_db", available: true, items };
+}
+
+async function listLocalAgentRisks(args: { projectId: number; status?: "aberto" | "mitigado" | "encerrado" }) {
+  const db = await getDb();
+  if (!db) throw new Error("Banco de dados não configurado.");
+  const conditions = [eq(projectRisks.projectId, args.projectId)];
+  if (args.status) conditions.push(eq(projectRisks.status, args.status));
+  const items = await db.select({
+    id: projectRisks.id,
+    title: projectRisks.title,
+    description: projectRisks.description,
+    probability: projectRisks.probability,
+    impact: projectRisks.impact,
+    responsePlan: projectRisks.responsePlan,
+    responsible: projectRisks.responsible,
+    status: projectRisks.status,
+    updatedAt: projectRisks.updatedAt,
+  }).from(projectRisks).where(and(...conditions)).orderBy(desc(projectRisks.updatedAt), desc(projectRisks.id)).limit(200);
+  return { source: "local_db", available: true, total: items.length, items };
 }
 
 async function createLocalAgentConstraint(args: {
@@ -1682,7 +1710,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, LOCAL_CONSTRAINTS_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL, LOCAL_CONSTRAINT_CREATE_TOOL, LOCAL_BUDGET_SEED_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, LOCAL_CONSTRAINTS_READ_TOOL, LOCAL_RISKS_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL, LOCAL_CONSTRAINT_CREATE_TOOL, LOCAL_BUDGET_SEED_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -1941,6 +1969,7 @@ export async function runProjectOrchestrator(
     "calcular_duracao_atividade",
     "validar_rede_dependencias_local",
     "consultar_eap_local",
+    "consultar_riscos_locais",
     "consultar_memoria",
     "registrar_memoria",
     "registrar_aprendizado",
@@ -2261,6 +2290,23 @@ export async function runProjectOrchestrator(
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: compactLlmContent(JSON.stringify(result), MAX_TOOL_RESULT_CHARS) };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+      if (toolName === "consultar_riscos_locais") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!options.localProjectId) throw new Error("Identificador local da obra indisponível para consulta de riscos.");
+          const status = rawArgs.status === "aberto" || rawArgs.status === "mitigado" || rawArgs.status === "encerrado" ? rawArgs.status : undefined;
+          const result = await listLocalAgentRisks({ projectId: options.localProjectId, status });
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: JSON.stringify(result).slice(0, MAX_TOOL_RESULT_CHARS) };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
