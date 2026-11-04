@@ -2687,6 +2687,48 @@ export const appRouter = router({
           .returning();
         return atualizado;
       }),
+    revincularVersaoAtual: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        if (!currentVersion) throw notFound("A obra não possui versão de planejamento.");
+        const entries = await db
+          .select({ id: productionEntries.id, activityId: productionEntries.activityId })
+          .from(productionEntries)
+          .where(eq(productionEntries.projectId, input.projectId));
+        const oldActivities = entries.length
+          ? await db
+              .select({ id: scheduleActivities.id, eapRef: scheduleActivities.eapRef })
+              .from(scheduleActivities)
+              .where(inArray(scheduleActivities.id, entries.map((entry) => entry.activityId)))
+          : [];
+        const currentActivities = await db
+          .select({ id: scheduleActivities.id, eapRef: scheduleActivities.eapRef })
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, currentVersion.id)));
+        const byEap = new Map(currentActivities.map((activity) => [activity.eapRef, activity.id]));
+        const oldById = new Map(oldActivities.map((activity) => [activity.id, activity.eapRef]));
+        let relinked = 0;
+        let unresolved = 0;
+        for (const entry of entries) {
+          const eapRef = oldById.get(entry.activityId);
+          const newActivityId = eapRef ? byEap.get(eapRef) : undefined;
+          if (!newActivityId) {
+            unresolved += 1;
+            continue;
+          }
+          if (newActivityId !== entry.activityId) {
+            await db.update(productionEntries).set({ activityId: newActivityId, updatedAt: new Date() }).where(eq(productionEntries.id, entry.id));
+            relinked += 1;
+          }
+        }
+        const avanco = await recalcularAvancoReal(db, input.projectId);
+        await recomputeProjectProgress(db, input.projectId);
+        return { relinked, unresolved, atividadesAtualizadas: avanco.atualizadas };
+      }),
     deleteEntry: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), entryId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
