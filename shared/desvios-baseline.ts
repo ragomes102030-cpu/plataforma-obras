@@ -10,11 +10,12 @@
  * a comparação. Não consulta banco nem relógio, então o mesmo par de listas
  * gera sempre o mesmo relatório — dá para auditar e testar.
  *
- * A ligação é pelo **código da EAP**, com o id como reserva. Quando a EAP é
- * refeita (nova versão, novo import), as atividades ganham ids novos mas
- * mantêm o código: comparar por id diria que toda a obra é nova e toda a
- * baseline foi removida — e o engenheiro perderia a tarde procurando um
- * problema de dados que não existe.
+ * A ligação prioriza o id (quando a mesma versão ainda está aberta), depois a
+ * identidade composta por código + nome e só usa o código sozinho quando ele
+ * é único na fotografia. Código de EAP não é necessariamente uma chave de
+ * atividade: uma folha pode gerar várias atividades (por exemplo, projeto,
+ * execução e inspeção). Usá-lo sozinho fazia uma atividade consumir a linha
+ * errada e criava falsos "fora do plano".
  */
 
 export type AtividadeComparavel = {
@@ -88,11 +89,16 @@ export function compararComBaseline(
   // Reserva por id: só casa quando a atividade é literalmente a mesma linha do
   // banco (baseline tirada na versão que ainda está aberta).
   const basePorId = new Map<number, ItemDaBaseline>();
-  const basePorCodigo = new Map<string, ItemDaBaseline>();
+  const basePorIdentidade = new Map<string, ItemDaBaseline[]>();
+  const basePorCodigo = new Map<string, ItemDaBaseline[]>();
+  const identidade = (codigo: string | null, nome: string) =>
+    `${codigo?.trim() ?? ""}\u0000${nome.trim().toLocaleLowerCase()}`;
   for (const item of baseline) {
     basePorId.set(item.activityId, item);
     const codigo = item.wbsCode?.trim();
-    if (codigo && !basePorCodigo.has(codigo)) basePorCodigo.set(codigo, item);
+    if (codigo) basePorCodigo.set(codigo, [...(basePorCodigo.get(codigo) ?? []), item]);
+    const key = identidade(codigo ?? null, item.name);
+    basePorIdentidade.set(key, [...(basePorIdentidade.get(key) ?? []), item]);
   }
 
   const usados = new Set<ItemDaBaseline>();
@@ -100,7 +106,13 @@ export function compararComBaseline(
 
   for (const atividade of atuais) {
     const codigo = atividade.wbsCode?.trim() ?? null;
-    const item = (codigo ? basePorCodigo.get(codigo) : undefined) ?? basePorId.get(atividade.id);
+    const byId = basePorId.get(atividade.id);
+    const byIdentity = (basePorIdentidade.get(identidade(codigo, atividade.name)) ?? [])
+      .find(candidate => !usados.has(candidate));
+    const byUniqueCode = codigo && (basePorCodigo.get(codigo) ?? []).length === 1
+      ? (basePorCodigo.get(codigo) ?? [])[0]
+      : undefined;
+    const item = (byId && !usados.has(byId) ? byId : undefined) ?? byIdentity ?? byUniqueCode;
     if (item) usados.add(item);
 
     const deltaInicio = delta(atividade.earlyStart, item?.earlyStart ?? null);
