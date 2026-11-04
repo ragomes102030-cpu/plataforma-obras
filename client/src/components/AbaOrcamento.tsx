@@ -29,6 +29,9 @@ export function AbaOrcamento({ projetoId }: Props) {
       setEditandoId(null);
     },
   });
+  const atualizarStatus = trpc.budgets.updateVersionStatus.useMutation({
+    onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
+  });
 
   const items = budget.data?.items ?? [];
   const total = budget.data?.total ?? 0;
@@ -95,6 +98,13 @@ export function AbaOrcamento({ projetoId }: Props) {
               {versaoAtiva.status ? ` · ${versaoAtiva.status}` : ""}
             </p>
           )}
+          {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && (
+            <div className="xl-acoes-versao">
+              <button type="button" className="xl-btn" disabled={atualizarStatus.isPending} onClick={() => atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "em_revisao" })}>Enviar para revisão</button>
+              <button type="button" className="xl-btn xl-btn-primary" disabled={atualizarStatus.isPending} onClick={() => { if (window.confirm("Aprovar somente se todos os preços e fontes estiverem validados pelo engenheiro.")) atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "aprovado" }); }}>Aprovar orçamento</button>
+            </div>
+          )}
+          {atualizarStatus.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{atualizarStatus.error.message}</p>}
         </div>
         <div className="xl-filtros">
           <button

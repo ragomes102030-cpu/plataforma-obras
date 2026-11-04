@@ -2796,6 +2796,25 @@ export const appRouter = router({
           unavailable: false,
         };
       }),
+    updateVersionStatus: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), budgetVersionId: z.number().int().positive(), status: z.enum(["em_revisao", "aprovado", "arquivado"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [version] = await db.select({ id: budgetVersions.id, status: budgetVersions.status }).from(budgetVersions).where(and(eq(budgetVersions.id, input.budgetVersionId), eq(budgetVersions.projectId, input.projectId))).limit(1);
+        if (!version) throw notFound("Versão de orçamento não encontrada.");
+        if (version.status === "arquivado") throw conflict("Uma versão arquivada não pode voltar ao fluxo.");
+        if (input.status === "aprovado") {
+          const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
+          if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
+          const pendencias = items.filter(item => Number(item.unitPrice) <= 0 || !item.source?.trim() || item.source.trim().toLowerCase() === "a preencher");
+          if (pendencias.length) throw badRequest(`O orçamento ainda tem ${pendencias.length} item(ns) sem preço ou fonte validada: ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.`);
+          await db.update(budgetVersions).set({ status: "arquivado", updatedAt: new Date() }).where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado"), ne(budgetVersions.id, input.budgetVersionId)));
+        }
+        const [updated] = await db.update(budgetVersions).set({ status: input.status, updatedAt: new Date() }).where(eq(budgetVersions.id, input.budgetVersionId)).returning({ id: budgetVersions.id, status: budgetVersions.status });
+        return updated;
+      }),
     createVersion: protectedProcedure
       .input(
         z.object({

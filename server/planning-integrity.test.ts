@@ -355,4 +355,18 @@ describe("aplicarPropostaEap", () => {
     await db.update(budgetVersions).set({ status: "aprovado" }).where(eq(budgetVersions.id, budget!.id));
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
+
+  it("não aprova orçamento com placeholders e arquiva a versão aprovada anterior", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [previous] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento anterior", versionNumber: 1, status: "aprovado" }).returning({ id: budgetVersions.id });
+    const [draft] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento novo", versionNumber: 2, status: "rascunho" }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({ budgetVersionId: draft!.id, wbsNodeId: root!.id, code: "ITEM-APPROVAL", description: "Serviço", unit: "vb", quantity: "1.000", unitPrice: "0.00", source: "A preencher" }).returning({ id: budgetItems.id });
+
+    await expect(caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" })).rejects.toThrow(/sem preço ou fonte validada/i);
+    await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 100, source: "SINAPI 2026 — validar referência" });
+    await caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" });
+    const versions = await db.select({ id: budgetVersions.id, status: budgetVersions.status }).from(budgetVersions).where(eq(budgetVersions.projectId, projectId));
+    expect(versions.find(version => version.id === previous!.id)?.status).toBe("arquivado");
+    expect(versions.find(version => version.id === draft!.id)?.status).toBe("aprovado");
+  });
 });
