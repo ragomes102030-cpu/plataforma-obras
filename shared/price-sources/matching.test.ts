@@ -8,6 +8,7 @@ import {
   similarityScore,
   type ComparableRecord,
 } from "./matching";
+import { reconcilePriceItem } from "./reconciliation";
 
 const base: ComparableRecord[] = [
   {
@@ -101,5 +102,32 @@ describe("priceVariation / threshold", () => {
     expect(exceedsPriceThreshold(100, 131, 10)).toBe(true);
     // valor inválido cai no default 30
     expect(exceedsPriceThreshold(100, 131, Number.NaN)).toBe(true);
+  });
+});
+
+describe("reconcilePriceItem — revisão técnica sem autolink", () => {
+  it("retorna candidato compatível e calcula variação", () => {
+    const result = reconcilePriceItem(
+      { code: "C1000", description: "Concreto estrutural", unit: "m³", manualPrice: 500 },
+      base,
+    );
+    expect(result.status).toBe("candidato");
+    expect(result.candidates[0].unitCompatible).toBe(true);
+    expect(result.candidates[0].variation).toBeCloseTo(0.04);
+  });
+
+  it("não converte unidade incompatível", () => {
+    const result = reconcilePriceItem(
+      { description: "Concreto estrutural", unit: "m²", manualPrice: 500 },
+      base,
+    );
+    expect(result.status).toBe("unidade_incompativel");
+    expect(result.candidates[0].unitCompatible).toBe(false);
+    expect(result.candidates[0].reason).toMatch(/não fará conversão/i);
+  });
+
+  it("marca ausência de candidato sem criar vínculo", () => {
+    expect(reconcilePriceItem({ description: "Serviço inexistente", unit: "vb" }, base).status)
+      .toBe("sem_candidato");
   });
 });
