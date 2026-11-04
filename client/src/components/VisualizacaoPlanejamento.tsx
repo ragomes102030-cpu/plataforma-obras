@@ -104,7 +104,11 @@ export function VisualizacaoPlanejamento({
       .filter(linha=>codigos.has(linha.codigo))
       .map(linha=>nodePorCodigo.get(linha.codigo))
       .filter((node): node is NonNullable<typeof node> => Boolean(node && !node.location));
-    await Promise.all(pendentes.map(node=>definirLocalLob.mutateAsync({projectId:projetoId,nodeId:node.id,unitId})));
+    // Gravar uma unidade por vez evita que mutações concorrentes sobrescrevam
+    // o mesmo dicionário da EAP quando vários vínculos são aplicados em lote.
+    for (const node of pendentes) {
+      await definirLocalLob.mutateAsync({projectId:projetoId,nodeId:node.id,unitId});
+    }
     await utilsLob.projects.wbs.invalidate({projectId:projetoId});
   };
   const criarUnidadeLob = trpc.production.createUnit.useMutation({
