@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { budgetItems, budgetVersions, projectPlanVersions, projects, scheduleActivities, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
@@ -319,5 +320,39 @@ describe("aplicarPropostaEap", () => {
     });
     const persisted = (await db.select().from(wbsNodes)).find(node => node.id === leaf!.id);
     expect(persisted).toMatchObject({ name: "Estrutura", description: "Elementos estruturais previstos no escopo registrado." });
+  });
+
+  it("edita item de orçamento em rascunho e bloqueia versão aprovada", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Orçamento editável",
+      versionNumber: 1,
+      status: "rascunho",
+    }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "ITEM-EDIT",
+      description: "Serviço placeholder",
+      unit: "vb",
+      quantity: "1.000",
+      unitPrice: "0.00",
+      source: "PENDÊNCIA DIDÁTICA",
+    }).returning({ id: budgetItems.id });
+
+    await caller.budgets.updateItem({
+      projectId,
+      budgetItemId: item!.id,
+      unit: "m²",
+      quantity: 120.5,
+      unitPrice: 42.75,
+      source: "SINAPI — validar referência",
+    });
+    const [persisted] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    expect(persisted).toMatchObject({ unit: "m²", quantity: "120.500", unitPrice: "42.75", source: "SINAPI — validar referência" });
+
+    await db.update(budgetVersions).set({ status: "aprovado" }).where(eq(budgetVersions.id, budget!.id));
+    await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
 });
