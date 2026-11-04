@@ -65,6 +65,24 @@ describe("comparar com a baseline", () => {
     expect(resumo.removidas).toBe(0);
   });
 
+  it("distingue atividades diferentes que compartilham a mesma folha EAP", () => {
+    const { linhas, resumo } = compararComBaseline(
+      [
+        { ...base(7, "1.8.1", 0, 10), name: "Projeto arquitetônico" },
+        { ...base(8, "1.8.1", 10, 20), name: "Compatibilização" },
+      ],
+      [
+        { ...atual(99, "1.8.1", 0, 12), name: "Projeto arquitetônico" },
+        { ...atual(100, "1.8.1", 10, 22), name: "Compatibilização" },
+      ],
+    );
+
+    expect(resumo.novas).toBe(0);
+    expect(resumo.removidas).toBe(0);
+    expect(linhas.map(linha => linha.atividadeId)).toEqual([99, 100]);
+    expect(linhas.map(linha => linha.deltaFim)).toEqual([2, 2]);
+  });
+
   it("aponta escopo novo e escopo que sumiu", () => {
     const { linhas, resumo } = compararComBaseline(
       [base(1, "1.1", 0, 10), base(2, "1.2", 10, 20)],
