@@ -15,11 +15,20 @@ function moeda(valor: number): string {
 
 export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "" });
+  const utils = trpc.useUtils();
 
   const budget = trpc.budgets.list.useQuery(
     { projectId: Number(projetoId) },
     { enabled: Number(projetoId) > 0 }
   );
+  const atualizarItem = trpc.budgets.updateItem.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
+      setEditandoId(null);
+    },
+  });
 
   const items = budget.data?.items ?? [];
   const total = budget.data?.total ?? 0;
@@ -38,6 +47,32 @@ export function AbaOrcamento({ projetoId }: Props) {
           if (filtro === "sem_valor") return Number(i.unitPrice) === 0;
           return true;
         });
+
+  function iniciarEdicao(item: (typeof items)[number]) {
+    setEditandoId(item.id);
+    setRascunho({
+      code: item.code,
+      description: item.description,
+      unit: item.unit,
+      quantity: String(item.quantity),
+      unitPrice: String(item.unitPrice),
+      source: item.source ?? "",
+    });
+  }
+
+  function salvarEdicao() {
+    if (editandoId == null) return;
+    atualizarItem.mutate({
+      projectId: Number(projetoId),
+      budgetItemId: editandoId,
+      code: rascunho.code,
+      description: rascunho.description,
+      unit: rascunho.unit,
+      quantity: Number(rascunho.quantity),
+      unitPrice: Number(rascunho.unitPrice),
+      source: rascunho.source || null,
+    });
+  }
 
   return (
     <div className="xl-painel">
@@ -181,15 +216,27 @@ export function AbaOrcamento({ projetoId }: Props) {
               </tr>
             ) : (
               itensFiltrados.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.code}</td>
-                  <td>{item.description}</td>
-                  <td>{item.unit}</td>
-                  <td>{Number(item.quantity).toLocaleString("pt-BR")}</td>
-                  <td>{moeda(Number(item.unitPrice))}</td>
-                  <td>{moeda(Number(item.quantity) * Number(item.unitPrice))}</td>
-                  <td>{item.source}</td>
-                </tr>
+                editandoId === item.id ? (
+                  <tr key={item.id}>
+                    <td><input aria-label="Código do item" value={rascunho.code} onChange={e => setRascunho({ ...rascunho, code: e.target.value })} /></td>
+                    <td><input aria-label="Descrição do item" value={rascunho.description} onChange={e => setRascunho({ ...rascunho, description: e.target.value })} /></td>
+                    <td><input aria-label="Unidade do item" value={rascunho.unit} onChange={e => setRascunho({ ...rascunho, unit: e.target.value })} /></td>
+                    <td><input aria-label="Quantidade do item" type="number" min="0.001" step="0.001" value={rascunho.quantity} onChange={e => setRascunho({ ...rascunho, quantity: e.target.value })} /></td>
+                    <td><input aria-label="Preço unitário do item" type="number" min="0" step="0.01" value={rascunho.unitPrice} onChange={e => setRascunho({ ...rascunho, unitPrice: e.target.value })} /></td>
+                    <td>—</td>
+                    <td><input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} /><button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button><button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button></td>
+                  </tr>
+                ) : (
+                  <tr key={item.id}>
+                    <td>{item.code}</td>
+                    <td>{item.description}</td>
+                    <td>{item.unit}</td>
+                    <td>{Number(item.quantity).toLocaleString("pt-BR")}</td>
+                    <td>{moeda(Number(item.unitPrice))}</td>
+                    <td>{moeda(Number(item.quantity) * Number(item.unitPrice))}</td>
+                    <td>{item.source}<button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
+                  </tr>
+                )
               ))
             )}
           </tbody>
