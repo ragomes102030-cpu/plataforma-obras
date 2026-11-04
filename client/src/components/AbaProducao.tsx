@@ -74,6 +74,14 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
       setObservacao("");
     },
   });
+  const revincular = trpc.production.revincularVersaoAtual.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.production.entries.invalidate({ projectId: projetoId }),
+        utils.planning.list.invalidate({ projectId: projetoId }),
+      ]);
+    },
+  });
   // As linhas são as atividades do cronograma, na ordem do código. Vêm do
   // `grade`, que já aplicou o motor e sabe a ordem.
   const linhas: Linha[] = useMemo(() => {
@@ -414,6 +422,25 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           confirme de novo.
         </p>
       </div>
+      {todosLancamentos.some(l => l.vinculo === "perdido") && (
+        <div className="prod-revinculo-aviso" role="status">
+          <div>
+            <strong>Há lançamentos confirmados de uma versão anterior.</strong>
+            <span>O sistema pode revincular automaticamente apenas os códigos EAP que continuam iguais na versão atual; data e quantidade não são alteradas.</span>
+          </div>
+          <button
+            type="button"
+            className="eap-btn"
+            disabled={revincular.isPending}
+            onClick={() => revincular.mutate({ projectId: projetoId })}
+          >
+            {revincular.isPending ? "Revinculando…" : "Revincular ao plano atual"}
+          </button>
+          {revincular.isSuccess && (
+            <span>Revinculados: {revincular.data.relinked}; sem correspondência: {revincular.data.unresolved}.</span>
+          )}
+        </div>
+      )}
       <ListaLancamentosProducao projetoId={projetoId} lancamentos={todosLancamentos} />
     </div>
   );
