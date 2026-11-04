@@ -56,6 +56,7 @@ import {
   type ComparableRecord,
 } from "@shared/price-sources/matching";
 import { unitsCompatible } from "@shared/price-sources/reconciliation";
+import { findBudgetApprovalBlockers } from "@shared/budget-readiness";
 import { badRequest, conflict, forbidden, notFound } from "./_core/errors";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -2851,8 +2852,14 @@ export const appRouter = router({
         if (input.status === "aprovado") {
           const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
           if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
-          const pendencias = items.filter(item => Number(item.unitPrice) <= 0 || !item.source?.trim() || item.source.trim().toLowerCase() === "a preencher");
-          if (pendencias.length) throw badRequest(`O orçamento ainda tem ${pendencias.length} item(ns) sem preço ou fonte validada: ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.`);
+          const pendencias = findBudgetApprovalBlockers(items);
+          if (pendencias.length) {
+            const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
+            throw badRequest(
+              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação: ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.` +
+              (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "")
+            );
+          }
           await db.update(budgetVersions).set({ status: "arquivado", updatedAt: new Date() }).where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado"), ne(budgetVersions.id, input.budgetVersionId)));
         }
         const [updated] = await db.update(budgetVersions).set({ status: input.status, updatedAt: new Date() }).where(eq(budgetVersions.id, input.budgetVersionId)).returning({ id: budgetVersions.id, status: budgetVersions.status });
