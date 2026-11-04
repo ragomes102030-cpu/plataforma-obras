@@ -4466,11 +4466,15 @@ export const appRouter = router({
         const nodes=await db.select({id:wbsNodes.id,nodeType:wbsNodes.nodeType}).from(wbsNodes)
           .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),
             codes.length?inArray(wbsNodes.code,codes):inArray(wbsNodes.id,ids)));
-        if(nodes.length===0||nodes.some(node=>!isTerminalEapNode(node.nodeType)))throw badRequest("Todos os itens precisam ser folhas da EAP da versão de trabalho.");
-        const resolvedIds=nodes.map(node=>node.id);
+        // Um lote vindo da LOB pode misturar códigos de nós agregadores e folhas
+        // enquanto a EAP ainda está sendo desdobrada. Um item inválido não deve
+        // abortar as vinculações válidas do restante do lote.
+        const folhas=nodes.filter(node=>isTerminalEapNode(node.nodeType));
+        if(folhas.length===0)throw badRequest("Nenhuma atividade elegível (folha da EAP) foi encontrada para vinculação.");
+        const resolvedIds=folhas.map(node=>node.id);
         await db.update(wbsNodes).set({location,updatedAt:new Date()})
           .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),inArray(wbsNodes.id,resolvedIds)));
-        return {ok:true as const,versionId,location,updated:resolvedIds.length};
+        return {ok:true as const,versionId,location,updated:resolvedIds.length,skipped:nodes.length-resolvedIds.length};
       }),
     // ---------------------------------------------------------- calendário
     // A ESCRITA do calendário vive em server/construction/calendario-obra.ts,
