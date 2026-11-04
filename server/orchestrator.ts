@@ -1,7 +1,7 @@
 import { ENV } from "./_core/env";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "./db";
-import { planningConstraints, projectAuditEvents, projectPlanVersions, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
+import { budgetItems, budgetVersions, planningConstraints, projectAuditEvents, projectPlanVersions, projects, scheduleActivities, scheduleDependencies, wbsNodes } from "../drizzle/schema";
 import { validateEap } from "./construction/eap-validator";
 import { validateDependencies } from "./construction/dependency-validator";
 import { ensureWritablePlanVersion, getCurrentPlanVersion } from "./construction/plan-versions";
@@ -651,6 +651,15 @@ const LOCAL_EAP_TOOL: LlmTool = {
       additionalProperties: false
     }
   }
+};
+
+const LOCAL_BUDGET_SEED_TOOL: LlmTool = {
+  type: "function",
+  function: {
+    name: "garantir_orcamento_didatico_local",
+    description: "Cria, somente quando a obra ainda não possui itens de orçamento, uma versão rascunho com uma linha por folha pacote da EAP corrente. Cada linha é placeholder didático (1 vb, R$ 0,00) e deve permanecer explicitamente pendente até validação do engenheiro.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+  },
 };
 
 const LOCAL_ACTIVITY_TOOL: LlmTool = {
@@ -1673,7 +1682,7 @@ function toOpenAiTools(
   // O chat do Arquimedes permanece no papel de orquestrador. A Análise/Revisão
   // formal com Euclides ocorre no fluxo próprio e não deve ser disparada
   // silenciosamente por uma mensagem de chat.
-  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, LOCAL_CONSTRAINTS_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL, LOCAL_CONSTRAINT_CREATE_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
+  return [...tools, INTERNAL_EAP_TOOL, INTERNAL_CPM_TOOL, ...INTERNAL_ENGINEERING_TOOLS, ENGINEERING_TEAM_TOOL, ENGINEERING_GAP_TOOL, LOCAL_EAP_TOOL, LOCAL_ACTIVITIES_READ_TOOL, LOCAL_CONSTRAINTS_READ_TOOL, MEMORY_RECALL_TOOL, MEMORY_WRITE_TOOL, LEARNING_WRITE_TOOL, ...(allowMutations ? [LOCAL_PROJECT_SCOPE_UPDATE_TOOL, LOCAL_ACTIVITY_TOOL, LOCAL_DEPENDENCIES_TOOL, LOCAL_EAP_APPLY_TOOL, LOCAL_CONSTRAINT_CREATE_TOOL, LOCAL_BUDGET_SEED_TOOL] : []), WEB_RESEARCH_TOOL, ...RUNTIME_TOOLS];
 }
 
 function hasExplicitMutationConfirmation(messages: AgentMessage[]) {
@@ -2184,6 +2193,39 @@ export async function runProjectOrchestrator(
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
           await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
           return { ok: true, content: serialized };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "error" });
+          return { ok: false, error: message, content: "" };
+        }
+      }
+
+      if (toolName === "garantir_orcamento_didatico_local") {
+        const startedAt = Date.now();
+        await emit({ type: "tool_started", iteration, domain: "runtime", toolName });
+        try {
+          if (!allowMutations) throw new Error("A criação do orçamento exige ordem operacional explícita.");
+          if (!options.localProjectId || !options.userId) throw new Error("Sessão local da obra indisponível para criar orçamento.");
+          const db = await getDb();
+          if (!db) throw new Error("Banco local indisponível para criar orçamento.");
+          const existing = await db.select({ id: budgetVersions.id }).from(budgetVersions).where(eq(budgetVersions.projectId, options.localProjectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
+          if (existing[0]) {
+            const items = await db.select({ id: budgetItems.id }).from(budgetItems).where(eq(budgetItems.budgetVersionId, existing[0].id)).limit(1);
+            if (items.length) return { ok: true, content: JSON.stringify({ status: "already_present_and_verified", versionId: existing[0].id, itemCount: items.length, fonte: "local_db" }) };
+          }
+          const eapVersion = await getCurrentPlanVersion(options.localProjectId);
+          const eapVersionId = eapVersion?.id ?? null;
+          if (!eapVersionId) throw new Error("A obra ainda não possui versão de EAP para semear o orçamento.");
+          const rows = await db.select({ id: wbsNodes.id, code: wbsNodes.code, name: wbsNodes.name, parentId: wbsNodes.parentId, nodeType: wbsNodes.nodeType }).from(wbsNodes).where(and(eq(wbsNodes.projectId, options.localProjectId), eq(wbsNodes.versionId, eapVersionId))).orderBy(wbsNodes.sortOrder, wbsNodes.id);
+          const parentIds = new Set(rows.map(row => row.parentId).filter((id): id is number => id != null));
+          const leaves = rows.filter(row => row.nodeType === "pacote" && !parentIds.has(row.id));
+          if (!leaves.length) throw new Error("A EAP corrente não possui folhas pacote para semear o orçamento.");
+          const [version] = await db.insert(budgetVersions).values({ projectId: options.localProjectId, name: "Orçamento didático inicial — substituir premissas", versionNumber: existing[0] ? 2 : 1, status: "rascunho", currency: "BRL", notes: "Linhas semeadas da EAP; quantidade, unidade e preço são placeholders didáticos.", createdBy: options.userId }).returning({ id: budgetVersions.id });
+          await db.insert(budgetItems).values(leaves.map((leaf, index) => ({ budgetVersionId: version.id, wbsNodeId: leaf.id, code: leaf.code, description: leaf.name, unit: "vb", quantity: "1.000", unitPrice: "0.00", source: "PENDÊNCIA DIDÁTICA — unidade, quantidade e preço não validados", sortOrder: index })));
+          audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "success", durationMs: Date.now() - startedAt });
+          await emit({ type: "tool_finished", iteration, domain: "runtime", toolName, status: "success" });
+          return { ok: true, content: compactLlmContent(JSON.stringify({ status: "criado_e_conferido", fonte: "local_db", versionId: version.id, itemCount: leaves.length, eapVersionId }), MAX_TOOL_RESULT_CHARS) };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           audit.push({ taskId, iteration, event: "tool_call", domain: "runtime", toolName, status: "error", durationMs: Date.now() - startedAt, error: message });
