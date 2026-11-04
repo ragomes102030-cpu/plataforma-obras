@@ -23,6 +23,10 @@ export function AbaOrcamento({ projetoId }: Props) {
     { projectId: Number(projetoId) },
     { enabled: Number(projetoId) > 0 }
   );
+  const coerencia = trpc.planning.validateEngineeringCoherence.useQuery(
+    { projectId: Number(projetoId) },
+    { enabled: Number(projetoId) > 0, retry: false, staleTime: 5 * 60_000 }
+  );
   const atualizarItem = trpc.budgets.updateItem.useMutation({
     onSuccess: async () => {
       await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
@@ -39,6 +43,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const itensSemValor = items.length - itensComValor;
 
   const versaoAtiva = budget.data?.versions?.find((v) => v.id === budget.data?.activeVersionId);
+  const errosDeEngenharia = (coerencia.data?.issues ?? []).filter((issue) => issue.severity === "error");
   const carregando = budget.isPending;
   const erro = budget.isError;
 
@@ -97,6 +102,12 @@ export function AbaOrcamento({ projetoId }: Props) {
               Versão ativa: v{versaoAtiva.versionNumber} · {versaoAtiva.name}
               {versaoAtiva.status ? ` · ${versaoAtiva.status}` : ""}
             </p>
+          )}
+          {!carregando && !erro && versaoAtiva?.status === "aprovado" && errosDeEngenharia.length > 0 && (
+            <div className="xl-aviso" role="status">
+              <strong>Revisão técnica necessária antes de usar este orçamento como controle.</strong>
+              <p>{errosDeEngenharia.length} incompatibilidade(s) de engenharia foram identificadas. A aprovação existente foi preservada; corrija em uma nova versão antes de substituir a referência atual.</p>
+            </div>
           )}
           {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && (
             <div className="xl-acoes-versao">
