@@ -20,10 +20,9 @@ describe("hierarquia da navegação da obra", () => {
     expect(grupoDe("documentos")).toBe("GOVERNANÇA");
   });
 
-  it("não anuncia cadastro de riscos como pronto enquanto não há persistência", () => {
+  it("anuncia riscos como prontos quando o cadastro é persistente", () => {
     expect(ABAS.find(aba => aba.id === "riscos")).toMatchObject({
-      status: "pendente",
-      falta: expect.stringContaining("persistente"),
+      status: "pronta",
     });
   });
 });
