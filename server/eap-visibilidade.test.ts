@@ -31,10 +31,10 @@ function corpoDoCreate(): string {
   return router.slice(inicio, fim === -1 ? inicio + 9000 : fim);
 }
 
-describe("nova obra começa sem EAP genérica", () => {
-  it("projects.create não chama o seeder da EAP", () => {
+describe("nova obra nasce com plano inicial revisável", () => {
+  it("projects.create chama o seeder do plano inicial", () => {
     expect(corpoDoCreate()).not.toMatch(/semearEapDoCatalogo\s*\(/);
-    expect(corpoDoCreate()).not.toMatch(/seedStarterPlan\s*\(/);
+    expect(corpoDoCreate()).toMatch(/seedStarterPlan\s*\(/);
   });
 
   it("projects.create mantém a descrição do cliente para o planejamento", () => {
