@@ -4436,6 +4436,37 @@ export const appRouter = router({
         ));
         return {ok:true as const,versionId,location};
       }),
+    /** Confirma várias folhas EAP de uma vez, em uma única atualização. */
+    definirLocaisLobEmLote: protectedProcedure
+      .input(z.object({
+        projectId:z.number().int().positive(),
+        nodeIds:z.array(z.number().int().positive()).min(1).max(200),
+        unitId:z.number().int().positive().nullable(),
+      }))
+      .mutation(async ({ctx,input})=>{
+        const db=await getDb();
+        if(!db)throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db,input.projectId,ctx.user.id);
+        const versionId=await getCurrentPlanVersionId(db,input.projectId);
+        if(versionId==null)throw conflict("Sem versão de trabalho do planejamento.");
+        const [version]=await db.select({status:projectPlanVersions.status}).from(projectPlanVersions)
+          .where(and(eq(projectPlanVersions.id,versionId),eq(projectPlanVersions.projectId,input.projectId))).limit(1);
+        if(!version||!["draft","proposed"].includes(version.status))throw conflict("A versão aprovada/histórica está congelada. Crie uma versão de trabalho.");
+        let location:string|null=null;
+        if(input.unitId!==null){
+          const [unit]=await db.select({name:productionUnits.name}).from(productionUnits)
+            .where(and(eq(productionUnits.id,input.unitId),eq(productionUnits.projectId,input.projectId))).limit(1);
+          if(!unit)throw forbidden("Unidade física não pertence a esta obra.");
+          location=unit.name;
+        }
+        const ids=[...new Set(input.nodeIds)];
+        const nodes=await db.select({id:wbsNodes.id,nodeType:wbsNodes.nodeType}).from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),inArray(wbsNodes.id,ids)));
+        if(nodes.length!==ids.length||nodes.some(node=>!isTerminalEapNode(node.nodeType)))throw badRequest("Todos os itens precisam ser folhas da EAP da versão de trabalho.");
+        await db.update(wbsNodes).set({location,updatedAt:new Date()})
+          .where(and(eq(wbsNodes.projectId,input.projectId),eq(wbsNodes.versionId,versionId),inArray(wbsNodes.id,ids)));
+        return {ok:true as const,versionId,location,updated:ids.length};
+      }),
     // ---------------------------------------------------------- calendário
     // A ESCRITA do calendário vive em server/construction/calendario-obra.ts,
     // junto da leitura. Este router é só a porta tRPC: não toca
