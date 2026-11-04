@@ -153,6 +153,13 @@
       "when": 1793203200000,
       "tag": "0021_lob_activity_locations",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793289600000,
+      "tag": "0022_project_risks",
+      "breakpoints": true
     }
   ],
   "version": "7",

@@ -218,7 +218,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
     ).toEqual([]);
   });
 
-  it("reconhece as 43 tabelas, os 39 tipos e as 30 triggers", () => {
+  it("reconhece as 44 tabelas, os 39 tipos e as 31 triggers", () => {
     const conta = { table: 0, type: 0, trigger: 0 };
     for (const arquivo of arquivos) {
       for (const stmt of statementsDe(arquivo)) {
@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 43, type: 39, trigger: 30 });
+    expect(conta).toEqual({ table: 44, type: 39, trigger: 31 });
   });
 });
 
@@ -305,7 +305,7 @@ describe("aplicarMigracoes num banco vazio", () => {
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
       // 42 do schema + a de registro.
-      expect(tabelas.rows[0]!.n).toBe(44);
+      expect(tabelas.rows[0]!.n).toBe(45);
     } finally {
       await pg.close();
     }
@@ -418,7 +418,7 @@ describe("aplicarMigracoes num banco vazio", () => {
       const depois = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM information_schema.triggers"
       );
-      expect(depois.rows[0]!.n).toBe(30);
+      expect(depois.rows[0]!.n).toBe(31);
 
       // E o que o Render derrubou duas vezes: ao reaplicar a 0000 inteira, o
       // `CREATE TYPE "users_role"` que JA EXISTIA rodava de novo e o banco

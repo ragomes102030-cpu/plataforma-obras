@@ -8,6 +8,7 @@ import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquime
 import { GatewayArquimedesProvider } from "./agent/providers/gateway-provider";
 import {
   projects,
+  projectRisks,
   productionEntries,
   productionFronts,
   productionTeams,
@@ -1355,6 +1356,54 @@ export const appRouter = router({
       setEnabled: adminProcedure.input(z.object({capabilityId:z.string().min(1),enabled:z.boolean()})).mutation(async({input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({enabled:input.enabled,status:input.enabled?"installed":"available",updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name,enabled:row.enabled};}),
       uninstall: adminProcedure.input(z.object({capabilityId:z.string().min(1)})).mutation(async({input})=>{const db=await getDb();if(!db)throw new Error("Banco de dados não configurado.");const [row]=await db.update(arquimedesCapabilities).set({enabled:false,status:"available",updatedAt:new Date()}).where(eq(arquimedesCapabilities.id,input.capabilityId)).returning();if(!row)throw notFound("Capacidade não encontrada.");return {name:row.name};}),
     }),
+  }),
+  risks: router({
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db.select().from(projectRisks).where(eq(projectRisks.projectId, input.projectId)).orderBy(desc(projectRisks.updatedAt), desc(projectRisks.id));
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        title: z.string().trim().min(3).max(180),
+        description: z.string().trim().min(3).max(4000),
+        probability: z.number().int().min(1).max(5),
+        impact: z.number().int().min(1).max(5),
+        responsePlan: z.string().trim().max(4000).optional(),
+        responsible: z.string().trim().max(160).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [risk] = await db.insert(projectRisks).values({ ...input, responsePlan: input.responsePlan || null, responsible: input.responsible || null, createdBy: ctx.user.id }).returning();
+        return risk;
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        projectId: z.number().int().positive(),
+        title: z.string().trim().min(3).max(180).optional(),
+        description: z.string().trim().min(3).max(4000).optional(),
+        probability: z.number().int().min(1).max(5).optional(),
+        impact: z.number().int().min(1).max(5).optional(),
+        responsePlan: z.string().trim().max(4000).nullable().optional(),
+        responsible: z.string().trim().max(160).nullable().optional(),
+        status: z.enum(["aberto", "mitigado", "encerrado"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const { id, projectId, ...changes } = input;
+        const [risk] = await db.update(projectRisks).set({ ...changes, updatedAt: new Date() }).where(and(eq(projectRisks.id, id), eq(projectRisks.projectId, projectId))).returning();
+        if (!risk) throw notFound("Risco não encontrado.");
+        return risk;
+      }),
   }),
   projects: router({
     list: protectedProcedure.query(async ({ ctx }) => {

@@ -263,6 +263,23 @@ export const projects = pgTable("projects", {
   deletedAtBy: integer("deletedAtBy").references(() => users.id),
 });
 
+export const projectRisks = pgTable("project_risks", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  projectId: integer("projectId").notNull().references(() => projects.id),
+  title: varchar("title", { length: 180 }).notNull(),
+  description: text("description").notNull(),
+  probability: integer("probability").notNull(),
+  impact: integer("impact").notNull(),
+  responsePlan: text("responsePlan"),
+  responsible: varchar("responsible", { length: 160 }),
+  status: varchar("status", { length: 32 }).notNull().default("aberto"),
+  createdBy: integer("createdBy").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
+}, table => ({
+  projectIdx: index("project_risks_project_idx").on(table.projectId),
+}));
+
 export const projectDocuments = pgTable(
   "project_documents",
   {
