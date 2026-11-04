@@ -97,6 +97,9 @@ export function VisualizacaoPlanejamento({
   const definirLocalLob = trpc.planning.definirLocalLob.useMutation({
     onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
   });
+  const definirLocaisLobEmLote = trpc.planning.definirLocaisLobEmLote.useMutation({
+    onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
+  });
   const definirTodosLocaisLob = async (unitId:number) => {
     const nodePorCodigo = new Map((nodosEap.data??[]).map(node=>[node.code,node]));
     const codigos = new Set(atividadesLob.map(activity=>activity.wbsCode));
@@ -104,10 +107,8 @@ export function VisualizacaoPlanejamento({
       .filter(linha=>codigos.has(linha.codigo))
       .map(linha=>nodePorCodigo.get(linha.codigo))
       .filter((node): node is NonNullable<typeof node> => Boolean(node && !node.location));
-    // Gravar uma unidade por vez evita que mutações concorrentes sobrescrevam
-    // o mesmo dicionário da EAP quando vários vínculos são aplicados em lote.
-    for (const node of pendentes) {
-      await definirLocalLob.mutateAsync({projectId:projetoId,nodeId:node.id,unitId});
+    if (pendentes.length) {
+      await definirLocaisLobEmLote.mutateAsync({projectId:projetoId,nodeIds:pendentes.map(node=>node.id),unitId});
     }
     await utilsLob.projects.wbs.invalidate({projectId:projetoId});
   };
@@ -284,8 +285,8 @@ export function VisualizacaoPlanejamento({
             estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"}
             nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
             distribuicoes={distribuicoesLob.data??[]} atividadeIds={atividadesLob}
-            editavel={editavelLob} salvandoLocal={definirLocalLob.isPending}
-            erroLocal={definirLocalLob.error?.message??criarUnidadeLob.error?.message??null}
+            editavel={editavelLob} salvandoLocal={definirLocalLob.isPending||definirLocaisLobEmLote.isPending}
+            erroLocal={definirLocalLob.error?.message??definirLocaisLobEmLote.error?.message??criarUnidadeLob.error?.message??null}
             onDefinirLocal={(nodeId,unitId)=>definirLocalLob.mutate({projectId:projetoId,nodeId,unitId})}
             onDefinirTodosLocais={(unitId)=>{void definirTodosLocaisLob(unitId);}}
             onCriarUnidade={(code,name,unitType)=>criarUnidadeLob.mutate({projectId:projetoId,code,name,unitType})}
