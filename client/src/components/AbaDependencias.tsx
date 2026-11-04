@@ -32,6 +32,16 @@ export function AbaDependencias({ projetoId }: Props) {
   const [tipo, setTipo] = useState<(typeof TIPOS)[number]>("FS");
   const [lag, setLag] = useState("0");
   const [mensagem, setMensagem] = useState<string | null>(null);
+  const abrirVersao = trpc.planning.abrirVersaoDeTrabalho.useMutation({
+    onSuccess: async result => {
+      setMensagem(`Versão de trabalho v${result.versionNumber} aberta. A versão aprovada foi preservada; os vínculos agora podem ser editados.`);
+      setPred("");
+      setSucc("");
+      await utils.planning.list.invalidate({ projectId: projetoId });
+      await utils.planning.grade.invalidate({ projectId: projetoId });
+    },
+    onError: error => setMensagem(error.message),
+  });
 
   const criar = trpc.planning.createDependency.useMutation({
     onSuccess: async result => {
@@ -108,6 +118,18 @@ export function AbaDependencias({ projetoId }: Props) {
       </header>
 
       {mensagem && <div className="pl-planejamento-alerta">{mensagem}</div>}
+
+      {plano.data?.currentVersionStatus === "approved" && plano.data.hasApprovedEap && (
+        <div className="pl-planejamento-box">
+          <strong>Versão aprovada/histórica em leitura</strong>
+          <p className="pl-planejamento-vazio">
+            Para ajustar dependências ou recalcular o cronograma, abra uma versão de trabalho. A versão aprovada e a baseline permanecem preservadas.
+          </p>
+          <button type="button" className="pl-planejamento-secondary" onClick={() => abrirVersao.mutate({ projectId: projetoId })} disabled={abrirVersao.isPending}>
+            {abrirVersao.isPending ? "Abrindo versão…" : "Abrir versão de trabalho"}
+          </button>
+        </div>
+      )}
 
       {activities.length < 2 ? (
         <div className="pl-planejamento-box">

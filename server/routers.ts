@@ -4199,6 +4199,15 @@ export const appRouter = router({
       }),
   }),
   planning: router({
+    /** Reabre o planejamento como uma versão de trabalho sem alterar a versão aprovada. */
+    abrirVersaoDeTrabalho: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return ensureWritablePlanVersion(input.projectId, ctx.user.id);
+      }),
     /** Parcelas físicas do cronograma; ligadas à versão atual, nunca à baseline. */
     listarDistribuicoesLob: protectedProcedure
       .input(z.object({projectId:z.number().int().positive()}))
