@@ -20,6 +20,14 @@ describe("sameEapContent", () => {
     expect(sameEapContent(draft, approved)).toBe(true);
   });
 
+  it("ignora o status de governança ao comparar a cópia técnica da EAP", () => {
+    const approved = [node(1, null, "1", "Obra")];
+    const draft = [node(10, null, "1", "Obra")];
+    draft[0].scopeStatus = "aprovado";
+    draft[0].sortOrder = approved[0].sortOrder;
+    expect(sameEapContent(draft, approved)).toBe(true);
+  });
+
   it("bloqueia a criação se a EAP da versão de trabalho mudou", () => {
     const approved = [node(1, null, "1", "Obra"), node(2, 1, "1.1", "Fundação")];
     const draft = [node(10, null, "1", "Obra"), node(11, 10, "1.1", "Fundação alterada")];
