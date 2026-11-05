@@ -35,13 +35,30 @@ describe("SVG exportado do Gantt",()=>{
    const sem=gerarSvgGantt(entrada);
    const com=gerarSvgGantt({...entrada,
      baseline:[{codigo:"1.1",inicio:"2026-10-22",fim:"2026-10-26"}]});
-   expect(sem).not.toContain('fill="#8798aa"');
-   expect(com).toContain('fill="#8798aa"');
+   expect(sem).not.toContain('id="baseline-');
+   expect(com).toContain('id="baseline-');
    expect(com).toContain("baseline aprovada");
    const oculto=gerarSvgGantt({...entrada,
      linhas:[entrada.linhas[0]!],
      baseline:[{codigo:"1.1",inicio:"2026-10-22",fim:"2026-10-26"}]});
-   expect(oculto).not.toContain('fill="#8798aa"');
+   expect(oculto).not.toContain('id="baseline-');
+ });
+ it("preserva identidade da atividade e rotula hoje e início sem tracejado",()=>{
+   const linhas=[
+     {...entrada.linhas[1]!,activityId:101,codigo:"1.1",nome:"Primeira ocorrência"},
+     {...entrada.linhas[1]!,activityId:202,codigo:"1.1",nome:"Segunda ocorrência",inicio:"2026-11-01",fim:"2026-11-05"},
+   ];
+   const svg=gerarSvgGantt({...entrada,inicioObra:"2026-10-02",linhas,
+     vinculos:[{de:"101",para:"202",tipo:"FS"}],
+     baseline:[{activityId:202,codigo:"1.1",inicio:"2026-10-30",fim:"2026-11-03"}],
+   });
+   expect(svg).toContain("Primeira ocorrência");
+   expect(svg).toContain("Segunda ocorrência");
+   expect(svg).toContain("INÍCIO");
+   expect(svg).toContain("HOJE");
+   expect(svg).not.toContain('stroke-dasharray');
+   expect(svg.match(/id="baseline-/g)).toHaveLength(1);
+   expect(svg).toContain('<circle cx=');
  });
 
 });

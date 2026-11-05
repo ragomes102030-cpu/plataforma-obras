@@ -43,3 +43,11 @@ Ruling: the worktree starts from commit abe6a60, which contains the approved spe
 - The planned physical target remains visible when weights exist but production has not yet been confirmed; realized, variance and EV remain unavailable instead of being rendered as zero.
 - Ruling: the current data model does not persist approved physical weights. The live panel therefore reports that limitation honestly and retains per-activity visibility; Task 6 will make the operational route explicit without inventing an aggregate.
 - Verification: 30 focused readiness/dashboard tests and TypeScript check passed. The deprecated phrase “régua validada” is absent from the affected UI and decision code.
+
+## Task 5 — complete
+
+- The Gantt now uses explicit semantic tokens for planned, critical, actual, baseline, warning and milestone states. Critical work retains a visible marker and textual legend instead of depending on color alone.
+- Today and construction start use solid, labelled markers; the start marker is omitted when it is the same date as today. The approved baseline uses a hatch pattern, making it distinct from the current bar in color and shape.
+- Selecting an activity highlights only its direct predecessor/successor links and attenuates unrelated links. With no selection, all visible links remain discreet and readable.
+- SVG export now uses activity identity instead of WBS code for links and baseline matching, labels today/start, preserves duplicate WBS activities and mirrors the screen legend.
+- Verification: 17 focused Gantt/baseline/export tests and TypeScript check passed. No unexplained dotted date or dependency line remains.

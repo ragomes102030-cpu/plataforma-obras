@@ -4,6 +4,7 @@
  * Não exporta somente as camadas auxiliares de setas.
  */
 export type LinhaGanttExport = {
+  activityId?: number | null;
   codigo: string;
   nome: string;
   inicio: string;
@@ -19,13 +20,14 @@ export type VinculoGanttExport = { de: string; para: string; tipo: string };
 export type GanttExportInput = {
   titulo: string;
   inicio: string;
+  inicioObra?: string | null;
   totalDias: number;
   pxDia: number;
   hoje: string;
   linhas: LinhaGanttExport[];
   vinculos: VinculoGanttExport[];
   /** Fotografias já convertidas a datas civis pelo calendário da obra. */
-  baseline?: { codigo: string; inicio: string; fim: string }[];
+  baseline?: { activityId?: number | null; codigo: string; inicio: string; fim: string }[];
 };
 const MS_DIA=86400000;
 const dia=(iso:string)=>Date.parse(iso+"T12:00:00Z");
@@ -68,14 +70,14 @@ export function gerarSvgGantt(input:GanttExportInput):string {
       primeiro.setTime(proximo.getTime());
     }
   }
-  const baselinePorCodigo=new Map((input.baseline??[]).map(b=>[b.codigo,b]));
+  const baselinePorIdentidade=new Map((input.baseline??[]).map(b=>[b.activityId==null?b.codigo:String(b.activityId),b]));
   const geometria=new Map<string,{x0:number;x1:number;y:number}>();
   input.linhas.forEach((r,i)=>{
     const y=cabecalho+i*alturaLinha;
     const x0=Math.max(0,posicao(r.inicio));
     const larguraBarra=Math.max(5,(diaDeslocamento(r.inicio,r.fim)+1)*px);
     const x1=x0+larguraBarra;
-    geometria.set(r.codigo,{x0:esquerda+x0,x1:esquerda+x1,y:y+alturaLinha/2});
+    geometria.set(r.activityId==null?r.codigo:String(r.activityId),{x0:esquerda+x0,x1:esquerda+x1,y:y+alturaLinha/2});
     partes.push('<rect x="0" y="'+y+'" width="'+largura+'" height="'+alturaLinha+'" fill="'+(i%2?"#f6f9fc":"#fff")+'"/>');
     partes.push('<path d="M 0 '+(y+alturaLinha)+' H '+largura+'" stroke="#e4ebf0"/>');
     const nome=r.codigo+"  "+r.nome;
@@ -86,11 +88,12 @@ export function gerarSvgGantt(input:GanttExportInput):string {
     partes.push('<text x="405" y="'+(y+20)+'" font-family="Arial,sans-serif" font-size="10" fill="#3e5d71">'+xml(data(r.fim).slice(0,5))+'</text>');
     partes.push('<text x="461" y="'+(y+20)+'" font-family="Arial,sans-serif" font-size="10" fill="#3e5d71">'+Math.round(r.progresso)+'%</text>');
     const meio=y+alturaLinha/2;
-    const baseline=baselinePorCodigo.get(r.codigo);
+    const baseline=baselinePorIdentidade.get(r.activityId==null?r.codigo:String(r.activityId));
     if(baseline&&!r.resumo) {
       const xBase=esquerda+Math.max(0,posicao(baseline.inicio));
       const larguraBase=Math.max(3,(diaDeslocamento(baseline.inicio,baseline.fim)+1)*px);
-      partes.push('<rect x="'+xBase+'" y="'+(meio-13)+'" width="'+larguraBase+'" height="5" rx="2" fill="#8798aa"/>');
+      partes.push('<pattern id="baseline-'+i+'" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(135)"><rect width="4" height="7" fill="#71879a"/><rect x="4" width="3" height="7" fill="#dce4ea"/></pattern>');
+      partes.push('<rect x="'+xBase+'" y="'+(meio-13)+'" width="'+larguraBase+'" height="5" rx="2" fill="url(#baseline-'+i+')" stroke="#64788c" stroke-width=".5"/>');
     }
     if(r.marco){
       partes.push('<polygon points="'+(esquerda+x0)+','+(meio-6)+' '+(esquerda+x0+7)+','+meio+' '+(esquerda+x0)+','+(meio+6)+' '+(esquerda+x0-7)+','+meio+'" fill="'+(r.critica?"#d15b59":"#36799b")+'"/>');
@@ -110,14 +113,22 @@ export function gerarSvgGantt(input:GanttExportInput):string {
     const origem=(tipo==="SS"||tipo==="SF")?a.x0:a.x1;
     const destino=(tipo==="FF"||tipo==="SF")?b.x1:b.x0;
     const canal=Math.max(origem+7,destino+7);
-    partes.push('<path d="M '+origem+' '+a.y+' H '+canal+' V '+b.y+' H '+destino+'" stroke="#748b9d" stroke-width="1" stroke-dasharray="3 2" fill="none"/>');
+    partes.push('<path d="M '+origem+' '+a.y+' H '+canal+' V '+b.y+' H '+destino+'" stroke="#5f7180" stroke-width="1" fill="none"/>');
     partes.push('<circle cx="'+destino+'" cy="'+b.y+'" r="2" fill="#748b9d"/>');
   }
   const hojeX=esquerda+posicao(input.hoje);
   if(hojeX>=esquerda&&hojeX<=largura){
-    partes.push('<path d="M '+hojeX+' 49 V '+(altura-rodape)+'" stroke="#da5447" stroke-width="1.5" stroke-dasharray="4 4"/>');
+    partes.push('<path d="M '+hojeX+' 49 V '+(altura-rodape)+'" stroke="#b3261e" stroke-width="1.5"/>');
+    partes.push('<text x="'+(hojeX+3)+'" y="58" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#8f1d17">HOJE</text>');
   }
-  partes.push('<text x="12" y="'+(altura-12)+'" font-family="Arial,sans-serif" font-size="10" fill="#577082">Azul: atividade · vermelho: caminho crítico · cinza: etapa'+(input.baseline?.length?' e baseline aprovada':'')+' · losango: marco · tracejado: dependência</text>');
+  if(input.inicioObra&&input.inicioObra!==input.hoje){
+    const inicioX=esquerda+posicao(input.inicioObra);
+    if(inicioX>=esquerda&&inicioX<=largura){
+      partes.push('<path d="M '+inicioX+' 49 V '+(altura-rodape)+'" stroke="#287a9b" stroke-width="1.5"/>');
+      partes.push('<text x="'+(inicioX+3)+'" y="84" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#15546b">INÍCIO</text>');
+    }
+  }
+  partes.push('<text x="12" y="'+(altura-12)+'" font-family="Arial,sans-serif" font-size="10" fill="#577082">Azul: planejada · verde: avanço real · vermelho: caminho crítico · baseline aprovada hachurada · losango: marco · linha: dependência</text>');
   partes.push('</svg>');
   return partes.join("\n");
 }

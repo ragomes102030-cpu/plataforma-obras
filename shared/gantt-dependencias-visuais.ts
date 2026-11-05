@@ -5,7 +5,7 @@
  */
 export type PosicaoAtividadeGantt = { x0:number; x1:number; y:number };
 export type DependenciaVisualGantt = { de:string; para:string; tipo:string };
-export type SetaVisualGantt = { chave:string; d:string; critica:boolean; tipo:string };
+export type SetaVisualGantt = { chave:string; d:string; critica:boolean; tipo:string; relacionada?:boolean };
 
 const valido=(p:PosicaoAtividadeGantt|undefined):p is PosicaoAtividadeGantt=>
   Boolean(p) && Number.isFinite(p!.x0) && Number.isFinite(p!.x1) &&
@@ -15,6 +15,7 @@ export function gerarSetasVisiveisGantt(
   dependencias:readonly DependenciaVisualGantt[],
   posicoes:ReadonlyMap<string,PosicaoAtividadeGantt>,
   criticas:ReadonlySet<string>,
+  atividadeSelecionada?:string|number|null,
 ):SetaVisualGantt[] {
   const setas:SetaVisualGantt[]=[];
   const jaVistas=new Set<string>();
@@ -52,7 +53,14 @@ export function gerarSetasVisiveisGantt(
         d=`M ${origem} ${a.y} H ${xCanal} V ${b.y} H ${destino}`;
       }
     }
-    setas.push({chave,d,tipo,critica:criticas.has(dep.de)&&criticas.has(dep.para)});
+    const selecionada=typeof atividadeSelecionada==="number"
+      ? `atividade:${atividadeSelecionada}`
+      : atividadeSelecionada;
+    setas.push({
+      chave,d,tipo,
+      critica:criticas.has(dep.de)&&criticas.has(dep.para),
+      ...(selecionada?{relacionada:dep.de===selecionada||dep.para===selecionada}:{}),
+    });
   }
   return setas;
 }

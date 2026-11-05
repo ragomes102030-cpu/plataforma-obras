@@ -1581,6 +1581,15 @@ tr:hover .xl-codigo {
   pointer-events: none;
 }
 
+:root {
+  --gantt-planned:#287a9b;
+  --gantt-critical:#a9362a;
+  --gantt-actual:#24704b;
+  --gantt-baseline:#71879a;
+  --gantt-warning:#a56a12;
+  --gantt-milestone:#8b5c12;
+}
+
 .pg-seta {
   fill: none;
   stroke: #5f7180;
@@ -1588,9 +1597,11 @@ tr:hover .xl-codigo {
 }
 
 .pg-seta.critica {
-  stroke: #a63a2c;
+  stroke: var(--gantt-critical);
   stroke-width: 1.4;
 }
+.pg-seta.atenuada{opacity:.16}
+.pg-seta.relacionada{opacity:1;stroke-width:2.2;filter:drop-shadow(0 0 1px #fff)}
 
 .pg-seta-ponta {
   fill: #5f7180;
@@ -2203,8 +2214,10 @@ tr:hover .xl-codigo {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1.5px dashed #1f6f8b;
+  width:1.5px;
+  background:var(--gantt-planned);
 }
+.pg-inicio-rotulo{position:absolute;top:2px;z-index:2;transform:translateX(-50%);padding:1px 4px;border-radius:3px;background:#e5f1f5;color:#15546b;font-size:9px;font-weight:800;text-transform:uppercase}
 
 .pg-linha {
   position: relative;
@@ -2392,16 +2405,16 @@ tr:hover .xl-codigo {
   height: 16px;
   margin-top: -8px;
   border-radius: 3px;
-  background: #4d8291;
+  background: var(--gantt-planned);
   box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.15);
 }
 
 .pg-barra.critica {
-  background: #a63a2c;
+  background: var(--gantt-critical);
 }
 
 .pg-barra.concluida {
-  background: #2e7d54;
+  background: var(--gantt-actual);
 }
 
 .pg-barra-avanco {
@@ -2456,13 +2469,13 @@ tr:hover .xl-codigo {
   border-radius: 2px;
 }
 
-.pg-amostra.normal { background: #4d8291; }
-.pg-amostra.critica { background: #a63a2c; }
+.pg-amostra.normal { background: var(--gantt-planned); }
+.pg-amostra.critica { background: var(--gantt-critical); }
 .pg-amostra.marco {
   width: 8px;
   height: 8px;
   border-radius: 0;
-  background: #b98a2a;
+  background: var(--gantt-milestone);
   transform: rotate(45deg);
 }
 .pg-amostra.hoje { width: 2px; height: 12px; background: #b3261e; }
@@ -6807,8 +6820,8 @@ tr:hover .xl-codigo {
    Botão opcional evita poluir o Gantt quando o usuário não compara. */
 .pg-comparando-baseline .pg-barra{height:13px;margin-top:-2px}
 .pg-comparando-baseline .pg-barra-texto{line-height:13px}
-.pg-baseline-barra{position:absolute;top:50%;height:5px;margin-top:-12px;min-width:3px;border-radius:3px;background:#8798aa;opacity:.82;box-shadow:inset -1px 0 0 #64788c;pointer-events:auto}
-.pg-amostra.pg-amostra-baseline{height:5px;background:#8798aa}
+.pg-baseline-barra{position:absolute;top:50%;height:5px;margin-top:-12px;min-width:3px;border-radius:3px;background:repeating-linear-gradient(135deg,var(--gantt-baseline) 0 4px,#dce4ea 4px 7px);opacity:.95;box-shadow:inset 0 0 0 1px #64788c;pointer-events:auto}
+.pg-amostra.pg-amostra-baseline{height:5px;background:repeating-linear-gradient(135deg,var(--gantt-baseline) 0 4px,#dce4ea 4px 7px)}
 .pg-delta-fim{font-size:10px;font-weight:700;color:#657681}
 .pg-delta-fim.atraso{color:#b13c34}
 .pg-delta-fim.adiantada{color:#22754d}

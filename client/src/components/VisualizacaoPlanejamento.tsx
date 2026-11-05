@@ -677,8 +677,8 @@ function Gantt({
       para: `atividade:${dependencia.para}`,
     }));
     const criticasVisuais = new Set([...idsCriticos].map(id => `atividade:${id}`));
-    return gerarSetasVisiveisGantt(dependenciasVisuais, geometria, criticasVisuais);
-  }, [dependencias, geometria, mostrarSetas, idsCriticos]);
+    return gerarSetasVisiveisGantt(dependenciasVisuais, geometria, criticasVisuais, selecionada);
+  }, [dependencias, geometria, mostrarSetas, idsCriticos, selecionada]);
 
   // Linha de avanço: passa pelo ponto em que cada atividade realmente está.
   // Trecho sem lançamento quebra a linha em vez de voltar ao início do gráfico.
@@ -744,9 +744,9 @@ function Gantt({
   const exportarSvg = () => {
     const conteudo = gerarSvgGantt({
       titulo: titulo || "Cronograma da obra",
-      inicio: dados.start, totalDias: dados.total, pxDia: px, hoje,
+      inicio: dados.start, inicioObra, totalDias: dados.total, pxDia: px, hoje,
       linhas: filtradas.map(no => ({
-        codigo:no.codigo,nome:no.nome,inicio:no.inicio,fim:no.fim,
+        activityId:no.activityId,codigo:no.codigo,nome:no.nome,inicio:no.inicio,fim:no.fim,
         duracao:no.duracao,progresso:no.progresso,critica:no.critica,
         marco:no.marco,resumo:no.temFilhos,profundidade:no.profundidade,
       })),
@@ -757,7 +757,7 @@ function Gantt({
       })) : [],
       baseline: baselinePronta ? filtradas.flatMap(no=>{
         const b=barrasBaseline.get(no.chave);
-        return b && !no.temFilhos ? [{codigo:no.codigo,inicio:b.inicio,fim:b.fim}] : [];
+        return b && !no.temFilhos ? [{activityId:no.activityId,codigo:no.codigo,inicio:b.inicio,fim:b.fim}] : [];
       }) : [],
     });
     const url = URL.createObjectURL(new Blob([conteudo],{type:"image/svg+xml;charset=utf-8"}));
@@ -1002,7 +1002,10 @@ function Gantt({
                 <div key={mes.iso} className="pg-mes-linha" style={{ left: mes.x }} />
               ))}
               <div className="pg-hoje-linha" style={{ left: hojeX }} />
-              {inicioX != null && <div className="pg-inicio-obra" style={{ left: inicioX }} title="Início da obra" />}
+              {inicioX != null && inicioObra !== hoje && <>
+                <div className="pg-inicio-obra" style={{ left: inicioX }} title="Início da obra" />
+                <div className="pg-inicio-rotulo" style={{ left: inicioX }}>início</div>
+              </>}
             </div>
 
             {mostrarSetas && setas.length > 0 && (
@@ -1028,7 +1031,7 @@ function Gantt({
                     key={seta.chave}
                     d={seta.d}
                     data-testid="gantt-dependency-path"
-                    className={`pg-seta${seta.critica ? " critica" : ""}`}
+                    className={`pg-seta${seta.critica ? " critica" : ""}${selecionada ? seta.relacionada ? " relacionada" : " atenuada" : ""}`}
                     markerEnd={`url(#${seta.critica ? "pg-seta-critica" : "pg-seta"})`}
                   />
                 ))}
