@@ -5,6 +5,7 @@ import { diasEntre, montarResumo, type AlertaDoPainel } from "@shared/painel-obr
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { classificarEstadoAtividadesDashboard, excluirAtividadesDeDemonstracao } from "@/lib/dashboard-work-scope";
 import { avaliarPrazoDashboard } from "@/lib/prazo-dashboard";
+import { avaliarIntegridadeDashboard } from "@/lib/dashboard-integridade";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
 
@@ -178,6 +179,11 @@ export function PainelDoCronograma({
       isoDoValor(l.productionDate) <= hoje
     );
     const confirmados = lancamentos.filter((l) => l.status === "confirmada");
+    const integridade = avaliarIntegridadeDashboard({
+      hoje, atividades, itens: orcamento.data?.items ?? [],
+      versaoAtivaAprovada: orcamento.data?.versions?.find(v => v.id === orcamento.data?.activeVersionId)?.status === "aprovado",
+      custoPorAtividade: custo.custoPorAtividade, lancamentos,
+    });
     const foraDoPlano = confirmados.filter((l) => l.vinculo && l.vinculo !== "atual").length;
 
     const linhasAvaliadas = linhasDaObra;
@@ -219,6 +225,7 @@ export function PainelDoCronograma({
 
     return {
       resumo,
+      integridade,
       avancoComReguaValida: pesoComOrcamento > 0,
       valorSemDestino: custo.valorSemDestino,
       ultimos: [...lancamentos]
@@ -339,7 +346,7 @@ export function PainelDoCronograma({
     );
   }
 
-  const { resumo, avancoComReguaValida, valorSemDestino, ultimos, semana } = dados;
+  const { resumo, integridade, valorSemDestino, ultimos, semana } = dados;
   const { prazo, fisico, valor, status, selo, alertas } = resumo;
   const prazoConfianca = avaliarPrazoDashboard({
     fim: prazo.fim,
@@ -428,7 +435,11 @@ export function PainelDoCronograma({
       projetoId={projetoId}
       nomeObra={nomeObra ?? "Obra"}
       codigosExemplo={codigosExemplo}
-      avancoEstado={orcamento.isPending ? "pendente" : orcamento.isError ? "erro" : avancoComReguaValida ? "ok" : "indisponivel"}
+      avancoEstado={orcamento.isPending || producao.isPending ? "pendente"
+        : orcamento.isError || producao.isError ? "erro"
+        : !integridade.orcamentoConfiavel ? "indisponivel"
+        : !integridade.temProducaoConfirmada ? "sem-producao" : "ok"}
+      orcamentoConfiavel={integridade.orcamentoConfiavel}
       hoje={hoje}
       resumo={resumo}
       prazoConfianca={prazoConfianca}

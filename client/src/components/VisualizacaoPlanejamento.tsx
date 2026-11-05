@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
 import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBranch, GanttChartSquare, Maximize2, Minimize2, Printer, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
-import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
+import type { IsoDate } from "@shared/work-calendar";
 import { prepararBarrasBaselineGantt, resumirBaselineNoGantt, type BarraBaselineGantt } from "@shared/gantt-baseline-visual";
 import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
 import { gerarSetasVisiveisGantt } from "@shared/gantt-dependencias-visuais";
@@ -138,29 +138,22 @@ export function VisualizacaoPlanejamento({
   const [compararBaseline, setCompararBaseline] = useState(false);
   const baselinesVigentes = (planejamento.data?.baselines ?? []).filter(b => b.status === "ativa");
   const baselineVigente = baselinesVigentes.length === 1 ? baselinesVigentes[0] : null;
-  const anoObra = Number(inicioObra?.slice(0,4) ?? 0);
-  const anoValido = Number.isInteger(anoObra) && anoObra >= 2000 && anoObra <= 2100;
   const consultarBaseline = view === "gantt" && compararBaseline && baselineVigente !== null;
   const comparacaoBaseline = trpc.planning.compararComBaseline.useQuery(
     { projectId: Number(projetoId), baselineId: baselineVigente?.id },
     { enabled: consultarBaseline && Number(projetoId) > 0 }
   );
-  const calendarioBaseline = trpc.planning.getCalendarForCurve.useQuery(
-    { projectId: Number(projetoId), startYear: anoValido ? anoObra : 2000 },
-    { enabled: consultarBaseline && anoValido && Number(projetoId) > 0 }
-  );
   const barrasBaseline = useMemo(() =>
-    compararBaseline && inicioObra && comparacaoBaseline.data?.linhas && calendarioBaseline.data
+    compararBaseline && comparacaoBaseline.data?.linhas
       ? prepararBarrasBaselineGantt(
           comparacaoBaseline.data.linhas,
-          inicioObra,
-          calendarioBaseline.data as WorkCalendar,
+          comparacaoBaseline.data.baseline.datasCapturadas,
         )
       : new Map<string, BarraBaselineGantt>(),
-    [compararBaseline, inicioObra, comparacaoBaseline.data, calendarioBaseline.data]
+    [compararBaseline, comparacaoBaseline.data]
   );
   const baselinePronta = compararBaseline && comparacaoBaseline.isSuccess &&
-    calendarioBaseline.isSuccess && Boolean(comparacaoBaseline.data);
+    Boolean(comparacaoBaseline.data?.baseline.datasCapturadas);
   const resumoBaseline = baselinePronta && comparacaoBaseline.data
     ? resumirBaselineNoGantt(comparacaoBaseline.data.resumo)
     : null;
@@ -266,16 +259,15 @@ export function VisualizacaoPlanejamento({
       {view === "gantt" && compararBaseline && !baselinePronta && (
         <div className="pl-gantt-cpm-aviso" role="status">
           {!baselineVigente ? "Não há baseline vigente única para comparar. Consulte a aba Baseline." :
-           !anoValido ? "A obra não possui data de início válida para converter os dias úteis da baseline." :
            comparacaoBaseline.isError ? "Erro ao carregar comparação: "+comparacaoBaseline.error.message :
-           calendarioBaseline.isError ? "Erro ao carregar calendário: "+calendarioBaseline.error.message :
-           "Carregando baseline vigente e calendário da obra…"}
+           comparacaoBaseline.isSuccess && !comparacaoBaseline.data?.baseline.datasCapturadas ? "Baseline histórica sem datas civis capturadas. A sobreposição está indisponível; consulte a comparação na aba Baseline." :
+           "Carregando as datas congeladas da baseline vigente…"}
         </div>
       )}
       {view === "gantt" ? (
         <Gantt linhas={linhasGantt} atividades={atividadePorCodigo} dependencias={dependenciasGantt} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
           compararBaseline={compararBaseline} onAlternarBaseline={() => setCompararBaseline(v=>!v)}
-          baselineDisponivel={baselineVigente !== null && anoValido}
+          baselineDisponivel={baselineVigente !== null}
           baselinePronta={baselinePronta} barrasBaseline={barrasBaseline}
           nomeBaseline={comparacaoBaseline.data?.baseline.name ?? baselineVigente?.name ?? null}
           resumoBaseline={resumoBaseline} />
@@ -1116,7 +1108,7 @@ function Gantt({
                       const dias=Math.round((dateMs(base.fim)-dateMs(base.inicio))/86400000)+1;
                       const w=Math.max(5,Math.min(larguraDoTempo-x,dias*px));
                       return <span className="pg-baseline-barra" data-testid="gantt-baseline-bar"
-                        style={{left:x,width:w}} title={`Baseline ${base.inicio} a ${base.fim} · desvio de término ${base.deltaFim??"indisponível"} dias úteis`}/>;
+                        style={{left:x,width:w}} title={`Baseline ${base.inicio} a ${base.fim} · ${base.atividades > 1 ? `envelope de ${base.atividades} atividades; desvios individuais na aba Baseline` : `desvio de término ${base.deltaFim??"indisponível"} dias úteis`}`}/>;
                     })()}
                     {resumo ? (
                       <div className={`pg-resumo${no.critica ? " critica" : ""}`} style={{ left: inicioBarra, width: larguraBarra }} title={descricao}>

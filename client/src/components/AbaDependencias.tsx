@@ -1,6 +1,7 @@
 import { GitBranch, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { revalidarPlanejamentoDaObra } from "@/lib/revalidar-planejamento";
 
 type Props = { projetoId: number };
 
@@ -37,8 +38,7 @@ export function AbaDependencias({ projetoId }: Props) {
       setMensagem(`Versão de trabalho v${result.versionNumber} aberta. A versão aprovada foi preservada; os vínculos agora podem ser editados.`);
       setPred("");
       setSucc("");
-      await utils.planning.list.invalidate({ projectId: projetoId });
-      await utils.planning.grade.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setMensagem(error.message),
   });
@@ -48,8 +48,7 @@ export function AbaDependencias({ projetoId }: Props) {
       setMensagem(result.warning
         ? `Dependência adicionada, mas a rede ainda está incompleta. O CPM continuará bloqueado até conectar todos os blocos. ${result.warning}`
         : "Dependência adicionada. A rede está conectada; recalcule o CPM para validar as datas.");
-      await utils.planning.list.invalidate({ projectId: projetoId });
-      await utils.planning.grade.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setMensagem(error.message),
   });
@@ -57,8 +56,7 @@ export function AbaDependencias({ projetoId }: Props) {
   const remover = trpc.planning.deleteDependency.useMutation({
     onSuccess: async () => {
       setMensagem("Dependência removida e registrada na auditoria. O CPM ficou desatualizado; recalcule depois de revisar a rede.");
-      await utils.planning.list.invalidate({ projectId: projetoId });
-      await utils.planning.grade.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setMensagem(error.message),
   });
@@ -118,6 +116,14 @@ export function AbaDependencias({ projetoId }: Props) {
       </header>
 
       {mensagem && <div className="pl-planejamento-alerta">{mensagem}</div>}
+
+      {plano.data?.networkValidation && <section className="pl-planejamento-box" aria-label="Diagnóstico da rede atual">
+        <strong>{plano.data.networkValidation.valid ? "Rede estruturalmente válida" : "Rede com pendências"}</strong>
+        <p className="pl-tabela-legenda">Versão v{plano.data.currentVersionNumber} · verificação de ciclos, referências e conectividade das atividades operacionais.</p>
+        {plano.data.networkValidation.issues.length > 0
+          ? <ul>{plano.data.networkValidation.issues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul>
+          : <p className="pl-tabela-legenda">A revisão da sequência de execução continua necessária antes de congelar a baseline.</p>}
+      </section>}
 
       {plano.data?.currentVersionStatus === "approved" && plano.data.hasApprovedEap && (
         <div className="pl-planejamento-box">

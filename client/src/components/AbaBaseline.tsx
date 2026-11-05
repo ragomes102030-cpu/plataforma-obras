@@ -1,6 +1,7 @@
 import { Camera, CheckCircle2, LockKeyhole, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { revalidarPlanejamentoDaObra } from "@/lib/revalidar-planejamento";
 import { selectOperationalPlanning } from "@shared/operational-planning";
 import { PainelDesviosBaseline } from "./PainelDesviosBaseline";
 
@@ -17,9 +18,10 @@ export function AbaBaseline({ projetoId }: Props) {
 
   const capturar = trpc.planning.captureBaseline.useMutation({
     onSuccess: async result => {
-      setMensagem(`Baseline "${nome.trim()}" criada com ${result.activityCount} atividade(s).`);
+      setMensagem(`Baseline de prazo "${nome.trim()}" criada com ${result.activityCount} atividade(s). ${(result.avisosOrcamento ?? []).join(" ")}`);
       setNome("");
-      await utils.planning.list.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
+      await utils.planning.compararComBaseline.invalidate({ projectId: projetoId });
     },
     onError: error => setMensagem(error.message),
   });
@@ -43,11 +45,11 @@ export function AbaBaseline({ projetoId }: Props) {
         );
         return;
       }
-      setMensagem("CPM recalculado. O gate de captura foi liberado.");
+      setMensagem("CPM recalculado. Confira a aprovação da EAP e os demais critérios antes de capturar.");
       // Invalida o router inteiro: baseline, grade (dashboard) e CPM leem os
       // mesmos dados, e deixar um deles com cache velho foi o que produziu a
       // tela dizendo "CPM pendente" com CPM calculado.
-      await utils.planning.invalidate();
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setMensagem(error.message),
   });
@@ -61,9 +63,9 @@ export function AbaBaseline({ projetoId }: Props) {
       setMensagem(
         resultado.jaEstavaAprovada
           ? `A versão v${resultado.versionNumber} já estava aprovada.`
-          : `Versão v${resultado.versionNumber} aprovada. A captura da baseline está liberada.`
+          : `Versão v${resultado.versionNumber} aprovada. Confira o CPM e os critérios de captura da baseline.`
       );
-      await utils.planning.invalidate();
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setMensagem(error.message),
   });
@@ -147,11 +149,12 @@ export function AbaBaseline({ projetoId }: Props) {
         <div className="pl-planejamento-box">
           <div className="pl-planejamento-box-head">
             <div>
-              <strong>Aprovação da EAP pendente</strong>
+              <strong>Aprovação da versão de trabalho pendente</strong>
               <span>
                 {numeroVersao ? `A versão de trabalho v${numeroVersao} está em rascunho. ` : ""}
-                A baseline é uma fotografia do planejamento aprovado, então o servidor só a aceita
-                quando a EAP da versão de trabalho está aprovada. Nada é gravado enquanto isso.
+                {plano.data?.canCreateActivities
+                  ? "O escopo herdado da EAP aprovada está preservado. Revise e aprove esta versão do planejamento antes de capturar a baseline."
+                  : "Revise e aprove a EAP desta versão antes de capturar a baseline."}
               </span>
             </div>
           </div>

@@ -27,6 +27,7 @@ import { GRUPOS_DA_SIDEBAR } from "@/modules/navegacao-sidebar";
 import { VISTAS_DO_WORKSPACE, pertenceAoWorkspace } from "@/modules/navegacao-workspace";
 import type { AgregadoDoCronograma, EntradaDaLinha } from "@shared/cronograma-colunas";
 import { CALENDARIO_CORRIDO } from "@shared/cronograma-colunas";
+import { proximoPassoPlanejamento } from "@shared/proximo-passo-planejamento";
 import type { IsoDate, WorkCalendar } from "@shared/work-calendar";
 import "@/planilha.css";
 import "@/eap.css";
@@ -591,20 +592,12 @@ function Obra({
   const destinoDoProximoPasso = coordenador.data?.nextStage
     ? abaPorEstagio[coordenador.data.nextStage]
     : abaPorEstagio[coordenador.data?.stage ?? "DESCRITIVO"];
-  const baselineBloqueadaPorEap =
-    !baseline.isPending &&
-    baseline.data?.eapApproved !== true;
-  const tituloDoFluxo = baselineBloqueadaPorEap
-    ? "Baseline bloqueada"
-    : coordenador.isPending
-      ? "Lendo o planejamento…"
-      : coordenador.data?.canAdvance
-        ? "Pronto para avançar"
-        : "Revisar pendência";
-  const mensagemDoFluxo = baselineBloqueadaPorEap
-    ? "Baseline bloqueada: aprove a EAP da versão de trabalho antes de capturar."
-    : coordenador.data?.gateMessage ?? "Verifique o escopo antes de estruturar a EAP.";
-  const destinoDoFluxo = baselineBloqueadaPorEap ? "eap" : destinoDoProximoPasso;
+  const proximoPasso = baseline.data ? proximoPassoPlanejamento(baseline.data) : null;
+  const tituloDoFluxo = baseline.isError ? "Planejamento indisponível"
+    : proximoPasso?.titulo ?? "Lendo o planejamento…";
+  const mensagemDoFluxo = baseline.isError ? "Não foi possível consultar o plano. Recarregue a página para tentar novamente."
+    : proximoPasso?.mensagem ?? coordenador.data?.gateMessage ?? "Consultando a versão atual da obra.";
+  const destinoDoFluxo = proximoPasso?.aba ?? destinoDoProximoPasso;
 
   // Barra de campo (so no celular). Sao as quatro telas que se usa de pe, na
   // obra, mais o "Mais" que abre o menu completo. Existe porque o painel nao
@@ -725,7 +718,7 @@ function Obra({
                 <small>{mensagemDoFluxo}</small>
               </div>
               <button type="button" onClick={() => irParaAba(destinoDoFluxo)}>
-                {baselineBloqueadaPorEap ? "Abrir EAP" : coordenador.data?.nextStage ? "Abrir etapa" : "Ver escopo"} <ArrowRight size={14} aria-hidden="true" />
+                Abrir etapa <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
             {/* O menu do celular saiu daqui e virou a barra de campo, no fim da

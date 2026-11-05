@@ -9,7 +9,7 @@ export type BudgetApprovalBlocker = {
   reason: "sem_preco" | "sem_fonte" | "fonte_didatica";
 };
 
-/** Orçamento didático serve para rascunho, nunca para controle ou baseline. */
+/** Orçamento didático serve para rascunho, nunca para controle ou baseline de custos. */
 export function findBudgetApprovalBlockers(items: BudgetApprovalItem[]): BudgetApprovalBlocker[] {
   return items.flatMap(item => {
     const source = item.source?.trim() ?? "";

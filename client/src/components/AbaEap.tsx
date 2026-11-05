@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, Bot, Check, CheckCircle2, ClipboardCheck, DollarSign, FileCheck2, FileText, Info, Layers3, LockKeyhole, Maximize2, Minimize2, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { revalidarPlanejamentoDaObra } from "@/lib/revalidar-planejamento";
 import { prepararEntradaDuracaoAtividade } from "@/lib/activity-duration-form";
 
 /**
@@ -81,19 +82,18 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   const recarregar = () => utils.projects.wbs.invalidate({ projectId: projetoId });
 
   const criarNo = trpc.projects.createWbsNode.useMutation({
-    onSuccess: async () => { setEditor(null); await recarregar(); await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId }); },
+    onSuccess: async () => { setEditor(null); await revalidarPlanejamentoDaObra(utils, projetoId); },
   });
 
   const editarNo = trpc.projects.updateWbsNode.useMutation({
-    onSuccess: async () => { setEditor(null); await recarregar(); await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId }); },
+    onSuccess: async () => { setEditor(null); await revalidarPlanejamentoDaObra(utils, projetoId); },
   });
 
   /** Cria uma atividade vinculada à folha somente com estimativa fundamentada. */
   const trazer = trpc.planning.criarAtividadeDaFolha.useMutation({
     onSuccess: async () => {
       setAtividadeAlvoId(null);
-      await recarregar();
-      await utils.planning.grade.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
   });
 
@@ -105,6 +105,7 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
     { projectId: projetoId },
     { enabled: projetoId > 0 }
   );
+  const planejamento = trpc.planning.list.useQuery({ projectId: projetoId }, { enabled: projetoId > 0 });
   const coordenador = trpc.agent.snapshot.useQuery(
     { projectId: projetoId },
     { enabled: projetoId > 0 }
@@ -116,9 +117,7 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   const aprovarEap = trpc.agent.recordDecision.useMutation({
     onSuccess: async () => {
       setErro(null);
-      await coordenador.refetch();
-      await versoes.refetch();
-      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     // Approval has multiple server-side gates. Keep the rejection visible so
     // an engineer can resolve the actual blocker instead of seeing a silent
@@ -128,17 +127,13 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   const aprovarVersaoDeTrabalho = trpc.planning.aprovarVersaoDeTrabalho.useMutation({
     onSuccess: async () => {
       setErro(null);
-      await coordenador.refetch();
-      await versoes.refetch();
-      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setErro(error.message),
   });
   const enviarEapParaRevisao = trpc.eap.enviarEapParaRevisao.useMutation({
     onSuccess: async () => {
-      await coordenador.refetch();
-      await versoes.refetch();
-      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
   });
   const validacao = trpc.eap.validateWbsStructure.useQuery(
@@ -158,7 +153,7 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
   });
   const selecionado = nos.find(no => no.id === selecionadoId) ?? null;
   const versaoEmUso = versoes.data?.[0];
-  const podeCriarAtividade = versaoEmUso?.status === "approved";
+  const podeCriarAtividade = planejamento.data?.canCreateActivities === true;
   const versaoAprovada = versoes.data?.find(v => v.status === "approved");
   const navegar = (aba: string) => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }));
   const abrirEstimativaAtividade = (id: number) => {
@@ -399,11 +394,7 @@ export function AbaEap({ projetoId, tipoDeObra }: { projetoId: number; tipoDeObr
 
   const aplicarPropostaEap = trpc.eap.aplicarPropostaEap.useMutation({
     onSuccess: async () => {
-      await recarregar();
-      await utils.eap.validateWbsStructure.invalidate({ projectId: projetoId });
-      await coordenador.refetch();
-      await versoes.refetch();
-      await revisaoArquimedes.refetch();
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
   });
   const gerarPropostaEap = trpc.eap.analisarEapComArquimedes.useMutation({
@@ -637,7 +628,7 @@ function filtrarArvore(ramos: Ramo[], termo: string): Ramo[] {
  * aberto é do pai (Home), não deste componente, para que a busca possa abrir o
  * caminho inteiro de uma vez.
  */
-function NoDaArvore({
+export function NoDaArvore({
   ramo,
   abertos,
   onAlternar,
@@ -666,12 +657,13 @@ function NoDaArvore({
 }) {
   const { no, filhos } = ramo;
   const temFilhos = filhos.length > 0;
+  const terminal = (no.nodeType === "pacote" || no.nodeType === "entrega") && !temFilhos;
   const aberto = abertos.has(no.id);
 
   return (
     <div role="treeitem" aria-expanded={temFilhos ? aberto : undefined}>
       <div
-        className={`eap-linha eap-nivel-${no.level}${no.nodeType === "entrega" ? " eap-folha" : " eap-grupo"}${no.id === selecionadoId ? " ct-eap-selecionado" : ""}`}
+        className={`eap-linha eap-nivel-${no.level}${terminal ? " eap-folha" : " eap-grupo"}${no.id === selecionadoId ? " ct-eap-selecionado" : ""}`}
         title="Clique para inspecionar; a edição requer modo manual"
         onClick={() => aoSelecionar(no.id)}
         onDoubleClick={() => { if (modoRevisao) aoEditar(no.id); }}
@@ -700,7 +692,7 @@ function NoDaArvore({
         <span className="eap-responsavel">{no.responsible || "—"}</span>
         <span className="eap-local">{no.location || "—"}</span>
         <span className="eap-status-cell">
-          {no.nodeType === "entrega" ? (
+          {terminal ? (
             jaNoCronograma(no.code) ? (
               <span className="eap-no-crono">No cronograma</span>
             ) : !podeCriarAtividade ? (
@@ -721,7 +713,7 @@ function NoDaArvore({
           {!modoRevisao && <button type="button" className="ct-eap-inspecionar" onClick={() => aoSelecionar(no.id)}>Ficha</button>}
           {modoRevisao && (
             <span className="eap-acoes-linha eap-acoes-revisao">
-              {no.nodeType !== "entrega" && (
+              {no.nodeType === "grupo" && (
                 <button type="button" className="eap-acao-linha eap-acao-revisao" onClick={() => aoAdicionar(no.id)} title="Adicionar item filho">
                   <Plus size={12} /> <span>Adicionar</span>
                 </button>

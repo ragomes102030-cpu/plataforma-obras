@@ -226,7 +226,7 @@ export function PainelDesviosBaseline({
             </thead>
             <tbody>
               {linhas.map(linha => (
-                <tr key={`${linha.situacao}-${linha.chave}-${linha.atividadeId ?? "b"}`}>
+                <tr key={`${linha.situacao}-${linha.chave}-${linha.atividadeId ?? `b${linha.baselineAtividadeId}`}`}>
                   <td className="pl-bloqueio-wbs">{linha.wbsCode ?? "—"}</td>
                   <td>{linha.nome}</td>
                   <td>

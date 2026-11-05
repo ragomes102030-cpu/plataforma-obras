@@ -1,6 +1,8 @@
 import { AlertTriangle, Calculator, CheckCircle2, Network, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { revalidarPlanejamentoDaObra } from "@/lib/revalidar-planejamento";
+import { avaliarCpmGantt } from "@shared/gantt-cpm-validade";
 import { selectOperationalPlanning } from "@shared/operational-planning";
 import { PainelMonteCarlo } from "./PainelMonteCarlo";
 
@@ -21,10 +23,7 @@ export function AbaCpm({ projetoId }: Props) {
           ? `CPM calculado · ${result.projectDuration} dias úteis.`
           : result.issues?.[0]?.message ?? "A rede precisa de correção antes do cálculo."
       );
-      await Promise.all([
-        utils.planning.list.invalidate({ projectId: projetoId }),
-        utils.planning.grade.invalidate({ projectId: projetoId }),
-      ]);
+      await revalidarPlanejamentoDaObra(utils, projetoId);
     },
     onError: error => setMensagem(error.message),
   });
@@ -50,7 +49,7 @@ export function AbaCpm({ projetoId }: Props) {
     const projectDuration = validas.length
       ? Math.max(...validas.map(activity => Number(activity.earlyFinish ?? 0)))
       : 0;
-    const hasStoredCpm = validas.length > 0 && calculadas.length === validas.length && !desatualizado;
+    const hasStoredCpm = avaliarCpmGantt(activities).valido;
     const critical = [...criticas].sort(
       (a, b) => Number(a.earlyStart ?? 0) - Number(b.earlyStart ?? 0) || a.id - b.id
     );
