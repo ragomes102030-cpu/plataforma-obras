@@ -3,8 +3,11 @@ import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore } from "./gan
 import type { EntradaDaLinha } from "./cronograma-colunas";
 import type { IsoDate } from "./work-calendar";
 
+let proximoId = 1;
+
 function entrada(codigo: string, inicio: string, duracao: number, extra: Partial<EntradaDaLinha> = {}): EntradaDaLinha {
   return {
+    activityId: proximoId++,
     codigo,
     atividade: `Atividade ${codigo}`,
     frente: "Execução",
@@ -19,6 +22,24 @@ function entrada(codigo: string, inicio: string, duracao: number, extra: Partial
 }
 
 describe("montarArvore", () => {
+  it("preserva atividades distintas quando elas compartilham o mesmo código WBS", () => {
+    const arvore = montarArvore([
+      entrada("1.8.1", "2026-10-01", 3, { activityId: 101, atividade: "Programa" } as Partial<EntradaDaLinha>),
+      entrada("1.8.1", "2026-10-04", 4, { activityId: 102, atividade: "Estudo preliminar" } as Partial<EntradaDaLinha>),
+      entrada("1.8.2", "2026-10-08", 2, { activityId: 103, atividade: "Levantamento" } as Partial<EntradaDaLinha>),
+    ]);
+
+    const folhas = linhasVisiveis(arvore, new Set()).filter(no => no.activityId != null);
+    expect(folhas).toHaveLength(3);
+    expect(folhas.map(no => no.chave)).toEqual([
+      "atividade:101",
+      "atividade:102",
+      "atividade:103",
+    ]);
+    expect(folhas.map(no => no.nome)).toEqual(["Programa", "Estudo preliminar", "Levantamento"]);
+    expect(folhas.find(no => no.activityId === 102)?.nome).toBe("Estudo preliminar");
+  });
+
   it("cria as etapas intermediárias que não existem como atividade", () => {
     const arvore = montarArvore([entrada("1.13.2", "2026-10-01", 3)]);
     expect(arvore).toHaveLength(1);
@@ -147,7 +168,7 @@ describe("linhasVisiveis", () => {
   });
 
   it("esconde os filhos da etapa recolhida e mantém a etapa", () => {
-    expect(linhasVisiveis(arvore, new Set(["1"])).map(no => no.codigo)).toEqual(["1", "2", "2.1"]);
+    expect(linhasVisiveis(arvore, new Set(["eap:1"])).map(no => no.codigo)).toEqual(["1", "2", "2.1"]);
   });
 
   it("recolher todas as etapas deixa só as raízes", () => {
@@ -164,7 +185,7 @@ describe("Só crítico — mantém a EAP e barras críticas após recolhimento",
    entrada("2.2","2026-11-20",5),
  ],new Set(["1.2","2.1"]));
  it("expande somente a visão filtrada sem alterar a árvore nem as escolhas de recolhimento",()=>{
-   const fechadas=new Set(["1","2"]);
+   const fechadas=new Set(["eap:1","eap:2"]);
    expect(linhasVisiveis(arvore,fechadas).map(x=>x.codigo)).toEqual(["1","2"]);
    expect(linhasCriticasVisiveisGantt(arvore).map(x=>x.codigo)).toEqual([
      "1","1.2","2","2.1",

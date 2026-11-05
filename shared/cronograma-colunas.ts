@@ -45,6 +45,8 @@ export type StatusDaLinha =
 
 /** O que o usuário informa. Só isso é entrada; o resto é derivado. */
 export type EntradaDaLinha = {
+  /** Identidade operacional. O código WBS organiza, mas pode se repetir. */
+  activityId: number;
   codigo: string;
   atividade: string;
   frente: string;

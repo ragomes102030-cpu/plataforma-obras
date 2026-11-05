@@ -536,8 +536,9 @@ function Obra({
 
   const calendario: WorkCalendar = CALENDARIO_CORRIDO;
   const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
-  const finsCalculados = Object.fromEntries((grade.data?.linhas ?? []).map(l => [l.codigo, l.fim]));
+  const finsCalculados = Object.fromEntries((grade.data?.linhas ?? []).map(l => [String(l.activityId), l.fim]));
   const linhas: EntradaDaLinha[] = (grade.data?.linhas ?? []).map(l => ({
+    activityId: l.activityId,
     codigo: l.codigo,
     atividade: l.atividade,
     frente: l.frente,
@@ -550,7 +551,6 @@ function Obra({
     marco: l.marco,
   }));
   const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
-  const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
   const exemploPorCodigo = new Set(Object.keys(grade.data?.exemploPorCodigo ?? {}));
   const definicao = ABAS.find(a => a.id === aba);
 

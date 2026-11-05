@@ -3,6 +3,7 @@ import type { BaselineActivityDate } from "./baseline-dates";
 
 /** A barra lê somente as datas civis congeladas pelo servidor na captura. */
 export type BarraBaselineGantt = {
+  activityId: number | null;
   codigo: string;
   inicio: string;
   fim: string;
@@ -26,19 +27,11 @@ export function prepararBarrasBaselineGantt(
     const codigo = data.wbsCode?.trim();
     if (!codigo) continue;
     const linha = linhasPorId.get(data.activityId);
-    const existente = barras.get(codigo);
-    if (existente) {
-      // O Gantt é uma grade por pacote EAP. Várias atividades formam o
-      // envelope completo do pacote, sem atribuir o desvio de só uma delas.
-      existente.inicio = existente.inicio < data.inicio ? existente.inicio : data.inicio;
-      existente.fim = existente.fim > data.fim ? existente.fim : data.fim;
-      existente.atividades += 1;
-      existente.situacao = "indefinida";
-      existente.deltaInicio = null;
-      existente.deltaFim = null;
-      continue;
-    }
-    barras.set(codigo, {
+    const chave = linha?.atividadeId != null
+      ? `atividade:${linha.atividadeId}`
+      : `baseline:${data.activityId}`;
+    barras.set(chave, {
+      activityId: linha?.atividadeId ?? null,
       codigo, inicio: data.inicio, fim: data.fim, atividades: 1,
       situacao: linha?.situacao ?? "indefinida",
       deltaInicio: linha?.deltaInicio ?? null,

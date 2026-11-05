@@ -125,11 +125,11 @@ export function VisualizacaoPlanejamento({
   const editavelLob = ["draft","proposed"].includes(planejamento.data?.currentVersionStatus??"");
   const atividadesLob=atividades.filter(a=>!codigosExemplo?.has(a.wbsCode)).map(a=>({id:a.id,wbsCode:a.wbsCode}));
 
-  const atividadePorCodigo = useMemo(
+  const atividadePorId = useMemo(
     () => new Map(
       atividades
         .filter(activity => !codigosDeExemploOperacionais.has(activity.wbsCode))
-        .map(activity => [activity.wbsCode, activity])
+        .map(activity => [activity.id, activity])
     ),
     [atividades, codigosDeExemploOperacionais]
   );
@@ -164,10 +164,18 @@ export function VisualizacaoPlanejamento({
   const estadoCpm = avaliarCpmGantt(planejamentoOperacional.activities);
   const cpmValido = !planejamento.isPending && !planejamento.isError && estadoCpm.valido;
 
-  // Dependências do cronograma traduzidas para os códigos da EAP, que é o que a
-  // planilha do Gantt usa como chave de linha. Sem isso o gráfico mostra barras
-  // soltas — e o Project/Primavera mostram a sequência entre elas.
-  const dependencias = useMemo(() => {
+  const dependenciasPorId = useMemo(() =>
+    (planejamento.data?.dependencies ?? []).map(dependencia => ({
+      de: dependencia.predecessorId,
+      para: dependencia.successorId,
+      tipo: String(dependencia.type ?? "FS"),
+      lag: Number(dependencia.lag ?? 0),
+    })),
+  [planejamento.data]);
+
+  // A LOB ainda agrupa a leitura pelo pacote EAP. O Gantt nunca usa esta
+  // tradução porque códigos repetidos não identificam uma atividade.
+  const dependenciasPorCodigo = useMemo(() => {
     const codigoPorAtividade = new Map(atividades.map(activity => [activity.id, activity.wbsCode]));
     return (planejamento.data?.dependencies ?? []).flatMap(dependencia => {
       const de = codigoPorAtividade.get(dependencia.predecessorId);
@@ -177,6 +185,13 @@ export function VisualizacaoPlanejamento({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planejamento.data]);
 
+  const idsDeExemploOperacionais = useMemo(
+    () => new Set(atividades
+      .filter(activity => codigosDeExemploOperacionais.has(activity.wbsCode))
+      .map(activity => activity.id)),
+    [atividades, codigosDeExemploOperacionais],
+  );
+
   // O Gantt operacional, seus indicadores e exportação usam a mesma população
   // do CPM. Tarefas QA continuam disponíveis nas abas de atividades e na LOB
   // (que tem seu próprio controle), mas não se misturam ao plano da obra.
@@ -185,11 +200,11 @@ export function VisualizacaoPlanejamento({
     [linhas, codigosDeExemploOperacionais]
   );
   const dependenciasGantt = useMemo(
-    () => dependencias.filter(
-      dependencia => !codigosDeExemploOperacionais.has(dependencia.de) &&
-        !codigosDeExemploOperacionais.has(dependencia.para)
+    () => dependenciasPorId.filter(
+      dependencia => !idsDeExemploOperacionais.has(dependencia.de) &&
+        !idsDeExemploOperacionais.has(dependencia.para)
     ),
-    [dependencias, codigosDeExemploOperacionais]
+    [dependenciasPorId, idsDeExemploOperacionais]
   );
   const linhasDaVisao = view === "gantt" ? linhasGantt : linhas;
 
@@ -199,7 +214,7 @@ export function VisualizacaoPlanejamento({
     const minAtual = linhasDaVisao.reduce((v,l) => Math.min(v,dateMs(l.inicio)),dateMs(linhasDaVisao[0]!.inicio));
     const min = baselineExibida.reduce((v,b)=>Math.min(v,dateMs(b.inicio)),minAtual);
     const max = linhasDaVisao.reduce((v,l)=>{
-      const fim = finsCalculados[l.codigo];
+      const fim = finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo];
       const dataValida = typeof fim === "string" &&
         /^\d{4}-\d{2}-\d{2}$/.test(fim) &&
         Number.isFinite(dateMs(fim)) && fim >= l.inicio;
@@ -265,7 +280,7 @@ export function VisualizacaoPlanejamento({
         </div>
       )}
       {view === "gantt" ? (
-        <Gantt linhas={linhasGantt} atividades={atividadePorCodigo} dependencias={dependenciasGantt} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
+        <Gantt linhas={linhasGantt} atividades={atividadePorId} dependencias={dependenciasGantt} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
           compararBaseline={compararBaseline} onAlternarBaseline={() => setCompararBaseline(v=>!v)}
           baselineDisponivel={baselineVigente !== null}
           baselinePronta={baselinePronta} barrasBaseline={barrasBaseline}
@@ -274,7 +289,7 @@ export function VisualizacaoPlanejamento({
       ) : (
         <>
           <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra}
-            codigosExemplo={codigosExemplo} dependencias={dependencias}
+            codigosExemplo={codigosExemplo} dependencias={dependenciasPorCodigo}
             estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"}
             nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
             distribuicoes={distribuicoesLob.data??[]} atividadeIds={atividadesLob}
@@ -358,9 +373,10 @@ function Gantt({
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<
-    string,
+    number,
     {
       id: number;
+      name: string;
       projectId: number;
       isMilestone: boolean;
       critical: number;
@@ -368,7 +384,7 @@ function Gantt({
       cpmCalculatedAt: Date | string | null;
     }
   >;
-  dependencias: { de: string; para: string; tipo: string }[];
+  dependencias: { de: number; para: number; tipo: string }[];
   dados: { start: string; end: string; total: number };
   hoje: IsoDate;
   inicioObra: IsoDate | null;
@@ -524,16 +540,16 @@ function Gantt({
   const totalCriticas = cpmValido ? Array.from(atividades.values()).filter(item => item.critical === 1).length : 0;
 
   // Árvore da EAP (etapas recolhíveis, como no Project) e o que está visível.
-  const codigosCriticos = useMemo(
+  const idsCriticos = useMemo(
     () =>
       new Set(
         Array.from(atividades.entries())
           .filter(([, item]) => cpmValido && item.critical === 1)
-          .map(([codigo]) => codigo)
+          .map(([activityId]) => activityId)
       ),
     [atividades, cpmValido]
   );
-  const arvore = useMemo(() => montarArvore(linhas, codigosCriticos, finsCalculados), [linhas, codigosCriticos, finsCalculados]);
+  const arvore = useMemo(() => montarArvore(linhas, idsCriticos, finsCalculados), [linhas, idsCriticos, finsCalculados]);
   const [colapsados, setColapsados] = useState<Set<string>>(() => new Set());
   const temEtapas = arvore.some(no => no.temFilhos);
   const visiveis = useMemo(() => linhasVisiveis(arvore, colapsados), [arvore, colapsados]);
@@ -653,12 +669,16 @@ function Gantt({
     return mapa;
   }, [filtradas, px, dados.start, larguraDoTempo, alturaLinha, baselinePronta]);
 
-  const setas = useMemo(
-    () => mostrarSetas
-      ? gerarSetasVisiveisGantt(dependencias, geometria, codigosCriticos)
-      : [],
-    [dependencias, geometria, mostrarSetas, codigosCriticos]
-  );
+  const setas = useMemo(() => {
+    if (!mostrarSetas) return [];
+    const dependenciasVisuais = dependencias.map(dependencia => ({
+      ...dependencia,
+      de: `atividade:${dependencia.de}`,
+      para: `atividade:${dependencia.para}`,
+    }));
+    const criticasVisuais = new Set([...idsCriticos].map(id => `atividade:${id}`));
+    return gerarSetasVisiveisGantt(dependenciasVisuais, geometria, criticasVisuais);
+  }, [dependencias, geometria, mostrarSetas, idsCriticos]);
 
   // Linha de avanço: passa pelo ponto em que cada atividade realmente está.
   // Trecho sem lançamento quebra a linha em vez de voltar ao início do gráfico.
@@ -688,13 +708,16 @@ function Gantt({
   const detalhe = useMemo(() => {
     const no = filtradas.find(linha => linha.chave === selecionada);
     if (!no) return null;
-    const atividade = atividades.get(no.codigo);
-    const listaPred = dependencias.filter(dependencia => dependencia.para === no.codigo);
-    const listaSuces = dependencias.filter(dependencia => dependencia.de === no.codigo);
-    const resumo = (lista: { de: string; para: string; tipo: string }[], chave: "de" | "para") =>
+    const atividade = no.activityId == null ? undefined : atividades.get(no.activityId);
+    const listaPred = dependencias.filter(dependencia => dependencia.para === no.activityId);
+    const listaSuces = dependencias.filter(dependencia => dependencia.de === no.activityId);
+    const resumo = (lista: { de: number; para: number; tipo: string }[], chave: "de" | "para") =>
       lista.length === 0
         ? "nenhuma"
-        : lista.map(dependencia => `${dependencia.tipo.toUpperCase()} ${dependencia[chave]}`).join(" · ");
+        : lista.map(dependencia => {
+            const vinculada = atividades.get(dependencia[chave]);
+            return `${dependencia.tipo.toUpperCase()} ${vinculada?.id ?? dependencia[chave]} — ${vinculada?.name ?? "atividade"}`;
+          }).join(" · ");
     return {
       no,
       atividadeId: atividade?.id ?? null,
@@ -727,9 +750,13 @@ function Gantt({
         duracao:no.duracao,progresso:no.progresso,critica:no.critica,
         marco:no.marco,resumo:no.temFilhos,profundidade:no.profundidade,
       })),
-      vinculos: mostrarSetas ? dependencias : [],
+      vinculos: mostrarSetas ? dependencias.map(dependencia => ({
+        de: String(dependencia.de),
+        para: String(dependencia.para),
+        tipo: dependencia.tipo,
+      })) : [],
       baseline: baselinePronta ? filtradas.flatMap(no=>{
-        const b=barrasBaseline.get(no.codigo);
+        const b=barrasBaseline.get(no.chave);
         return b && !no.temFilhos ? [{codigo:no.codigo,inicio:b.inicio,fim:b.fim}] : [];
       }) : [],
     });
@@ -1093,17 +1120,17 @@ function Gantt({
                         </>
                       )}
                       <span className="pg-celula-num pg-celula-pct">{Math.round(no.progresso)}%</span>
-                      {baselinePronta && !estreita && <span className={`pg-celula-num pg-delta-fim${(barrasBaseline.get(no.codigo)?.deltaFim??0)>0 ? " atraso" : (barrasBaseline.get(no.codigo)?.deltaFim??0)<0 ? " adiantada" : ""}`}
+                      {baselinePronta && !estreita && <span className={`pg-celula-num pg-delta-fim${(barrasBaseline.get(no.chave)?.deltaFim??0)>0 ? " atraso" : (barrasBaseline.get(no.chave)?.deltaFim??0)<0 ? " adiantada" : ""}`}
                         title="Variação do término em dias úteis do CPM, em comparação à baseline vigente">
-                        {no.temFilhos ? "—" : barrasBaseline.get(no.codigo)?.deltaFim != null
-                          ? `${barrasBaseline.get(no.codigo)!.deltaFim!>0?"+":""}${barrasBaseline.get(no.codigo)!.deltaFim}d`
+                        {no.temFilhos ? "—" : barrasBaseline.get(no.chave)?.deltaFim != null
+                          ? `${barrasBaseline.get(no.chave)!.deltaFim!>0?"+":""}${barrasBaseline.get(no.chave)!.deltaFim}d`
                           : "—"}
                       </span>}
                     </div>
                   </div>
                   <div className="pg-trilho" style={{ width: larguraDoTempo }}>
-                    {baselinePronta && !resumo && barrasBaseline.has(no.codigo) && (()=>{
-                      const base=barrasBaseline.get(no.codigo)!;
+                    {baselinePronta && !resumo && barrasBaseline.has(no.chave) && (()=>{
+                      const base=barrasBaseline.get(no.chave)!;
                       const x=Math.max(0,posicao(base.inicio));
                       const dias=Math.round((dateMs(base.fim)-dateMs(base.inicio))/86400000)+1;
                       const w=Math.max(5,Math.min(larguraDoTempo-x,dias*px));
@@ -1260,8 +1287,8 @@ function Gantt({
             )}
             {baselinePronta && !detalhe.no.temFilhos && <div>
               <dt>Baseline vigente</dt>
-              <dd>{barrasBaseline.has(detalhe.no.codigo)
-                ? `${fmtComAno(barrasBaseline.get(detalhe.no.codigo)!.inicio,true)} a ${fmtComAno(barrasBaseline.get(detalhe.no.codigo)!.fim,true)} · Δ término ${barrasBaseline.get(detalhe.no.codigo)!.deltaFim??"—"} d úteis`
+              <dd>{barrasBaseline.has(detalhe.no.chave)
+                ? `${fmtComAno(barrasBaseline.get(detalhe.no.chave)!.inicio,true)} a ${fmtComAno(barrasBaseline.get(detalhe.no.chave)!.fim,true)} · Δ término ${barrasBaseline.get(detalhe.no.chave)!.deltaFim??"—"} d úteis`
                 : "Sem correspondência nesta baseline"}</dd>
             </div>}
             <div className="pg-detalhe-larga">

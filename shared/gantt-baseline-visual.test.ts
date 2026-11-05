@@ -24,16 +24,18 @@ describe("baseline civil congelada", () => {
     expect(datas[0]).toMatchObject({ inicio: "2026-10-23", fim: "2026-10-27" });
     expect(datas[1]).toMatchObject({ inicio: "2026-10-23", fim: "2026-10-23" });
     const barras = prepararBarrasBaselineGantt([linha(1, "1.1", 2)], datas);
-    expect(barras.get("1.1")).toMatchObject({ inicio: "2026-10-23", fim: "2026-10-27", deltaFim: 2 });
+    expect(barras.get("atividade:101")).toMatchObject({ inicio: "2026-10-23", fim: "2026-10-27", deltaFim: 2 });
   });
 
-  it("agrega todas as atividades do mesmo pacote sem escolher o desvio de uma delas", () => {
+  it("preserva separadas as atividades do mesmo pacote", () => {
     const datas = [data(2, "1.8.1", "2026-10-26", "2026-11-20"), data(1, "1.8.1", "2026-10-01", "2026-10-23")];
     const barras = prepararBarrasBaselineGantt([linha(1, "1.8.1", 2), linha(2, "1.8.1", 5)], datas);
-    expect(barras.size).toBe(1);
-    expect(barras.get("1.8.1")).toMatchObject({
-      inicio: "2026-10-01", fim: "2026-11-20", atividades: 2,
-      situacao: "indefinida", deltaInicio: null, deltaFim: null,
+    expect(barras.size).toBe(2);
+    expect(barras.get("atividade:101")).toMatchObject({
+      inicio: "2026-10-01", fim: "2026-10-23", atividades: 1,
+    });
+    expect(barras.get("atividade:102")).toMatchObject({
+      inicio: "2026-10-26", fim: "2026-11-20", atividades: 1,
     });
   });
 
@@ -41,8 +43,8 @@ describe("baseline civil congelada", () => {
     const barras = prepararBarrasBaselineGantt([
       linha(1, "1.1", 3), { ...linha(2, "1.2"), atividadeId: null, situacao: "removida" },
     ], [data(1, "1.1", "2026-10-01", "2026-10-02"), data(2, "1.2", "2026-10-03", "2026-10-04")]);
-    expect(barras.get("1.1")?.deltaFim).toBe(3);
-    expect(barras.get("1.2")?.situacao).toBe("removida");
+    expect(barras.get("atividade:101")?.deltaFim).toBe(3);
+    expect(barras.get("baseline:2")?.situacao).toBe("removida");
   });
 
   it("não reconstrói datas para baseline legada nem aceita fotografia de outra baseline", () => {

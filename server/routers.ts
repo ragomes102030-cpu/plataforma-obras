@@ -149,7 +149,7 @@ import type { AtividadeConciliacao, ItemOrcamento } from "./construction/concili
 import { persistCpmResult } from "./construction/cpm-persister";
 import { coletarDadosEvms } from "./construction/evm-dados";
 import { coletarDadosLookahead } from "./construction/lookahead-dados";
-import { coletarLancamentosExecutados } from "./construction/grade-dados";
+import { alocarProducaoNaVersaoAtual, coletarLancamentosExecutados } from "./construction/grade-dados";
 import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
 import { consolidateControlProgress } from "./construction/control-summary";
@@ -4679,7 +4679,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
+        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {}, producaoSemAlocacao: [] };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4710,32 +4710,28 @@ export const appRouter = router({
         const calendarioDaGrade = (await carregarCalendarioDoPeriodo(
           db, input.projectId, inicio.getFullYear(), anoFinalDaGrade
         )).calendar;
-        // Produção é somada pelo CÓDIGO da EAP (1.2.3), que sobrevive à regeração
-        // do plano; o id da linha, não.
         const codigoPorAtividade = new Map<number,string>();
         for (const atividade of todasAtividades) codigoPorAtividade.set(atividade.id, atividade.wbsCode);
-        const executadoPorCodigo = new Map<string,number>();
-        for (const entry of entries) {
-          const codigo = codigoPorAtividade.get(entry.activityId);
-          if (!codigo) continue;
-          executadoPorCodigo.set(codigo,(executadoPorCodigo.get(codigo)??0)+Number(entry.quantity));
-        }
+        const { executadoPorAtividade, producaoSemAlocacao } = alocarProducaoNaVersaoAtual(
+          activities,
+          todasAtividades,
+          entries,
+        );
         const entradas = activities.map(a => {
           // A régua é o CPM (dias úteis). Antes, `startOffset` zerado em todas as
           // atividades empilhava as 53 barras no primeiro dia e fazia o painel
           // anunciar 120 dias de prazo enquanto a Curva S mostrava 580.
-          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0, marco:a.isMilestone };
+          return { activityId:a.id, codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorAtividade.get(a.id)??0, marco:a.isMilestone };
         });
         const linhasDerivadas = gradeDoCronograma(calendarioDaGrade,hoje,entradas);
-        const linhas = linhasDerivadas.map((l,i)=>({ ...l, atividadeId: activities.find(a=>a.wbsCode===l.codigo)?.id ?? 0 }));
-        const idsPorCodigo = Object.fromEntries(linhas.map(l=>[l.codigo,l.atividadeId]));
+        const linhas = linhasDerivadas;
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
         for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
         const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
         const exemploPorCodigo = Object.fromEntries(
           activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
         );
-        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo, producaoSemAlocacao };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({

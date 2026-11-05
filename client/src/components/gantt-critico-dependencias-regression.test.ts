@@ -12,11 +12,19 @@ describe("Regressão Gantt — Crítico e ligações",()=>{
    expect(view).toContain("CPM ausente, incompleto ou desatualizado");
  });
  it("usa mesmo mapa filtrado nas barras, ligações e altura do SVG",()=>{
-   expect(view).toContain("gerarSetasVisiveisGantt(dependencias, geometria, codigosCriticos)");
+   expect(view).toContain("gerarSetasVisiveisGantt(dependenciasVisuais, geometria, criticasVisuais)");
    expect(view).toContain("filtradas.forEach((no, indice)");
    expect(view).toContain("const deslocamentoBaseline = baselinePronta");
    expect(view).toContain("height={Math.max(1, filtradas.length * alturaLinha)}");
    expect(view).toContain('data-testid="gantt-dependency-path"');
+ });
+ it("usa o id da atividade para linha, vínculo, crítico e detalhe",()=>{
+   expect(view).toContain("const atividadePorId = useMemo(");
+   expect(view).toContain("de: dependencia.predecessorId");
+   expect(view).toContain("para: dependencia.successorId");
+   expect(view).toContain("de: `atividade:${dependencia.de}`");
+   expect(view).toContain("atividades.get(no.activityId)");
+   expect(view).toContain("finsCalculados[String(l.activityId)]");
  });
  it("mantém atividades de exemplo fora da visão operacional do Gantt",()=>{
    expect(view).toContain("selectOperationalScheduleRows(linhas, codigosDeExemploOperacionais)");
