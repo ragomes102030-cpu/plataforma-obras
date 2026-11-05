@@ -12,10 +12,8 @@ import { ControlTowerDashboard } from "./ControlTowerDashboard";
 /**
  * Painel da obra.
  *
- * Regra que vale para todo o painel: número sem régua é ruído. Avanço é
- * ponderado pelo valor do orçamento (a mesma régua da Curva S); valor executado
- * só conta o que tem atividade; contagem é por atividade. Cada um aparece com o
- * nome da sua régua e com o desvio assinado.
+ * Regra que vale para todo o painel: avanço físico e valor agregado são eixos
+ * diferentes. O orçamento pondera EVM; nunca substitui pesos físicos aprovados.
  */
 
 type Props = {
@@ -183,6 +181,11 @@ export function PainelDoCronograma({
       hoje, atividades, itens: orcamento.data?.items ?? [],
       versaoAtivaAprovada: orcamento.data?.versions?.find(v => v.id === orcamento.data?.activeVersionId)?.status === "aprovado",
       custoPorAtividade: custo.custoPorAtividade, lancamentos,
+      // O modelo atual ainda não persiste uma distribuição física aprovada. O
+      // painel mantém o agregado oculto em vez de usar custo ou misturar unidades.
+      pesosFisicosAprovados: false,
+      erroFisico: producao.isError,
+      erroFinanceiro: orcamento.isError,
     });
     const foraDoPlano = confirmados.filter((l) => l.vinculo && l.vinculo !== "atual").length;
 
@@ -355,7 +358,6 @@ export function PainelDoCronograma({
   });
 
   // Coerência: só entra quando há item que IMPEDE execução e valor em risco.
-  // Percentual é sempre sobre o valor do orçamento, a mesma régua do painel.
   const alertaDeOrcamento: AlertaDoPainel | null = (() => {
     const analise = coerencia.data;
     if (!analise) return null;
@@ -435,11 +437,7 @@ export function PainelDoCronograma({
       projetoId={projetoId}
       nomeObra={nomeObra ?? "Obra"}
       codigosExemplo={codigosExemplo}
-      avancoEstado={orcamento.isPending || producao.isPending ? "pendente"
-        : orcamento.isError || producao.isError ? "erro"
-        : !integridade.orcamentoConfiavel ? "indisponivel"
-        : !integridade.temProducaoConfirmada ? "sem-producao" : "ok"}
-      orcamentoConfiavel={integridade.orcamentoConfiavel}
+      prontidao={integridade.prontidao}
       hoje={hoje}
       resumo={resumo}
       prazoConfianca={prazoConfianca}

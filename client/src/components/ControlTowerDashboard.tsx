@@ -5,7 +5,9 @@ import {
   ListChecks, ShieldAlert, Wallet, X,
 } from "lucide-react";
 import type { AlertaDoPainel, ResumoDoPainel } from "@shared/painel-obra";
+import type { ProntidaoDeAvanco } from "@shared/progress-readiness";
 import { CurvaSControlTower } from "./CurvaSControlTower";
+import { OrientacaoDeEtapa } from "./OrientacaoDeEtapa";
 import "@/control-tower.css";
 
 export type SemanaControl = {
@@ -29,8 +31,7 @@ type Props = {
   projetoId: number;
   nomeObra: string;
   codigosExemplo: ReadonlySet<string>;
-  avancoEstado: "pendente" | "erro" | "indisponivel" | "sem-producao" | "ok";
-  orcamentoConfiavel: boolean;
+  prontidao: ProntidaoDeAvanco;
   hoje: string;
   resumo: ResumoDoPainel;
   prazoConfianca: { confiavel: boolean; motivo: string };
@@ -64,7 +65,7 @@ const destinos: Record<Detalhe, string> = {
 };
 
 export function ControlTowerDashboard({
-  projetoId, nomeObra, codigosExemplo, avancoEstado, orcamentoConfiavel, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
+  projetoId, nomeObra, codigosExemplo, prontidao, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
@@ -94,37 +95,40 @@ export function ControlTowerDashboard({
   }, [detalhe]);
 
   const atrasadaFisico = fisico.pontos < -0.5;
-  const fisicoDisponivel = avancoEstado === "ok";
-  const planejadoDisponivel = orcamentoConfiavel && (avancoEstado === "ok" || avancoEstado === "sem-producao");
+  const fisicoDisponivel = prontidao.fisico === "disponivel";
+  const financeiroDisponivel = prontidao.financeiro === "disponivel";
+  // A meta planejada continua sendo informativa quando os pesos existem,
+  // mesmo que ainda não haja uma medição confirmada para o realizado.
+  const planejadoDisponivel = fisicoDisponivel || prontidao.fisico === "sem_producao";
   const textoRealizado = fisicoDisponivel ? percentual(fisico.real) : "Sem dado";
   const textoPlanejado = planejadoDisponivel ? percentual(fisico.planejado) : "Indisponível";
   const textoDesvio = fisicoDisponivel ? ponto(fisico.pontos) : "Sem dado";
-  const textoEv = avancoEstado === "pendente" ? "Consultando…"
-    : avancoEstado === "erro" ? "Indisponível"
-    : !orcamentoConfiavel ? "Orçamento em revisão"
-    : !fisicoDisponivel ? "Sem dado" : dinheiro(valor.executado);
-  const tituloStatus = avancoEstado === "pendente" ? "Conferindo orçamento e produção."
-    : avancoEstado === "erro" ? "Avanço físico indisponível."
-    : avancoEstado === "indisponivel" ? "Orçamento ainda sem régua validada."
-    : avancoEstado === "sem-producao" ? "Produção ainda não apurada."
+  const textoEv = prontidao.evDisponivel ? dinheiro(valor.executado)
+    : prontidao.financeiro === "didatico" ? "Orçamento de teste"
+    : prontidao.financeiro === "cobertura_incompleta" ? "Cobertura incompleta"
+    : prontidao.financeiro === "sem_orcamento" ? "Sem orçamento aprovado"
+    : prontidao.financeiro === "erro" ? "Indisponível"
+    : "Sem produção confirmada";
+  const tituloStatus = prontidao.fisico === "erro" ? "Avanço físico indisponível."
+    : prontidao.fisico === "sem_pesos" ? "Avanço físico ainda sem pesos aprovados."
+    : prontidao.fisico === "sem_producao" ? "Produção ainda não apurada."
     : fisico.rotulo === "atrasada" ? "A execução está abaixo do planejado."
     : selo.tipo === "atrasada" ? "O planejamento exige correção."
     : selo.tipo === "sem_plano" ? "Planejamento ainda incompleto."
     : fisico.rotulo === "adiantada" ? "A execução supera o planejado."
     : "Acompanhe o desempenho da obra.";
-  const corStatus = avancoEstado !== "ok" ? "atencao" : atrasadaFisico || selo.tipo === "atrasada" ? "atrasada"
+  const corStatus = !fisicoDisponivel ? "atencao" : atrasadaFisico || selo.tipo === "atrasada" ? "atrasada"
     : selo.tipo === "atencao" || selo.tipo === "sem_plano" ? "atencao" : "em-dia";
-  const statusTexto = avancoEstado === "pendente" ? "Conferindo fontes"
-    : avancoEstado === "erro" ? "Falha na consulta dos indicadores"
-    : avancoEstado === "indisponivel" ? "Avanço sem régua válida"
-    : avancoEstado === "sem-producao" ? "Sem produção confirmada"
+  const statusTexto = prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
+    : prontidao.fisico === "sem_pesos" ? "Pesos físicos ainda não aprovados"
+    : prontidao.fisico === "sem_producao" ? "Sem produção confirmada"
     : atrasadaFisico ? "Abaixo do planejado"
     : selo.tipo === "atrasada" ? "Atraso identificado" : selo.rotulo;
   const comprometidos = semana?.compromissos ?? null;
   const totalContado = status.concluidas + status.emAndamento + status.atrasadas + status.naoIniciadas;
   const statusConfere = totalContado === status.total;
   const detalhes: Record<Detalhe, { titulo: string; desc: string; itens: [string, string][]; acao: string }> = {
-    fisico: { titulo: "Avanço físico", desc: "Avanço ponderado pelo orçamento ligado às atividades. A diferença não demonstra, sozinha, atraso na conclusão da obra.", itens: [
+    fisico: { titulo: "Avanço físico", desc: "Avanço consolidado somente quando as atividades possuem pesos físicos explícitos e aprovados. Orçamento não substitui peso físico.", itens: [
       ["Realizado", textoRealizado], ["Planejado", textoPlanejado], ["Desvio", textoDesvio],
     ], acao: "Investigar na Curva S" },
     prazo: { titulo: "Prazo e cronograma", desc: prazoConfianca.confiavel ? "Data calculada no plano atual; atraso no término exige comparação com a baseline aprovada." : "A data exibida na grade é provisória. Ela não deve orientar decisões de prazo até a EAP e o CPM estarem válidos.", itens: [
@@ -159,15 +163,21 @@ export function ControlTowerDashboard({
         <div className="ct-hero-main">
           <span className="ct-status"><span className="ct-status-dot" aria-hidden="true"/>{statusTexto.toUpperCase()} · {dataBr(hoje)}</span>
           <h2>{tituloStatus}</h2>
-          <p>{avancoEstado === "ok" ? "O avanço executado é comparado à meta acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano." : avancoEstado === "pendente" ? "Os percentuais serão exibidos depois de carregar o orçamento e a produção." : avancoEstado === "erro" ? "Uma fonte dos indicadores não foi consultada. Tente novamente para apurar o desempenho." : avancoEstado === "sem-producao" ? "Registre e confirme uma medição para apurar realizado e desvio. A ausência de lançamento não comprova execução zero." : "Revise fontes de preço, aprovação e cobertura do orçamento. Valores didáticos ou parciais não habilitam avanço financeiro."}</p>
-          {avancoEstado === "ok" ? <div className="ct-hero-bottom"><strong className="ct-delta">{ponto(fisico.pontos)}</strong><span>Desvio de avanço<br/>realizado − planejado</span><button type="button" onClick={() => abrir("fisico")}>Entender o desvio <ArrowRight size={15}/></button></div>
-            : <div className="ct-hero-bottom ct-fisico-indisponivel" role="status"><strong>{avancoEstado === "pendente" ? "Consultando…" : "Sem dado"}</strong><span>Avanço comparável<br/>indisponível</span><button type="button" onClick={() => abrir("valor")}>Ver orçamento <ArrowRight size={15}/></button></div>}
+          <p>{fisicoDisponivel
+            ? "O avanço executado é comparado à meta física acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano."
+            : prontidao.fisico === "erro"
+              ? "Uma fonte do acompanhamento físico não foi consultada. Atualize a leitura antes de interpretar o desempenho."
+              : prontidao.fisico === "sem_producao"
+                ? "Registre e confirme uma medição para apurar realizado e desvio. A ausência de lançamento não comprova execução zero."
+                : "O painel acompanha as atividades individualmente, mas não soma unidades diferentes. Defina e aprove pesos físicos explícitos para publicar o percentual da obra."}</p>
+          {fisicoDisponivel ? <div className="ct-hero-bottom"><strong className="ct-delta">{ponto(fisico.pontos)}</strong><span>Desvio de avanço<br/>realizado − planejado</span><button type="button" onClick={() => abrir("fisico")}>Entender o desvio <ArrowRight size={15}/></button></div>
+            : <div className="ct-hero-bottom ct-fisico-indisponivel" role="status"><strong>Sem dado agregado</strong><span>Atividades continuam<br/>visíveis individualmente</span><button type="button" onClick={() => abrirAba(prontidao.fisico === "sem_pesos" ? "atividades" : "producao")}>{prontidao.fisico === "sem_pesos" ? "Definir pesos físicos" : "Conferir produção"} <ArrowRight size={15}/></button></div>}
         </div>
         <div className="ct-hero-side">
-          {avancoEstado === "ok" ? <div className="ct-gauge" role="img" aria-label={"Avanço realizado " + percentual(fisico.real)}>
+          {fisicoDisponivel ? <div className="ct-gauge" role="img" aria-label={"Avanço realizado " + percentual(fisico.real)}>
             <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="41" fill="none" stroke="#304859" strokeWidth="11" pathLength="100"/><circle cx="50" cy="50" r="41" fill="none" stroke="#58cbd0" strokeWidth="11" strokeLinecap="round" strokeDasharray={reduzir(fisico.real * 100) + " 100"} pathLength="100" transform="rotate(-90 50 50)"/></svg>
             <div><strong>{percentual(fisico.real)}</strong><small>EXECUTADO</small></div>
-          </div> : <div className="ct-gauge ct-gauge-indisponivel" role="status"><strong>{avancoEstado === "pendente" ? "…" : "—"}</strong><small>{avancoEstado === "pendente" ? "VALIDANDO" : "SEM DADO"}</small></div>}
+          </div> : <div className="ct-gauge ct-gauge-indisponivel" role="status"><strong>—</strong><small>SEM AGREGADO</small></div>}
           {planejadoDisponivel && <div className="ct-hero-compare">
             <span>Meta até hoje</span><strong>{percentual(fisico.planejado)}</strong>
             <div className="ct-compare-line"><span>Planejado</span><b>{percentual(fisico.planejado)}</b></div><div className="ct-progress"><span style={{ width: reduzir(fisico.planejado * 100) + "%" }}/></div>
@@ -176,9 +186,15 @@ export function ControlTowerDashboard({
         </div>
       </section>
 
+      {prontidao.orientacoes.length > 0 && (
+        <section className="ct-prontidao" aria-label="Como liberar os indicadores">
+          {prontidao.orientacoes.map(orientacao => <OrientacaoDeEtapa key={orientacao.id} orientacao={orientacao} />)}
+        </section>
+      )}
+
       <section className="ct-kpis" aria-label="Indicadores essenciais">
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">{prazoConfianca.confiavel ? "TÉRMINO CALCULADO" : "PRAZO EM REVISÃO"} <CalendarDays size={18}/></span><strong>{prazoConfianca.confiavel ? dataBr(prazo.fim) : "Não validado"}</strong><small>{prazoConfianca.confiavel ? (prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido") + " · " + percentual(prazo.fracaoDecorrida) + " transcorrido" : prazoConfianca.motivo}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
-        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{!orcamentoConfiavel ? "Exige orçamento aprovado com fonte e cobertura válidas" : !fisicoDisponivel ? "Aguardando produção confirmada" : "Orçamento: " + dinheiro(valor.total)}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
+        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro" : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido" : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura" : !prontidao.evDisponivel ? "Aguardando produção confirmada e pesos físicos" : "Orçamento: " + dinheiro(valor.total)}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("atividades")}><span className="ct-kpi-head">ATIVIDADES DO PLANO <ListChecks size={18}/></span><strong>{status.total} atividades</strong><small>{statusConfere ? status.atrasadas + " atrasadas · " + status.concluidas + " concluídas" : "Distribuição de status inconsistente"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">COMPROMISSOS DA SEMANA <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Sem registro" : comprometidos + " compromissos"}</strong><small>{ppc != null ? "PPC avaliado: " + numero.format(ppc) + "%" : "PPC não apurado"}{bloqueadas != null ? " · " + bloqueadas + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
       </section>
@@ -208,7 +224,7 @@ export function ControlTowerDashboard({
             <div className="ct-empty-row"><Activity size={18}/>{producaoEstado === "pendente" ? "Consultando lançamentos…" : producaoEstado === "erro" ? "Falha ao consultar lançamentos." : "Nenhum lançamento registrado no período."}</div>}
         </section>
       </div>
-      <details className="ct-metodo"><summary>Fontes e critérios dos indicadores</summary><p>O avanço físico é ponderado pelo valor do orçamento associado às atividades na versão ativa. O valor agregado usa o trabalho executado associado a itens orçados. A Curva S emprega orçamento aprovado, dias úteis do calendário do CPM e produção confirmada. Contagens de atividades não são ponderadas. Diferenças entre versões e fontes devem ser investigadas; o painel nunca recalcula CPM nem altera dados.</p></details>
+      <details className="ct-metodo"><summary>Fontes e critérios dos indicadores</summary><p>O avanço físico agregado exige pesos físicos explícitos e aprovados; sem eles, o painel mantém a leitura por atividade. O valor agregado usa orçamento aprovado e trabalho executado confirmado. A Curva S financeira emprega orçamento aprovado, dias úteis do calendário do CPM e produção confirmada. Diferenças entre versões e fontes devem ser investigadas; o painel nunca recalcula CPM nem altera dados.</p></details>
 
       {detalhe && <div className="ct-dialog-root"><button type="button" className="ct-backdrop" aria-label="Fechar painel de investigação" onClick={fechar}/>
         <aside className="ct-inspector" role="dialog" aria-modal="true" aria-label={detalhes[detalhe].titulo}>

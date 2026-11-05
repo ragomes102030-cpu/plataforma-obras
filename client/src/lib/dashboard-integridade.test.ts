@@ -5,13 +5,18 @@ const base = {
   hoje: "2026-11-05", atividades: [{id:1,budgetItemId:10}],
   itens: [{id:10,code:"1.1",quantity:5,unitPrice:100,source:"SEINFRA 028"}],
   versaoAtivaAprovada: true, custoPorAtividade: new Map([[1,500]]), lancamentos: [],
+  pesosFisicosAprovados: true,
 };
 const medicao = { activityId:1,productionDate:"2026-11-05",quantity:0,status:"confirmada",vinculo:"atual" };
 
 describe("integridade dos indicadores do dashboard", () => {
   it("distingue ausência de medição de medição confirmada zero", () => {
-    expect(avaliarIntegridadeDashboard(base)).toEqual({orcamentoConfiavel:true,temProducaoConfirmada:false});
+    expect(avaliarIntegridadeDashboard(base)).toMatchObject({orcamentoConfiavel:true,temProducaoConfirmada:false,prontidao:{fisico:"sem_producao",financeiro:"disponivel"}});
     expect(avaliarIntegridadeDashboard({...base,lancamentos:[medicao]}).temProducaoConfirmada).toBe(true);
+  });
+  it("mantém o físico independente do orçamento", () => {
+    const resultado=avaliarIntegridadeDashboard({...base,itens:[],versaoAtivaAprovada:false,lancamentos:[medicao]});
+    expect(resultado.prontidao).toMatchObject({fisico:"disponivel",financeiro:"sem_orcamento"});
   });
   it.each([
     {...medicao,status:"rascunho"}, {...medicao,productionDate:"2026-11-06"},

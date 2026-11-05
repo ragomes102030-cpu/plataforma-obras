@@ -20,7 +20,8 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(home).toContain("codigosExemplo={exemploPorCodigo}");
     expect(painel).toContain("agregadoDoCronograma(linhasDaObra)");
     expect(painel).toContain("!codigosExemplo.has(a.wbsCode ?? \"\")");
-    expect(painel).toContain('avancoEstado={orcamento.isPending || producao.isPending ? "pendente"');
+    expect(painel).toContain('prontidao={integridade.prontidao}');
+    expect(painel).toContain('pesosFisicosAprovados: false');
     expect(painel).toContain('Number(l.exemplo ?? 0) !== 1');
     expect(painel).toContain('isoDoValor(l.productionDate) <= hoje');
     expect(painel).toContain("erroGrade && !agregado");
@@ -59,9 +60,9 @@ describe("Control Tower — integração V1 somente leitura", () => {
   });
   it("trata estados vazios, dados parciais, teclado, celular e movimento reduzido", () => {
     expect(control).toContain("carregandoComplementos");
-    expect(control).toContain('avancoEstado === "ok"');
+    expect(control).toContain('prontidao.fisico === "disponivel"');
     expect(control).toContain('fisicoDisponivel ? percentual(fisico.real) : "Sem dado"');
-    expect(control).toContain("Avanço comparável");
+    expect(control).toContain("Atividades continuam");
     expect(control).toContain('["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível"');
     expect(control).toContain("erroComplementos");
     expect(control).toContain('role="dialog"');

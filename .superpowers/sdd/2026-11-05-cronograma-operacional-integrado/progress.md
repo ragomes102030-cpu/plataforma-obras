@@ -34,3 +34,12 @@ Ruling: the worktree starts from commit abe6a60, which contains the approved spe
 - Removing a relationship now requires an explicit confirmation showing predecessor and successor; Cancel, backdrop and Escape preserve it.
 - Invalid-network guidance reuses the didactic contract from Task 2. Approved versions continue to explain how to open a work version without losing the approved plan or baseline.
 - Verification: 12 focused dependency tests and TypeScript check passed. Responsive rules cover the 1024 px content width; live 1366/1024 visual confirmation remains in Task 7 after deployment.
+
+## Task 4 — complete
+
+- Physical progress, financial readiness and earned value now have independent states. A missing or didactic budget no longer turns physical progress into zero or hides a valid physical plan.
+- The dashboard distinguishes missing physical weights, missing confirmed production, missing approved budget, didactic prices, incomplete cost coverage and query errors.
+- Every unavailable indicator explains what happened, why it cannot be published, where to resolve it and what evidence releases it.
+- The planned physical target remains visible when weights exist but production has not yet been confirmed; realized, variance and EV remain unavailable instead of being rendered as zero.
+- Ruling: the current data model does not persist approved physical weights. The live panel therefore reports that limitation honestly and retains per-activity visibility; Task 6 will make the operational route explicit without inventing an aggregate.
+- Verification: 30 focused readiness/dashboard tests and TypeScript check passed. The deprecated phrase “régua validada” is absent from the affected UI and decision code.
