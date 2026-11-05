@@ -5,7 +5,13 @@ describe("revalidação entre abas do planejamento", () => {
   it("atualiza todas as leituras da mesma obra após uma alteração", async () => {
     const consulta = () => ({ invalidate: vi.fn().mockResolvedValue(undefined) });
     const utils = {
-      planning: { list: consulta(), grade: consulta() },
+      planning: {
+        list: consulta(),
+        grade: consulta(),
+        compararComBaseline: consulta(),
+        lookahead: consulta(),
+        validateEngineeringCoherence: consulta(),
+      },
       projects: { wbs: consulta() },
       eap: { validateWbsStructure: consulta(), eapArquimedesReview: consulta() },
       agent: { snapshot: consulta(), agentPlanVersions: consulta() },

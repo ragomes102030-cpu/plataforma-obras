@@ -55,11 +55,11 @@ describe("baseline: gate de CPM resolve na própria tela", () => {
     // tela tem de dizer isso ANTES do clique, com o botão travado.
     expect(FONTE).toContain("plano.data?.eapApproved");
     expect(FONTE).toContain("const podeCapturar = resumo.cpmOk && versaoAprovada");
-    expect(FONTE).toContain("Aprovação da EAP pendente");
+    expect(FONTE).toContain("Aprovação da versão de trabalho pendente");
   });
 
-  it("invalida o planejamento inteiro para baseline e curva S verem o CPM novo", () => {
+  it("revalida as leituras dependentes para baseline e curva S verem o CPM novo", () => {
     const trecho = FONTE.slice(FONTE.indexOf("const recalcular"));
-    expect(trecho).toContain("utils.planning.invalidate()");
+    expect(trecho).toContain("revalidarPlanejamentoDaObra(utils, projetoId)");
   });
 });

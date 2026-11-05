@@ -3,7 +3,13 @@ type ConsultaDaObra = {
 };
 
 type LeiturasDoPlanejamento = {
-  planning: { list: ConsultaDaObra; grade: ConsultaDaObra };
+  planning: {
+    list: ConsultaDaObra;
+    grade: ConsultaDaObra;
+    compararComBaseline: ConsultaDaObra;
+    lookahead: ConsultaDaObra;
+    validateEngineeringCoherence: ConsultaDaObra;
+  };
   projects: { wbs: ConsultaDaObra };
   eap: { validateWbsStructure: ConsultaDaObra; eapArquimedesReview: ConsultaDaObra };
   agent: { snapshot: ConsultaDaObra; agentPlanVersions: ConsultaDaObra };
@@ -15,6 +21,9 @@ export async function revalidarPlanejamentoDaObra(utils: LeiturasDoPlanejamento,
   await Promise.all([
     utils.planning.list.invalidate(input),
     utils.planning.grade.invalidate(input),
+    utils.planning.compararComBaseline.invalidate(input),
+    utils.planning.lookahead.invalidate(input),
+    utils.planning.validateEngineeringCoherence.invalidate(input),
     utils.projects.wbs.invalidate(input),
     utils.eap.validateWbsStructure.invalidate(input),
     utils.eap.eapArquimedesReview.invalidate(input),
