@@ -3793,6 +3793,39 @@ tr:hover .xl-codigo {
 .pl-dep-remover{display:inline-flex;align-items:center;gap:5px;border:1px solid #d8a6a1;border-radius:5px;background:#fff;color:#9c3128;padding:5px 7px;font-size:11px;font-weight:700;cursor:pointer}
 .pl-dep-remover:hover:not(:disabled){background:#fff4f2;border-color:#b74439}
 .pl-dep-remover:disabled{opacity:.55;cursor:wait}
+.pl-dependencias-layout{display:grid;grid-template-columns:1fr;gap:14px;min-width:0}
+.pl-dependencias-formulario .pl-dependencia-form{grid-template-columns:minmax(220px,1.2fr) 90px minmax(220px,1.2fr) 90px auto}
+.pl-dependencias-rede{min-width:0}
+.pl-dependencias-filtros{display:flex;align-items:end;gap:10px;padding:10px;border-top:1px solid #e5edf1;background:#f8fbfc}
+.pl-dependencias-filtros label{display:grid;gap:4px;color:#526b78;font-size:10px;font-weight:800}
+.pl-dependencias-filtros input,.pl-dependencias-filtros select{min-height:34px;border:1px solid #cbd9df;border-radius:7px;background:#fff;color:#183544;padding:6px 9px;font:inherit}
+.pl-dependencias-busca{position:relative;flex:1;min-width:220px}
+.pl-dependencias-busca svg{position:absolute;left:10px;bottom:10px;color:#6c818c}
+.pl-dependencias-busca input{width:100%;padding-left:32px!important;font-weight:500}
+.pl-dependencias-check{display:flex!important;grid-template-columns:auto 1fr;align-items:center;gap:7px!important;min-height:34px;padding:0 8px;white-space:nowrap}
+.pl-dependencias-check input{min-height:auto;width:16px;height:16px;padding:0}
+.pl-dependencias-contagem{margin-left:auto;padding-bottom:9px;color:#526b78;font-size:11px;font-weight:700;white-space:nowrap}
+.pl-dependencias-rede-wrap{height:clamp(320px,55vh,720px);max-height:none;overflow:auto;border-top:1px solid #dce6eb}
+.pl-dependencias-rede-wrap .pl-tabela-analitica{font-size:11px}
+.pl-dependencias-rede-wrap .pl-tabela-analitica thead th{padding:10px 12px;font-size:9px}
+.pl-dependencias-rede-wrap .pl-tabela-analitica tbody td{padding:9px 12px}
+.pl-dependencias-rede-wrap .pl-tabela-analitica tbody tr{cursor:pointer}
+.pl-dependencias-rede-wrap .pl-tabela-analitica tbody tr.expandida td{max-width:none;overflow:visible;text-overflow:clip;white-space:normal;background:#eef7fa;color:#183544}
+.pl-dependencias-confirmacao-fundo{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:20px;background:rgba(9,31,42,.42)}
+.pl-dependencias-confirmacao{width:min(520px,100%);padding:20px;border:1px solid #d7e2e7;border-radius:12px;background:#fff;box-shadow:0 24px 70px rgba(10,38,51,.28)}
+.pl-dependencias-confirmacao header{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.pl-dependencias-confirmacao header small{display:block;margin-bottom:3px;color:#9c3128;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.pl-dependencias-confirmacao h3{margin:0;color:#193f4f;font-size:18px}
+.pl-dependencias-confirmacao header>button{display:grid;place-items:center;width:32px;height:32px;border:1px solid #dce5e9;border-radius:7px;background:#fff;color:#526b78}
+.pl-dependencias-confirmacao>p{color:#526b78;font-size:13px;line-height:1.5}
+.pl-dependencias-confirmacao dl{display:grid;gap:8px;margin:14px 0;padding:12px;border-radius:8px;background:#f6f9fa}
+.pl-dependencias-confirmacao dl div{display:grid;grid-template-columns:100px 1fr;gap:10px}
+.pl-dependencias-confirmacao dt{color:#6b808a;font-size:10px;font-weight:800;text-transform:uppercase}
+.pl-dependencias-confirmacao dd{margin:0;color:#193f4f;font-size:12px;font-weight:700}
+.pl-dependencias-confirmacao-acoes{display:flex;justify-content:flex-end;gap:8px}
+.pl-dependencias-confirmacao-acoes button{border:1px solid #cbd9df;border-radius:7px;background:#fff;color:#34515f;padding:8px 12px;font-size:12px;font-weight:800}
+.pl-dependencias-confirmacao-acoes button.perigo{border-color:#a83d34;background:#a83d34;color:#fff}
+.pl-dependencias-confirmacao-acoes button:disabled{opacity:.55;cursor:wait}
 .pl-tabela-legenda{
   display:block;
   margin:0;
@@ -3980,6 +4013,11 @@ tr:hover .xl-codigo {
 @media(max-width:900px){
   .pl-planejamento-cards{grid-template-columns:1fr 1fr}
   .pl-planejamento-grid{grid-template-columns:1fr}
+  .pl-dependencias-formulario .pl-dependencia-form{grid-template-columns:1fr 88px 1fr}
+  .pl-dependencias-formulario .pl-dependencia-form .pl-planejamento-secondary{grid-column:2 / -1;width:100%}
+  .pl-dependencias-filtros{flex-wrap:wrap;align-items:center}
+  .pl-dependencias-busca{flex-basis:100%}
+  .pl-dependencias-contagem{margin-left:0;padding:0}
 }
 @media(max-width:700px){
   .pl-planejamento-head{flex-direction:column;align-items:stretch}

@@ -26,3 +26,11 @@ Ruling: the worktree starts from commit abe6a60, which contains the approved spe
 - The workbar renders the primary blocker through `OrientacaoDeEtapa`; the action dispatches navigation to the exact corrective tab.
 - Ruling: the component test uses `.test.ts`, not the planned `.test.tsx`, because this repository's Vitest include intentionally runs client `*.test.ts` files in the Node/static-render harness. Cost if wrong: a `.tsx` test would exist but would not run in the full suite.
 - Verification: 24 focused tests and TypeScript check passed.
+
+## Task 3 — complete
+
+- Dependency creation is a compact full-width region above a separate full-width network table.
+- The network table has a sticky header, `clamp(320px, 55vh, 720px)` work area, search, type filter, critical-path filter, visible counts and expandable long rows.
+- Removing a relationship now requires an explicit confirmation showing predecessor and successor; Cancel, backdrop and Escape preserve it.
+- Invalid-network guidance reuses the didactic contract from Task 2. Approved versions continue to explain how to open a work version without losing the approved plan or baseline.
+- Verification: 12 focused dependency tests and TypeScript check passed. Responsive rules cover the 1024 px content width; live 1366/1024 visual confirmation remains in Task 7 after deployment.

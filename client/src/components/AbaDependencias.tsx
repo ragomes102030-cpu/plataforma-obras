@@ -1,7 +1,9 @@
-import { GitBranch, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { GitBranch, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { revalidarPlanejamentoDaObra } from "@/lib/revalidar-planejamento";
+import { orientarFluxoPlanejamento } from "@shared/planning-guidance";
+import { OrientacaoDeEtapa } from "./OrientacaoDeEtapa";
 
 type Props = { projetoId: number };
 
@@ -33,6 +35,15 @@ export function AbaDependencias({ projetoId }: Props) {
   const [tipo, setTipo] = useState<(typeof TIPOS)[number]>("FS");
   const [lag, setLag] = useState("0");
   const [mensagem, setMensagem] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | (typeof TIPOS)[number]>("todos");
+  const [somenteCriticas, setSomenteCriticas] = useState(false);
+  const [linhaExpandida, setLinhaExpandida] = useState<number | null>(null);
+  const [confirmarRemocao, setConfirmarRemocao] = useState<{
+    id: number;
+    predecessorId: number;
+    successorId: number;
+  } | null>(null);
   const abrirVersao = trpc.planning.abrirVersaoDeTrabalho.useMutation({
     onSuccess: async result => {
       setMensagem(`Versão de trabalho v${result.versionNumber} aberta. A versão aprovada foi preservada; os vínculos agora podem ser editados.`);
@@ -55,6 +66,7 @@ export function AbaDependencias({ projetoId }: Props) {
 
   const remover = trpc.planning.deleteDependency.useMutation({
     onSuccess: async () => {
+      setConfirmarRemocao(null);
       setMensagem("Dependência removida e registrada na auditoria. O CPM ficou desatualizado; recalcule depois de revisar a rede.");
       await revalidarPlanejamentoDaObra(utils, projetoId);
     },
@@ -64,11 +76,36 @@ export function AbaDependencias({ projetoId }: Props) {
   const activities = plano.data?.activities ?? [];
   const dependencies = plano.data?.dependencies ?? [];
   const atividadesSemDuracao = activities.filter(item => Number(item.durationDays) < 1);
+  const atividadePorId = useMemo(() => new Map(activities.map(item => [item.id, item])), [activities]);
+  const dependenciasFiltradas = useMemo(() => {
+    const termo = busca.trim().toLocaleLowerCase("pt-BR");
+    return dependencies.filter(dependency => {
+      const predecessora = atividadePorId.get(dependency.predecessorId);
+      const sucessora = atividadePorId.get(dependency.successorId);
+      if (filtroTipo !== "todos" && String(dependency.type).toUpperCase() !== filtroTipo) return false;
+      if (somenteCriticas && !(predecessora?.critical === 1 && sucessora?.critical === 1)) return false;
+      if (!termo) return true;
+      return `${predecessora?.wbsCode ?? ""} ${predecessora?.name ?? ""} ${sucessora?.wbsCode ?? ""} ${sucessora?.name ?? ""}`
+        .toLocaleLowerCase("pt-BR").includes(termo);
+    });
+  }, [dependencies, atividadePorId, busca, filtroTipo, somenteCriticas]);
+  const orientacaoRede = plano.data
+    ? orientarFluxoPlanejamento(plano.data).primaria
+    : null;
 
   useEffect(() => {
     if (!pred && activities[0]) setPred(String(activities[0].id));
     if (!succ && activities[1]) setSucc(String(activities[1].id));
   }, [activities, pred, succ]);
+
+  useEffect(() => {
+    if (!confirmarRemocao) return;
+    const cancelarComEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setConfirmarRemocao(null);
+    };
+    window.addEventListener("keydown", cancelarComEscape);
+    return () => window.removeEventListener("keydown", cancelarComEscape);
+  }, [confirmarRemocao]);
 
   const enviar = () => {
     const predecessorId = Number(pred);
@@ -117,6 +154,10 @@ export function AbaDependencias({ projetoId }: Props) {
 
       {mensagem && <div className="pl-planejamento-alerta">{mensagem}</div>}
 
+      {orientacaoRede?.abaDestino === "dependencias" && (
+        <OrientacaoDeEtapa orientacao={orientacaoRede} />
+      )}
+
       {plano.data?.networkValidation && <section className="pl-planejamento-box" aria-label="Diagnóstico da rede atual">
         <strong>{plano.data.networkValidation.valid ? "Rede estruturalmente válida" : "Rede com pendências"}</strong>
         <p className="pl-tabela-legenda">Versão v{plano.data.currentVersionNumber} · verificação de ciclos, referências e conectividade das atividades operacionais.</p>
@@ -153,8 +194,8 @@ export function AbaDependencias({ projetoId }: Props) {
           </p>
         </div>
       ) : (
-        <div className="pl-planejamento-grid">
-          <div className="pl-planejamento-box">
+        <div className="pl-dependencias-layout">
+          <section className="pl-planejamento-box pl-dependencias-formulario" aria-label="Adicionar vínculo">
             <div className="pl-planejamento-box-head">
               <div>
                 <strong><GitBranch size={13} /> Adicionar vínculo</strong>
@@ -202,22 +243,54 @@ export function AbaDependencias({ projetoId }: Props) {
             <div className="pl-dependencia-nota">
               <strong>{tipo}</strong> — {EXPLICACAO[tipo]}
             </div>
-          </div>
+          </section>
 
-          <div className="pl-planejamento-box">
+          <section className="pl-planejamento-box pl-dependencias-rede" aria-label="Rede atual">
             <div className="pl-planejamento-box-head">
               <div>
-                <strong>Rede atual</strong>
-                <span>{dependencies.length ? "Vínculos registrados na versão de trabalho." : "Nenhum vínculo registrado."}</span>
+                <strong>Rede atual · {dependencies.length} vínculos</strong>
+                <span>{dependencies.length ? "Vínculos registrados na versão de trabalho. Pesquise ou filtre sem alterar a rede." : "Nenhum vínculo registrado."}</span>
               </div>
             </div>
+
+            {dependencies.length > 0 && (
+              <div className="pl-dependencias-filtros" aria-label="Filtros da rede">
+                <label className="pl-dependencias-busca">
+                  <Search size={14} aria-hidden="true" />
+                  <span className="sr-only">Pesquisar atividade ou EAP</span>
+                  <input
+                    value={busca}
+                    onChange={event => setBusca(event.target.value)}
+                    placeholder="Pesquisar atividade ou EAP"
+                  />
+                </label>
+                <label>
+                  <span>Tipo</span>
+                  <select
+                    aria-label="Filtrar por tipo de vínculo"
+                    value={filtroTipo}
+                    onChange={event => setFiltroTipo(event.target.value as typeof filtroTipo)}
+                  >
+                    <option value="todos">Todos</option>
+                    {TIPOS.map(item => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label className="pl-dependencias-check">
+                  <input type="checkbox" checked={somenteCriticas} onChange={event => setSomenteCriticas(event.target.checked)} />
+                  Somente caminho crítico
+                </label>
+                <span className="pl-dependencias-contagem">
+                  {dependenciasFiltradas.length} de {dependencies.length} vínculos
+                </span>
+              </div>
+            )}
 
             {dependencies.length === 0 ? (
               <p className="pl-planejamento-vazio">
                 A rede ainda está vazia. Isso é esperado antes da definição das relações de precedência.
               </p>
             ) : (
-              <div className="pl-tabela-wrap">
+              <div className="pl-tabela-wrap pl-dependencias-rede-wrap">
                 <table className="pl-tabela-analitica">
                   <thead>
                     <tr>
@@ -229,8 +302,12 @@ export function AbaDependencias({ projetoId }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {dependencies.map(dependency => (
-                      <tr key={dependency.id}>
+                    {dependenciasFiltradas.map(dependency => (
+                      <tr
+                        key={dependency.id}
+                        className={linhaExpandida === dependency.id ? "expandida" : undefined}
+                        onClick={() => setLinhaExpandida(atual => atual === dependency.id ? null : dependency.id)}
+                      >
                         <td title={nomeAtividade(activities, dependency.predecessorId)}>
                           {nomeAtividade(activities, dependency.predecessorId)}
                         </td>
@@ -248,7 +325,10 @@ export function AbaDependencias({ projetoId }: Props) {
                             aria-label={`Remover vínculo ${nomeAtividade(activities, dependency.predecessorId)} para ${nomeAtividade(activities, dependency.successorId)}`}
                             title="Remover este vínculo da versão de trabalho"
                             disabled={remover.isPending}
-                            onClick={() => remover.mutate({ projectId: projetoId, dependencyId: dependency.id })}
+                            onClick={event => {
+                              event.stopPropagation();
+                              setConfirmarRemocao(dependency);
+                            }}
                           >
                             <Trash2 size={14} />
                             <span>Remover</span>
@@ -258,13 +338,41 @@ export function AbaDependencias({ projetoId }: Props) {
                     ))}
                   </tbody>
                 </table>
+                {dependenciasFiltradas.length === 0 && (
+                  <p className="pl-planejamento-vazio">Nenhum vínculo corresponde aos filtros atuais.</p>
+                )}
                 <p className="pl-tabela-legenda">
                   FS = término → início · SS = início → início · FF = término → término · SF = início → término.
                   Lag em dias; positivo atrasa a sucessora, negativo antecipa.
                 </p>
               </div>
             )}
-          </div>
+          </section>
+        </div>
+      )}
+
+      {confirmarRemocao && (
+        <div className="pl-dependencias-confirmacao-fundo" role="presentation" onMouseDown={event => {
+          if (event.target === event.currentTarget) setConfirmarRemocao(null);
+        }}>
+          <section className="pl-dependencias-confirmacao" role="alertdialog" aria-modal="true" aria-labelledby="titulo-remover-vinculo">
+            <header>
+              <div>
+                <small>Alteração da rede</small>
+                <h3 id="titulo-remover-vinculo">Remover este vínculo?</h3>
+              </div>
+              <button type="button" aria-label="Cancelar remoção" onClick={() => setConfirmarRemocao(null)}><X size={16} /></button>
+            </header>
+            <p>A remoção altera a lógica do cronograma e deixa o CPM desatualizado.</p>
+            <dl>
+              <div><dt>Predecessora</dt><dd>{nomeAtividade(activities, confirmarRemocao.predecessorId)}</dd></div>
+              <div><dt>Sucessora</dt><dd>{nomeAtividade(activities, confirmarRemocao.successorId)}</dd></div>
+            </dl>
+            <div className="pl-dependencias-confirmacao-acoes">
+              <button type="button" onClick={() => setConfirmarRemocao(null)}>Cancelar</button>
+              <button type="button" className="perigo" disabled={remover.isPending} onClick={() => remover.mutate({ projectId: projetoId, dependencyId: confirmarRemocao.id })}>Remover vínculo</button>
+            </div>
+          </section>
         </div>
       )}
 
