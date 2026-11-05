@@ -319,3 +319,11 @@
 - **Sequences:** o `setval` que rodava no boot virou parte da auditoria. `audit-schema-pg.mjs` agora lista as 40 colunas de identidade, compara `last_value` com `max(id)` e acusa: *"N sequence(s) de identidade atrasada(s) … o proximo INSERT com DEFAULT vai colidir"*. O risco real é carga com id explícito, que não avança a sequence. Verificado em produção em 22/10/2026: nenhuma atrasada.
 - **Custo da mudança:** um deploy que falhe por schema divergente agora falha **no CI**, não no Render; e a imagem ficou menor (sem `drizzle/`, sem três scripts).
 - **Consequências:** `pnpm db:migrate` e `pnpm db:audit` continuam existindo como comandos explícitos — tirar do boot não é perder a ferramenta, é parar de escondê-la no start. Guardas em `server/migrations.test.ts` e `server/migration-guard.test.ts` passaram a exigir o contrário do que exigiam: que o `start` **não** contenha passo de banco.
+
+## Decisão 24 — cronograma operacional por atividade e prontidões independentes
+
+- **Decisão:** `activityId` é a identidade operacional entre grade, Gantt, produção, baseline e inspetor; código EAP continua sendo classificação, não chave. A navegação principal de prazo é “Cronograma”, com Gantt, Fluxo e Rede como modos e atalhos técnicos preservados.
+- **Indicadores:** avanço físico exige pesos físicos aprovados e produção confirmada. EV exige também orçamento aprovado, rastreável e com cobertura. A falta de um eixo não transforma os demais em zero.
+- **Bloqueios:** todo gate deve apresentar o que ocorreu, por que impede o próximo passo, passos ordenados, módulo responsável e evidência que confirma a resolução.
+- **Visual:** hoje e início são linhas sólidas rotuladas; baseline é hachurada; crítico possui texto/marcador; seleção realça somente relações diretas. Cor nunca é a única evidência.
+- **Escala e compatibilidade:** filtros trabalham sem mutar as fontes e a lista usa renderização progressiva acima de 50 linhas. Gantt e Linha de Balanço antigos permanecem acessíveis durante o piloto.

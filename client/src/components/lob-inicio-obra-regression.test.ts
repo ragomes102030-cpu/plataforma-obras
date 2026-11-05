@@ -9,7 +9,7 @@ describe("Grade e LOB — datas de projeto e atividades de demonstração",()=>{
   it("marca no endpoint apenas as atividades realmente identificadas como exemplo no banco",()=>{
     expect(routers).toContain('activities.filter(a => a.exemplo === 1)');
     expect(routers).toContain('map(a => [a.wbsCode, true])');
-    expect(routers).toContain("exemploPorCodigo };");
+    expect(routers).toContain("exemploPorCodigo, producaoSemAlocacao };");
   });
   it("propaga referência da obra e QA da grade sem alterar o plano",()=>{
     expect(home).toContain("codigosExemplo={exemploPorCodigo}");

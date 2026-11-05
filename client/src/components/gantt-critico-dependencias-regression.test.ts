@@ -12,7 +12,7 @@ describe("Regressão Gantt — Crítico e ligações",()=>{
    expect(view).toContain("CPM ausente, incompleto ou desatualizado");
  });
  it("usa mesmo mapa filtrado nas barras, ligações e altura do SVG",()=>{
-   expect(view).toContain("gerarSetasVisiveisGantt(dependenciasVisuais, geometria, criticasVisuais)");
+   expect(view).toContain("gerarSetasVisiveisGantt(dependenciasVisuais, geometria, criticasVisuais, selecionada)");
    expect(view).toContain("filtradas.forEach((no, indice)");
    expect(view).toContain("const deslocamentoBaseline = baselinePronta");
    expect(view).toContain("height={Math.max(1, filtradas.length * alturaLinha)}");
