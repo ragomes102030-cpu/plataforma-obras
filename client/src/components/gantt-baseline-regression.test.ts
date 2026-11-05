@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 describe("Gantt clássico — baseline integrada sem outra interface",()=>{
   const view=readFileSync("client/src/components/VisualizacaoPlanejamento.tsx","utf8");
   const home=readFileSync("client/src/pages/Home.tsx","utf8");
-  it("consulta baseline e calendário oficiais apenas para comparação, sem escrever dados",()=>{
+  it("consulta as datas congeladas da baseline sem reconstrução pelo calendário atual",()=>{
     expect(view).toContain("trpc.planning.compararComBaseline.useQuery");
-    expect(view).toContain("trpc.planning.getCalendarForCurve.useQuery");
+    expect(view).not.toContain("trpc.planning.getCalendarForCurve.useQuery");
+    expect(view).toContain("comparacaoBaseline.data.baseline.datasCapturadas");
+    expect(view).toContain("Baseline histórica sem datas civis capturadas");
     expect(view).toContain('baselineVigente');
     expect(view).toContain('baselinesVigentes.length === 1');
     expect(view).toContain('prepararBarrasBaselineGantt(');

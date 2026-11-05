@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentDecisions, agentProjectStates, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, users, wbsNodes } from "../drizzle/schema";
+import { agentDecisions, agentProjectStates, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, scheduleDependencies, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
 import { pgliteComSchema } from "./test-helpers/pglite";
 
@@ -77,6 +77,66 @@ describe("versão aprovada x versão de trabalho", () => {
   afterEach(async () => {
     await pg.close();
     estado.db = null;
+  });
+
+  it("permite criar duas atividades sucessivas com os IDs da EAP de trabalho e preserva a aprovada", async () => {
+    const db = drizzlePglite(pg);
+    await db.delete(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 2));
+    const [aprovada] = await db.select().from(projectPlanVersions);
+    const [raiz] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: aprovada.id, code: "1", name: "Obra", level: 1, nodeType: "grupo",
+    }).returning({ id: wbsNodes.id });
+    const folhas = await db.insert(wbsNodes).values([1, 2].map(i => ({
+      projectId: obraId, versionId: aprovada.id, parentId: raiz.id, code: `1.${i}`, name: `Pacote ${i}`, level: 2, nodeType: "pacote" as const,
+    }))).returning({ id: wbsNodes.id });
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    expect((await dono.planning.list({ projectId: obraId })).canCreateActivities).toBe(true);
+    await dono.planning.criarAtividadeDaFolha({ projectId: obraId, wbsNodeId: folhas[0].id, durationDays: 5 });
+    const depoisDaPrimeira = await dono.planning.list({ projectId: obraId });
+    expect(depoisDaPrimeira.currentVersionStatus).toBe("draft");
+    expect(depoisDaPrimeira.canCreateActivities).toBe(true);
+    const atuais = await dono.projects.wbs({ projectId: obraId });
+    const segundaFolha = atuais.find(no => no.code === "1.2")!;
+    expect(segundaFolha.id).not.toBe(folhas[1].id);
+    await dono.planning.criarAtividadeDaFolha({ projectId: obraId, wbsNodeId: segundaFolha.id, durationDays: 7 });
+    const depoisDaSegunda = await dono.planning.list({ projectId: obraId });
+    expect(depoisDaSegunda.activities).toHaveLength(2);
+    expect(depoisDaSegunda.activities.map(item => item.durationDays)).toEqual([5, 7]);
+    expect(depoisDaSegunda.canCreateActivities).toBe(true);
+    expect((await db.select().from(scheduleActivities)).every(item => item.versionId !== aprovada.id)).toBe(true);
+    await db.update(wbsNodes).set({ inclusions: "Mudança de escopo pendente de aprovação" }).where(eq(wbsNodes.id, segundaFolha.id));
+    expect((await dono.planning.list({ projectId: obraId })).canCreateActivities).toBe(false);
+    await expect(dono.planning.criarAtividadeDaFolha({ projectId: obraId, wbsNodeId: segundaFolha.id, durationDays: 9 })).rejects.toThrow(/difere da aprovada/);
+  });
+
+  it.each(["desconectada", "cíclica", "operacional com QA isolado"] as const)("mantém diagnóstico e gate coerentes para rede %s", async tipo => {
+    const db = drizzlePglite(pg);
+    const [versao] = await db.select().from(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 2));
+    const [folha] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: versao.id, code: "1", name: "Pacote de teste", level: 1, nodeType: "pacote",
+    }).returning({ id: wbsNodes.id });
+    const atividades = await db.insert(scheduleActivities).values([0, 1, 2].map(i => ({
+      projectId: obraId, versionId: versao.id, wbsNodeId: folha.id, wbsCode: "1", name: `Atividade ${i}`,
+      phase: "Teste", startOffset: 0, durationDays: 5, exemplo: tipo === "operacional com QA isolado" && i === 2 ? 1 : 0,
+    }))).returning({ id: scheduleActivities.id });
+    await db.insert(scheduleDependencies).values({
+      projectId: obraId, versionId: versao.id, predecessorId: atividades[0].id, successorId: atividades[1].id, type: "FS", lag: 0,
+    });
+    if (tipo === "cíclica") await db.insert(scheduleDependencies).values({
+      projectId: obraId, versionId: versao.id, predecessorId: atividades[1].id, successorId: atividades[0].id, type: "FS", lag: 0,
+    });
+    await db.insert(agentProjectStates).values({ projectId: obraId, stage: "DEPENDENCIAS_PROPOSTA" });
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    const [plano, snapshot] = await Promise.all([
+      dono.planning.list({ projectId: obraId }), dono.agent.snapshot({ projectId: obraId }),
+    ]);
+    const esperadaValida = tipo === "operacional com QA isolado";
+    expect(plano.networkValidation?.valid).toBe(esperadaValida);
+    expect(snapshot.gateChecks.find(check => check.code === "dependencies_valid")?.valid).toBe(esperadaValida);
+    expect(snapshot.gateChecks.find(check => check.code === "cpm_valid")?.valid).toBe(esperadaValida);
+    if (!esperadaValida) expect(plano.networkValidation?.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: tipo === "cíclica" ? "dependency_cycle" : "disconnected_network" }),
+    ]));
   });
 
   it("não deixa aprovar a versão sem o padrão do dicionário aprovado", async () => {

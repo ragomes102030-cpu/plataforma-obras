@@ -1,5 +1,14 @@
 # Decisões de Arquitetura
 
+## Decisão 24 — Baseline de prazo e estados verificáveis do planejamento
+
+- **Quando:** 05/11/2026.
+- **Decisão:** a captura de `schedule_baselines` congela prazo; pendências de orçamento são retornadas e auditadas, sem bloquear a referência do cronograma. Isso não aprova preços, quantitativos nem uma baseline de custos.
+- **Motivo:** os itens fotografados contêm duração e posições CPM, sem custo. Exigir orçamento real completo nesta operação impedia fechar o planejamento da Escola sem que esses dados participassem da fotografia.
+- **Histórico:** novas capturas registram também as datas civis por atividade em evento transacional `schedule_baseline_captured`. A leitura histórica usa essas datas, nunca o calendário ou início atuais. Sem contexto histórico (legado), a sobreposição visual deve declarar indisponibilidade.
+- **Interface:** o próximo passo reflete EAP, rede, CPM e baseline persistidos; mutações revalidam as consultas de todas essas etapas. O estágio conversacional do agente não substitui essas evidências.
+- **Indicadores:** ausência de medição confirmada não representa produção zero; fonte de custo didática não habilita EV real. Alertas lexicais de escopo são evidências para revisão, inclusive quando mencionam códigos existentes.
+
 > **Documento normativo.** Última atualização: 24/10/2026 (commit `caa66f5`).
 
 > Decisões 1 e 2 estão **substituídas** pelas decisões 16 e 17 (abaixo). Elas ficam

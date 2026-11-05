@@ -1,12 +1,7 @@
 import type { LinhaDesvio, ResumoDesvios } from "./desvios-baseline";
-import type { WorkCalendar } from "./work-calendar";
-import { dateAt } from "./work-calendar";
+import type { BaselineActivityDate } from "./baseline-dates";
 
-/** A fotografia da baseline armazena índices de dias úteis CPM.
- * earlyFinish é EXCLUSIVO (earlyStart + duração). Convertemos o último
- * dia ocupado em earlyFinish - 1 para sobrepor à barra civil da grade.
- * A comparação e os deltas continuam sendo os calculados pelo servidor.
- */
+/** A barra lê somente as datas civis congeladas pelo servidor na captura. */
 export type BarraBaselineGantt = {
   codigo: string;
   inicio: string;
@@ -14,33 +9,40 @@ export type BarraBaselineGantt = {
   situacao: LinhaDesvio["situacao"];
   deltaInicio: number | null;
   deltaFim: number | null;
+  atividades: number;
 };
-
-function indiceValido(valor: number | null): valor is number {
-  return typeof valor === "number" && Number.isInteger(valor) && valor >= 0 && valor <= 10000;
-}
 
 export function prepararBarrasBaselineGantt(
   linhas: readonly LinhaDesvio[],
-  inicioObra: string,
-  calendario: WorkCalendar,
+  datasCapturadas: readonly BaselineActivityDate[] | null | undefined,
 ): Map<string, BarraBaselineGantt> {
   const barras = new Map<string, BarraBaselineGantt>();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicioObra)) return barras;
-  for (const linha of linhas) {
-    const codigo = linha.wbsCode?.trim();
-    if (!codigo || barras.has(codigo) ||
-      !indiceValido(linha.baselineInicio) || !indiceValido(linha.baselineFim) ||
-      linha.baselineFim < linha.baselineInicio) continue;
-    const inicio = dateAt(calendario, inicioObra, linha.baselineInicio);
-    const fim = dateAt(calendario, inicioObra,
-      Math.max(linha.baselineInicio, linha.baselineFim - 1));
-    if (fim < inicio) continue;
+  if (!datasCapturadas) return barras;
+  const linhasPorId = new Map(linhas.flatMap(linha => {
+    const id = linha.baselineAtividadeId ?? linha.atividadeId;
+    return id == null ? [] : [[id, linha] as const];
+  }));
+  for (const data of datasCapturadas) {
+    const codigo = data.wbsCode?.trim();
+    if (!codigo) continue;
+    const linha = linhasPorId.get(data.activityId);
+    const existente = barras.get(codigo);
+    if (existente) {
+      // O Gantt é uma grade por pacote EAP. Várias atividades formam o
+      // envelope completo do pacote, sem atribuir o desvio de só uma delas.
+      existente.inicio = existente.inicio < data.inicio ? existente.inicio : data.inicio;
+      existente.fim = existente.fim > data.fim ? existente.fim : data.fim;
+      existente.atividades += 1;
+      existente.situacao = "indefinida";
+      existente.deltaInicio = null;
+      existente.deltaFim = null;
+      continue;
+    }
     barras.set(codigo, {
-      codigo, inicio, fim,
-      situacao: linha.situacao,
-      deltaInicio: linha.deltaInicio,
-      deltaFim: linha.deltaFim,
+      codigo, inicio: data.inicio, fim: data.fim, atividades: 1,
+      situacao: linha?.situacao ?? "indefinida",
+      deltaInicio: linha?.deltaInicio ?? null,
+      deltaFim: linha?.deltaFim ?? null,
     });
   }
   return barras;

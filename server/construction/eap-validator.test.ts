@@ -545,27 +545,30 @@ describe("validateEapScope", () => {
     ]));
   });
 
-  it("não gera falso alerta quando a exclusão do pai referencia explicitamente o filho", () => {
+  it("mantém alerta de exclusão definitiva mesmo quando o pai referencia o código do filho", () => {
     const result = validateEapScope([
       node({
         id: 1,
         code: "1",
         name: "Obra",
         nodeType: "grupo",
-        exclusions: "A execução da estrutura pertence ao pacote 1.3.2 e não faz parte deste grupo de projeto.",
+        exclusions: "Poço artesiano 1.1 definitivamente fora do escopo contratado.",
       }),
       node({
         id: 2,
         parentId: 1,
-        code: "1.3.2",
-        name: "Execução da estrutura",
+        code: "1.1",
+        name: "Poço artesiano",
         nodeType: "pacote",
-        description: "Execução da estrutura conforme projeto liberado.",
-        inclusions: "Execução da estrutura da edificação.",
+        description: "Execução de poço artesiano.",
+        inclusions: "Poço artesiano completo.",
       }),
     ]);
 
-    expect(result.issues.filter(issue => issue.code === "eap_child_outside_parent_scope")).toEqual([]);
+    expect(result.issues.filter(issue => issue.code === "eap_child_outside_parent_scope")).toEqual([
+      expect.objectContaining({ severity: "warning", entityRef: "2" }),
+    ]);
+    expect(result.valid).toBe(true);
   });
 
   it("aceita profundidade variável sem exigir quatro níveis fixos", () => {

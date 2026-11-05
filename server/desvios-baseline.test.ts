@@ -97,6 +97,73 @@ describe("comparar com a baseline", () => {
     expect(resumo.atrasoNoFim).toBe(0);
   });
 
+  it.each([false, true])("não reutiliza baseline para uma atividade nova na mesma folha (ordem invertida: %s)", inverter => {
+    const existente = { ...atual(1, "1.1", 0, 10), name: "Execução" };
+    const nova = { ...atual(2, "1.1", 10, 12), name: "Inspeção nova" };
+    const { linhas, resumo } = compararComBaseline(
+      [{ ...base(1, "1.1", 0, 10), name: "Execução" }],
+      inverter ? [nova, existente] : [existente, nova],
+    );
+
+    expect(linhas.find(linha => linha.atividadeId === 1)?.situacao).toBe("igual");
+    expect(linhas.find(linha => linha.atividadeId === 2)).toMatchObject({ situacao: "nova", baselineInicio: null, deltaFim: null });
+    expect(resumo).toMatchObject({ novas: 1, iguais: 1, atrasadas: 0, removidas: 0 });
+  });
+
+  it("reserva todos os ids antes de casar identidades textuais", () => {
+    const { linhas, resumo } = compararComBaseline(
+      [
+        { ...base(1, "1.1", 0, 10), name: "Execução" },
+        { ...base(2, "1.1", 10, 20), name: "Inspeção" },
+      ],
+      [
+        { ...atual(3, "1.1", 0, 10), name: "Execução" },
+        { ...atual(1, "1.1", 0, 12), name: "Execução renomeada" },
+      ],
+    );
+
+    expect(linhas.find(linha => linha.atividadeId === 1)).toMatchObject({ baselineFim: 10, deltaFim: 2 });
+    expect(linhas.find(linha => linha.atividadeId === 3)?.situacao).toBe("nova");
+    expect(resumo).toMatchObject({ novas: 1, removidas: 1 });
+  });
+
+  it("reserva identidades antes do fallback por código e não adivinha códigos repetidos", () => {
+    const { linhas, resumo } = compararComBaseline(
+      [{ ...base(1, "1.1", 0, 10), name: "Execução" }],
+      [
+        { ...atual(3, "1.1", 10, 15), name: "Inspeção" },
+        { ...atual(2, "1.1", 0, 10), name: "Execução" },
+      ],
+    );
+    expect(linhas.find(linha => linha.atividadeId === 2)?.situacao).toBe("igual");
+    expect(linhas.find(linha => linha.atividadeId === 3)?.situacao).toBe("nova");
+    expect(resumo).toMatchObject({ iguais: 1, novas: 1, removidas: 0 });
+  });
+
+  it("aceita fallback de código somente inequívoco nas duas listas", () => {
+    const resultado = compararComBaseline(
+      [{ ...base(1, "1.1", 0, 10), name: "Nome anterior" }],
+      [{ ...atual(2, "1.1", 0, 12), name: "Nome revisado" }],
+    );
+    expect(resultado.linhas[0]).toMatchObject({ situacao: "atrasada", deltaFim: 2 });
+    const ambiguo = compararComBaseline(
+      [{ ...base(1, "1.1", 0, 10), name: "Nome anterior" }],
+      [
+        { ...atual(2, "1.1", 0, 12), name: "Nome revisado" },
+        { ...atual(3, "1.1", 12, 15), name: "Novo serviço" },
+      ],
+    );
+    expect(ambiguo.resumo).toMatchObject({ novas: 2, removidas: 1, atrasadas: 0 });
+  });
+
+  it("não escolhe arbitrariamente entre identidades duplicadas de outra versão", () => {
+    const resultado = compararComBaseline(
+      [base(1, "1.1", 0, 10), base(2, "1.1", 10, 20)],
+      [atual(3, "1.1", 0, 10), atual(4, "1.1", 10, 20)],
+    );
+    expect(resultado.resumo).toMatchObject({ novas: 2, removidas: 2, iguais: 0 });
+  });
+
   it("não inventa desvio quando falta data de CPM", () => {
     const { linhas, resumo } = compararComBaseline(
       [base(1, "1.1", 0, 10)],

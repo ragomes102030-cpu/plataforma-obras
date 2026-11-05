@@ -224,7 +224,7 @@ export function validateDependencies(
           `A rede de dependências está desconectada em ${connected.components} blocos separados: ` +
           `${amostra}${restantes}. Cada bloco calcula o CPM como se começasse no dia zero da obra, ` +
           `então o caminho crítico reflete apenas um deles.${avulsas} ` +
-          `Vincule o último item de um bloco ao primeiro do seguinte, na ordem da EAP, e recalcule.`,
+          `Revise os blocos e registre as precedências justificadas pela sequência executiva. A ordem dos códigos EAP não define a ordem de execução. Depois, recalcule.`,
         entityRef: blocos[0]?.ids[0],
       });
     }

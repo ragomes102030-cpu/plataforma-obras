@@ -12,7 +12,8 @@
  *
  * A ligação prioriza o id (quando a mesma versão ainda está aberta), depois a
  * identidade composta por código + nome e só usa o código sozinho quando ele
- * é único na fotografia. Código de EAP não é necessariamente uma chave de
+ * é único nas duas listas. Cada item da fotografia só pode ser usado uma vez.
+ * Código de EAP não é necessariamente uma chave de
  * atividade: uma folha pode gerar várias atividades (por exemplo, projeto,
  * execução e inspeção). Usá-lo sozinho fazia uma atividade consumir a linha
  * errada e criava falsos "fora do plano".
@@ -48,6 +49,8 @@ export type SituacaoDesvio =
 
 export type LinhaDesvio = {
   chave: string;
+  /** Identidade na fotografia, inclusive depois de abrir uma nova versão. */
+  baselineAtividadeId?: number | null;
   /** Id da atividade de hoje; a curva S usa para achar o peso de custo. */
   atividadeId: number | null;
   wbsCode: string | null;
@@ -93,6 +96,7 @@ export function compararComBaseline(
   const basePorId = new Map<number, ItemDaBaseline>();
   const basePorIdentidade = new Map<string, ItemDaBaseline[]>();
   const basePorCodigo = new Map<string, ItemDaBaseline[]>();
+  const atuaisPorCodigo = new Map<string, AtividadeComparavel[]>();
   const identidade = (codigo: string | null, nome: string) =>
     `${codigo?.trim() ?? ""}\u0000${nome.trim().toLocaleLowerCase()}`;
   for (const item of baseline) {
@@ -102,20 +106,55 @@ export function compararComBaseline(
     const key = identidade(codigo ?? null, item.name);
     basePorIdentidade.set(key, [...(basePorIdentidade.get(key) ?? []), item]);
   }
+  for (const atividade of atuais) {
+    const codigo = atividade.wbsCode?.trim();
+    if (codigo) atuaisPorCodigo.set(codigo, [...(atuaisPorCodigo.get(codigo) ?? []), atividade]);
+  }
 
   const usados = new Set<ItemDaBaseline>();
+  const correspondencias = new Map<number, ItemDaBaseline>();
   const linhas: LinhaDesvio[] = [];
 
-  for (const atividade of atuais) {
+  // Reserva todas as correspondências por id antes de considerar nomes ou
+  // códigos. Uma nova linha com o nome antigo não pode roubar a referência de
+  // uma atividade existente que foi renomeada, independentemente da ordem.
+  atuais.forEach((atividade, index) => {
+    const item = basePorId.get(atividade.id);
+    if (item && !usados.has(item)) {
+      correspondencias.set(index, item);
+      usados.add(item);
+    }
+  });
+
+  const atuaisPorIdentidade = new Map<string, number[]>();
+  atuais.forEach((atividade, index) => {
+    if (correspondencias.has(index)) return;
+    const key = identidade(atividade.wbsCode, atividade.name);
+    atuaisPorIdentidade.set(key, [...(atuaisPorIdentidade.get(key) ?? []), index]);
+  });
+  for (const [key, indices] of atuaisPorIdentidade) {
+    const candidatos = (basePorIdentidade.get(key) ?? []).filter(item => !usados.has(item));
+    if (indices.length === 1 && candidatos.length === 1) {
+      correspondencias.set(indices[0]!, candidatos[0]!);
+      usados.add(candidatos[0]!);
+    }
+  }
+
+  atuais.forEach((atividade, index) => {
+    if (correspondencias.has(index)) return;
     const codigo = atividade.wbsCode?.trim() ?? null;
-    const byId = basePorId.get(atividade.id);
-    const byIdentity = (basePorIdentidade.get(identidade(codigo, atividade.name)) ?? [])
-      .find(candidate => !usados.has(candidate));
-    const byUniqueCode = codigo && (basePorCodigo.get(codigo) ?? []).length === 1
-      ? (basePorCodigo.get(codigo) ?? [])[0]
+    const item = codigo && basePorCodigo.get(codigo)?.length === 1 && atuaisPorCodigo.get(codigo)?.length === 1
+      ? basePorCodigo.get(codigo)![0]
       : undefined;
-    const item = (byId && !usados.has(byId) ? byId : undefined) ?? byIdentity ?? byUniqueCode;
-    if (item) usados.add(item);
+    if (item && !usados.has(item)) {
+      correspondencias.set(index, item);
+      usados.add(item);
+    }
+  });
+
+  for (const [index, atividade] of atuais.entries()) {
+    const codigo = atividade.wbsCode?.trim() ?? null;
+    const item = correspondencias.get(index);
 
     const deltaInicio = delta(atividade.earlyStart, item?.earlyStart ?? null);
     const deltaFim = delta(atividade.earlyFinish, item?.earlyFinish ?? null);
@@ -129,6 +168,7 @@ export function compararComBaseline(
 
     linhas.push({
       chave: codigo ?? String(atividade.id),
+      baselineAtividadeId: item?.activityId ?? null,
       atividadeId: atividade.id,
       wbsCode: codigo,
       nome: atividade.name,
@@ -149,6 +189,7 @@ export function compararComBaseline(
     if (usados.has(item)) continue;
     linhas.push({
       chave: item.wbsCode?.trim() ?? String(item.activityId),
+      baselineAtividadeId: item.activityId,
       atividadeId: null,
       wbsCode: item.wbsCode?.trim() ?? null,
       nome: item.name,

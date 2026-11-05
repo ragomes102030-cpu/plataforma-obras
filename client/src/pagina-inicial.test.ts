@@ -174,12 +174,10 @@ describe("orientação do fluxo de planejamento", () => {
     expect(HOME).toMatch(/gateMessage/);
   });
 
-  it("explica que a baseline depende da aprovação da EAP", () => {
-    expect(HOME).toMatch(
-      /Baseline bloqueada: aprove a EAP da versão de trabalho antes de capturar\./
-    );
+  it("deriva a orientação do plano atual em vez de prometer avanço pelo estágio antigo", () => {
+    expect(HOME).toMatch(/proximoPassoPlanejamento\(baseline.data\)/);
     expect(HOME).toMatch(/trpc\.planning\.list\.useQuery/);
-    expect(HOME).toMatch(/eapApproved/);
+    expect(HOME).toMatch(/baseline.isError/);
   });
 
   it("mantém o bloqueio da baseline visível em qualquer aba da obra", () => {

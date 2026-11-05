@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 05/nov/2026 — Coerência do fluxo de planejamento e integridade dos indicadores
+
+**Diagnóstico:** na Escola, a EAP aprovada continuava pendente no cabeçalho por cache de outra consulta. O gate de dependências reconhecia um código de erro inexistente. A supressão lexical do PR333 ocultava conflitos reais; comparação por código reutilizava itens da baseline. Ausência de produção e orçamento didático permitiam indicadores enganosos.
+
+**Correção:** centralizar a revalidação das leituras da obra; orientar próximo passo pelo plano persistido; diagnosticar rede pelo validador do CPM; preservar alertas de escopo e correspondência um para um na baseline. Corrigir pacotes terminais e criação sequencial de atividades. Capturar datas históricas da baseline e bloquear EV sem fonte válida.
+
+**Aceite e limites:** ver [plano da rodada](PLANO-MVP-CONFIAVEL-2026-11-05.md). O fechamento registra testes e commit live; orçamento didático, quantitativos e dados de produção continuam identificados conforme as evidências, sem conversão em dados reais.
+
 > **Documento normativo.** Última atualização: 30/10/2026.
 
 ## 30/out/2026 — Separar conversas do Arquimedes por sessão

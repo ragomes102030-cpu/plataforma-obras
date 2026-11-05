@@ -185,6 +185,7 @@ import {
   semearCalendarioPadrao,
 } from "./construction/calendario-obra";
 import { dateAt, indexOf as calendarIndexOf } from "../shared/work-calendar";
+import { congelarDatasBaseline, lerDatasCapturadasBaseline } from "../shared/baseline-dates";
 import {
   allowedSourcesFor,
   canTransitionFinding,
@@ -956,7 +957,9 @@ async function loadStageGateEvidence(
     requiredDictionaryFields: normalizeEapDictionaryFields(dictionarySettings?.requiredFields),
   });
   const eapDictionaryCompliant = dictionaryApproved && eapBaselineValidation.readyForBaseline;
-  const cpm = calculateDeterministicCpm(activities, dependencies);
+  const operationalPlanning = selectOperationalPlanning(activities, dependencies);
+  const dependencyValidation = validateDependencies(operationalPlanning.activities, operationalPlanning.dependencies);
+  const cpm = calculateDeterministicCpm(operationalPlanning.activities, operationalPlanning.dependencies);
   const evidenceBudgetItems = activeBudgetVersion[0]
     ? await db
         .select({
@@ -970,7 +973,7 @@ async function loadStageGateEvidence(
         .where(eq(budgetItems.budgetVersionId, activeBudgetVersion[0].id))
     : [];
   const evidenceBudgetById = new Map(evidenceBudgetItems.map(item => [item.id, item]));
-  const planningEvidence = activities.map(activity => ({
+  const planningEvidence = operationalPlanning.activities.map(activity => ({
     activityId: activity.id,
     eapRef: activity.eapRef ?? activity.wbsCode ?? null,
     name: activity.name,
@@ -1014,8 +1017,8 @@ async function loadStageGateEvidence(
     hasDescription: Boolean(project[0]?.name?.trim() && project[0]?.location?.trim()),
     eapNodeCount: eapNodes.length,
     eapValid: eapValidation.valid,
-    activityCount: activities.length,
-    dependenciesValid: cpm.issues.every(issue => issue.code !== "invalid_dependency"),
+    activityCount: operationalPlanning.activities.length,
+    dependenciesValid: operationalPlanning.activities.length > 0 && dependencyValidation.valid,
     // Rede calculável não significa cronograma viável: folga negativa bloqueia aprovação.
     cpmValid: cpm.valid && !cpm.infeasible,
     blockerCount,
@@ -1023,8 +1026,8 @@ async function loadStageGateEvidence(
     eapDictionaryStandardApproved: dictionaryApproved,
     eapDictionaryCompliant,
     eapApprovalReady: dictionaryApproved && eapApprovalValidation.valid,
-    activitiesPlanned: activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
-    activitiesWithoutQuantity: activities.filter(activity => activity.plannedQuantity == null).length,
+    activitiesPlanned: operationalPlanning.activities.filter(activity => Number(activity.durationDays ?? 0) > 0).length,
+    activitiesWithoutQuantity: operationalPlanning.activities.filter(activity => activity.plannedQuantity == null).length,
     planningEvidence: { summary: evidenceSummary, activities: planningEvidence },
   };
 }
@@ -4594,13 +4597,17 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, hasApprovedEap: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null };
+        if (!db) return { activities: [], dependencies: [], resources: [], baselines: [], eapApproved: false, hasApprovedEap: false, canCreateActivities: false, approvedVersionId: null as number | null, currentVersionNumber: null as number | null, currentVersionStatus: null as string | null, networkValidation: null };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
         const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
+        const operational = selectOperationalPlanning(activities, dependencies);
+        const networkValidation = operational.activities.length > 0
+          ? validateDependencies(operational.activities, operational.dependencies)
+          : { valid: false, issues: [{ code: "empty_network", severity: "error" as const, message: "Cadastre atividades antes de validar a rede." }] };
         const resources = await db.select().from(planningResources).where(eq(planningResources.projectId, input.projectId)).orderBy(planningResources.name);
         const baselines = await db.select().from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).orderBy(desc(scheduleBaselines.createdAt));
         // A origem e as premissas da duracao sao registradas pelo Arquimedes
@@ -4642,6 +4649,14 @@ export const appRouter = router({
           .where(and(eq(projectPlanVersions.projectId, input.projectId), eq(projectPlanVersions.status, "approved")))
           .orderBy(desc(projectPlanVersions.versionNumber))
           .limit(1);
+        const approvedNodes = approved ? await db.select().from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, approved.id))) : [];
+        let canCreateActivities = Boolean(approved && validateEap(approvedNodes).valid);
+        if (canCreateActivities && currentVersion && currentVersion.id !== approved?.id) {
+          const currentNodes = await db.select().from(wbsNodes)
+            .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id)));
+          canCreateActivities = sameEapContent(currentNodes, approvedNodes);
+        }
         // `eapApproved` indica que a versão atual do plano pode virar baseline.
         // A proposta de atividades usa a EAP aprovada como fonte mesmo depois
         // de aberta uma versão de trabalho; por isso expomos também
@@ -4653,9 +4668,11 @@ export const appRouter = router({
           baselines,
           eapApproved: currentVersion?.status === "approved",
           hasApprovedEap: approved != null,
+          canCreateActivities,
           approvedVersionId: approved?.id ?? null,
           currentVersionNumber: currentVersion?.versionNumber ?? null,
           currentVersionStatus: currentVersion?.status ?? null,
+          networkValidation,
         };
       }),
     grade: protectedProcedure
@@ -4735,27 +4752,24 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
 
         const approved = await requireApprovedEapVersion(db, input.projectId);
-        const [node] = await db
+        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        const allowedVersions = [...new Set([approved.id, currentVersion?.id ?? approved.id])];
+        const [selectedNode] = await db
           .select()
           .from(wbsNodes)
           .where(
             and(
               eq(wbsNodes.id, input.wbsNodeId),
               eq(wbsNodes.projectId, input.projectId),
-              eq(wbsNodes.versionId, approved.id)
+              inArray(wbsNodes.versionId, allowedVersions)
             )
           )
           .limit(1);
-        if (!node) throw notFound("Folha da EAP aprovada não encontrada.");
-        if (!isTerminalEapNode(node.nodeType)) {
-          throw badRequest("Somente uma folha terminal da EAP pode virar atividade.");
-        }
-        const [child] = await db.select({ id: wbsNodes.id }).from(wbsNodes)
-          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, approved.id), eq(wbsNodes.parentId, node.id)))
-          .limit(1);
-        if (child) throw badRequest("Somente uma folha sem filhos da EAP pode virar atividade.");
-
-        const currentVersion = await getCurrentPlanVersion(input.projectId);
+        if (!selectedNode) throw notFound("Folha da EAP aprovada ou da versão de trabalho não encontrada.");
+        // A primeira atividade abre um fork da EAP aprovada. As próximas
+        // escolhas da tela já chegam com os IDs desse fork, não do histórico.
+        // Só reconciliamos pelo código quando o conteúdo integral é idêntico.
+        let node = selectedNode;
         if (currentVersion && currentVersion.id !== approved.id) {
           const [currentNodes, approvedNodes] = await Promise.all([
             db.select().from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id))),
@@ -4764,7 +4778,17 @@ export const appRouter = router({
           if (!sameEapContent(currentNodes, approvedNodes)) {
             throw badRequest("A EAP em elaboração difere da aprovada. Aprove esta versão antes de criar atividades.");
           }
+          const approvedNode = approvedNodes.find(item => item.code === selectedNode.code);
+          if (!approvedNode) throw notFound("Pacote correspondente não encontrado na EAP aprovada.");
+          node = approvedNode;
         }
+        if (!isTerminalEapNode(node.nodeType)) {
+          throw badRequest("Somente uma folha terminal da EAP pode virar atividade.");
+        }
+        const [child] = await db.select({ id: wbsNodes.id }).from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, approved.id), eq(wbsNodes.parentId, node.id)))
+          .limit(1);
+        if (child) throw badRequest("Somente uma folha sem filhos da EAP pode virar atividade.");
 
         let durationDays: number;
         try {
@@ -5181,9 +5205,9 @@ export const appRouter = router({
         const allActivities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
         const activities = allActivities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
         if (!activities.length) throw badRequest("Não há atividades operacionais para congelar como baseline.");
-        // A baseline precisa congelar prazo e custo da mesma versão lógica. Se já
-        // existe orçamento aprovado, nenhuma atividade operacional pode ficar
-        // sem item correspondente e o orçamento não pode ser apenas didático.
+        // Esta fotografia contém prazo, não preços. Pendências financeiras são
+        // reportadas sem impedir a referência do cronograma; não validam EV.
+        const avisosOrcamento: string[] = [];
         const [budgetApproved] = await db
           .select({ id: budgetVersions.id })
           .from(budgetVersions)
@@ -5198,11 +5222,11 @@ export const appRouter = router({
           const itemIds = new Set(approvedItems.map(item => item.id));
           const semOrcamento = activities.filter(activity => activity.budgetItemId == null || !itemIds.has(activity.budgetItemId));
           if (semOrcamento.length) {
-            throw badRequest(`A baseline exige vínculo orçamentário em todas as atividades; ${semOrcamento.length} ainda estão sem item aprovado (${semOrcamento.slice(0, 5).map(activity => activity.wbsCode).join(", ")}).`);
+            avisosOrcamento.push(`${semOrcamento.length} atividade(s) sem item do orçamento aprovado. A baseline registra somente prazo; a cobertura financeira continua pendente.`);
           }
           const bloqueiosOrcamento = findBudgetApprovalBlockers(approvedItems);
           if (bloqueiosOrcamento.length) {
-            throw badRequest("A baseline está bloqueada porque o orçamento aprovado ainda contém itens sem fonte de custo real ou com fonte didática. Revise o orçamento e crie uma nova versão aprovada.");
+            avisosOrcamento.push("O orçamento contém fonte didática ou sem rastreabilidade. A captura do prazo não aprova custos nem habilita valor agregado real.");
           }
         }
         const semCpm = activities.filter(activity => !activity.cpmCalculatedAt);
@@ -5309,6 +5333,14 @@ export const appRouter = router({
           const blocking = networkValidation.issues.find(issue => issue.severity === "error");
           throw badRequest(blocking?.message ?? "A rede de dependências é inválida para congelar uma baseline.");
         }
+        const [projetoBaseline] = await db.select({ plannedStart: projects.plannedStart })
+          .from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        if (!projetoBaseline?.plannedStart) throw badRequest("Defina o início planejado da obra antes de capturar a baseline.");
+        const calendarioDaCaptura = await carregarCalendarioDoPeriodo(
+          db, input.projectId, projetoBaseline.plannedStart.getFullYear(),
+          anoFinalCalendarioCpm(projetoBaseline.plannedStart, activities),
+        );
+        const datasCapturadas = congelarDatasBaseline(activities, localIso(projetoBaseline.plannedStart), calendarioDaCaptura.calendar);
         // Cabeçalho e itens formam uma única fotografia: falha em qualquer
         // item reverte também o registro da baseline.
         return db.transaction(async tx => {
@@ -5333,9 +5365,14 @@ export const appRouter = router({
             earlyStart: activity.earlyStart,
             earlyFinish: activity.earlyFinish,
           })));
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId, userId: ctx.user.id, action: "schedule_baseline_captured",
+            payload: { baselineId: created.id, snapshotVersion: 1, activityDates: datasCapturadas, avisosOrcamento },
+          });
           return {
             id: created.id, activityCount: activities.length,
             versionId: currentVersion.id, versionNumber: currentVersion.versionNumber,
+            avisosOrcamento,
           };
         });
       }),
@@ -5423,12 +5460,24 @@ export const appRouter = router({
         const atuaisOperacionais = atuais.filter(activity => Number(activity.exemplo ?? 0) !== 1);
         const itensOperacionais = itens.filter(item => Number(item.exemplo ?? 0) !== 1);
         const comparacao = compararComBaseline(itensOperacionais, atuaisOperacionais);
+        const [fotografiaCivil] = await db.select({ payload: projectAuditEvents.payload })
+          .from(projectAuditEvents)
+          .where(and(
+            eq(projectAuditEvents.projectId, input.projectId),
+            eq(projectAuditEvents.action, "schedule_baseline_captured"),
+            sql`${projectAuditEvents.payload}->>'baselineId' = ${String(baseline.id)}`,
+          ))
+          .orderBy(desc(projectAuditEvents.createdAt), desc(projectAuditEvents.id)).limit(1);
+        const payloadFotografia = fotografiaCivil?.payload as { avisosOrcamento?: unknown } | undefined;
         return {
           baseline: {
             id: baseline.id,
             name: baseline.name,
             createdAt: baseline.createdAt,
             versionId: baseline.versionId ?? null,
+            datasCapturadas: lerDatasCapturadasBaseline(fotografiaCivil?.payload, baseline.id),
+            avisosOrcamento: Array.isArray(payloadFotografia?.avisosOrcamento)
+              ? payloadFotografia.avisosOrcamento.filter((aviso): aviso is string => typeof aviso === "string") : [],
           },
           ...comparacao,
         };

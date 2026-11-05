@@ -128,7 +128,9 @@ describe("o Catálogo se explica em termos do que destrava", () => {
 
 describe("criação de atividades a partir da EAP", () => {
   it("exige EAP aprovada e estimativa válida antes da mutação", () => {
-    expect(abaEap).toContain('versaoEmUso?.status === "approved"');
+    // O servidor aceita o rascunho de atividades com escopo idêntico ao
+    // aprovado. Exigir status approved aqui impedia criar a segunda atividade.
+    expect(abaEap).toContain('planejamento.data?.canCreateActivities === true');
     expect(abaEap).toContain("prepararEntradaDuracaoAtividade");
     expect(abaEap).toContain("!entradaDuracaoAtividade.valid");
     expect(abaEap).toContain("Após aprovação da EAP");
