@@ -11,7 +11,10 @@ describe("próximo passo a partir do plano persistido", () => {
   });
   it("não confunde rede inválida com CPM antigo ou atividades faltantes", () => {
     expect(proximoPassoPlanejamento({...plano,activities:[]}).aba).toBe("atividades");
-    expect(proximoPassoPlanejamento({...plano,networkValidation:{valid:false,issues:[{message:"Ciclo detectado"}]}})).toMatchObject({aba:"dependencias",mensagem:"Ciclo detectado"});
+    expect(proximoPassoPlanejamento({...plano,networkValidation:{valid:false,issues:[{message:"Ciclo detectado"}]}})).toMatchObject({
+      aba:"dependencias",
+      orientacao:{id:"rede-invalida",detalhesTecnicos:"Ciclo detectado"},
+    });
     expect(proximoPassoPlanejamento({...plano,activities:[{...atividade,updatedAt:"2026-11-05T12:00:00Z"}]}).aba).toBe("cpm");
   });
   it("exige baseline da versão aprovada atual e ignora atividades QA", () => {
@@ -24,6 +27,6 @@ describe("próximo passo a partir do plano persistido", () => {
     const herdado = {...plano,eapApproved:false,canCreateActivities:true};
     expect(proximoPassoPlanejamento({...herdado,activities:[]}).aba).toBe("atividades");
     expect(proximoPassoPlanejamento({...herdado,activities:[{...atividade,cpmCalculatedAt:null}]}).aba).toBe("cpm");
-    expect(proximoPassoPlanejamento(herdado)).toMatchObject({aba:"baseline",titulo:"Revisar versão do plano"});
+    expect(proximoPassoPlanejamento(herdado)).toMatchObject({aba:"baseline",titulo:"Aprovar a versão de trabalho"});
   });
 });

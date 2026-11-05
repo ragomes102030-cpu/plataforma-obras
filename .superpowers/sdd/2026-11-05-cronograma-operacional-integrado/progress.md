@@ -18,3 +18,11 @@ Ruling: the worktree starts from commit abe6a60, which contains the approved spe
 - Current production is allocated by exact activity ID. Historical production falls back by WBS only when the current match is unique; ambiguous quantities are exposed in `producaoSemAlocacao`.
 - LOB date lookup prefers activity ID and retains the WBS fallback for legacy fixtures.
 - Verification: TypeScript check passed; 42 focused tests passed across tree, baseline, production allocation, dependency identity and LOB compatibility.
+
+## Task 2 — complete
+
+- Added a deterministic blocker contract with cause, impact, ordered resolution steps, target tab and resolution evidence.
+- Guidance follows EAP → activities → dependencies → CPM → baseline and exposes additional simultaneous blockers without replacing human explanation with technical errors.
+- The workbar renders the primary blocker through `OrientacaoDeEtapa`; the action dispatches navigation to the exact corrective tab.
+- Ruling: the component test uses `.test.ts`, not the planned `.test.tsx`, because this repository's Vitest include intentionally runs client `*.test.ts` files in the Node/static-render harness. Cost if wrong: a `.tsx` test would exist but would not run in the full suite.
+- Verification: 24 focused tests and TypeScript check passed.

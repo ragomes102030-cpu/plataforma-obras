@@ -21,6 +21,7 @@ import { AbaOrcamento } from "@/components/AbaOrcamento";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
+import { OrientacaoDeEtapa } from "@/components/OrientacaoDeEtapa";
 import { usarLayoutProfissional } from "@/modules/layout-planejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
 import { GRUPOS_DA_SIDEBAR } from "@/modules/navegacao-sidebar";
@@ -712,14 +713,20 @@ function Obra({
               </nav>
             )}
             <div className="arquimedes-fluxo-status" aria-live="polite">
-              <div>
-                <span>Próximo passo</span>
-                <strong>{tituloDoFluxo}</strong>
-                <small>{mensagemDoFluxo}</small>
-              </div>
-              <button type="button" onClick={() => irParaAba(destinoDoFluxo)}>
-                Abrir etapa <ArrowRight size={14} aria-hidden="true" />
-              </button>
+              {proximoPasso?.orientacao ? (
+                <OrientacaoDeEtapa orientacao={proximoPasso.orientacao} compacta />
+              ) : (
+                <>
+                  <div>
+                    <span>{baseline.isError ? "Atenção" : "Fluxo liberado"}</span>
+                    <strong>{tituloDoFluxo}</strong>
+                    <small>{mensagemDoFluxo}</small>
+                  </div>
+                  <button type="button" onClick={() => irParaAba(destinoDoFluxo)}>
+                    {baseline.isError ? "Tentar resolver" : "Abrir acompanhamento"} <ArrowRight size={14} aria-hidden="true" />
+                  </button>
+                </>
+              )}
             </div>
             {/* O menu do celular saiu daqui e virou a barra de campo, no fim da
                 pagina: era o unico caminho de navegacao e desaparecia justamente
