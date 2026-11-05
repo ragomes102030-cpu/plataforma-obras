@@ -5,19 +5,20 @@ import { ABAS } from "./abas";
 import { VISTAS_DO_WORKSPACE, pertenceAoWorkspace } from "./navegacao-workspace";
 
 describe("workspace manual do planejamento", () => {
-  it("navega entre oito módulos reais, não entre demos ou telas fictícias", () => {
+  it("navega entre os módulos reais, não entre demos ou telas fictícias", () => {
     expect(VISTAS_DO_WORKSPACE.map(item => item.aba)).toEqual([
       "escopo", "eap", "atividades", "dependencias",
-      "cpm", "baseline", "gantt", "linha-balanco",
+      "cpm", "baseline", "cronograma", "gantt", "linha-balanco",
     ]);
     const ids = ABAS.filter(item => item.status === "pronta").map(item => item.id);
     for (const item of VISTAS_DO_WORKSPACE) expect(ids).toContain(item.aba);
-    expect(new Set(VISTAS_DO_WORKSPACE.map(item => item.aba)).size).toBe(8);
+    expect(new Set(VISTAS_DO_WORKSPACE.map(item => item.aba)).size).toBe(9);
   });
 
   it("o workspace não engole as telas administrativas ou de outras áreas", () => {
     expect(pertenceAoWorkspace("eap")).toBe(true);
     expect(pertenceAoWorkspace("gantt")).toBe(true);
+    expect(pertenceAoWorkspace("cronograma")).toBe(true);
     expect(pertenceAoWorkspace("linha-balanco")).toBe(true);
     for (const aba of ["dashboard", "comando", "catalogo", "producao", "financeiro", "suprimentos"]) {
       expect(pertenceAoWorkspace(aba)).toBe(false);

@@ -11,6 +11,7 @@ export const VISTAS_DO_WORKSPACE: ReadonlyArray<{ titulo: string; aba: IdDaAba }
   { titulo: "Dependências", aba: "dependencias" },
   { titulo: "CPM", aba: "cpm" },
   { titulo: "Baseline", aba: "baseline" },
+  { titulo: "Cronograma", aba: "cronograma" },
   { titulo: "Gantt", aba: "gantt" },
   { titulo: "Linha de Balanço", aba: "linha-balanco" },
 ];

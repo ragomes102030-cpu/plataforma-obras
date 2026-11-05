@@ -15,7 +15,7 @@ export const GRUPOS_DA_SIDEBAR: ReadonlyArray<{
     titulo: "PLANEJAMENTO",
     ids: ["escopo", "eap", "atividades", "dependencias", "cpm", "baseline"],
   },
-  { titulo: "CRONOGRAMA", ids: ["gantt", "linha-balanco"] },
+  { titulo: "CRONOGRAMA", ids: ["cronograma", "gantt", "linha-balanco"] },
   { titulo: "CUSTOS E FINANÇAS", ids: ["financeiro"] },
   { titulo: "EXECUÇÃO E CONTROLE", ids: ["producao", "suprimentos", "curva-s"] },
   { titulo: "GOVERNANÇA", ids: ["documentos", "riscos"] },

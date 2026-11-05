@@ -51,3 +51,12 @@ Ruling: the worktree starts from commit abe6a60, which contains the approved spe
 - Selecting an activity highlights only its direct predecessor/successor links and attenuates unrelated links. With no selection, all visible links remain discreet and readable.
 - SVG export now uses activity identity instead of WBS code for links and baseline matching, labels today/start, preserves duplicate WBS activities and mirrors the screen legend.
 - Verification: 17 focused Gantt/baseline/export tests and TypeScript check passed. No unexplained dotted date or dependency line remains.
+
+## Task 6 — complete
+
+- Added “Cronograma” as the principal entry in the CRONOGRAMA group while keeping Gantt and Linha de Balanço available as technical shortcuts during the pilot.
+- The operational schedule combines a searchable/filterable activity grid with three synchronized modes: Cronograma, Fluxo and Rede. Selection uses `activityId`, is serialized in the URL and is shared with the Gantt.
+- The activity inspector exposes Planejado, Baseline, Realizado, Rede, Local and Restrições. Missing values are labelled “Sem dado” and every section links to the responsible manual module; Escape closes, Tab remains trapped and focus returns to the originating control.
+- Flux mode explains exactly why an activity without a physical location cannot enter the LOB and routes to EAP without deleting dates or dependencies.
+- Lists above 50 rows use `content-visibility`; a 2,000-activity regression confirms unique IDs and non-mutating filtering.
+- Verification: 12 focused model/component/navigation tests and TypeScript check passed.

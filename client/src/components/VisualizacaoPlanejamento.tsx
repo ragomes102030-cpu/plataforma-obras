@@ -30,6 +30,8 @@ type Props = {
   layoutProfissional?: boolean;
   finsCalculados?: Record<string,string>;
   codigosExemplo?: ReadonlySet<string>;
+  atividadeSelecionadaId?: number | null;
+  onSelecionarAtividade?: (activityId:number|null)=>void;
 };
 
 type View = "gantt" | "lob";
@@ -70,6 +72,8 @@ export function VisualizacaoPlanejamento({
   layoutProfissional = true,
   finsCalculados = {},
   codigosExemplo,
+  atividadeSelecionadaId,
+  onSelecionarAtividade,
 }: Props & { view?: PlanejamentoView }) {
   const planejamento = trpc.planning.list.useQuery(
     { projectId: Number(projetoId) },
@@ -285,7 +289,8 @@ export function VisualizacaoPlanejamento({
           baselineDisponivel={baselineVigente !== null}
           baselinePronta={baselinePronta} barrasBaseline={barrasBaseline}
           nomeBaseline={comparacaoBaseline.data?.baseline.name ?? baselineVigente?.name ?? null}
-          resumoBaseline={resumoBaseline} />
+           resumoBaseline={resumoBaseline} atividadeSelecionadaId={atividadeSelecionadaId}
+           onSelecionarAtividade={onSelecionarAtividade} />
       ) : (
         <>
           <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra}
@@ -370,6 +375,8 @@ function Gantt({
   barrasBaseline,
   nomeBaseline,
   resumoBaseline,
+  atividadeSelecionadaId,
+  onSelecionarAtividade,
 }: {
   linhas: EntradaDaLinha[];
   atividades: Map<
@@ -398,6 +405,8 @@ function Gantt({
   barrasBaseline: ReadonlyMap<string, BarraBaselineGantt>;
   nomeBaseline: string | null;
   resumoBaseline: ReturnType<typeof resumirBaselineNoGantt> | null;
+  atividadeSelecionadaId?: number | null;
+  onSelecionarAtividade?: (activityId:number|null)=>void;
   /** Cabeçalho da impressão: nome, código e local da obra. */
   titulo?: string;
   codigoObra?: string | null;
@@ -597,6 +606,10 @@ function Gantt({
   }, [podeFiltrarCritico]);
   const [mostrarSetas, setMostrarSetas] = useState(true);
   const [selecionada, setSelecionada] = useState<string | null>(null);
+  useEffect(()=>{
+    if(atividadeSelecionadaId===undefined)return;
+    setSelecionada(atividadeSelecionadaId==null?null:`atividade:${atividadeSelecionadaId}`);
+  },[atividadeSelecionadaId]);
   const [rotulos, setRotulos] = useState(true);
   const [mostrarAvanco, setMostrarAvanco] = useState(true);
   const [telaCheia, setTelaCheia] = useState(false);
@@ -1081,11 +1094,12 @@ function Gantt({
                   tabIndex={0}
                   aria-pressed={selecionada === no.chave}
                   aria-label={`Detalhes de ${no.codigo} ${no.nome}`}
-                  onClick={() => setSelecionada(no.chave)}
+                  onClick={() => {setSelecionada(no.chave);onSelecionarAtividade?.(no.activityId);}}
                   onKeyDown={evento => {
                     if (evento.key === "Enter" || evento.key === " ") {
                       evento.preventDefault();
                       setSelecionada(no.chave);
+                      onSelecionarAtividade?.(no.activityId);
                     }
                   }}
                 >
