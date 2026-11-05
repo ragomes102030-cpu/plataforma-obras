@@ -13,7 +13,9 @@ if (!databaseUrl) throw new Error("DATABASE_URL não encontrado");
 
 const poolerUrl = new URL(databaseUrl);
 poolerUrl.hostname = "aws-0-sa-east-1.pooler.supabase.com";
-poolerUrl.port = "5432";
+// Transaction pooler evita que uma sessão de migração abandonada bloqueie o
+// backfill das obras de demonstração.
+poolerUrl.port = "6543";
 poolerUrl.username = "postgres.tromrvfijbtihuilvnuk";
 const ca = fs.readFileSync("certs/supabase-ca-2021.crt", "utf8");
 const client = new Client({ connectionString: poolerUrl.toString(), ssl: { ca } });
@@ -63,7 +65,7 @@ try {
     for (const activity of elegiveis) {
       const exists = await client.query('select 1 from production_entries where "projectId"=$1 and "activityId"=$2 and status=$3 limit 1', [projectId, activity.id, "confirmada"]);
       if (exists.rowCount) continue;
-      await client.query('insert into production_entries ("projectId","activityId","productionDate",quantity,"measurementUnit",notes,status,exemplo,"createdBy") values ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [projectId, activity.id, agora.toISOString().slice(0, 10), (Number(activity.plannedQuantity) * 0.1).toFixed(3), "un", "Registro didático de demonstração do MVP; substituir pela medição de campo.", "confirmada", true, project.rows[0].ownerUserId]);
+      await client.query('insert into production_entries ("projectId","activityId","productionDate",quantity,"measurementUnit",notes,status,exemplo,"createdBy") values ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [projectId, activity.id, agora.toISOString().slice(0, 10), (Number(activity.plannedQuantity) * 0.1).toFixed(3), "un", "Registro didático de demonstração do MVP; substituir pela medição de campo.", "confirmada", 1, project.rows[0].ownerUserId]);
     }
     console.log(JSON.stringify({ projectId, linked, operational: operational.length, productionSeeded: elegiveis.length }));
   }
