@@ -9,7 +9,7 @@ export type EstadoCronogramaOperacional={
 export type LinhaCronogramaOperacional={
   activityId:number;codigo:string;atividade:string;inicio:string;fim:string;duracao:number;
   executado:number|null;quantidade:number|null;unidade:string|null;pavimento:string|null;
-  critica:boolean;atrasada:boolean;bloqueada:boolean;precisaVincularLocal?:boolean;
+  critica:boolean;atrasada:boolean;bloqueada:boolean|null;precisaVincularLocal?:boolean;
 };
 const modos=new Set<ModoCronogramaOperacional>(["cronograma","fluxo","rede"]);
 const filtros=new Set<FiltroCronogramaOperacional>(["todas","criticas","atrasadas","bloqueadas","sem_medicao"]);

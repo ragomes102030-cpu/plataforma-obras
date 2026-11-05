@@ -60,3 +60,12 @@ Ruling: the worktree starts from commit abe6a60, which contains the approved spe
 - Flux mode explains exactly why an activity without a physical location cannot enter the LOB and routes to EAP without deleting dates or dependencies.
 - Lists above 50 rows use `content-visibility`; a 2,000-activity regression confirms unique IDs and non-mutating filtering.
 - Verification: 12 focused model/component/navigation tests and TypeScript check passed.
+
+## Task 7 — implementation complete; deployment verification pending
+
+- Independent review found that the dashboard readiness contract was honest but could never be released because approved physical weights were not persisted. Added per-activity physical weights, recorded approval timestamps, audit events, uniform proposal generation and explicit approval. Quantities and financial costs are no longer substituted for physical weights.
+- Editing any physical weight invalidates approval for the entire current plan version. Approval requires every operational activity to have a positive weight and the total to equal 100%. Plan forks preserve the reviewed distribution and its audit state.
+- The dashboard now consumes the physical aggregate by approved weights; financial weighting remains separate for earned-value calculations. Activity identity, not WBS code, is used for per-activity progress matching.
+- The integrated schedule now reads real open constraints and distinguishes loading/query failure from a confirmed unblocked state. Search and filters drive both the grid and Gantt/LOB population.
+- The inspector reads baseline variance, calculates progress as executed/planned quantity, preserves the focus origin across rerenders, and exposes unavailable constraint state honestly. LOB selection now synchronizes with the shared activity selection.
+- Verification so far: TypeScript passed; focused unit, schema, PostgreSQL migration and router tests passed, including the write→approve→invalidate lifecycle for physical weights. Full regression, production build, deployment and live visual validation remain before completion can be claimed.

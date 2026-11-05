@@ -21,7 +21,7 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(painel).toContain("agregadoDoCronograma(linhasDaObra)");
     expect(painel).toContain("!codigosExemplo.has(a.wbsCode ?? \"\")");
     expect(painel).toContain('prontidao={integridade.prontidao}');
-    expect(painel).toContain('pesosFisicosAprovados: false');
+    expect(painel).toContain('pesosFisicosAprovados: agregadoDaObra?.pesosFisicosAprovados === true');
     expect(painel).toContain('Number(l.exemplo ?? 0) !== 1');
     expect(painel).toContain('isoDoValor(l.productionDate) <= hoje');
     expect(painel).toContain("erroGrade && !agregado");
@@ -55,7 +55,7 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(curva).toContain("idsDasAtividadesDaObra.has(l.atividadeId)");
     expect(curva).toContain('getCalendarForCurve.useQuery');
     expect(curva).toContain("temBaseline && comparacao.isPending");
-    expect(curva).toContain("Os percentuais desta curva");
+    expect(curva).not.toContain("Os percentuais desta curva");
     expect(curva).not.toContain("dadosDemonstrativos");
   });
   it("trata estados vazios, dados parciais, teclado, celular e movimento reduzido", () => {

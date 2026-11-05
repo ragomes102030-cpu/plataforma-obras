@@ -296,6 +296,7 @@ export function VisualizacaoPlanejamento({
           <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra}
             codigosExemplo={codigosExemplo} dependencias={dependenciasPorCodigo}
             estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"}
+            atividadeSelecionadaId={atividadeSelecionadaId} onSelecionarAtividade={onSelecionarAtividade}
             nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
             distribuicoes={distribuicoesLob.data??[]} atividadeIds={atividadesLob}
             editavel={editavelLob} salvandoLocal={definirLocalLob.isPending||definirLocaisLobEmLote.isPending}

@@ -141,13 +141,11 @@ export function PainelDoCronograma({
   const dados = useMemo(() => {
     const custo = calcularPesosDaCurva(atividades, orcamento.data?.items ?? []);
 
-    const pctPorCodigo = new Map<string, number>();
-    const planejadoPorCodigo = new Map<string, number>();
+    const pctPorAtividade = new Map<number, number>();
+    const planejadoPorAtividade = new Map<number, number>();
     for (const linha of linhasDaObra) {
-      if (linha.codigo) {
-        pctPorCodigo.set(linha.codigo, linha.pctReal);
-        planejadoPorCodigo.set(linha.codigo, linha.pctPlanejado);
-      }
+      pctPorAtividade.set(linha.activityId, linha.pctReal);
+      planejadoPorAtividade.set(linha.activityId, linha.pctPlanejado);
     }
 
     let executado = 0;
@@ -156,10 +154,10 @@ export function PainelDoCronograma({
     for (const atividade of atividades) {
       const valorDaAtividade = custo.custoPorAtividade.get(atividade.id) ?? 0;
       if (valorDaAtividade <= 0) continue;
-      const avanco = pctPorCodigo.get(atividade.wbsCode ?? "") ?? 0;
+      const avanco = pctPorAtividade.get(atividade.id) ?? 0;
       executado += valorDaAtividade * avanco;
       pesoComOrcamento += valorDaAtividade;
-      planejadoPorValor += valorDaAtividade * (planejadoPorCodigo.get(atividade.wbsCode ?? "") ?? 0);
+      planejadoPorValor += valorDaAtividade * (planejadoPorAtividade.get(atividade.id) ?? 0);
     }
 
     // Frações 0..1: `pctReal` e `pctPlanejado` já vêm assim da grade.
@@ -181,9 +179,7 @@ export function PainelDoCronograma({
       hoje, atividades, itens: orcamento.data?.items ?? [],
       versaoAtivaAprovada: orcamento.data?.versions?.find(v => v.id === orcamento.data?.activeVersionId)?.status === "aprovado",
       custoPorAtividade: custo.custoPorAtividade, lancamentos,
-      // O modelo atual ainda não persiste uma distribuição física aprovada. O
-      // painel mantém o agregado oculto em vez de usar custo ou misturar unidades.
-      pesosFisicosAprovados: false,
+      pesosFisicosAprovados: agregadoDaObra?.pesosFisicosAprovados === true,
       erroFisico: producao.isError,
       erroFinanceiro: orcamento.isError,
     });
@@ -200,12 +196,10 @@ export function PainelDoCronograma({
       hoje,
       inicio: agregadoDaObra?.inicio ?? null,
       fim: agregadoDaObra?.fim ?? null,
-      fisico: pesoComOrcamento > 0
-        ? avancoPorValor
-        : {
-            real: agregadoDaObra?.avancoFisico ?? 0,
-            planejado: agregadoDaObra?.avancoPlanejado ?? 0,
-          },
+      fisico: {
+        real: agregadoDaObra?.avancoFisico ?? 0,
+        planejado: agregadoDaObra?.avancoPlanejado ?? 0,
+      },
       status: {
         total: agregadoDaObra?.totalAtividades ?? 0,
         concluidas: agregadoDaObra?.contagemPorStatus.Concluido ?? 0,
@@ -229,7 +223,7 @@ export function PainelDoCronograma({
     return {
       resumo,
       integridade,
-      avancoComReguaValida: pesoComOrcamento > 0,
+      avancoFinanceiro: avancoPorValor,
       valorSemDestino: custo.valorSemDestino,
       ultimos: [...lancamentos]
         .sort((a, b) => isoDoValor(b.productionDate).localeCompare(isoDoValor(a.productionDate)))

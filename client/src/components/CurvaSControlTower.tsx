@@ -20,9 +20,6 @@ type Props = {
   codigosExemplo: ReadonlySet<string>;
   hoje: string;
   abrirAba: (aba: string) => void;
-  /** Somente para expor divergência de régua, nunca corrigir a série artificialmente. */
-  painelReal: number;
-  painelPlanejado: number;
 };
 type Faixa = "90" | "365" | "total";
 const pct = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
@@ -31,7 +28,7 @@ const dataBr = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" +
 const inicioValido = (iso: string | null | undefined) => Boolean(iso && /^\d{4}-\d{2}-\d{2}$/.test(iso));
 const soFinito = (n: number) => Number.isFinite(n) ? n : 0;
 
-export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba, painelReal, painelPlanejado }: Props) {
+export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }: Props) {
   const [faixa, setFaixa] = useState<Faixa>("total");
   const [pontoSelecionado, setPontoSelecionado] = useState<number | null>(null);
   const planejamento = trpc.planning.list.useQuery({ projectId: projetoId }, { enabled: projetoId > 0, retry: false });
@@ -146,12 +143,6 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba, 
   const emCarregamento = planejamento.isPending || budget.isPending || grade.isPending || producao.isPending || (ano >= 2000 && calendario.isPending) || (temBaseline && comparacao.isPending);
   const falhou = planejamento.isError || budget.isError || grade.isError || producao.isError || (ano >= 2000 && calendario.isError) || comparacao.isError;
   const pronto = Boolean(curvaDados && serie && cal && inicio);
-  const erroRegua = Boolean(
-    pronto && acumuladoConfirmado && hojeNum >= 0 &&
-    (Math.abs((serie?.points[Math.min(hojeNum, serie!.duration)]?.planned ?? 0) / 100 - painelPlanejado) > .002 ||
-     Math.abs(realizadoNoDia(acumuladoConfirmado, hojeNum) / 100 - painelReal) > .002)
-  );
-
   return (
     <section className="ct-card ct-curve" aria-labelledby="ct-curve-title">
       <div className="ct-card-head">
@@ -196,7 +187,6 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba, 
             <span>{!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes: realizado não exibido." : "Realizado datado pela produção confirmada."}</span>
             <button type="button" onClick={() => abrirAba("curva-s")}>Abrir Curva S <ArrowUpRight size={14}/></button>
           </div>
-          {erroRegua && <p className="ct-aviso-regua" role="note"><AlertTriangle size={15}/> Os percentuais desta curva (orçamento aprovado e produção confirmada) diferem dos cartões (cronograma e orçamento da versão ativa). Verifique versões e lançamentos antes de comparar.</p>}
         </>}
     </section>
   );

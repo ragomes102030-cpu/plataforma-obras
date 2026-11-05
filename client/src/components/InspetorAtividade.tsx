@@ -2,16 +2,19 @@ import {useEffect,useRef} from "react";
 import {ArrowUpRight,X} from "lucide-react";
 import type {LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
 
-type Props={linha:LinhaCronogramaOperacional;predecessoras:number;sucessoras:number;onFechar:()=>void;onAbrirAba:(aba:string)=>void};
+type Baseline={estado:"carregando"|"erro"|"ausente"}|{estado:"pronto";inicio:number|null;fim:number|null;deltaFim:number|null};
+type Props={linha:LinhaCronogramaOperacional;predecessoras:number;sucessoras:number;restricoesAbertas:number|null;baseline:Baseline;onFechar:()=>void;onAbrirAba:(aba:string)=>void};
 const valor=(dado:unknown,sufixo="")=>dado===null||dado===undefined||dado===""?"Sem dado":`${dado}${sufixo}`;
-export function InspetorAtividade({linha,predecessoras,sucessoras,onFechar,onAbrirAba}:Props){
+export function InspetorAtividade({linha,predecessoras,sucessoras,restricoesAbertas,baseline,onFechar,onAbrirAba}:Props){
   const fecharRef=useRef<HTMLButtonElement>(null);
   const focoAnterior=useRef<HTMLElement|null>(null);
+  const onFecharRef=useRef(onFechar);
+  onFecharRef.current=onFechar;
   useEffect(()=>{
     focoAnterior.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
     fecharRef.current?.focus();
     const aoTeclar=(evento:KeyboardEvent)=>{
-      if(evento.key === "Escape"){evento.preventDefault();onFechar();focoAnterior.current?.focus();return;}
+      if(evento.key === "Escape"){evento.preventDefault();onFecharRef.current();focoAnterior.current?.focus();return;}
       if(evento.key !== "Tab")return;
       const controles=Array.from(document.querySelectorAll<HTMLElement>(".cronograma-inspetor button:not(:disabled)"));
       if(!controles.length)return;
@@ -21,15 +24,18 @@ export function InspetorAtividade({linha,predecessoras,sucessoras,onFechar,onAbr
     };
     document.addEventListener("keydown",aoTeclar);
     return()=>document.removeEventListener("keydown",aoTeclar);
-  },[onFechar]);
+  },[]);
   const fechar=()=>{onFechar();focoAnterior.current?.focus();};
+  const progresso=linha.quantidade!=null&&linha.quantidade>0&&linha.executado!=null?`${Math.min(100,Math.max(0,linha.executado/linha.quantidade*100)).toLocaleString("pt-BR",{maximumFractionDigits:1})}%`:"Sem dado";
+  const referenciaBaseline=baseline.estado==="pronto"&&baseline.inicio!=null&&baseline.fim!=null?`D+${baseline.inicio} a D+${baseline.fim}`:baseline.estado==="carregando"?"Carregando…":baseline.estado==="erro"?"Erro na consulta":baseline.estado==="ausente"?"Baseline não aprovada":"Sem correspondência";
+  const variacaoBaseline=baseline.estado==="pronto"&&baseline.deltaFim!=null?`${baseline.deltaFim>0?"+":""}${baseline.deltaFim} dias`:"Sem dado";
   const secoes=[
     {titulo:"Planejado",linhas:[["Início",linha.inicio],["Término",linha.fim],["Duração",valor(linha.duracao," dias")]],aba:"atividades"},
-    {titulo:"Baseline",linhas:[["Referência","Sem dado"],["Variação","Sem dado"]],aba:"baseline"},
-    {titulo:"Realizado",linhas:[["Quantidade",valor(linha.executado,linha.unidade?` ${linha.unidade}`:"")],["Progresso",linha.executado==null?"Sem dado":valor(linha.executado)]],aba:"producao"},
+    {titulo:"Baseline",linhas:[["Referência",referenciaBaseline],["Variação",variacaoBaseline]],aba:"baseline"},
+    {titulo:"Realizado",linhas:[["Quantidade",valor(linha.executado,linha.unidade?` ${linha.unidade}`:"")],["Progresso",progresso]],aba:"producao"},
     {titulo:"Rede",linhas:[["Predecessoras",predecessoras],["Sucessoras",sucessoras],["Caminho crítico",linha.critica?"Sim":"Não"]],aba:"dependencias"},
     {titulo:"Local",linhas:[["Local de execução",valor(linha.pavimento)]],aba:"eap"},
-    {titulo:"Restrições",linhas:[["Abertas",linha.bloqueada?"Requer atenção":"Sem registro"]],aba:"producao"},
+    {titulo:"Restrições",linhas:[["Abertas",restricoesAbertas??"Consulta indisponível"],["Estado",restricoesAbertas==null?"Não confirmado":restricoesAbertas>0?"Requer atenção":"Sem restrições abertas"]],aba:"producao"},
   ] as const;
   return <div className="cronograma-inspetor-raiz">
     <button type="button" className="cronograma-inspetor-fundo" aria-label="Fechar detalhes da atividade" onClick={fechar}/>

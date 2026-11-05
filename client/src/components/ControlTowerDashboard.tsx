@@ -200,7 +200,7 @@ export function ControlTowerDashboard({
       </section>
 
       <div className="ct-columns">
-        <CurvaSControlTower projetoId={projetoId} codigosExemplo={codigosExemplo} hoje={hoje} abrirAba={abrirAba} painelReal={fisico.real} painelPlanejado={fisico.planejado}/>
+        <CurvaSControlTower projetoId={projetoId} codigosExemplo={codigosExemplo} hoje={hoje} abrirAba={abrirAba}/>
         <section className="ct-card ct-prioridades" aria-labelledby="ct-prioridades">
           <span className="ct-overline">RADAR DE DECISÕES</span><h3 id="ct-prioridades">Onde atuar primeiro</h3><p>A origem do alerta e o módulo indicado estão conectados aos dados da obra.</p>
           {alertas.length === 0 ? <div className="ct-nada"><CheckCircle2 size={22}/><strong>Sem alertas técnicos registrados</strong><span>Continue acompanhando avanço, prazo e lançamentos. Ausência de alerta não substitui conferência do planejamento.</span></div>

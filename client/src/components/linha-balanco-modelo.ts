@@ -1,6 +1,7 @@
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
 
 export type PontoLob = {
+  activityId?: number;
   codigo: string;
   nome: string;
   local: string;
@@ -52,7 +53,7 @@ export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalcu
     const chave = nome.toLocaleLowerCase("pt-BR") + (disciplina ? "|" + disciplina : "");
     if (!agrupados.has(chave)) agrupados.set(chave, { chave, nome, pontos: [], repetitiva: false });
     agrupados.get(chave)!.pontos.push({
-      codigo: l.codigo, nome, local, inicio: l.inicio, fim: (finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo])!,
+      activityId: l.activityId, codigo: l.codigo, nome, local, inicio: l.inicio, fim: (finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo])!,
       executado: l.executado, quantidade: l.quantidade, unidade: l.unidade,
     });
   }
