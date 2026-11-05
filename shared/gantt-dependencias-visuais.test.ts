@@ -45,4 +45,16 @@ describe("Traçado contínuo do Gantt entre barras visíveis",()=>{
     ],visiveis,new Set());
     expect(r.map(x=>x.chave)).toEqual(["B>A:FS","A>B:FS"]);
   });
+  it("destaca apenas predecessoras e sucessoras diretas da atividade selecionada",()=>{
+    const r=gerarSetasVisiveisGantt([
+      {de:"A",para:"B",tipo:"FS"},
+      {de:"B",para:"C",tipo:"FS"},
+      {de:"C",para:"D",tipo:"FS"},
+    ],pos,new Set(),"B");
+    expect(r.map(x=>({chave:x.chave,relacionada:x.relacionada}))).toEqual([
+      {chave:"A>B:FS",relacionada:true},
+      {chave:"B>C:FS",relacionada:true},
+      {chave:"C>D:FS",relacionada:false},
+    ]);
+  });
 });

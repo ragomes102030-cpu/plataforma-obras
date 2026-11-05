@@ -72,6 +72,11 @@ export const ABAS: readonly AbaDoSistema[] = [
     status: "pronta",
   },
   {
+    id: "cronograma",
+    rotulo: "CRONOGRAMA",
+    status: "pronta",
+  },
+  {
     id: "gantt",
     rotulo: "GANTT",
     status: "pronta",

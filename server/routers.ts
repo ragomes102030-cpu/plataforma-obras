@@ -149,7 +149,7 @@ import type { AtividadeConciliacao, ItemOrcamento } from "./construction/concili
 import { persistCpmResult } from "./construction/cpm-persister";
 import { coletarDadosEvms } from "./construction/evm-dados";
 import { coletarDadosLookahead } from "./construction/lookahead-dados";
-import { coletarLancamentosExecutados } from "./construction/grade-dados";
+import { alocarProducaoNaVersaoAtual, coletarLancamentosExecutados } from "./construction/grade-dados";
 import { computeLookahead, segundaFeira } from "./construction/lookahead";
 import { computeEvm } from "./construction/evm";
 import { consolidateControlProgress } from "./construction/control-summary";
@@ -4679,7 +4679,7 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], idsPorCodigo: {}, datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, exemploPorCodigo: {} };
+        if (!db) return { hoje: new Date().toISOString().slice(0,10), inicioObra: null, linhas: [], datas: [], grade: {}, porAtividade: {}, totalGeral: "0.000", agregado: undefined, pesosFisicosAprovados: false, exemploPorCodigo: {}, producaoSemAlocacao: [] };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
@@ -4710,32 +4710,30 @@ export const appRouter = router({
         const calendarioDaGrade = (await carregarCalendarioDoPeriodo(
           db, input.projectId, inicio.getFullYear(), anoFinalDaGrade
         )).calendar;
-        // Produção é somada pelo CÓDIGO da EAP (1.2.3), que sobrevive à regeração
-        // do plano; o id da linha, não.
         const codigoPorAtividade = new Map<number,string>();
         for (const atividade of todasAtividades) codigoPorAtividade.set(atividade.id, atividade.wbsCode);
-        const executadoPorCodigo = new Map<string,number>();
-        for (const entry of entries) {
-          const codigo = codigoPorAtividade.get(entry.activityId);
-          if (!codigo) continue;
-          executadoPorCodigo.set(codigo,(executadoPorCodigo.get(codigo)??0)+Number(entry.quantity));
-        }
+        const { executadoPorAtividade, producaoSemAlocacao } = alocarProducaoNaVersaoAtual(
+          activities,
+          todasAtividades,
+          entries,
+        );
         const entradas = activities.map(a => {
           // A régua é o CPM (dias úteis). Antes, `startOffset` zerado em todas as
           // atividades empilhava as 53 barras no primeiro dia e fazia o painel
           // anunciar 120 dias de prazo enquanto a Curva S mostrava 580.
-          return { codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorCodigo.get(a.wbsCode)??0, marco:a.isMilestone };
+          return { activityId:a.id, codigo:a.wbsCode, atividade:a.name, frente:a.phase, pavimento:a.pavimento??null, inicio:dateAt(calendarioDaGrade,inicioIso,deslocamentoEmDiasUteis(a)), duracao:duracaoEmDiasUteis(a), quantidade:a.plannedQuantity==null?null:Number(a.plannedQuantity), unidade:a.unit??null, executado:executadoPorAtividade.get(a.id)??0, medicaoConfirmada:executadoPorAtividade.has(a.id), pesoFisico:a.physicalWeight==null?null:Number(a.physicalWeight), pesoFisicoAprovado:a.physicalWeightApprovedAt!=null, marco:a.isMilestone };
         });
         const linhasDerivadas = gradeDoCronograma(calendarioDaGrade,hoje,entradas);
-        const linhas = linhasDerivadas.map((l,i)=>({ ...l, atividadeId: activities.find(a=>a.wbsCode===l.codigo)?.id ?? 0 }));
-        const idsPorCodigo = Object.fromEntries(linhas.map(l=>[l.codigo,l.atividadeId]));
+        const linhas = linhasDerivadas;
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
         for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
         const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
         const exemploPorCodigo = Object.fromEntries(
           activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
         );
-        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, idsPorCodigo, datas, grade, porAtividade, totalGeral, agregado:agregadoDoCronograma(linhasDerivadas), exemploPorCodigo };
+        const idsExemplo = new Set(activities.filter(a => a.exemplo === 1).map(a => a.id));
+        const agregado = agregadoDoCronograma(linhasDerivadas.filter(linha => !idsExemplo.has(linha.activityId)));
+        return { hoje, inicioObra:inicio.toISOString().slice(0,10), linhas, datas, grade, porAtividade, totalGeral, agregado, pesosFisicosAprovados:agregado.pesosFisicosAprovados, exemploPorCodigo, producaoSemAlocacao };
       }),
     criarAtividadeDaFolha: protectedProcedure
       .input(z.object({
@@ -4894,7 +4892,7 @@ export const appRouter = router({
       .input(z.object({
         projectId: z.number().int().positive(),
         atividadeId: z.number().int().positive(),
-        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","otimista","pessimista","quantidade","produtividade","unidade","marco"]),
+        campo: z.enum(["atividade","frente","pavimento","inicio","duracao","otimista","pessimista","quantidade","produtividade","unidade","peso_fisico","marco"]),
         valor: z.string().max(500),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -4990,6 +4988,13 @@ export const appRouter = router({
           }
         }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;
+        if (input.campo === "peso_fisico") {
+          const peso = Number(input.valor);
+          if (!Number.isFinite(peso) || peso <= 0 || peso > 100) throw badRequest("O peso físico deve ser maior que zero e no máximo 100%.");
+          patch.physicalWeight = peso.toFixed(6);
+          // Qualquer revisão invalida o conjunto inteiro até nova aprovação.
+          patch.physicalWeightApprovedAt = null;
+        }
         if (input.campo === "marco") {
           // O banco continua com duração >= 1 (CHECK), mas o CPM passa a receber
           // 0 dia para marco — por isso a marcação invalida o CPM (abaixo) e o
@@ -5015,6 +5020,8 @@ export const appRouter = router({
           durationOptimisticDays: activity.durationOptimisticDays,
           durationPessimisticDays: activity.durationPessimisticDays,
           plannedQuantity: activity.plannedQuantity,
+          physicalWeight: activity.physicalWeight,
+          physicalWeightApprovedAt: activity.physicalWeightApprovedAt,
           unit: activity.unit,
           isMilestone: activity.isMilestone,
           cpmCalculatedAt: activity.cpmCalculatedAt,
@@ -5025,6 +5032,12 @@ export const appRouter = router({
             ? { ...patch, critical: 0, earlyStart: 0, earlyFinish: 0, lateStart: 0, lateFinish: 0, totalFloat: 0, cpmCalculatedAt: null }
             : patch;
 
+          if (input.campo === "peso_fisico") {
+            await tx.update(scheduleActivities).set({ physicalWeightApprovedAt: null }).where(and(
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, activity.versionId!),
+            ));
+          }
           await tx.update(scheduleActivities).set(schedulePatch).where(and(
             eq(scheduleActivities.id, input.atividadeId),
             eq(scheduleActivities.projectId, input.projectId),
@@ -5054,6 +5067,52 @@ export const appRouter = router({
 
         await recomputeProjectProgress(db, input.projectId);
         return { updated: true as const, cpmInvalidated: invalidatesCpm };
+      }),
+    distribuirPesosFisicosUniformes: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versao = await getCurrentPlanVersion(input.projectId);
+        if (!versao || !["draft", "proposed"].includes(versao.status)) throw conflict("Abra uma versão de trabalho antes de definir os pesos físicos.");
+        const atividades = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(
+          eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
+        )).orderBy(scheduleActivities.sortOrder, scheduleActivities.id);
+        if (!atividades.length) throw badRequest("Cadastre atividades operacionais antes de distribuir pesos físicos.");
+        const base = Math.floor((100 / atividades.length) * 1_000_000) / 1_000_000;
+        await db.transaction(async tx => {
+          for (const [indice, atividade] of atividades.entries()) {
+            const peso = indice === atividades.length - 1 ? 100 - base * (atividades.length - 1) : base;
+            await tx.update(scheduleActivities).set({ physicalWeight: peso.toFixed(6), physicalWeightApprovedAt: null }).where(eq(scheduleActivities.id, atividade.id));
+          }
+          await tx.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "physical_weights_distributed", payload: { versionId: versao.id, method: "uniform", activityCount: atividades.length } });
+        });
+        return { updated: atividades.length, total: 100, approved: false as const };
+      }),
+    aprovarPesosFisicos: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versao = await getCurrentPlanVersion(input.projectId);
+        if (!versao || !["draft", "proposed"].includes(versao.status)) throw conflict("Abra uma versão de trabalho antes de aprovar os pesos físicos.");
+        const atividades = await db.select({ id: scheduleActivities.id, peso: scheduleActivities.physicalWeight, quantidade: scheduleActivities.plannedQuantity }).from(scheduleActivities).where(and(
+          eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
+        ));
+        const soma = atividades.reduce((total, atividade) => total + Number(atividade.peso ?? 0), 0);
+        if (!atividades.length || atividades.some(atividade => Number(atividade.quantidade ?? 0) <= 0) || atividades.some(atividade => Number(atividade.peso ?? 0) <= 0) || Math.abs(soma - 100) > 0.01) {
+          throw badRequest(`Revise os pesos e quantitativos: todas as atividades precisam de quantidade mensurável, peso positivo e a soma deve ser 100% (atual: ${soma.toFixed(2)}%).`);
+        }
+        const aprovadoEm = new Date();
+        await db.transaction(async tx => {
+          await tx.update(scheduleActivities).set({ physicalWeightApprovedAt: aprovadoEm }).where(and(
+            eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
+          ));
+          await tx.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "physical_weights_approved", payload: { versionId: versao.id, activityCount: atividades.length, total: soma, pesos: atividades.map(atividade => ({ activityId: atividade.id, peso: Number(atividade.peso) })), approvedAt: aprovadoEm.toISOString() } });
+        });
+        return { approved: true as const, total: soma, activityCount: atividades.length };
       }),
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))

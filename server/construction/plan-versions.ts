@@ -281,11 +281,18 @@ export async function ensureWritablePlanVersion(
             pavimento: activity.pavimento,
             startOffset: activity.startOffset,
             durationDays: activity.durationDays,
+            durationOptimisticDays: activity.durationOptimisticDays,
+            durationPessimisticDays: activity.durationPessimisticDays,
             plannedQuantity: activity.plannedQuantity,
+            physicalWeight: activity.physicalWeight,
+            // Peso é herdado como proposta; aprovação é uma decisão da nova
+            // versão e nunca pode atravessar o fork histórico.
+            physicalWeightApprovedAt: null,
             unit: activity.unit,
             productivity: activity.productivity,
             budgetItemId: activity.budgetItemId,
             progress: activity.progress,
+            isMilestone: activity.isMilestone,
             exemplo: activity.exemplo,
             status: activity.status,
             critical: activity.critical,

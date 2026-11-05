@@ -1,13 +1,13 @@
 import "./index.css"; import "./mobile.css"; import "./campo-tipografia.css"; import "./tipografia-desktop.css";
 import React,{useState} from "react"; import {createRoot} from "react-dom/client"; import {LinhaBalancoEscadinha} from "./components/AuroraLinhaBalanco"; import type {EntradaDaLinha} from "@shared/cronograma-colunas";
-type Linha=EntradaDaLinha&{id:string}; const base: Linha[]=[{id:"1",codigo:"QA.01",atividade:"Alvenaria",frente:"Vedação",pavimento:"",inicio:"2026-11-03",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},{id:"2",codigo:"QA.02",atividade:"Alvenaria",frente:"Vedação",pavimento:"",inicio:"2026-11-12",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},{id:"3",codigo:"QA.03",atividade:"Pintura",frente:"Acabamento",pavimento:"P03",inicio:"2026-11-18",duracao:5,quantidade:1,unidade:"m²",executado:0,marco:false}];
+type Linha=EntradaDaLinha&{id:string}; const base: Linha[]=[{id:"1",activityId:1,codigo:"QA.01",atividade:"Alvenaria",frente:"Vedação",pavimento:"",inicio:"2026-11-03",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},{id:"2",activityId:2,codigo:"QA.02",atividade:"Alvenaria",frente:"Vedação",pavimento:"",inicio:"2026-11-12",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},{id:"3",activityId:3,codigo:"QA.03",atividade:"Pintura",frente:"Acabamento",pavimento:"P03",inicio:"2026-11-18",duracao:5,quantidade:1,unidade:"m²",executado:0,marco:false}];
 
 const heightRows: Linha[] = [
-  {id:"v1",codigo:"QA.V.P01",atividade:"Vedação",frente:"Estrutura",pavimento:"P01",inicio:"2026-11-03",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},
-  {id:"v2",codigo:"QA.V.P02",atividade:"Vedação",frente:"Estrutura",pavimento:"P02",inicio:"2026-11-05",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},
+  {id:"v1",activityId:11,codigo:"QA.V.P01",atividade:"Vedação",frente:"Estrutura",pavimento:"P01",inicio:"2026-11-03",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},
+  {id:"v2",activityId:12,codigo:"QA.V.P02",atividade:"Vedação",frente:"Estrutura",pavimento:"P02",inicio:"2026-11-05",duracao:8,quantidade:1,unidade:"m²",executado:0,marco:false},
   ...["Impermeabilização","Pintura","Revestimento"].flatMap((nome, indice) => [
-    {id:`f${indice}a`,codigo:`QA.F${indice}.P01`,atividade:nome,frente:nome,pavimento:"P01",inicio:"2028-01-10",duracao:60,quantidade:1,unidade:"m²",executado:0,marco:false},
-    {id:`f${indice}b`,codigo:`QA.F${indice}.P02`,atividade:nome,frente:nome,pavimento:"P02",inicio:"2028-01-10",duracao:60,quantidade:1,unidade:"m²",executado:0,marco:false},
+    {id:`f${indice}a`,activityId:20+indice*2,codigo:`QA.F${indice}.P01`,atividade:nome,frente:nome,pavimento:"P01",inicio:"2028-01-10",duracao:60,quantidade:1,unidade:"m²",executado:0,marco:false},
+    {id:`f${indice}b`,activityId:21+indice*2,codigo:`QA.F${indice}.P02`,atividade:nome,frente:nome,pavimento:"P02",inicio:"2028-01-10",duracao:60,quantidade:1,unidade:"m²",executado:0,marco:false},
   ]),
 ];
 

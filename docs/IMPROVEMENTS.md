@@ -447,3 +447,13 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 - Correção: o agente passa a receber o mesmo conjunto estrutural, de dicionário e escopo da tela. Os avisos são mantidos como indícios para julgamento de engenharia, sem bloqueio automático por semântica.
 - Regra permanente: “zero estrutural” não equivale a “zero apontamentos”. Toda auditoria deve citar os códigos e mensagens da lista do painel ou declarar que não conseguiu recuperá-los.
 - Regressão: `server/agent/core/engineering-capabilities.test.ts` cobre alerta de possível sobreposição no resultado da análise local.
+
+## 05/nov/2026 — cronograma operacional integrado e indicadores honestos
+
+**Problemas:** a rede dividia a largura com o formulário e escondia vínculos; o Gantt misturava linhas pontilhadas e cores sem semântica suficiente; o dashboard acoplava avanço físico ao orçamento; não existia uma porta de entrada operacional que conectasse atividade, datas, rede, local e medição.
+
+**Correções:** a rede ganhou área vertical pesquisável, filtros e remoção confirmada; o Gantt passou a identificar atividades por ID, destacar vínculos relacionados, rotular início/hoje e hachurar baseline; o painel separa prontidão física, financeira e EV; a nova aba Cronograma integra grade, Gantt, fluxo e rede com inspetor por atividade. Bloqueios agora informam causa, impacto, passos, destino e evidência de resolução.
+
+**Integridade:** dados ausentes são “Sem dado”, nunca zero. Orçamento didático não libera EV. Produção confirmada sem pesos físicos mantém o acompanhamento por atividade, mas não publica agregado inventado. Mudança de duração ou dependência invalida CPM antes de permitir nova baseline.
+
+**Validação:** testes focados cobrem identidade duplicada, orientação, rede, prontidão, semântica do Gantt, 2.000 atividades, teclado e cadeia CPM → baseline. A validação completa e ao vivo fica registrada no fechamento do release.

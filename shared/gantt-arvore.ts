@@ -7,14 +7,15 @@ import { diasEntre } from "./painel-obra";
  * Project): início, fim, duração e avanço são agregados das atividades dentro.
  */
 export type NoDoGantt = {
-  /** Chave estável na árvore: o próprio código da EAP. */
+  /** Chave estável: `atividade:<id>` nas folhas e `eap:<codigo>` nos grupos. */
   chave: string;
+  activityId: number | null;
   codigo: string;
   nome: string;
   /** 0 = raiz. Usado para indentar e para o nível do "recolher tudo". */
   profundidade: number;
   filhos: NoDoGantt[];
-  /** Presente só quando o código existe como atividade de verdade. */
+  /** Presente quando o nó representa uma atividade de verdade. */
   linha: EntradaDaLinha | null;
   inicio: IsoDate;
   fim: IsoDate;
@@ -47,14 +48,15 @@ function compararPorCodigo(a: NoDoGantt, b: NoDoGantt): number {
  */
 export function montarArvore(
   linhas: EntradaDaLinha[],
-  codigosCriticos: ReadonlySet<string> = new Set(),
+  codigosCriticos: ReadonlySet<string | number> = new Set(),
   finsCalculados: Readonly<Record<string, string>> = {}
 ): NoDoGantt[] {
   const raizes: NoDoGantt[] = [];
-  const porChave = new Map<string, NoDoGantt>();
+  const estruturalPorCodigo = new Map<string, NoDoGantt>();
 
-  const novoNo = (codigo: string, profundidade: number): NoDoGantt => ({
-    chave: codigo,
+  const novoNo = (codigo: string, profundidade: number, activityId: number | null = null): NoDoGantt => ({
+    chave: activityId == null ? `eap:${codigo}` : `atividade:${activityId}`,
+    activityId,
     codigo,
     nome: "",
     profundidade,
@@ -69,26 +71,38 @@ export function montarArvore(
     marco: false,
   });
 
-  for (const linha of linhas) {
+  // Pais precisam existir antes dos filhos. A ordenação é estável, portanto
+  // atividades irmãs com o mesmo WBS preservam a ordem recebida.
+  const linhasOrdenadas = [...linhas].sort((a, b) => {
+    const profundidadeA = (a.codigo || "").split(".").length;
+    const profundidadeB = (b.codigo || "").split(".").length;
+    return profundidadeA - profundidadeB;
+  });
+
+  for (const linha of linhasOrdenadas) {
     const codigo = (linha.codigo || "").trim() || "sem-codigo";
     const partes = codigo.split(".");
     let pai: NoDoGantt | null = null;
     let acumulado = "";
-    for (let nivel = 0; nivel < partes.length; nivel++) {
+    for (let nivel = 0; nivel < partes.length - 1; nivel++) {
       acumulado = acumulado ? `${acumulado}.${partes[nivel]}` : partes[nivel];
-      let no = porChave.get(acumulado);
+      let no = estruturalPorCodigo.get(acumulado);
       if (!no) {
         no = novoNo(acumulado, nivel);
-        porChave.set(acumulado, no);
+        estruturalPorCodigo.set(acumulado, no);
         if (pai) pai.filhos.push(no);
         else raizes.push(no);
       }
       pai = no;
     }
-    if (pai) {
-      pai.linha = linha;
-      pai.nome = linha.atividade;
-    }
+    const atividade = novoNo(codigo, Math.max(0, partes.length - 1), linha.activityId);
+    atividade.linha = linha;
+    atividade.nome = linha.atividade;
+    if (pai) pai.filhos.push(atividade);
+    else raizes.push(atividade);
+    // A primeira atividade de um código também pode ser o pai estrutural de
+    // códigos mais profundos. Duplicatas continuam como irmãs independentes.
+    if (!estruturalPorCodigo.has(codigo)) estruturalPorCodigo.set(codigo, atividade);
   }
 
   const folhas = (no: NoDoGantt): NoDoGantt[] =>
@@ -107,7 +121,7 @@ export function montarArvore(
     // Marco é ponto: começa e termina no mesmo dia, mesmo que a planilha tenha
     // lançado duração (o banco exige >= 1).
     no.marco = Boolean(linha.marco);
-    const fimOficial = finsCalculados[no.codigo];
+    const fimOficial = finsCalculados[String(no.activityId)] ?? finsCalculados[no.codigo];
     // Quando existe, o término do motor (calendário de trabalho, feriados e
     // dependências) é a autoridade. Não reconstituir o fim com dias corridos.
     const fimValido = typeof fimOficial === "string" &&
@@ -122,7 +136,7 @@ export function montarArvore(
     const quantidade = Number(linha.quantidade) || 0;
     const executado = Number(linha.executado) || 0;
     no.progresso = quantidade > 0 ? Math.max(0, Math.min(100, (executado / quantidade) * 100)) : 0;
-    no.critica = codigosCriticos.has(no.codigo);
+    no.critica = codigosCriticos.has(no.activityId ?? "") || codigosCriticos.has(no.codigo);
   };
 
   const agregar = (no: NoDoGantt): void => {

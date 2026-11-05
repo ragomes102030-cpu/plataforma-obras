@@ -40,7 +40,8 @@ export function LobDistribuicaoPainel({
     Math.abs(quantidadeNum*1000-Math.round(quantidadeNum*1000))<1e-6&&
     (linha?.quantidade??0)>0&&quantidadeNum<=restante+0.0001&&
     /^\d{4}-\d{2}-\d{2}$/.test(inicio)&&/^\d{4}-\d{2}-\d{2}$/.test(fim)&&fim>=inicio&&
-    !!linha&&inicio>=linha.inicio&&!!finsCalculados[linha.codigo]&&fim<=finsCalculados[linha.codigo]!;
+    !!linha&&inicio>=linha.inicio&&!!(finsCalculados[String(linha.activityId)]??finsCalculados[linha.codigo])&&
+    fim<=(finsCalculados[String(linha.activityId)]??finsCalculados[linha.codigo])!;
   const comDistribuicao=new Set(distribuicoes.map(d=>d.activityId)).size;
   const totais=useMemo(()=>ativos.map(a=>{
     const l=linhasPorCodigo.get(a.wbsCode)!;
@@ -83,7 +84,7 @@ export function LobDistribuicaoPainel({
         Total da atividade: <b>{linha.quantidade===null?"Não informado":linha.quantidade.toLocaleString("pt-BR")+" "+(linha.unidade??"")}</b> ·
         Alocado nos outros locais: <b>{alocado.toLocaleString("pt-BR")}</b> ·
         Disponível para este local: <b>{restante.toLocaleString("pt-BR")}</b> ·
-        Janela oficial de referência: <b>{linha.inicio} – {finsCalculados[linha.codigo]??"não calculado"}</b>.
+        Janela oficial de referência: <b>{linha.inicio} – {finsCalculados[String(linha.activityId)]??finsCalculados[linha.codigo]??"não calculado"}</b>.
       </p>}
       <div className="lob-distribuicao-table-wrap">
         <table><thead><tr><th>EAP / serviço</th><th>Locais</th><th>Alocado / total</th><th>Saldo</th></tr></thead><tbody>

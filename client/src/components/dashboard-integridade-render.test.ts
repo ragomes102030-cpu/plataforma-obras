@@ -18,10 +18,13 @@ const props = {
   ppc:null,bloqueadas:null,compromissosPendentes:null,carregandoComplementos:false,erroComplementos:false,
   orcamentoEstado:"ok" as const,producaoEstado:"ok" as const,semanaEstado:"ok" as const,abrirAba:()=>{},
 };
+const prontidao = (fisico:"disponivel"|"sem_pesos"|"sem_producao"|"erro",financeiro:"disponivel"|"sem_orcamento"|"cobertura_incompleta"|"didatico"|"erro",evDisponivel=false) => ({
+  fisico,financeiro,evDisponivel,orientacoes:[],
+});
 
 describe("dashboard não transforma dado ausente em desempenho zero", () => {
   it("mantém planejado e suprime realizado/desvio/EV sem medição", () => {
-    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,avancoEstado:"sem-producao",orcamentoConfiavel:true}));
+    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,prontidao:prontidao("sem_producao","disponivel")}));
     expect(html).toContain("Produção ainda não apurada");
     expect(html).toContain("40,0%");
     expect(html).toContain("Sem dado");
@@ -31,13 +34,15 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     expect(html).not.toMatch(/<strong>R\$.*?0<\/strong>/);
   });
   it("não apresenta orçamento didático/parcial como valor agregado", () => {
-    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,avancoEstado:"indisponivel",orcamentoConfiavel:false}));
-    expect(html).toContain("Orçamento em revisão");
+    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,prontidao:prontidao("sem_pesos","didatico")}));
+    expect(html).toContain("Orçamento de teste");
+    expect(html).toContain("Avanço físico ainda sem pesos aprovados");
+    expect(html).not.toMatch(/r[eé]gua validada/i);
     expect(html).not.toContain("A execução está abaixo");
     expect(html).not.toContain("Avanço realizado 0,0%");
   });
-  it("aceita execução zero quando existe medição confirmada e régua válida", () => {
-    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,avancoEstado:"ok",orcamentoConfiavel:true}));
+  it("aceita execução zero quando existem pesos e medição confirmados", () => {
+    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,prontidao:prontidao("disponivel","disponivel",true)}));
     expect(html).toContain("Avanço realizado 0,0%");
     expect(html).toContain("A execução está abaixo");
     expect(html).toContain("−40,0 p.p.");

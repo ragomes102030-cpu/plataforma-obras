@@ -20,7 +20,8 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(home).toContain("codigosExemplo={exemploPorCodigo}");
     expect(painel).toContain("agregadoDoCronograma(linhasDaObra)");
     expect(painel).toContain("!codigosExemplo.has(a.wbsCode ?? \"\")");
-    expect(painel).toContain('avancoEstado={orcamento.isPending || producao.isPending ? "pendente"');
+    expect(painel).toContain('prontidao={integridade.prontidao}');
+    expect(painel).toContain('pesosFisicosAprovados: agregadoDaObra?.pesosFisicosAprovados === true');
     expect(painel).toContain('Number(l.exemplo ?? 0) !== 1');
     expect(painel).toContain('isoDoValor(l.productionDate) <= hoje');
     expect(painel).toContain("erroGrade && !agregado");
@@ -54,14 +55,14 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(curva).toContain("idsDasAtividadesDaObra.has(l.atividadeId)");
     expect(curva).toContain('getCalendarForCurve.useQuery');
     expect(curva).toContain("temBaseline && comparacao.isPending");
-    expect(curva).toContain("Os percentuais desta curva");
+    expect(curva).not.toContain("Os percentuais desta curva");
     expect(curva).not.toContain("dadosDemonstrativos");
   });
   it("trata estados vazios, dados parciais, teclado, celular e movimento reduzido", () => {
     expect(control).toContain("carregandoComplementos");
-    expect(control).toContain('avancoEstado === "ok"');
+    expect(control).toContain('prontidao.fisico === "disponivel"');
     expect(control).toContain('fisicoDisponivel ? percentual(fisico.real) : "Sem dado"');
-    expect(control).toContain("Avanço comparável");
+    expect(control).toContain("Atividades continuam");
     expect(control).toContain('["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível"');
     expect(control).toContain("erroComplementos");
     expect(control).toContain('role="dialog"');

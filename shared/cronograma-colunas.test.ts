@@ -236,20 +236,19 @@ describe("meses do Gantt", () => {
 describe("painel", () => {
   const hoje: IsoDate = "2026-07-15";
 
-  it("pondera por quantidade, e não faz média simples", () => {
-    // Duas linhas de 1000 cada, uma a 100% e outra a 0%: a média simples daria
-    // 50% e a ponderada também. Com quantidades diferentes, a simples mente.
+  it("pondera por peso físico aprovado, sem somar unidades incompatíveis", () => {
     const linhas = gradeDoCronograma(CAL, hoje, [
-      { ...linha01, codigo: "A", quantidade: 9000, executado: 9000 },
-      { ...linha01, codigo: "B", quantidade: 1000, executado: 0 },
+      { ...linha01, codigo: "A", quantidade: 9000, executado: 9000, pesoFisico: 90, pesoFisicoAprovado: true },
+      { ...linha01, codigo: "B", quantidade: 1, unidade: "un", executado: 0, pesoFisico: 10, pesoFisicoAprovado: true },
     ]);
     const a = agregadoDoCronograma(linhas);
     expect(a.avancoFisico).toBeCloseTo(0.9, 6);
+    expect(a.pesosFisicosAprovados).toBe(true);
   });
 
   it("linha sem quantidade fica fora da média e é contada", () => {
     const linhas = gradeDoCronograma(CAL, hoje, [
-      { ...linha01, codigo: "A", quantidade: 1000, executado: 500 },
+      { ...linha01, codigo: "A", quantidade: 1000, executado: 500, pesoFisico: 100, pesoFisicoAprovado: true },
       { ...linha01, codigo: "B", quantidade: null, executado: 9999 },
     ]);
     const a = agregadoDoCronograma(linhas);
@@ -257,6 +256,7 @@ describe("painel", () => {
     expect(a.linhasPonderadas).toBe(1);
     expect(a.linhasSemQuantidade).toBe(1);
     expect(a.totalAtividades).toBe(2);
+    expect(a.pesosFisicosAprovados).toBe(false);
   });
 
   it("conta as quatro posições de status", () => {

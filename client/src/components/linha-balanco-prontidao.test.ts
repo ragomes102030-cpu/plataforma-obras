@@ -27,7 +27,7 @@ describe("prontidão visual de Linha de Balanço", () => {
     expect(atividades).toContain('className="pavimento-col">Local físico');
     expect(atividades).toContain('onBlur={() => salvarEdicao(activity.id, "frente")}');
     expect(atividades).toContain('onBlur={() => salvarEdicao(activity.id, "pavimento")}');
-    expect(atividades).toContain('<td colSpan={13} className="pl-atividades-empty">');
+    expect(atividades).toContain('<td colSpan={14} className="pl-atividades-empty">');
     const router = readFileSync(resolve("server/routers.ts"), "utf8");
     expect(router).toContain('if (input.campo === "frente") patch.phase');
     expect(router).toContain('if (input.campo === "pavimento") patch.pavimento');

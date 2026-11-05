@@ -500,6 +500,9 @@ export const scheduleActivities = pgTable(
     durationOptimisticDays: integer("durationOptimisticDays"),
     durationPessimisticDays: integer("durationPessimisticDays"),
     plannedQuantity: numeric("plannedQuantity", { precision: 14, scale: 3 }),
+    /** Peso percentual aprovado para consolidar avanço físico entre unidades distintas. */
+    physicalWeight: numeric("physicalWeight", { precision: 9, scale: 6 }),
+    physicalWeightApprovedAt: timestamp("physicalWeightApprovedAt", { withTimezone: true }),
     /**
      * Unidade de medida do quantitativo, herdada da folha da EAP. Fica na
      * atividade porque é ela que o % Real divide: "128 /dia" não significa
@@ -544,6 +547,7 @@ export const scheduleActivities = pgTable(
       table.externalId
     ),
     check("schedule_activities_duration_positive", drizzleSql`"durationDays" > 0`),
+    check("schedule_activities_physical_weight_positive", drizzleSql`"physicalWeight" is null or "physicalWeight" > 0`),
     check(
       "schedule_activities_three_point_positive",
       drizzleSql`("durationOptimisticDays" is null or "durationOptimisticDays" >= 1) and ("durationPessimisticDays" is null or "durationPessimisticDays" >= 1)`

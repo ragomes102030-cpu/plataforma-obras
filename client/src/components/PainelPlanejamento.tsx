@@ -27,7 +27,8 @@ type CampoEditavel =
   | "pessimista"
   | "quantidade"
   | "produtividade"
-  | "unidade";
+  | "unidade"
+  | "peso_fisico";
 
 export function PainelPlanejamento({ projetoId }: Props) {
   const utils = trpc.useUtils();
@@ -95,6 +96,20 @@ export function PainelPlanejamento({ projetoId }: Props) {
     },
     onError: error => setMensagem(error.message),
   });
+  const distribuirPesos = trpc.planning.distribuirPesosFisicosUniformes.useMutation({
+    onSuccess: async result => {
+      setMensagem(`Proposta uniforme aplicada a ${result.updated} atividades. Revise os percentuais e aprove para liberar o avanço físico.`);
+      await Promise.all([utils.planning.list.invalidate({ projectId: projetoId }), utils.planning.grade.invalidate({ projectId: projetoId })]);
+    },
+    onError: error => setMensagem(error.message),
+  });
+  const aprovarPesos = trpc.planning.aprovarPesosFisicos.useMutation({
+    onSuccess: async () => {
+      setMensagem("Pesos físicos aprovados. A dashboard pode consolidar o avanço confirmado sem misturar unidades.");
+      await Promise.all([utils.planning.list.invalidate({ projectId: projetoId }), utils.planning.grade.invalidate({ projectId: projetoId })]);
+    },
+    onError: error => setMensagem(error.message),
+  });
 
   const activities = plano.data?.activities ?? [];
 
@@ -108,6 +123,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
     if (campo === "pessimista") return activity.durationPessimisticDays == null ? "" : String(activity.durationPessimisticDays);
     if (campo === "quantidade") return activity.plannedQuantity == null ? "" : String(activity.plannedQuantity);
     if (campo === "produtividade") return activity.productivity == null ? "" : String(activity.productivity);
+    if (campo === "peso_fisico") return activity.physicalWeight == null ? "" : String(activity.physicalWeight);
     return activity.unit ?? "";
   };
 
@@ -150,6 +166,13 @@ export function PainelPlanejamento({ projetoId }: Props) {
     const decomposicoes = proposta.filter(item => item.requiresDecompositionReview).length;
     return { total, prontas, pendentes, decomposicoes };
   }, [activities.length, proposta]);
+  const resumoPesos = useMemo(() => {
+    const operacionais = activities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
+    const soma = operacionais.reduce((total, activity) => total + Number(activity.physicalWeight ?? 0), 0);
+    const completos = operacionais.filter(activity => Number(activity.physicalWeight ?? 0) > 0).length;
+    const aprovados = operacionais.length > 0 && completos === operacionais.length && operacionais.every(activity => activity.physicalWeightApprovedAt != null) && Math.abs(soma - 100) <= 0.01;
+    return { total: operacionais.length, completos, soma, aprovados };
+  }, [activities]);
 
   const propostaFiltrada = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -287,6 +310,14 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
       )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
+      {activities.length > 0 && <div className="pl-atividades-alerta" role="status">
+        <strong>Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} atividades · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? "aprovados" : "aguardando aprovação"}.</strong>{" "}
+        Use o rateio uniforme como proposta inicial de demonstração ou edite cada peso. A dashboard só publica avanço após a soma chegar a 100% e a aprovação ser registrada.
+        <div className="pl-atividades-header-actions">
+          <button type="button" className="pl-atividades-btn secondary" disabled={distribuirPesos.isPending || aprovarPesos.isPending} onClick={() => distribuirPesos.mutate({ projectId: projetoId })}>Distribuir igualmente</button>
+          <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>
+        </div>
+      </div>}
       {!propostaAprovada && proposta.length > 0 && <div className="pl-atividades-alerta">A prévia mostra as lacunas da EAP v{versaoDaProposta}. As atividades ficam disponíveis para criação depois da aprovação desta versão.</div>}
 
       <div className="pl-atividades-table-wrap">
@@ -304,6 +335,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
               <th className="unit-col">Unidade</th>
               <th className="prod-col">Produtividade</th>
               <th className="qtd-col">Quantidade</th>
+              <th className="qtd-col">Peso físico (%)</th>
               <th className="status-col">Estado</th>
               <th className="action-col">Observação</th>
             </tr>
@@ -406,6 +438,14 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     title={Number(activity.productivity) > 0 ? "Com produtividade informada, alterar a quantidade recalcula a duração e invalida o CPM se o prazo mudar." : "Quantidade planejada; sem produtividade, a duração permanece uma entrada manual."}
                   />
                 </td>
+                <td className="qtd-col">
+                  <input className="pl-duracao-input" type="number" min="0.000001" max="100" step="0.000001"
+                    value={valorEdicao(activity, "peso_fisico")}
+                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|peso_fisico"]: event.target.value }))}
+                    onBlur={() => salvarEdicao(activity.id, "peso_fisico")}
+                    aria-label={"Peso físico percentual de " + activity.name}
+                    title="Participação desta atividade no avanço físico total; editar invalida a aprovação do conjunto." />
+                </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
                 <td className="action-col">
                   {activity.planningEvidence?.source ? (
@@ -452,6 +492,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
                 <td className="unit-col">{item.unit ?? "—"}</td>
                 <td className="prod-col">—</td>
                 <td className="qtd-col">—</td>
+                <td className="qtd-col">—</td>
                 <td className="status-col"><span className="pl-status-badge revisar">Revisar</span></td>
                 <td className="action-col">
                   <button
@@ -469,7 +510,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
 
             {!temLinhasVisiveis && (
               <tr>
-                <td colSpan={13} className="pl-atividades-empty">
+                <td colSpan={14} className="pl-atividades-empty">
                   <strong>{busca ? "Nenhum resultado encontrado." : filtro === "pendentes" ? "Nenhuma atividade aguardando revisão." : "Nenhuma atividade criada ainda."}</strong>
                   <span>{busca ? "Ajuste a pesquisa para localizar outro item." : "As atividades aparecem aqui quando forem adicionadas a partir da EAP aprovada."}</span>
                 </td>

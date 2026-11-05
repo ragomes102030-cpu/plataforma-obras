@@ -12,10 +12,8 @@ import { ControlTowerDashboard } from "./ControlTowerDashboard";
 /**
  * Painel da obra.
  *
- * Regra que vale para todo o painel: número sem régua é ruído. Avanço é
- * ponderado pelo valor do orçamento (a mesma régua da Curva S); valor executado
- * só conta o que tem atividade; contagem é por atividade. Cada um aparece com o
- * nome da sua régua e com o desvio assinado.
+ * Regra que vale para todo o painel: avanço físico e valor agregado são eixos
+ * diferentes. O orçamento pondera EVM; nunca substitui pesos físicos aprovados.
  */
 
 type Props = {
@@ -143,13 +141,11 @@ export function PainelDoCronograma({
   const dados = useMemo(() => {
     const custo = calcularPesosDaCurva(atividades, orcamento.data?.items ?? []);
 
-    const pctPorCodigo = new Map<string, number>();
-    const planejadoPorCodigo = new Map<string, number>();
+    const pctPorAtividade = new Map<number, number>();
+    const planejadoPorAtividade = new Map<number, number>();
     for (const linha of linhasDaObra) {
-      if (linha.codigo) {
-        pctPorCodigo.set(linha.codigo, linha.pctReal);
-        planejadoPorCodigo.set(linha.codigo, linha.pctPlanejado);
-      }
+      pctPorAtividade.set(linha.activityId, linha.pctReal);
+      planejadoPorAtividade.set(linha.activityId, linha.pctPlanejado);
     }
 
     let executado = 0;
@@ -158,10 +154,10 @@ export function PainelDoCronograma({
     for (const atividade of atividades) {
       const valorDaAtividade = custo.custoPorAtividade.get(atividade.id) ?? 0;
       if (valorDaAtividade <= 0) continue;
-      const avanco = pctPorCodigo.get(atividade.wbsCode ?? "") ?? 0;
+      const avanco = pctPorAtividade.get(atividade.id) ?? 0;
       executado += valorDaAtividade * avanco;
       pesoComOrcamento += valorDaAtividade;
-      planejadoPorValor += valorDaAtividade * (planejadoPorCodigo.get(atividade.wbsCode ?? "") ?? 0);
+      planejadoPorValor += valorDaAtividade * (planejadoPorAtividade.get(atividade.id) ?? 0);
     }
 
     // Frações 0..1: `pctReal` e `pctPlanejado` já vêm assim da grade.
@@ -183,6 +179,9 @@ export function PainelDoCronograma({
       hoje, atividades, itens: orcamento.data?.items ?? [],
       versaoAtivaAprovada: orcamento.data?.versions?.find(v => v.id === orcamento.data?.activeVersionId)?.status === "aprovado",
       custoPorAtividade: custo.custoPorAtividade, lancamentos,
+      pesosFisicosAprovados: agregadoDaObra?.pesosFisicosAprovados === true,
+      erroFisico: producao.isError,
+      erroFinanceiro: orcamento.isError,
     });
     const foraDoPlano = confirmados.filter((l) => l.vinculo && l.vinculo !== "atual").length;
 
@@ -197,12 +196,10 @@ export function PainelDoCronograma({
       hoje,
       inicio: agregadoDaObra?.inicio ?? null,
       fim: agregadoDaObra?.fim ?? null,
-      fisico: pesoComOrcamento > 0
-        ? avancoPorValor
-        : {
-            real: agregadoDaObra?.avancoFisico ?? 0,
-            planejado: agregadoDaObra?.avancoPlanejado ?? 0,
-          },
+      fisico: {
+        real: agregadoDaObra?.avancoFisico ?? 0,
+        planejado: agregadoDaObra?.avancoPlanejado ?? 0,
+      },
       status: {
         total: agregadoDaObra?.totalAtividades ?? 0,
         concluidas: agregadoDaObra?.contagemPorStatus.Concluido ?? 0,
@@ -226,7 +223,7 @@ export function PainelDoCronograma({
     return {
       resumo,
       integridade,
-      avancoComReguaValida: pesoComOrcamento > 0,
+      avancoFinanceiro: avancoPorValor,
       valorSemDestino: custo.valorSemDestino,
       ultimos: [...lancamentos]
         .sort((a, b) => isoDoValor(b.productionDate).localeCompare(isoDoValor(a.productionDate)))
@@ -355,7 +352,6 @@ export function PainelDoCronograma({
   });
 
   // Coerência: só entra quando há item que IMPEDE execução e valor em risco.
-  // Percentual é sempre sobre o valor do orçamento, a mesma régua do painel.
   const alertaDeOrcamento: AlertaDoPainel | null = (() => {
     const analise = coerencia.data;
     if (!analise) return null;
@@ -435,11 +431,7 @@ export function PainelDoCronograma({
       projetoId={projetoId}
       nomeObra={nomeObra ?? "Obra"}
       codigosExemplo={codigosExemplo}
-      avancoEstado={orcamento.isPending || producao.isPending ? "pendente"
-        : orcamento.isError || producao.isError ? "erro"
-        : !integridade.orcamentoConfiavel ? "indisponivel"
-        : !integridade.temProducaoConfirmada ? "sem-producao" : "ok"}
-      orcamentoConfiavel={integridade.orcamentoConfiavel}
+      prontidao={integridade.prontidao}
       hoje={hoje}
       resumo={resumo}
       prazoConfianca={prazoConfianca}

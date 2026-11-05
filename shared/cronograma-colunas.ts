@@ -45,6 +45,8 @@ export type StatusDaLinha =
 
 /** O que o usuário informa. Só isso é entrada; o resto é derivado. */
 export type EntradaDaLinha = {
+  /** Identidade operacional. O código WBS organiza, mas pode se repetir. */
+  activityId: number;
   codigo: string;
   atividade: string;
   frente: string;
@@ -58,6 +60,12 @@ export type EntradaDaLinha = {
   unidade: string | null;
   /** Quantidade já executada, somada da aba PRODUCAO. */
   executado: number;
+  /** Participação percentual no avanço físico total. */
+  pesoFisico?: number | null;
+  /** Só pesos explicitamente aprovados podem alimentar o painel executivo. */
+  pesoFisicoAprovado?: boolean;
+  /** A medição confirmada existe para esta atividade na data de referência. */
+  medicaoConfirmada?: boolean;
   /**
    * Marco: data única, sem duração de verdade. A planilha continua mostrando os
    * dias lançados (a duração no banco é >= 1), mas o Gantt e a Linha de Balanço
@@ -190,9 +198,9 @@ export function gradeDoCronograma(
 }
 
 export type AgregadoDoCronograma = {
-  /** Avanço físico ponderado por quantidade, 0..1. */
+  /** Avanço físico ponderado pelo peso físico aprovado, 0..1. */
   avancoFisico: number;
-  /** Avanço planejado ponderado por quantidade, 0..1. */
+  /** Avanço planejado ponderado pelo peso físico aprovado, 0..1. */
   avancoPlanejado: number;
   /** `avancoFisico - avancoPlanejado`. Negativo = atrasado. */
   desvio: number;
@@ -200,6 +208,10 @@ export type AgregadoDoCronograma = {
   /** Quantas linhas entraram na média ponderada. */
   linhasPonderadas: number;
   linhasSemQuantidade: number;
+  linhasSemPesoFisico: number;
+  linhasSemMedicao: number;
+  somaPesosFisicos: number;
+  pesosFisicosAprovados: boolean;
   totalAtividades: number;
   inicio: IsoDate | null;
   fim: IsoDate | null;
@@ -212,11 +224,8 @@ export type AgregadoDoCronograma = {
  * "média ponderada" — e não pondera nada. Isso não se reproduz aqui: média
  * simples entre atividades trata uma tarefa de 15 dias igual a uma de 150, e
  * o "avanço físico" do painel deixa de corresponder a qualquer coisa real. Aqui
- * a média é ponderada pela quantidade planejada, que é a única unidade que
- * significa algo entre atividades de unidades diferentes.
- *
- * Atividade sem quantidade fica fora da média e é contada à parte, para o painel
- * poder dizer que elas existem em vez de diluí-las com peso zero.
+ * a média é ponderada por pesos físicos explicitamente revisados. Quantidades
+ * de unidades diferentes (m², m³ e un) nunca são somadas entre si.
  */
 export function agregadoDoCronograma(
   linhas: LinhaDoCronograma[]
@@ -233,6 +242,8 @@ export function agregadoDoCronograma(
   let somaPlanejado = 0;
   let linhasPonderadas = 0;
   let semQuantidade = 0;
+  let semPesoFisico = 0;
+  let semMedicao = 0;
   let inicio: IsoDate | null = null;
   let fim: IsoDate | null = null;
 
@@ -241,13 +252,16 @@ export function agregadoDoCronograma(
     if (inicio === null || l.inicio < inicio) inicio = l.inicio;
     if (fim === null || l.fim > fim) fim = l.fim;
 
-    if (l.quantidade == null || l.quantidade <= 0) {
-      semQuantidade += 1;
+    if (l.quantidade == null || l.quantidade <= 0) semQuantidade += 1;
+    if (l.quantidade == null || l.quantidade <= 0) continue;
+    if (l.medicaoConfirmada === false) semMedicao += 1;
+    if (!l.pesoFisicoAprovado || l.pesoFisico == null || l.pesoFisico <= 0) {
+      semPesoFisico += 1;
       continue;
     }
-    peso += l.quantidade;
-    somaReal += l.quantidade * l.pctReal;
-    somaPlanejado += l.quantidade * l.pctPlanejado;
+    peso += l.pesoFisico;
+    somaReal += l.pesoFisico * l.pctReal;
+    somaPlanejado += l.pesoFisico * l.pctPlanejado;
     linhasPonderadas += 1;
   }
 
@@ -261,6 +275,10 @@ export function agregadoDoCronograma(
     contagemPorStatus,
     linhasPonderadas,
     linhasSemQuantidade: semQuantidade,
+    linhasSemPesoFisico: semPesoFisico,
+    linhasSemMedicao: semMedicao,
+    somaPesosFisicos: peso,
+    pesosFisicosAprovados: linhas.length > 0 && semQuantidade === 0 && semPesoFisico === 0 && semMedicao === 0 && Math.abs(peso - 100) <= 0.01,
     totalAtividades: linhas.length,
     inicio,
     fim,

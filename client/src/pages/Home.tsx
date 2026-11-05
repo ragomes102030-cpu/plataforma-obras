@@ -1,4 +1,4 @@
-import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, FileText, LogOut, ArrowRight, ArrowLeft, Ellipsis } from "lucide-react";
+import { Layers3, Plus, Sparkles, X, Trash2, Menu, Home as HomeIcon, ClipboardList, TreePine, ListTodo, BarChart3, GanttChartSquare, Activity, Package, WalletCards, ShieldAlert, Bot, GitBranch, Network, LockKeyhole, Search, FileText, LogOut, ArrowRight, ArrowLeft, Ellipsis } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useRoute } from "wouter";
@@ -21,6 +21,8 @@ import { AbaOrcamento } from "@/components/AbaOrcamento";
 import { PainelPlanejamento } from "@/components/PainelPlanejamento";
 import { PainelDoCronograma } from "@/components/PainelDoCronograma";
 import { VisualizacaoPlanejamento } from "@/components/VisualizacaoPlanejamento";
+import { CronogramaOperacional } from "@/components/CronogramaOperacional";
+import { OrientacaoDeEtapa } from "@/components/OrientacaoDeEtapa";
 import { usarLayoutProfissional } from "@/modules/layout-planejamento";
 import { ABAS, type IdDaAba } from "@/modules/abas";
 import { GRUPOS_DA_SIDEBAR } from "@/modules/navegacao-sidebar";
@@ -536,8 +538,9 @@ function Obra({
 
   const calendario: WorkCalendar = CALENDARIO_CORRIDO;
   const hoje: IsoDate = grade.data?.hoje ?? localIsoDe(new Date());
-  const finsCalculados = Object.fromEntries((grade.data?.linhas ?? []).map(l => [l.codigo, l.fim]));
+  const finsCalculados = Object.fromEntries((grade.data?.linhas ?? []).map(l => [String(l.activityId), l.fim]));
   const linhas: EntradaDaLinha[] = (grade.data?.linhas ?? []).map(l => ({
+    activityId: l.activityId,
     codigo: l.codigo,
     atividade: l.atividade,
     frente: l.frente,
@@ -550,7 +553,6 @@ function Obra({
     marco: l.marco,
   }));
   const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;
-  const idPorCodigo = new Map<string, number>(Object.entries(grade.data?.idsPorCodigo ?? {}));
   const exemploPorCodigo = new Set(Object.keys(grade.data?.exemploPorCodigo ?? {}));
   const definicao = ABAS.find(a => a.id === aba);
 
@@ -562,6 +564,7 @@ function Obra({
     dependencias: <GitBranch size={17} />,
     cpm: <Network size={17} />,
     baseline: <LockKeyhole size={17} />,
+    cronograma: <GanttChartSquare size={17} />,
     gantt: <BarChart3 size={17} />,
     "linha-balanco": <Activity size={17} />,
     producao: <Activity size={17} />,
@@ -578,7 +581,7 @@ function Obra({
   const etapaAtual = ({
     dashboard: "Painel da obra", escopo: "Escopo", eap: "EAP", atividades: "Atividades",
     dependencias: "Dependências", cpm: "CPM / Caminho crítico", baseline: "Baseline",
-    gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Controle",
+    cronograma: "Cronograma Operacional", gantt: "Gantt", "linha-balanco": "Linha de Balanço", producao: "Controle",
     documentos: "Documentos",
     suprimentos: "Suprimentos", financeiro: "Orçamento e Custos", riscos: "Riscos",
     "curva-s": "Curva S", catalogo: "Catálogo de Insumos", comando: "Central de Comando"
@@ -607,7 +610,7 @@ function Obra({
   const atalhosDeCampo: { id: IdDaAba; rotulo: string; icone: ReactNode }[] = [
     { id: "dashboard", rotulo: "Painel", icone: <HomeIcon size={22} aria-hidden="true" /> },
     { id: "producao", rotulo: "Produção", icone: <ClipboardList size={22} aria-hidden="true" /> },
-    { id: "gantt", rotulo: "Gantt", icone: <BarChart3 size={22} aria-hidden="true" /> },
+    { id: "cronograma", rotulo: "Cronograma", icone: <BarChart3 size={22} aria-hidden="true" /> },
     { id: "financeiro", rotulo: "Custos", icone: <WalletCards size={22} aria-hidden="true" /> },
   ];
 
@@ -712,14 +715,20 @@ function Obra({
               </nav>
             )}
             <div className="arquimedes-fluxo-status" aria-live="polite">
-              <div>
-                <span>Próximo passo</span>
-                <strong>{tituloDoFluxo}</strong>
-                <small>{mensagemDoFluxo}</small>
-              </div>
-              <button type="button" onClick={() => irParaAba(destinoDoFluxo)}>
-                Abrir etapa <ArrowRight size={14} aria-hidden="true" />
-              </button>
+              {proximoPasso?.orientacao ? (
+                <OrientacaoDeEtapa orientacao={proximoPasso.orientacao} compacta />
+              ) : (
+                <>
+                  <div>
+                    <span>{baseline.isError ? "Atenção" : "Fluxo liberado"}</span>
+                    <strong>{tituloDoFluxo}</strong>
+                    <small>{mensagemDoFluxo}</small>
+                  </div>
+                  <button type="button" onClick={() => irParaAba(destinoDoFluxo)}>
+                    {baseline.isError ? "Tentar resolver" : "Abrir acompanhamento"} <ArrowRight size={14} aria-hidden="true" />
+                  </button>
+                </>
+              )}
             </div>
             {/* O menu do celular saiu daqui e virou a barra de campo, no fim da
                 pagina: era o unico caminho de navegacao e desaparecia justamente
@@ -727,7 +736,7 @@ function Obra({
           </div>
         )}
         <div className={`arquimedes-content${emWorkspacePlanejamento ? " planejamento-area" : ""}`}>
-        {(aba === "gantt" || aba === "linha-balanco") && (
+        {(aba === "cronograma" || aba === "gantt" || aba === "linha-balanco") && (
           <div className="planejamento-layout-selo" role="note">
             <strong>CRONOGRAMA DA OBRA</strong>
             <span>Interface clássica única. Edite atividades, datas e predecessoras nas abas técnicas; o agente é opcional.</span>
@@ -757,6 +766,8 @@ function Obra({
           <AbaCpm projetoId={projetoId} />
         ) : aba === "baseline" ? (
           <AbaBaseline projetoId={projetoId} />
+        ) : aba === "cronograma" ? (
+          <CronogramaOperacional projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} titulo={obra} codigoObra={codigoObra} localObra={localizacao} finsCalculados={finsCalculados} codigosExemplo={exemploPorCodigo} layoutProfissional={layoutProfissional} />
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} layoutProfissional={layoutProfissional} localObra={localizacao} finsCalculados={finsCalculados} />
         ) : aba === "linha-balanco" ? (

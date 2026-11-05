@@ -1,4 +1,5 @@
 import { findBudgetApprovalBlockers, type BudgetApprovalItem } from "@shared/budget-readiness";
+import { avaliarProntidaoDeAvanco } from "@shared/progress-readiness";
 
 type Item = BudgetApprovalItem & { id: number; quantity: number | string };
 type Atividade = { id: number; budgetItemId: number | null };
@@ -19,16 +20,22 @@ export function avaliarIntegridadeDashboard(input: {
   versaoAtivaAprovada: boolean;
   custoPorAtividade: ReadonlyMap<number, number>;
   lancamentos: readonly Lancamento[];
+  pesosFisicosAprovados?: boolean;
+  erroFisico?: boolean;
+  erroFinanceiro?: boolean;
 }) {
   const ids = new Set(input.atividades.map(a => a.id));
   const itens = new Set(input.itens.map(i => i.id));
-  const orcamentoConfiavel = input.versaoAtivaAprovada && input.itens.length > 0 &&
-    findBudgetApprovalBlockers(input.itens).length === 0 &&
+  const bloqueiosOrcamento = findBudgetApprovalBlockers(input.itens);
+  const orcamentoDidatico = bloqueiosOrcamento.some(item => item.reason === "fonte_didatica");
+  const orcamentoAprovado = input.versaoAtivaAprovada && input.itens.length > 0 &&
+    bloqueiosOrcamento.every(item => item.reason === "fonte_didatica") &&
     input.itens.every(i => Number.isFinite(Number(i.quantity)) && Number(i.quantity) > 0) &&
-    input.atividades.length > 0 && input.atividades.every(a =>
-      a.budgetItemId != null && itens.has(a.budgetItemId) &&
-      (input.custoPorAtividade.get(a.id) ?? 0) > 0
-    );
+    input.atividades.length > 0;
+  const atividadesSemCusto = input.atividades.filter(a =>
+    a.budgetItemId == null || !itens.has(a.budgetItemId) ||
+    (input.custoPorAtividade.get(a.id) ?? 0) <= 0
+  ).length;
   const temProducaoConfirmada = input.lancamentos.some(l => {
     if (l.productionDate instanceof Date && !Number.isFinite(l.productionDate.getTime())) return false;
     const data = l.productionDate instanceof Date
@@ -40,5 +47,18 @@ export function avaliarIntegridadeDashboard(input: {
       dataValida && data <= input.hoje &&
       l.quantity != null && String(l.quantity).trim() !== "" && Number.isFinite(Number(l.quantity)) && Number(l.quantity) >= 0;
   });
-  return { orcamentoConfiavel, temProducaoConfirmada };
+  const prontidao = avaliarProntidaoDeAvanco({
+    pesosFisicosAprovados: input.pesosFisicosAprovados === true,
+    temProducaoConfirmada,
+    orcamentoAprovado,
+    orcamentoDidatico,
+    atividadesSemCusto,
+    erroFisico: input.erroFisico,
+    erroFinanceiro: input.erroFinanceiro,
+  });
+  return {
+    orcamentoConfiavel: prontidao.financeiro === "disponivel",
+    temProducaoConfirmada,
+    prontidao,
+  };
 }

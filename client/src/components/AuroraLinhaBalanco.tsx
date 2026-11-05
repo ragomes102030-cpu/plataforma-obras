@@ -33,6 +33,8 @@ type Props = {
   onAbrirAtividades: () => void;
   dependencias?: VínculoLob[];
   estadoVinculos?: "pronto" | "carregando" | "erro";
+  atividadeSelecionadaId?: number | null;
+  onSelecionarAtividade?: (activityId:number|null)=>void;
 };
 type Escala = "dia" | "semana" | "quinzena" | "mes";
 type Barra = { serie: SerieLob; ponto: PontoLob; cor: string; indice: number };
@@ -78,7 +80,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
 export function LinhaBalancoEscadinha({
   linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],
   editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onDefinirTodosLocais,onCriarUnidade,
-  onAbrirAtividades,dependencias=[],estadoVinculos="carregando"
+  onAbrirAtividades,dependencias=[],estadoVinculos="carregando",atividadeSelecionadaId,onSelecionarAtividade
 }: Props) {
   // O cronograma pode conter serviços reais e atividades de QA em 2028.
   // O modo padrão prioriza o plano real e mantém a simulação isolada.
@@ -153,6 +155,14 @@ export function LinhaBalancoEscadinha({
   // reais. "Período completo" continua disponível, sem deslocar nenhum prazo.
   const [incluirInicioObra, setIncluirInicioObra] = useState<boolean | null>(null);
   const [detalhe, setDetalhe] = useState<Barra | null>(null);
+  React.useEffect(()=>{
+    if(atividadeSelecionadaId===undefined)return;
+    if(atividadeSelecionadaId===null){setDetalhe(null);return;}
+    for(const serie of dados.series){
+      const ponto=serie.pontos.find(item=>item.activityId===atividadeSelecionadaId);
+      if(ponto){setDetalhe({serie,ponto,cor:CORES[dados.series.indexOf(serie)%CORES.length]!,indice:0});return;}
+    }
+  },[atividadeSelecionadaId,dados.series]);
   const [mostrarVinculos, setMostrarVinculos] = useState(false);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
   const rolagem = useRef<HTMLDivElement | null>(null);
@@ -579,7 +589,7 @@ export function LinhaBalancoEscadinha({
                           className="lob-stairs-bar" style={{left:x,top:10+b.indice*23,width:largura,backgroundColor:b.cor}}
                           aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
                           title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
-                          onClick={()=>setDetalhe(b)}>
+                          onClick={()=>{setDetalhe(b);onSelecionarAtividade?.(b.ponto.activityId??null);}}>
                           {b.ponto.quantidade!==null&&b.ponto.quantidade>0&&b.ponto.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,b.ponto.executado/b.ponto.quantidade*100))+"%"}}/>}
                           <span>{largura >= 62 ? nomeCurto : ""}</span>
                         </button>;
@@ -627,7 +637,7 @@ export function LinhaBalancoEscadinha({
                           data-testid="lob-unlocated-bar" style={{left:x,top:9,width:largura}}
                           title={ponto.nome+" | EAP "+ponto.codigo+" | Sem local confirmado | "+formatoCompleto(ponto.inicio)+" a "+formatoCompleto(ponto.fim)}
                           aria-label={ponto.codigo+" · "+ponto.nome+" · local pendente · "+formatoCompleto(ponto.inicio)+" a "+formatoCompleto(ponto.fim)}
-                          onClick={()=>setDetalhe({serie,ponto,cor:"#657d8f",indice:0})}>
+                          onClick={()=>{setDetalhe({serie,ponto,cor:"#657d8f",indice:0});onSelecionarAtividade?.(ponto.activityId??null);}}>
                           {ponto.quantidade!==null&&ponto.quantidade>0&&ponto.executado>0&&
                             <i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,ponto.executado/ponto.quantidade*100))+"%"}}/>}
                           <span>{largura>=52?ponto.codigo:""}</span>
@@ -770,7 +780,7 @@ export function LinhaBalancoEscadinha({
                   <div><dt>Predecessoras cadastradas</dt><dd>{estadoVinculos!=="pronto"?"Indisponíveis":dependencias.filter(v=>v.para===detalhe.ponto.codigo).map(v=>v.de+" ("+v.tipo+")").join(", ")||"Nenhuma"}</dd></div>
                   <div><dt>Sucessoras cadastradas</dt><dd>{estadoVinculos!=="pronto"?"Indisponíveis":dependencias.filter(v=>v.de===detalhe.ponto.codigo).map(v=>v.para+" ("+v.tipo+")").join(", ")||"Nenhuma"}</dd></div>
                 </dl>}
-              {detalhe&&<button type="button" className="lob-stairs-detail-close" onClick={()=>setDetalhe(null)}>Limpar seleção</button>}
+              {detalhe&&<button type="button" className="lob-stairs-detail-close" onClick={()=>{setDetalhe(null);onSelecionarAtividade?.(null);}}>Limpar seleção</button>}
             </section>
           </div>
           {(dados.semLocal>0||dados.descartadas>0)&&<p className="lob-stairs-footnote">{dados.semLocal} atividades sem local físico · {dados.descartadas} marcos ou registros sem duração válida. Não são inventados pavimentos ou prazos.</p>}

@@ -14,6 +14,7 @@ describe("hierarquia da navegação da obra", () => {
     const grupoDe = (id: string) => GRUPOS_DA_SIDEBAR.find(grupo => grupo.ids.includes(id))?.titulo;
     expect(grupoDe("escopo")).toBe("PLANEJAMENTO");
     expect(grupoDe("gantt")).toBe("CRONOGRAMA");
+    expect(grupoDe("cronograma")).toBe("CRONOGRAMA");
     expect(grupoDe("financeiro")).toBe("CUSTOS E FINANÇAS");
     expect(grupoDe("producao")).toBe("EXECUÇÃO E CONTROLE");
     expect(grupoDe("riscos")).toBe("GOVERNANÇA");
