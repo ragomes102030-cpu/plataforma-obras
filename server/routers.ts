@@ -3665,7 +3665,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const activeVersion = (
+        let activeVersion = (
           await db
             .select()
             .from(budgetVersions)
@@ -3674,8 +3674,61 @@ export const appRouter = router({
             .limit(1)
         )[0];
         if (!activeVersion) throw badRequest("Nenhuma versão de orçamento ativa.");
-        if (activeVersion.status === "aprovado" || activeVersion.status === "arquivado")
-          throw badRequest("Versão aprovada/arquivada não aceita reconciliação.");
+        // Versão aprovada/arquivada é imutável. A conciliação, porém, precisa
+        // continuar utilizável no fluxo normal: abre uma revisão rastreável,
+        // copia os itens sem alterar a referência aprovada e aplica as decisões
+        // somente nessa nova versão de trabalho.
+        if (activeVersion.status === "aprovado" || activeVersion.status === "arquivado") {
+          const [revision] = await db
+            .insert(budgetVersions)
+            .values({
+              projectId: input.projectId,
+              name: `${activeVersion.name} — revisão de composições`,
+              versionNumber: activeVersion.versionNumber + 1,
+              status: "rascunho",
+              currency: activeVersion.currency,
+              notes: `Revisão criada a partir da v${activeVersion.versionNumber}. A versão aprovada foi preservada; validar composições e incompatibilidades antes de aprovar.`,
+              createdBy: ctx.user.id,
+            })
+            .returning();
+          const sourceItems = await db
+            .select()
+            .from(budgetItems)
+            .where(eq(budgetItems.budgetVersionId, activeVersion.id))
+            .orderBy(asc(budgetItems.sortOrder), asc(budgetItems.id));
+          const clonedItemIds = new Map<number, number>();
+          if (sourceItems.length) {
+            const cloned = await db.insert(budgetItems).values(
+              sourceItems.map(item => ({
+                budgetVersionId: revision.id,
+                wbsNodeId: item.wbsNodeId,
+                code: item.code,
+                description: item.description,
+                unit: item.unit,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                compositionId: item.compositionId,
+                compositionUnitCost: item.compositionUnitCost,
+                productivity: item.productivity,
+                plannedDurationDays: item.plannedDurationDays,
+                source: item.source,
+                referencePeriod: item.referencePeriod,
+                compositionNote: item.compositionNote,
+                isPriceException: item.isPriceException,
+                sortOrder: item.sortOrder,
+              }))
+            ) .returning({ id: budgetItems.id });
+            sourceItems.forEach((source, index) => {
+              const clone = cloned[index];
+              if (clone) clonedItemIds.set(source.id, clone.id);
+            });
+          }
+          activeVersion = revision;
+          input.decisions = input.decisions.map(decision => ({
+            ...decision,
+            budgetItemId: clonedItemIds.get(decision.budgetItemId) ?? decision.budgetItemId,
+          }));
+        }
         cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
         const itemIds = input.decisions.map(d => d.budgetItemId);
         const existing = await db
