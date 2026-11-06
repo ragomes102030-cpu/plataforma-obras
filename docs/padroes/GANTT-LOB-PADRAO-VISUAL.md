@@ -25,3 +25,7 @@
 - Abrir PR da branch de feature contra `main` para disparar CI. **Nunca gravar diretamente em `develop`: o workflow `sync-develop.yml` sincroniza `develop` automaticamente com `main` após validação e merge.** Não gravar em obra real durante testes.
 
 Este documento registra a regra de interface. A renderização é da Plataforma Obras; os MCPs EAP/Cronograma/Gantt-LOB continuam motores de cálculo stateless nos endpoints públicos.
+
+## Planilha de demonstração
+
+O arquivo de demonstração **Edifício Horizonte 8P** contém 40 barras identificadas e as 62 relações TI registradas na rede. É um retrato exportado: após mudança de datas, deve-se gerar outra saída para manter setas e posições sincronizadas. A Plataforma Obras é a fonte dos cálculos; o Excel não substitui a baseline nem faz gravação de vínculos.
