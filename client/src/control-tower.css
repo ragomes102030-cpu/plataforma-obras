@@ -140,3 +140,4 @@
 @media(prefers-reduced-motion:reduce){.ct *, .ct *:before, .ct *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .ct-readiness-gate{display:flex;justify-content:space-between;gap:20px;align-items:center;margin:0 0 16px;padding:16px 18px;border:1px solid #e1c98f;border-left:4px solid #c88b28;background:#fffaf0}.ct-readiness-gate strong{display:block;margin:4px 0;color:#183e50;font-size:16px}.ct-readiness-gate p{margin:4px 0;color:#5d737d;font-size:12px}.ct-readiness-gate small{color:#4b6570;font-size:11px}@media(max-width:760px){.ct-readiness-gate{display:block}.ct-readiness-gate .ct-button{margin-top:12px}}
+.ct-readiness-gate--planning-ready{border-color:#a9d8c2;border-left-color:#17845b;background:#f3fbf7}.ct-readiness-gate--planning-ready .ct-overline{color:#16704f}

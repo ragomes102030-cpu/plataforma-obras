@@ -25,6 +25,8 @@ export type SnapshotProntidao = {
 export type ResultadoProntidao = {
   etapas: Record<EtapaProntidao, { estado: EstadoProntidao; bloqueios: BloqueioProntidao[] }>;
   primeiraBarreira: BloqueioProntidao | null;
+  /** O planejamento pode ser usado mesmo enquanto o gate financeiro está em revisão. */
+  prontoParaPlanejamento: boolean;
   prontoParaAcompanhamento: boolean;
 };
 
@@ -83,5 +85,16 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   add("execucao", execBloqueios.length ? "incompleto" : "pronto_revisao", execBloqueios);
   const ordem: EtapaProntidao[] = ["escopo", "eap", "orcamento", "atividades", "rede", "cpm", "baseline", "execucao"];
   const primeiraBarreira = ordem.flatMap(etapa => etapas[etapa].bloqueios)[0] ?? null;
-  return { etapas, primeiraBarreira, prontoParaAcompanhamento: !primeiraBarreira };
+  // Orçamento sem composição e baseline ausente impedem controle financeiro/EV,
+  // mas não devem impedir o engenheiro de continuar estruturando o planejamento.
+  // O gate estrutural continua rígido para evitar cronograma sem escopo, EAP,
+  // rede ou CPM coerentes.
+  const gateEstrutural = ["escopo", "eap", "atividades", "rede", "cpm"] as EtapaProntidao[];
+  const prontoParaPlanejamento = gateEstrutural.every(etapa => etapas[etapa].bloqueios.length === 0);
+  return {
+    etapas,
+    primeiraBarreira,
+    prontoParaPlanejamento,
+    prontoParaAcompanhamento: !primeiraBarreira,
+  };
 }
