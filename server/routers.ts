@@ -71,6 +71,7 @@ import {
 } from "./_core/trpc";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
+import { McpClient } from "./integrations/mcp-client";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
   filterAgentRunsByConversation,
@@ -209,7 +210,10 @@ import { invalidateStoredProviderCache } from "./llm-provider-gateway";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
+  createProjectConstructionMcpClients,
+  validateProjectMcpEndpoint,
   CONTROLLED_MUTATION_POLICY,
+  MCP_TOOL_POLICY,
   getConstructionMcpStatus,
   toCentralCommandMcpDomains,
   PROJECT_SCOPED_READ_ONLY_TOOLS,
@@ -679,7 +683,8 @@ function mcpEndpoint(provider: McpProvider) {
     ganttLob: ENV.mcpGanttLobUrl,
   }[provider];
   const normalized = baseUrl.replace(/\/$/, "");
-  return normalized.endsWith("/mcp") ? normalized : `${normalized}/mcp`;
+  if (!normalized) return "";
+  return /\/(?:public-)?mcp$/.test(normalized) ? normalized : `${normalized}/mcp`;
 }
 
 function requestIdFrom(ctx: {
@@ -1053,6 +1058,11 @@ async function buildPhase7PlanForProject(
     }
     return value;
   };
+  // Não importar como dados reais os cálculos stateless dos MCPs públicos.
+  // O caminho antigo /mcp com projeto privado não faz parte desta integração.
+  if (mappings.some(row => row.endpointUrl.endsWith("/public-mcp"))) {
+    throw badRequest("Importação externa indisponível para MCP público stateless; use dados locais versionados da obra.");
+  }
   const eapProjectId = externalProjectId("eap");
   const cronogramaProjectId = externalProjectId("cronograma");
   const [eapResult, activityResult, dependencyResult] = await Promise.all([
@@ -9185,7 +9195,7 @@ export const appRouter = router({
         return mcpProviders.map(provider => {
           const row = rows.find(item => item.provider === provider);
           return row
-            ? { ...row, endpointUrl: mcpEndpoint(provider) }
+            ? { ...row, endpointUrl: row.endpointUrl }
             : {
                 provider,
                 externalProjectId: null,
@@ -9263,9 +9273,15 @@ export const appRouter = router({
             return [provider, value] as const;
           })
         ) as Record<McpProvider, string>;
+        const endpoints = Object.fromEntries(
+          mcpProviders.map(provider => [provider,
+            mappings.find(row => row.provider === provider)?.endpointUrl ?? ""])
+        ) as Record<McpProvider, string>;
+        const clients = createProjectConstructionMcpClients(endpoints);
         const result = await runConstructionMcpHomologation(
           externalProjectIds,
-          requestIdFrom(ctx)
+          requestIdFrom(ctx),
+          clients
         );
         await Promise.all(
           mcpProviders.map(provider => {
@@ -9275,8 +9291,9 @@ export const appRouter = router({
               .set({
                 syncState: server.status === "passed" ? "ready" : "error",
                 lastError: server.error,
-                lastSyncedAt:
-                  server.status === "passed" ? new Date() : undefined,
+                // Homologar transporte NÃO é sincronizar dados da obra.
+                // Preserve lastSyncedAt=NULL até existir uma rotina de sync real.
+                lastSyncedAt: null,
               })
               .where(
                 and(
@@ -9561,9 +9578,14 @@ export const appRouter = router({
           planJson: JSON.stringify(plan),
           startedAt: new Date(),
         });
+        const projectEndpoints = Object.fromEntries(
+          mcpProviders.map(provider => [provider,
+            mappings.find(row => row.provider === provider)?.endpointUrl ?? ""])
+        ) as Record<McpProvider, string>;
         const result = await runConstructionMcpHomologation(
           externalProjectIds,
-          requestId
+          requestId,
+          createProjectConstructionMcpClients(projectEndpoints)
         );
         const allPassed = Object.values(result.servers).every(
           server => server.status === "passed"
@@ -9627,6 +9649,7 @@ export const appRouter = router({
         const [mapping] = await db
           .select({
             externalProjectId: projectMcpIntegrations.externalProjectId,
+            endpointUrl: projectMcpIntegrations.endpointUrl,
           })
           .from(projectMcpIntegrations)
           .where(
@@ -9649,7 +9672,16 @@ export const appRouter = router({
         if (PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName)) {
           args.project_id = externalProjectId;
         }
-        return callReadOnlyMcpTool(input.domain, input.toolName, args);
+        // Nunca enviar chamadas de uma obra para a URL global de outra.
+        if (!mapping?.endpointUrl) throw badRequest("Endpoint MCP da obra não configurado.");
+        const endpoint = validateProjectMcpEndpoint(input.domain, mapping.endpointUrl);
+        const client = new McpClient(endpoint, {
+          name: "plataforma-obras-consulta-publica", timeoutMs: ENV.mcpTimeoutMs,
+        });
+        if (!MCP_TOOL_POLICY.readOnly.has(input.toolName as never)) {
+          throw forbidden("Ferramenta não autorizada para consulta sem escrita.");
+        }
+        return client.callTool(input.toolName, args);
       }),
   }),
 });
