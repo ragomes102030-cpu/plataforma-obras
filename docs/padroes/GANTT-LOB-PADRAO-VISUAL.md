@@ -22,6 +22,6 @@
 
 - Testes: `shared/gantt-padrao-visual.test.ts`, `shared/gantt-dependencias-visuais.test.ts`, `client/src/components/gantt-critico-dependencias-regression.test.ts`, `client/src/components/lob-inicio-obra-regression.test.ts`.
 - Testar em obra QA: nomes em barras longas/curtas, seta FS/SS/FF/SF, 4+ pavimentos, crítico, baseline, zoom, colapso, SVG e LOB.
-- Publicar primeiro na branch `develop`; promover `main` **somente após CI/validação**. Não gravar em obra real durante testes.
+- Abrir PR da branch de feature contra `main` para disparar CI. **Nunca gravar diretamente em `develop`: o workflow `sync-develop.yml` sincroniza `develop` automaticamente com `main` após validação e merge.** Não gravar em obra real durante testes.
 
 Este documento registra a regra de interface. A renderização é da Plataforma Obras; os MCPs EAP/Cronograma/Gantt-LOB continuam motores de cálculo stateless nos endpoints públicos.
