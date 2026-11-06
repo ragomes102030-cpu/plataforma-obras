@@ -15,6 +15,7 @@ describe("motor de prontidão integrada", () => {
     });
     expect(result.etapas.orcamento.estado).toBe("incompleto");
     expect(result.primeiraBarreira?.codigo).toBe("ORCAMENTO_DIDATICO");
+    expect(result.prontoParaPlanejamento).toBe(true);
     expect(result.prontoParaAcompanhamento).toBe(false);
   });
 
