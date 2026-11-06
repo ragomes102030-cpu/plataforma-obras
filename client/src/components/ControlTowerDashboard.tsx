@@ -70,7 +70,6 @@ export function ControlTowerDashboard({
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
-  const readiness = trpc.planning.readiness.useQuery({ projectId: projetoId }, { staleTime: 30_000 });
   const { fisico, prazo, valor, status, selo } = resumo;
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const fecharRef = useRef<HTMLButtonElement>(null);
@@ -161,10 +160,7 @@ export function ControlTowerDashboard({
         <AlertTriangle size={17}/>{erroComplementos ? "Parte das consultas falhou. Os indicadores dependentes dessas fontes podem estar incompletos; não interprete ausência de dado como zero." : "Conferindo orçamento, produção e compromissos; informações complementares ainda estão sendo carregadas."}
       </div>}
 
-      {readiness.data?.primeiraBarreira && <section className="ct-readiness-gate" aria-label="Primeira barreira da obra">
-        <div><span className="ct-overline">GOVERNANÇA DO PLANEJAMENTO</span><strong>{readiness.data.primeiraBarreira.titulo}</strong><p>{readiness.data.primeiraBarreira.explicacao}</p><small><b>Como resolver:</b> {readiness.data.primeiraBarreira.comoResolver}</small></div>
-        <button type="button" className="ct-button" onClick={() => abrirAba(readiness.data?.primeiraBarreira?.impacta[0] === "orcamento" ? "financeiro" : readiness.data?.primeiraBarreira?.impacta[0] === "cpm" ? "cpm" : readiness.data?.primeiraBarreira?.impacta[0] === "baseline" ? "baseline" : readiness.data?.primeiraBarreira?.impacta[0] === "eap" ? "eap" : "escopo")}>Abrir etapa responsável <ArrowRight size={15}/></button>
-      </section>}
+      {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={abrirAba} />}
 
       <section className={"ct-hero ct-hero-" + corStatus} aria-label="Resumo do desempenho">
         <div className="ct-hero-main">
@@ -242,4 +238,15 @@ export function ControlTowerDashboard({
       </div>}
     </div>
   );
+}
+
+function ReadinessGate({ projetoId, abrirAba }: { projetoId: number; abrirAba: (aba: string) => void }) {
+  const readiness = trpc.planning.readiness.useQuery({ projectId: projetoId }, { staleTime: 30_000 });
+  const barrier = readiness.data?.primeiraBarreira;
+  if (!barrier) return null;
+  const aba = barrier.impacta[0] === "orcamento" ? "financeiro" : barrier.impacta[0] === "cpm" ? "cpm" : barrier.impacta[0] === "baseline" ? "baseline" : barrier.impacta[0] === "eap" ? "eap" : "escopo";
+  return <section className="ct-readiness-gate" aria-label="Primeira barreira da obra">
+    <div><span className="ct-overline">GOVERNANÇA DO PLANEJAMENTO</span><strong>{barrier.titulo}</strong><p>{barrier.explicacao}</p><small><b>Como resolver:</b> {barrier.comoResolver}</small></div>
+    <button type="button" className="ct-button" onClick={() => abrirAba(aba)}>Abrir etapa responsável <ArrowRight size={15}/></button>
+  </section>;
 }
