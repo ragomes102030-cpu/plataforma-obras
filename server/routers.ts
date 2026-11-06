@@ -72,6 +72,7 @@ import {
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
 import { McpClient } from "./integrations/mcp-client";
+import { auditApprovedSnapshot, type ApprovedSnapshot } from "./integrations/approved-plan-audit";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
   filterAgentRunsByConversation,
@@ -9173,6 +9174,47 @@ export const appRouter = router({
       }),
   }),
 
+async function approvedSnapshotForMcpAudit(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>, projectId: number
+): Promise<ApprovedSnapshot> {
+  // Usar SOMENTE a última versão aprovada da própria obra, nunca misturar rascunhos.
+  const [version] = await db.select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, projectId),
+      eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
+  if (!version) throw badRequest("Homologação exige versão do plano aprovada.");
+  const scope = and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, version.id));
+  const taskScope = and(eq(scheduleActivities.projectId, projectId),
+    eq(scheduleActivities.versionId, version.id));
+  const depScope = and(eq(scheduleDependencies.projectId, projectId),
+    eq(scheduleDependencies.versionId, version.id));
+  const lobScope = and(eq(lobActivityLocations.projectId, projectId),
+    eq(lobActivityLocations.versionId, version.id));
+  const [nodes, activities, dependencies, lobRows] = await Promise.all([
+    db.select({ id:wbsNodes.id, code:wbsNodes.code, parentId:wbsNodes.parentId,
+      level:wbsNodes.level }).from(wbsNodes).where(scope),
+    db.select({ id:scheduleActivities.id, durationDays:scheduleActivities.durationDays,
+      earlyStart:scheduleActivities.earlyStart, earlyFinish:scheduleActivities.earlyFinish,
+      lateStart:scheduleActivities.lateStart, lateFinish:scheduleActivities.lateFinish,
+      totalFloat:scheduleActivities.totalFloat, freeFloat:scheduleActivities.freeFloat,
+      critical:scheduleActivities.critical }).from(scheduleActivities).where(taskScope),
+    db.select({ predecessorId:scheduleDependencies.predecessorId,
+      successorId:scheduleDependencies.successorId, type:scheduleDependencies.type,
+      lag:scheduleDependencies.lag }).from(scheduleDependencies).where(depScope),
+    db.select({ id:lobActivityLocations.id }).from(lobActivityLocations).where(lobScope),
+  ]);
+  const activityIds = activities.map(a=>a.id);
+  const allocations = activityIds.length ? await db.select({
+    activityId: activityResourceAllocations.activityId,
+  }).from(activityResourceAllocations)
+    .where(inArray(activityResourceAllocations.activityId, activityIds)) : [];
+  return {
+    nodes, activities, dependencies, lobRows: lobRows.length,
+    activitiesWithResourceAllocations: new Set(allocations.map(a=>a.activityId)).size,
+  };
+}
+
   integrations: router({
     projectMappings: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -9283,14 +9325,27 @@ export const appRouter = router({
           requestIdFrom(ctx),
           clients
         );
+        // Smoke de conexão nunca é suficiente: comparar dados da versão aprovada.
+        const snapshot = await approvedSnapshotForMcpAudit(db, input.projectId);
+        const audit = await auditApprovedSnapshot(snapshot, clients);
         await Promise.all(
           mcpProviders.map(provider => {
             const server = result.servers[provider];
+            const mathematicallyApproved = provider === "eap"
+              ? audit.eap.status === "passed"
+              : provider === "cronograma" ? audit.cpm.status === "passed" : false;
+            const ready = server.status === "passed" && mathematicallyApproved;
+            const detail = provider === "eap" ? audit.eap.errors.join("; ")
+              : provider === "cronograma" ? audit.cpm.error ??
+                (audit.cpm.differences.length ?
+                  `Divergências CPM: ${audit.cpm.differences.length} atividades` : "")
+                : audit.lob.reason;
             return db
               .update(projectMcpIntegrations)
               .set({
-                syncState: server.status === "passed" ? "ready" : "error",
-                lastError: server.error,
+                syncState: ready ? "ready" :
+                  server.status === "failed" ? "error" : "pending",
+                lastError: server.error ?? (ready ? null : detail),
                 // Homologar transporte NÃO é sincronizar dados da obra.
                 // Preserve lastSyncedAt=NULL até existir uma rotina de sync real.
                 lastSyncedAt: null,
@@ -9303,7 +9358,7 @@ export const appRouter = router({
               );
           })
         );
-        return result;
+        return { ...result, approvedPlanAudit: audit };
       }),
     phase7PreviewImport: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
