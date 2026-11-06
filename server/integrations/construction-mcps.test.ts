@@ -8,6 +8,7 @@ import {
   createConstructionMcpClients,
   createProjectConstructionMcpClients,
   validateProjectMcpEndpoint,
+  isPublicMcpUrl,
   runConstructionMcpHomologation,
   getConstructionMcpStatus,
   MCP_TOOL_POLICY,
@@ -147,6 +148,12 @@ describe("Aurora — endpoints públicos isolados por obra", () => {
     cronograma: "https://arquimedes-mcp-cronograma.vercel.app/public-mcp",
     ganttLob: "https://arquimedes-mcp-gantt-lob.vercel.app/public-mcp",
   };
+
+  it("não envia credenciais privadas a MCPs públicos", () => {
+    expect(isPublicMcpUrl("https://arquimedes-mcp-eap.vercel.app/public-mcp")).toBe(true);
+    expect(isPublicMcpUrl("https://arquimedes-mcp-eap.vercel.app/public-mcp/")).toBe(true);
+    expect(isPublicMcpUrl("https://mcp-eap-server.onrender.com/mcp")).toBe(false);
+  });
 
   it("aceita exclusivamente /public-mcp no host oficial de cada domínio", () => {
     const clients = createProjectConstructionMcpClients(allowed);
