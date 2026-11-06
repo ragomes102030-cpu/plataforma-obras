@@ -217,83 +217,55 @@ describe("getConstructionMcpStatus", () => {
 });
 
 describe("runConstructionMcpHomologation", () => {
-  it("executa uma consulta permitida por domínio com o ID correto", async () => {
-    const calls: Array<{ domain: string; name: string; args: unknown }> = [];
-    const result = await runConstructionMcpHomologation(
-      {
-        eap: "eap-123",
-        cronograma: "cronograma-456",
-        ganttLob: "lob-789",
-      },
-      "req-homologation-1",
-      {
-        eap: {
-          listTools: async () => [{ name: "get_eap_tree" }],
-          callTool: async (name, args) => {
-            calls.push({ domain: "eap", name, args });
-            return { content: [{ type: "text", text: "EAP OK" }] };
-          },
-        },
-        cronograma: {
-          listTools: async () => [{ name: "listar_atividades" }],
-          callTool: async (name, args) => {
-            calls.push({ domain: "cronograma", name, args });
-            return { structuredContent: { activities: 3 } };
-          },
-        },
-        ganttLob: {
-          listTools: async () => [{ name: "listar_temas" }],
-          callTool: async (name, args) => {
-            calls.push({ domain: "ganttLob", name, args });
-            return { content: [{ type: "text", text: "LOB OK" }] };
-          },
-        },
-      }
-    );
-
-    expect(result.readOnly).toBe(true);
-    expect(Object.values(result.servers).every(item => item.status === "passed")).toBe(
-      true
-    );
-    expect(calls).toEqual([
-      { domain: "eap", name: "get_eap_tree", args: { project_id: "eap-123" } },
-      {
-        domain: "cronograma",
-        name: "listar_atividades",
-        args: { project_id: "cronograma-456" },
-      },
-      { domain: "ganttLob", name: "listar_temas", args: {} },
-    ]);
-  });
-});
-describe("homologação dos MCPs públicos reais", () => {
-  it("usa dados sintéticos e não exige project_id externo", async () => {
-    const calls: Array<{ domain: string; name: string; args: Record<string, unknown> }> = [];
-    const tool = (name: string) => ({ name });
-    const mk = (domain: string, names: string[]) => ({
-      listTools: async () => names.map(tool),
-      callTool: async (name: string, args: Record<string, unknown>) => {
-        calls.push({ domain, name, args });
-        return { content: [{ type: "text", text: JSON.stringify({ persistido: false }) }] };
+  it("testa três MCPs públicos com provas stateless e sem buscar project_id", async () => {
+    const calls: Array<{ domain:string; name:string; args:Record<string,unknown> }> = [];
+    const make = (domain:string,name:string,result:object) => ({
+      listTools: async () => [{name}],
+      callTool: async (tool:string,args:Record<string,unknown>) => {
+        calls.push({domain,name:tool,args});
+        return { content:[{type:"text",text:JSON.stringify(result)}] };
       },
     });
-    const response = await runConstructionMcpHomologation(
-      { eap: "nao-usado-eap", cronograma: "nao-usado-cron", ganttLob: "nao-usado-lob" },
-      "req-public-qa",
+    const result = await runConstructionMcpHomologation(
+      {eap:"eap-123", cronograma:"cronograma-456", ganttLob:"lob-789"},
+      "req-homologation-1",
       {
-        eap: mk("eap", ["validar_estrutura_eap"]),
-        cronograma: mk("cronograma", ["calcular_duracao_com_evidencia"]),
-        ganttLob: mk("ganttLob", ["listar_temas"]),
+        eap:make("eap","validar_estrutura_eap",
+          {ok:true,total_nos:3,erros:[],persistido:false}),
+        cronograma:make("cronograma","calcular_cpm_com_evidencia",
+          {valid:true,persistido:false,duracao_projeto_dias:5}),
+        ganttLob:make("ganttLob","calcular_lob_com_vinculos",
+          {total_tarefas:2,persistido:false}),
       }
     );
-    expect(Object.values(response.servers).every(s => s.status === "passed")).toBe(true);
-    expect(calls).toEqual([
-      { domain: "eap", name: "validar_estrutura_eap", args: { nos: [] } },
-      { domain: "cronograma", name: "calcular_duracao_com_evidencia",
-        args: { quantidade: 10, produtividade: 2, unidade: "m²",
-          unidade_produtividade: "m²/dia", fonte: "homologacao_sintetica_sem_persistencia" } },
-      { domain: "ganttLob", name: "listar_temas", args: {} },
+    expect(result.readOnly).toBe(true);
+    expect(Object.values(result.servers).every(item=>item.status==="passed")).toBe(true);
+    expect(calls.map(x=>x.name)).toEqual([
+      "validar_estrutura_eap","calcular_cpm_com_evidencia","calcular_lob_com_vinculos",
     ]);
+    expect(JSON.stringify(calls)).not.toContain("project_id");
+    expect((calls[0].args.nos as unknown[]).length).toBe(3);
+    expect((calls[1].args.dependencias as Array<{tipo:string}>)[0].tipo).toBe("FS");
+    expect((calls[2].args.dependencias as Array<{tipo:string}>)[0].tipo).toBe("FS");
+  });
+});
+
+describe("homologação dos MCPs públicos reais", () => {
+  it("não interpreta ausência de persistido:false como sucesso", async () => {
+    const mk = (name:string) => ({
+      listTools: async () => [{name}],
+      callTool: async () => ({content:[{type:"text",text:JSON.stringify({valid:true})}]}),
+    });
+    const response = await runConstructionMcpHomologation(
+      {eap:"QA",cronograma:"QA",ganttLob:"QA"}, "req-negative",
+      {
+        eap:mk("validar_estrutura_eap"),
+        cronograma:mk("calcular_cpm_com_evidencia"),
+        ganttLob:mk("calcular_lob_com_vinculos"),
+      }
+    );
+    expect(Object.values(response.servers).every(s=>s.status==="failed")).toBe(true);
+    expect(response.readOnly).toBe(true);
   });
 });
 
