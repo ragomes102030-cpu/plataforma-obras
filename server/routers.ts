@@ -1308,6 +1308,47 @@ function anoFinalCalendarioCpm(
   return anoFinal;
 }
 
+async function approvedSnapshotForMcpAudit(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>, projectId: number
+): Promise<ApprovedSnapshot> {
+  // Usar SOMENTE a última versão aprovada da própria obra, nunca misturar rascunhos.
+  const [version] = await db.select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, projectId),
+      eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
+  if (!version) throw badRequest("Homologação exige versão do plano aprovada.");
+  const scope = and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, version.id));
+  const taskScope = and(eq(scheduleActivities.projectId, projectId),
+    eq(scheduleActivities.versionId, version.id));
+  const depScope = and(eq(scheduleDependencies.projectId, projectId),
+    eq(scheduleDependencies.versionId, version.id));
+  const lobScope = and(eq(lobActivityLocations.projectId, projectId),
+    eq(lobActivityLocations.versionId, version.id));
+  const [nodes, activities, dependencies, lobRows] = await Promise.all([
+    db.select({ id:wbsNodes.id, code:wbsNodes.code, parentId:wbsNodes.parentId,
+      level:wbsNodes.level }).from(wbsNodes).where(scope),
+    db.select({ id:scheduleActivities.id, durationDays:scheduleActivities.durationDays,
+      earlyStart:scheduleActivities.earlyStart, earlyFinish:scheduleActivities.earlyFinish,
+      lateStart:scheduleActivities.lateStart, lateFinish:scheduleActivities.lateFinish,
+      totalFloat:scheduleActivities.totalFloat, freeFloat:scheduleActivities.freeFloat,
+      critical:scheduleActivities.critical }).from(scheduleActivities).where(taskScope),
+    db.select({ predecessorId:scheduleDependencies.predecessorId,
+      successorId:scheduleDependencies.successorId, type:scheduleDependencies.type,
+      lag:scheduleDependencies.lag }).from(scheduleDependencies).where(depScope),
+    db.select({ id:lobActivityLocations.id }).from(lobActivityLocations).where(lobScope),
+  ]);
+  const activityIds = activities.map(a=>a.id);
+  const allocations = activityIds.length ? await db.select({
+    activityId: activityResourceAllocations.activityId,
+  }).from(activityResourceAllocations)
+    .where(inArray(activityResourceAllocations.activityId, activityIds)) : [];
+  return {
+    nodes, activities, dependencies, lobRows: lobRows.length,
+    activitiesWithResourceAllocations: new Set(allocations.map(a=>a.activityId)).size,
+  };
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -9173,47 +9214,6 @@ export const appRouter = router({
         return { id: input.documentId, removido: true };
       }),
   }),
-
-async function approvedSnapshotForMcpAudit(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>, projectId: number
-): Promise<ApprovedSnapshot> {
-  // Usar SOMENTE a última versão aprovada da própria obra, nunca misturar rascunhos.
-  const [version] = await db.select({ id: projectPlanVersions.id })
-    .from(projectPlanVersions)
-    .where(and(eq(projectPlanVersions.projectId, projectId),
-      eq(projectPlanVersions.status, "approved")))
-    .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
-  if (!version) throw badRequest("Homologação exige versão do plano aprovada.");
-  const scope = and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, version.id));
-  const taskScope = and(eq(scheduleActivities.projectId, projectId),
-    eq(scheduleActivities.versionId, version.id));
-  const depScope = and(eq(scheduleDependencies.projectId, projectId),
-    eq(scheduleDependencies.versionId, version.id));
-  const lobScope = and(eq(lobActivityLocations.projectId, projectId),
-    eq(lobActivityLocations.versionId, version.id));
-  const [nodes, activities, dependencies, lobRows] = await Promise.all([
-    db.select({ id:wbsNodes.id, code:wbsNodes.code, parentId:wbsNodes.parentId,
-      level:wbsNodes.level }).from(wbsNodes).where(scope),
-    db.select({ id:scheduleActivities.id, durationDays:scheduleActivities.durationDays,
-      earlyStart:scheduleActivities.earlyStart, earlyFinish:scheduleActivities.earlyFinish,
-      lateStart:scheduleActivities.lateStart, lateFinish:scheduleActivities.lateFinish,
-      totalFloat:scheduleActivities.totalFloat, freeFloat:scheduleActivities.freeFloat,
-      critical:scheduleActivities.critical }).from(scheduleActivities).where(taskScope),
-    db.select({ predecessorId:scheduleDependencies.predecessorId,
-      successorId:scheduleDependencies.successorId, type:scheduleDependencies.type,
-      lag:scheduleDependencies.lag }).from(scheduleDependencies).where(depScope),
-    db.select({ id:lobActivityLocations.id }).from(lobActivityLocations).where(lobScope),
-  ]);
-  const activityIds = activities.map(a=>a.id);
-  const allocations = activityIds.length ? await db.select({
-    activityId: activityResourceAllocations.activityId,
-  }).from(activityResourceAllocations)
-    .where(inArray(activityResourceAllocations.activityId, activityIds)) : [];
-  return {
-    nodes, activities, dependencies, lobRows: lobRows.length,
-    activitiesWithResourceAllocations: new Set(allocations.map(a=>a.activityId)).size,
-  };
-}
 
   integrations: router({
     projectMappings: protectedProcedure
