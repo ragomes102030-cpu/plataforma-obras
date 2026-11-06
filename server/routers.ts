@@ -3483,12 +3483,6 @@ export const appRouter = router({
               project.baseReferenciaRef === null ||
               row.referencePeriod === project.baseReferenciaRef
           ) ?? seinfraCatalogs[0];
-        const baseItems = activeCatalog
-          ? await db
-              .select()
-              .from(priceItems)
-              .where(eq(priceItems.catalogId, activeCatalog.id))
-          : [];
         const baseCompositions = await db
           .select()
           .from(serviceCompositions)
@@ -3509,24 +3503,19 @@ export const appRouter = router({
               Number(component.coefficient) * Number(component.unitPriceSnapshot)
           );
         }
-        const records: ComparableRecord[] = [
-          ...baseItems.map(row => ({
-            kind: "priceItem" as const,
-            id: row.id,
-            code: row.code,
-            description: row.description,
-            unit: row.unit,
-            unitPrice: Number(row.unitPrice),
-          })),
-          ...baseCompositions.map(row => ({
+        // Para aprovação financeira, insumo simples não é composição de serviço.
+        // Antes ele aparecia como match válido e podia dar a impressão de que o
+        // item estava rastreado, embora `compositionId` continuasse vazio.
+        // Mantemos a busca restrita a serviços compostos; itens sem composição
+        // oficial permanecem pendentes para revisão, sem custo inventado.
+        const records: ComparableRecord[] = baseCompositions.map(row => ({
             kind: "composition" as const,
             id: row.id,
             code: row.code,
             description: row.description,
             unit: row.unit,
             unitPrice: compositionPriceById.get(row.id) ?? 0,
-          })),
-        ];
+          }));
         // A base oficial grande torna a busca fuzzy O(obra x catálogo) muito
         // cara. Unidade é uma restrição de engenharia segura: não comparamos
         // m² com m³, vb ou un. Mantemos fallback para a base completa quando
