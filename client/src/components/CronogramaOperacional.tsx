@@ -58,10 +58,23 @@ export function CronogramaOperacional({projetoId,linhas,inicioObra,hoje,titulo,c
   const abrirAba=useCallback((aba:string)=>window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba}})),[]);
   const fecharInspetor=useCallback(()=>atualizar({atividadeSelecionadaId:null}),[atualizar]);
   const linhaBaseline=selecionada?baseline.data?.linhas.find(item=>item.atividadeId===selecionada.activityId)??null:null;
+  const resumoOperacional=useMemo(()=>({
+    atrasadas:operacionais.filter(item=>item.atrasada).length,
+    bloqueadas:operacionais.filter(item=>item.bloqueada===true).length,
+    criticas:operacionais.filter(item=>item.critica).length,
+    semLocal:operacionais.filter(item=>!item.pavimento).length,
+  }),[operacionais]);
+  const descricaoModo=estado.modo==="cronograma"
+    ? "Lista operacional para decidir o que começa, termina e exige atenção."
+    : estado.modo==="fluxo"
+      ? "Leitura por local e frente para conferir ritmo e transferência entre unidades."
+      : "Rede de precedências para explicar bloqueios e o caminho de execução.";
   return <section className="cronograma-operacional" aria-labelledby="cronograma-titulo">
     <header className="cronograma-operacional-topo"><div><small>PLANEJAMENTO INTEGRADO</small><h1 id="cronograma-titulo">Cronograma operacional</h1><p>Selecione uma atividade para conferir datas, rede, local, medição e evidências no mesmo fluxo.</p></div><div className="cronograma-modos" role="tablist" aria-label="Modo do cronograma">
       {modos.map(modo=><button key={modo} type="button" role="tab" aria-selected={estado.modo===modo} className={estado.modo===modo?"ativo":""} onClick={()=>atualizar({modo})}>{modo==="cronograma"?<GanttChartSquare size={16}/>:modo==="fluxo"?<Activity size={16}/>:<GitBranch size={16}/>}{rotuloModo[modo]}</button>)}
     </div></header>
+    <div className="cronograma-modo-explicacao"><strong>{rotuloModo[estado.modo]}:</strong><span>{descricaoModo}</span></div>
+    <div className="cronograma-resumo" aria-label="Resumo do cronograma"><div><small>ATIVIDADES</small><b>{operacionais.length}</b></div><div><small>ATRASADAS</small><b className={resumoOperacional.atrasadas?"alerta":""}>{resumoOperacional.atrasadas}</b></div><div><small>BLOQUEADAS</small><b className={resumoOperacional.bloqueadas?"alerta":""}>{resumoOperacional.bloqueadas}</b></div><div><small>SEM LOCAL</small><b className={resumoOperacional.semLocal?"alerta":""}>{resumoOperacional.semLocal}</b></div><div><small>CRÍTICAS</small><b>{resumoOperacional.criticas}</b></div></div>
     <div className="cronograma-controles"><label className="cronograma-busca"><span>Pesquisar atividade</span><div><Search size={15}/><input value={estado.busca} onChange={e=>atualizar({busca:e.target.value})} placeholder="Código, serviço ou local"/></div></label><label><span>Filtrar</span><select value={estado.filtro} onChange={e=>atualizar({filtro:e.target.value as EstadoCronogramaOperacional["filtro"]})}>{filtros.map(([valor,rotulo])=><option key={valor} value={valor}>{rotulo}</option>)}</select></label><strong aria-live="polite">{visiveis.length} de {operacionais.length} atividades</strong></div>
     <div className="cronograma-grade" role="region" aria-label="Atividades do cronograma" tabIndex={0}>
       <div className="cronograma-grade-cab"><span>Atividade</span><span>Local</span><span>Início</span><span>Término</span><span>Situação</span></div>
