@@ -204,7 +204,7 @@ describe("Aurora — endpoints públicos isolados por obra", () => {
     };
     const ok = {
       listTools: async () => [{name: "calcular_cpm_com_evidencia"}],
-      callTool: async () => ({content:[{type:"text", text: JSON.stringify({valid:true})}]}),
+      callTool: async () => ({content:[{type:"text", text: JSON.stringify({valid:true,persistido:false})}]}),
     };
     const result = await runConstructionMcpHomologation({eap:"QA",cronograma:"QA",ganttLob:"QA"}, "qa-failure", {
       eap:failed, cronograma:ok, ganttLob:{...ok,listTools:async()=>[{name:"calcular_lob_com_vinculos"}]},
