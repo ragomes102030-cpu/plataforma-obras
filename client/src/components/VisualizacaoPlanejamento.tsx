@@ -1174,18 +1174,22 @@ function Gantt({
                           title={descricao}
                         >
                           {no.progresso > 0 && <i className="pg-barra-avanco" style={{ width: `${no.progresso}%` }} />}
-                          {larguraBarra >= 52 && <span className="pg-barra-texto">{Math.round(no.progresso)}%</span>}
+                          {rotulos && larguraBarra >= 106 && (
+                            <span className="pg-barra-texto pg-barra-nome" data-testid="gantt-bar-service-label" title={no.nome}>
+                              {no.nome}
+                            </span>
+                          )}
+                          {!rotulos && larguraBarra >= 52 && <span className="pg-barra-texto">{Math.round(no.progresso)}%</span>}
                         </div>
                         {larguraBarra < 18 && (
                           <span className="pg-barra-dias" style={{ left: inicioBarra + larguraBarra + 4 }}>{no.duracao}d</span>
                         )}
                       </>
                     )}
-                    {rotulos &&
+                    {rotulos && (resumo || marco || larguraBarra < 106) &&
                       (() => {
-                        // Rótulo fora da barra só entra se houver espaço; se não
-                        // couber o nome inteiro, encurta o código ou some — do
-                        // mesmo jeito que o Project evita sobreposição.
+                        // MS Project / Primavera: texto completo dentro de barras largas,
+                        // e à direita nas curtas. Nunca sobrepor a barra vizinha.
                         const sobra = larguraDoTempo - fimVisual - 8;
                         if (sobra < 30) return null;
                         const curto = sobra < 96;
