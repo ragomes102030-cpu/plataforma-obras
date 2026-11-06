@@ -63,6 +63,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const redeBloqueios: BloqueioProntidao[] = [];
   if (!rede?.totalAtividades) redeBloqueios.push(bloqueio("REDE_AUSENTE", "Rede de precedências ausente", "O cronograma não possui atividades suficientes para formar uma rede.", "Cadastre atividades e suas relações dentro da mesma obra.", ["rede", "cpm"], "critica"));
   if (rede?.ciclos) redeBloqueios.push(bloqueio("REDE_COM_CICLO", "Rede contém ciclo", `${rede.ciclos} ciclo(s) impedem o cálculo determinístico.`, "Remova a relação que fecha o ciclo e recalcule a rede.", ["rede", "cpm"], "critica"));
+  if (rede?.semPredecessora && rede.totalAtividades > 1) redeBloqueios.push(bloqueio("REDE_SEM_PREDECESSORA", "Atividades sem predecessora", `${rede.semPredecessora} atividade(s) começam sem uma relação de entrada.`, "Defina predecessoras para as atividades que dependem de outra etapa; mantenha apenas o marco inicial sem predecessora.", ["rede", "cpm"], "alta"));
   add("rede", redeBloqueios.length ? "bloqueado" : "pronto_revisao", redeBloqueios);
 
   const cpm = snapshot.cpm;
@@ -78,6 +79,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const execucao = snapshot.execucao;
   const execBloqueios: BloqueioProntidao[] = [];
   if (!execucao?.medicoes) execBloqueios.push(bloqueio("MEDICAO_AUSENTE", "Execução sem medições", "Não há registros confirmados para comparar planejado e realizado.", "Registre medições com quantidade, unidade, data e evidência na aba Controle.", ["execucao"], "media"));
+  else if (!execucao.comUnidade) execBloqueios.push(bloqueio("MEDICAO_SEM_ITENS", "Medições sem itens", "Há documentos de medição, mas nenhum item quantitativo vinculado.", "Abra cada medição, vincule os itens do orçamento e informe quantidade e unidade antes de acompanhar o avanço.", ["execucao"], "alta"));
   add("execucao", execBloqueios.length ? "incompleto" : "pronto_revisao", execBloqueios);
   const ordem: EtapaProntidao[] = ["escopo", "eap", "orcamento", "atividades", "rede", "cpm", "baseline", "execucao"];
   const primeiraBarreira = ordem.flatMap(etapa => etapas[etapa].bloqueios)[0] ?? null;

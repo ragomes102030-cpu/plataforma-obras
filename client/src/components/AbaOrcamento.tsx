@@ -4,6 +4,7 @@ import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
 import { PainelMedicao } from "./PainelMedicao";
+import { ReadinessGate } from "./ReadinessGate";
 
 type Props = {
   projetoId: number;
@@ -89,6 +90,7 @@ export function AbaOrcamento({ projetoId }: Props) {
 
   return (
     <div className="xl-painel">
+      {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={aba => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }))} />}
       <div className="orcamento-hero">
         <div className="orcamento-hero-copy">
           <span className="xl-painel-kicker">CENTRAL DE CUSTOS · ETAPA DE VALIDAÇÃO</span>

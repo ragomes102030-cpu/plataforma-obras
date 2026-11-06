@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { revalidarPlanejamentoDaObra } from "@/lib/revalidar-planejamento";
 import { selectOperationalPlanning } from "@shared/operational-planning";
 import { PainelDesviosBaseline } from "./PainelDesviosBaseline";
+import { ReadinessGate } from "./ReadinessGate";
 
 type Props = { projetoId: number };
 
@@ -132,6 +133,7 @@ export function AbaBaseline({ projetoId }: Props) {
 
   return (
     <section className="pl-planejamento-panel">
+      {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={aba => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }))} />}
       <header className="pl-planejamento-head">
         <div>
           <div className="pl-planejamento-kicker"><LockKeyhole size={13} /> BASELINE DO CRONOGRAMA</div>

@@ -7,6 +7,7 @@ import {estadoCronogramaDaQuery,estadoCronogramaNaQuery,selecionarLinhasOperacio
 import {VisualizacaoPlanejamento} from "./VisualizacaoPlanejamento";
 import {AbaDependencias} from "./AbaDependencias";
 import {InspetorAtividade} from "./InspetorAtividade";
+import {ReadinessGate} from "./ReadinessGate";
 
 type Props={projetoId:number;linhas:EntradaDaLinha[];inicioObra:IsoDate|null;hoje:IsoDate;titulo?:string;codigoObra?:string|null;localObra?:string|null;finsCalculados:Record<string,string>;codigosExemplo?:ReadonlySet<string>;layoutProfissional?:boolean};
 const modos = ["cronograma","fluxo","rede"] as const;
@@ -70,6 +71,7 @@ export function CronogramaOperacional({projetoId,linhas,inicioObra,hoje,titulo,c
       ? "Leitura por local e frente para conferir ritmo e transferência entre unidades."
       : "Rede de precedências para explicar bloqueios e o caminho de execução.";
   return <section className="cronograma-operacional" aria-labelledby="cronograma-titulo">
+    {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={abrirAba} />}
     <header className="cronograma-operacional-topo"><div><small>PLANEJAMENTO INTEGRADO</small><h1 id="cronograma-titulo">Cronograma operacional</h1><p>Selecione uma atividade para conferir datas, rede, local, medição e evidências no mesmo fluxo.</p></div><div className="cronograma-modos" role="tablist" aria-label="Modo do cronograma">
       {modos.map(modo=><button key={modo} type="button" role="tab" aria-selected={estado.modo===modo} className={estado.modo===modo?"ativo":""} onClick={()=>atualizar({modo})}>{modo==="cronograma"?<GanttChartSquare size={16}/>:modo==="fluxo"?<Activity size={16}/>:<GitBranch size={16}/>}{rotuloModo[modo]}</button>)}
     </div></header>
