@@ -52,6 +52,7 @@ import { seinfraAdapter, lerPrimeiraAba, reconhecerPlanilhaSeinfra } from "@shar
 import {
   exceedsPriceThreshold,
   findCandidates,
+  normalizeForMatch,
   priceVariation,
   type ComparableRecord,
 } from "@shared/price-sources/matching";
@@ -3525,14 +3526,27 @@ export const appRouter = router({
             unitPrice: compositionPriceById.get(row.id) ?? 0,
           })),
         ];
+        // A base oficial grande torna a busca fuzzy O(obra x catálogo) muito
+        // cara. Unidade é uma restrição de engenharia segura: não comparamos
+        // m² com m³, vb ou un. Mantemos fallback para a base completa quando
+        // a unidade do item não estiver normalizada no catálogo.
+        const recordsByUnit = new Map<string, ComparableRecord[]>();
+        for (const record of records) {
+          const key = normalizeForMatch(record.unit);
+          const bucket = recordsByUnit.get(key) ?? [];
+          bucket.push(record);
+          recordsByUnit.set(key, bucket);
+        }
         const preview = items.map(item => {
           const manualPrice = Number(item.unitPrice);
           const codeCandidates = records.filter(
             record => record.code === item.code
           );
+          const unitRecords = recordsByUnit.get(normalizeForMatch(item.unit));
+          const searchRecords = unitRecords?.length ? unitRecords : records;
           const scored = [
             ...codeCandidates.map(record => ({ ...record, score: 1 })),
-            ...findCandidates(item.description, records, {
+            ...findCandidates(item.description, searchRecords, {
               minScore: input.minScore,
               limit: 3,
             }).filter(
