@@ -522,6 +522,7 @@ export async function runConstructionMcpHomologation(
         let data: Record<string, unknown> | null = null;
         try { data = raw ? JSON.parse(raw) as Record<string, unknown> : null; } catch { /* tools podem retornar texto simples */ }
         if (result.isError === true || data?.ok === false || data?.valid === false ||
+            data?.persistido !== false ||
             (data && Array.isArray(data.erros) && data.erros.length > 0)) {
           throw new Error(`MCP ${domain} rejeitou o cálculo de homologação: ${raw.slice(0,200)}`);
         }
