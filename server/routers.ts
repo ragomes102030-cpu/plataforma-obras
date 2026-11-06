@@ -4305,30 +4305,42 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [project] = await db.select({ descricao: projects.descricao, location: projects.location, tipoDeObra: projects.tipoDeObra })
+          .from(projects).where(eq(projects.id, input.projectId)).limit(1);
         const [plan] = await db.select().from(projectPlanVersions)
           .where(eq(projectPlanVersions.projectId, input.projectId))
           .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
-        const nodes = plan ? await db.select({ nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus })
+        const nodes = plan ? await db.select({ id: wbsNodes.id, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus })
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
-        const activities = plan ? await db.select({ durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt })
+        const activities = plan ? await db.select({ id: scheduleActivities.id, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
-        const dependencies = plan ? await db.select({ id: scheduleDependencies.id }).from(scheduleDependencies)
+        const dependencies = plan ? await db.select({ id: scheduleDependencies.id, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
         const [budget] = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
         const budgetRows = budget ? await db.select({ compositionId: budgetItems.compositionId, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, budget.id)) : [];
         const [baseline] = await db.select({ status: scheduleBaselines.status }).from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).limit(1);
-        const measurementRows = await db.select({ status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
+        const measurementRows = await db.select({ id: measurements.id, status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
+        const measurementItemRows = measurementRows.length ? await db.select({ measurementId: measurementItems.measurementId }).from(measurementItems).where(inArray(measurementItems.measurementId, measurementRows.map(row => row.id))) : [];
+        const successors = new Map<number, number[]>();
+        for (const dependency of dependencies) successors.set(dependency.predecessorId, [...(successors.get(dependency.predecessorId) ?? []), dependency.successorId]);
+        const visiting = new Set<number>();
+        const visited = new Set<number>();
+        let cycles = 0;
+        const visit = (id: number) => { if (visiting.has(id)) { cycles += 1; return; } if (visited.has(id)) return; visiting.add(id); for (const next of successors.get(id) ?? []) visit(next); visiting.delete(id); visited.add(id); };
+        for (const activity of activities) visit(activity.id);
+        const predecessorIds = new Set(dependencies.map(item => item.successorId));
+        const semPredecessora = activities.filter(activity => activities.length > 1 && !predecessorIds.has(activity.id)).length;
         const calculated = activities.filter(item => item.cpmCalculatedAt).length;
         const alteredAfterCpm = activities.some(item => item.cpmCalculatedAt && item.updatedAt > item.cpmCalculatedAt);
         return avaliarProntidaoObra({
-          escopo: { declarado: true, validado: true },
-          eap: { existe: nodes.length > 0, aprovada: plan?.status === "approved", folhas: nodes.filter(item => item.nodeType !== "grupo").length },
+          escopo: { declarado: Boolean(project?.descricao && project.location && project.tipoDeObra), validado: Boolean(project?.descricao && nodes.length > 0 && nodes.every(item => item.scopeStatus === "aprovado" || item.scopeStatus === "validado")) },
+          eap: { existe: nodes.length > 0, aprovada: plan?.status === "approved", folhas: nodes.filter(item => item.nodeType === "pacote" || item.nodeType === "entrega").length },
           orcamento: { existe: Boolean(budget), aprovado: budget?.status === "aprovado", itens: budgetRows.length, semComposicao: budgetRows.filter(item => !item.compositionId).length, didaticos: budgetRows.filter(item => /didatic|rateio uniforme/i.test(String(item.source ?? ""))).length },
           atividades: { total: activities.length, semLocal: activities.filter(item => !item.pavimento).length, semDuracao: activities.filter(item => !item.durationDays || item.durationDays < 1).length },
-          rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: 0, semPredecessora: 0 },
+          rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, semPredecessora },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
-          execucao: { medicoes: measurementRows.length, comUnidade: measurementRows.length, confirmadas: measurementRows.filter(item => item.status === "aprovada" || item.status === "paga").length },
+          execucao: { medicoes: measurementRows.length, comUnidade: measurementItemRows.length, confirmadas: measurementRows.filter(item => item.status === "aprovada" || item.status === "paga").length },
         });
       }),
     /** Reabre o planejamento como uma versão de trabalho sem alterar a versão aprovada. */

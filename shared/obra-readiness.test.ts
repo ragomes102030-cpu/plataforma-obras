@@ -23,4 +23,19 @@ describe("motor de prontidão integrada", () => {
     expect(result.etapas.rede.bloqueios[0].comoResolver).toContain("Remova");
     expect(result.etapas.cpm.estado).toBe("desatualizado");
   });
+
+  it("bloqueia atividade órfã e medição sem itens", () => {
+    const result = avaliarProntidaoObra({
+      escopo: { declarado: true, validado: true },
+      eap: { existe: true, aprovada: true, folhas: 2 },
+      orcamento: { existe: true, aprovado: true, itens: 2, semComposicao: 0, didaticos: 0 },
+      atividades: { total: 2, semLocal: 0, semDuracao: 0 },
+      rede: { totalAtividades: 2, totalDependencias: 1, ciclos: 0, semPredecessora: 1 },
+      cpm: { calculadoEm: null, alteradoDepois: false, atividadesCalculadas: 0 },
+      baseline: { existe: false, aprovada: false },
+      execucao: { medicoes: 1, comUnidade: 0, confirmadas: 0 },
+    });
+    expect(result.etapas.rede.bloqueios[0].codigo).toBe("REDE_SEM_PREDECESSORA");
+    expect(result.etapas.execucao.bloqueios[0].codigo).toBe("MEDICAO_SEM_ITENS");
+  });
 });
