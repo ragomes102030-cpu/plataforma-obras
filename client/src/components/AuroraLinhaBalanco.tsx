@@ -512,6 +512,7 @@ export function LinhaBalancoEscadinha({
               <ChevronDown size={15}/>
             </summary>
             <div className="lob-stairs-analysis-body">
+              <p className="lob-flow-technical-note"><strong>Como interpretar:</strong> cada cartão mede a cadência observada no calendário e cada alerta aponta uma janela que merece conferência no cronograma. Isso orienta a decisão do planejador; não substitui medição de produção, restrições de frente ou validação das dependências.</p>
               <div className="lob-stairs-analysis-rhythms">
                 <strong>Cadência dos serviços</strong>
                 <div className="lob-stairs-analysis-rhythm-grid">

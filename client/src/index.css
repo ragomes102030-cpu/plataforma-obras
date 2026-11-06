@@ -6573,3 +6573,5 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); }
   .scopo-trace-grid { grid-template-columns:1fr; }
   .scopo-footer { align-items:flex-start; flex-direction:column; }
 }
+
+.lob-stairs-analysis-body{max-height:440px;overflow:auto;padding-right:6px}.lob-flow-technical-note{margin:0 0 14px;padding:10px 12px;border-left:3px solid #2a9d9a;background:#f2f8f8;color:#48636d;font-size:12px;line-height:1.5}.lob-stairs-analysis-rhythm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}.lob-stairs-analysis-observations ul{max-height:250px;overflow:auto;padding-right:8px}.lob-stairs-analysis-observations li{display:grid;grid-template-columns:minmax(150px,.7fr) 1fr;gap:3px 12px}.lob-stairs-analysis-observations li small{grid-column:1/-1}

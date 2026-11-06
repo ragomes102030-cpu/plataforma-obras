@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
@@ -16,6 +16,7 @@ function moeda(valor: number): string {
 export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [detalheId, setDetalheId] = useState<number | null>(null);
   const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "" });
   const utils = trpc.useUtils();
 
@@ -240,7 +241,7 @@ export function AbaOrcamento({ projetoId }: Props) {
               <th>Qtd</th>
               <th>Preço unit.</th>
               <th>Total</th>
-              <th>Fonte</th>
+              <th>Validação</th>
             </tr>
           </thead>
           <tbody>
@@ -259,9 +260,9 @@ export function AbaOrcamento({ projetoId }: Props) {
                 </td>
               </tr>
             ) : (
-              itensFiltrados.map((item) => (
-                editandoId === item.id ? (
-                  <tr key={item.id}>
+              itensFiltrados.map((item) => (<Fragment key={item.id}>
+                {editandoId === item.id ? (
+                  <tr key={item.id} className={detalheId === item.id ? "orcamento-row-active" : undefined}>
                     <td><input aria-label="Código do item" value={rascunho.code} onChange={e => setRascunho({ ...rascunho, code: e.target.value })} /></td>
                     <td><input aria-label="Descrição do item" value={rascunho.description} onChange={e => setRascunho({ ...rascunho, description: e.target.value })} /></td>
                     <td><input aria-label="Unidade do item" value={rascunho.unit} onChange={e => setRascunho({ ...rascunho, unit: e.target.value })} /></td>
@@ -278,10 +279,11 @@ export function AbaOrcamento({ projetoId }: Props) {
                     <td>{Number(item.quantity).toLocaleString("pt-BR")}</td>
                     <td>{moeda(Number(item.unitPrice))}</td>
                     <td>{moeda(Number(item.quantity) * Number(item.unitPrice))}</td>
-                    <td>{item.source}<button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
+                    <td><span className={`orcamento-row-status ${item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "ok" : "warn"}`}>{item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Composição validável" : /didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Fonte didática" : "Vínculo pendente"}</span><button type="button" className="xl-btn" onClick={() => setDetalheId(detalheId === item.id ? null : item.id)}>{detalheId === item.id ? "Fechar" : "Detalhes"}</button><button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
                   </tr>
-                )
-              ))
+                )}
+                {detalheId === item.id && editandoId !== item.id && <tr key={`${item.id}-detail`} className="orcamento-detail-row"><td colSpan={7}><div><b>Diagnóstico do item</b><span>Fonte: {item.source || "não informada"} · Referência: {item.referencePeriod || "não informada"} · Composição: {item.compositionId ? `#${item.compositionId}` : "não vinculada"}</span><small>{item.compositionId ? "Confirme unidade, coeficientes e produtividade antes da aprovação." : "Abra o Catálogo de Insumos, encontre a composição oficial e volte para vincular o código ao orçamento."}</small></div></td></tr>}
+              </Fragment>))
             )}
           </tbody>
         </table>
