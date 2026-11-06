@@ -391,13 +391,14 @@ export function PainelDoCronograma({
     const itens = orcamento.data?.items ?? [];
     const aprovado = orcamento.data?.versions?.some((version) => version.status === "aprovado");
     if (!aprovado || itens.length === 0) return null;
-    const didatico = itens.filter((item) => /rateio uniforme did[aá]tico/i.test(String(item.source ?? "")));
-    if (didatico.length !== itens.length) return null;
+    const didatico = itens.filter((item) => /didatic|rateio uniforme/i.test(String(item.source ?? "")));
+    if (didatico.length === 0) return null;
+    const cobertura = didatico.length === itens.length ? "Todos os itens" : `${didatico.length} de ${itens.length} itens`;
     return {
       id: "orcamento-didatico",
       nivel: "atencao",
-      titulo: "Orçamento aprovado é apenas didático",
-      detalhe: "Todos os itens estão marcados como rateio uniforme didático. Ele serve para testar o fluxo, não para controlar custo real ou valor agregado.",
+      titulo: didatico.length === itens.length ? "Orçamento aprovado é apenas didático" : "Orçamento com itens didáticos",
+      detalhe: `${cobertura} usam rateio ou fonte didática. Substitua-os por composições de catálogo oficial antes de controlar custo real ou valor agregado.`,
       aba: "financeiro",
       acao: "Revisar orçamento",
     };
