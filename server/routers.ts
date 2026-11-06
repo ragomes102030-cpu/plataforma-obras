@@ -3563,23 +3563,22 @@ export const appRouter = router({
           }
           const manualPrice = Number(item.unitPrice);
           const codeCandidates = records.filter(
-            record => record.code === item.code
+            record => record.code === item.code && unitsCompatible(item.unit, record.unit)
           );
           const unitRecords = recordsByUnit.get(normalizeForMatch(item.unit));
-          const searchRecords = unitRecords?.length ? unitRecords : records;
+          // Não sugerir por semelhança textual: uma descrição parecida pode
+          // representar serviço, unidade ou escopo diferentes e gerar custo
+          // falso. O preview só aceita código exato ou descrição normalizada
+          // exata dentro da mesma unidade; os demais ficam pendentes para
+          // seleção manual pelo engenheiro.
+          const exactDescriptionCandidates = (unitRecords ?? []).filter(
+            record => normalizeForMatch(record.description) === normalizeForMatch(item.description)
+          );
           const scored = [
             ...codeCandidates.map(record => ({ ...record, score: 1 })),
-            ...findCandidates(item.description, searchRecords, {
-              minScore: input.minScore,
-              limit: 3,
-            }).filter(
-              candidate =>
-                !codeCandidates.some(
-                  existing =>
-                    existing.kind === candidate.kind &&
-                    existing.id === candidate.id
-                )
-            ),
+            ...exactDescriptionCandidates
+              .filter(candidate => !codeCandidates.some(existing => existing.kind === candidate.kind && existing.id === candidate.id))
+              .map(record => ({ ...record, score: 1 })),
           ].sort((a, b) => b.score - a.score);
           const best = scored[0] ?? null;
           const suggestedPrice = best ? best.unitPrice : null;
