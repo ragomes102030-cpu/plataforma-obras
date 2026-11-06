@@ -11,7 +11,7 @@ export type ApprovedSnapshot = {
   activities: Array<{
     id: number; durationDays: number; earlyStart: number | null;
     earlyFinish: number | null; lateStart: number | null; lateFinish: number | null;
-    totalFloat: number | null; freeFloat: number | null; critical: boolean;
+    totalFloat: number | null; freeFloat: number | null; critical: boolean | number;
   }>;
   dependencies: Array<{ predecessorId: number; successorId: number; type: string; lag: number }>;
   lobRows: number;
@@ -133,7 +133,7 @@ export async function auditApprovedSnapshot(
           return stored == null || !Number.isFinite(Number(got[right])) ||
             Math.abs(Number(stored) - Number(got[right])) > 1e-6;
         }).map(([left]) => left as string);
-        if (Boolean(got.critica) !== activity.critical) fields.push("critical");
+        if (Boolean(got.critica) !== Boolean(activity.critical)) fields.push("critical");
         return { id: activity.id, fields };
       }).filter(item => item.fields.length);
       cpm = { status: differences.length ? "failed" : "passed",
