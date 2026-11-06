@@ -41,6 +41,10 @@ export function AbaOrcamento({ projetoId }: Props) {
   const total = budget.data?.total ?? 0;
   const itensComValor = items.filter((i) => Number(i.unitPrice) > 0).length;
   const itensSemValor = items.length - itensComValor;
+  const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
+  const itensComComposicao = items.filter((i) => i.compositionId != null).length;
+  const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
+  const statusOrcamento = cobertura === 100 && itensComValor === items.length && itensComComposicao > 0 ? "pronto" : itensComFonte > 0 ? "em_revisao" : "pendente";
 
   const versaoAtiva = budget.data?.versions?.find((v) => v.id === budget.data?.activeVersionId);
   const errosDeEngenharia = (coerencia.data?.issues ?? []).filter((issue) => issue.severity === "error");
@@ -84,6 +88,15 @@ export function AbaOrcamento({ projetoId }: Props) {
 
   return (
     <div className="xl-painel">
+      <div className="orcamento-hero">
+        <div className="orcamento-hero-copy">
+          <span className="xl-painel-kicker">CENTRAL DE CUSTOS · ETAPA DE VALIDAÇÃO</span>
+          <h1>Orçamento que explica a obra.</h1>
+          <p>Conecte cada serviço da EAP a uma composição oficial, valide o quantitativo e só então libere o custo para EV, Curva S e controle.</p>
+          <div className={`orcamento-status-pill ${statusOrcamento}`}><span />{statusOrcamento === "pronto" ? "Pronto para aprovação" : statusOrcamento === "em_revisao" ? "Em revisão técnica" : "Aguardando fonte oficial"}</div>
+        </div>
+        <div className="orcamento-hero-route"><span>01</span><b>Fonte</b><small>SEINFRA / SINAPI</small><i>→</i><span>02</span><b>Composição</b><small>Coeficientes e unidade</small><i>→</i><span>03</span><b>Validação</b><small>Quantidade e BDI</small></div>
+      </div>
       <div className="xl-painel-intro">
         <div>
           <span className="xl-painel-kicker">ORÇAMENTO E CUSTOS</span>
@@ -144,6 +157,16 @@ export function AbaOrcamento({ projetoId }: Props) {
           </button>
         </div>
       </div>
+
+      {!carregando && !erro && <section className="orcamento-kpis" aria-label="Prontidão do orçamento">
+        <div className="orcamento-kpi"><span>COBERTURA DE FONTE</span><strong>{cobertura}%</strong><small>{itensComFonte} de {items.length} itens sem fonte didática</small><div><i style={{width:`${cobertura}%`}} /></div></div>
+        <div className="orcamento-kpi"><span>COMPOSIÇÕES VINCULADAS</span><strong>{itensComComposicao}</strong><small>{items.length - itensComComposicao} itens ainda dependem de composição</small></div>
+        <div className="orcamento-kpi"><span>QUANTITATIVOS</span><strong>{itensSemValor ? "Revisar" : "OK"}</strong><small>{itensSemValor ? `${itensSemValor} itens sem preço unitário` : "Todos os itens possuem preço unitário"}</small></div>
+      </section>}
+
+      {!carregando && !erro && statusOrcamento !== "pronto" && <section className="orcamento-next-step">
+        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : "Revisar os itens sem composição oficial"}</strong><p>{itensComFonte === 0 ? "Use SEINFRA-CE para Fortaleza. O sistema valida o arquivo antes de gravar e preserva a versão da tabela." : "Não aprove por rateio. Cada item precisa de código, unidade, referência e composição compatíveis."}</p></div></div><button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button>
+      </section>}
 
       {erro && (
         <div className="xl-aviso xl-aviso-erro">
