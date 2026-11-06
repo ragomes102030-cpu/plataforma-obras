@@ -8,6 +8,7 @@ import type { AlertaDoPainel, ResumoDoPainel } from "@shared/painel-obra";
 import type { ProntidaoDeAvanco } from "@shared/progress-readiness";
 import { CurvaSControlTower } from "./CurvaSControlTower";
 import { OrientacaoDeEtapa } from "./OrientacaoDeEtapa";
+import { trpc } from "@/lib/trpc";
 import "@/control-tower.css";
 
 export type SemanaControl = {
@@ -69,6 +70,7 @@ export function ControlTowerDashboard({
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
+  const readiness = trpc.planning.readiness.useQuery({ projectId: projetoId }, { staleTime: 30_000 });
   const { fisico, prazo, valor, status, selo } = resumo;
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
   const fecharRef = useRef<HTMLButtonElement>(null);
@@ -158,6 +160,11 @@ export function ControlTowerDashboard({
       {(carregandoComplementos || erroComplementos) && <div className="ct-data-note" role={erroComplementos ? "alert" : "status"}>
         <AlertTriangle size={17}/>{erroComplementos ? "Parte das consultas falhou. Os indicadores dependentes dessas fontes podem estar incompletos; não interprete ausência de dado como zero." : "Conferindo orçamento, produção e compromissos; informações complementares ainda estão sendo carregadas."}
       </div>}
+
+      {readiness.data?.primeiraBarreira && <section className="ct-readiness-gate" aria-label="Primeira barreira da obra">
+        <div><span className="ct-overline">GOVERNANÇA DO PLANEJAMENTO</span><strong>{readiness.data.primeiraBarreira.titulo}</strong><p>{readiness.data.primeiraBarreira.explicacao}</p><small><b>Como resolver:</b> {readiness.data.primeiraBarreira.comoResolver}</small></div>
+        <button type="button" className="ct-button" onClick={() => abrirAba(readiness.data?.primeiraBarreira?.impacta[0] === "orcamento" ? "financeiro" : readiness.data?.primeiraBarreira?.impacta[0] === "cpm" ? "cpm" : readiness.data?.primeiraBarreira?.impacta[0] === "baseline" ? "baseline" : readiness.data?.primeiraBarreira?.impacta[0] === "eap" ? "eap" : "escopo")}>Abrir etapa responsável <ArrowRight size={15}/></button>
+      </section>}
 
       <section className={"ct-hero ct-hero-" + corStatus} aria-label="Resumo do desempenho">
         <div className="ct-hero-main">
