@@ -8,6 +8,7 @@ import type { AlertaDoPainel, ResumoDoPainel } from "@shared/painel-obra";
 import type { ProntidaoDeAvanco } from "@shared/progress-readiness";
 import { CurvaSControlTower } from "./CurvaSControlTower";
 import { OrientacaoDeEtapa } from "./OrientacaoDeEtapa";
+import { trpc } from "@/lib/trpc";
 import "@/control-tower.css";
 
 export type SemanaControl = {
@@ -159,6 +160,8 @@ export function ControlTowerDashboard({
         <AlertTriangle size={17}/>{erroComplementos ? "Parte das consultas falhou. Os indicadores dependentes dessas fontes podem estar incompletos; não interprete ausência de dado como zero." : "Conferindo orçamento, produção e compromissos; informações complementares ainda estão sendo carregadas."}
       </div>}
 
+      {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={abrirAba} />}
+
       <section className={"ct-hero ct-hero-" + corStatus} aria-label="Resumo do desempenho">
         <div className="ct-hero-main">
           <span className="ct-status"><span className="ct-status-dot" aria-hidden="true"/>{statusTexto.toUpperCase()} · {dataBr(hoje)}</span>
@@ -235,4 +238,15 @@ export function ControlTowerDashboard({
       </div>}
     </div>
   );
+}
+
+function ReadinessGate({ projetoId, abrirAba }: { projetoId: number; abrirAba: (aba: string) => void }) {
+  const readiness = trpc.planning.readiness.useQuery({ projectId: projetoId }, { staleTime: 30_000 });
+  const barrier = readiness.data?.primeiraBarreira;
+  if (!barrier) return null;
+  const aba = barrier.impacta[0] === "orcamento" ? "financeiro" : barrier.impacta[0] === "cpm" ? "cpm" : barrier.impacta[0] === "baseline" ? "baseline" : barrier.impacta[0] === "eap" ? "eap" : "escopo";
+  return <section className="ct-readiness-gate" aria-label="Primeira barreira da obra">
+    <div><span className="ct-overline">GOVERNANÇA DO PLANEJAMENTO</span><strong>{barrier.titulo}</strong><p>{barrier.explicacao}</p><small><b>Como resolver:</b> {barrier.comoResolver}</small></div>
+    <button type="button" className="ct-button" onClick={() => abrirAba(aba)}>Abrir etapa responsável <ArrowRight size={15}/></button>
+  </section>;
 }
