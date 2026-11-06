@@ -4114,6 +4114,34 @@ export const appRouter = router({
           aviso: planilha === "insumos" ? "Tabela de Insumos importada corretamente; ela não contém serviços e, portanto, não gera EAP." : null,
         };
       }),
+    inspectPriceSheet: protectedProcedure
+      .input(z.object({
+        fileName: z.string().trim().min(1).max(240),
+        fileDataBase64: z.string().min(1).max(40_000_000),
+      }))
+      .mutation(async ({ input }) => {
+        const bytes = Buffer.from(input.fileDataBase64, "base64");
+        if (!bytes.length) throw badRequest("Arquivo vazio ou base64 inválido.");
+        const uint8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const planilha = reconhecerPlanilhaSeinfra(await lerPrimeiraAba(uint8));
+        if (!seinfraAdapter.canParse(input.fileName, uint8)) {
+          throw badRequest("Formato não suportado. Envie um .xls ou .xlsx oficial da SEINFRA-CE.");
+        }
+        if (planilha === "composicoes") {
+          return { planilha, registros: 0, podeImportar: false, geraEap: false, aviso: "Relatório de Composições não é uma tabela plana de preços. Importe Tabela de Insumos e Planos de Serviços." };
+        }
+        const parsed = await seinfraAdapter.parse(input.fileName, uint8);
+        const geraEap = planilha === "servicos";
+        return {
+          planilha,
+          registros: parsed.records.length,
+          podeImportar: parsed.records.length > 0,
+          geraEap,
+          aviso: geraEap
+            ? "Arquivo de serviços: gera itens de serviço e pode alimentar a EAP."
+            : "Arquivo de insumos: importa preços para composições, mas não gera folhas da EAP.",
+        };
+      }),
     searchPrices: protectedProcedure
       .input(
         z.object({

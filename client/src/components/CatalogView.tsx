@@ -80,6 +80,7 @@ export function CatalogView() {
   const [seinfraPeriod, setSeinfraPeriod] = useState("");
   const [seinfraUf, setSeinfraUf] = useState("CE");
   const [seinfraName, setSeinfraName] = useState("");
+  const [seinfraInspection, setSeinfraInspection] = useState<{ planilha: string; registros: number; podeImportar: boolean; geraEap: boolean; aviso: string } | null>(null);
   const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; skipped: number; referenceHint: string | null; aviso?: string | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [acQuery, setAcQuery] = useState("");
@@ -156,17 +157,25 @@ export function CatalogView() {
       setCatalogId(result.catalogId);
     },
   });
+  const inspectSheet = trpc.catalog.inspectPriceSheet.useMutation({
+    onSuccess: result => setSeinfraInspection(result),
+    onError: () => setSeinfraInspection(null),
+  });
+  const encodeFile = async (file: File) => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+    return btoa(binary);
+  };
   const submitImport = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!seinfraFile || !seinfraPeriod.trim()) return;
-    const buffer = await seinfraFile.arrayBuffer();
-    let binary = "";
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+    if (!seinfraFile || !seinfraPeriod.trim() || !seinfraInspection?.podeImportar) return;
+    const fileDataBase64 = await encodeFile(seinfraFile);
     importSheet.mutate({
       sourceType: "SEINFRA",
       fileName: seinfraFile.name,
-      fileDataBase64: btoa(binary),
+      fileDataBase64,
       referencePeriod: seinfraPeriod.trim(),
       state: seinfraUf.trim().toUpperCase() || undefined,
       name: seinfraName.trim() || undefined,
@@ -228,20 +237,23 @@ export function CatalogView() {
       <section className="module-card">
         <div className="panel-heading"><div><h3>Importar base SEINFRA-CE</h3><p>Upload manual de .xls/.xlsx oficial — cada importação gera um novo catálogo versionado.</p></div><Upload size={18} className="sparkle" /></div>
         <form className="catalog-form-grid" onSubmit={submitImport}>
-          <label>Arquivo SEINFRA<input ref={fileInputRef} type="file" accept=".xls,.xlsx" onChange={event => setSeinfraFile(event.target.files?.[0] ?? null)} required /></label>
+          <label>Arquivo SEINFRA<input ref={fileInputRef} type="file" accept=".xls,.xlsx" onChange={async event => { const file = event.target.files?.[0] ?? null; setSeinfraFile(file); setSeinfraInspection(null); if (file) inspectSheet.mutate({ fileName: file.name, fileDataBase64: await encodeFile(file) }); }} required /></label>
           <label>Período de referência<input value={seinfraPeriod} onChange={event => setSeinfraPeriod(event.target.value)} placeholder="09/2026" required /></label>
           <label>UF<input value={seinfraUf} onChange={event => setSeinfraUf(event.target.value)} placeholder="CE" maxLength={2} /></label>
           <label>Nome do catálogo<input value={seinfraName} onChange={event => setSeinfraName(event.target.value)} placeholder="SEINFRA-CE 09/2026 (opcional)" /></label>
           <div className="catalog-form-footer">
-            <span>Arquivos aceitos: Tabela de Insumos (I...) e Planos de Serviços (C...) da SEINFRA.</span>
+            <span>Primeiro validamos o arquivo: Planos de Serviços (C...) alimenta a EAP; Tabela de Insumos (I...) alimenta composições; Relatório de Composições não é importável sozinho.</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || importSheet.isPending}>
+              <button className="primary-button" disabled={!seinfraFile || !seinfraPeriod.trim() || !seinfraInspection?.podeImportar || inspectSheet.isPending || importSheet.isPending}>
                 <Upload size={14} /> {importSheet.isPending ? "Importando..." : "Importar planilha"}
               </button>
             </div>
           </div>
         </form>
         {importSheet.error && <p className="form-error">{importSheet.error.message}</p>}
+        {inspectSheet.error && <p className="form-error">Não foi possível validar o arquivo: {inspectSheet.error.message}</p>}
+        {inspectSheet.isPending && <p className="catalog-busca-status">Validando estrutura da planilha antes de gravar…</p>}
+        {seinfraInspection && <div className="catalog-list-row"><div><strong>{seinfraInspection.podeImportar ? "Arquivo validado" : "Arquivo bloqueado"} · {seinfraInspection.planilha}</strong><span>{seinfraInspection.registros.toLocaleString("pt-BR")} registros reconhecidos · {seinfraInspection.aviso}</span></div></div>}
         {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span>{importResult.aviso && <span style={{ color: "var(--warn)" }}>{importResult.aviso}</span>}</div></div>}
       </section>
 
