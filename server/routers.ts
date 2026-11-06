@@ -9347,8 +9347,8 @@ export const appRouter = router({
                   server.status === "failed" ? "error" : "pending",
                 lastError: server.error ?? (ready ? null : detail),
                 // Homologar transporte NÃO é sincronizar dados da obra.
-                // Preserve lastSyncedAt=NULL até existir uma rotina de sync real.
-                lastSyncedAt: null,
+                // Não sobrescrever um timestamp de sincronização anterior.
+                lastSyncedAt: undefined,
               })
               .where(
                 and(
