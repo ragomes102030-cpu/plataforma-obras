@@ -62,6 +62,18 @@ describe("construction-mcps — política de ferramentas", () => {
     );
   });
 
+  it("libera ferramentas avançadas sem persistência, mas nenhuma mutação", () => {
+    for (const tool of [
+      "diagnosticar_rede_cpm",
+      "nivelar_recursos_com_calendario",
+      "comparar_cenarios_custo_prazo",
+      "nivelar_frentes_de_trabalho",
+      "nivelar_calendarios_por_equipe",
+      "comparar_cenarios_equipes_frentes",
+    ]) expect(MCP_TOOL_POLICY.readOnly.has(tool as never)).toBe(true);
+    expect(MCP_TOOL_POLICY.readOnly.has("salvar_baseline" as never)).toBe(false);
+  });
+
   it("não confunde leitura com escrita na política", () => {
     // get_eap_tree é leitura; criar_eap_node é escrita. A interseção tem que ser vazia.
     expect(MCP_TOOL_POLICY.readOnly.has("get_eap_tree" as never)).toBe(true);
