@@ -84,6 +84,12 @@ export const MCP_TOOL_POLICY = {
     "calcular_cpm_com_calendario",
     "comparar_baseline_sem_persistencia",
     "calcular_lob_com_vinculos",
+    "diagnosticar_rede_cpm",
+    "nivelar_recursos_com_calendario",
+    "comparar_cenarios_custo_prazo",
+    "nivelar_frentes_de_trabalho",
+    "nivelar_calendarios_por_equipe",
+    "comparar_cenarios_equipes_frentes",
     "get_eap_tree",
     "get_eap_node",
     "listar_por_tipo_frente",
@@ -222,13 +228,19 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
   "calcular_linha_balanco",
 ]);
 
+// MCPs públicos não exigem autenticação: nunca enviar o token privado legado.
+export function isPublicMcpUrl(value: string): boolean {
+  try { return new URL(value).pathname.replace(/\/+$/, "") === "/public-mcp"; }
+  catch { return false; }
+}
+
 export function createConstructionMcpClients() {
   const client = (url: string, name: string, bearerToken: string) => {
     if (url) {
       return new McpClient(url, {
         name,
         timeoutMs: ENV.mcpTimeoutMs,
-        bearerToken,
+        bearerToken: isPublicMcpUrl(url) ? "" : bearerToken,
       });
     }
 
@@ -244,6 +256,40 @@ export function createConstructionMcpClients() {
     eap: client(ENV.mcpEapUrl, "plataforma-obras-eap", ENV.mcpEapToken),
     cronograma: client(ENV.mcpCronogramaUrl, "plataforma-obras-cronograma", ENV.mcpCronogramaToken),
     ganttLob: client(ENV.mcpGanttLobUrl, "plataforma-obras-gantt-lob", ENV.mcpGanttLobToken),
+  };
+}
+
+// Integrações por obra usam SOMENTE os endpoints públicos dos motores stateless.
+// Nunca aceitar URLs livres vindas do banco (SSRF / endpoint privado / credenciais).
+const PUBLIC_MCP_HOSTS: Record<ConstructionMcpDomain, string> = {
+  eap: "arquimedes-mcp-eap.vercel.app",
+  cronograma: "arquimedes-mcp-cronograma.vercel.app",
+  ganttLob: "arquimedes-mcp-gantt-lob.vercel.app",
+};
+
+export function validateProjectMcpEndpoint(domain: ConstructionMcpDomain, input: string): string {
+  const url = new URL(input);
+  if (url.protocol !== "https:" || url.hostname !== PUBLIC_MCP_HOSTS[domain] ||
+      url.pathname !== "/public-mcp" || url.port || url.username || url.password ||
+      url.search || url.hash) {
+    throw new Error(`Endpoint público não autorizado para MCP ${domain}.`);
+  }
+  return url.toString();
+}
+
+export function createProjectConstructionMcpClients(
+  endpoints: Record<ConstructionMcpDomain, string>
+): Record<ConstructionMcpDomain, McpClient> {
+  return {
+    eap: new McpClient(validateProjectMcpEndpoint("eap", endpoints.eap), {
+      name: "plataforma-obras-eap-publico", timeoutMs: ENV.mcpTimeoutMs,
+    }),
+    cronograma: new McpClient(validateProjectMcpEndpoint("cronograma", endpoints.cronograma), {
+      name: "plataforma-obras-cronograma-publico", timeoutMs: ENV.mcpTimeoutMs,
+    }),
+    ganttLob: new McpClient(validateProjectMcpEndpoint("ganttLob", endpoints.ganttLob), {
+      name: "plataforma-obras-lob-publico", timeoutMs: ENV.mcpTimeoutMs,
+    }),
   };
 }
 
@@ -365,14 +411,35 @@ function errorMessage(error: unknown) {
 }
 
 const homologationProbes: Record<ConstructionMcpDomain, string[]> = {
-  eap: ["get_eap_tree", "get_eap_node", "listar_templates", "validar_estrutura_eap"],
-  cronograma: ["listar_atividades", "listar_dependencias", "listar_baselines", "calcular_duracao_com_evidencia"],
-  ganttLob: ["listar_temas", "calcular_linha_balanco"],
+  // Todas as chamadas são sintéticas e stateless; nunca prometem sincronização
+  // de project_id: o MCP público não lê bancos da Plataforma Obras.
+  eap: ["validar_estrutura_eap"],
+  cronograma: ["calcular_cpm_com_evidencia", "calcular_duracao_com_evidencia"],
+  ganttLob: ["calcular_lob_com_vinculos", "calcular_linha_balanco"],
 };
 
 function probeArguments(toolName: string, externalProjectId: string) {
   // Projetos não são acessados ao homologar os MCPs públicos.
-  if (toolName === "validar_estrutura_eap") return { nos: [] };
+  if (toolName === "validar_estrutura_eap") return { nos: [
+    { eap_id: "1", parent_id: null, nivel: 1 },
+    { eap_id: "1.1", parent_id: "1", nivel: 2 },
+    { eap_id: "1.1.1", parent_id: "1.1", nivel: 3 },
+  ] };
+  if (toolName === "calcular_cpm_com_evidencia") return {
+    atividades: [{ id: "QA-A", duracao_dias: 2 }, { id: "QA-B", duracao_dias: 3 }],
+    dependencias: [{ predecessora_id: "QA-A", sucessora_id: "QA-B", tipo: "FS", lag_dias: 0 }],
+  };
+  if (toolName === "calcular_lob_com_vinculos") return {
+    atividades: [{ activity_id: "QA-A", duracao_dias: 2, equipe_id: "EQ-A" },
+                 { activity_id: "QA-B", duracao_dias: 3, equipe_id: "EQ-B" }],
+    locais: ["QA-P01"],
+    dependencias: [{ predecessora_id: "QA-A", predecessora_local: "QA-P01",
+      sucessora_id: "QA-B", sucessora_local: "QA-P01", tipo: "FS", lag_dias: 0 }],
+  };
+  if (toolName === "calcular_linha_balanco") return {
+    atividades: [{ nome: "QA-ALV", tempo_unitario: 2, numero_equipes: 1, pulmao_dias: 0 }],
+    unidades: ["QA-P01"],
+  };
   if (toolName === "calcular_duracao_com_evidencia") {
     return {
       quantidade: 10,
@@ -455,6 +522,16 @@ export async function runConstructionMcpHomologation(
         );
         attempts += callResult.attempts;
         const result = callResult.value;
+        // MCP transport pode responder HTTP 200 contendo isError ou um
+        // diagnóstico inválido no conteúdo da ferramenta. Não marcar como OK.
+        const raw = extractMcpText(result).trim();
+        let data: Record<string, unknown> | null = null;
+        try { data = raw ? JSON.parse(raw) as Record<string, unknown> : null; } catch { /* tools podem retornar texto simples */ }
+        if (result.isError === true || data?.ok === false || data?.valid === false ||
+            data?.persistido !== false ||
+            (data && Array.isArray(data.erros) && data.erros.length > 0)) {
+          throw new Error(`MCP ${domain} rejeitou o cálculo de homologação: ${raw.slice(0,200)}`);
+        }
         return [
           domain,
           {

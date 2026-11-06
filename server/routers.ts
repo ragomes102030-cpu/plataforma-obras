@@ -71,6 +71,8 @@ import {
 } from "./_core/trpc";
 import { getDb } from "./db";
 import { ENV } from "./_core/env";
+import { McpClient } from "./integrations/mcp-client";
+import { auditApprovedSnapshot, type ApprovedSnapshot } from "./integrations/approved-plan-audit";
 import { buildAgentProjectContext } from "./agent/context-builder";
 import {
   filterAgentRunsByConversation,
@@ -209,7 +211,10 @@ import { invalidateStoredProviderCache } from "./llm-provider-gateway";
 import {
   callControlledMcpTool,
   callReadOnlyMcpTool,
+  createProjectConstructionMcpClients,
+  validateProjectMcpEndpoint,
   CONTROLLED_MUTATION_POLICY,
+  MCP_TOOL_POLICY,
   getConstructionMcpStatus,
   toCentralCommandMcpDomains,
   PROJECT_SCOPED_READ_ONLY_TOOLS,
@@ -679,7 +684,8 @@ function mcpEndpoint(provider: McpProvider) {
     ganttLob: ENV.mcpGanttLobUrl,
   }[provider];
   const normalized = baseUrl.replace(/\/$/, "");
-  return normalized.endsWith("/mcp") ? normalized : `${normalized}/mcp`;
+  if (!normalized) return "";
+  return /\/(?:public-)?mcp$/.test(normalized) ? normalized : `${normalized}/mcp`;
 }
 
 function requestIdFrom(ctx: {
@@ -1053,6 +1059,11 @@ async function buildPhase7PlanForProject(
     }
     return value;
   };
+  // Não importar como dados reais os cálculos stateless dos MCPs públicos.
+  // O caminho antigo /mcp com projeto privado não faz parte desta integração.
+  if (mappings.some(row => row.endpointUrl.endsWith("/public-mcp"))) {
+    throw badRequest("Importação externa indisponível para MCP público stateless; use dados locais versionados da obra.");
+  }
   const eapProjectId = externalProjectId("eap");
   const cronogramaProjectId = externalProjectId("cronograma");
   const [eapResult, activityResult, dependencyResult] = await Promise.all([
@@ -1295,6 +1306,47 @@ function anoFinalCalendarioCpm(
     if (activity.finishNoLaterThan) anoFinal = Math.max(anoFinal, activity.finishNoLaterThan.getFullYear());
   }
   return anoFinal;
+}
+
+async function approvedSnapshotForMcpAudit(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>, projectId: number
+): Promise<ApprovedSnapshot> {
+  // Usar SOMENTE a última versão aprovada da própria obra, nunca misturar rascunhos.
+  const [version] = await db.select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, projectId),
+      eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
+  if (!version) throw badRequest("Homologação exige versão do plano aprovada.");
+  const scope = and(eq(wbsNodes.projectId, projectId), eq(wbsNodes.versionId, version.id));
+  const taskScope = and(eq(scheduleActivities.projectId, projectId),
+    eq(scheduleActivities.versionId, version.id));
+  const depScope = and(eq(scheduleDependencies.projectId, projectId),
+    eq(scheduleDependencies.versionId, version.id));
+  const lobScope = and(eq(lobActivityLocations.projectId, projectId),
+    eq(lobActivityLocations.versionId, version.id));
+  const [nodes, activities, dependencies, lobRows] = await Promise.all([
+    db.select({ id:wbsNodes.id, code:wbsNodes.code, parentId:wbsNodes.parentId,
+      level:wbsNodes.level }).from(wbsNodes).where(scope),
+    db.select({ id:scheduleActivities.id, durationDays:scheduleActivities.durationDays,
+      earlyStart:scheduleActivities.earlyStart, earlyFinish:scheduleActivities.earlyFinish,
+      lateStart:scheduleActivities.lateStart, lateFinish:scheduleActivities.lateFinish,
+      totalFloat:scheduleActivities.totalFloat, freeFloat:scheduleActivities.freeFloat,
+      critical:scheduleActivities.critical }).from(scheduleActivities).where(taskScope),
+    db.select({ predecessorId:scheduleDependencies.predecessorId,
+      successorId:scheduleDependencies.successorId, type:scheduleDependencies.type,
+      lag:scheduleDependencies.lag }).from(scheduleDependencies).where(depScope),
+    db.select({ id:lobActivityLocations.id }).from(lobActivityLocations).where(lobScope),
+  ]);
+  const activityIds = activities.map(a=>a.id);
+  const allocations = activityIds.length ? await db.select({
+    activityId: activityResourceAllocations.activityId,
+  }).from(activityResourceAllocations)
+    .where(inArray(activityResourceAllocations.activityId, activityIds)) : [];
+  return {
+    nodes, activities, dependencies, lobRows: lobRows.length,
+    activitiesWithResourceAllocations: new Set(allocations.map(a=>a.activityId)).size,
+  };
 }
 
 export const appRouter = router({
@@ -9185,7 +9237,7 @@ export const appRouter = router({
         return mcpProviders.map(provider => {
           const row = rows.find(item => item.provider === provider);
           return row
-            ? { ...row, endpointUrl: mcpEndpoint(provider) }
+            ? { ...row, endpointUrl: row.endpointUrl }
             : {
                 provider,
                 externalProjectId: null,
@@ -9263,20 +9315,40 @@ export const appRouter = router({
             return [provider, value] as const;
           })
         ) as Record<McpProvider, string>;
+        const endpoints = Object.fromEntries(
+          mcpProviders.map(provider => [provider,
+            mappings.find(row => row.provider === provider)?.endpointUrl ?? ""])
+        ) as Record<McpProvider, string>;
+        const clients = createProjectConstructionMcpClients(endpoints);
         const result = await runConstructionMcpHomologation(
           externalProjectIds,
-          requestIdFrom(ctx)
+          requestIdFrom(ctx),
+          clients
         );
+        // Smoke de conexão nunca é suficiente: comparar dados da versão aprovada.
+        const snapshot = await approvedSnapshotForMcpAudit(db, input.projectId);
+        const audit = await auditApprovedSnapshot(snapshot, clients);
         await Promise.all(
           mcpProviders.map(provider => {
             const server = result.servers[provider];
+            const mathematicallyApproved = provider === "eap"
+              ? audit.eap.status === "passed"
+              : provider === "cronograma" ? audit.cpm.status === "passed" : false;
+            const ready = server.status === "passed" && mathematicallyApproved;
+            const detail = provider === "eap" ? audit.eap.errors.join("; ")
+              : provider === "cronograma" ? audit.cpm.error ??
+                (audit.cpm.differences.length ?
+                  `Divergências CPM: ${audit.cpm.differences.length} atividades` : "")
+                : audit.lob.reason;
             return db
               .update(projectMcpIntegrations)
               .set({
-                syncState: server.status === "passed" ? "ready" : "error",
-                lastError: server.error,
-                lastSyncedAt:
-                  server.status === "passed" ? new Date() : undefined,
+                syncState: ready ? "ready" :
+                  server.status === "failed" ? "error" : "pending",
+                lastError: server.error ?? (ready ? null : detail),
+                // Homologar transporte NÃO é sincronizar dados da obra.
+                // Não sobrescrever um timestamp de sincronização anterior.
+                lastSyncedAt: undefined,
               })
               .where(
                 and(
@@ -9286,7 +9358,7 @@ export const appRouter = router({
               );
           })
         );
-        return result;
+        return { ...result, approvedPlanAudit: audit };
       }),
     phase7PreviewImport: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -9561,9 +9633,14 @@ export const appRouter = router({
           planJson: JSON.stringify(plan),
           startedAt: new Date(),
         });
+        const projectEndpoints = Object.fromEntries(
+          mcpProviders.map(provider => [provider,
+            mappings.find(row => row.provider === provider)?.endpointUrl ?? ""])
+        ) as Record<McpProvider, string>;
         const result = await runConstructionMcpHomologation(
           externalProjectIds,
-          requestId
+          requestId,
+          createProjectConstructionMcpClients(projectEndpoints)
         );
         const allPassed = Object.values(result.servers).every(
           server => server.status === "passed"
@@ -9627,6 +9704,7 @@ export const appRouter = router({
         const [mapping] = await db
           .select({
             externalProjectId: projectMcpIntegrations.externalProjectId,
+            endpointUrl: projectMcpIntegrations.endpointUrl,
           })
           .from(projectMcpIntegrations)
           .where(
@@ -9649,7 +9727,16 @@ export const appRouter = router({
         if (PROJECT_SCOPED_READ_ONLY_TOOLS.has(input.toolName)) {
           args.project_id = externalProjectId;
         }
-        return callReadOnlyMcpTool(input.domain, input.toolName, args);
+        // Nunca enviar chamadas de uma obra para a URL global de outra.
+        if (!mapping?.endpointUrl) throw badRequest("Endpoint MCP da obra não configurado.");
+        const endpoint = validateProjectMcpEndpoint(input.domain, mapping.endpointUrl);
+        const client = new McpClient(endpoint, {
+          name: "plataforma-obras-consulta-publica", timeoutMs: ENV.mcpTimeoutMs,
+        });
+        if (!MCP_TOOL_POLICY.readOnly.has(input.toolName as never)) {
+          throw forbidden("Ferramenta não autorizada para consulta sem escrita.");
+        }
+        return client.callTool(input.toolName, args);
       }),
   }),
 });
