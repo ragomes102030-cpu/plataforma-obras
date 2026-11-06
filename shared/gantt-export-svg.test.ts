@@ -29,7 +29,7 @@ describe("SVG exportado do Gantt",()=>{
    const svg=gerarSvgGantt({...entrada,linhas:[entrada.linhas[1]!]});
    expect(svg).not.toContain("Entrega");
    expect(svg).toContain("Vigas");
-   expect(svg).not.toContain('<circle cx="');
+   expect(svg).not.toContain('marker-end="url(#gantt-export-arrow)"');
  });
  it("inclui a barra cinza da baseline só quando a comparação está ativa",()=>{
    const sem=gerarSvgGantt(entrada);
@@ -58,7 +58,7 @@ describe("SVG exportado do Gantt",()=>{
    expect(svg).toContain("HOJE");
    expect(svg).not.toContain('stroke-dasharray');
    expect(svg.match(/id="baseline-/g)).toHaveLength(1);
-   expect(svg).toContain('<circle cx=');
+   expect(svg).toContain('marker-end="url(#gantt-export-arrow)"');
  });
 
 });
