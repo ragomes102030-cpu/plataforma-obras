@@ -1,3 +1,4 @@
+import { gerarSetasVisiveisGantt } from "./gantt-dependencias-visuais";
 /**
  * Exportação SVG autossuficiente do Gantt clássico.
  * Inclui a grade de atividades, meses, barras, marcos, avanço e vínculos visíveis.
@@ -44,6 +45,7 @@ export function gerarSvgGantt(input:GanttExportInput):string {
   const partes:string[]=[
     '<svg xmlns="http://www.w3.org/2000/svg" width="'+largura+'" height="'+altura+'" viewBox="0 0 '+largura+' '+altura+'">',
     '<rect width="100%" height="100%" fill="#fff"/>',
+    '<defs><marker id="gantt-export-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#526c80"/></marker></defs>',
     '<text x="15" y="23" font-family="Arial,sans-serif" fill="#163850" font-size="16" font-weight="700">'+xml(input.titulo)+'</text>',
     '<text x="15" y="40" font-family="Arial,sans-serif" font-size="10" fill="#537085">Gantt · EAP, cronograma e dependências visíveis · exportado em '+xml(new Date().toISOString().slice(0,10))+'</text>',
     '<rect x="0" y="49" width="'+largura+'" height="38" fill="#edf3f8"/>',
@@ -104,17 +106,24 @@ export function gerarSvgGantt(input:GanttExportInput):string {
       partes.push('<rect x="'+(esquerda+x0)+'" y="'+by+'" width="'+larguraBarra+'" height="'+h+'" rx="2" fill="'+cor+'"/>');
       const progresso=Math.max(0,Math.min(100,r.progresso));
       if(progresso>0)partes.push('<rect x="'+(esquerda+x0)+'" y="'+by+'" width="'+(larguraBarra*progresso/100)+'" height="'+h+'" rx="1" fill="#245b50" opacity=".7"/>');
+      // Mesmo contrato visual do Gantt da tela: nome na barra, ou a direita se curta.
+      if(!r.resumo){
+        const limite=Math.max(3,Math.floor((larguraBarra-12)/5.5));
+        if(larguraBarra>=84){
+          const texto=r.nome.length>limite?r.nome.slice(0,limite-1)+"…":r.nome;
+          partes.push('<text data-gantt-service-label="true" x="'+(esquerda+x0+5)+'" y="'+(meio+3.2)+'" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#fff">'+xml(texto)+'</text>');
+        }else if(x1+14<larguraTempo){
+          const espaco=larguraTempo-x1-8;
+          const max=Math.max(4,Math.floor(espaco/5.4));
+          const texto=r.nome.length>max?r.nome.slice(0,max-1)+"…":r.nome;
+          partes.push('<text data-gantt-service-label="true" x="'+(esquerda+x1+6)+'" y="'+(meio+3.2)+'" font-family="Arial,sans-serif" font-size="9" fill="#294a60">'+xml(texto)+'</text>');
+        }
+      }
     }
   });
-  for(const v of input.vinculos){
-    const a=geometria.get(v.de),b=geometria.get(v.para);
-    if(!a||!b)continue;
-    const tipo=v.tipo.toUpperCase();
-    const origem=(tipo==="SS"||tipo==="SF")?a.x0:a.x1;
-    const destino=(tipo==="FF"||tipo==="SF")?b.x1:b.x0;
-    const canal=Math.max(origem+7,destino+7);
-    partes.push('<path d="M '+origem+' '+a.y+' H '+canal+' V '+b.y+' H '+destino+'" stroke="#5f7180" stroke-width="1" fill="none"/>');
-    partes.push('<circle cx="'+destino+'" cy="'+b.y+'" r="2" fill="#748b9d"/>');
+  const criticas=new Set(input.linhas.filter(r=>r.critica).map(r=>r.activityId==null?r.codigo:String(r.activityId)));
+  for(const v of gerarSetasVisiveisGantt(input.vinculos, geometria, criticas)){
+    partes.push('<path d="'+xml(v.d)+'" stroke="'+(v.critica?'#a9362a':'#526c80')+'" stroke-width="'+(v.critica?'1.7':'1.15')+'" stroke-linejoin="round" fill="none" marker-end="url(#gantt-export-arrow)"/>');
   }
   const hojeX=esquerda+posicao(input.hoje);
   if(hojeX>=esquerda&&hojeX<=largura){

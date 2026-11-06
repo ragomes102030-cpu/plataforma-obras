@@ -163,7 +163,7 @@ export function LinhaBalancoEscadinha({
       if(ponto){setDetalhe({serie,ponto,cor:CORES[dados.series.indexOf(serie)%CORES.length]!,indice:0});return;}
     }
   },[atividadeSelecionadaId,dados.series]);
-  const [mostrarVinculos, setMostrarVinculos] = useState(false);
+  const [mostrarVinculos, setMostrarVinculos] = useState(true);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
   const rolagem = useRef<HTMLDivElement | null>(null);
   const painelVinculo = useRef<HTMLDetailsElement | null>(null);
@@ -585,14 +585,14 @@ export function LinhaBalancoEscadinha({
                         if(fimCortado < inicioCortado) return null;
                         const largura = Math.max(5, ((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
                         const x = ((inicioCortado-diaUtc(eixoInicio))/DIA)*pxDia;
-                        const nomeCurto = b.serie.nome.split(" ")[0] ?? b.serie.nome;
+                        const nomeCurto = b.serie.nome;
                         return <button type="button" key={b.serie.chave+"|"+b.ponto.codigo+"|"+b.ponto.inicio} data-testid="lob-step-bar"
                           className="lob-stairs-bar" style={{left:x,top:10+b.indice*23,width:largura,backgroundColor:b.cor}}
                           aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
                           title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
                           onClick={()=>{setDetalhe(b);onSelecionarAtividade?.(b.ponto.activityId??null);}}>
                           {b.ponto.quantidade!==null&&b.ponto.quantidade>0&&b.ponto.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,b.ponto.executado/b.ponto.quantidade*100))+"%"}}/>}
-                          <span>{largura >= 62 ? nomeCurto : ""}</span>
+                          <span>{largura >= 48 ? nomeCurto : b.ponto.codigo}</span>
                         </button>;
                       })}
                       {marcos.filter(m=>m.pavimento===local&&m.inicio>=eixoInicio&&m.inicio<eixoFimExclusivo).map(m=><span key={m.codigo} className="lob-stairs-milestone" style={{left:dataX(m.inicio)}} title={m.atividade+" · "+m.codigo+" · "+formatoCompleto(m.inicio)}>◆</span>)}
@@ -651,7 +651,7 @@ export function LinhaBalancoEscadinha({
                 ))}
                 {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={alturaEscadinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${alturaEscadinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
-                  {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#758b9b" strokeWidth="1.4" strokeDasharray="4 3" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
+                  {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#526c80" strokeWidth="1.6" data-testid="lob-dependency-path" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
                 </svg>}
               </div>
             </div>}
