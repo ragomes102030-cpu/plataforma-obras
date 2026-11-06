@@ -4333,7 +4333,11 @@ export const appRouter = router({
         const calculated = activities.filter(item => item.cpmCalculatedAt).length;
         const alteredAfterCpm = activities.some(item => item.cpmCalculatedAt && item.updatedAt > item.cpmCalculatedAt);
         return avaliarProntidaoObra({
-          escopo: { declarado: Boolean(project?.descricao && project.location && project.tipoDeObra), validado: Boolean(project?.descricao && nodes.length > 0 && nodes.every(item => item.scopeStatus === "aprovado" || item.scopeStatus === "validado")) },
+          // A validação do escopo é governada pelo cadastro declarado e pela
+          // versão aprovada da EAP. `scopeStatus` dos nós é um detalhe de
+          // inspeção/editoração e não pode rebaixar uma EAP já aprovada no
+          // próprio fluxo; antes isso gerava um falso bloqueio no Dashboard.
+          escopo: { declarado: Boolean(project?.descricao && project.location && project.tipoDeObra), validado: Boolean(project?.descricao && plan?.status === "approved") },
           eap: { existe: nodes.length > 0, aprovada: plan?.status === "approved", folhas: nodes.filter(item => item.nodeType === "pacote" || item.nodeType === "entrega").length },
           orcamento: { existe: Boolean(budget), aprovado: budget?.status === "aprovado", itens: budgetRows.length, semComposicao: budgetRows.filter(item => !item.compositionId).length, didaticos: budgetRows.filter(item => /didatic|rateio uniforme/i.test(String(item.source ?? ""))).length },
           atividades: { total: activities.length, semLocal: activities.filter(item => !item.pavimento).length, semDuracao: activities.filter(item => !item.durationDays || item.durationDays < 1).length },
