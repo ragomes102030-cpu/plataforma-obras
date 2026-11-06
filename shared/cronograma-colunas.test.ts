@@ -259,6 +259,16 @@ describe("painel", () => {
     expect(a.pesosFisicosAprovados).toBe(false);
   });
 
+  it("mantém o agregado disponível quando falta medição, mas os pesos cobrem o plano", () => {
+    const linhas = gradeDoCronograma(CAL, hoje, [
+      { ...linha01, codigo: "A", quantidade: 100, executado: 0, medicaoConfirmada: false, pesoFisico: 60, pesoFisicoAprovado: true },
+      { ...linha01, codigo: "B", quantidade: 100, executado: 50, medicaoConfirmada: true, pesoFisico: 40, pesoFisicoAprovado: true },
+    ]);
+    const a = agregadoDoCronograma(linhas);
+    expect(a.pesosFisicosAprovados).toBe(true);
+    expect(a.linhasSemMedicao).toBe(1);
+  });
+
   it("conta as quatro posições de status", () => {
     const linhas = gradeDoCronograma(CAL, hoje, [linha01, linha02, linha15]);
     const a = agregadoDoCronograma(linhas);

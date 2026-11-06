@@ -278,7 +278,12 @@ export function agregadoDoCronograma(
     linhasSemPesoFisico: semPesoFisico,
     linhasSemMedicao: semMedicao,
     somaPesosFisicos: peso,
-    pesosFisicosAprovados: linhas.length > 0 && semQuantidade === 0 && semPesoFisico === 0 && semMedicao === 0 && Math.abs(peso - 100) <= 0.01,
+    // A ausência de medição não invalida os pesos do plano. Ela significa que
+    // a atividade ainda não teve produção confirmada e deve ser tratada como
+    // "sem produção" pelo readiness, não como "sem agregado". Bloquear o
+    // denominador inteiro por isso fazia uma única atividade sem lançamento
+    // esconder o avanço ponderado de toda a obra.
+    pesosFisicosAprovados: linhas.length > 0 && semQuantidade === 0 && semPesoFisico === 0 && Math.abs(peso - 100) <= 0.01,
     totalAtividades: linhas.length,
     inicio,
     fim,
