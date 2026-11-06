@@ -222,13 +222,19 @@ export const PROJECT_SCOPED_READ_ONLY_TOOLS = new Set([
   "calcular_linha_balanco",
 ]);
 
+// MCPs públicos não exigem autenticação: nunca enviar o token privado legado.
+export function isPublicMcpUrl(value: string): boolean {
+  try { return new URL(value).pathname.replace(/\/+$/, "") === "/public-mcp"; }
+  catch { return false; }
+}
+
 export function createConstructionMcpClients() {
   const client = (url: string, name: string, bearerToken: string) => {
     if (url) {
       return new McpClient(url, {
         name,
         timeoutMs: ENV.mcpTimeoutMs,
-        bearerToken,
+        bearerToken: isPublicMcpUrl(url) ? "" : bearerToken,
       });
     }
 
