@@ -3539,6 +3539,28 @@ export const appRouter = router({
           recordsByUnit.set(key, bucket);
         }
         const preview = items.map(item => {
+          // Itens já vinculados não precisam passar pelo casamento fuzzy da
+          // base SEINFRA. Além de ser desnecessário, isso multiplicava o custo
+          // da consulta e deixava a tela presa em "Consultando" em catálogos
+          // grandes.
+          if (item.compositionId !== null) {
+            const quantity = Number(item.quantity);
+            const manualPrice = Number(item.unitPrice);
+            return {
+              budgetItemId: item.id,
+              code: item.code,
+              description: item.description,
+              unit: item.unit,
+              quantity,
+              manualPrice,
+              isPriceException: item.isPriceException,
+              match: null,
+              candidates: [],
+              variation: null,
+              alert: false,
+              projectedDelta: 0,
+            };
+          }
           const manualPrice = Number(item.unitPrice);
           const codeCandidates = records.filter(
             record => record.code === item.code

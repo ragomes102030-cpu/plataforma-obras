@@ -331,6 +331,13 @@ export function PainelConciliacao({ projetoId }: { projetoId: number }) {
             <div className="pl-planejamento-alerta">Consultando a base SEINFRA…</div>
           )}
 
+          {mostrarComposicoes && reconciliacao.isError && (
+            <div className="pl-planejamento-alerta">
+              Não foi possível concluir a consulta à base SEINFRA agora. Nenhuma alteração foi aplicada;
+              feche e reabra a conciliação para tentar novamente.
+            </div>
+          )}
+
           {mostrarComposicoes && confiaveis.length > 0 && (
             <div className="pl-planejamento-alerta">
               <button
