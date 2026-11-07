@@ -622,13 +622,15 @@ export function LinhaBalancoEscadinha({
                         const largura = Math.max(5, ((fimCortado-inicioCortado)/DIA+1)*pxDia-2);
                         const x = ((inicioCortado-diaUtc(eixoInicio))/DIA)*pxDia;
                         const nomeCurto = b.serie.nome;
+                        const sigla = nomeCurto.split(/\s+/).filter(Boolean).slice(0,3)
+                          .map(palavra=>palavra.slice(0,1).toLocaleUpperCase("pt-BR")).join("");
                         return <button type="button" key={b.serie.chave+"|"+b.ponto.codigo+"|"+b.ponto.inicio} data-testid="lob-step-bar"
                           className="lob-stairs-bar" style={{left:x,top:10+b.indice*23,width:largura,backgroundColor:b.cor}}
                           aria-label={b.serie.nome+" · "+local+" · "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)}
                           title={b.serie.nome+" | "+local+" | "+formatoCompleto(b.ponto.inicio)+" a "+formatoCompleto(b.ponto.fim)+" | EAP "+b.ponto.codigo}
                           onClick={()=>{setDetalhe(b);onSelecionarAtividade?.(b.ponto.activityId??null);}}>
                           {b.ponto.quantidade!==null&&b.ponto.quantidade>0&&b.ponto.executado>0&&<i aria-hidden="true" className="lob-stairs-bar-progress" style={{width:Math.min(100,Math.max(0,b.ponto.executado/b.ponto.quantidade*100))+"%"}}/>}
-                          <span>{largura >= 48 ? nomeCurto : b.ponto.codigo}</span>
+                          <span>{largura >= 48 ? nomeCurto : sigla}</span>
                         </button>;
                       })}
                       {marcos.filter(m=>m.pavimento===local&&m.inicio>=eixoInicio&&m.inicio<eixoFimExclusivo).map(m=><span key={m.codigo} className="lob-stairs-milestone" style={{left:dataX(m.inicio)}} title={m.atividade+" · "+m.codigo+" · "+formatoCompleto(m.inicio)}>◆</span>)}
