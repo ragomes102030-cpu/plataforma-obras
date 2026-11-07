@@ -557,7 +557,7 @@ export function LinhaBalancoEscadinha({
                 <input type="checkbox" data-testid="lob-show-service-flow" checked={mostrarFluxoSeries}
                   onChange={e=>setMostrarFluxoSeries(e.target.checked)}/>
                 Traçado entre pavimentos ({fluxosSeries.length})
-              </label>
+              </label>}
               {dependenciasIds.length>0 && <span className="lob-stairs-link-coverage" data-testid="lob-link-coverage"
                 title="Predecessoras da rede CPM representadas pelos serviços visíveis; vínculos ausentes dependem de localização/visibilidade">
                 {analiseVinculos.dependenciasRepresentadas}/{analiseVinculos.dependenciasTotais} predecessoras representadas
