@@ -120,3 +120,26 @@ export function calcularFaixasCompactasLob(
   }
   return { faixas, totalFaixas: fimPorFaixa.length };
 }
+
+
+/** Pavimentos superiores acima dos inferiores; térreo abaixo do 1º.
+ * Setores que não são pavimentos (como Fachadas) ficam em bloco separado.
+ * Não inferimos localização física de uma disciplina textual. */
+function numeroPavimentoLob(nome: string): number | null {
+  const valor = nome.trim().toLocaleLowerCase("pt-BR").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"");
+  if (/^(terreo|p0+)(?:\b|\s)/.test(valor)) return 0;
+  const subsolo = valor.match(/^s(?:ubsolo)?\s*(\d+)\b/);
+  if (subsolo) return -Number(subsolo[1]);
+  const pavimento = valor.match(/^p(?:av(?:imento)?)?\s*0*(\d+)\b|^(\d+)\s*[º°ª]?\s*(?:pav(?:imento)?|andar)?\b/);
+  if (pavimento) return Number(pavimento[1] ?? pavimento[2]);
+  return null;
+}
+export function ordenarLocaisFisicosLob(a: string, b: string): number {
+  const nivelA = numeroPavimentoLob(a);
+  const nivelB = numeroPavimentoLob(b);
+  if (nivelA !== null && nivelB !== null) return nivelB-nivelA;
+  if (nivelA !== null) return -1;
+  if (nivelB !== null) return 1;
+  return b.localeCompare(a, "pt-BR", {numeric:true});
+}
