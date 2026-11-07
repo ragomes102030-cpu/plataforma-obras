@@ -95,7 +95,7 @@ async function versaoDoPlano(projectId: number) {
   if (existente) return existente;
   const [versao] = await db
     .insert(projectPlanVersions)
-    .values({ projectId, versionNumber: 1 })
+    .values({ projectId, versionNumber: 1, status: "approved" })
     .returning({ id: projectPlanVersions.id });
   versaoDoPlanoPorObra.set(projectId, versao.id);
   return versao.id;
@@ -262,6 +262,23 @@ describe("coletarDadosMedicao — produção no período", () => {
     );
 
     expect(dados.produzidoAcumulado).toEqual([{ budgetItemId: itemId, quantity: 30 }]);
+  });
+
+  it("isola producao de exemplo mesmo quando lancamento esta confirmado", async () => {
+    const { projectId } = await criarObra();
+    const versaoId = await criarVersao(projectId, 1, "aprovado");
+    const itemId = await criarItem(versaoId, "01.01", "100.000", "10.00");
+    const real = await criarAtividade(projectId, { budgetItemId: itemId });
+    const qa = await criarAtividade(projectId, { budgetItemId: itemId });
+    await lancarProducao(projectId, real, "2026-02-10", "10.000");
+    await lancarProducao(projectId, qa, "2026-02-10", "40.000");
+    await db.update(productionEntries).set({ exemplo: 1 }).where(eq(productionEntries.activityId, qa));
+    const dados = await coletarDadosMedicao(
+      db, projectId,
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-28T23:59:59Z")
+    );
+    expect(dados.produzidoAcumulado).toEqual([{ budgetItemId: itemId, quantity: 10 }]);
   });
 
   it("soma produção de atividades diferentes que apontam para o mesmo item", async () => {
