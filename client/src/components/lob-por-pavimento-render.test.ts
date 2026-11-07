@@ -36,6 +36,9 @@ describe("LOB parcelada — renderização real do Excel aprovado",()=>{
     const html=render();
     expect((html.match(/data-testid="lob-step-bar"/g)??[])).toHaveLength(4);
     expect((html.match(/data-testid="lob-dependency-path"/g)??[])).toHaveLength(2);
+    expect((html.match(/data-testid="lob-service-flow"/g)??[])).toHaveLength(2);
+    expect(html).toContain('data-testid="lob-show-service-flow"');
+    expect(html).toContain("traçado de repetição, não vínculo CPM");
     expect(html).toContain("01/01/2027 a 05/01/2027");
     expect(html).toContain("06/01/2027 a 10/01/2027");
     expect(html).toContain("06/01/2027 a 09/01/2027");
