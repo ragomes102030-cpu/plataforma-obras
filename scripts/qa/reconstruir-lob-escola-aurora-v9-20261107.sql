@@ -3,6 +3,7 @@
 -- A nova v9 é DRAFT. A v8 e as baselines ativas não sofrem alteração.
 -- Produção real/financeiro não são alterados. Quantidades simuladas identificadas.
 DO $rebuild$
+#variable_conflict use_variable
 DECLARE
   pid integer; base_id integer; next_id integer; new_id integer; mapped_id integer;
   mapped_parent integer; mapped_succ integer; mapped_pred integer;
