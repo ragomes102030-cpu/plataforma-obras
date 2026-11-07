@@ -53,7 +53,7 @@ describe("Distribuição multilocal LOB — não duplica quantitativo, CPM ou EA
  });
  it("rejeita parcela que termina depois da janela CPM sem alterar dados legados",()=>{
    const d=[part(1,1,25,"2026-11-05","2026-12-01")];
-   const r=integrarDistribuicoesLob([parent],ids,units,d,{"10":"2026-11-30"});
+   const r=integrarDistribuicoesLob([parent],ids,units,d,{"1.4.3":"2026-11-30"});
    expect(r.parcelasForaDaJanelaCpm).toBe(1);
    expect(r.entradas).toHaveLength(0);
    expect(r.pendentes).toEqual([parent]);
