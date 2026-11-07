@@ -47,9 +47,10 @@ describe("LOB parcelada — renderização real do Excel aprovado",()=>{
     expect(html).toContain("1º Pavimento");
     expect(html).toContain("2º Pavimento");
   });
-  it("não inventa vínculo quando os locais não coincidem",()=>{
+  it("não vincula atividade de fora da população aprovada",()=>{
     const html=render([{de:10,para:98,tipo:"FS",lag:0}]);
     expect(html).not.toContain('data-testid="lob-dependency-path"');
-    expect(html).toContain("1 sem representação neste filtro");
+    expect(html).not.toContain("Mostrar vínculos (1)");
+    expect(html).not.toContain("1 sem representação neste filtro");
   });
 });
