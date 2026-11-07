@@ -4427,7 +4427,7 @@ export const appRouter = router({
           .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
         const nodes = plan ? await db.select({ id: wbsNodes.id, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus })
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
-        const activities = plan ? await db.select({ id: scheduleActivities.id, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset })
+        const activities = plan ? await db.select({ id: scheduleActivities.id, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset, plannedQuantity: scheduleActivities.plannedQuantity })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
         const dependencies = plan ? await db.select({ id: scheduleDependencies.id, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
