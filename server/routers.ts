@@ -4433,7 +4433,8 @@ export const appRouter = router({
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
         const [budget] = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
         const budgetRows = budget ? await db.select({ compositionId: budgetItems.compositionId, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, budget.id)) : [];
-        const [baseline] = await db.select({ status: scheduleBaselines.status }).from(scheduleBaselines).where(eq(scheduleBaselines.projectId, input.projectId)).limit(1);
+        const [baseline] = await db.select({ status: scheduleBaselines.status }).from(scheduleBaselines)
+          .where(and(eq(scheduleBaselines.projectId, input.projectId), eq(scheduleBaselines.status, "ativa"))).limit(1);
         const measurementRows = await db.select({ id: measurements.id, status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
         const measurementItemRows = measurementRows.length ? await db.select({ measurementId: measurementItems.measurementId }).from(measurementItems).where(inArray(measurementItems.measurementId, measurementRows.map(row => row.id))) : [];
         const successors = new Map<number, number[]>();
