@@ -4577,9 +4577,13 @@ export const appRouter = router({
           if(!activity||activity.exemplo===1)throw badRequest("Atividade real da versão corrente não encontrada.");
           if(activity.quantity===null||Number(activity.quantity)<=0)
             throw badRequest("Atividade sem quantitativo aprovado para distribuição. Complete a EAP.");
-          const [unit]=await tx.select({id:productionUnits.id}).from(productionUnits)
+          const [unit]=await tx.select({id:productionUnits.id,name:productionUnits.name}).from(productionUnits)
             .where(and(eq(productionUnits.id,input.unitId),eq(productionUnits.projectId,input.projectId))).limit(1);
           if(!unit)throw forbidden("Local físico não pertence à obra.");
+          // Setores de treinamento permanecem em versões históricas para auditoria,
+          // mas não podem receber novas parcelas no planejamento que será homologado.
+          if(/did[aá]tic/i.test(unit.name))
+            throw badRequest("Local didático não é uma frente física comprovada. Cadastre ou selecione o local real da atividade.");
           const [project]=await tx.select({start:projects.plannedStart,finish:projects.plannedFinish})
             .from(projects).where(eq(projects.id,input.projectId)).limit(1);
           const obraInicio=project?.start?.toISOString().slice(0,10);
