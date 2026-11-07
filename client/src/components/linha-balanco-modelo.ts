@@ -38,7 +38,7 @@ export function rotuloMes(iso: string): string {
 /** Datas da parcela vencem as globais; nas demais tarefas o ID da atividade
  * vence o código EAP (que pode aparecer em mais de uma atividade). */
 export function terminoCorretoLob(l: EntradaDaLinha, finsCalculados: Record<string,string>): string | undefined {
-  return /^lob-segmento-\\d+-\\d+$/.test(l.codigo)
+  return /^lob-segmento-\d+-\d+$/.test(l.codigo)
     ? (finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)])
     : (finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo]);
 }
