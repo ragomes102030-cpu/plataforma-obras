@@ -122,10 +122,10 @@ export function LinhaBalancoEscadinha({
   const linhasFisicas = useMemo(
     () => [...(possuiQaSeparada
       ? locaisConfirmados.linhas.filter(l =>
-          !integrado.codigosDistribuidos.has(l.codigo) &&
+          !(l.activityId != null && integrado.atividadeIdsDistribuidos.has(l.activityId)) &&
           (locaisConfirmados.codigosConfirmados.has(l.codigo) ||
             (exibirQa && !!codigosExemplo?.has(l.codigo))))
-      : locaisConfirmados.linhas.filter(l=>!integrado.codigosDistribuidos.has(l.codigo))),
+      : locaisConfirmados.linhas.filter(l=>!(l.activityId != null && integrado.atividadeIdsDistribuidos.has(l.activityId)))),
       ...integrado.entradas],
     [locaisConfirmados, possuiQaSeparada, exibirQa, codigosExemplo, integrado]
   );
@@ -313,6 +313,8 @@ export function LinhaBalancoEscadinha({
     barrasPorLocal.set(local, barras);
   }
 
+  const seriesSemDefasagem = seriesExibidas.filter(serie =>
+    serie.pontos.length > 1 && new Set(serie.pontos.map(ponto=>ponto.inicio)).size === 1);
   const qtdBarras = Array.from(barrasPorLocal.values()).reduce((s, b) => s + b.length, 0);
   const qtdGrafico = qtdBarras + pontosPendentes.length;
   const resumo = resumoLob(seriesExibidas,locais,hoje);
@@ -525,10 +527,20 @@ export function LinhaBalancoEscadinha({
               <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-STATUS_COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
               <button type="button" onClick={()=>{setIncluirInicioObra(true);setDataInicial("");setDataFinal("");setPxManual(null);}}>Período completo</button>
               {estadoVinculos==="pronto" && ligacoes.length>0 && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarVinculos} onChange={e=>setMostrarVinculos(e.target.checked)}/> Mostrar vínculos ({ligacoes.length})</label>}
+              {dependenciasIds.length>0 && <span className="lob-stairs-link-coverage" data-testid="lob-link-coverage"
+                title="Predecessoras da rede CPM representadas pelos serviços visíveis; vínculos ausentes dependem de localização/visibilidade">
+                {analiseVinculos.dependenciasRepresentadas}/{analiseVinculos.dependenciasTotais} predecessoras representadas
+                {analiseVinculos.semRepresentacao>0 ? ` · ${analiseVinculos.semRepresentacao} sem representação neste filtro` : ""}
+              </span>}
               {linhas.some(l=>l.marco&&dataValida(l.inicio)) && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarMarcos} onChange={e=>setMostrarMarcos(e.target.checked)}/> Mostrar marcos</label>}
             </div>
           </div>
 
+          {seriesSemDefasagem.length>0 && <p className="lob-stairs-cadence-warning" role="status" data-testid="lob-no-floor-cadence">
+            {seriesSemDefasagem.length} serviço(s) repetido(s) iniciam na mesma data em todos os locais visíveis.
+            Não há defasagem física cadastrada para desenhar escadinhas diagonais reais.
+            O gráfico preserva as datas aprovadas; programe equipes e ritmos em uma versão de trabalho.
+          </p>}
           <details className="lob-stairs-analysis" data-testid="lob-flow-analysis">
             <summary>
               <span className="lob-stairs-analysis-name"><Activity size={16}/> Análise de fluxo</span>
@@ -675,7 +687,18 @@ export function LinhaBalancoEscadinha({
                 ))}
                 {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={alturaEscadinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${alturaEscadinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
-                  {setas.map((v,i)=><path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`} fill="none" stroke="#526c80" strokeWidth="1.6" data-testid="lob-dependency-path" markerEnd="url(#lob-link-arrow)"><title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag}</title></path>)}
+                  {setas.map((v,i)=>{
+                     const selecionadaId=detalhe?.ponto.activityId;
+                     const destacada=selecionadaId==null || !("chaveOrigem" in v) ||
+                       v.chaveOrigem.startsWith(selecionadaId+"|") ||
+                       v.chaveDestino.startsWith(selecionadaId+"|");
+                     return <path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`}
+                       fill="none" stroke="#526c80" strokeWidth={destacada?"1.45":"0.8"} opacity={destacada?0.68:0.14}
+                       data-testid="lob-dependency-path" markerEnd="url(#lob-link-arrow)">
+                       <title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag+
+                         ("localOrigem" in v ? " · "+v.localOrigem+" → "+v.localDestino : "")}</title>
+                     </path>;
+                   })}
                 </svg>}
               </div>
             </div>}
