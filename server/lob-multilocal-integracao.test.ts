@@ -29,6 +29,15 @@ describe("LOB multi-local — contrato de persistência seguro",()=>{
     expect(save).not.toContain("update(scheduleActivities)");
     expect(save).not.toContain("scheduleBaselines");
   });
+  it("barra setor didatico antes de qualquer insert de parcela",()=>{
+    const save=router.split("salvarDistribuicaoLob: protectedProcedure")[1]?.split("removerDistribuicaoLob:")[0]??"";
+    const guard=save.indexOf('if(/did[aá]tic/i.test(unit.name))');
+    const write=save.indexOf('await tx.insert(lobActivityLocations)');
+    expect(guard).toBeGreaterThan(0);
+    expect(write).toBeGreaterThan(guard);
+    expect(save).toContain('if(!unit)throw forbidden("Local físico não pertence à obra.")');
+    expect(save).toContain('if(!version||!["draft","proposed"].includes(version.status))');
+  });
   it("mantém a distribuição em cada fork e apaga ao eliminar a obra",()=>{
     expect(versions).toContain("parcelasBase");
     expect(versions).toContain("activityIdMap.get(parcela.activityId)");
