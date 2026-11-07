@@ -41,6 +41,16 @@ describe("Distribuição multilocal LOB — não duplica quantitativo, CPM ou EA
    expect(r.pendentes[0]?.atividade).toContain("saldo sem local");
    expect(parent.quantidade).toBe(100);
  });
+ it("não desenha parcelas antigas que antecedem a janela oficial CPM e preserva a atividade pendente",()=>{
+   const resultado=integrarDistribuicoesLob([parent],ids,units,[
+     part(1,1,25,"2026-10-29","2026-11-03"),
+     part(2,2,25,"2026-11-06","2026-11-10"),
+   ]);
+   expect(resultado.parcelasForaDaJanelaCpm).toBe(1);
+   expect(resultado.entradas).toHaveLength(1);
+   expect(resultado.entradas[0]?.inicio).toBe("2026-11-06");
+   expect(resultado.pendentes[0]?.quantidade).toBe(75);
+ });
  it("ignora referências órfãs, datas inválidas e quantidade ausente",()=>{
    const r=integrarDistribuicoesLob([parent],ids,units,[
      part(1,404,25,"2026-11-01","2026-11-04"),
