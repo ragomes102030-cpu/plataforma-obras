@@ -448,6 +448,11 @@ export function LinhaBalancoEscadinha({
         </div>
       </header>
 
+      {integrado.parcelasForaDaJanelaCpm > 0 && (
+        <p role="alert" data-testid="lob-cpm-window-warning" className="lob-stairs-error">
+          {integrado.parcelasForaDaJanelaCpm} parcela(s) cadastrada(s) antes da data oficial do CPM foram retiradas apenas da visualização. Os registros permanecem preservados para correção em versão de trabalho. Revise calendário, dependências e ritmo por local antes de homologar.
+        </p>
+      )}
       {repetitivas.length === 0 && atividadesGerais.length === 0 ? (
         <div className="lob-stairs-empty" role="status">
           <h3>LINHA DE RITMO AINDA NÃO DISPONÍVEL</h3>
