@@ -59,6 +59,15 @@ describe("Distribuição multilocal LOB — não duplica quantitativo, CPM ou EA
    expect(r.pendentes).toEqual([parent]);
    expect(d[0].finishDate).toBe("2026-12-01");
  });
+ it("oculta parcelas historicas de locais didaticos sem apagar ou descontar quantitativo",()=>{
+   const didatico={id:5,code:"T-A",name:"Terreo - Bloco A (didatico)",unitType:"setor"};
+   const d=[part(1,5,25,"2026-11-02","2026-11-05")];
+   const r=integrarDistribuicoesLob([parent],ids,[...units,didatico],d);
+   expect(r.parcelasEmLocaisDidaticos).toBe(1);
+   expect(r.entradas).toHaveLength(0);
+   expect(r.pendentes).toEqual([parent]);
+   expect(d[0].plannedQuantity).toBe("25");
+ });
  it("ignora referências órfãs, datas inválidas e quantidade ausente",()=>{
    const r=integrarDistribuicoesLob([parent],ids,units,[
      part(1,404,25,"2026-11-01","2026-11-04"),

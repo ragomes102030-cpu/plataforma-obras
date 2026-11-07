@@ -26,6 +26,7 @@ export function integrarDistribuicoesLob(
   const entradas:EntradaDaLinha[]=[];
   // Parcelas legadas fora da janela oficial não podem simular avanço antes do CPM.
   let parcelasForaDaJanelaCpm=0;
+  let parcelasEmLocaisDidaticos=0;
   const fins:Record<string,string>={};
   const codigosConfirmados=new Set<string>();
   const codigosDistribuidos=new Set<string>();
@@ -36,6 +37,11 @@ export function integrarDistribuicoesLob(
     const quantidade=Number(d.plannedQuantity);
     if(!fonte||!nomeLocal||fonte.marco||!dataValida(d.startDate)||!dataValida(d.finishDate)||
       d.finishDate<d.startDate||!Number.isFinite(quantidade)||quantidade<=0)continue;
+    // Os locais didáticos pertencem ao histórico, não ao plano físico real.
+    if (/did[aá]tic/i.test(nomeLocal)) {
+      parcelasEmLocaisDidaticos++;
+      continue;
+    }
     // A data de início da fonte vem da régua CPM/calendário da obra. Não ajustar
     // automaticamente: o registro histórico permanece para revisão humana.
     const fimOficial = finsCalculados[String(fonte.activityId)] ?? finsCalculados[fonte.codigo];
@@ -70,5 +76,5 @@ export function integrarDistribuicoesLob(
       executado:0,
     }];
   });
-  return {entradas,fins,codigosConfirmados,codigosDistribuidos,atividadeIdsDistribuidos,pendentes,somaPorCodigo,parcelasForaDaJanelaCpm};
+  return {entradas,fins,codigosConfirmados,codigosDistribuidos,atividadeIdsDistribuidos,pendentes,somaPorCodigo,parcelasForaDaJanelaCpm,parcelasEmLocaisDidaticos};
 }

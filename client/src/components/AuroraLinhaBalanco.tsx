@@ -448,6 +448,11 @@ export function LinhaBalancoEscadinha({
         </div>
       </header>
 
+      {integrado.parcelasEmLocaisDidaticos > 0 && (
+        <p role="alert" data-testid="lob-didactic-location-warning" className="lob-stairs-error">
+          {integrado.parcelasEmLocaisDidaticos} parcela(s) vinculada(s) a setores didáticos foram ocultadas da Linha de Balanço, sem alterar os dados históricos nem reduzir o saldo da atividade. É necessário confirmar os locais físicos antes da homologação.
+        </p>
+      )}
       {integrado.parcelasForaDaJanelaCpm > 0 && (
         <p role="alert" data-testid="lob-cpm-window-warning" className="lob-stairs-error">
           {integrado.parcelasForaDaJanelaCpm} parcela(s) cadastrada(s) antes da data oficial do CPM foram retiradas apenas da visualização. Os registros permanecem preservados para correção em versão de trabalho. Revise calendário, dependências e ritmo por local antes de homologar.
