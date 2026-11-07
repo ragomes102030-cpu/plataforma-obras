@@ -23,6 +23,8 @@ export function integrarDistribuicoesLob(
   const somaPorAtividade=new Map<number,number>();
   const atividadeIdsDistribuidos=new Set<number>();
   const entradas:EntradaDaLinha[]=[];
+  // Parcelas legadas fora da janela oficial não podem simular avanço antes do CPM.
+  let parcelasForaDaJanelaCpm=0;
   const fins:Record<string,string>={};
   const codigosConfirmados=new Set<string>();
   const codigosDistribuidos=new Set<string>();
@@ -33,6 +35,12 @@ export function integrarDistribuicoesLob(
     const quantidade=Number(d.plannedQuantity);
     if(!fonte||!nomeLocal||fonte.marco||!dataValida(d.startDate)||!dataValida(d.finishDate)||
       d.finishDate<d.startDate||!Number.isFinite(quantidade)||quantidade<=0)continue;
+    // A data de início da fonte vem da régua CPM/calendário da obra. Não ajustar
+    // automaticamente: o registro histórico permanece para revisão humana.
+    if(dataValida(fonte.inicio)&&d.startDate<fonte.inicio){
+      parcelasForaDaJanelaCpm++;
+      continue;
+    }
     const chave="lob-segmento-"+d.activityId+"-"+d.unitId;
     entradas.push({
       ...fonte,codigo:chave,pavimento:nomeLocal,inicio:d.startDate,
@@ -59,5 +67,5 @@ export function integrarDistribuicoesLob(
       executado:0,
     }];
   });
-  return {entradas,fins,codigosConfirmados,codigosDistribuidos,atividadeIdsDistribuidos,pendentes,somaPorCodigo};
+  return {entradas,fins,codigosConfirmados,codigosDistribuidos,atividadeIdsDistribuidos,pendentes,somaPorCodigo,parcelasForaDaJanelaCpm};
 }
