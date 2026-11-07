@@ -22,6 +22,10 @@ describe("LOB multi-local — contrato de persistência seguro",()=>{
     expect(save).toContain("activity.exemplo===1");
     expect(save).toContain("usado+qtdMil>total");
     expect(save).toContain("unitId:input.unitId");
+    expect(save).toContain("productionUnits.name");
+    expect(save).toContain('did[aá]tic');
+    expect(save).toContain("Local didático não é uma frente física comprovada");
+    expect(save).not.toContain("delete(lobActivityLocations)");
     expect(save).not.toContain("update(scheduleActivities)");
     expect(save).not.toContain("scheduleBaselines");
   });
