@@ -177,8 +177,8 @@ export function VisualizacaoPlanejamento({
     })),
   [planejamento.data]);
 
-  // A LOB ainda agrupa a leitura pelo pacote EAP. O Gantt nunca usa esta
-  // tradução porque códigos repetidos não identificam uma atividade.
+  // Compatibilidade com testes e LOB legada. Vínculos de parcelas físicas
+  // são resolvidos pelos IDs imutáveis de atividade + local, não pelo código EAP.
   const dependenciasPorCodigo = useMemo(() => {
     const codigoPorAtividade = new Map(atividades.map(activity => [activity.id, activity.wbsCode]));
     return (planejamento.data?.dependencies ?? []).flatMap(dependencia => {
@@ -294,7 +294,7 @@ export function VisualizacaoPlanejamento({
       ) : (
         <>
           <LinhaBalancoEscadinha linhas={linhas} finsCalculados={finsCalculados} hoje={hoje} inicioObra={inicioObra}
-            codigosExemplo={codigosExemplo} dependencias={dependenciasPorCodigo}
+            codigosExemplo={codigosExemplo} dependencias={dependenciasPorCodigo} dependenciasIds={dependenciasPorId}
             estadoVinculos={planejamento.isError ? "erro" : planejamento.isLoading ? "carregando" : "pronto"}
             atividadeSelecionadaId={atividadeSelecionadaId} onSelecionarAtividade={onSelecionarAtividade}
             nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
