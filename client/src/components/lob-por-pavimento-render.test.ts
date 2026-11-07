@@ -9,7 +9,7 @@ const lines: EntradaDaLinha[] = [
     frente:"Estrutura", pavimento:null, inicio:"2027-01-01", duracao:28,
     quantidade:200, unidade:"m³", executado:0, marco:false },
   { activityId:11, codigo:"1.5.1", atividade:"Alvenaria",
-    frente:"Vedações", pavimento:null, inicio:"2027-02-01", duracao:28,
+    frente:"Vedações", pavimento:null, inicio:"2027-01-06", duracao:23,
     quantidade:200, unidade:"m²", executado:0, marco:false },
 ];
 const units=[
@@ -24,7 +24,7 @@ const distributions=[
 ];
 const render = (deps=[{de:10,para:11,tipo:"FS",lag:0}]) =>
   renderToStaticMarkup(createElement(LinhaBalancoEscadinha,{
-    linhas:lines, finsCalculados:{"10":"2027-01-28","11":"2027-02-28"},
+    linhas:lines, finsCalculados:{"10":"2027-01-28","11":"2027-01-28"},
     unidades:units,distribuicoes:distributions,
     atividadeIds:lines.map(l=>({id:l.activityId!,wbsCode:l.codigo})),
     dependenciasIds:deps, estadoVinculos:"pronto",

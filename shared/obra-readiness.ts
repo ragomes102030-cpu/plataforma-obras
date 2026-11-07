@@ -20,6 +20,7 @@ export type SnapshotProntidao = {
   cpm?: { calculadoEm: string | null; alteradoDepois: boolean; atividadesCalculadas: number };
   baseline?: { existe: boolean; aprovada: boolean };
   execucao?: { medicoes: number; comUnidade: number; confirmadas: number };
+  lob?: { parcelas: number; foraJanelaCpm: number; orfas: number; parcelasEmLocaisDidaticos?: number };
 };
 
 export type ResultadoProntidao = {
@@ -79,7 +80,11 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   add("baseline", baselineBloqueios.length ? "bloqueado" : "aprovado", baselineBloqueios);
 
   const execucao = snapshot.execucao;
+  const lob = snapshot.lob;
   const execBloqueios: BloqueioProntidao[] = [];
+  if (lob?.orfas) execBloqueios.push(bloqueio("LOB_PARCELAS_ORFAS", "Parcelas sem atividade válida", `${lob.orfas} parcela(s) referenciam atividades ausentes na versão corrente.`, "Revise as referências na versão de trabalho antes da homologação.", ["execucao"], "critica"));
+  if (lob?.parcelasEmLocaisDidaticos) execBloqueios.push(bloqueio("LOB_LOCAL_DIDATICO", "Parcelas em locais demonstrativos", `${lob.parcelasEmLocaisDidaticos} parcela(s) estão atribuídas a locais identificados como didáticos.`, "Revise a localização física de cada serviço na versão de trabalho. Serviços globais não devem gerar repetição artificial entre pavimentos.", ["execucao"], "critica"));
+  if (lob?.foraJanelaCpm) execBloqueios.push(bloqueio("LOB_FORA_JANELA_CPM", "Linha de Balanço contradiz o CPM", `${lob.foraJanelaCpm} parcela(s) estão fora da janela oficial de execução da atividade.`, "Revise datas e locais na versão de trabalho, respeitando o calendário da obra. Não invente escadinhas.", ["execucao"], "critica"));
   if (!execucao?.medicoes) execBloqueios.push(bloqueio("MEDICAO_AUSENTE", "Execução sem medições", "Não há registros confirmados para comparar planejado e realizado.", "Registre medições com quantidade, unidade, data e evidência na aba Controle.", ["execucao"], "media"));
   else if (!execucao.comUnidade) execBloqueios.push(bloqueio("MEDICAO_SEM_ITENS", "Medições sem itens", "Há documentos de medição, mas nenhum item quantitativo vinculado.", "Abra cada medição, vincule os itens do orçamento e informe quantidade e unidade antes de acompanhar o avanço.", ["execucao"], "alta"));
   add("execucao", execBloqueios.length ? "incompleto" : "pronto_revisao", execBloqueios);
