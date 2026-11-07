@@ -11,6 +11,10 @@ import { analisarFluxoLob } from "./lob-analise-fluxo";
 import { calcularVinculosExibidos, resumoLob, taxaPlanejadaLob, type VínculoLob } from "./lob-indicadores";
 import "./linha-balanco-profissional.css";
 import { integrarDistribuicoesLob, type DistribuicaoLob, type AtividadeIdLob } from "./lob-distribuicao-modelo";
+import {
+  calcularFaixasCompactasLob, chavePontoLob, resolverVinculosLocalizadosLob,
+  type DependenciaAtividadeLob,
+} from "./lob-vinculos-localizados";
 
 export { prepararLinhaBalancoVertical } from "./linha-balanco-modelo";
 
@@ -32,6 +36,8 @@ type Props = {
   onCriarUnidade?: (code:string,name:string,unitType:string)=>void;
   onAbrirAtividades: () => void;
   dependencias?: VínculoLob[];
+  /** Vínculos de produção reais, identificados pela atividade do CPM. */
+  dependenciasIds?: readonly DependenciaAtividadeLob[];
   estadoVinculos?: "pronto" | "carregando" | "erro";
   atividadeSelecionadaId?: number | null;
   onSelecionarAtividade?: (activityId:number|null)=>void;
@@ -80,7 +86,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
 export function LinhaBalancoEscadinha({
   linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],
   editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onDefinirTodosLocais,onCriarUnidade,
-  onAbrirAtividades,dependencias=[],estadoVinculos="carregando",atividadeSelecionadaId,onSelecionarAtividade
+  onAbrirAtividades,dependencias=[],dependenciasIds=[],estadoVinculos="carregando",atividadeSelecionadaId,onSelecionarAtividade
 }: Props) {
   // O cronograma pode conter serviços reais e atividades de QA em 2028.
   // O modo padrão prioriza o plano real e mantém a simulação isolada.
@@ -294,12 +300,13 @@ export function LinhaBalancoEscadinha({
       const ponto = serie.pontos.find(p => p.local === local);
       if (ponto) barras.push({ serie, ponto, cor: CORES[repetitivas.findIndex(s => s.chave === serie.chave) % CORES.length]!, indice });
     });
-    // Cada atividade recebe uma faixa própria. O empacotamento por sobreposição
-    // economizava altura, mas fazia dezenas de tarefas do mesmo local parecerem
-    // duas ou três barras sobrepostas. A escadinha precisa ser auditável: uma
-    // linha por atividade, com rolagem vertical no quadro quando necessário.
-    barras.forEach((barra, indice) => { barra.indice = indice; });
-    const altura = Math.max(64, 14 + barras.length * 23);
+    // Como no Excel aprovado, barras em períodos sequenciais compartilham a
+    // mesma faixa. Apenas serviços que realmente se sobrepõem ocupam outra.
+    const distribuicao = calcularFaixasCompactasLob(barras.map(barra=>({
+      inicio:barra.ponto.inicio,fim:barra.ponto.fim,
+    })));
+    barras.forEach((barra, indice) => { barra.indice = distribuicao.faixas[indice]!; });
+    const altura = Math.max(64, 14 + distribuicao.totalFaixas * 23);
     deslocamentoPorLocal.set(local, alturaEscadinha);
     alturaPorLocal.set(local, altura);
     alturaEscadinha += altura;
@@ -310,30 +317,47 @@ export function LinhaBalancoEscadinha({
   const qtdGrafico = qtdBarras + pontosPendentes.length;
   const resumo = resumoLob(seriesExibidas,locais,hoje);
   const originais = new Map([...linhas,...integrado.entradas].map(l=>[l.codigo,l]));
-  const ligacoes = estadoVinculos==="pronto"
-    ? calcularVinculosExibidos(dependencias,[...resumo.pontos,...pontosPendentes]) : [];
+  // Pontos sem local não podem usar a disciplina legada como pavimento.
+  // Eles continuam visíveis, com seu próprio vínculo de atividade.
+  const pontosParaVinculos = [
+    ...resumo.pontos,
+    ...pontosPendentes.map(p=>({...p,local:""})),
+  ];
+  const analiseVinculos = estadoVinculos==="pronto" && dependenciasIds.length
+    ? resolverVinculosLocalizadosLob(dependenciasIds,pontosParaVinculos)
+    : {vinculos:[],semRepresentacao:0,dependenciasRepresentadas:0,dependenciasTotais:0};
+  // Fallback exclusivo das fixtures antigas que não enviam IDs de atividade.
+  const ligacoesLegadas = estadoVinculos==="pronto" && !dependenciasIds.length
+    ? calcularVinculosExibidos(dependencias,pontosParaVinculos) : [];
+  const ligacoes = dependenciasIds.length ? analiseVinculos.vinculos : ligacoesLegadas;
   const coordenadas = new Map<string,{inicio:number;fim:number;y:number}>();
   locais.forEach(local=>{
-    for (const barra of barrasPorLocal.get(local) ?? []) coordenadas.set(barra.ponto.codigo,{
-      inicio:dataX(barra.ponto.inicio),
-      fim:dataX(adicionarDias(barra.ponto.fim,1)),
-      y:(deslocamentoPorLocal.get(local) ?? 0)+19+barra.indice*23,
-    });
+    for (const barra of barrasPorLocal.get(local) ?? []) {
+      const geometria={inicio:dataX(barra.ponto.inicio),
+        fim:dataX(adicionarDias(barra.ponto.fim,1)),
+        y:(deslocamentoPorLocal.get(local) ?? 0)+19+barra.indice*23};
+      coordenadas.set(chavePontoLob(barra.ponto),geometria);
+      coordenadas.set(barra.ponto.codigo,geometria);
+    }
   });
   let deslocamentoPendente = alturaEscadinha;
   for (const linha of linhasPendentes) {
-    if (linha.tipo==="atividade") coordenadas.set(linha.ponto.codigo,{
-      inicio:dataX(linha.ponto.inicio),fim:dataX(adicionarDias(linha.ponto.fim,1)),
-      y:deslocamentoPendente+19,
-    });
+    if (linha.tipo==="atividade") {
+      const geometria={inicio:dataX(linha.ponto.inicio),
+        fim:dataX(adicionarDias(linha.ponto.fim,1)),
+        y:deslocamentoPendente+19};
+      coordenadas.set(chavePontoLob({...linha.ponto,local:""}),geometria);
+      coordenadas.set(linha.ponto.codigo,geometria);
+    }
     deslocamentoPendente += linha.altura;
   }
   const setas = ligacoes.flatMap(v=>{
-    const origem=coordenadas.get(v.de),destino=coordenadas.get(v.para);
+    const origem=coordenadas.get("chaveOrigem" in v ? v.chaveOrigem : v.de);
+    const destino=coordenadas.get("chaveDestino" in v ? v.chaveDestino : v.para);
     if(!origem||!destino)return [];
     const tipo=v.tipo.toUpperCase();
-    const x1=tipo==="SS"||tipo==="SF"?origem.inicio:origem.fim;
-    const x2=tipo==="FF"||tipo==="SF"?destino.fim:destino.inicio;
+    const x1=tipo==="SS"||tipo==="SF"||tipo==="II"||tipo==="IT" ?origem.inicio:origem.fim;
+    const x2=tipo==="FF"||tipo==="SF"||tipo==="TT"||tipo==="IT" ?destino.fim:destino.inicio;
     return [{...v,x1,x2,y1:origem.y,y2:destino.y}];
   });
   const marcos = mostrarMarcos?linhas.filter(l=>l.marco && dataValida(l.inicio) && locais.includes(String(l.pavimento??"").trim())):[];
