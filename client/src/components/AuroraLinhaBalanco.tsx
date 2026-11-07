@@ -726,7 +726,7 @@ export function LinhaBalancoEscadinha({
                   role="img" aria-label="Continuidade visual de serviços repetidos por pavimento; não são vínculos de predecessora">
                   {fluxosSeries.map(linha=><path key={linha.chave} d={linha.d}
                     stroke={linha.cor} strokeWidth="1.8" strokeDasharray="5 4"
-                    fill="none" opacity={detalhe && detalhe.serie.nome!==linha.nome ? 0.12 : 0.55}
+                    fill="none" opacity={detalhe ? detalhe.serie.nome===linha.nome ? 0.85 : 0.08 : 0.3}
                     data-testid="lob-service-flow">
                     <title>{linha.nome+" · "+linha.localDe+" → "+linha.localPara+
                       " · traçado de repetição, não vínculo CPM"}</title>
