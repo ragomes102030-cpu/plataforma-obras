@@ -361,20 +361,27 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
                 key={nota.id}
                 className={nota.status === "cancelada" ? "pl-med-cancelada" : undefined}
               >
-                <td>{nota.number}</td>
+                <td>
+                  {nota.number}
+                  {nota.notes?.includes("[SIMULACAO_QA]") && (
+                    <div className="pl-med-aviso" role="note">
+                      SIMULAÇÃO DIDÁTICA — sem ateste, cobrança ou pagamento
+                    </div>
+                  )}
+                </td>
                 <td>
                   {dataBr(nota.periodStart)} – {dataBr(nota.periodEnd)}
                 </td>
                 <td>
                   <span className={`pl-med-status pl-med-status-${nota.status}`}>
-                    {STATUS_ROTULO[nota.status] ?? nota.status}
+                    {nota.notes?.includes("[SIMULACAO_QA]") ? "Rascunho QA — fictício" : STATUS_ROTULO[nota.status] ?? nota.status}
                   </span>
                 </td>
                 <td className="pl-med-num">{brl(nota.bruto)}</td>
                 <td className="pl-med-num">{brl(nota.retencao)}</td>
                 <td className="pl-med-num">{brl(nota.liquido)}</td>
                 <td className="pl-med-acoes-celula">
-                  {(ACOES[nota.status] ?? []).map(acao => (
+                  {(ACOES[nota.status] ?? []).filter(acao => !nota.notes?.includes("[SIMULACAO_QA]") || acao.status === "cancelada").map(acao => (
                     <button
                       key={acao.status}
                       type="button"
