@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { terminoCorretoLob } from "./linha-balanco-modelo";
 import {
-  calcularFaixasCompactasLob, chavePontoLob, resolverVinculosLocalizadosLob,
+  calcularFaixasCompactasLob, chavePontoLob, ordenarLocaisFisicosLob, resolverVinculosLocalizadosLob,
 } from "./lob-vinculos-localizados";
+
+describe("LOB — pavimentos na ordem da escadinha do Excel",()=>{
+  it("coloca andares altos em cima, térreo na base e fachadas depois",()=>{
+    const lugares=["Térreo","1º Pavimento","Fachadas","P08","3º Pavimento","P02"];
+    expect(lugares.sort(ordenarLocaisFisicosLob)).toEqual([
+      "P08","3º Pavimento","P02","1º Pavimento","Térreo","Fachadas",
+    ]);
+  });
+});
 
 describe("LOB — datas da atividade e datas de cada parcela",()=>{
   const source={codigo:"1.4.1",atividade:"Pilares",activityId:10,
