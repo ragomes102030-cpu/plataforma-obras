@@ -101,8 +101,8 @@ export function LinhaBalancoEscadinha({
     [linhas, codigosExemplo, possuiQaSeparada, exibirQa]
   );
   const integrado = useMemo(
-    ()=>integrarDistribuicoesLob(linhasDaVisualizacao,atividadeIds,unidades,distribuicoes),
-    [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes]
+    ()=>integrarDistribuicoesLob(linhasDaVisualizacao,atividadeIds,unidades,distribuicoes,finsCalculados),
+    [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes,finsCalculados]
   );
   const locaisConfirmados = useMemo(
     ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades),
