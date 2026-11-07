@@ -238,3 +238,6 @@
 }
 .lob-stairs-row .lob-stairs-bar { box-shadow:0 1px 2px #16374c19; }
 .lob-stairs-links { isolation:isolate; }
+
+/* O rastreio pontilhado fica atrás das setas de precedência oficiais. */
+.lob-stairs-service-flow{z-index:3;}
