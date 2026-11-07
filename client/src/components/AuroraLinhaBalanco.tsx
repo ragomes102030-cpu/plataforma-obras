@@ -325,8 +325,14 @@ export function LinhaBalancoEscadinha({
     ...resumo.pontos,
     ...pontosPendentes.map(p=>({...p,local:""})),
   ];
-  const analiseVinculos = estadoVinculos==="pronto" && dependenciasIds.length
-    ? resolverVinculosLocalizadosLob(dependenciasIds,pontosParaVinculos)
+  // A rede QA não se mistura à rede real quando o painel alterna de visão.
+  // Vínculos ocultos por busca/local são contados como não representados.
+  const idsDaPopulacao=new Set(linhasDaVisualizacao
+    .map(l=>l.activityId).filter((id):id is number=>typeof id==="number"));
+  const dependenciasDaPopulacao=dependenciasIds.filter(d=>
+    idsDaPopulacao.has(d.de)&&idsDaPopulacao.has(d.para));
+  const analiseVinculos = estadoVinculos==="pronto" && dependenciasDaPopulacao.length
+    ? resolverVinculosLocalizadosLob(dependenciasDaPopulacao,pontosParaVinculos)
     : {vinculos:[],semRepresentacao:0,dependenciasRepresentadas:0,dependenciasTotais:0};
   // Fallback exclusivo das fixtures antigas que não enviam IDs de atividade.
   const ligacoesLegadas = estadoVinculos==="pronto" && !dependenciasIds.length
