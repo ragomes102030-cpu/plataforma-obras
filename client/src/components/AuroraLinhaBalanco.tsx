@@ -372,7 +372,7 @@ export function LinhaBalancoEscadinha({
   // Continuidade gráfica do MESMO serviço entre locais confirmados.
   // É apenas um traçado de repetição, NÃO uma dependência FS nem alocação
   // implícita de equipe. A inclinação reflete as datas reais já cadastradas.
-  const posicaoLocal = new Map(locais.map((local,indice)=>[local,indice]));
+  const posicaoLocal = new Map<string,number>(locais.map((local,indice)=>[local,indice] as const));
   const fluxosSeries = seriesExibidas.flatMap(serie=>{
     const ordenados=serie.pontos.filter(p=>posicaoLocal.has(p.local))
       .sort((a,b)=>(posicaoLocal.get(b.local)??0)-(posicaoLocal.get(a.local)??0));
