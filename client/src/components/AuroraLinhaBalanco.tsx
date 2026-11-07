@@ -170,6 +170,7 @@ export function LinhaBalancoEscadinha({
     }
   },[atividadeSelecionadaId,dados.series]);
   const [mostrarVinculos, setMostrarVinculos] = useState(true);
+  const [mostrarFluxoSeries, setMostrarFluxoSeries] = useState(true);
   const [mostrarMarcos, setMostrarMarcos] = useState(true);
   const rolagem = useRef<HTMLDivElement | null>(null);
   const painelVinculo = useRef<HTMLDetailsElement | null>(null);
@@ -368,6 +369,25 @@ export function LinhaBalancoEscadinha({
     const x2=tipo==="FF"||tipo==="SF"||tipo==="TT"||tipo==="IT" ?destino.fim:destino.inicio;
     return [{...v,x1,x2,y1:origem.y,y2:destino.y}];
   });
+  // Continuidade gráfica do MESMO serviço entre locais confirmados.
+  // É apenas um traçado de repetição, NÃO uma dependência FS nem alocação
+  // implícita de equipe. A inclinação reflete as datas reais já cadastradas.
+  const posicaoLocal = new Map(locais.map((local,indice)=>[local,indice]));
+  const fluxosSeries = seriesExibidas.flatMap(serie=>{
+    const ordenados=serie.pontos.filter(p=>posicaoLocal.has(p.local))
+      .sort((a,b)=>(posicaoLocal.get(b.local)??0)-(posicaoLocal.get(a.local)??0));
+    const pontos=ordenados.flatMap(ponto=>{
+      const geo=coordenadas.get(chavePontoLob(ponto));
+      return geo ? [{ponto,geo}] : [];
+    });
+    return pontos.slice(1).map((item,indice)=>{
+      const anterior=pontos[indice]!;
+      const cor=CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length] ?? "#56758a";
+      return {chave:serie.chave+"|"+anterior.ponto.local+"|"+item.ponto.local,
+        nome:serie.nome,localDe:anterior.ponto.local,localPara:item.ponto.local,cor,
+        d:`M ${anterior.geo.inicio+3} ${anterior.geo.y} L ${item.geo.inicio+3} ${item.geo.y}`};
+    });
+  });
   const marcos = mostrarMarcos?linhas.filter(l=>l.marco && dataValida(l.inicio) && locais.includes(String(l.pavimento??"").trim())):[];
   // Leitura analítica derivada apenas dos serviços e locais exibidos.
   // Não interpreta coincidência temporal como colisão ou infração de predecessora.
@@ -533,6 +553,11 @@ export function LinhaBalancoEscadinha({
               <button type="button" onClick={()=>setPxManual(Math.min(36, Math.max(3, ((rolagem.current?.clientWidth ?? 1100)-COLUNA-STATUS_COLUNA-12)/diasNoEixo)))}><Maximize2 size={15}/> Ajustar à tela</button>
               <button type="button" onClick={()=>{setIncluirInicioObra(true);setDataInicial("");setDataFinal("");setPxManual(null);}}>Período completo</button>
               {estadoVinculos==="pronto" && ligacoes.length>0 && <label className="lob-stairs-show-links"><input type="checkbox" checked={mostrarVinculos} onChange={e=>setMostrarVinculos(e.target.checked)}/> Mostrar vínculos ({ligacoes.length})</label>}
+              {fluxosSeries.length>0 && <label className="lob-stairs-show-links">
+                <input type="checkbox" data-testid="lob-show-service-flow" checked={mostrarFluxoSeries}
+                  onChange={e=>setMostrarFluxoSeries(e.target.checked)}/>
+                Traçado entre pavimentos ({fluxosSeries.length})
+              </label>
               {dependenciasIds.length>0 && <span className="lob-stairs-link-coverage" data-testid="lob-link-coverage"
                 title="Predecessoras da rede CPM representadas pelos serviços visíveis; vínculos ausentes dependem de localização/visibilidade">
                 {analiseVinculos.dependenciasRepresentadas}/{analiseVinculos.dependenciasTotais} predecessoras representadas
@@ -693,6 +718,20 @@ export function LinhaBalancoEscadinha({
                     </div>
                   </div>
                 ))}
+                {mostrarFluxoSeries && fluxosSeries.length>0 && <svg
+                  className="lob-stairs-links lob-stairs-service-flow"
+                  width={larguraTempo} height={alturaEscadinha+alturaPendentes}
+                  viewBox={`0 0 ${larguraTempo} ${alturaEscadinha+alturaPendentes}`}
+                  style={{left:COLUNA+STATUS_COLUNA,top:71}}
+                  role="img" aria-label="Continuidade visual de serviços repetidos por pavimento; não são vínculos de predecessora">
+                  {fluxosSeries.map(linha=><path key={linha.chave} d={linha.d}
+                    stroke={linha.cor} strokeWidth="1.8" strokeDasharray="5 4"
+                    fill="none" opacity={detalhe && detalhe.serie.nome!==linha.nome ? 0.12 : 0.55}
+                    data-testid="lob-service-flow">
+                    <title>{linha.nome+" · "+linha.localDe+" → "+linha.localPara+
+                      " · traçado de repetição, não vínculo CPM"}</title>
+                  </path>)}
+                </svg>}
                 {mostrarVinculos && setas.length>0 && <svg className="lob-stairs-links" width={larguraTempo} height={alturaEscadinha+alturaPendentes} viewBox={`0 0 ${larguraTempo} ${alturaEscadinha+alturaPendentes}`} style={{left:COLUNA+STATUS_COLUNA,top:71}} role="img" aria-label="Vínculos cadastrados entre atividades visíveis">
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=>{
@@ -717,7 +756,7 @@ export function LinhaBalancoEscadinha({
 
           <div className="lob-stairs-legend">
             {seriesExibidas.map(serie=><span key={serie.chave}><i style={{background:CORES[repetitivas.findIndex(s=>s.chave===serie.chave)%CORES.length]}}/>{serie.nome}</span>)}
-            <span className="lob-stairs-legend-note">Barras coloridas = local confirmado · barras cinzas = local pendente · vínculos = dependências cadastradas</span>
+            <span className="lob-stairs-legend-note">Barras = atividades por local · setas = dependências oficiais · tracejado = mesmo serviço entre pavimentos (não é predecessora)</span>
           </div>
           {totalGerais>0 && (
             <details className="lob-stairs-mapping" data-testid="lob-location-mapping" ref={painelVinculo}>
