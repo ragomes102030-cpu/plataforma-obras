@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, lte } from "drizzle-orm";
 import {
   budgetItems,
   budgetVersions,
@@ -116,6 +116,24 @@ export async function coletarDadosMedicao(
       ))
     : [];
 
+  // O filtro financeiro nao pode ocultar alertas de servicos produzidos mas
+  // sem item do orçamento. Eles nao sao cobrados, porem continuam reportados.
+  const producaoSemVinculo = approvedPlan ? await db.select({
+    budgetItemId: scheduleActivities.budgetItemId,
+    quantity: productionEntries.quantity,
+  }).from(productionEntries)
+    .innerJoin(scheduleActivities, eq(scheduleActivities.id, productionEntries.activityId))
+    .where(and(
+      eq(productionEntries.projectId, projectId),
+      eq(productionEntries.status, "confirmada"),
+      eq(productionEntries.exemplo, 0),
+      eq(scheduleActivities.exemplo, 0),
+      eq(scheduleActivities.projectId, projectId),
+      eq(scheduleActivities.versionId, approvedPlan.id),
+      isNull(scheduleActivities.budgetItemId),
+      lte(productionEntries.productionDate, periodEnd),
+    )) : [];
+
   const jaMedidas = await db
     .select({
       budgetItemId: measurementItems.budgetItemId,
@@ -132,7 +150,7 @@ export async function coletarDadosMedicao(
       )
     );
 
-  const produzido = somar(produzidas);
+  const produzido = somar([...produzidas, ...producaoSemVinculo]);
   const medido = somar(jaMedidas);
 
   const paraLista = (mapa: Map<number, number>): QuantidadePorItem[] =>
