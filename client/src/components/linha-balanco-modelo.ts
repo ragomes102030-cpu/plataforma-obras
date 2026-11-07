@@ -37,8 +37,8 @@ export function rotuloMes(iso: string): string {
 }
 export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalculados: Record<string, string>, codigosComLocalConfirmado: ReadonlySet<string> = new Set()) {
   const validas = linhas.filter(l => !l.marco && dataValida(l.inicio) &&
-    dataValida(finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo]) &&
-    diaUtc((finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo])!) >= diaUtc(l.inicio) &&
+    dataValida(finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)]) &&
+    diaUtc((finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)])!) >= diaUtc(l.inicio) &&
     Number.isFinite(l.duracao) && l.duracao >= 1);
   const locais = Array.from(new Set(validas.map(l => String(l.pavimento ?? "").trim()).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
@@ -53,7 +53,7 @@ export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalcu
     const chave = nome.toLocaleLowerCase("pt-BR") + (disciplina ? "|" + disciplina : "");
     if (!agrupados.has(chave)) agrupados.set(chave, { chave, nome, pontos: [], repetitiva: false });
     agrupados.get(chave)!.pontos.push({
-      activityId: l.activityId, codigo: l.codigo, nome, local, inicio: l.inicio, fim: (finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo])!,
+      activityId: l.activityId, codigo: l.codigo, nome, local, inicio: l.inicio, fim: (finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)])!,
       executado: l.executado, quantidade: l.quantidade, unidade: l.unidade,
     });
   }
@@ -111,7 +111,7 @@ export function atividadesForaDaEscadinhaLob(
   const codigosRepetitivos = new Set(seriesRepetitivas.flatMap(s=>s.pontos.map(p=>p.codigo)));
   const grupos = new Map<string,GrupoContextoLob>();
   for(const l of linhas) {
-    const fim=finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo];
+    const fim=finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)];
     if(l.marco || codigosRepetitivos.has(l.codigo) ||
       !dataValida(l.inicio) || !dataValida(fim) ||
       fim<l.inicio ||
@@ -120,7 +120,7 @@ export function atividadesForaDaEscadinhaLob(
     const chave=nome.toLocaleLowerCase("pt-BR");
     if(!grupos.has(chave)) grupos.set(chave,{chave,nome,pontos:[]});
     grupos.get(chave)!.pontos.push({
-      codigo:l.codigo,nome:l.atividade,local:String(l.pavimento??"").trim(),
+      activityId:l.activityId,codigo:l.codigo,nome:l.atividade,local:String(l.pavimento??"").trim(),
       inicio:l.inicio,fim,
       executado:l.executado,quantidade:l.quantidade,unidade:l.unidade,
     });
