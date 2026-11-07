@@ -35,11 +35,19 @@ export function rotuloMes(iso: string): string {
   const nomes = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   return nomes[Number(mes) - 1] + "/" + ano.slice(2);
 }
+/** Datas da parcela vencem as globais; nas demais tarefas o ID da atividade
+ * vence o código EAP (que pode aparecer em mais de uma atividade). */
+export function terminoCorretoLob(l: EntradaDaLinha, finsCalculados: Record<string,string>): string | undefined {
+  return /^lob-segmento-\\d+-\\d+$/.test(l.codigo)
+    ? (finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)])
+    : (finsCalculados[String(l.activityId)] ?? finsCalculados[l.codigo]);
+}
 export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalculados: Record<string, string>, codigosComLocalConfirmado: ReadonlySet<string> = new Set()) {
-  const validas = linhas.filter(l => !l.marco && dataValida(l.inicio) &&
-    dataValida(finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)]) &&
-    diaUtc((finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)])!) >= diaUtc(l.inicio) &&
-    Number.isFinite(l.duracao) && l.duracao >= 1);
+  const validas = linhas.filter(l => {
+    const fim=terminoCorretoLob(l,finsCalculados);
+    return !l.marco && dataValida(l.inicio) && dataValida(fim) &&
+      diaUtc(fim) >= diaUtc(l.inicio) && Number.isFinite(l.duracao) && l.duracao >= 1;
+  });
   const locais = Array.from(new Set(validas.map(l => String(l.pavimento ?? "").trim()).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
   const agrupados = new Map<string, SerieLob>();
@@ -53,7 +61,7 @@ export function prepararLinhaBalancoVertical(linhas: EntradaDaLinha[], finsCalcu
     const chave = nome.toLocaleLowerCase("pt-BR") + (disciplina ? "|" + disciplina : "");
     if (!agrupados.has(chave)) agrupados.set(chave, { chave, nome, pontos: [], repetitiva: false });
     agrupados.get(chave)!.pontos.push({
-      activityId: l.activityId, codigo: l.codigo, nome, local, inicio: l.inicio, fim: (finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)])!,
+      activityId: l.activityId, codigo: l.codigo, nome, local, inicio: l.inicio, fim: terminoCorretoLob(l,finsCalculados)!,
       executado: l.executado, quantidade: l.quantidade, unidade: l.unidade,
     });
   }
@@ -111,7 +119,7 @@ export function atividadesForaDaEscadinhaLob(
   const codigosRepetitivos = new Set(seriesRepetitivas.flatMap(s=>s.pontos.map(p=>p.codigo)));
   const grupos = new Map<string,GrupoContextoLob>();
   for(const l of linhas) {
-    const fim=finsCalculados[l.codigo] ?? finsCalculados[String(l.activityId)];
+    const fim=terminoCorretoLob(l,finsCalculados);
     if(l.marco || codigosRepetitivos.has(l.codigo) ||
       !dataValida(l.inicio) || !dataValida(fim) ||
       fim<l.inicio ||
