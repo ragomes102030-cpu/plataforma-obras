@@ -17,15 +17,18 @@ export function integrarDistribuicoesLob(
 ){
   const codPorId=new Map(ids.map(a=>[a.id,a.wbsCode]));
   const porCodigo=new Map(linhas.map(l=>[l.codigo,l]));
+  const porAtividade=new Map(linhas.filter(l=>l.activityId!=null).map(l=>[l.activityId,l]));
   const nomePorUnidade=new Map(unidades.map(u=>[u.id,u.name]));
   const somaPorCodigo=new Map<string,number>();
+  const somaPorAtividade=new Map<number,number>();
+  const atividadeIdsDistribuidos=new Set<number>();
   const entradas:EntradaDaLinha[]=[];
   const fins:Record<string,string>={};
   const codigosConfirmados=new Set<string>();
   const codigosDistribuidos=new Set<string>();
   for(const d of distribuicoes) {
     const codigo=codPorId.get(d.activityId);
-    const fonte=codigo?porCodigo.get(codigo):undefined;
+    const fonte=porAtividade.get(d.activityId) ?? (codigo ? porCodigo.get(codigo) : undefined);
     const nomeLocal=nomePorUnidade.get(d.unitId);
     const quantidade=Number(d.plannedQuantity);
     if(!fonte||!nomeLocal||fonte.marco||!dataValida(d.startDate)||!dataValida(d.finishDate)||
@@ -39,10 +42,12 @@ export function integrarDistribuicoesLob(
     fins[chave]=d.finishDate;
     codigosConfirmados.add(chave);
     codigosDistribuidos.add(fonte.codigo);
+    atividadeIdsDistribuidos.add(d.activityId);
+    somaPorAtividade.set(d.activityId,(somaPorAtividade.get(d.activityId)??0)+Math.round(quantidade*MIL));
     somaPorCodigo.set(fonte.codigo,(somaPorCodigo.get(fonte.codigo)??0)+Math.round(quantidade*MIL));
   }
   const pendentes=linhas.flatMap(l=>{
-    const distribuiddo=somaPorCodigo.get(l.codigo)??0;
+    const distribuiddo=l.activityId != null ? somaPorAtividade.get(l.activityId) ?? 0 : somaPorCodigo.get(l.codigo) ?? 0;
     if(distribuiddo===0)return [l];
     const total=l.quantidade===null?null:Math.round(l.quantidade*MIL);
     const restante=total===null?null:Math.max(0,total-distribuiddo);
@@ -54,5 +59,5 @@ export function integrarDistribuicoesLob(
       executado:0,
     }];
   });
-  return {entradas,fins,codigosConfirmados,codigosDistribuidos,pendentes,somaPorCodigo};
+  return {entradas,fins,codigosConfirmados,codigosDistribuidos,atividadeIdsDistribuidos,pendentes,somaPorCodigo};
 }
