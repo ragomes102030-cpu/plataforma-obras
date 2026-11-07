@@ -374,6 +374,7 @@ export function LinhaBalancoEscadinha({
   // implícita de equipe. A inclinação reflete as datas reais já cadastradas.
   const posicaoLocal = new Map<string,number>(locais.map((local,indice)=>[local,indice] as const));
   const fluxosSeries = seriesExibidas.flatMap(serie=>{
+    if (!serie.repetitiva) return [];
     const ordenados=serie.pontos.filter(p=>posicaoLocal.has(p.local))
       .sort((a,b)=>(posicaoLocal.get(b.local)??0)-(posicaoLocal.get(a.local)??0));
     const pontos=ordenados.flatMap(ponto=>{
