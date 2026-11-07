@@ -354,8 +354,8 @@ export function LinhaBalancoEscadinha({
     deslocamentoPendente += linha.altura;
   }
   const setas = ligacoes.flatMap(v=>{
-    const origem=coordenadas.get("chaveOrigem" in v ? v.chaveOrigem : v.de);
-    const destino=coordenadas.get("chaveDestino" in v ? v.chaveDestino : v.para);
+    const origem=coordenadas.get("chaveOrigem" in v && typeof v.chaveOrigem==="string" ? v.chaveOrigem : v.de);
+    const destino=coordenadas.get("chaveDestino" in v && typeof v.chaveDestino==="string" ? v.chaveDestino : v.para);
     if(!origem||!destino)return [];
     const tipo=v.tipo.toUpperCase();
     const x1=tipo==="SS"||tipo==="SF"||tipo==="II"||tipo==="IT" ?origem.inicio:origem.fim;
@@ -691,14 +691,18 @@ export function LinhaBalancoEscadinha({
                   <defs><marker id="lob-link-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 z" fill="#758b9b"/></marker></defs>
                   {setas.map((v,i)=>{
                      const selecionadaId=detalhe?.ponto.activityId;
-                     const destacada=selecionadaId==null || !("chaveOrigem" in v) ||
-                       v.chaveOrigem.startsWith(selecionadaId+"|") ||
-                       v.chaveDestino.startsWith(selecionadaId+"|");
+                     const destacada=selecionadaId==null ||
+                       !("chaveOrigem" in v) ||
+                       (typeof v.chaveOrigem==="string" && v.chaveOrigem.startsWith(selecionadaId+"|")) ||
+                       ("chaveDestino" in v && typeof v.chaveDestino==="string" &&
+                         v.chaveDestino.startsWith(selecionadaId+"|"));
                      return <path key={v.de+"-"+v.para+"-"+i} d={`M ${v.x1} ${v.y1} L ${v.x1+5} ${v.y1} L ${v.x1+5} ${v.y2} L ${v.x2} ${v.y2}`}
                        fill="none" stroke="#526c80" strokeWidth={destacada?"1.45":"0.8"} opacity={destacada?0.68:0.14}
                        data-testid="lob-dependency-path" markerEnd="url(#lob-link-arrow)">
                        <title>{v.de+" → "+v.para+" · "+v.tipo+" · lag "+v.lag+
-                         ("localOrigem" in v ? " · "+v.localOrigem+" → "+v.localDestino : "")}</title>
+                         ("localOrigem" in v && "localDestino" in v &&
+                            typeof v.localOrigem==="string" && typeof v.localDestino==="string"
+                            ? " · "+v.localOrigem+" → "+v.localDestino : "")}</title>
                      </path>;
                    })}
                 </svg>}
