@@ -36,6 +36,23 @@ describe("motor de prontidão integrada", () => {
     expect(result.prontoParaAcompanhamento).toBe(false);
   });
 
+  it("não aprova acompanhamento com parcelas em locais didáticos mesmo quando datas CPM são compatíveis", () => {
+    const result = avaliarProntidaoObra({
+      escopo: { declarado: true, validado: true },
+      eap: { existe: true, aprovada: true, folhas: 3 },
+      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
+      atividades: { total: 3, semLocal: 0, semDuracao: 0 },
+      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0, semPredecessora: 0 },
+      cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
+      baseline: { existe: true, aprovada: true },
+      lob: { parcelas: 9, foraJanelaCpm: 0, orfas: 0, parcelasEmLocaisDidaticos: 9 },
+      execucao: { medicoes: 1, comUnidade: 1, confirmadas: 1 },
+    });
+    expect(result.etapas.execucao.bloqueios.map(b => b.codigo)).toContain("LOB_LOCAL_DIDATICO");
+    expect(result.prontoParaPlanejamento).toBe(true);
+    expect(result.prontoParaAcompanhamento).toBe(false);
+  });
+
   it("explica como resolver uma rede com ciclo", () => {
     const result = avaliarProntidaoObra({ rede: { totalAtividades: 2, totalDependencias: 2, ciclos: 1, semPredecessora: 0 } });
     expect(result.etapas.rede.bloqueios[0].comoResolver).toContain("Remova");
