@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, lt, lte } from "drizzle-orm";
 import {
   budgetItems,
   budgetVersions,
+  projectPlanVersions,
   measurementItems,
   measurements,
   productionEntries,
@@ -65,6 +66,11 @@ export async function coletarDadosMedicao(
     .orderBy(desc(budgetVersions.versionNumber))
     .limit(1);
 
+  const [approvedPlan] = await db.select({ id: projectPlanVersions.id })
+    .from(projectPlanVersions)
+    .where(and(eq(projectPlanVersions.projectId, projectId), eq(projectPlanVersions.status, "approved")))
+    .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
+
   const itens: ItemDeOrcamento[] = baselineRow
     ? (
         await db
@@ -88,23 +94,27 @@ export async function coletarDadosMedicao(
       }))
     : [];
 
-  const produzidas = await db
-    .select({
-      budgetItemId: scheduleActivities.budgetItemId,
-      quantity: productionEntries.quantity,
-    })
-    .from(productionEntries)
-    .leftJoin(
-      scheduleActivities,
-      eq(scheduleActivities.id, productionEntries.activityId)
-    )
-    .where(
-      and(
+  // Somente produção não didática da versão aprovada vigente e com vínculo
+  // com item do orçamento aprovado. Lançamentos legados/de QA não faturam.
+  const validBudgetItemIds = itens.map(item => item.budgetItemId);
+  const produzidas = approvedPlan && validBudgetItemIds.length
+    ? await db.select({
+        budgetItemId: scheduleActivities.budgetItemId,
+        quantity: productionEntries.quantity,
+      })
+      .from(productionEntries)
+      .innerJoin(scheduleActivities, eq(scheduleActivities.id, productionEntries.activityId))
+      .where(and(
         eq(productionEntries.projectId, projectId),
         eq(productionEntries.status, "confirmada"),
-        lte(productionEntries.productionDate, periodEnd)
-      )
-    );
+        eq(productionEntries.exemplo, 0),
+        eq(scheduleActivities.exemplo, 0),
+        eq(scheduleActivities.projectId, projectId),
+        eq(scheduleActivities.versionId, approvedPlan.id),
+        inArray(scheduleActivities.budgetItemId, validBudgetItemIds),
+        lte(productionEntries.productionDate, periodEnd),
+      ))
+    : [];
 
   const jaMedidas = await db
     .select({
