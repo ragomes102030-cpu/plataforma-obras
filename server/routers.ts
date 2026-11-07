@@ -4420,14 +4420,14 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [project] = await db.select({ descricao: projects.descricao, location: projects.location, tipoDeObra: projects.tipoDeObra })
+        const [project] = await db.select({ descricao: projects.descricao, location: projects.location, tipoDeObra: projects.tipoDeObra, plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish })
           .from(projects).where(eq(projects.id, input.projectId)).limit(1);
         const [plan] = await db.select().from(projectPlanVersions)
           .where(eq(projectPlanVersions.projectId, input.projectId))
           .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
         const nodes = plan ? await db.select({ id: wbsNodes.id, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus })
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
-        const activities = plan ? await db.select({ id: scheduleActivities.id, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt })
+        const activities = plan ? await db.select({ id: scheduleActivities.id, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
         const dependencies = plan ? await db.select({ id: scheduleDependencies.id, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
@@ -4437,6 +4437,34 @@ export const appRouter = router({
           .where(and(eq(scheduleBaselines.projectId, input.projectId), eq(scheduleBaselines.status, "ativa"))).limit(1);
         const measurementRows = await db.select({ id: measurements.id, status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
         const measurementItemRows = measurementRows.length ? await db.select({ measurementId: measurementItems.measurementId }).from(measurementItems).where(inArray(measurementItems.measurementId, measurementRows.map(row => row.id))) : [];
+        // A prontidão considera parcelas persistidas, inclusive as ocultadas pela UI.
+        const lobSegments = plan ? await db.select({
+          activityId: lobActivityLocations.activityId,
+          startDate: lobActivityLocations.startDate,
+          finishDate: lobActivityLocations.finishDate,
+        }).from(lobActivityLocations).where(and(
+          eq(lobActivityLocations.projectId, input.projectId),
+          eq(lobActivityLocations.versionId, plan.id)
+        )) : [];
+        const activityById = new Map(activities.map(activity => [activity.id, activity]));
+        const calendar = project?.plannedStart && lobSegments.length ? (await carregarCalendarioDoPeriodo(
+          db, input.projectId, project.plannedStart.getFullYear(),
+          Math.max(project.plannedStart.getFullYear(), project.plannedFinish?.getFullYear() ?? project.plannedStart.getFullYear())
+        )).calendar : null;
+        let lobOrfas = 0;
+        let lobForaJanela = 0;
+        for (const segment of lobSegments) {
+          const activity = activityById.get(segment.activityId);
+          if (!activity) { lobOrfas++; continue; }
+          // Sem CPM calculado não há janela oficial com que comparar.
+          if (!calendar || !project?.plannedStart || !activity.cpmCalculatedAt ||
+              activity.earlyStart == null || !activity.durationDays || activity.durationDays < 1) continue;
+          const offset = deslocamentoEmDiasUteis(activity);
+          const inicioOficial = dateAt(calendar, localIso(project.plannedStart), offset);
+          const fimOficial = dateAt(calendar, inicioOficial, duracaoEmDiasUteis(activity) - 1);
+          if (segment.startDate < inicioOficial || segment.finishDate > fimOficial ||
+              segment.startDate > segment.finishDate) lobForaJanela++;
+        }
         const successors = new Map<number, number[]>();
         for (const dependency of dependencies) successors.set(dependency.predecessorId, [...(successors.get(dependency.predecessorId) ?? []), dependency.successorId]);
         const visiting = new Set<number>();
@@ -4460,6 +4488,7 @@ export const appRouter = router({
           rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, semPredecessora },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
+          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas },
           execucao: { medicoes: measurementRows.length, comUnidade: measurementItemRows.length, confirmadas: measurementRows.filter(item => item.status === "aprovada" || item.status === "paga").length },
         });
       }),
