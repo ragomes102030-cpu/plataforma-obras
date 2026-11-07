@@ -4447,6 +4447,21 @@ export const appRouter = router({
           eq(lobActivityLocations.versionId, plan.id)
         )) : [];
         const activityById = new Map(activities.map(activity => [activity.id, activity]));
+        const unidadesDaObra = lobSegments.length ? await db.select({
+          id: productionUnits.id,
+          name: productionUnits.name,
+        }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId)) : [];
+        const unidadesDidaticas = new Set(unidadesDaObra
+          .filter(unit => /did[aá]tic/i.test(unit.name)).map(unit => unit.id));
+        const unidadesPorParcela = lobSegments.length ? await db.select({
+          id: lobActivityLocations.id,
+          unitId: lobActivityLocations.unitId,
+        }).from(lobActivityLocations).where(and(
+          eq(lobActivityLocations.projectId, input.projectId),
+          eq(lobActivityLocations.versionId, plan!.id)
+        )) : [];
+        const parcelasEmLocaisDidaticos = unidadesPorParcela.filter(segment =>
+          unidadesDidaticas.has(segment.unitId)).length;
         const calendar = project?.plannedStart && lobSegments.length ? (await carregarCalendarioDoPeriodo(
           db, input.projectId, project.plannedStart.getFullYear(),
           Math.max(project.plannedStart.getFullYear(), project.plannedFinish?.getFullYear() ?? project.plannedStart.getFullYear())
@@ -4488,7 +4503,7 @@ export const appRouter = router({
           rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, semPredecessora },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
-          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas },
+          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos },
           execucao: { medicoes: measurementRows.length, comUnidade: measurementItemRows.length, confirmadas: measurementRows.filter(item => item.status === "aprovada" || item.status === "paga").length },
         });
       }),
