@@ -4436,7 +4436,8 @@ export const appRouter = router({
         const [baseline] = await db.select({ status: scheduleBaselines.status }).from(scheduleBaselines)
           .where(and(eq(scheduleBaselines.projectId, input.projectId), eq(scheduleBaselines.status, "ativa"))).limit(1);
         const measurementRows = await db.select({ id: measurements.id, status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
-        const measurementItemRows = measurementRows.length ? await db.select({ measurementId: measurementItems.measurementId }).from(measurementItems).where(inArray(measurementItems.measurementId, measurementRows.map(row => row.id))) : [];
+        const approvedMeasurementRows = measurementRows.filter(item => item.status === "aprovada" || item.status === "faturada" || item.status === "paga");
+        const measurementItemRows = approvedMeasurementRows.length ? await db.select({ measurementId: measurementItems.measurementId }).from(measurementItems).where(inArray(measurementItems.measurementId, approvedMeasurementRows.map(row => row.id))) : [];
         // A prontidão considera parcelas persistidas, inclusive as ocultadas pela UI.
         const lobSegments = plan ? await db.select({
           activityId: lobActivityLocations.activityId,
@@ -4504,7 +4505,7 @@ export const appRouter = router({
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
           lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos },
-          execucao: { medicoes: measurementRows.length, comUnidade: measurementItemRows.length, confirmadas: measurementRows.filter(item => item.status === "aprovada" || item.status === "paga").length },
+          execucao: { medicoes: approvedMeasurementRows.length, comUnidade: measurementItemRows.length, confirmadas: approvedMeasurementRows.length },
         });
       }),
     /** Reabre o planejamento como uma versão de trabalho sem alterar a versão aprovada. */
@@ -9017,6 +9018,11 @@ export const appRouter = router({
         const para = input.status as MedicaoStatus;
         if (!podeTransicionar(de, para)) {
           throw conflict(`Não é possível passar de "${de}" para "${para}".`);
+        }
+        // Medições de treinamento podem existir como rascunho para QA, mas
+        // nunca devem ser atestadas, faturadas ou usadas em controle financeiro.
+        if (para === "aprovada" && nota.notes?.includes("[SIMULACAO_QA]")) {
+          throw badRequest("Boletim de simulação não pode ser aprovado. Gere medição com produção real, orçamento rastreável e evidências de fiscalização.");
         }
 
         const agora = new Date();
