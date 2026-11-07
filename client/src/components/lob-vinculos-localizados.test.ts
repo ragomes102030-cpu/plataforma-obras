@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
+import { terminoCorretoLob } from "./linha-balanco-modelo";
 import {
   calcularFaixasCompactasLob, chavePontoLob, resolverVinculosLocalizadosLob,
 } from "./lob-vinculos-localizados";
+
+describe("LOB — datas da atividade e datas de cada parcela",()=>{
+  const source={codigo:"1.4.1",atividade:"Pilares",activityId:10,
+    frente:"Estrutura",pavimento:null,inicio:"2027-01-01",
+    duracao:30,quantidade:200,unidade:"m³",executado:0,marco:false};
+  it("prefere a data por ID na atividade normal, mesmo com código EAP duplicado",()=>{
+    expect(terminoCorretoLob(source,{
+      "1.4.1":"2027-02-15","10":"2027-01-30",
+    })).toBe("2027-01-30");
+  });
+  it("usa a data específica do local para a parcela e ignora término global",()=>{
+    const parcela={...source,codigo:"lob-segmento-10-1"};
+    expect(terminoCorretoLob(parcela,{
+      "10":"2027-01-30","lob-segmento-10-1":"2027-01-05",
+    })).toBe("2027-01-05");
+  });
+});
 
 describe("LOB — vínculos físicos por ID, sem criar precedências", () => {
   const points=[
