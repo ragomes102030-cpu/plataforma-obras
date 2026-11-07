@@ -13,7 +13,8 @@ export function integrarDistribuicoesLob(
   linhas:readonly EntradaDaLinha[],
   ids:readonly AtividadeIdLob[],
   unidades:readonly UnidadeLob[],
-  distribuicoes:readonly DistribuicaoLob[]
+  distribuicoes:readonly DistribuicaoLob[],
+  finsCalculados:Readonly<Record<string,string>> = {}
 ){
   const codPorId=new Map(ids.map(a=>[a.id,a.wbsCode]));
   const porCodigo=new Map(linhas.map(l=>[l.codigo,l]));
@@ -37,7 +38,9 @@ export function integrarDistribuicoesLob(
       d.finishDate<d.startDate||!Number.isFinite(quantidade)||quantidade<=0)continue;
     // A data de início da fonte vem da régua CPM/calendário da obra. Não ajustar
     // automaticamente: o registro histórico permanece para revisão humana.
-    if(dataValida(fonte.inicio)&&d.startDate<fonte.inicio){
+    const fimOficial = finsCalculados[String(fonte.activityId)] ?? finsCalculados[fonte.codigo];
+    if ((dataValida(fonte.inicio) && d.startDate < fonte.inicio) ||
+        (fimOficial && dataValida(fimOficial) && d.finishDate > fimOficial)) {
       parcelasForaDaJanelaCpm++;
       continue;
     }
