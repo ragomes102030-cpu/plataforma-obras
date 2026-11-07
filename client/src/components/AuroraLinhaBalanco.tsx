@@ -12,7 +12,7 @@ import { calcularVinculosExibidos, resumoLob, taxaPlanejadaLob, type VínculoLob
 import "./linha-balanco-profissional.css";
 import { integrarDistribuicoesLob, type DistribuicaoLob, type AtividadeIdLob } from "./lob-distribuicao-modelo";
 import {
-  calcularFaixasCompactasLob, chavePontoLob, resolverVinculosLocalizadosLob,
+  calcularFaixasCompactasLob, chavePontoLob, ordenarLocaisFisicosLob, resolverVinculosLocalizadosLob,
   type DependenciaAtividadeLob,
 } from "./lob-vinculos-localizados";
 
@@ -197,7 +197,7 @@ export function LinhaBalancoEscadinha({
   // Descarta categorias antigas usadas equivocadamente no campo pavimento:
   // apenas unidades de serviços repetitivos entram no eixo físico.
   const locaisValidos = Array.from(new Set(repetitivas.flatMap(s => s.pontos.map(p => p.local))))
-    .sort((a, b) => b.localeCompare(a, "pt-BR", { numeric: true }));
+    .sort(ordenarLocaisFisicosLob);
   const locais = locaisValidos.filter(p => pavimento === "todos" || p === pavimento);
   const pontosVisiveis = seriesVisiveis.map(s => ({
     ...s, pontos: s.pontos.filter(p => locais.includes(p.local)),
