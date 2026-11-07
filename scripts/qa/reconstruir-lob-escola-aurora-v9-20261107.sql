@@ -46,7 +46,7 @@ BEGIN
        ORDER BY level,"sortOrder",id LOOP
       mapped_parent:=NULL;
       IF r."parentId" IS NOT NULL THEN
-        SELECT new_id INTO mapped_parent FROM _qa_wbs_map WHERE _qa_wbs_map.pid=pid AND old_id=r."parentId";
+        SELECT m.new_id INTO mapped_parent FROM _qa_wbs_map m WHERE m.pid=pid AND old_id=r."parentId";
         IF mapped_parent IS NULL THEN RAISE EXCEPTION 'Pai WBS sem mapeamento: %',r.id; END IF;
       END IF;
       EXECUTE format('INSERT INTO public.wbs_nodes(%s) SELECT %s FROM public.wbs_nodes s WHERE s.id=$1 RETURNING id',cols,expr)
@@ -65,7 +65,7 @@ BEGIN
     FOR r IN SELECT * FROM public.schedule_activities
       WHERE "projectId"=pid AND "versionId"=base_id
       ORDER BY "sortOrder",id LOOP
-      SELECT new_id INTO mapped_id FROM _qa_wbs_map WHERE _qa_wbs_map.pid=pid AND old_id=r."wbsNodeId";
+      SELECT m.new_id INTO mapped_id FROM _qa_wbs_map m WHERE m.pid=pid AND old_id=r."wbsNodeId";
       IF mapped_id IS NULL THEN RAISE EXCEPTION 'Atividade % com WBS nao mapeada',r.id; END IF;
       EXECUTE format('INSERT INTO public.schedule_activities(%s) SELECT %s FROM public.schedule_activities s WHERE s.id=$1 RETURNING id',cols,expr)
         INTO new_id USING r.id,next_id,mapped_id;
@@ -81,8 +81,8 @@ BEGIN
     WHERE table_schema='public' AND table_name='schedule_dependencies' AND column_name<>'id';
     FOR r IN SELECT * FROM public.schedule_dependencies
        WHERE "projectId"=pid AND "versionId"=base_id LOOP
-      SELECT new_id INTO mapped_pred FROM _qa_act_map WHERE _qa_act_map.pid=pid AND old_id=r."predecessorId";
-      SELECT new_id INTO mapped_succ FROM _qa_act_map WHERE _qa_act_map.pid=pid AND old_id=r."successorId";
+      SELECT m.new_id INTO mapped_pred FROM _qa_act_map m WHERE m.pid=pid AND old_id=r."predecessorId";
+      SELECT m.new_id INTO mapped_succ FROM _qa_act_map m WHERE m.pid=pid AND old_id=r."successorId";
       IF mapped_pred IS NULL OR mapped_succ IS NULL THEN RAISE EXCEPTION 'Dependencia % orfa no fork',r.id; END IF;
       EXECUTE format('INSERT INTO public.schedule_dependencies(%s) SELECT %s FROM public.schedule_dependencies s WHERE s.id=$1 RETURNING id',cols,expr)
         INTO new_id USING r.id,next_id,mapped_pred,mapped_succ;
@@ -114,7 +114,7 @@ BEGIN
       WHERE table_schema='public' AND table_name='lob_activity_locations' AND column_name<>'id';
       FOR r IN SELECT * FROM public.lob_activity_locations
           WHERE "projectId"=pid AND "versionId"=base_id LOOP
-        SELECT new_id INTO mapped_id FROM _qa_act_map WHERE _qa_act_map.pid=pid AND old_id=r."activityId";
+        SELECT m.new_id INTO mapped_id FROM _qa_act_map m WHERE m.pid=pid AND old_id=r."activityId";
         IF mapped_id IS NULL THEN RAISE EXCEPTION 'Parcela % orfa no fork',r.id; END IF;
         EXECUTE format('INSERT INTO public.lob_activity_locations(%s) SELECT %s FROM public.lob_activity_locations s WHERE s.id=$1 RETURNING id',cols,expr)
           INTO new_id USING r.id,next_id,mapped_id;
