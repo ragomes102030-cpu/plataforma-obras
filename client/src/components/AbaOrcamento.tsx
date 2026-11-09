@@ -285,27 +285,42 @@ export function AbaOrcamento({ projetoId }: Props) {
             ) : (
               itensFiltrados.map((item) => (<Fragment key={item.id}>
                 {editandoId === item.id ? (
-                  <tr key={item.id} className={detalheId === item.id ? "orcamento-row-active" : undefined}>
-                    <td><input aria-label="Código do item" value={rascunho.code} onChange={e => setRascunho({ ...rascunho, code: e.target.value })} /></td>
-                    <td><input aria-label="Descrição do item" value={rascunho.description} onChange={e => setRascunho({ ...rascunho, description: e.target.value })} /></td>
-                    <td><input aria-label="Unidade do item" value={rascunho.unit} onChange={e => setRascunho({ ...rascunho, unit: e.target.value })} /></td>
-                    <td><input aria-label="Quantidade do item" type="number" min="0.001" step="0.001" value={rascunho.quantity} onChange={e => setRascunho({ ...rascunho, quantity: e.target.value })} /></td>
-                    <td><input aria-label="Preço unitário do item" type="number" min="0" step="0.01" value={rascunho.unitPrice} onChange={e => setRascunho({ ...rascunho, unitPrice: e.target.value })} /></td>
-                    <td>—</td>
-                    <td>
-                      <input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} />
-                      <label htmlFor={`composicao-busca-${item.id}`}>Buscar composição oficial</label>
-                      <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Código ou descrição SINAPI/SEINFRA" />
-                      <select aria-label="Composição oficial vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value })}>
-                        <option value="">Sem composição oficial</option>
-                        {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
-                        {composicoesCandidatas.map(composition => {
-                          const catalog = catalogoComposicoes.data?.catalogs.find(row => row.id === composition.sourceCatalogId);
-                          return <option key={composition.id} value={composition.id}>{composition.code} · {composition.description} ({composition.unit}) · {catalog?.sourceType ?? "base oficial"} · {composition.referencePeriod ?? catalog?.referencePeriod ?? "sem referência"}</option>;
-                        })}
-                      </select>
-                      {rascunho.compositionId && <small>Ao salvar, o preço unitário será calculado pelos coeficientes e preços rastreados da composição. A unidade precisa coincidir.</small>}
-                      <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button><button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button>
+                  <tr key={item.id} className={"orcamento-row-active orcamento-edit-row"}>
+                    <td colSpan={7}>
+                      <div className="orcamento-edit-panel" aria-label={`Editar item ${item.code}`}>
+                        <label>Código<input aria-label="Código do item" value={rascunho.code} onChange={e => setRascunho({ ...rascunho, code: e.target.value })} /></label>
+                        <label className="orcamento-edit-wide">Descrição<input aria-label="Descrição do item" value={rascunho.description} onChange={e => setRascunho({ ...rascunho, description: e.target.value })} /></label>
+                        <label>Unidade<input aria-label="Unidade do item" value={rascunho.unit} onChange={e => setRascunho({ ...rascunho, unit: e.target.value })} /></label>
+                        <label>Quantidade<input aria-label="Quantidade do item" type="number" min="0.001" step="0.001" value={rascunho.quantity} onChange={e => setRascunho({ ...rascunho, quantity: e.target.value })} /></label>
+                        <label>Preço unitário<input aria-label="Preço unitário do item" type="number" min="0" step="0.01" value={rascunho.unitPrice} onChange={e => setRascunho({ ...rascunho, unitPrice: e.target.value })} /></label>
+                        <label className="orcamento-edit-wide">Fonte do preço<input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} /></label>
+                        <label className="orcamento-edit-search orcamento-edit-wide" htmlFor={`composicao-busca-${item.id}`}>
+                          Buscar composição oficial por código ou descrição
+                          <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Digite código ou serviço SINAPI/SEINFRA (mínimo 2 caracteres)" />
+                        </label>
+                        <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
+                          Composição oficial vinculada
+                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição oficial vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value })} disabled={buscaComposicaoDebounced.length < 2 || catalogoComposicoes.isFetching}>
+                            <option value="">Sem composição oficial</option>
+                            {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
+                            {composicoesCandidatas.map(composition => {
+                              const catalog = catalogoComposicoes.data?.catalogs.find(row => row.id === composition.sourceCatalogId);
+                              return <option key={composition.id} value={composition.id}>{composition.code} · {composition.description} ({composition.unit}) · {catalog?.sourceType ?? "base oficial"} · {composition.referencePeriod ?? catalog?.referencePeriod ?? "sem referência"}</option>;
+                            })}
+                          </select>
+                        </label>
+                        <div className="orcamento-edit-feedback" role="status" aria-live="polite">
+                          {buscaComposicaoDebounced.length < 2 && <span>Digite pelo menos 2 caracteres para pesquisar no catálogo oficial.</span>}
+                          {buscaComposicaoDebounced.length >= 2 && catalogoComposicoes.isFetching && <span>Buscando composições oficiais…</span>}
+                          {buscaComposicaoDebounced.length >= 2 && catalogoComposicoes.isError && <span className="orcamento-edit-error">Não foi possível consultar o catálogo. Tente novamente.</span>}
+                          {buscaComposicaoDebounced.length >= 2 && catalogoComposicoes.isSuccess && !catalogoComposicoes.isFetching && composicoesCandidatas.length === 0 && <span>Nenhuma composição oficial validada foi encontrada para esse termo e unidade.</span>}
+                          {rascunho.compositionId && <span>Ao salvar, o preço unitário será calculado pelos coeficientes e preços rastreados da composição.</span>}
+                        </div>
+                        <div className="orcamento-edit-actions">
+                          <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button>
+                          <button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ) : (
