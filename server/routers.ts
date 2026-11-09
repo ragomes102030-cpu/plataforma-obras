@@ -3232,6 +3232,7 @@ export const appRouter = router({
         productivity: z.number().positive().nullable().optional(),
         plannedDurationDays: z.number().int().positive().nullable().optional(),
         wbsNodeId: z.number().int().positive().nullable().optional(),
+        compositionId: z.number().int().positive().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -3241,6 +3242,7 @@ export const appRouter = router({
           .select({
             id: budgetItems.id,
             budgetVersionId: budgetItems.budgetVersionId,
+            unit: budgetItems.unit,
             status: budgetVersions.status,
           })
           .from(budgetItems)
@@ -3254,17 +3256,77 @@ export const appRouter = router({
           await assertCurrentPlanWbsLinks(db, input.projectId, [input.wbsNodeId]);
         }
         const values: Partial<typeof budgetItems.$inferInsert> = { updatedAt: new Date() };
+        if (input.compositionId !== undefined) {
+          if (input.compositionId === null) {
+            values.compositionId = null;
+            values.compositionUnitCost = null;
+            values.compositionNote = null;
+          } else {
+            const [composition] = await db
+              .select()
+              .from(serviceCompositions)
+              .where(eq(serviceCompositions.id, input.compositionId))
+              .limit(1);
+            if (!composition) throw notFound("Composição não encontrada.");
+            if (composition.status !== "validada" || composition.sourceCatalogId == null)
+              throw badRequest("Vincule somente composição validada de catálogo rastreável.");
+            const itemUnit = input.unit ?? item.unit;
+            if (!unitsCompatible(itemUnit, composition.unit))
+              throw badRequest(`Unidade incompatível: item ${itemUnit} e composição ${composition.unit}.`);
+            const [catalog] = await db
+              .select({ name: priceCatalogs.name, sourceType: priceCatalogs.sourceType, state: priceCatalogs.state, referencePeriod: priceCatalogs.referencePeriod, status: priceCatalogs.status })
+              .from(priceCatalogs)
+              .where(eq(priceCatalogs.id, composition.sourceCatalogId))
+              .limit(1);
+            if (!catalog || catalog.status !== "ativo" || !["SINAPI", "SEINFRA"].includes(catalog.sourceType))
+              throw badRequest("A composição não pertence a uma base oficial ativa SINAPI ou SEINFRA.");
+            const [project] = await db
+              .select({ location: projects.location })
+              .from(projects)
+              .where(eq(projects.id, input.projectId))
+              .limit(1);
+            const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1];
+            if (projectState && catalog.state && catalog.state.toUpperCase() !== projectState)
+              throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${catalog.state}.`);
+            if (projectState && catalog.sourceType === "SEINFRA" && catalog.state?.toUpperCase() !== projectState)
+              throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+            const components = await db
+              .select({
+                id: compositionComponents.id,
+                coefficient: compositionComponents.coefficient,
+                unitPriceSnapshot: compositionComponents.unitPriceSnapshot,
+                catalogId: priceItems.catalogId,
+              })
+              .from(compositionComponents)
+              .innerJoin(priceItems, eq(priceItems.id, compositionComponents.priceItemId))
+              .where(eq(compositionComponents.compositionId, composition.id));
+            if (!components.length) throw badRequest("A composição não possui insumos para formar o preço.");
+            if (components.some(component => component.catalogId !== composition.sourceCatalogId))
+              throw badRequest("A composição contém insumos de outra base; revise a rastreabilidade antes de vincular.");
+            const unitPrice = components.reduce(
+              (sum, component) => sum + Number(component.coefficient) * Number(component.unitPriceSnapshot),
+              0,
+            );
+            values.compositionId = composition.id;
+            values.compositionUnitCost = unitPrice.toFixed(2);
+            values.compositionNote = `${composition.code} · ${composition.description}`;
+            values.unitPrice = unitPrice.toFixed(2);
+            values.source = `${catalog.sourceType} · ${catalog.name}`;
+            values.referencePeriod = composition.referencePeriod ?? catalog.referencePeriod;
+          }
+        }
         if (input.code !== undefined) values.code = input.code;
         if (input.description !== undefined) values.description = input.description;
         if (input.unit !== undefined) values.unit = input.unit;
         if (input.quantity !== undefined) values.quantity = input.quantity.toFixed(3);
-        if (input.unitPrice !== undefined) values.unitPrice = input.unitPrice.toFixed(2);
-        if (input.source !== undefined) values.source = input.source;
-        if (input.referencePeriod !== undefined) values.referencePeriod = input.referencePeriod;
+        if (input.unitPrice !== undefined && !(input.compositionId && input.compositionId > 0)) values.unitPrice = input.unitPrice.toFixed(2);
+        if (input.source !== undefined && !(input.compositionId && input.compositionId > 0)) values.source = input.source;
+        if (input.referencePeriod !== undefined && !(input.compositionId && input.compositionId > 0)) values.referencePeriod = input.referencePeriod;
         if (input.productivity !== undefined) values.productivity = input.productivity == null ? null : input.productivity.toFixed(3);
         if (input.plannedDurationDays !== undefined) values.plannedDurationDays = input.plannedDurationDays;
         if (input.wbsNodeId !== undefined) values.wbsNodeId = input.wbsNodeId;
         const [updated] = await db.update(budgetItems).set(values).where(eq(budgetItems.id, input.budgetItemId)).returning({ id: budgetItems.id });
+        cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
         return { id: updated.id };
       }),
     createItems: protectedProcedure

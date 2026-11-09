@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { budgetItems, budgetVersions, projectPlanVersions, projects, scheduleActivities, users, wbsNodes } from "../drizzle/schema";
+import { budgetItems, budgetVersions, compositionComponents, priceCatalogs, priceItems, projectPlanVersions, projects, scheduleActivities, serviceCompositions, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
 import { pgliteComSchema } from "./test-helpers/pglite";
 
@@ -354,6 +354,28 @@ describe("aplicarPropostaEap", () => {
 
     await db.update(budgetVersions).set({ status: "aprovado" }).where(eq(budgetVersions.id, budget!.id));
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
+  });
+
+  it("vincula composição oficial validada, confere unidade e recalcula o preço pelos componentes", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento rastreável", versionNumber: 1, status: "rascunho" }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({ budgetVersionId: budget!.id, wbsNodeId: root!.id, code: "ITEM-COMP", description: "Revestimento", unit: "m²", quantity: "10.000", unitPrice: "1.00", source: "SIMULACAO_QA" }).returning({ id: budgetItems.id });
+    await db.update(projects).set({ location: "Fortaleza-CE" }).where(eq(projects.id, projectId));
+    const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1", sourceType: "SEINFRA", state: "CE", referencePeriod: "2026-09", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [price] = await db.insert(priceItems).values({ catalogId: catalog!.id, code: "MAT-1", description: "Insumo de teste", unit: "un", itemType: "material", unitPrice: "50.00" }).returning({ id: priceItems.id });
+    const [composition] = await db.insert(serviceCompositions).values({ code: "COMP-1", description: "Serviço rastreável", unit: "M2", sourceCatalogId: catalog!.id, referencePeriod: "2026-09", status: "validada" }).returning({ id: serviceCompositions.id });
+    await db.insert(compositionComponents).values({ compositionId: composition!.id, priceItemId: price!.id, componentType: "material", coefficient: "2.000000", unitPriceSnapshot: "50.00" });
+
+    await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, compositionId: composition!.id, unitPrice: 1, source: "manual" });
+    const [linked] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    expect(linked).toMatchObject({ compositionId: composition!.id, compositionUnitCost: "100.00", compositionNote: "COMP-1 · Serviço rastreável", unitPrice: "100.00", source: "SEINFRA · SEINFRA-CE 028.1", referencePeriod: "2026-09" });
+    await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unit: "m³", compositionId: composition!.id })).rejects.toThrow(/Unidade incompatível/i);
+
+    const [otherCatalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-BA", sourceType: "SEINFRA", state: "BA", referencePeriod: "2026-09", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [otherPrice] = await db.insert(priceItems).values({ catalogId: otherCatalog!.id, code: "MAT-BA", description: "Insumo BA", unit: "un", itemType: "material", unitPrice: "25.00" }).returning({ id: priceItems.id });
+    const [otherComposition] = await db.insert(serviceCompositions).values({ code: "COMP-BA", description: "Serviço regional BA", unit: "M2", sourceCatalogId: otherCatalog!.id, referencePeriod: "2026-09", status: "validada" }).returning({ id: serviceCompositions.id });
+    await db.insert(compositionComponents).values({ compositionId: otherComposition!.id, priceItemId: otherPrice!.id, componentType: "material", coefficient: "1.000000", unitPriceSnapshot: "25.00" });
+    await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, compositionId: otherComposition!.id })).rejects.toThrow(/Base regional incompatível/i);
   });
 
   it("não aprova orçamento com placeholders e arquiva a versão aprovada anterior", async () => {

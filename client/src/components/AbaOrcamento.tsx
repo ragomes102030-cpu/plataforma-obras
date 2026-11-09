@@ -1,5 +1,6 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { unitsCompatible } from "@shared/price-sources/reconciliation";
 import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
@@ -18,8 +19,15 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
-  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "" });
+  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", compositionId: "" });
+  const [buscaComposicao, setBuscaComposicao] = useState("");
+  const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const utils = trpc.useUtils();
+
+  useEffect(() => {
+    const timer = setTimeout(() => setBuscaComposicaoDebounced(buscaComposicao.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [buscaComposicao]);
 
   const budget = trpc.budgets.list.useQuery(
     { projectId: Number(projetoId) },
@@ -28,6 +36,10 @@ export function AbaOrcamento({ projetoId }: Props) {
   const coerencia = trpc.planning.validateEngineeringCoherence.useQuery(
     { projectId: Number(projetoId) },
     { enabled: Number(projetoId) > 0, retry: false, staleTime: 5 * 60_000 }
+  );
+  const catalogoComposicoes = trpc.catalog.list.useQuery(
+    { qCompositions: buscaComposicaoDebounced || undefined, limitCompositions: 50 },
+    { enabled: editandoId !== null && buscaComposicaoDebounced.length >= 2, staleTime: 60_000 }
   );
   const atualizarItem = trpc.budgets.updateItem.useMutation({
     onSuccess: async () => {
@@ -71,7 +83,9 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantity: String(item.quantity),
       unitPrice: String(item.unitPrice),
       source: item.source ?? "",
+      compositionId: item.compositionId == null ? "" : String(item.compositionId),
     });
+    setBuscaComposicao(item.compositionNote ?? "");
   }
 
   function salvarEdicao() {
@@ -85,8 +99,15 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantity: Number(rascunho.quantity),
       unitPrice: Number(rascunho.unitPrice),
       source: rascunho.source || null,
+      compositionId: rascunho.compositionId ? Number(rascunho.compositionId) : null,
     });
   }
+
+  const composicoesCandidatas = (catalogoComposicoes.data?.compositions ?? []).filter(
+    composition => composition.status === "validada" && composition.sourceCatalogId != null &&
+      unitsCompatible(composition.unit, rascunho.unit) &&
+      catalogoComposicoes.data?.catalogs.some(row => row.id === composition.sourceCatalogId && row.status === "ativo" && ["SINAPI", "SEINFRA"].includes(row.sourceType))
+  );
 
   return (
     <div className="xl-painel">
@@ -271,7 +292,21 @@ export function AbaOrcamento({ projetoId }: Props) {
                     <td><input aria-label="Quantidade do item" type="number" min="0.001" step="0.001" value={rascunho.quantity} onChange={e => setRascunho({ ...rascunho, quantity: e.target.value })} /></td>
                     <td><input aria-label="Preço unitário do item" type="number" min="0" step="0.01" value={rascunho.unitPrice} onChange={e => setRascunho({ ...rascunho, unitPrice: e.target.value })} /></td>
                     <td>—</td>
-                    <td><input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} /><button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button><button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button></td>
+                    <td>
+                      <input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} />
+                      <label htmlFor={`composicao-busca-${item.id}`}>Buscar composição oficial</label>
+                      <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Código ou descrição SINAPI/SEINFRA" />
+                      <select aria-label="Composição oficial vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value })}>
+                        <option value="">Sem composição oficial</option>
+                        {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
+                        {composicoesCandidatas.map(composition => {
+                          const catalog = catalogoComposicoes.data?.catalogs.find(row => row.id === composition.sourceCatalogId);
+                          return <option key={composition.id} value={composition.id}>{composition.code} · {composition.description} ({composition.unit}) · {catalog?.sourceType ?? "base oficial"} · {composition.referencePeriod ?? catalog?.referencePeriod ?? "sem referência"}</option>;
+                        })}
+                      </select>
+                      {rascunho.compositionId && <small>Ao salvar, o preço unitário será calculado pelos coeficientes e preços rastreados da composição. A unidade precisa coincidir.</small>}
+                      <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button><button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button>
+                    </td>
                   </tr>
                 ) : (
                   <tr key={item.id}>

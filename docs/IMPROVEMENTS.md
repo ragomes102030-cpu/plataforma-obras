@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 09/nov/2026 — Vincular composição oficial em item de orçamento
+
+**Achado:** a conciliação automática exigia código ou descrição exatos; quando não encontrava candidato, a edição de orçamento não oferecia seleção manual e o servidor não aceitava `compositionId`. Itens de pacote sem correspondência segura ficavam sem caminho de correção.
+
+**Correção:** a edição pesquisa composições validadas em catálogos SINAPI/SEINFRA ativos, filtra pela unidade e preserva a referência. O servidor confere UF regional, origem dos insumos, unidade e componentes; ao vincular, calcula o preço unitário pela soma dos coeficientes vezes os preços congelados. A decisão continua humana; nenhuma correspondência é aplicada automaticamente.
+
+**Validação:** 11 testes focados passaram (`planning-integrity` e edição do orçamento), incluindo cálculo do preço pelos componentes e rejeição de unidade/UF incompatíveis; `pnpm check`, `pnpm build` e `git diff --check` passaram. Código ainda local; a mudança não foi publicada e nenhum orçamento ao vivo foi alterado.
+
 ## 05/nov/2026 — Coerência do fluxo de planejamento e integridade dos indicadores
 
 **Diagnóstico:** na Escola, a EAP aprovada continuava pendente no cabeçalho por cache de outra consulta. O gate de dependências reconhecia um código de erro inexistente. A supressão lexical do PR333 ocultava conflitos reais; comparação por código reutilizava itens da baseline. Ausência de produção e orçamento didático permitiam indicadores enganosos.
