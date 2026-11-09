@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 09/nov/2026 — Editor de composição ocupa a largura disponível
+
+**Achado:** o vínculo manual estava no código publicado, mas os controles de busca e seleção ficavam dentro da última coluna de uma linha de tabela com sete colunas. Em telas com rolagem horizontal, o seletor podia ficar fora da área visível e a busca não indicava quando estava carregando ou sem resultados compatíveis.
+
+**Correção:** a edição passa a usar um painel de largura total com campos identificados, busca e seleção de composição. O seletor fica desabilitado até haver termo de busca; a interface informa mínimo de caracteres, carregamento, erro e ausência de composição oficial validada para a unidade informada.
+
+**Estado:** correção de interface no código para a próxima obra de teste. Nenhum orçamento, dado de obra ou baseline foi alterado.
+
 ## 09/nov/2026 — Vincular composição oficial em item de orçamento
 
 **Achado:** a conciliação automática exigia código ou descrição exatos; quando não encontrava candidato, a edição de orçamento não oferecia seleção manual e o servidor não aceitava `compositionId`. Itens de pacote sem correspondência segura ficavam sem caminho de correção.
