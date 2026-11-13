@@ -131,11 +131,11 @@ async function startServer() {
     })
   );
 
-  // Teto de corpo de 1 MB. As duas únicas procedures que recebem arquivo em
-  // base64 mantêm 50 MB, e o parser grande precisa ser montado ANTES do global:
+  // Teto de corpo de 1 MB. As procedures que recebem arquivo em base64 mantêm
+  // 50 MB, e o parser grande precisa ser montado ANTES do global:
   // `express.json` marca `req._body` e o seguinte é ignorado.
   const CAMINHOS_DE_UPLOAD =
-    /^\/api\/trpc\/(catalog\.importPriceSheet|documents\.upload)([,?]|$)/;
+    /^\/api\/trpc\/(catalog\.(?:inspect|import)PriceSheet|documents\.upload)([,?]|$)/;
   const jsonGrande = express.json({ limit: "50mb" });
   app.use((req, res, next) =>
     CAMINHOS_DE_UPLOAD.test(req.originalUrl) ? jsonGrande(req, res, next) : next()
