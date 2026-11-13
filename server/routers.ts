@@ -4270,31 +4270,70 @@ export const appRouter = router({
           );
         }
         const referencePeriod = input.referencePeriod || parsed.referenceHint || "s/ ref";
+        const catalogName = input.name ?? `SEINFRA-CE ${referencePeriod}`;
+        const catalogState = (input.state ?? "CE").toUpperCase();
 
         let catalogId: number;
+        let imported = 0;
+        let alreadyPresent = 0;
         try {
-          // Cada import = 1 NOVO priceCatalogs; catálogo e itens são atômicos:
-          // falha em qualquer lote reverte tudo e não deixa versão incompleta.
+          // Cada import cria uma versão; reenvio da mesma planilha pode retomar
+          // com segurança um catálogo parcial se todos os registros existentes
+          // coincidirem com a fonte. Divergências abortam sem gravar.
           catalogId = await db.transaction(async tx => {
-            const [created] = await tx
-              .insert(priceCatalogs)
-              .values({
-                name: input.name ?? `SEINFRA-CE ${referencePeriod}`,
-                sourceType: "SEINFRA",
-                state: (input.state ?? "CE").toUpperCase(),
-                referencePeriod,
-                notes: parsed.referenceHint
-                  ? `ref arquivo: ${parsed.referenceHint}; ${parsed.skipped} linha(s) ignoradas; ${consolidado.duplicateRows} linha(s) duplicadas idênticas consolidadas`
-                  : `${parsed.skipped} linha(s) ignoradas; ${consolidado.duplicateRows} linha(s) duplicadas idênticas consolidadas`,
-                createdBy: ctx.user.id,
-              })
-              .returning({ id: priceCatalogs.id });
+            const candidatos = await tx
+              .select()
+              .from(priceCatalogs)
+              .where(and(
+                eq(priceCatalogs.name, catalogName),
+                eq(priceCatalogs.sourceType, "SEINFRA"),
+                eq(priceCatalogs.state, catalogState),
+                eq(priceCatalogs.referencePeriod, referencePeriod),
+                eq(priceCatalogs.createdBy, ctx.user.id),
+              ));
+            if (candidatos.length > 1) {
+              throw badRequest("Há mais de um catálogo com esta identificação. Renomeie a nova referência para evitar ambiguidade.");
+            }
+            const candidato = candidatos[0];
+            let id: number;
+            let faltantes = consolidado.records;
+            if (candidato) {
+              const existentes = await tx.select().from(priceItems).where(eq(priceItems.catalogId, candidato.id));
+              const fontePorCodigo = new Map(consolidado.records.map(record => [record.code, record]));
+              for (const item of existentes) {
+                const fonte = fontePorCodigo.get(item.code);
+                if (!fonte || fonte.description !== item.description || fonte.unit !== item.unit ||
+                    fonte.itemType !== item.itemType || Number(item.unitPrice) !== fonte.unitPrice) {
+                  throw badRequest(`O catálogo ${catalogName} já contém o código ${item.code} com dados diferentes da planilha. Nada foi alterado.`);
+                }
+              }
+              const codigosExistentes = new Set(existentes.map(item => item.code));
+              faltantes = consolidado.records.filter(record => !codigosExistentes.has(record.code));
+              id = candidato.id;
+              alreadyPresent = existentes.length;
+            } else {
+              const [created] = await tx
+                .insert(priceCatalogs)
+                .values({
+                  name: catalogName,
+                  sourceType: "SEINFRA",
+                  state: catalogState,
+                  referencePeriod,
+                  notes: parsed.referenceHint
+                    ? `ref arquivo: ${parsed.referenceHint}; ${parsed.skipped} linha(s) ignoradas; ${consolidado.duplicateRows} linha(s) duplicadas idênticas consolidadas`
+                    : `${parsed.skipped} linha(s) ignoradas; ${consolidado.duplicateRows} linha(s) duplicadas idênticas consolidadas`,
+                  createdBy: ctx.user.id,
+                })
+                .returning({ id: priceCatalogs.id });
+              id = created.id;
+              alreadyPresent = 0;
+            }
             const chunkSize = 500;
-            for (let i = 0; i < consolidado.records.length; i += chunkSize) {
-              const chunk = consolidado.records.slice(i, i + chunkSize);
+            for (let i = 0; i < faltantes.length; i += chunkSize) {
+              const chunk = faltantes.slice(i, i + chunkSize);
               await tx.insert(priceItems).values(
                 chunk.map(record => ({
-                  catalogId: created.id,
+                  catalogId: id,
                   code: record.code,
                   description: record.description,
                   unit: record.unit,
@@ -4304,9 +4343,11 @@ export const appRouter = router({
                 }))
               );
             }
-            return created.id;
+            imported = faltantes.length;
+            return id;
           });
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           const dbError = error as { name?: unknown; code?: unknown; constraint?: unknown };
           console.error("[catalog.importPriceSheet] gravação transacional revertida", {
             name: typeof dbError?.name === "string" ? dbError.name : "unknown",
@@ -4323,7 +4364,9 @@ export const appRouter = router({
         return {
           catalogId,
           referencePeriod,
-          imported: consolidado.records.length,
+          imported,
+          alreadyPresent,
+          total: consolidado.records.length,
           duplicateRows: consolidado.duplicateRows,
           skipped: parsed.skipped,
           referenceHint: parsed.referenceHint,

@@ -81,7 +81,7 @@ export function CatalogView() {
   const [seinfraUf, setSeinfraUf] = useState("CE");
   const [seinfraName, setSeinfraName] = useState("");
   const [seinfraInspection, setSeinfraInspection] = useState<{ planilha: string; registros: number; registrosUnicos: number; duplicados: number; duplicidadesDivergentes: number; podeImportar: boolean; geraEap: boolean; aviso: string } | null>(null);
-  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; duplicateRows: number; skipped: number; referenceHint: string | null; aviso?: string | null } | null>(null);
+  const [importResult, setImportResult] = useState<{ catalogId: number; referencePeriod: string; imported: number; alreadyPresent: number; total: number; duplicateRows: number; skipped: number; referenceHint: string | null; aviso?: string | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [acQuery, setAcQuery] = useState("");
   const [acOpen, setAcOpen] = useState(false);
@@ -254,7 +254,7 @@ export function CatalogView() {
         {inspectSheet.error && <p className="form-error">Não foi possível validar o arquivo: {inspectSheet.error.message}</p>}
         {inspectSheet.isPending && <p className="catalog-busca-status">Validando estrutura da planilha antes de gravar…</p>}
         {seinfraInspection && <div className="catalog-list-row"><div><strong>{seinfraInspection.podeImportar ? "Arquivo validado" : "Arquivo bloqueado"} · {seinfraInspection.planilha}</strong><span>{seinfraInspection.registros.toLocaleString("pt-BR")} linhas reconhecidas · {seinfraInspection.registrosUnicos.toLocaleString("pt-BR")} códigos únicos · {seinfraInspection.duplicados} ocorrências repetidas · {seinfraInspection.duplicidadesDivergentes} códigos divergentes · {seinfraInspection.aviso}</span></div></div>}
-        {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens importados · {importResult.duplicateRows} linhas repetidas consolidadas · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span>{importResult.aviso && <span style={{ color: "var(--warn)" }}>{importResult.aviso}</span>}</div></div>}
+        {importResult && <div className="catalog-list-row"><div><strong>Importação concluída · {importResult.referencePeriod}</strong><span>{importResult.imported} itens novos · {importResult.alreadyPresent} já existentes e conferidos · {importResult.total} códigos únicos no catálogo · {importResult.duplicateRows} linhas repetidas consolidadas · {importResult.skipped} ignorados{importResult.referenceHint ? ` · ref arquivo: ${importResult.referenceHint}` : ""}</span>{importResult.aviso && <span style={{ color: "var(--warn)" }}>{importResult.aviso}</span>}</div></div>}
       </section>
 
       <div className="catalog-two-column">
