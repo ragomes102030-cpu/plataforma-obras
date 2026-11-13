@@ -21,8 +21,10 @@ export type NoDoGantt = {
   fim: IsoDate;
   /** Duração do intervalo coberto (não a soma das durações), como no Project. */
   duracao: number;
-  /** Avanço 0..100, ponderado pela quantidade planejada das atividades-folha. */
+/** Avanço 0..100; etapa agregada apenas com pesos físicos aprovados. */
   progresso: number;
+  /** False means there is no confirmed physical measurement to show yet. */
+  progressoDisponivel: boolean;
   critica: boolean;
   temFilhos: boolean;
   /** Marco: data única. Desenha losango, não barra. */
@@ -66,6 +68,7 @@ export function montarArvore(
     fim: "" as IsoDate,
     duracao: 0,
     progresso: 0,
+    progressoDisponivel: false,
     critica: false,
     temFilhos: false,
     marco: false,
@@ -135,7 +138,8 @@ export function montarArvore(
     no.duracao = no.marco ? 1 : Math.max(1, linha.duracao);
     const quantidade = Number(linha.quantidade) || 0;
     const executado = Number(linha.executado) || 0;
-    no.progresso = quantidade > 0 ? Math.max(0, Math.min(100, (executado / quantidade) * 100)) : 0;
+    no.progressoDisponivel = linha.medicaoConfirmada === true && quantidade > 0;
+    no.progresso = no.progressoDisponivel ? Math.max(0, Math.min(100, (executado / quantidade) * 100)) : 0;
     no.critica = codigosCriticos.has(no.activityId ?? "") || codigosCriticos.has(no.codigo);
   };
 
@@ -157,13 +161,20 @@ export function montarArvore(
     );
     const intervalo = diasEntre(no.inicio, no.fim);
     no.duracao = Math.max(1, (intervalo ?? 0) + 1);
+    const temPesosEAfericoes = descendentes.length > 0 && descendentes.every(item =>
+      item.progressoDisponivel && item.linha?.pesoFisicoAprovado === true &&
+      Number(item.linha.pesoFisico) > 0
+    );
     let peso = 0;
     let soma = 0;
-    for (const item of descendentes) {
-      const quantidade = Number(item.linha?.quantidade) || 1;
-      peso += quantidade;
-      soma += item.progresso * quantidade;
+    if (temPesosEAfericoes) {
+      for (const item of descendentes) {
+        const pesoAtividade = Number(item.linha?.pesoFisico);
+        peso += pesoAtividade;
+        soma += item.progresso * pesoAtividade;
+      }
     }
+    no.progressoDisponivel = temPesosEAfericoes && peso > 0;
     no.progresso = peso > 0 ? soma / peso : 0;
     no.critica = descendentes.some(item => item.critica);
   };

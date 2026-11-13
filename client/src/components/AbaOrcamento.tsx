@@ -6,6 +6,7 @@ import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
 import { PainelMedicao } from "./PainelMedicao";
 import { ReadinessGate } from "./ReadinessGate";
+import { summarizeBudgetQuantities } from "./budget-quantity-readiness";
 
 type Props = {
   projetoId: number;
@@ -55,6 +56,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const total = budget.data?.total ?? 0;
   const itensComValor = items.filter((i) => Number(i.unitPrice) > 0).length;
   const itensSemValor = items.length - itensComValor;
+  const prontidaoQuantitativos = summarizeBudgetQuantities(items.length, itensSemValor);
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
   const itensComComposicao = items.filter((i) => i.compositionId != null).length;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
@@ -185,7 +187,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       {!carregando && !erro && <section className="orcamento-kpis" aria-label="Prontidão do orçamento">
         <div className="orcamento-kpi"><span>COBERTURA DE FONTE</span><strong>{cobertura}%</strong><small>{itensComFonte} de {items.length} itens sem fonte didática</small><div><i style={{width:`${cobertura}%`}} /></div></div>
         <div className="orcamento-kpi"><span>COMPOSIÇÕES VINCULADAS</span><strong>{itensComComposicao}</strong><small>{items.length - itensComComposicao} itens ainda dependem de composição</small></div>
-        <div className="orcamento-kpi"><span>QUANTITATIVOS</span><strong>{itensSemValor ? "Revisar" : "OK"}</strong><small>{itensSemValor ? `${itensSemValor} itens sem preço unitário` : "Todos os itens possuem preço unitário"}</small></div>
+        <div className="orcamento-kpi"><span>PREÇOS UNITÁRIOS</span><strong>{prontidaoQuantitativos.status}</strong><small>{prontidaoQuantitativos.description}</small></div>
       </section>}
 
       {!carregando && !erro && statusOrcamento !== "pronto" && <section className="orcamento-next-step">
