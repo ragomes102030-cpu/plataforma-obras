@@ -569,6 +569,7 @@ function Gantt({
     let atividades = 0;
     let peso = 0;
     let ponderado = 0;
+    let pesosEAfericoesCompletos = true;
     let primeiro = "";
     let ultimo = "";
     const andar = (nos: typeof arvore) => {
@@ -581,16 +582,20 @@ function Gantt({
           continue;
         }
         atividades += 1;
-        const dias = Math.max(1, no.duracao);
-        peso += dias;
-        ponderado += no.progresso * dias;
+        const pesoAprovado = Number(no.linha?.pesoFisico);
+        if (!no.progressoDisponivel || no.linha?.pesoFisicoAprovado !== true || !(pesoAprovado > 0)) {
+          pesosEAfericoesCompletos = false;
+          continue;
+        }
+        peso += pesoAprovado;
+        ponderado += no.progresso * pesoAprovado;
       }
     };
     andar(arvore);
     return {
       atividades,
       etapas: total - atividades,
-      executado: peso === 0 ? 0 : ponderado / peso,
+      executado: peso === 0 || !pesosEAfericoesCompletos ? null : ponderado / peso,
       inicio: primeiro || dados.start,
       fim: ultimo || dados.end,
     };
@@ -796,7 +801,7 @@ function Gantt({
             <span>{resumoDoPlano.atividades} atividades</span>
             <span>{resumoDoPlano.etapas} etapas</span>
             <span>término {fmtComAno(resumoDoPlano.fim, true)}</span>
-            <span className="pg-visao-destaque">{Math.round(resumoDoPlano.executado)}% executado</span>
+            <span className="pg-visao-destaque">{resumoDoPlano.executado == null ? "Sem agregado físico" : `${Math.round(resumoDoPlano.executado)}% executado`}</span>
           </span>
         </button>
         {visaoAberta && (
@@ -815,7 +820,7 @@ function Gantt({
             </div>
             <div>
               <dt>Executado</dt>
-              <dd>{Math.round(resumoDoPlano.executado)}%</dd>
+              <dd>{resumoDoPlano.executado == null ? "Sem agregado físico" : `${Math.round(resumoDoPlano.executado)}%`}</dd>
             </div>
             <div>
               <dt>Escala atual</dt>
@@ -1084,8 +1089,8 @@ function Gantt({
               const marco = !resumo && no.marco;
               const fimVisual = marco ? inicioBarra : inicioBarra + larguraBarra;
               const descricao = marco
-                ? `${no.codigo} ${no.nome} · marco em ${fmt(no.inicio)} · ${no.progresso >= 100 ? "concluído" : "não concluído"}${no.critica ? " · caminho crítico" : ""}`
-                : `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${Math.round(no.progresso)}% executado${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}`;
+                ? `${no.codigo} ${no.nome} · marco em ${fmt(no.inicio)} · ${no.progressoDisponivel ? (no.progresso >= 100 ? "concluído" : "não concluído") : "sem medição confirmada"}${no.critica ? " · caminho crítico" : ""}`
+                : `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${no.progressoDisponivel ? `${Math.round(no.progresso)}% executado` : resumo ? "agregado indisponível (exige pesos aprovados e medições completas)" : "sem medição confirmada"}${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}`;
               return (
                 <div
                   key={no.chave}
@@ -1137,7 +1142,7 @@ function Gantt({
                           <span className="pg-celula-num">{fmt(no.fim)}</span>
                         </>
                       )}
-                      <span className="pg-celula-num pg-celula-pct">{Math.round(no.progresso)}%</span>
+                      <span className="pg-celula-num pg-celula-pct">{no.progressoDisponivel ? `${Math.round(no.progresso)}%` : "—"}</span>
                       {baselinePronta && !estreita && <span className={`pg-celula-num pg-delta-fim${(barrasBaseline.get(no.chave)?.deltaFim??0)>0 ? " atraso" : (barrasBaseline.get(no.chave)?.deltaFim??0)<0 ? " adiantada" : ""}`}
                         title="Variação do término em dias úteis do CPM, em comparação à baseline vigente">
                         {no.temFilhos ? "—" : barrasBaseline.get(no.chave)?.deltaFim != null
@@ -1179,7 +1184,7 @@ function Gantt({
                               {no.nome}
                             </span>
                           )}
-                          {!rotulos && larguraBarra >= 52 && <span className="pg-barra-texto">{Math.round(no.progresso)}%</span>}
+                          {!rotulos && larguraBarra >= 52 && <span className="pg-barra-texto">{no.progressoDisponivel ? `${Math.round(no.progresso)}%` : "—"}</span>}
                         </div>
                         {larguraBarra < 18 && (
                           <span className="pg-barra-dias" style={{ left: inicioBarra + larguraBarra + 4 }}>{no.duracao}d</span>
@@ -1214,7 +1219,7 @@ function Gantt({
                       <span
                         className="pg-avanco-ponto"
                         style={{ left: avancos.pontos.get(no.chave) }}
-                        title={`Avanço: ${Math.round(no.progresso)}%`}
+                        title={no.progressoDisponivel ? `Avanço: ${Math.round(no.progresso)}%` : "Sem medição confirmada"}
                       />
                     )}
                   </div>
@@ -1259,7 +1264,7 @@ function Gantt({
             </div>
             <div>
               <dt>Executado</dt>
-              <dd>{Math.round(detalhe.no.progresso)}%</dd>
+              <dd>{detalhe.no.progressoDisponivel ? `${Math.round(detalhe.no.progresso)}%` : detalhe.no.temFilhos ? "Sem agregado físico aprovado" : "Sem medição"}</dd>
             </div>
             <div>
               <dt>Folga total</dt>
@@ -1399,7 +1404,7 @@ function Gantt({
                   <td className="pgp-num">{no.marco ? "marco" : `${no.duracao}d`}</td>
                   <td className="pgp-num">{fmt(no.inicio)}</td>
                   <td className="pgp-num">{no.marco ? fmt(no.inicio) : fmt(no.fim)}</td>
-                  <td className="pgp-num">{Math.round(no.progresso)}%</td>
+                  <td className="pgp-num">{no.progressoDisponivel ? `${Math.round(no.progresso)}%` : "—"}</td>
                   <td className="pgp-trilho" style={{ ["--pgp-hoje" as string]: `${impressao.hoje}%` } as React.CSSProperties}>
                     {no.temFilhos ? (
                       <span className="pgp-resumo" style={{ left: `${esquerda}%`, width: `${largura}%` }} />

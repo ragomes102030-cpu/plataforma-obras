@@ -17,6 +17,7 @@ function entrada(codigo: string, inicio: string, duracao: number, extra: Partial
     quantidade: 10,
     unidade: "m2",
     executado: 0,
+    medicaoConfirmada: true,
     ...extra,
   };
 }
@@ -70,10 +71,28 @@ describe("montarArvore", () => {
 
   it("pondera o avanço da etapa pela quantidade de cada atividade", () => {
     const arvore = montarArvore([
-      entrada("1.1", "2026-10-01", 2, { quantidade: 100, executado: 100 }),
-      entrada("1.2", "2026-10-03", 2, { quantidade: 300, executado: 0 }),
+      entrada("1.1", "2026-10-01", 2, { quantidade: 100, executado: 100, pesoFisico: 25, pesoFisicoAprovado: true }),
+      entrada("1.2", "2026-10-03", 2, { quantidade: 300, executado: 0, pesoFisico: 75, pesoFisicoAprovado: true }),
     ]);
+    expect(arvore[0]!.progressoDisponivel).toBe(true);
     expect(arvore[0]!.progresso).toBeCloseTo(25, 5);
+  });
+
+  it("não apresenta ausência de medição como 0% executado", () => {
+    const arvore = montarArvore([
+      entrada("1.1", "2026-10-01", 2, { executado: 0, medicaoConfirmada: false }),
+      entrada("1.2", "2026-10-03", 2, { executado: 0, medicaoConfirmada: false }),
+    ]);
+    expect(arvore[0]!.progressoDisponivel).toBe(false);
+    expect(arvore[0]!.filhos.every(no => !no.progressoDisponivel)).toBe(true);
+  });
+
+  it("não agrega avanço de etapa com pesos não aprovados ou sem prova de quantidade", () => {
+    const arvore = montarArvore([
+      entrada("1.1", "2026-10-01", 2, { executado: 50, pesoFisico: 50, pesoFisicoAprovado: false }),
+      entrada("1.2", "2026-10-03", 2, { executado: 50, pesoFisico: 50, pesoFisicoAprovado: true }),
+    ]);
+    expect(arvore[0]!.progressoDisponivel).toBe(false);
   });
 
   it("marca a etapa como crítica quando qualquer atividade dela é crítica", () => {

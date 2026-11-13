@@ -553,6 +553,9 @@ function Obra({
     quantidade: l.quantidade,
     unidade: l.unidade,
     executado: l.executado,
+    medicaoConfirmada: l.medicaoConfirmada,
+    pesoFisico: l.pesoFisico,
+    pesoFisicoAprovado: l.pesoFisicoAprovado,
     marco: l.marco,
   }));
   const agregado: AgregadoDoCronograma | undefined = grade.data?.agregado;

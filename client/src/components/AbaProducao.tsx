@@ -5,6 +5,7 @@ import { PainelLookahead } from "./PainelLookahead";
 import { ListaLancamentosProducao } from "./ListaLancamentosProducao";
 import { EstadoCarregando } from "./EstadoCarregando";
 import { selectConfirmedProductionEntries } from "@shared/production-entries";
+import { calcularAvancoMedioDasAtividadesMedidas } from "./production-summary";
 
 /**
  * A aba PRODUÇÃO: a fonte do `% Real`.
@@ -149,17 +150,13 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
   // Não existe "total geral" de produção: somar m³ com m² e kg não significa
   // nada. O avanço é sempre por atividade, contra a própria quantidade.
 
-  const atividadesComQuantidade = linhas.filter(l => {
-    const totalPlanejado = gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity;
-    return totalPlanejado && Number(totalPlanejado) > 0;
-  });
-  const avancoMedio = atividadesComQuantidade.length > 0
-    ? atividadesComQuantidade.reduce((sum, l) => {
-        const realizado = Number(porAtividade[l.codigo] ?? 0);
-        const planejado = Number(gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity ?? 0);
-        return sum + (realizado / planejado) * 100;
-      }, 0) / atividadesComQuantidade.length
-    : 0;
+  const avancoMedio = calcularAvancoMedioDasAtividadesMedidas(linhas.map(l => ({
+    plannedQuantity: gradeCrono.data?.activities?.find(a => a.id === l.atividadeId)?.plannedQuantity,
+    confirmedQuantity: porAtividade[l.codigo],
+  })));
+  const resumoAvanco = avancoMedio === null
+    ? lancamentos.length === 0 ? "Sem produção confirmada" : "Sem quantidade base nas atividades medidas"
+    : `${avancoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
   // Aviso suave (não bloqueio): se o lançamento proposto levar a soma executada
   // acima da quantidade planejada da atividade, avisa o usuário antes de confirmar.
@@ -207,8 +204,8 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           <span className="xl-painel-kicker">CONTROLE DE PRODUÇÃO</span>
           <h2>{linhas.length} atividades · {datas.length} {datas.length === 1 ? "dia lançado" : "dias lançados"}</h2>
           <p>
-            Avanço médio <strong>{avancoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</strong>{" "}
-            <span className="xl-regua">média simples entre as atividades com quantidade</span>
+            Avanço médio <strong>{resumoAvanco}</strong>{" "}
+            <span className="xl-regua">média simples entre atividades medidas com quantidade planejada</span>
           </p>
         </div>
       </div>
@@ -230,7 +227,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Avanço médio</span>
           <strong className="xl-cartao-valor">
-            {avancoMedio.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+            {resumoAvanco}
           </strong>
         </div>
         <div className="xl-cartao">
@@ -269,8 +266,9 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
                 <td className="xl-vazia" colSpan={linhas.length + 1}>
                   <strong>Nenhum lançamento ainda</strong>
                   <span>
-                    Registre a primeira produção no formulário abaixo. O que não é
-                    lançado aparece como 0% no painel e na Curva S.
+                    Registre a primeira produção confirmada no formulário abaixo.
+                    Sem medição, o avanço realizado permanece indisponível; a ausência
+                    de lançamento não comprova execução zero.
                   </span>
                 </td>
               </tr>
@@ -288,10 +286,10 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
                     return (
                       <td
                         key={l.codigo}
-                        className={`xl-tabela-celula${v ? " xl-tabela-celula-valor" : ""}`}
+                        className={`xl-tabela-celula${v != null ? " xl-tabela-celula-valor" : ""}`}
                       >
                         {v ?? ""}
-                        {v && planejado > 0 && (
+                        {v != null && planejado > 0 && (
                           <span className="xl-tabela-pct">({pct.toFixed(0)}%)</span>
                         )}
                       </td>
@@ -310,7 +308,7 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
                 return (
                   <td key={l.codigo} className="xl-tabela-celula xl-tabela-total-celula">
                     <strong>{v ?? "—"}</strong>
-                    {v && planejado > 0 && (
+                    {v != null && planejado > 0 && (
                       <span className="xl-tabela-pct xl-tabela-pct-total">({pct.toFixed(0)}%)</span>
                     )}
                   </td>
