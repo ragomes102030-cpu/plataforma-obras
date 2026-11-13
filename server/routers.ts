@@ -86,6 +86,7 @@ import { EvidenceSourceRouter } from "./construction/evidence-router";
 import { ConstructionMcpEvidenceSource } from "./construction/mcp-evidence-source";
 import { validateEap, validateWbsCostCoverage, validateAndNormalizeEapProposal, eapNodeCanHaveChildren } from "./construction/eap-validator";
 import {
+  getEapBaselineBlockers,
   normalizeEapDictionaryFields,
   validateEapForApproval,
   validateEapForBaseline,
@@ -5747,16 +5748,7 @@ export const appRouter = router({
           requiredDictionaryFields: normalizeEapDictionaryFields(dicionarioBaseline?.requiredFields),
         });
         if (!readiness.readyForBaseline) {
-          const blockers = readiness.issues.filter(issue =>
-            issue.severity === "error" || [
-              "eap_leaf_not_ready",
-              "eap_scope_coverage_not_evidenced",
-              "eap_child_scope_not_evidenced",
-              "eap_scope_overlap_evidence",
-              "eap_mixed_decomposition_basis",
-              "eap_group_without_decomposition",
-            ].includes(issue.code)
-          );
+          const blockers = getEapBaselineBlockers(readiness.issues);
           throw badRequest(
             `EAP não está pronta para a baseline: ${blockers.map(issue => issue.message).join(" ")}`
           );

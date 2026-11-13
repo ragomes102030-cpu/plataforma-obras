@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateEapForBaseline } from "./eap-approval-validator";
+import { getEapBaselineBlockers, validateEapForBaseline } from "./eap-approval-validator";
 import type { EapScopeNode } from "./eap-validator";
 
 function node(overrides: Partial<EapScopeNode> = {}): EapScopeNode {
@@ -89,6 +89,26 @@ describe("validateEapForBaseline", () => {
 
     expect(result.readyForBaseline).toBe(true);
     expect(result.issues.some(issue => issue.code === "eap_scope_overlap_evidence")).toBe(true);
+  });
+
+  it("não adiciona sobreposição lexical à lista de bloqueios de baseline", () => {
+    const leaf = {
+      description: "Execução de formas e concretagem.",
+      inclusions: "Formas e concretagem.",
+      exclusions: "Armaduras.",
+      responsible: "Engenheiro",
+      acceptanceCriteria: "Inspeção aprovada.",
+      decompositionBasis: "deliverable",
+    };
+    const result = validateEapForBaseline([
+      node(),
+      node({ id: 2, parentId: 1, code: "1.1", name: "Fundação A", nodeType: "pacote", ...leaf }),
+      node({ id: 3, parentId: 1, code: "1.2", name: "Fundação B", nodeType: "pacote", ...leaf }),
+    ]);
+
+    const blockers = getEapBaselineBlockers(result.issues);
+    expect(result.readyForBaseline).toBe(true);
+    expect(blockers.map(issue => issue.code)).not.toContain("eap_scope_overlap_evidence");
   });
 
 });
