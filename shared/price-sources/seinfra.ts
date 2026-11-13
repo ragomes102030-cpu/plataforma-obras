@@ -361,6 +361,47 @@ export function parseSeinfraRows(rows: SheetRow[], fileName: string): PriceParse
   };
 }
 
+/**
+ * Consolida códigos repetidos de uma planilha oficial sem ocultar conflitos.
+ * A tabela de preços possui chave única por código; a SEINFRA pode repetir o
+ * mesmo serviço em mais de um capítulo do Planos-de-Serviços. Repetições com
+ * o mesmo conteúdo são uma referência só no catálogo. Preço, descrição,
+ * unidade ou tipo divergentes bloqueiam a importação para revisão.
+ */
+export function consolidarRegistrosSeinfra(records: ParsedPriceRecord[]): {
+  records: ParsedPriceRecord[];
+  duplicateRows: number;
+  conflictingCodes: string[];
+} {
+  const porCodigo = new Map<string, ParsedPriceRecord>();
+  const conflictingCodes = new Set<string>();
+  let duplicateRows = 0;
+
+  for (const record of records) {
+    const existente = porCodigo.get(record.code);
+    if (!existente) {
+      porCodigo.set(record.code, record);
+      continue;
+    }
+
+    duplicateRows += 1;
+    if (
+      existente.description !== record.description ||
+      existente.unit !== record.unit ||
+      existente.unitPrice !== record.unitPrice ||
+      existente.itemType !== record.itemType
+    ) {
+      conflictingCodes.add(record.code);
+    }
+  }
+
+  return {
+    records: [...porCodigo.values()],
+    duplicateRows,
+    conflictingCodes: [...conflictingCodes].sort(),
+  };
+}
+
 /** `1`, `1.1`, `1.1.10` — a numeração hierárquica da planilha. */
 function ehNumeroDeItem(item: string): boolean {
   return /^\d+(\.\d+)*$/.test(item);

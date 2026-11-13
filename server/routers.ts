@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { selectOperationalPlanning } from "../shared/operational-planning";
@@ -48,7 +49,7 @@ import {
   arquimedesCapabilities,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
-import { seinfraAdapter, lerPrimeiraAba, reconhecerPlanilhaSeinfra } from "@shared/price-sources/seinfra";
+import { seinfraAdapter, lerPrimeiraAba, reconhecerPlanilhaSeinfra, consolidarRegistrosSeinfra } from "@shared/price-sources/seinfra";
 import {
   exceedsPriceThreshold,
   findCandidates,
@@ -4262,45 +4263,68 @@ export const appRouter = router({
         if (!parsed.records.length) {
           throw badRequest("Nenhum preço reconhecido na planilha (cabeçalho não identificado).");
         }
+        const consolidado = consolidarRegistrosSeinfra(parsed.records);
+        if (consolidado.conflictingCodes.length) {
+          throw badRequest(
+            `A planilha repete códigos com descrição, unidade, tipo ou preço divergente: ${consolidado.conflictingCodes.slice(0, 10).join(", ")}. Revise a fonte antes de importar.`
+          );
+        }
         const referencePeriod = input.referencePeriod || parsed.referenceHint || "s/ ref";
 
-        // Cada import = 1 NOVO priceCatalogs; nunca sobrescreve meses anteriores.
-        const [created] = await db
-          .insert(priceCatalogs)
-          .values({
-            name: input.name ?? `SEINFRA-CE ${referencePeriod}`,
-            sourceType: "SEINFRA",
-            state: (input.state ?? "CE").toUpperCase(),
-            referencePeriod,
-            notes: parsed.referenceHint
-              ? `ref arquivo: ${parsed.referenceHint}; ${parsed.skipped} linha(s) ignoradas`
-              : `${parsed.skipped} linha(s) ignoradas`,
-            createdBy: ctx.user.id,
-          })
-          .returning({ id: priceCatalogs.id });
-        cacheClearPrefix("catalog.list:");
-        cacheClearPrefix("reconcilePreview:");
-        const chunkSize = 500;
-        for (let i = 0; i < parsed.records.length; i += chunkSize) {
-          const chunk = parsed.records.slice(i, i + chunkSize);
-          await db.insert(priceItems).values(
-            chunk.map(record => ({
-              catalogId: created.id,
-              code: record.code,
-              description: record.description,
-              unit: record.unit,
-              itemType: record.itemType,
-              unitPrice: record.unitPrice.toFixed(2),
-              notes: record.notes ?? null,
-            }))
-          );
+        let catalogId: number;
+        try {
+          // Cada import = 1 NOVO priceCatalogs; catálogo e itens são atômicos:
+          // falha em qualquer lote reverte tudo e não deixa versão incompleta.
+          catalogId = await db.transaction(async tx => {
+            const [created] = await tx
+              .insert(priceCatalogs)
+              .values({
+                name: input.name ?? `SEINFRA-CE ${referencePeriod}`,
+                sourceType: "SEINFRA",
+                state: (input.state ?? "CE").toUpperCase(),
+                referencePeriod,
+                notes: parsed.referenceHint
+                  ? `ref arquivo: ${parsed.referenceHint}; ${parsed.skipped} linha(s) ignoradas; ${consolidado.duplicateRows} linha(s) duplicadas idênticas consolidadas`
+                  : `${parsed.skipped} linha(s) ignoradas; ${consolidado.duplicateRows} linha(s) duplicadas idênticas consolidadas`,
+                createdBy: ctx.user.id,
+              })
+              .returning({ id: priceCatalogs.id });
+            const chunkSize = 500;
+            for (let i = 0; i < consolidado.records.length; i += chunkSize) {
+              const chunk = consolidado.records.slice(i, i + chunkSize);
+              await tx.insert(priceItems).values(
+                chunk.map(record => ({
+                  catalogId: created.id,
+                  code: record.code,
+                  description: record.description,
+                  unit: record.unit,
+                  itemType: record.itemType,
+                  unitPrice: record.unitPrice.toFixed(2),
+                  notes: record.notes ?? null,
+                }))
+              );
+            }
+            return created.id;
+          });
+        } catch (error) {
+          const dbError = error as { name?: unknown; code?: unknown; constraint?: unknown };
+          console.error("[catalog.importPriceSheet] gravação transacional revertida", {
+            name: typeof dbError?.name === "string" ? dbError.name : "unknown",
+            code: typeof dbError?.code === "string" ? dbError.code : undefined,
+            constraint: typeof dbError?.constraint === "string" ? dbError.constraint : undefined,
+          });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "A importação não foi concluída e nenhuma versão parcial foi mantida. Confira a planilha e tente novamente.",
+          });
         }
         cacheClearPrefix("catalog.list:");
         cacheClearPrefix("reconcilePreview:");
         return {
-          catalogId: created.id,
+          catalogId,
           referencePeriod,
-          imported: parsed.records.length,
+          imported: consolidado.records.length,
+          duplicateRows: consolidado.duplicateRows,
           skipped: parsed.skipped,
           referenceHint: parsed.referenceHint,
           aviso: planilha === "insumos" ? "Tabela de Insumos importada corretamente; ela não contém serviços e, portanto, não gera EAP." : null,
@@ -4320,16 +4344,22 @@ export const appRouter = router({
           throw badRequest("Formato não suportado. Envie um .xls ou .xlsx oficial da SEINFRA-CE.");
         }
         if (planilha === "composicoes") {
-          return { planilha, registros: 0, podeImportar: false, geraEap: false, aviso: "Relatório de Composições não é uma tabela plana de preços. Importe Tabela de Insumos e Planos de Serviços." };
+          return { planilha, registros: 0, registrosUnicos: 0, duplicados: 0, duplicidadesDivergentes: 0, podeImportar: false, geraEap: false, aviso: "Relatório de Composições não é uma tabela plana de preços. Importe Tabela de Insumos e Planos de Serviços." };
         }
         const parsed = await seinfraAdapter.parse(input.fileName, uint8);
+        const consolidado = consolidarRegistrosSeinfra(parsed.records);
         const geraEap = planilha === "servicos";
         return {
           planilha,
           registros: parsed.records.length,
-          podeImportar: parsed.records.length > 0,
+          registrosUnicos: consolidado.records.length,
+          duplicados: consolidado.duplicateRows,
+          duplicidadesDivergentes: consolidado.conflictingCodes.length,
+          podeImportar: parsed.records.length > 0 && consolidado.conflictingCodes.length === 0,
           geraEap,
-          aviso: geraEap
+          aviso: consolidado.conflictingCodes.length
+            ? `Há códigos repetidos com dados divergentes (${consolidado.conflictingCodes.slice(0, 10).join(", ")}); revise a planilha antes de importar.`
+            : geraEap
             ? "Arquivo de serviços: gera itens de serviço e pode alimentar a EAP."
             : "Arquivo de insumos: importa preços para composições, mas não gera folhas da EAP.",
         };

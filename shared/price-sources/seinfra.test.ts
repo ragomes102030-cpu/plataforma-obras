@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractReferenceHint,
   findHeaderRow,
+  consolidarRegistrosSeinfra,
   parsePtBrCurrency,
   parseSeinfraRows,
 } from "./seinfra";
@@ -124,6 +125,40 @@ describe("parseSeinfraRows", () => {
       unit: "KG",
       unitPrice: 9.9,
     });
+  });
+});
+
+describe("consolidarRegistrosSeinfra", () => {
+  const registro = {
+    code: "C2721",
+    description: "DESOBSTRUÇÃO DE REDE",
+    unit: "UN",
+    unitPrice: 80.82,
+    itemType: "servico" as const,
+    notes: "item 17.2.20 | SERVIÇOS OPERACIONAIS",
+  };
+
+  it("consolida código repetido idêntico e preserva a primeira referência rastreável", () => {
+    const result = consolidarRegistrosSeinfra([
+      registro,
+      { ...registro, notes: "item 17.5.10 | MANUTENÇÃO EM REDE DE ESGOTO" },
+    ]);
+
+    expect(result.records).toEqual([registro]);
+    expect(result.duplicateRows).toBe(1);
+    expect(result.conflictingCodes).toEqual([]);
+  });
+
+  it("bloqueia código repetido com descrição, unidade, preço ou tipo divergente", () => {
+    const result = consolidarRegistrosSeinfra([
+      registro,
+      { ...registro, unitPrice: 81 },
+      { ...registro, unit: "M" },
+    ]);
+
+    expect(result.records).toHaveLength(1);
+    expect(result.duplicateRows).toBe(2);
+    expect(result.conflictingCodes).toEqual(["C2721"]);
   });
 });
 
