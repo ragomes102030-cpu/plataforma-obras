@@ -111,4 +111,39 @@ describe("validateEapForBaseline", () => {
     expect(blockers.map(issue => issue.code)).not.toContain("eap_scope_overlap_evidence");
   });
 
+  it("mantém mistura de base como aviso quando a cobertura e o dicionário estão comprovados", () => {
+    const result = validateEapForBaseline([
+      node({ decompositionBasis: "project" }),
+      node({
+        id: 2,
+        parentId: 1,
+        code: "1.1",
+        name: "Fundação",
+        nodeType: "pacote",
+        description: "Execução das fundações da Torre A.",
+        inclusions: "Estacas hélice contínua e blocos de coroamento da Torre A.",
+        exclusions: "Fundações da Torre B.",
+        responsible: "Engenheiro de estruturas",
+        acceptanceCriteria: "Executado conforme projeto estrutural e liberado em inspeção.",
+        decompositionBasis: "location",
+      }),
+      node({
+        id: 3,
+        parentId: 1,
+        code: "1.2",
+        name: "Projeto executivo",
+        nodeType: "pacote",
+        description: "Compatibilização e liberação dos projetos executivos.",
+        inclusions: "Projetos de arquitetura, estrutura e instalações.",
+        exclusions: "Execução física dos serviços em campo.",
+        responsible: "Coordenação de projetos",
+        acceptanceCriteria: "Disciplinas compatibilizadas e liberadas para execução.",
+        decompositionBasis: "deliverable",
+      }),
+    ]);
+
+    expect(result.issues.some(issue => issue.code === "eap_mixed_decomposition_basis")).toBe(true);
+    expect(result.readyForBaseline).toBe(true);
+  });
+
 });
