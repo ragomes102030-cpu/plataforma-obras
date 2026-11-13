@@ -5,6 +5,19 @@ export type EapBaselineValidationResult = EapValidationResult & {
   readyForBaseline: boolean;
 };
 
+/** Mantém a explicação da baseline alinhada aos bloqueios reais do validador. */
+export function getEapBaselineBlockers(issues: EapValidationResult["issues"]) {
+  return issues.filter(issue =>
+    issue.severity === "error" || [
+      "eap_leaf_not_ready",
+      "eap_scope_coverage_not_evidenced",
+      "eap_child_scope_not_evidenced",
+      "eap_mixed_decomposition_basis",
+      "eap_group_without_decomposition",
+    ].includes(issue.code)
+  );
+}
+
 const allowedDictionaryFields = new Set<EapDictionaryField>([
   "description",
   "inclusions",
@@ -117,16 +130,9 @@ export function validateEapForBaseline(
   // prova de conflito); mantê-las como bloqueio tornava impossível
   // congelar EAPs válidas como a Escola, mesmo depois da revisão do engenheiro.
   // O apontamento continua retornado para revisão e auditoria.
-  const blocking = issues.filter(issue =>
-    issue.severity === "error" ||
-    (!options.allowWarnings && (
-      issue.code === "eap_leaf_not_ready" ||
-      issue.code === "eap_scope_coverage_not_evidenced" ||
-      issue.code === "eap_child_scope_not_evidenced" ||
-      issue.code === "eap_mixed_decomposition_basis" ||
-      issue.code === "eap_group_without_decomposition"
-    ))
-  );
+  const blocking = options.allowWarnings
+    ? issues.filter(issue => issue.severity === "error")
+    : getEapBaselineBlockers(issues);
 
   return {
     valid: blocking.length === 0,
