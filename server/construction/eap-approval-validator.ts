@@ -12,7 +12,6 @@ export function getEapBaselineBlockers(issues: EapValidationResult["issues"]) {
       "eap_leaf_not_ready",
       "eap_scope_coverage_not_evidenced",
       "eap_child_scope_not_evidenced",
-      "eap_mixed_decomposition_basis",
       "eap_group_without_decomposition",
     ].includes(issue.code)
   );
