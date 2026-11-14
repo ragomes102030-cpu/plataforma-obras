@@ -856,6 +856,8 @@ export const budgetItems = pgTable(
     unit: varchar("unit", { length: 32 }).notNull(),
     quantity: numeric("quantity", { precision: 14, scale: 3 }).notNull(),
     unitPrice: numeric("unitPrice", { precision: 14, scale: 2 }).notNull(),
+    /** Linha de serviço oficial de catálogo quando o import não fornece composição analítica. */
+    officialPriceItemId: integer("officialPriceItemId").references(() => priceItems.id),
     compositionId: integer("compositionId"),
     compositionUnitCost: numeric("compositionUnitCost", { precision: 14, scale: 2 }),
     productivity: numeric("productivity", { precision: 14, scale: 3 }),
@@ -876,6 +878,7 @@ export const budgetItems = pgTable(
       table.code
     ),
     index("budget_items_version_idx").on(table.budgetVersionId),
+    index("budget_items_official_price_item_idx").on(table.officialPriceItemId),
   ]
 );
 

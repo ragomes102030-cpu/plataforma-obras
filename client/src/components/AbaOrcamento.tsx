@@ -20,9 +20,10 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
-  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", compositionId: "" });
+  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", compositionId: "", officialPriceItemId: "" });
   const [buscaComposicao, setBuscaComposicao] = useState("");
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
+  const [buscaServico, setBuscaServico] = useState("");
   const utils = trpc.useUtils();
 
   useEffect(() => {
@@ -42,6 +43,10 @@ export function AbaOrcamento({ projetoId }: Props) {
     { qCompositions: buscaComposicaoDebounced || undefined, limitCompositions: 50 },
     { enabled: editandoId !== null && buscaComposicaoDebounced.length >= 2, staleTime: 60_000 }
   );
+  const catalogoServicos = trpc.catalog.searchOfficialServices.useQuery(
+    { q: buscaServico.trim() },
+    { enabled: editandoId !== null && buscaServico.trim().length >= 2, staleTime: 60_000 }
+  );
   const atualizarItem = trpc.budgets.updateItem.useMutation({
     onSuccess: async () => {
       await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
@@ -58,7 +63,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const itensSemValor = items.length - itensComValor;
   const prontidaoQuantitativos = summarizeBudgetQuantities(items.length, itensSemValor);
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
-  const itensComComposicao = items.filter((i) => i.compositionId != null).length;
+  const itensComComposicao = items.filter((i) => i.compositionId != null || i.officialPriceItemId != null).length;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
   const statusOrcamento = cobertura === 100 && itensComValor === items.length && itensComComposicao > 0 ? "pronto" : itensComFonte > 0 ? "em_revisao" : "pendente";
 
@@ -88,8 +93,10 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantityEvidence: item.quantityEvidence ?? "",
       quantityEvidenceStatus: (item.quantityEvidenceStatus ?? "pendente") as typeof rascunho.quantityEvidenceStatus,
       compositionId: item.compositionId == null ? "" : String(item.compositionId),
+      officialPriceItemId: item.officialPriceItemId == null ? "" : String(item.officialPriceItemId),
     });
     setBuscaComposicao(item.compositionNote ?? "");
+    setBuscaServico(item.officialPriceItemId == null ? "" : item.code);
   }
 
   function salvarEdicao() {
@@ -106,6 +113,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantityEvidence: rascunho.quantityEvidence || null,
       quantityEvidenceStatus: rascunho.quantityEvidenceStatus,
       compositionId: rascunho.compositionId ? Number(rascunho.compositionId) : null,
+      officialPriceItemId: rascunho.officialPriceItemId ? Number(rascunho.officialPriceItemId) : null,
     });
   }
 
@@ -122,7 +130,7 @@ export function AbaOrcamento({ projetoId }: Props) {
         <div className="orcamento-hero-copy">
           <span className="xl-painel-kicker">CENTRAL DE CUSTOS · ETAPA DE VALIDAÇÃO</span>
           <h1>Orçamento que explica a obra.</h1>
-          <p>Conecte cada serviço da EAP a uma composição oficial, valide o quantitativo e só então libere o custo para EV, Curva S e controle.</p>
+          <p>Vincule cada serviço da EAP a uma composição analítica ou a um serviço oficial de tabela, valide o quantitativo e só então libere o custo para EV, Curva S e controle.</p>
           <div className={`orcamento-status-pill ${statusOrcamento}`}><span />{statusOrcamento === "pronto" ? "Pronto para aprovação" : statusOrcamento === "em_revisao" ? "Em revisão técnica" : "Aguardando fonte oficial"}</div>
         </div>
         <div className="orcamento-hero-route"><span>01</span><b>Fonte</b><small>SEINFRA / SINAPI</small><i>→</i><span>02</span><b>Composição</b><small>Coeficientes e unidade</small><i>→</i><span>03</span><b>Validação</b><small>Quantidade e BDI</small></div>
@@ -190,12 +198,12 @@ export function AbaOrcamento({ projetoId }: Props) {
 
       {!carregando && !erro && <section className="orcamento-kpis" aria-label="Prontidão do orçamento">
         <div className="orcamento-kpi"><span>COBERTURA DE FONTE</span><strong>{cobertura}%</strong><small>{itensComFonte} de {items.length} itens sem fonte didática</small><div><i style={{width:`${cobertura}%`}} /></div></div>
-        <div className="orcamento-kpi"><span>COMPOSIÇÕES VINCULADAS</span><strong>{itensComComposicao}</strong><small>{items.length - itensComComposicao} itens ainda dependem de composição</small></div>
+        <div className="orcamento-kpi"><span>VÍNCULOS OFICIAIS</span><strong>{itensComComposicao}</strong><small>{items.length - itensComComposicao} itens ainda sem composição ou serviço oficial</small></div>
         <div className="orcamento-kpi"><span>PREÇOS UNITÁRIOS</span><strong>{prontidaoQuantitativos.status}</strong><small>{prontidaoQuantitativos.description}</small></div>
       </section>}
 
       {!carregando && !erro && statusOrcamento !== "pronto" && <section className="orcamento-next-step">
-        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : "Revisar os itens sem composição oficial"}</strong><p>{itensComFonte === 0 ? "Use SEINFRA-CE para Fortaleza. O sistema valida o arquivo antes de gravar e preserva a versão da tabela." : "Não aprove por rateio. Cada item precisa de código, unidade, referência e composição compatíveis."}</p></div></div><button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button>
+        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : "Revisar itens sem vínculo oficial"}</strong><p>{itensComFonte === 0 ? "Use SEINFRA-CE para Fortaleza. O sistema valida o arquivo antes de gravar e preserva a versão da tabela." : "Não aprove por rateio. Cada item precisa de código, unidade e referência rastreáveis por composição ou serviço oficial."}</p></div></div><button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button>
       </section>}
 
       {erro && (
@@ -308,7 +316,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
                           Composição oficial vinculada
-                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição oficial vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value })} disabled={buscaComposicaoDebounced.length < 2 || catalogoComposicoes.isFetching}>
+                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição oficial vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "" })} disabled={buscaComposicaoDebounced.length < 2 || catalogoComposicoes.isFetching}>
                             <option value="">Sem composição oficial</option>
                             {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
                             {composicoesCandidatas.map(composition => {
@@ -323,6 +331,26 @@ export function AbaOrcamento({ projetoId }: Props) {
                           {buscaComposicaoDebounced.length >= 2 && catalogoComposicoes.isError && <span className="orcamento-edit-error">Não foi possível consultar o catálogo. Tente novamente.</span>}
                           {buscaComposicaoDebounced.length >= 2 && catalogoComposicoes.isSuccess && !catalogoComposicoes.isFetching && composicoesCandidatas.length === 0 && <span>Nenhuma composição oficial validada foi encontrada para esse termo e unidade.</span>}
                           {rascunho.compositionId && <span>Ao salvar, o preço unitário será calculado pelos coeficientes e preços rastreados da composição.</span>}
+                        </div>
+                        <label className="orcamento-edit-search orcamento-edit-wide" htmlFor={`servico-oficial-busca-${item.id}`}>
+                          Vincular serviço oficial da tabela (preço unitário da própria SEINFRA/SINAPI)
+                          <input id={`servico-oficial-busca-${item.id}`} aria-label="Buscar serviço oficial de tabela" value={buscaServico} onChange={e => setBuscaServico(e.target.value)} placeholder="Busque por código ou descrição (mínimo 2 caracteres)" />
+                        </label>
+                        <label className="orcamento-edit-wide" htmlFor={`servico-oficial-selecao-${item.id}`}>
+                          Serviço oficial vinculado
+                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "" })} disabled={buscaServico.trim().length < 2 || catalogoServicos.isFetching}>
+                            <option value="">Sem serviço oficial direto</option>
+                            {rascunho.officialPriceItemId && !catalogoServicos.data?.items.some(service => String(service.id) === rascunho.officialPriceItemId) && <option value={rascunho.officialPriceItemId}>Serviço oficial atual #{rascunho.officialPriceItemId}</option>}
+                            {(catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).map(service => (
+                              <option key={service.id} value={service.id}>{service.code} · {service.description} ({service.unit}) · {service.sourceType} · {service.referencePeriod ?? "sem referência"} · R$ {Number(service.unitPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="orcamento-edit-feedback" role="status" aria-live="polite">
+                          {buscaServico.trim().length >= 2 && catalogoServicos.isFetching && <span>Buscando serviços oficiais…</span>}
+                          {buscaServico.trim().length >= 2 && catalogoServicos.isError && <span className="orcamento-edit-error">Não foi possível consultar serviços oficiais. Tente novamente.</span>}
+                          {buscaServico.trim().length >= 2 && catalogoServicos.isSuccess && !catalogoServicos.isFetching && (catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).length === 0 && <span>Nenhum serviço oficial ativo encontrado para esse termo e unidade.</span>}
+                          {rascunho.officialPriceItemId && <span>O preço e a referência vêm diretamente da linha oficial; composição analítica fica desvinculada.</span>}
                         </div>
                         <div className="orcamento-edit-actions">
                           <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button>
@@ -339,10 +367,10 @@ export function AbaOrcamento({ projetoId }: Props) {
                     <td>{Number(item.quantity).toLocaleString("pt-BR")}</td>
                     <td>{moeda(Number(item.unitPrice))}</td>
                     <td>{moeda(Number(item.quantity) * Number(item.unitPrice))}</td>
-                    <td><span className={`orcamento-row-status ${item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "ok" : "warn"}`}>{item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Composição validável" : /didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Fonte didática" : "Vínculo pendente"}</span><button type="button" className="xl-btn" onClick={() => setDetalheId(detalheId === item.id ? null : item.id)}>{detalheId === item.id ? "Fechar" : "Detalhes"}</button><button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
+                    <td><span className={`orcamento-row-status ${(item.compositionId != null || item.officialPriceItemId != null) && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "ok" : "warn"}`}>{item.officialPriceItemId != null ? "Serviço oficial rastreado" : item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Composição validável" : /didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Fonte didática" : "Vínculo pendente"}</span><button type="button" className="xl-btn" onClick={() => setDetalheId(detalheId === item.id ? null : item.id)}>{detalheId === item.id ? "Fechar" : "Detalhes"}</button><button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
                   </tr>
                 )}
-                {detalheId === item.id && editandoId !== item.id && <tr key={`${item.id}-detail`} className="orcamento-detail-row"><td colSpan={7}><div><b>Diagnóstico do item</b><span>Fonte do preço: {item.source || "não informada"} · Referência: {item.referencePeriod || "não informada"} · Composição: {item.compositionId ? `#${item.compositionId}` : "não vinculada"}</span><span>Quantitativo: {item.quantityEvidenceStatus ?? "pendente"} · Evidência: {item.quantityEvidence || "não informada"}</span><small>{item.quantityEvidenceStatus === "cenario" ? "Cenário de planejamento; não representa medição ou execução." : item.quantityEvidenceStatus === "validada" ? "Evidência classificada como validada; confirme a documentação antes do uso executivo." : "Informe a referência e classifique o quantitativo antes de aprovar o orçamento."}</small></div></td></tr>}
+                {detalheId === item.id && editandoId !== item.id && <tr key={`${item.id}-detail`} className="orcamento-detail-row"><td colSpan={7}><div><b>Diagnóstico do item</b><span>Fonte do preço: {item.source || "não informada"} · Referência: {item.referencePeriod || "não informada"} · Serviço oficial: {item.officialPriceItemId ? `#${item.officialPriceItemId}` : "não vinculado"} · Composição: {item.compositionId ? `#${item.compositionId}` : "não vinculada"}</span><span>Quantitativo: {item.quantityEvidenceStatus ?? "pendente"} · Evidência: {item.quantityEvidence || "não informada"}</span><small>{item.quantityEvidenceStatus === "cenario" ? "Cenário de planejamento; não representa medição ou execução." : item.quantityEvidenceStatus === "validada" ? "Evidência classificada como validada; confirme a documentação antes do uso executivo." : "Informe a referência e classifique o quantitativo antes de aprovar o orçamento."}</small></div></td></tr>}
               </Fragment>))
             )}
           </tbody>

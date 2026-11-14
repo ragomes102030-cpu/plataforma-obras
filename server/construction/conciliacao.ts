@@ -21,6 +21,7 @@ export type ItemOrcamento = {
   quantity: number;
   unitPrice: number;
   compositionId: number | null;
+  officialPriceItemId?: number | null;
 };
 
 export type AtividadeConciliacao = {
@@ -180,7 +181,7 @@ export function resumirCobertura(
     atividadesSemQuantidade: atividades.filter(
       atividade => atividade.budgetItemId != null && (atividade.plannedQuantity ?? 0) <= 0
     ).length,
-    itensSemComposicao: itens.filter(item => item.compositionId == null).length,
+    itensSemComposicao: itens.filter(item => item.compositionId == null && item.officialPriceItemId == null).length,
     itensTotal: itens.length,
   };
 }

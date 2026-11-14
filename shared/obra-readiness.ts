@@ -51,7 +51,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   if (!orc?.existe || orc.itens === 0) orcBloqueios.push(bloqueio("ORCAMENTO_AUSENTE", "Orçamento inexistente", "Não há itens para formar custo planejado.", "Crie uma versão de orçamento a partir das folhas da EAP.", ["orcamento", "execucao"], "critica"));
   else {
     if (orc.didaticos > 0) orcBloqueios.push(bloqueio("ORCAMENTO_DIDATICO", "Preço didático impede controle financeiro", `${orc.didaticos} item(ns) usam fonte didática.`, "Concilie cada item com composição oficial SEINFRA/SINAPI ou marque uma exceção justificada.", ["orcamento", "execucao"], "critica"));
-    if (orc.semComposicao > 0) orcBloqueios.push(bloqueio("ORCAMENTO_SEM_COMPOSICAO", "Composição não rastreável", `${orc.semComposicao} item(ns) têm preço sem composição vinculada.`, "Abra a conciliação, confirme código e unidade e aplique somente correspondências oficiais seguras.", ["orcamento", "execucao"], "alta"));
+    if (orc.semComposicao > 0) orcBloqueios.push(bloqueio("ORCAMENTO_SEM_COMPOSICAO", "Preço sem referência oficial", `${orc.semComposicao} item(ns) têm preço sem composição analítica ou serviço oficial vinculado.`, "Vincule uma composição analítica ou um serviço oficial SEINFRA/SINAPI compatível em código, unidade, região e período.", ["orcamento", "execucao"], "alta"));
   }
   add("orcamento", orcBloqueios.length ? "incompleto" : orc?.aprovado ? "aprovado" : "pronto_revisao", orcBloqueios);
 
