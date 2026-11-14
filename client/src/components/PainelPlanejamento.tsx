@@ -82,9 +82,11 @@ export function PainelPlanejamento({ projetoId }: Props) {
       if (vars) {
         const key = vars.atividadeId + "|" + vars.campo;
         setEdicoes(atual => {
-          if (!(key in atual)) return atual;
+          const evidenceKey = vars.atividadeId + "|evidencia_peso_fisico";
+          if (!(key in atual) && !(vars.campo === "peso_fisico" && evidenceKey in atual)) return atual;
           const next = { ...atual };
           delete next[key];
+          if (vars.campo === "peso_fisico") delete next[evidenceKey];
           return next;
         });
       }
@@ -93,13 +95,6 @@ export function PainelPlanejamento({ projetoId }: Props) {
         utils.planning.list.invalidate({ projectId: projetoId }),
         utils.planning.grade.invalidate({ projectId: projetoId }),
       ]);
-    },
-    onError: error => setMensagem(error.message),
-  });
-  const distribuirPesos = trpc.planning.distribuirPesosFisicosUniformes.useMutation({
-    onSuccess: async result => {
-      setMensagem(`Proposta uniforme aplicada a ${result.updated} atividades. Revise os percentuais e aprove para liberar o avanço físico.`);
-      await Promise.all([utils.planning.list.invalidate({ projectId: projetoId }), utils.planning.grade.invalidate({ projectId: projetoId })]);
     },
     onError: error => setMensagem(error.message),
   });
@@ -131,6 +126,16 @@ export function PainelPlanejamento({ projetoId }: Props) {
     const key = activityId + "|" + campo;
     if (!(key in edicoes)) return;
     atualizarAtividade.mutate({ projectId: projetoId, atividadeId: activityId, campo, valor: edicoes[key] });
+  };
+
+  const salvarPesoFisico = (activity: (typeof activities)[number]) => {
+    const pesoKey = activity.id + "|peso_fisico";
+    const evidenciaKey = activity.id + "|evidencia_peso_fisico";
+    const valor = edicoes[pesoKey] ?? (activity.physicalWeight == null ? "" : String(activity.physicalWeight));
+    const evidencia = (edicoes[evidenciaKey] ?? activity.physicalWeightEvidence ?? "").trim();
+    if (!valor.trim()) { setMensagem(`Informe o peso físico de ${activity.name}.`); return; }
+    if (evidencia.length < 12) { setMensagem(`Inclua a fonte e o critério de medição do peso de ${activity.name}.`); return; }
+    atualizarAtividade.mutate({ projectId: projetoId, atividadeId: activity.id, campo: "peso_fisico", valor, evidenciaPesoFisico: evidencia });
   };
 
   useEffect(() => {
@@ -170,8 +175,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
     const operacionais = activities.filter(activity => Number(activity.exemplo ?? 0) !== 1);
     const soma = operacionais.reduce((total, activity) => total + Number(activity.physicalWeight ?? 0), 0);
     const completos = operacionais.filter(activity => Number(activity.physicalWeight ?? 0) > 0).length;
-    const aprovados = operacionais.length > 0 && completos === operacionais.length && operacionais.every(activity => activity.physicalWeightApprovedAt != null) && Math.abs(soma - 100) <= 0.01;
-    return { total: operacionais.length, completos, soma, aprovados };
+    const comEvidencia = operacionais.filter(activity => (activity.physicalWeightEvidence?.trim().length ?? 0) >= 12).length;
+    const aprovados = operacionais.length > 0 && completos === operacionais.length && comEvidencia === operacionais.length && operacionais.every(activity => activity.physicalWeightApprovedAt != null) && Math.abs(soma - 100) <= 0.01;
+    return { total: operacionais.length, completos, comEvidencia, soma, aprovados };
   }, [activities]);
 
   const propostaFiltrada = useMemo(() => {
@@ -311,11 +317,10 @@ export function PainelPlanejamento({ projetoId }: Props) {
       )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
       {activities.length > 0 && <div className="pl-atividades-alerta" role="status">
-        <strong>Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} atividades · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? "aprovados" : "aguardando aprovação"}.</strong>{" "}
-        Use o rateio uniforme como proposta inicial de demonstração ou edite cada peso. A dashboard só publica avanço após a soma chegar a 100% e a aprovação ser registrada.
+        <strong>Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} pesos · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? "aprovados" : "aguardando validação"}.</strong>{" "}
+        Cada peso exige memória rastreável com fonte, revisão/localização e critério de medição. Rateio uniforme não é aceito como base de avanço físico.
         <div className="pl-atividades-header-actions">
-          <button type="button" className="pl-atividades-btn secondary" disabled={distribuirPesos.isPending || aprovarPesos.isPending} onClick={() => distribuirPesos.mutate({ projectId: projetoId })}>Distribuir igualmente</button>
-          <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>
+          <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>
         </div>
       </div>}
       {!propostaAprovada && proposta.length > 0 && <div className="pl-atividades-alerta">A prévia mostra as lacunas da EAP v{versaoDaProposta}. As atividades ficam disponíveis para criação depois da aprovação desta versão.</div>}
@@ -443,12 +448,22 @@ export function PainelPlanejamento({ projetoId }: Props) {
                   />
                 </td>
                 <td className="qtd-col">
-                  <input className="pl-duracao-input" type="number" min="0.000001" max="100" step="0.000001"
-                    value={valorEdicao(activity, "peso_fisico")}
-                    onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|peso_fisico"]: event.target.value }))}
-                    onBlur={() => salvarEdicao(activity.id, "peso_fisico")}
-                    aria-label={"Peso físico percentual de " + activity.name}
-                    title="Participação desta atividade no avanço físico total; editar invalida a aprovação do conjunto." />
+                  <div className="pl-peso-editor">
+                    <input className="pl-duracao-input" type="number" min="0.000001" max="100" step="0.000001"
+                      value={valorEdicao(activity, "peso_fisico")}
+                      onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|peso_fisico"]: event.target.value }))}
+                      aria-label={"Peso físico percentual de " + activity.name}
+                      title="Participação desta atividade no avanço físico total." />
+                    <input className="pl-duracao-input" type="text"
+                      value={edicoes[activity.id + "|evidencia_peso_fisico"] ?? activity.physicalWeightEvidence ?? ""}
+                      onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|evidencia_peso_fisico"]: event.target.value }))}
+                      aria-label={"Evidência do peso físico de " + activity.name}
+                      placeholder="Fonte/revisão/folha e critério"
+                      title="Informe documento e revisão, localização ou página, e critério de medição que justificam este peso." />
+                    <button type="button" className="pl-atividades-btn secondary"
+                      disabled={atualizarAtividade.isPending}
+                      onClick={() => salvarPesoFisico(activity)}>Salvar peso e evidência</button>
+                  </div>
                 </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
                 <td className="action-col">
