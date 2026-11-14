@@ -35,19 +35,43 @@ describe("pesos físicos do cronograma", () => {
 
   afterEach(async () => { await pg.close(); estado.db = null; });
 
-  it("propõe 100%, exige aprovação e invalida o conjunto quando um peso muda", async () => {
-    await caller.planning.distribuirPesosFisicosUniformes({ projectId });
+  it("não aprova rateio uniforme sem evidência de cada peso", async () => {
     const db = drizzlePglite(pg);
-    let rows = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, projectId));
+    await db.update(scheduleActivities).set({ physicalWeight: "50" }).where(eq(scheduleActivities.projectId, projectId));
+    const rows = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, projectId));
     expect(rows.reduce((total, row) => total + Number(row.physicalWeight), 0)).toBeCloseTo(100, 6);
     expect(rows.every(row => row.physicalWeightApprovedAt == null)).toBe(true);
 
-    await caller.planning.aprovarPesosFisicos({ projectId });
-    rows = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, projectId));
-    expect(rows.every(row => row.physicalWeightApprovedAt != null)).toBe(true);
+    await expect(caller.planning.aprovarPesosFisicos({ projectId })).rejects.toThrow(/evidência|justificativa/i);
+    await expect(caller.planning.distribuirPesosFisicosUniformes({ projectId })).rejects.toThrow(/rateio uniforme/i);
+  });
 
-    await caller.planning.atualizarAtividade({ projectId, atividadeId: activityId, campo: "peso_fisico", valor: "40" });
+  it("exige uma memória rastreável por atividade e invalida a aprovação ao revisar o peso", async () => {
+    const db = drizzlePglite(pg);
+    await db.update(scheduleActivities).set({ physicalWeight: "50" }).where(eq(scheduleActivities.projectId, projectId));
+    const rowsBefore = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, projectId));
+    for (const row of rowsBefore) {
+      await caller.planning.atualizarAtividade({
+        projectId,
+        atividadeId: row.id,
+        campo: "peso_fisico",
+        valor: "50",
+        evidenciaPesoFisico: "Memória de cálculo FIS-001, item 2.1; critério por quantidade medida e escopo da atividade.",
+      });
+    }
+
+    await caller.planning.aprovarPesosFisicos({ projectId });
+    let rows = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, projectId));
+    expect(rows.every(row => row.physicalWeightApprovedAt != null)).toBe(true);
+    expect(rows.every(row => row.physicalWeightEvidence?.includes("FIS-001"))).toBe(true);
+
+    await caller.planning.atualizarAtividade({ projectId, atividadeId: activityId, campo: "peso_fisico", valor: "40", evidenciaPesoFisico: "Memória de cálculo FIS-001, item 2.2; revisão da participação desta atividade." });
     rows = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, projectId), eq(scheduleActivities.exemplo, 0)));
     expect(rows.every(row => row.physicalWeightApprovedAt == null)).toBe(true);
+  });
+
+  it("não aceita peso físico digitado sem evidência rastreável", async () => {
+    await expect(caller.planning.atualizarAtividade({ projectId, atividadeId: activityId, campo: "peso_fisico", valor: "50" }))
+      .rejects.toThrow(/evidência/i);
   });
 });

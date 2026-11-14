@@ -502,6 +502,8 @@ export const scheduleActivities = pgTable(
     plannedQuantity: numeric("plannedQuantity", { precision: 14, scale: 3 }),
     /** Peso percentual aprovado para consolidar avanço físico entre unidades distintas. */
     physicalWeight: numeric("physicalWeight", { precision: 9, scale: 6 }),
+    /** Memória rastreável que justifica o peso físico, a quantidade e o critério de medição. */
+    physicalWeightEvidence: text("physicalWeightEvidence"),
     physicalWeightApprovedAt: timestamp("physicalWeightApprovedAt", { withTimezone: true }),
     /**
      * Unidade de medida do quantitativo, herdada da folha da EAP. Fica na

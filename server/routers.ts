@@ -5392,6 +5392,7 @@ export const appRouter = router({
         atividadeId: z.number().int().positive(),
         campo: z.enum(["atividade","frente","pavimento","inicio","duracao","otimista","pessimista","quantidade","produtividade","unidade","peso_fisico","marco"]),
         valor: z.string().max(500),
+        evidenciaPesoFisico: z.string().trim().max(2000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -5411,6 +5412,9 @@ export const appRouter = router({
           throw conflict("A versão aprovada/histórica está congelada. Abra uma nova versão de trabalho antes de editar a atividade.");
         }
         const patch: Record<string, unknown> = {};
+        if (input.campo !== "peso_fisico" && input.evidenciaPesoFisico !== undefined) {
+          throw badRequest("A evidência de peso só pode ser enviada ao editar o peso físico.");
+        }
         /**
          * A faixa otimista/pessimista tem de conter a duração mais provável —
          * é o que o CHECK do banco e a triangular da simulação exigem.
@@ -5489,7 +5493,10 @@ export const appRouter = router({
         if (input.campo === "peso_fisico") {
           const peso = Number(input.valor);
           if (!Number.isFinite(peso) || peso <= 0 || peso > 100) throw badRequest("O peso físico deve ser maior que zero e no máximo 100%.");
+          const evidencia = input.evidenciaPesoFisico?.trim() ?? "";
+          if (evidencia.length < 12) throw badRequest("Informe a evidência rastreável do peso físico (documento, revisão/localização e critério de medição) com pelo menos 12 caracteres.");
           patch.physicalWeight = peso.toFixed(6);
+          patch.physicalWeightEvidence = evidencia;
           // Qualquer revisão invalida o conjunto inteiro até nova aprovação.
           patch.physicalWeightApprovedAt = null;
         }
@@ -5568,25 +5575,8 @@ export const appRouter = router({
       }),
     distribuirPesosFisicosUniformes: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
-      .mutation(async ({ ctx, input }) => {
-        const db = await getDb();
-        if (!db) throw new Error("Banco de dados não configurado.");
-        await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const versao = await getCurrentPlanVersion(input.projectId);
-        if (!versao || !["draft", "proposed"].includes(versao.status)) throw conflict("Abra uma versão de trabalho antes de definir os pesos físicos.");
-        const atividades = await db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(
-          eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
-        )).orderBy(scheduleActivities.sortOrder, scheduleActivities.id);
-        if (!atividades.length) throw badRequest("Cadastre atividades operacionais antes de distribuir pesos físicos.");
-        const base = Math.floor((100 / atividades.length) * 1_000_000) / 1_000_000;
-        await db.transaction(async tx => {
-          for (const [indice, atividade] of atividades.entries()) {
-            const peso = indice === atividades.length - 1 ? 100 - base * (atividades.length - 1) : base;
-            await tx.update(scheduleActivities).set({ physicalWeight: peso.toFixed(6), physicalWeightApprovedAt: null }).where(eq(scheduleActivities.id, atividade.id));
-          }
-          await tx.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "physical_weights_distributed", payload: { versionId: versao.id, method: "uniform", activityCount: atividades.length } });
-        });
-        return { updated: atividades.length, total: 100, approved: false as const };
+      .mutation(async () => {
+        throw badRequest("Rateio uniforme não é uma base técnica para avanço físico. Defina o peso por atividade com memória rastreável.");
       }),
     aprovarPesosFisicos: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -5596,19 +5586,19 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const versao = await getCurrentPlanVersion(input.projectId);
         if (!versao || !["draft", "proposed"].includes(versao.status)) throw conflict("Abra uma versão de trabalho antes de aprovar os pesos físicos.");
-        const atividades = await db.select({ id: scheduleActivities.id, peso: scheduleActivities.physicalWeight, quantidade: scheduleActivities.plannedQuantity }).from(scheduleActivities).where(and(
+        const atividades = await db.select({ id: scheduleActivities.id, peso: scheduleActivities.physicalWeight, quantidade: scheduleActivities.plannedQuantity, evidencia: scheduleActivities.physicalWeightEvidence }).from(scheduleActivities).where(and(
           eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
         ));
         const soma = atividades.reduce((total, atividade) => total + Number(atividade.peso ?? 0), 0);
-        if (!atividades.length || atividades.some(atividade => Number(atividade.quantidade ?? 0) <= 0) || atividades.some(atividade => Number(atividade.peso ?? 0) <= 0) || Math.abs(soma - 100) > 0.01) {
-          throw badRequest(`Revise os pesos e quantitativos: todas as atividades precisam de quantidade mensurável, peso positivo e a soma deve ser 100% (atual: ${soma.toFixed(2)}%).`);
+        if (!atividades.length || atividades.some(atividade => Number(atividade.quantidade ?? 0) <= 0) || atividades.some(atividade => Number(atividade.peso ?? 0) <= 0) || atividades.some(atividade => (atividade.evidencia?.trim().length ?? 0) < 12) || Math.abs(soma - 100) > 0.01) {
+          throw badRequest(`Revise pesos, evidências e quantitativos: cada atividade precisa de quantidade mensurável, peso positivo, evidência rastreável com no mínimo 12 caracteres e a soma deve ser 100% (atual: ${soma.toFixed(2)}%).`);
         }
         const aprovadoEm = new Date();
         await db.transaction(async tx => {
           await tx.update(scheduleActivities).set({ physicalWeightApprovedAt: aprovadoEm }).where(and(
             eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
           ));
-          await tx.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "physical_weights_approved", payload: { versionId: versao.id, activityCount: atividades.length, total: soma, pesos: atividades.map(atividade => ({ activityId: atividade.id, peso: Number(atividade.peso) })), approvedAt: aprovadoEm.toISOString() } });
+          await tx.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "physical_weights_approved", payload: { versionId: versao.id, activityCount: atividades.length, total: soma, pesos: atividades.map(atividade => ({ activityId: atividade.id, peso: Number(atividade.peso), evidencia: atividade.evidencia })), approvedAt: aprovadoEm.toISOString() } });
         });
         return { approved: true as const, total: soma, activityCount: atividades.length };
       }),
