@@ -378,6 +378,20 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, compositionId: otherComposition!.id })).rejects.toThrow(/Base regional incompatível/i);
   });
 
+  it("vincula serviço oficial do catálogo separado e usa o preço oficial da linha", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento por serviço oficial", versionNumber: 1, status: "em_revisao" }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({ budgetVersionId: budget!.id, wbsNodeId: root!.id, code: "C2595", description: "Tubo PVC esgoto DN 40", unit: "M", quantity: "10.000", unitPrice: "0.00" }).returning({ id: budgetItems.id });
+    await db.update(projects).set({ location: "Fortaleza-CE" }).where(eq(projects.id, projectId));
+    const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1 — Planos de Serviços — desonerada", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [officialService] = await db.insert(priceItems).values({ catalogId: catalog!.id, code: "C2595", description: "TUBO PVC BRANCO P/ESGOTO D=40mm", unit: "M", itemType: "servico", unitPrice: "17.97" }).returning({ id: priceItems.id });
+
+    await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, officialPriceItemId: officialService!.id });
+
+    const [linked] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    expect(linked).toMatchObject({ officialPriceItemId: officialService!.id, compositionId: null, unitPrice: "17.97", source: "SEINFRA · SEINFRA-CE 028.1 — Planos de Serviços — desonerada", referencePeriod: "028.1" });
+  });
+
   it("não aprova orçamento com placeholders e arquiva a versão aprovada anterior", async () => {
     const [root] = await db.select().from(wbsNodes);
     const [previous] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento anterior", versionNumber: 1, status: "aprovado" }).returning({ id: budgetVersions.id });

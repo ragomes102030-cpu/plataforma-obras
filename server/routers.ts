@@ -3235,6 +3235,7 @@ export const appRouter = router({
         quantityEvidence: z.string().trim().max(2000).nullable().optional(),
         quantityEvidenceStatus: z.enum(["pendente", "cenario", "validada"]).optional(),
         referencePeriod: z.string().trim().max(20).nullable().optional(),
+        officialPriceItemId: z.number().int().positive().nullable().optional(),
         productivity: z.number().positive().nullable().optional(),
         plannedDurationDays: z.number().int().positive().nullable().optional(),
         wbsNodeId: z.number().int().positive().nullable().optional(),
@@ -3262,11 +3263,15 @@ export const appRouter = router({
           await assertCurrentPlanWbsLinks(db, input.projectId, [input.wbsNodeId]);
         }
         const values: Partial<typeof budgetItems.$inferInsert> = { updatedAt: new Date() };
+        if (input.officialPriceItemId != null && input.compositionId != null) {
+          throw badRequest("Escolha um serviço oficial direto ou uma composição analítica, não os dois.");
+        }
         if (input.compositionId !== undefined) {
           if (input.compositionId === null) {
             values.compositionId = null;
             values.compositionUnitCost = null;
             values.compositionNote = null;
+            values.officialPriceItemId = null;
           } else {
             const [composition] = await db
               .select()
@@ -3314,6 +3319,7 @@ export const appRouter = router({
               0,
             );
             values.compositionId = composition.id;
+            values.officialPriceItemId = null;
             values.compositionUnitCost = unitPrice.toFixed(2);
             values.compositionNote = `${composition.code} · ${composition.description}`;
             values.unitPrice = unitPrice.toFixed(2);
@@ -3321,15 +3327,63 @@ export const appRouter = router({
             values.referencePeriod = composition.referencePeriod ?? catalog.referencePeriod;
           }
         }
+        if (input.officialPriceItemId !== undefined) {
+          if (input.officialPriceItemId === null) {
+            values.officialPriceItemId = null;
+          } else {
+            const [official] = await db
+              .select({
+                id: priceItems.id,
+                code: priceItems.code,
+                description: priceItems.description,
+                unit: priceItems.unit,
+                itemType: priceItems.itemType,
+                unitPrice: priceItems.unitPrice,
+                catalogId: priceCatalogs.id,
+                catalogName: priceCatalogs.name,
+                sourceType: priceCatalogs.sourceType,
+                state: priceCatalogs.state,
+                referencePeriod: priceCatalogs.referencePeriod,
+                catalogStatus: priceCatalogs.status,
+              })
+              .from(priceItems)
+              .innerJoin(priceCatalogs, eq(priceCatalogs.id, priceItems.catalogId))
+              .where(eq(priceItems.id, input.officialPriceItemId))
+              .limit(1);
+            if (!official) throw notFound("Serviço do catálogo não encontrado.");
+            if (official.itemType !== "servico" || official.catalogStatus !== "ativo" || !["SINAPI", "SEINFRA"].includes(official.sourceType)) {
+              throw badRequest("Vincule somente serviço de catálogo oficial ativo.");
+            }
+            const itemUnit = input.unit ?? item.unit;
+            if (!unitsCompatible(itemUnit, official.unit)) {
+              throw badRequest(`Unidade incompatível: item ${itemUnit} e serviço oficial ${official.unit}.`);
+            }
+            const [project] = await db.select({ location: projects.location }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+            const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1];
+            if (projectState && official.state && official.state.toUpperCase() !== projectState) {
+              throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${official.state}.`);
+            }
+            if (projectState && official.sourceType === "SEINFRA" && official.state?.toUpperCase() !== projectState) {
+              throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+            }
+            values.officialPriceItemId = official.id;
+            values.compositionId = null;
+            values.compositionUnitCost = null;
+            values.compositionNote = null;
+            values.unitPrice = Number(official.unitPrice).toFixed(2);
+            values.source = `${official.sourceType} · ${official.catalogName}`.slice(0, 80);
+            values.referencePeriod = official.referencePeriod;
+          }
+        }
         if (input.code !== undefined) values.code = input.code;
         if (input.description !== undefined) values.description = input.description;
         if (input.unit !== undefined) values.unit = input.unit;
         if (input.quantity !== undefined) values.quantity = input.quantity.toFixed(3);
-        if (input.unitPrice !== undefined && !(input.compositionId && input.compositionId > 0)) values.unitPrice = input.unitPrice.toFixed(2);
-        if (input.source !== undefined && !(input.compositionId && input.compositionId > 0)) values.source = input.source;
+        if (input.unitPrice !== undefined && !(input.compositionId && input.compositionId > 0) && !(input.officialPriceItemId && input.officialPriceItemId > 0)) values.unitPrice = input.unitPrice.toFixed(2);
+        if (input.source !== undefined && !(input.compositionId && input.compositionId > 0) && !(input.officialPriceItemId && input.officialPriceItemId > 0)) values.source = input.source;
         if (input.quantityEvidence !== undefined) values.quantityEvidence = input.quantityEvidence;
         if (input.quantityEvidenceStatus !== undefined) values.quantityEvidenceStatus = input.quantityEvidenceStatus;
-        if (input.referencePeriod !== undefined && !(input.compositionId && input.compositionId > 0)) values.referencePeriod = input.referencePeriod;
+        if (input.referencePeriod !== undefined && !(input.compositionId && input.compositionId > 0) && !(input.officialPriceItemId && input.officialPriceItemId > 0)) values.referencePeriod = input.referencePeriod;
         if (input.productivity !== undefined) values.productivity = input.productivity == null ? null : input.productivity.toFixed(3);
         if (input.plannedDurationDays !== undefined) values.plannedDurationDays = input.plannedDurationDays;
         if (input.wbsNodeId !== undefined) values.wbsNodeId = input.wbsNodeId;
@@ -3654,7 +3708,7 @@ export const appRouter = router({
           // base SEINFRA. Além de ser desnecessário, isso multiplicava o custo
           // da consulta e deixava a tela presa em "Consultando" em catálogos
           // grandes.
-          if (item.compositionId !== null) {
+          if (item.compositionId !== null || item.officialPriceItemId !== null) {
             const quantity = Number(item.quantity);
             const manualPrice = Number(item.unitPrice);
             return {
@@ -4151,6 +4205,38 @@ export const appRouter = router({
         if (!termo && !termoComposicoes) cacheSet(cacheKey, result);
         return result;
       }),
+    searchOfficialServices: protectedProcedure
+      .input(z.object({ q: z.string().trim().min(2).max(120), limit: z.number().int().min(1).max(50).optional() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { items: [] };
+        const pattern = escaparCuringaLike(input.q.trim());
+        const rows = await db
+          .select({
+            id: priceItems.id,
+            code: priceItems.code,
+            description: priceItems.description,
+            unit: priceItems.unit,
+            unitPrice: priceItems.unitPrice,
+            itemType: priceItems.itemType,
+            catalogId: priceCatalogs.id,
+            catalogName: priceCatalogs.name,
+            sourceType: priceCatalogs.sourceType,
+            state: priceCatalogs.state,
+            referencePeriod: priceCatalogs.referencePeriod,
+          })
+          .from(priceItems)
+          .innerJoin(priceCatalogs, eq(priceCatalogs.id, priceItems.catalogId))
+          .where(and(
+            eq(priceItems.itemType, "servico"),
+            eq(priceCatalogs.status, "ativo"),
+            inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA"]),
+            or(sql`${priceItems.code} ILIKE ${pattern}`, sql`${priceItems.description} ILIKE ${pattern}`),
+          ))
+          .orderBy(desc(priceCatalogs.createdAt), asc(priceItems.code))
+          .limit(input.limit ?? 25);
+        return { items: rows };
+      }),
     createCatalog: protectedProcedure
       .input(
         z.object({
@@ -4574,7 +4660,7 @@ export const appRouter = router({
         const dependencies = plan ? await db.select({ id: scheduleDependencies.id, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
         const [budget] = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
-        const budgetRows = budget ? await db.select({ compositionId: budgetItems.compositionId, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, budget.id)) : [];
+        const budgetRows = budget ? await db.select({ compositionId: budgetItems.compositionId, officialPriceItemId: budgetItems.officialPriceItemId, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, budget.id)) : [];
         const [baseline] = await db.select({ status: scheduleBaselines.status }).from(scheduleBaselines)
           .where(and(eq(scheduleBaselines.projectId, input.projectId), eq(scheduleBaselines.status, "ativa"))).limit(1);
         const measurementRows = await db.select({ id: measurements.id, status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
@@ -4641,7 +4727,7 @@ export const appRouter = router({
           // próprio fluxo; antes isso gerava um falso bloqueio no Dashboard.
           escopo: { declarado: Boolean(project?.descricao && project.location && project.tipoDeObra), validado: Boolean(project?.descricao && plan?.status === "approved") },
           eap: { existe: nodes.length > 0, aprovada: plan?.status === "approved", folhas: nodes.filter(item => item.nodeType === "pacote" || item.nodeType === "entrega").length },
-          orcamento: { existe: Boolean(budget), aprovado: budget?.status === "aprovado", itens: budgetRows.length, semComposicao: budgetRows.filter(item => !item.compositionId).length, didaticos: budgetRows.filter(item => /didatic|rateio uniforme/i.test(String(item.source ?? ""))).length },
+          orcamento: { existe: Boolean(budget), aprovado: budget?.status === "aprovado", itens: budgetRows.length, semComposicao: budgetRows.filter(item => !item.compositionId && !item.officialPriceItemId).length, didaticos: budgetRows.filter(item => /didatic|rateio uniforme/i.test(String(item.source ?? ""))).length },
           atividades: { total: activities.length, semLocal: activities.filter(item => !item.pavimento).length, semDuracao: activities.filter(item => !item.durationDays || item.durationDays < 1).length },
           rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, semPredecessora },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
@@ -6172,6 +6258,7 @@ export const appRouter = router({
                 quantity: budgetItems.quantity,
                 unitPrice: budgetItems.unitPrice,
                 compositionId: budgetItems.compositionId,
+                officialPriceItemId: budgetItems.officialPriceItemId,
               })
               .from(budgetItems)
               .where(eq(budgetItems.budgetVersionId, versao.id))
@@ -6197,6 +6284,7 @@ export const appRouter = router({
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
           compositionId: item.compositionId ?? null,
+          officialPriceItemId: item.officialPriceItemId ?? null,
         }));
 
         const atividades: AtividadeConciliacao[] = atividadesDb.map(atividade => ({
