@@ -43,7 +43,6 @@ describe("pesos físicos do cronograma", () => {
     expect(rows.every(row => row.physicalWeightApprovedAt == null)).toBe(true);
 
     await expect(caller.planning.aprovarPesosFisicos({ projectId })).rejects.toThrow(/evidência|justificativa/i);
-    await expect(caller.planning.distribuirPesosFisicosUniformes({ projectId })).rejects.toThrow(/rateio uniforme/i);
   });
 
   it("exige uma memória rastreável por atividade e invalida a aprovação ao revisar o peso", async () => {

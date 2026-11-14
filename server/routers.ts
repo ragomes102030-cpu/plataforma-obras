@@ -5573,11 +5573,6 @@ export const appRouter = router({
         await recomputeProjectProgress(db, input.projectId);
         return { updated: true as const, cpmInvalidated: invalidatesCpm };
       }),
-    distribuirPesosFisicosUniformes: protectedProcedure
-      .input(z.object({ projectId: z.number().int().positive() }))
-      .mutation(async () => {
-        throw badRequest("Rateio uniforme não é uma base técnica para avanço físico. Defina o peso por atividade com memória rastreável.");
-      }),
     aprovarPesosFisicos: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
