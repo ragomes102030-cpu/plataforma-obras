@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 14/nov/2026 — Rastrear evidência do quantitativo no orçamento
+
+**Achado:** o item de orçamento guardava somente a fonte do preço. A referência do quantitativo não tinha campo próprio, e preencher `source` com prancha/memória misturava preço e quantidade. Também não havia classificação para separar cenário de planejamento de quantitativo revisado.
+
+**Correção:** `budget_items` recebe evidência textual e estado `pendente`, `cenario` ou `validada`, com migração retrocompatível. A API e a tela editam esses campos separadamente da fonte do preço. A aprovação bloqueia evidência ausente ou pendente; cenário rastreável pode aprovar a versão de orçamento, sem ser tratado como produção/medição. A captura da baseline continua não bloqueante para custo e passa a reportar a falta de rastreabilidade como aviso financeiro.
+
+**Limites:** isto habilita rastreio por item de orçamento, não importa automaticamente a matriz de 208 linhas nem comprova sua revisão executiva. Nenhum dado Piazza, medição ou baseline foi alterado. Deploy e validação ao vivo não foram realizados.
+
 ## 09/nov/2026 — Editor de composição ocupa a largura disponível
 
 **Achado:** o vínculo manual estava no código publicado, mas os controles de busca e seleção ficavam dentro da última coluna de uma linha de tabela com sete colunas. Em telas com rolagem horizontal, o seletor podia ficar fora da área visível e a busca não indicava quando estava carregando ou sem resultados compatíveis.

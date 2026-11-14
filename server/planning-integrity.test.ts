@@ -384,9 +384,13 @@ describe("aplicarPropostaEap", () => {
     const [draft] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento novo", versionNumber: 2, status: "rascunho" }).returning({ id: budgetVersions.id });
     const [item] = await db.insert(budgetItems).values({ budgetVersionId: draft!.id, wbsNodeId: root!.id, code: "ITEM-APPROVAL", description: "Serviço", unit: "vb", quantity: "1.000", unitPrice: "0.00", source: "A preencher" }).returning({ id: budgetItems.id });
 
-    await expect(caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" })).rejects.toThrow(/sem preço ou fonte validada/i);
+    await expect(caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" })).rejects.toThrow(/quantitativo|bloqueio/i);
     await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 100, source: "SINAPI 2026 — validar referência" });
+    await expect(caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" })).rejects.toThrow(/quantidade_pendente|evidência/i);
+    await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, quantityEvidence: "Memória de cenário QA · prancha de referência 01", quantityEvidenceStatus: "cenario" });
     await caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" });
+    const [persisted] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    expect(persisted).toMatchObject({ quantityEvidence: "Memória de cenário QA · prancha de referência 01", quantityEvidenceStatus: "cenario" });
     const versions = await db.select({ id: budgetVersions.id, status: budgetVersions.status }).from(budgetVersions).where(eq(budgetVersions.projectId, projectId));
     expect(versions.find(version => version.id === previous!.id)?.status).toBe("arquivado");
     expect(versions.find(version => version.id === draft!.id)?.status).toBe("aprovado");

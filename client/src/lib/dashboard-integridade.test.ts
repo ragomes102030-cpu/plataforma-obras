@@ -3,7 +3,7 @@ import { avaliarIntegridadeDashboard } from "./dashboard-integridade";
 
 const base = {
   hoje: "2026-11-05", atividades: [{id:1,budgetItemId:10}],
-  itens: [{id:10,code:"1.1",quantity:5,unitPrice:100,source:"SEINFRA 028"}],
+  itens: [{id:10,code:"1.1",quantity:5,unitPrice:100,source:"SEINFRA 028",quantityEvidence:"Memória de cenário QA",quantityEvidenceStatus:"cenario"}],
   versaoAtivaAprovada: true, custoPorAtividade: new Map([[1,500]]), lancamentos: [],
   pesosFisicosAprovados: true,
 };
