@@ -4653,7 +4653,7 @@ export const appRouter = router({
         const [plan] = await db.select().from(projectPlanVersions)
           .where(eq(projectPlanVersions.projectId, input.projectId))
           .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
-        const nodes = plan ? await db.select({ id: wbsNodes.id, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus })
+        const nodes = plan ? await db.select({ id: wbsNodes.id, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus, location: wbsNodes.location })
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
         const activities = plan ? await db.select({ id: scheduleActivities.id, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset, plannedQuantity: scheduleActivities.plannedQuantity })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
@@ -4732,7 +4732,7 @@ export const appRouter = router({
           rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, semPredecessora },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
-          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos },
+          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos, atividadesSemLocalOperacional: activities.filter(item => !item.pavimento?.trim()).length },
           execucao: { medicoes: approvedMeasurementRows.length, comUnidade: measurementItemRows.length, confirmadas: approvedMeasurementRows.length },
         });
       }),
@@ -5087,6 +5087,10 @@ export const appRouter = router({
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
         const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
+        const versionNodes = currentVersion ? await db.select({ id: wbsNodes.id, location: wbsNodes.location }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id))) : [];
+        const locationByNode = new Map(versionNodes.map(node => [node.id, node.location?.trim() || null]));
+        const physicalUnits = await db.select({ name: productionUnits.name }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId));
+        const physicalUnitNames = new Set(physicalUnits.map(unit => unit.name.trim()));
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
         const operational = selectOperationalPlanning(activities, dependencies);
         const networkValidation = operational.activities.length > 0
@@ -5120,6 +5124,8 @@ export const appRouter = router({
         }
         const activitiesWithEvidence = activities.map(activity => ({
           ...activity,
+          wbsLocation: activity.wbsNodeId == null ? null : locationByNode.get(activity.wbsNodeId) ?? null,
+          wbsLocationIsProductionUnit: activity.wbsNodeId != null && physicalUnitNames.has(locationByNode.get(activity.wbsNodeId) ?? ""),
           planningEvidence: evidenceByActivity.get(activity.id) ?? null,
         }));
         // A tela de Atividades auto-dispara `generateFromEap` ao montar. Sem isto,
@@ -5298,6 +5304,10 @@ export const appRouter = router({
         if (!writableNode) {
           throw badRequest("Não foi possível preparar a versão de trabalho da EAP para a atividade.");
         }
+        const unidadesFisicas = await db.select({ name: productionUnits.name }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId));
+        const localOperacional = writableNode.location?.trim() && unidadesFisicas.some(unit => unit.name.trim() === writableNode.location!.trim())
+          ? writableNode.location.trim()
+          : null;
 
         const [existing] = await db
           .select({ id: scheduleActivities.id })
@@ -5320,6 +5330,10 @@ export const appRouter = router({
           wbsCode: writableNode.code,
           eapRef: writableNode.code,
           name: writableNode.name,
+          // Só transportar a localização da EAP para o campo operacional
+          // quando ela coincidir exatamente com uma unidade física cadastrada.
+          // Textos amplos (ex.: "por torre/local") permanecem como escopo EAP.
+          pavimento: localOperacional,
           phase: "Execução",
           startOffset: 0,
           durationDays: Number(durationDays),

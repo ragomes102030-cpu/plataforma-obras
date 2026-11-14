@@ -59,6 +59,24 @@ describe("motor de prontidão integrada", () => {
     expect(result.etapas.cpm.estado).toBe("desatualizado");
   });
 
+  it("mantém o CPM disponível quando faltam unidades específicas para a LOB", () => {
+    const result = avaliarProntidaoObra({
+      escopo: { declarado: true, validado: true },
+      eap: { existe: true, aprovada: true, folhas: 3 },
+      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
+      atividades: { total: 3, semLocal: 3, semDuracao: 0 },
+      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0, semPredecessora: 0 },
+      cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
+      baseline: { existe: true, aprovada: true },
+      lob: { parcelas: 0, foraJanelaCpm: 0, orfas: 0, atividadesSemLocalOperacional: 3 },
+      execucao: { medicoes: 0, comUnidade: 0, confirmadas: 0 },
+    });
+    expect(result.etapas.atividades.bloqueios).toHaveLength(0);
+    expect(result.prontoParaPlanejamento).toBe(true);
+    expect(result.etapas.execucao.bloqueios.map(item => item.codigo)).toContain("LOB_ATIVIDADES_SEM_UNIDADE");
+    expect(result.prontoParaAcompanhamento).toBe(false);
+  });
+
   it("bloqueia atividade órfã e medição sem itens", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },
