@@ -16,7 +16,7 @@ export type SnapshotProntidao = {
   eap?: { existe: boolean; aprovada: boolean; folhas: number };
   orcamento?: { existe: boolean; aprovado: boolean; itens: number; semComposicao: number; didaticos: number };
   atividades?: { total: number; semLocal: number; semDuracao: number };
-  rede?: { totalAtividades: number; totalDependencias: number; ciclos: number; semPredecessora: number };
+  rede?: { totalAtividades: number; totalDependencias: number; ciclos: number; desconectada?: boolean };
   cpm?: { calculadoEm: string | null; alteradoDepois: boolean; atividadesCalculadas: number };
   baseline?: { existe: boolean; aprovada: boolean };
   execucao?: { medicoes: number; comUnidade: number; confirmadas: number };
@@ -65,7 +65,11 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const redeBloqueios: BloqueioProntidao[] = [];
   if (!rede?.totalAtividades) redeBloqueios.push(bloqueio("REDE_AUSENTE", "Rede de precedências ausente", "O cronograma não possui atividades suficientes para formar uma rede.", "Cadastre atividades e suas relações dentro da mesma obra.", ["rede", "cpm"], "critica"));
   if (rede?.ciclos) redeBloqueios.push(bloqueio("REDE_COM_CICLO", "Rede contém ciclo", `${rede.ciclos} ciclo(s) impedem o cálculo determinístico.`, "Remova a relação que fecha o ciclo e recalcule a rede.", ["rede", "cpm"], "critica"));
-  if (rede?.semPredecessora && rede.totalAtividades > 1) redeBloqueios.push(bloqueio("REDE_SEM_PREDECESSORA", "Atividades sem predecessora", `${rede.semPredecessora} atividade(s) começam sem uma relação de entrada.`, "Defina predecessoras para as atividades que dependem de outra etapa; mantenha apenas o marco inicial sem predecessora.", ["rede", "cpm"], "alta"));
+  // Nós sem predecessor são raízes legítimas da rede (por exemplo, o início
+  // planejado da obra). A qualidade da rede deve ser bloqueada por ciclos ou
+  // componentes desconectados, não pela ausência de um elo de entrada no nó
+  // inicial.
+  if (rede?.desconectada) redeBloqueios.push(bloqueio("REDE_DESCONECTADA", "Rede de atividades desconectada", "Há atividades em blocos sem ligação entre si; cada bloco pode ser calculado como se começasse no dia zero.", "Conecte as cadeias com dependências tecnicamente justificadas e recalcule o CPM. Preserve atividades de início sem predecessora quando forem raízes válidas.", ["rede", "cpm"], "critica"));
   add("rede", redeBloqueios.length ? "bloqueado" : "pronto_revisao", redeBloqueios);
 
   const cpm = snapshot.cpm;

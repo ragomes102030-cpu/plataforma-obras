@@ -15,6 +15,10 @@ export type SemanaControl = {
   numero: number;
   inicio: string;
   fim: string;
+  situacao: "encerrada" | "corrente" | "futura";
+  bloqueadas: number;
+  ppc: number | null;
+  pendentes: number;
   atividades: { id: number; wbsCode: string; name: string; startIso: string; finishIso: string; openConstraints: number }[];
   compromissos: number;
 };
@@ -126,6 +130,9 @@ export function ControlTowerDashboard({
     : atrasadaFisico ? "Abaixo do planejado"
     : selo.tipo === "atrasada" ? "Atraso identificado" : selo.rotulo;
   const comprometidos = semana?.compromissos ?? null;
+  const ppcDaSemana = semana ? semana.ppc : ppc;
+  const bloqueadasDaSemana = semana ? semana.bloqueadas : bloqueadas;
+  const pendentesDaSemana = semana ? semana.pendentes : compromissosPendentes;
   const totalContado = status.concluidas + status.emAndamento + status.atrasadas + status.naoIniciadas;
   const statusConfere = totalContado === status.total;
   const detalhes: Record<Detalhe, { titulo: string; desc: string; itens: [string, string][]; acao: string }> = {
@@ -199,7 +206,7 @@ export function ControlTowerDashboard({
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">{prazoConfianca.confiavel ? "TÉRMINO CALCULADO" : "PRAZO EM REVISÃO"} <CalendarDays size={18}/></span><strong>{prazoConfianca.confiavel ? dataBr(prazo.fim) : "Não validado"}</strong><small>{prazoConfianca.confiavel ? (prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido") + " · " + percentual(prazo.fracaoDecorrida) + " transcorrido" : prazoConfianca.motivo}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro" : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido" : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura" : !prontidao.evDisponivel ? "Aguardando produção confirmada e pesos físicos" : "Orçamento: " + dinheiro(valor.total)}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("atividades")}><span className="ct-kpi-head">ATIVIDADES DO PLANO <ListChecks size={18}/></span><strong>{status.total} atividades</strong><small>{statusConfere ? status.atrasadas + " atrasadas · " + status.concluidas + " concluídas" : "Distribuição de status inconsistente"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
-        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">COMPROMISSOS DA SEMANA <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Sem registro" : comprometidos + " compromissos"}</strong><small>{ppc != null ? "PPC avaliado: " + numero.format(ppc) + "%" : "PPC não apurado"}{bloqueadas != null ? " · " + bloqueadas + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
+        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">{semana?.situacao === "futura" ? "COMPROMISSOS DA PRÓXIMA SEMANA" : "COMPROMISSOS DA SEMANA"} <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Nenhum compromisso" : comprometidos + " compromissos"}</strong><small>{ppcDaSemana != null ? "PPC avaliado: " + numero.format(ppcDaSemana) + "%" : "PPC não apurado"}{semana ? " · " + dataBr(semana.inicio) + " a " + dataBr(semana.fim) : ""}{bloqueadasDaSemana != null ? " · " + bloqueadasDaSemana + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
       </section>
 
       <div className="ct-columns">
@@ -217,8 +224,8 @@ export function ControlTowerDashboard({
 
       <div className="ct-lower">
         <section className="ct-card ct-lower-card" aria-labelledby="ct-semana"><div className="ct-lower-title"><div><span className="ct-overline">EXECUÇÃO E CONTROLE</span><h3 id="ct-semana">Semana de trabalho</h3></div><button type="button" onClick={() => abrirAba("producao")}>Abrir controle <ArrowUpRight size={15}/></button></div>
-          {semana ? <p>Semana {semana.numero}: {dataBr(semana.inicio)} a {dataBr(semana.fim)} · {semana.atividades.length} atividade(s) programada(s)</p> : <p>{semanaEstado === "pendente" ? "Consultando a programação semanal…" : semanaEstado === "erro" ? "Não foi possível consultar a programação semanal." : "Sem programação semanal disponível."}</p>}
-          {semana?.atividades.length ? <ul className="ct-atividade-lista">{semana.atividades.slice(0, 4).map(a => <li key={a.id}><span>{a.wbsCode}</span><strong>{a.name}</strong><small>{a.openConstraints > 0 ? a.openConstraints + " restrição(ões) aberta(s)" : dataBr(a.finishIso)}</small></li>)}</ul> :
+          {semana ? <p>{semana.situacao === "futura" ? "Próxima semana" : "Semana " + semana.numero}: {dataBr(semana.inicio)} a {dataBr(semana.fim)} · {semana.atividades.length} atividade(s) programada(s) · {pendentesDaSemana} compromisso(s) pendente(s)</p> : <p>{semanaEstado === "pendente" ? "Consultando a programação semanal…" : semanaEstado === "erro" ? "Não foi possível consultar a programação semanal." : "Sem programação semanal disponível."}</p>}
+          {semana?.atividades.length ? <ul className="ct-atividade-lista">{semana.atividades.slice(0, 4).map(a => <li key={a.id}><span>{a.wbsCode}</span><strong>{a.name}</strong><small>{a.openConstraints > 0 ? a.openConstraints + " restrição(ões) aberta(s)" : dataBr(a.startIso) + " a " + dataBr(a.finishIso)}</small></li>)}</ul> :
             <div className="ct-empty-row"><Clock3 size={18}/>Nenhuma atividade identificada para o período.</div>}
         </section>
         <section className="ct-card ct-lower-card" aria-labelledby="ct-producao"><div className="ct-lower-title"><div><span className="ct-overline">RASTREABILIDADE</span><h3 id="ct-producao">Últimos lançamentos</h3></div><button type="button" onClick={() => abrirAba("producao")}>Abrir produção <ArrowUpRight size={15}/></button></div>

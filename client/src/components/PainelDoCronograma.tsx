@@ -8,6 +8,7 @@ import { avaliarPrazoDashboard } from "@/lib/prazo-dashboard";
 import { avaliarIntegridadeDashboard } from "@/lib/dashboard-integridade";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
+import { selecionarSemanaDashboard } from "@/lib/dashboard-lookahead";
 
 /**
  * Painel da obra.
@@ -228,7 +229,7 @@ export function PainelDoCronograma({
       ultimos: [...lancamentos]
         .sort((a, b) => isoDoValor(b.productionDate).localeCompare(isoDoValor(a.productionDate)))
         .slice(0, 5),
-      semana: lookahead.data?.semanas?.find((s) => s.situacao === "corrente") ?? lookahead.data?.semanas?.[0],
+      semana: selecionarSemanaDashboard(lookahead.data?.semanas ?? []),
     };
   }, [agregadoDaObra, baseline.data, codigosExemplo, hoje, linhasDaObra, lookahead.data, orcamento.data, plano.data, producao.data]);
 
@@ -442,6 +443,10 @@ export function PainelDoCronograma({
         numero: semana.numero,
         inicio: semana.inicio,
         fim: semana.fim,
+        situacao: semana.situacao,
+        bloqueadas: semana.bloqueadas,
+        ppc: semana.ppc,
+        pendentes: semana.pendentes,
         compromissos: semana.compromissos.length,
         atividades: semana.atividades.map(a => ({
           id: a.id, wbsCode: a.wbsCode, name: a.name,
@@ -460,9 +465,9 @@ export function PainelDoCronograma({
           ? l.vinculo && l.vinculo !== "atual" ? "fora do plano" : "confirmada"
           : "rascunho",
       }))}
-      ppc={lookahead.data?.ppcCorrente ?? null}
-      bloqueadas={lookahead.data?.totalBloqueadas ?? null}
-      compromissosPendentes={lookahead.data?.compromissosPendentes ?? null}
+      ppc={semana?.ppc ?? null}
+      bloqueadas={semana?.bloqueadas ?? null}
+      compromissosPendentes={semana?.pendentes ?? null}
       carregandoComplementos={carregandoComplementos}
       erroComplementos={erroComplementos}
       orcamentoEstado={orcamento.isError ? "erro" : orcamento.isPending ? "pendente" : "ok"}

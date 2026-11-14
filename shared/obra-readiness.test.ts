@@ -8,7 +8,7 @@ describe("motor de prontidão integrada", () => {
       eap: { existe: true, aprovada: true, folhas: 3 },
       orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 1 },
       atividades: { total: 3, semLocal: 0, semDuracao: 0 },
-      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0, semPredecessora: 0 },
+      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
       baseline: { existe: true, aprovada: true },
       execucao: { medicoes: 1, comUnidade: 1, confirmadas: 1 },
@@ -25,7 +25,7 @@ describe("motor de prontidão integrada", () => {
       eap: { existe: true, aprovada: true, folhas: 3 },
       orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
       atividades: { total: 3, semLocal: 0, semDuracao: 0 },
-      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0, semPredecessora: 0 },
+      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
       baseline: { existe: true, aprovada: true },
       lob: { parcelas: 9, foraJanelaCpm: 3, orfas: 0 },
@@ -42,7 +42,7 @@ describe("motor de prontidão integrada", () => {
       eap: { existe: true, aprovada: true, folhas: 3 },
       orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
       atividades: { total: 3, semLocal: 0, semDuracao: 0 },
-      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0, semPredecessora: 0 },
+      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
       baseline: { existe: true, aprovada: true },
       lob: { parcelas: 9, foraJanelaCpm: 0, orfas: 0, parcelasEmLocaisDidaticos: 9 },
@@ -54,7 +54,7 @@ describe("motor de prontidão integrada", () => {
   });
 
   it("explica como resolver uma rede com ciclo", () => {
-    const result = avaliarProntidaoObra({ rede: { totalAtividades: 2, totalDependencias: 2, ciclos: 1, semPredecessora: 0 } });
+    const result = avaliarProntidaoObra({ rede: { totalAtividades: 2, totalDependencias: 2, ciclos: 1 } });
     expect(result.etapas.rede.bloqueios[0].comoResolver).toContain("Remova");
     expect(result.etapas.cpm.estado).toBe("desatualizado");
   });
@@ -65,7 +65,7 @@ describe("motor de prontidão integrada", () => {
       eap: { existe: true, aprovada: true, folhas: 3 },
       orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
       atividades: { total: 3, semLocal: 3, semDuracao: 0 },
-      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0, semPredecessora: 0 },
+      rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
       baseline: { existe: true, aprovada: true },
       lob: { parcelas: 0, foraJanelaCpm: 0, orfas: 0, atividadesSemLocalOperacional: 3 },
@@ -83,12 +83,37 @@ describe("motor de prontidão integrada", () => {
       eap: { existe: true, aprovada: true, folhas: 2 },
       orcamento: { existe: true, aprovado: true, itens: 2, semComposicao: 0, didaticos: 0 },
       atividades: { total: 2, semLocal: 0, semDuracao: 0 },
-      rede: { totalAtividades: 2, totalDependencias: 1, ciclos: 0, semPredecessora: 1 },
+      rede: { totalAtividades: 2, totalDependencias: 1, ciclos: 0, desconectada: true },
       cpm: { calculadoEm: null, alteradoDepois: false, atividadesCalculadas: 0 },
       baseline: { existe: false, aprovada: false },
       execucao: { medicoes: 1, comUnidade: 0, confirmadas: 0 },
     });
-    expect(result.etapas.rede.bloqueios[0].codigo).toBe("REDE_SEM_PREDECESSORA");
+    expect(result.etapas.rede.bloqueios[0].codigo).toBe("REDE_DESCONECTADA");
     expect(result.etapas.execucao.bloqueios[0].codigo).toBe("MEDICAO_SEM_ITENS");
+  });
+
+  it("aceita a atividade raiz sem predecessora quando a rede está conectada", () => {
+    const result = avaliarProntidaoObra({
+      atividades: { total: 2, semLocal: 0, semDuracao: 0 },
+      rede: { totalAtividades: 2, totalDependencias: 1, ciclos: 0 },
+    });
+
+    expect(result.etapas.rede.bloqueios).toHaveLength(0);
+    expect(result.etapas.rede.estado).toBe("pronto_revisao");
+  });
+
+  it("bloqueia componentes desconectados sem tratar a raiz como defeito", () => {
+    const result = avaliarProntidaoObra({
+      atividades: { total: 3, semLocal: 0, semDuracao: 0 },
+      rede: {
+        totalAtividades: 3,
+        totalDependencias: 1,
+        ciclos: 0,
+        desconectada: true,
+      },
+    });
+
+    expect(result.etapas.rede.bloqueios.map(item => item.codigo)).toContain("REDE_DESCONECTADA");
+    expect(result.etapas.rede.bloqueios.map(item => item.codigo)).not.toContain("REDE_SEM_PREDECESSORA");
   });
 });
