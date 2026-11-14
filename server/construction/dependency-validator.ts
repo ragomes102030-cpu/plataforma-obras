@@ -9,6 +9,9 @@ export type DependencyValidationResult = {
   issues: ValidationIssue[];
 };
 
+type DependencyValidationActivity = Pick<ScheduleEvidenceActivity, "id" | "projectId" | "name">;
+type DependencyValidationLink = Pick<ScheduleEvidenceDependency, "id" | "projectId" | "predecessorId" | "successorId" | "lag">;
+
 type NetworkBlock = {
   ids: string[];
   /** Nome da primeira atividade do bloco, para o engenheiro reconhecer onde ele começa. */
@@ -29,7 +32,7 @@ type NetworkShape = {
  * ao mesmo componente, que é a leitura que interessa para "a rede é uma só?".
  */
 function networkComponents(
-  activities: ScheduleEvidenceActivity[],
+  activities: DependencyValidationActivity[],
   edges: Map<string, string[]>
 ): NetworkShape {
   // Ordena por id numérico para que a mesma rede produza sempre os mesmos
@@ -84,8 +87,8 @@ function networkComponents(
 }
 
 export function validateDependencies(
-  activities: ScheduleEvidenceActivity[],
-  dependencies: ScheduleEvidenceDependency[],
+  activities: DependencyValidationActivity[],
+  dependencies: DependencyValidationLink[],
   options: { allowIncomplete?: boolean } = {}
 ): DependencyValidationResult {
   const issues: ValidationIssue[] = [];

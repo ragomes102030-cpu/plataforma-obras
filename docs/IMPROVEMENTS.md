@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 14/nov/2026 — Não bloquear atividade-raiz da rede no dashboard
+
+**Achado:** a prontidão contava toda atividade sem predecessora como falha, inclusive o início legítimo do cronograma. Na Piazza, a rede aprovada tinha 83 atividades, 83 vínculos e CPM calculado; `1.1.1 Compatibilizar e liberar projetos` é a raiz da cadeia. O aviso do dashboard contradizia o diagnóstico de rede conectada.
+
+**Correção:** ausência de predecessor não é mais bloqueio isolado. O gate usa o validador de dependências para bloquear componentes desconectados, preservando o início do projeto sem vínculo de entrada. A leitura continua protegendo o CPM contra cadeias desconectadas. No dashboard, fins de semana passam a priorizar a próxima semana útil, mostrar o intervalo da atividade e usar compromissos, PPC e restrições daquela mesma semana.
+
+**Regressão:** testes cobrem a raiz legítima sem predecessora, rede realmente desconectada e seleção da semana no fim de semana. Alteração local, ainda sem deploy ou validação ao vivo.
+
 ## 14/nov/2026 — Rastrear evidência do quantitativo no orçamento
 
 **Achado:** o item de orçamento guardava somente a fonte do preço. A referência do quantitativo não tinha campo próprio, e preencher `source` com prancha/memória misturava preço e quantidade. Também não havia classificação para separar cenário de planejamento de quantitativo revisado.
