@@ -167,6 +167,13 @@
       "when": 1793836800000,
       "tag": "0023_activity_physical_weights",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794614400000,
+      "tag": "0024_budget_quantity_evidence",
+      "breakpoints": true
     }
   ],
   "version": "7",

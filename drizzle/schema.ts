@@ -861,6 +861,8 @@ export const budgetItems = pgTable(
     productivity: numeric("productivity", { precision: 14, scale: 3 }),
     plannedDurationDays: integer("plannedDurationDays"),
     source: varchar("source", { length: 80 }),
+    quantityEvidence: text("quantityEvidence"),
+    quantityEvidenceStatus: varchar("quantityEvidenceStatus", { length: 16 }).default("pendente").notNull(),
     referencePeriod: varchar("referencePeriod", { length: 20 }),
     compositionNote: text("compositionNote"),
     isPriceException: boolean("isPriceException").default(false).notNull(),

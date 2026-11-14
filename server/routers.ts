@@ -2909,14 +2909,16 @@ export const appRouter = router({
         if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "arquivado") throw conflict("Uma versão arquivada não pode voltar ao fluxo.");
         if (input.status === "aprovado") {
-          const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
+          const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
           if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
           const pendencias = findBudgetApprovalBlockers(items);
           if (pendencias.length) {
             const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
+            const quantitativos = pendencias.filter(item => item.reason === "sem_evidencia_quantidade" || item.reason === "quantidade_pendente").length;
             throw badRequest(
-              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação (sem preço ou fonte validada): ${pendencias.slice(0, 5).map(item => item.code).join(", ")}.` +
-              (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "")
+              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação: ${pendencias.slice(0, 5).map(item => `${item.code} (${item.reason})`).join(", ")}.` +
+              (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "") +
+              (quantitativos ? ` ${quantitativos} pendência(s) de quantitativo; informe a evidência e classifique como cenário ou validada.` : "")
             );
           }
           await db.update(budgetVersions).set({ status: "arquivado", updatedAt: new Date() }).where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado"), ne(budgetVersions.id, input.budgetVersionId)));
@@ -3230,6 +3232,8 @@ export const appRouter = router({
         quantity: z.number().positive().optional(),
         unitPrice: z.number().nonnegative().optional(),
         source: z.string().trim().max(80).nullable().optional(),
+        quantityEvidence: z.string().trim().max(2000).nullable().optional(),
+        quantityEvidenceStatus: z.enum(["pendente", "cenario", "validada"]).optional(),
         referencePeriod: z.string().trim().max(20).nullable().optional(),
         productivity: z.number().positive().nullable().optional(),
         plannedDurationDays: z.number().int().positive().nullable().optional(),
@@ -3323,6 +3327,8 @@ export const appRouter = router({
         if (input.quantity !== undefined) values.quantity = input.quantity.toFixed(3);
         if (input.unitPrice !== undefined && !(input.compositionId && input.compositionId > 0)) values.unitPrice = input.unitPrice.toFixed(2);
         if (input.source !== undefined && !(input.compositionId && input.compositionId > 0)) values.source = input.source;
+        if (input.quantityEvidence !== undefined) values.quantityEvidence = input.quantityEvidence;
+        if (input.quantityEvidenceStatus !== undefined) values.quantityEvidenceStatus = input.quantityEvidenceStatus;
         if (input.referencePeriod !== undefined && !(input.compositionId && input.compositionId > 0)) values.referencePeriod = input.referencePeriod;
         if (input.productivity !== undefined) values.productivity = input.productivity == null ? null : input.productivity.toFixed(3);
         if (input.plannedDurationDays !== undefined) values.plannedDurationDays = input.plannedDurationDays;
@@ -5667,7 +5673,7 @@ export const appRouter = router({
           .limit(1);
         if (budgetApproved) {
           const approvedItems = await db
-            .select({ id: budgetItems.id, code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source })
+            .select({ id: budgetItems.id, code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus })
             .from(budgetItems)
             .where(eq(budgetItems.budgetVersionId, budgetApproved.id));
           const itemIds = new Set(approvedItems.map(item => item.id));
@@ -5677,7 +5683,7 @@ export const appRouter = router({
           }
           const bloqueiosOrcamento = findBudgetApprovalBlockers(approvedItems);
           if (bloqueiosOrcamento.length) {
-            avisosOrcamento.push("O orçamento contém fonte didática ou sem rastreabilidade. A captura do prazo não aprova custos nem habilita valor agregado real.");
+            avisosOrcamento.push("O orçamento contém preço ou quantitativo sem rastreabilidade completa. A captura do prazo não aprova custos nem habilita valor agregado real.");
           }
         }
         const semCpm = activities.filter(activity => !activity.cpmCalculatedAt);

@@ -44,7 +44,7 @@ const CONTRATO: Record<string, string[]> = {
   agent_project_states: ["activeSection", "activeSubtab", "blockerCount", "createdAt", "id", "lastSummary", "projectId", "stage", "updatedAt", "version"],
   agent_run_events: ["createdAt", "eventJson", "eventType", "id", "projectId", "requestId", "userId"],
   agent_runs: ["contextJson", "createdAt", "currentStep", "errorCode", "errorMessage", "finishedAt", "id", "iterations", "model", "projectId", "provider", "requestId", "resultJson", "startedAt", "status", "updatedAt", "userId"],
-  budget_items: ["budgetVersionId", "code", "compositionId", "compositionNote", "compositionUnitCost", "createdAt", "description", "id", "isPriceException", "plannedDurationDays", "productivity", "quantity", "referencePeriod", "sortOrder", "source", "unit", "unitPrice", "updatedAt", "wbsNodeId"],
+  budget_items: ["budgetVersionId", "code", "compositionId", "compositionNote", "compositionUnitCost", "createdAt", "description", "id", "isPriceException", "plannedDurationDays", "productivity", "quantity", "quantityEvidence", "quantityEvidenceStatus", "referencePeriod", "sortOrder", "source", "unit", "unitPrice", "updatedAt", "wbsNodeId"],
   budget_versions: ["createdAt", "createdBy", "currency", "id", "name", "notes", "projectId", "status", "updatedAt", "versionNumber"],
   calendar_exceptions: ["calendarId", "createdAt", "date", "id", "name", "type"],
   composition_components: ["coefficient", "componentType", "compositionId", "createdAt", "id", "priceItemId", "unitPriceSnapshot"],
@@ -152,7 +152,7 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas contempla 10 colunas multilocais (511)", () => {
+  it("o total de colunas inclui evidência rastreável do quantitativo (515)", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
@@ -162,8 +162,8 @@ describe("contrato do schema", () => {
     // 438 -> 464 no Last Planner (planning_constraints + weekly_commitments).
     // 464 -> 488 na medição (measurements + measurement_items).
     // 488 -> 489 no marco do cronograma (is_milestone em schedule_activities).
-    // 499 -> 511 no registro persistente de riscos; 513 com pesos físicos auditáveis.
+    // 499 -> 511 no registro persistente de riscos; 513 com pesos físicos; 515 com origem do quantitativo.
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(513);
+    expect(total).toBe(515);
   });
 });
