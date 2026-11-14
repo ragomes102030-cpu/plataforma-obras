@@ -16,6 +16,8 @@ import { normalizeForMatch, trigramSimilarity } from "../../shared/price-sources
 export type ItemOrcamento = {
   id: number;
   code: string;
+  /** Código do pacote EAP ao qual o item está associado; o código oficial pode ser C2595, SINAPI etc. */
+  wbsCode?: string | null;
   description: string;
   unit: string;
   quantity: number;
@@ -88,7 +90,8 @@ export function sugerirVinculos(
   const sugestoes = itens.map(item => {
     const unitMismatch = !unidadesCompativeis(atividade.unit, item.unit);
 
-    if (chaveAtividade && chaveDeCodigo(item.code) === chaveAtividade) {
+    const codigoEapOrcamento = item.wbsCode?.trim() || item.code;
+    if (chaveAtividade && chaveDeCodigo(codigoEapOrcamento) === chaveAtividade) {
       return {
         budgetItemId: item.id,
         code: item.code,

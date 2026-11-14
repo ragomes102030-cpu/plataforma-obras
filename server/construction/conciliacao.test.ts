@@ -70,6 +70,28 @@ describe("sugerirVinculos", () => {
     expect(sugestao.reason).toBe("codigo");
   });
 
+  it("casa pelo código do nó EAP quando o código do orçamento é SEINFRA", () => {
+    const [sugestao] = sugerirVinculos(
+      { ...atividadeBase, wbsCode: "1.6.4", name: "Tubulação sanitária PVC-U DN 40 mm", unit: "M" },
+      [{
+        id: 328,
+        code: "C2595",
+        wbsCode: "1.6.4",
+        description: "Rede sanitária PVC série normal DN 40 mm",
+        unit: "M",
+        quantity: 2023.97,
+        unitPrice: 17.97,
+        compositionId: null,
+        officialPriceItemId: 75991,
+      }]
+    );
+
+    expect(sugestao.budgetItemId).toBe(328);
+    expect(sugestao.reason).toBe("codigo");
+    expect(sugestao.confidence).toBe(1);
+    expect(sugestao.unitMismatch).toBe(false);
+  });
+
   it("descrição parecida é sugerida, mas com confiança menor que código", () => {
     const [sugestao] = sugerirVinculos(
       { ...atividadeBase, wbsCode: "9.9.9", name: "Alvenaria de vedação", unit: "m2" },

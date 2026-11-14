@@ -14,6 +14,8 @@ describe("edição do orçamento didático", () => {
     expect(source).toContain("Composição oficial vinculada");
     expect(source).toContain("Evidência do quantitativo");
     expect(source).toContain("Situação do quantitativo");
+    expect(source).toContain("Pacote EAP associado");
+    expect(source).toContain("wbsNodeId: Number(rascunho.wbsNodeId)");
     expect(source).toContain("quantityEvidenceStatus: rascunho.quantityEvidenceStatus");
     expect(source).toContain("compositionId: rascunho.compositionId ? Number(rascunho.compositionId) : null");
   });

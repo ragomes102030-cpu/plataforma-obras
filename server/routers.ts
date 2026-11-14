@@ -2870,6 +2870,7 @@ export const appRouter = router({
             versions: [],
             activeVersionId: null,
             items: [],
+            eapNodes: [],
             total: 0,
             unavailable: true,
           };
@@ -2887,6 +2888,22 @@ export const appRouter = router({
               .where(eq(budgetItems.budgetVersionId, active.id))
               .orderBy(budgetItems.sortOrder)
           : [];
+        const nodeIds = [...new Set(items.flatMap(item => item.wbsNodeId == null ? [] : [item.wbsNodeId]))];
+        const linkedNodes = nodeIds.length
+          ? await db.select({ id: wbsNodes.id, code: wbsNodes.code, name: wbsNodes.name })
+              .from(wbsNodes).where(inArray(wbsNodes.id, nodeIds))
+          : [];
+        const linkedNodeById = new Map(linkedNodes.map(node => [node.id, node]));
+        const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        const eapNodes = currentPlanVersionId == null ? [] : await db
+          .select({ id: wbsNodes.id, code: wbsNodes.code, name: wbsNodes.name, nodeType: wbsNodes.nodeType })
+          .from(wbsNodes)
+          .where(and(
+            eq(wbsNodes.projectId, input.projectId),
+            eq(wbsNodes.versionId, currentPlanVersionId),
+            inArray(wbsNodes.nodeType, ["pacote", "entrega"]),
+          ))
+          .orderBy(wbsNodes.code);
         const total = items.reduce(
           (sum, item) => sum + Number(item.quantity) * Number(item.unitPrice),
           0
@@ -2894,7 +2911,12 @@ export const appRouter = router({
         return {
           versions,
           activeVersionId: active?.id ?? null,
-          items,
+          items: items.map(item => ({
+            ...item,
+            wbsCode: item.wbsNodeId == null ? null : linkedNodeById.get(item.wbsNodeId)?.code ?? null,
+            wbsName: item.wbsNodeId == null ? null : linkedNodeById.get(item.wbsNodeId)?.name ?? null,
+          })),
+          eapNodes,
           total,
           unavailable: false,
         };
@@ -6269,6 +6291,7 @@ export const appRouter = router({
               .select({
                 id: budgetItems.id,
                 code: budgetItems.code,
+                wbsCode: wbsNodes.code,
                 description: budgetItems.description,
                 unit: budgetItems.unit,
                 quantity: budgetItems.quantity,
@@ -6277,6 +6300,7 @@ export const appRouter = router({
                 officialPriceItemId: budgetItems.officialPriceItemId,
               })
               .from(budgetItems)
+              .leftJoin(wbsNodes, eq(wbsNodes.id, budgetItems.wbsNodeId))
               .where(eq(budgetItems.budgetVersionId, versao.id))
           : [];
 
@@ -6300,6 +6324,7 @@ export const appRouter = router({
         const itens: ItemOrcamento[] = itensDb.map(item => ({
           id: item.id,
           code: item.code ?? "",
+          wbsCode: item.wbsCode ?? null,
           description: item.description ?? "",
           unit: item.unit ?? "",
           quantity: Number(item.quantity ?? 0),

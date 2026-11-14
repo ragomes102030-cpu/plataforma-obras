@@ -20,7 +20,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
-  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", compositionId: "", officialPriceItemId: "" });
+  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
   const [buscaComposicao, setBuscaComposicao] = useState("");
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const [buscaServico, setBuscaServico] = useState("");
@@ -82,6 +82,10 @@ export function AbaOrcamento({ projetoId }: Props) {
         });
 
   function iniciarEdicao(item: (typeof items)[number]) {
+    const eapNodes = budget.data?.eapNodes ?? [];
+    const nodeAtual = item.wbsNodeId != null && eapNodes.some(node => node.id === item.wbsNodeId)
+      ? String(item.wbsNodeId)
+      : "";
     setEditandoId(item.id);
     setRascunho({
       code: item.code,
@@ -92,6 +96,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       source: item.source ?? "",
       quantityEvidence: item.quantityEvidence ?? "",
       quantityEvidenceStatus: (item.quantityEvidenceStatus ?? "pendente") as typeof rascunho.quantityEvidenceStatus,
+      wbsNodeId: nodeAtual,
       compositionId: item.compositionId == null ? "" : String(item.compositionId),
       officialPriceItemId: item.officialPriceItemId == null ? "" : String(item.officialPriceItemId),
     });
@@ -112,6 +117,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       source: rascunho.source || null,
       quantityEvidence: rascunho.quantityEvidence || null,
       quantityEvidenceStatus: rascunho.quantityEvidenceStatus,
+      ...(rascunho.wbsNodeId ? { wbsNodeId: Number(rascunho.wbsNodeId) } : {}),
       compositionId: rascunho.compositionId ? Number(rascunho.compositionId) : null,
       officialPriceItemId: rascunho.officialPriceItemId ? Number(rascunho.officialPriceItemId) : null,
     });
@@ -310,6 +316,18 @@ export function AbaOrcamento({ projetoId }: Props) {
                         <label className="orcamento-edit-wide">Fonte do preço<input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} /></label>
                         <label className="orcamento-edit-wide">Evidência do quantitativo<textarea aria-label="Evidência do quantitativo" value={rascunho.quantityEvidence} onChange={e => setRascunho({ ...rascunho, quantityEvidence: e.target.value })} placeholder="Prancha, revisão, pavimento, memória de cálculo ou referência rastreável" maxLength={2000} /></label>
                         <label>Situação do quantitativo<select aria-label="Situação do quantitativo" value={rascunho.quantityEvidenceStatus} onChange={e => setRascunho({ ...rascunho, quantityEvidenceStatus: e.target.value as typeof rascunho.quantityEvidenceStatus })}><option value="pendente">Pendente</option><option value="cenario">Cenário de planejamento</option><option value="validada">Validada</option></select></label>
+                        <label className="orcamento-edit-wide" htmlFor={`item-eap-${item.id}`}>
+                          Pacote EAP associado
+                          <select id={`item-eap-${item.id}`} aria-label="Pacote EAP associado" value={rascunho.wbsNodeId} onChange={e => setRascunho({ ...rascunho, wbsNodeId: e.target.value })}>
+                            <option value="">{item.wbsNodeId == null ? "Sem vínculo com a EAP atual" : `Vínculo antigo: ${item.wbsCode ?? `nó #${item.wbsNodeId}`} — selecione uma folha atual`}</option>
+                            {(budget.data?.eapNodes ?? []).map(node => <option key={node.id} value={node.id}>{node.code} · {node.name}</option>)}
+                          </select>
+                        </label>
+                        {item.wbsNodeId != null && !budget.data?.eapNodes.some(node => node.id === item.wbsNodeId) && !rascunho.wbsNodeId && (
+                          <p className="orcamento-edit-feedback orcamento-edit-wide" role="status">
+                            Este item ainda aponta para {item.wbsCode ? `a folha ${item.wbsCode} da EAP anterior` : "uma versão anterior da EAP"}. Associe a folha vigente para habilitar a conciliação com o cronograma.
+                          </p>
+                        )}
                         <label className="orcamento-edit-search orcamento-edit-wide" htmlFor={`composicao-busca-${item.id}`}>
                           Buscar composição oficial por código ou descrição
                           <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Digite código ou serviço SINAPI/SEINFRA (mínimo 2 caracteres)" />
