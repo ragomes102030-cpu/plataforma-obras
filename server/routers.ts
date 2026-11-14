@@ -6262,6 +6262,8 @@ export const appRouter = router({
           .orderBy(desc(budgetVersions.versionNumber))
           .limit(1);
 
+        const planVersionId = await getCurrentPlanVersionId(db, input.projectId);
+
         const itensDb = versao
           ? await db
               .select({
@@ -6288,7 +6290,12 @@ export const appRouter = router({
             budgetItemId: scheduleActivities.budgetItemId,
           })
           .from(scheduleActivities)
-          .where(eq(scheduleActivities.projectId, input.projectId));
+          .where(and(
+            eq(scheduleActivities.projectId, input.projectId),
+            planVersionId == null
+              ? isNull(scheduleActivities.versionId)
+              : eq(scheduleActivities.versionId, planVersionId),
+          ));
 
         const itens: ItemOrcamento[] = itensDb.map(item => ({
           id: item.id,
