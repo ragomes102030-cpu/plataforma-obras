@@ -20,7 +20,7 @@ export type SnapshotProntidao = {
   cpm?: { calculadoEm: string | null; alteradoDepois: boolean; atividadesCalculadas: number };
   baseline?: { existe: boolean; aprovada: boolean };
   execucao?: { medicoes: number; comUnidade: number; confirmadas: number };
-  lob?: { parcelas: number; foraJanelaCpm: number; orfas: number; parcelasEmLocaisDidaticos?: number };
+  lob?: { parcelas: number; foraJanelaCpm: number; orfas: number; parcelasEmLocaisDidaticos?: number; atividadesSemLocalOperacional?: number };
 };
 
 export type ResultadoProntidao = {
@@ -59,7 +59,6 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const atividadeBloqueios: BloqueioProntidao[] = [];
   if (!atividades?.total) atividadeBloqueios.push(bloqueio("ATIVIDADES_AUSENTES", "Cronograma sem atividades", "Não há unidades executáveis para calcular prazo.", "Gere atividades a partir das folhas aprovadas da EAP.", ["atividades", "rede", "cpm"], "critica"));
   else if (atividades.semDuracao > 0) atividadeBloqueios.push(bloqueio("ATIVIDADES_SEM_DURACAO", "Atividades sem duração", `${atividades.semDuracao} atividade(s) não têm duração calculável.`, "Informe produtividade validada ou duração explícita; não invente duração.", ["cpm", "baseline"], "alta"));
-  if (atividades?.semLocal) atividadeBloqueios.push(bloqueio("ATIVIDADES_SEM_LOCAL", "Atividades sem local físico", `${atividades.semLocal} atividade(s) não podem entrar no fluxo por local.`, "Vincule o local físico real na EAP ou mantenha a atividade fora da Linha de Balanço.", ["atividades"], "media"));
   add("atividades", atividadeBloqueios.length ? "incompleto" : "pronto_revisao", atividadeBloqueios);
 
   const rede = snapshot.rede;
@@ -82,6 +81,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const execucao = snapshot.execucao;
   const lob = snapshot.lob;
   const execBloqueios: BloqueioProntidao[] = [];
+  if (lob?.atividadesSemLocalOperacional) execBloqueios.push(bloqueio("LOB_ATIVIDADES_SEM_UNIDADE", "Atividades sem unidade operacional específica", `${lob.atividadesSemLocalOperacional} atividade(s) ainda não estão vinculadas a uma unidade física cadastrada; por isso, não podem ser distribuídas automaticamente na Linha de Balanço.`, "Use uma correspondência exata com unidades físicas cadastradas. Para escopos gerais, decomponha por local somente quando os documentos definirem essa distribuição; serviços sem repetição podem permanecer fora da LOB.", ["execucao"], "media"));
   if (lob?.orfas) execBloqueios.push(bloqueio("LOB_PARCELAS_ORFAS", "Parcelas sem atividade válida", `${lob.orfas} parcela(s) referenciam atividades ausentes na versão corrente.`, "Revise as referências na versão de trabalho antes da homologação.", ["execucao"], "critica"));
   if (lob?.parcelasEmLocaisDidaticos) execBloqueios.push(bloqueio("LOB_LOCAL_DIDATICO", "Parcelas em locais demonstrativos", `${lob.parcelasEmLocaisDidaticos} parcela(s) estão atribuídas a locais identificados como didáticos.`, "Revise a localização física de cada serviço na versão de trabalho. Serviços globais não devem gerar repetição artificial entre pavimentos.", ["execucao"], "critica"));
   if (lob?.foraJanelaCpm) execBloqueios.push(bloqueio("LOB_FORA_JANELA_CPM", "Linha de Balanço contradiz o CPM", `${lob.foraJanelaCpm} parcela(s) estão fora da janela oficial de execução da atividade.`, "Revise datas e locais na versão de trabalho, respeitando o calendário da obra. Não invente escadinhas.", ["execucao"], "critica"));

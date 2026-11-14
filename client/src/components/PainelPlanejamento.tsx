@@ -358,7 +358,11 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|pavimento"]: event.target.value }))}
                     onBlur={() => salvarEdicao(activity.id, "pavimento")}
                     aria-label={"Unidade física de " + activity.name}
-                    placeholder="ex.: Pav. 02" title="Pavimento, trecho ou unidade física real da execução. Não informar a disciplina aqui." />
+                    placeholder="sem unidade específica" title="Unidade física cadastrada para execução e Linha de Balanço. O escopo textual da EAP aparece abaixo e não é convertido automaticamente em unidade." />
+                  {!activity.pavimento && activity.wbsLocation && <small className="pl-local-eap" title={activity.wbsLocationIsProductionUnit ? "Este escopo coincide com unidade cadastrada; salve-o no campo acima para usar na Linha de Balanço." : "Escopo textual da EAP; não equivale a uma unidade operacional cadastrada."}>
+                    Escopo EAP: {activity.wbsLocation}
+                  </small>}
+                  {!activity.pavimento && !activity.wbsLocation && <small className="pl-local-eap pendente">Local não declarado na EAP</small>}
                 </td>
                 <td className="type-col"><span className="pl-atividade-tag">Task</span></td>
                 <td className="dur-col">

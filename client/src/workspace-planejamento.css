@@ -315,3 +315,5 @@
 .planejamento-area .pl-atividades-table .frente-col input,
 .planejamento-area .pl-atividades-table .pavimento-col input{box-sizing:border-box;width:100%;min-width:0}
 .planejamento-area .pl-atividades-table .pavimento-col input:focus{background:#f4fbfe}
+.planejamento-area .pl-atividades-table .pl-local-eap{display:block;margin-top:4px;color:#657687;font-size:11px;line-height:1.3;overflow-wrap:anywhere}
+.planejamento-area .pl-atividades-table .pl-local-eap.pendente{color:#9b4a28}

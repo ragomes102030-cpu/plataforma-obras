@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentDecisions, agentProjectStates, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, scheduleDependencies, users, wbsNodes } from "../drizzle/schema";
+import { agentDecisions, agentProjectStates, productionUnits, projectPlanVersions, projects, scheduleActivities, scheduleBaselines, scheduleDependencies, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
 import { pgliteComSchema } from "./test-helpers/pglite";
 
@@ -107,6 +107,31 @@ describe("versão aprovada x versão de trabalho", () => {
     await db.update(wbsNodes).set({ inclusions: "Mudança de escopo pendente de aprovação" }).where(eq(wbsNodes.id, segundaFolha.id));
     expect((await dono.planning.list({ projectId: obraId })).canCreateActivities).toBe(false);
     await expect(dono.planning.criarAtividadeDaFolha({ projectId: obraId, wbsNodeId: segundaFolha.id, durationDays: 9 })).rejects.toThrow(/difere da aprovada/);
+  });
+
+  it("separa escopo textual da EAP de uma unidade operacional específica", async () => {
+    const db = drizzlePglite(pg);
+    await db.delete(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 2));
+    const [versao] = await db.select().from(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 1));
+    const [raiz] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: versao.id, code: "1", name: "Edificação", level: 1, nodeType: "grupo",
+      description: "Edificação da obra.", inclusions: "Serviços previstos no escopo.", exclusions: "Itens fora do escopo.",
+      responsible: "Engenheiro responsável", acceptanceCriteria: "Inspeção e aceite registrados.", decompositionBasis: "project",
+    }).returning({ id: wbsNodes.id });
+    const folhas = await db.insert(wbsNodes).values([
+      { projectId: obraId, versionId: versao.id, parentId: raiz.id, code: "1.1", name: "Pavimento 02", level: 2, nodeType: "pacote", location: "Pavimento 02", description: "Serviços do pavimento 02.", inclusions: "Execução conforme projeto.", exclusions: "Demais pavimentos.", responsible: "Engenheiro responsável", acceptanceCriteria: "Inspeção aprovada.", decompositionBasis: "deliverable" },
+      { projectId: obraId, versionId: versao.id, parentId: raiz.id, code: "1.2", name: "Serviços por torre/local", level: 2, nodeType: "pacote", location: "por torre/local", description: "Serviços com abrangência por torre/local.", inclusions: "Conforme projeto.", exclusions: "Não aplicável a locais não definidos.", responsible: "Engenheiro responsável", acceptanceCriteria: "Inspeção aprovada.", decompositionBasis: "deliverable" },
+    ]).returning({ id: wbsNodes.id });
+    await db.insert(productionUnits).values({ projectId: obraId, code: "PAV-02", name: "Pavimento 02", unitType: "pavimento" });
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    await dono.planning.criarAtividadeDaFolha({ projectId: obraId, wbsNodeId: folhas[0].id, durationDays: 5 });
+    const depoisDaPrimeira = await dono.planning.list({ projectId: obraId });
+    expect(depoisDaPrimeira.activities[0]).toMatchObject({ pavimento: "Pavimento 02", wbsLocation: "Pavimento 02", wbsLocationIsProductionUnit: true });
+    const eapAtual = await dono.projects.wbs({ projectId: obraId });
+    const folhaAmpla = eapAtual.find(no => no.code === "1.2")!;
+    await dono.planning.criarAtividadeDaFolha({ projectId: obraId, wbsNodeId: folhaAmpla.id, durationDays: 5 });
+    const final = await dono.planning.list({ projectId: obraId });
+    expect(final.activities[1]).toMatchObject({ pavimento: null, wbsLocation: "por torre/local", wbsLocationIsProductionUnit: false });
   });
 
   it.each(["desconectada", "cíclica", "operacional com QA isolado"] as const)("mantém diagnóstico e gate coerentes para rede %s", async tipo => {
