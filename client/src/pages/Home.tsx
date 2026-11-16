@@ -862,7 +862,6 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         dataIsoDoProjeto(salvo.plannedFinish) !== terminoObraEditado
       ) {
         throw new Error("O servidor não confirmou as datas informadas. Revise os campos e tente novamente.");
-        return;
       }
       await utils.projects.list.invalidate();
       const obrasAtualizadas = await utils.projects.list.fetch();
