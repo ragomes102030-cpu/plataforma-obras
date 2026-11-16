@@ -6,7 +6,7 @@ import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
 import { PainelMedicao } from "./PainelMedicao";
 import { ReadinessGate } from "./ReadinessGate";
-import { summarizeBudgetQuantities } from "./budget-quantity-readiness";
+import { summarizeBudgetQuantities, summarizeQuantityEvidence } from "./budget-quantity-readiness";
 
 type Props = {
   projetoId: number;
@@ -62,12 +62,13 @@ export function AbaOrcamento({ projetoId }: Props) {
   const itensComValor = items.filter((i) => Number(i.unitPrice) > 0).length;
   const itensSemValor = items.length - itensComValor;
   const prontidaoQuantitativos = summarizeBudgetQuantities(items.length, itensSemValor);
+  const prontidaoEvidencias = summarizeQuantityEvidence(items.map(item => item.quantityEvidenceStatus));
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
   const itensComComposicao = items.filter((i) => i.compositionId != null || i.officialPriceItemId != null).length;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
   const statusOrcamento = cobertura === 100 && itensComValor === items.length && itensComComposicao > 0 ? "pronto" : itensComFonte > 0 ? "em_revisao" : "pendente";
-
   const versaoAtiva = budget.data?.versions?.find((v) => v.id === budget.data?.activeVersionId);
+  const statusExibicaoOrcamento = versaoAtiva?.status === "aprovado" ? "aprovado" : statusOrcamento;
   const errosDeEngenharia = (coerencia.data?.issues ?? []).filter((issue) => issue.severity === "error");
   const carregando = budget.isPending;
   const erro = budget.isError;
@@ -137,7 +138,7 @@ export function AbaOrcamento({ projetoId }: Props) {
           <span className="xl-painel-kicker">CENTRAL DE CUSTOS · ETAPA DE VALIDAÇÃO</span>
           <h1>Orçamento que explica a obra.</h1>
           <p>Vincule cada serviço da EAP a uma composição analítica ou a um serviço oficial de tabela, valide o quantitativo e só então libere o custo para EV, Curva S e controle.</p>
-          <div className={`orcamento-status-pill ${statusOrcamento}`}><span />{statusOrcamento === "pronto" ? "Pronto para aprovação" : statusOrcamento === "em_revisao" ? "Em revisão técnica" : "Aguardando fonte oficial"}</div>
+          <div className={`orcamento-status-pill ${statusExibicaoOrcamento}`}><span />{statusExibicaoOrcamento === "aprovado" ? "Orçamento aprovado · quantitativos em cenário" : statusExibicaoOrcamento === "pronto" ? "Preços prontos · quantitativos pendentes de validação" : statusExibicaoOrcamento === "em_revisao" ? "Em revisão técnica" : "Aguardando fonte oficial"}</div>
         </div>
         <div className="orcamento-hero-route"><span>01</span><b>Fonte</b><small>SEINFRA / SINAPI</small><i>→</i><span>02</span><b>Composição</b><small>Coeficientes e unidade</small><i>→</i><span>03</span><b>Validação</b><small>Quantidade e BDI</small></div>
       </div>
@@ -206,10 +207,11 @@ export function AbaOrcamento({ projetoId }: Props) {
         <div className="orcamento-kpi"><span>COBERTURA DE FONTE</span><strong>{cobertura}%</strong><small>{itensComFonte} de {items.length} itens sem fonte didática</small><div><i style={{width:`${cobertura}%`}} /></div></div>
         <div className="orcamento-kpi"><span>VÍNCULOS OFICIAIS</span><strong>{itensComComposicao}</strong><small>{items.length - itensComComposicao} itens ainda sem composição ou serviço oficial</small></div>
         <div className="orcamento-kpi"><span>PREÇOS UNITÁRIOS</span><strong>{prontidaoQuantitativos.status}</strong><small>{prontidaoQuantitativos.description}</small></div>
+        <div className="orcamento-kpi"><span>EVIDÊNCIA DOS QUANTITATIVOS</span><strong>{prontidaoEvidencias.status}</strong><small>{prontidaoEvidencias.description}</small></div>
       </section>}
 
       {!carregando && !erro && statusOrcamento !== "pronto" && <section className="orcamento-next-step">
-        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : "Revisar itens sem vínculo oficial"}</strong><p>{itensComFonte === 0 ? "Use SEINFRA-CE para Fortaleza. O sistema valida o arquivo antes de gravar e preserva a versão da tabela." : "Não aprove por rateio. Cada item precisa de código, unidade e referência rastreáveis por composição ou serviço oficial."}</p></div></div><button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button>
+        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : itensComComposicao < items.length ? "Completar vínculos oficiais do orçamento" : prontidaoEvidencias.status !== "Validado" ? "Fechar evidência dos quantitativos" : "Revisar itens sem vínculo oficial"}</strong><p>{itensComFonte === 0 ? "Use a tabela oficial compatível com a região da obra; confirme a referência de preço e preserve a versão da base." : itensComComposicao < items.length ? "Associe cada serviço a uma composição ou item oficial compatível por código, unidade e escopo." : prontidaoEvidencias.status !== "Validado" ? "Os preços podem estar aprovados para referência; quantitativos em cenário ou pendentes não são quantidade executiva, medição ou avanço." : "Não aprove por rateio. Cada item precisa de código, unidade e referência rastreáveis por composição ou serviço oficial."}</p></div></div>{itensComFonte === 0 || itensComComposicao < items.length ? <button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button> : null}
       </section>}
 
       {erro && (
