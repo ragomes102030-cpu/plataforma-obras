@@ -176,8 +176,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
     const soma = operacionais.reduce((total, activity) => total + Number(activity.physicalWeight ?? 0), 0);
     const completos = operacionais.filter(activity => Number(activity.physicalWeight ?? 0) > 0).length;
     const comEvidencia = operacionais.filter(activity => (activity.physicalWeightEvidence?.trim().length ?? 0) >= 12).length;
+    const comQuantidade = operacionais.filter(activity => Number(activity.plannedQuantity ?? 0) > 0).length;
     const aprovados = operacionais.length > 0 && completos === operacionais.length && comEvidencia === operacionais.length && operacionais.every(activity => activity.physicalWeightApprovedAt != null) && Math.abs(soma - 100) <= 0.01;
-    return { total: operacionais.length, completos, comEvidencia, soma, aprovados };
+    return { total: operacionais.length, completos, comEvidencia, comQuantidade, soma, aprovados };
   }, [activities]);
 
   const propostaFiltrada = useMemo(() => {
@@ -317,10 +318,10 @@ export function PainelPlanejamento({ projetoId }: Props) {
       )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
       {activities.length > 0 && <div className="pl-atividades-alerta" role="status">
-        <strong>Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} pesos · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? "aprovados" : "aguardando validação"}.</strong>{" "}
-        Cada peso exige memória rastreável com fonte, revisão/localização e critério de medição. Rateio uniforme não é aceito como base de avanço físico.
+        <strong>Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} informados · {resumoPesos.comQuantidade}/{resumoPesos.total} quantidades · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? "aprovados" : "aguardando validação"}.</strong>{" "}
+        Para aprovar, cada atividade precisa de quantidade mensurável, peso e memória rastreável com fonte, revisão/localização e critério de medição. Rateio uniforme não é aceito como base de avanço físico.
         <div className="pl-atividades-header-actions">
-          <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>
+          <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comQuantidade !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>
         </div>
       </div>}
       {!propostaAprovada && proposta.length > 0 && <div className="pl-atividades-alerta">A prévia mostra as lacunas da EAP v{versaoDaProposta}. As atividades ficam disponíveis para criação depois da aprovação desta versão.</div>}
