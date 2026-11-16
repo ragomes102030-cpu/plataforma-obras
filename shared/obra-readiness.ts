@@ -38,7 +38,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const add = (etapa: EtapaProntidao, estado: EstadoProntidao, bloqueios: BloqueioProntidao[] = []) => { etapas[etapa] = { estado, bloqueios }; };
   const escopo = snapshot.escopo;
   if (!escopo?.declarado) add("escopo", "bloqueado", [bloqueio("ESCOPO_AUSENTE", "Escopo não declarado", "A obra ainda não informa claramente o que será entregue.", "Preencha natureza, localização, descrição e premissas na aba Escopo.", ["escopo", "eap", "orcamento"], "critica")]);
-  else if (!escopo.validado) add("escopo", "pronto_revisao", [bloqueio("ESCOPO_NAO_VALIDADO", "Escopo aguardando validação", "A descrição existe, mas ainda não foi confirmada como referência de planejamento.", "Revise premissas, limites e entregáveis e registre a validação na aba Escopo.", ["eap", "orcamento"], "alta")]);
+  else if (!escopo.validado) add("escopo", "pronto_revisao", [bloqueio("ESCOPO_NAO_VALIDADO", "EAP aguardando aprovação", "O escopo da obra está cadastrado, mas a versão de trabalho da EAP ainda não foi aprovada como referência do planejamento.", "Revise a hierarquia e os pacotes de trabalho e aprove a versão na aba EAP. A aprovação congela essa versão.", ["eap"], "alta")]);
   else add("escopo", "aprovado");
 
   const eap = snapshot.eap;
