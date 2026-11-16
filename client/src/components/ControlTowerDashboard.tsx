@@ -37,6 +37,16 @@ type Props = {
   nomeObra: string;
   codigosExemplo: ReadonlySet<string>;
   prontidao: ProntidaoDeAvanco;
+  prontidaoPesos?: {
+    total: number;
+    comQuantidade: number;
+    comPeso: number;
+    comEvidencia: number;
+    aprovadas: number;
+    somaPesos: number;
+    semVinculoOrcamento: number;
+    eapStatus: string | null;
+  } | null;
   hoje: string;
   resumo: ResumoDoPainel;
   prazoConfianca: { confiavel: boolean; motivo: string };
@@ -70,7 +80,7 @@ const destinos: Record<Detalhe, string> = {
 };
 
 export function ControlTowerDashboard({
-  projetoId, nomeObra, codigosExemplo, prontidao, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
+  projetoId, nomeObra, codigosExemplo, prontidao, prontidaoPesos, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
@@ -179,9 +189,13 @@ export function ControlTowerDashboard({
               ? "Uma fonte do acompanhamento físico não foi consultada. Atualize a leitura antes de interpretar o desempenho."
               : prontidao.fisico === "sem_producao"
                 ? "Registre e confirme uma medição para apurar realizado e desvio. A ausência de lançamento não comprova execução zero."
-                : "O painel acompanha as atividades individualmente, mas não soma unidades diferentes. Defina e aprove pesos físicos explícitos para publicar o percentual da obra."}</p>
+                : prontidao.fisico === "sem_pesos" && prontidaoPesos
+                  ? `O avanço consolidado está bloqueado: ${prontidaoPesos.aprovadas}/${prontidaoPesos.total} atividades têm peso aprovado. Quantidade: ${prontidaoPesos.comQuantidade}/${prontidaoPesos.total}; peso informado: ${prontidaoPesos.comPeso}/${prontidaoPesos.total}; evidência: ${prontidaoPesos.comEvidencia}/${prontidaoPesos.total}. Soma atual: ${numero.format(prontidaoPesos.somaPesos)}%.`
+                  : "O painel acompanha as atividades individualmente, mas não soma unidades diferentes. Defina pesos físicos explícitos com evidência rastreável para publicar o percentual da obra."}</p>
           {fisicoDisponivel ? <div className="ct-hero-bottom"><strong className="ct-delta">{ponto(fisico.pontos)}</strong><span>Desvio de avanço<br/>realizado − planejado</span><button type="button" onClick={() => abrir("fisico")}>Entender o desvio <ArrowRight size={15}/></button></div>
-            : <div className="ct-hero-bottom ct-fisico-indisponivel" role="status"><strong>Sem dado agregado</strong><span>Atividades continuam<br/>visíveis individualmente</span><button type="button" onClick={() => abrirAba(prontidao.fisico === "sem_pesos" ? "atividades" : "producao")}>{prontidao.fisico === "sem_pesos" ? "Definir pesos físicos" : "Conferir produção"} <ArrowRight size={15}/></button></div>}
+            : prontidao.fisico === "sem_pesos" && prontidaoPesos
+              ? <div className="ct-hero-bottom ct-fisico-indisponivel" role="status"><strong>{prontidaoPesos.semVinculoOrcamento} sem vínculo de orçamento</strong><span>EAP {prontidaoPesos.eapStatus ?? "sem versão"} · {prontidaoPesos.total - prontidaoPesos.comQuantidade} sem quantidade</span><button type="button" onClick={() => abrirAba("atividades")}>Ver atividades pendentes <ArrowRight size={15}/></button></div>
+              : <div className="ct-hero-bottom ct-fisico-indisponivel" role="status"><strong>Sem dado agregado</strong><span>Atividades continuam<br/>visíveis individualmente</span><button type="button" onClick={() => abrirAba(prontidao.fisico === "sem_pesos" ? "atividades" : "producao")}>{prontidao.fisico === "sem_pesos" ? "Definir pesos físicos" : "Conferir produção"} <ArrowRight size={15}/></button></div>}
         </div>
         <div className="ct-hero-side">
           {fisicoDisponivel ? <div className="ct-gauge" role="img" aria-label={"Avanço realizado " + percentual(fisico.real)}>

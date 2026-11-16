@@ -124,6 +124,10 @@ export function PainelDoCronograma({
     wbsNodeId: a.wbsNodeId,
     wbsCode: a.wbsCode,
     budgetItemId: a.budgetItemId ?? null,
+    plannedQuantity: a.plannedQuantity ?? null,
+    physicalWeight: a.physicalWeight ?? null,
+    physicalWeightEvidence: a.physicalWeightEvidence ?? null,
+    physicalWeightApprovedAt: a.physicalWeightApprovedAt ?? null,
     cpmCalculatedAt: a.cpmCalculatedAt ?? null,
     updatedAt: a.updatedAt ?? null,
   })).filter(a => !codigosExemplo.has(a.wbsCode ?? ""));
@@ -132,6 +136,17 @@ export function PainelDoCronograma({
     [codigosExemplo, linhas],
   );
   const agregadoDaObra = linhas ? agregadoDoCronograma(linhasDaObra) : agregado;
+  const atividadesOperacionais = (plano.data?.activities ?? []).filter(a => !codigosExemplo.has(a.wbsCode ?? ""));
+  const prontidaoPesos = plano.isError ? null : {
+    total: atividadesOperacionais.length,
+    comQuantidade: atividadesOperacionais.filter(a => Number(a.plannedQuantity) > 0).length,
+    comPeso: atividadesOperacionais.filter(a => Number(a.physicalWeight) > 0).length,
+    comEvidencia: atividadesOperacionais.filter(a => Boolean(a.physicalWeightEvidence?.trim())).length,
+    aprovadas: atividadesOperacionais.filter(a => a.physicalWeightApprovedAt != null).length,
+    somaPesos: atividadesOperacionais.reduce((sum, a) => sum + (Number(a.physicalWeight) || 0), 0),
+    semVinculoOrcamento: atividadesOperacionais.filter(a => a.budgetItemId == null).length,
+    eapStatus: plano.data?.currentVersionStatus ?? null,
+  };
   const estadoAtividades = classificarEstadoAtividadesDashboard({
     carregandoPlano: plano.isPending,
     erroPlano: plano.isError,
@@ -434,6 +449,7 @@ export function PainelDoCronograma({
       nomeObra={nomeObra ?? "Obra"}
       codigosExemplo={codigosExemplo}
       prontidao={integridade.prontidao}
+      prontidaoPesos={prontidaoPesos}
       hoje={hoje}
       resumo={resumo}
       prazoConfianca={prazoConfianca}
