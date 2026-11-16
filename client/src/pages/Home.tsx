@@ -854,8 +854,25 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     setTerminoObraEditado(dataIsoDoProjeto(plannedFinish));
   }, [descricao, localizacao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado, plannedStart, plannedFinish]);
   const salvarEscopo = trpc.projects.updateScope.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (salvo) => {
+      // Só encerra a edição depois de confirmar que o período retornado pelo
+      // servidor corresponde ao que o usuário enviou e que a lista foi relida.
+      if (
+        dataIsoDoProjeto(salvo.plannedStart) !== inicioObraEditado ||
+        dataIsoDoProjeto(salvo.plannedFinish) !== terminoObraEditado
+      ) {
+        throw new Error("O servidor não confirmou as datas informadas. Revise os campos e tente novamente.");
+      }
       await utils.projects.list.invalidate();
+      const obrasAtualizadas = await utils.projects.list.fetch();
+      const obraAtualizada = obrasAtualizadas.find(item => item.id === projetoId);
+      if (
+        !obraAtualizada ||
+        dataIsoDoProjeto(obraAtualizada.plannedStart) !== inicioObraEditado ||
+        dataIsoDoProjeto(obraAtualizada.plannedFinish) !== terminoObraEditado
+      ) {
+        throw new Error("A releitura da obra não confirmou as datas salvas. Mantenha a edição aberta e tente novamente.");
+      }
       setEditando(false);
     },
   });

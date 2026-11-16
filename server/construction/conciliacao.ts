@@ -91,7 +91,13 @@ export function sugerirVinculos(
     const unitMismatch = !unidadesCompativeis(atividade.unit, item.unit);
 
     const codigoEapOrcamento = item.wbsCode?.trim() || item.code;
-    if (chaveAtividade && chaveDeCodigo(codigoEapOrcamento) === chaveAtividade) {
+    const codigoOficial = chaveDeCodigo(item.code);
+    const nomeAtividade = chaveDeCodigo(atividade.name);
+    const codigoOficialExplicito = codigoOficial.length >= 4 && nomeAtividade.includes(codigoOficial);
+    if (
+      (chaveAtividade && chaveDeCodigo(codigoEapOrcamento) === chaveAtividade) ||
+      codigoOficialExplicito
+    ) {
       return {
         budgetItemId: item.id,
         code: item.code,

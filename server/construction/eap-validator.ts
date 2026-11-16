@@ -137,10 +137,10 @@ export function validateEapScope(
       .split(/[^a-z0-9]+/)
       .filter(token => token.length > 2 && !genericScopeTerms.has(token));
 
-  const clausesOverlap = (left: string, right: string) => {
+  const clausesOverlap = (left: string, right: string, ignoredTokens = new Set<string>()) => {
     if (left === right) return true;
-    const leftTokens = new Set(meaningfulTokens(left));
-    const rightTokens = new Set(meaningfulTokens(right));
+    const leftTokens = new Set(meaningfulTokens(left).filter(token => !ignoredTokens.has(token)));
+    const rightTokens = new Set(meaningfulTokens(right).filter(token => !ignoredTokens.has(token)));
     let sharedMeaningfulTokens = 0;
     for (const token of leftTokens) {
       if (rightTokens.has(token)) sharedMeaningfulTokens += 1;
@@ -149,8 +149,8 @@ export function validateEapScope(
     return false;
   };
 
-  const overlaps = (left: string[], right: string[]) =>
-    left.some(a => right.some(b => clausesOverlap(a, b)));
+  const overlaps = (left: string[], right: string[], ignoredTokens = new Set<string>()) =>
+    left.some(a => right.some(b => clausesOverlap(a, b, ignoredTokens)));
 
   const exclusionReferencesCode = (exclusions: string | null | undefined, code: string) => {
     const escapedCode = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -291,6 +291,24 @@ export function validateEapScope(
       }
 
       const childScopeClauses = childNodes.map(child => clauses(scopeText(child)));
+      // Em grupos repetitivos, palavras presentes na maioria dos irmãos
+      // descrevem o contexto comum (por exemplo torre/pavimento), não a
+      // fronteira do escopo. Ignorá-las evita centenas de falsos positivos;
+      // os termos raros do par continuam sendo comparados normalmente.
+      const commonSiblingTokens = new Set<string>();
+      if (childNodes.length >= 5) {
+        const siblingFrequency = new Map<string, number>();
+        for (const siblingClauses of childScopeClauses) {
+          const siblingTokens = new Set(siblingClauses.flatMap(meaningfulTokens));
+          for (const token of siblingTokens) {
+            siblingFrequency.set(token, (siblingFrequency.get(token) ?? 0) + 1);
+          }
+        }
+        const commonInMostSiblings = Math.ceil(childNodes.length / 3);
+        for (const [token, count] of siblingFrequency) {
+          if (count > commonInMostSiblings) commonSiblingTokens.add(token);
+        }
+      }
       // Pending scope is deliberately not an exclusion. Comparing it as one
       // created false structural blockers when a child package covered the
       // very item the parent said was awaiting definition.
@@ -307,7 +325,7 @@ export function validateEapScope(
           const mutuallyExcluded =
             exclusionReferencesCode(left.exclusions, right.code) &&
             exclusionReferencesCode(right.exclusions, left.code);
-          if (!mutuallyExcluded && overlaps(childScopeClauses[i]!, childScopeClauses[j]!)) {
+          if (!mutuallyExcluded && overlaps(childScopeClauses[i]!, childScopeClauses[j]!, commonSiblingTokens)) {
             issues.push({
               code: "eap_scope_overlap_evidence",
               // Evidência textual pede julgamento de escopo, mas não prova
