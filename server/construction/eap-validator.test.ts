@@ -408,6 +408,28 @@ describe("validateEapScope", () => {
     expect(result.issues.filter(issue => issue.code === "eap_scope_overlap_evidence")).toEqual([]);
   });
 
+  it("ignora contexto repetido na maioria dos irmãos, preservando sobreposições específicas", () => {
+    const nodes = [node({ id: 1, code: "1", name: "Obra", nodeType: "grupo" })];
+    for (let index = 1; index <= 6; index += 1) {
+      const scope = index === 1 || index === 2 ? "Concretagem de pilares" : `Serviço exclusivo ${index}`;
+      nodes.push(node({
+        id: index + 1,
+        parentId: 1,
+        code: `1.${index}`,
+        name: `Pacote ${index}`,
+        nodeType: "pacote",
+        description: `Execução na torre e pavimento conforme projeto: ${scope}.`,
+        inclusions: `${scope} na torre e pavimento.`,
+      }));
+    }
+
+    const result = validateEapScope(nodes);
+    const overlaps = result.issues.filter(issue => issue.code === "eap_scope_overlap_evidence");
+
+    expect(overlaps).toHaveLength(1);
+    expect(overlaps[0]?.message).toContain("1.1 e 1.2");
+  });
+
   it("não alerta sobreposição quando irmãos excluem reciprocamente o escopo um do outro", () => {
     const result = validateEapScope([
       node({ id: 1, code: "1", name: "Obra", nodeType: "grupo" }),
