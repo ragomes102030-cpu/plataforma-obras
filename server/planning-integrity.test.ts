@@ -448,12 +448,14 @@ describe("aplicarPropostaEap", () => {
 
   it("não aprova orçamento com placeholders e arquiva a versão aprovada anterior", async () => {
     const [root] = await db.select().from(wbsNodes);
+    const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1 — QA", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [officialService] = await db.insert(priceItems).values({ catalogId: catalog!.id, code: "C0001", description: "Serviço oficial rastreável de teste", unit: "vb", itemType: "servico", unitPrice: "100.00" }).returning({ id: priceItems.id });
     const [previous] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento anterior", versionNumber: 1, status: "aprovado" }).returning({ id: budgetVersions.id });
     const [draft] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento novo", versionNumber: 2, status: "rascunho" }).returning({ id: budgetVersions.id });
     const [item] = await db.insert(budgetItems).values({ budgetVersionId: draft!.id, wbsNodeId: root!.id, code: "ITEM-APPROVAL", description: "Serviço", unit: "vb", quantity: "1.000", unitPrice: "0.00", source: "A preencher" }).returning({ id: budgetItems.id });
 
     await expect(caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" })).rejects.toThrow(/quantitativo|bloqueio/i);
-    await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 100, source: "SINAPI 2026 — validar referência" });
+    await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, officialPriceItemId: officialService!.id });
     await expect(caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" })).rejects.toThrow(/quantidade_pendente|evidência/i);
     await caller.budgets.updateItem({ projectId, budgetItemId: item!.id, quantityEvidence: "Memória de cenário QA · prancha de referência 01", quantityEvidenceStatus: "cenario" });
     await caller.budgets.updateVersionStatus({ projectId, budgetVersionId: draft!.id, status: "aprovado" });
