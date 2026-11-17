@@ -2931,15 +2931,17 @@ export const appRouter = router({
         if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "arquivado") throw conflict("Uma versão arquivada não pode voltar ao fluxo.");
         if (input.status === "aprovado") {
-          const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
+          const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId, isPriceException: budgetItems.isPriceException, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
           if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
           const pendencias = findBudgetApprovalBlockers(items);
           if (pendencias.length) {
             const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
             const quantitativos = pendencias.filter(item => item.reason === "sem_evidencia_quantidade" || item.reason === "quantidade_pendente").length;
+            const semRastreio = pendencias.filter(item => item.reason === "sem_vinculo_rastreavel" || item.reason === "fonte_pendente").length;
             throw badRequest(
               `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação: ${pendencias.slice(0, 5).map(item => `${item.code} (${item.reason})`).join(", ")}.` +
               (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "") +
+              (semRastreio ? ` ${semRastreio} item(ns) não têm vínculo de preço rastreável ou ainda usam valor simbólico/pendente.` : "") +
               (quantitativos ? ` ${quantitativos} pendência(s) de quantitativo; informe a evidência e classifique como cenário ou validada.` : "")
             );
           }
@@ -5845,7 +5847,7 @@ export const appRouter = router({
           .limit(1);
         if (budgetApproved) {
           const approvedItems = await db
-            .select({ id: budgetItems.id, code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus })
+            .select({ id: budgetItems.id, code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId, isPriceException: budgetItems.isPriceException, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus })
             .from(budgetItems)
             .where(eq(budgetItems.budgetVersionId, budgetApproved.id));
           const itemIds = new Set(approvedItems.map(item => item.id));
