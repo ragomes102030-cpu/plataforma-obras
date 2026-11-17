@@ -356,6 +356,60 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
 
+  it("abre uma revisão em análise copiando os vínculos e preservando o orçamento aprovado", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [approved] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Orçamento aprovado",
+      versionNumber: 1,
+      status: "aprovado",
+    }).returning({ id: budgetVersions.id });
+    await db.insert(budgetItems).values({
+      budgetVersionId: approved!.id,
+      wbsNodeId: root!.id,
+      code: "QA-01",
+      description: "Serviço com vínculo preservado",
+      unit: "m²",
+      quantity: "12.500",
+      unitPrice: "7.74",
+      compositionId: 22239,
+      compositionUnitCost: "7.74",
+      compositionNote: "C1630 · Locação de gabarito",
+      source: "SEINFRA · SEINFRA-CE 028.1",
+      referencePeriod: "028.1",
+      quantityEvidence: "Cenário QA, não é medição",
+      quantityEvidenceStatus: "cenario",
+      sortOrder: 4,
+    });
+
+    const revised = await caller.budgets.createReviewVersion({ projectId });
+    const [review] = await db.select().from(budgetVersions).where(eq(budgetVersions.id, revised.id));
+    const [copied] = await db.select().from(budgetItems).where(eq(budgetItems.budgetVersionId, revised.id));
+    const [original] = await db.select().from(budgetItems).where(eq(budgetItems.budgetVersionId, approved!.id));
+
+    expect(review).toMatchObject({ versionNumber: 2, status: "em_revisao" });
+    expect(copied).toMatchObject({
+      wbsNodeId: root!.id,
+      code: "QA-01",
+      unit: "m²",
+      quantity: "12.500",
+      unitPrice: "7.74",
+      compositionId: 22239,
+      compositionUnitCost: "7.74",
+      compositionNote: "C1630 · Locação de gabarito",
+      source: "SEINFRA · SEINFRA-CE 028.1",
+      referencePeriod: "028.1",
+      quantityEvidence: "Cenário QA, não é medição",
+      quantityEvidenceStatus: "cenario",
+      sortOrder: 4,
+    });
+    expect(copied!.id).not.toBe(original!.id);
+    expect(original).toMatchObject({ budgetVersionId: approved!.id, unitPrice: "7.74", compositionId: 22239 });
+    expect((await db.select().from(budgetVersions).where(eq(budgetVersions.id, approved!.id)))[0]?.status).toBe("aprovado");
+
+    await expect(caller.budgets.createReviewVersion({ projectId })).rejects.toThrow(/já existe uma versão em edição/i);
+  });
+
   it("vincula composição oficial validada, confere unidade e recalcula o preço pelos componentes", async () => {
     const [root] = await db.select().from(wbsNodes);
     const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento rastreável", versionNumber: 1, status: "rascunho" }).returning({ id: budgetVersions.id });

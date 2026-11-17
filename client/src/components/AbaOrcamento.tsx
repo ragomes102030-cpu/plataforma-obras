@@ -56,6 +56,9 @@ export function AbaOrcamento({ projetoId }: Props) {
   const atualizarStatus = trpc.budgets.updateVersionStatus.useMutation({
     onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
   });
+  const criarRevisao = trpc.budgets.createReviewVersion.useMutation({
+    onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
+  });
 
   const items = budget.data?.items ?? [];
   const total = budget.data?.total ?? 0;
@@ -83,6 +86,7 @@ export function AbaOrcamento({ projetoId }: Props) {
         });
 
   function iniciarEdicao(item: (typeof items)[number]) {
+    atualizarItem.reset();
     const eapNodes = budget.data?.eapNodes ?? [];
     const nodeAtual = item.wbsNodeId != null && eapNodes.some(node => node.id === item.wbsNodeId)
       ? String(item.wbsNodeId)
@@ -165,6 +169,23 @@ export function AbaOrcamento({ projetoId }: Props) {
             <div className="xl-aviso" role="status">
               <strong>Revisão técnica necessária antes de usar este orçamento como controle.</strong>
               <p>{errosDeEngenharia.length} incompatibilidade(s) de engenharia foram identificadas. A aprovação existente foi preservada; corrija em uma nova versão antes de substituir a referência atual.</p>
+            </div>
+          )}
+          {!carregando && !erro && versaoAtiva?.status === "aprovado" && (
+            <div className="xl-acoes-versao">
+              <button
+                type="button"
+                className="xl-btn xl-btn-primary"
+                disabled={criarRevisao.isPending}
+                onClick={() => {
+                  if (window.confirm(`Criar uma revisão v${versaoAtiva.versionNumber + 1} copiando os ${items.length} itens atuais? A versão aprovada será preservada e não será alterada.`)) {
+                    criarRevisao.mutate({ projectId: Number(projetoId) });
+                  }
+                }}
+              >
+                {criarRevisao.isPending ? "Abrindo revisão…" : "Criar revisão para continuar os vínculos"}
+              </button>
+              {criarRevisao.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{criarRevisao.error.message}</p>}
             </div>
           )}
           {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && (
@@ -373,9 +394,10 @@ export function AbaOrcamento({ projetoId }: Props) {
                           {rascunho.officialPriceItemId && <span>O preço e a referência vêm diretamente da linha oficial; composição analítica fica desvinculada.</span>}
                         </div>
                         <div className="orcamento-edit-actions">
-                          <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>Salvar</button>
+                          <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>{atualizarItem.isPending ? "Salvando…" : "Salvar"}</button>
                           <button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button>
                         </div>
+                        {atualizarItem.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{atualizarItem.error.message}</p>}
                       </div>
                     </td>
                   </tr>
