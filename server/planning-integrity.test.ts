@@ -533,6 +533,52 @@ describe("aplicarPropostaEap", () => {
     expect(linked).toMatchObject({ officialPriceItemId: officialService!.id, compositionId: null, unitPrice: "17.97", source: "SEINFRA · SEINFRA-CE 028.1 — Planos de Serviços — desonerada", referencePeriod: "028.1" });
   });
 
+  it("compõe um pacote com vários serviços oficiais e grava preço, evidências e auditoria", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento composto QA", versionNumber: 1, status: "em_revisao" }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({ budgetVersionId: budget!.id, wbsNodeId: root!.id, code: "TERRAPLENAGEM", description: "Limpeza, escavação, transporte e aterro", unit: "vb", quantity: "1.000", unitPrice: "1.00", source: "CENÁRIO QA" }).returning({ id: budgetItems.id });
+    await db.update(projects).set({ location: "Fortaleza-CE" }).where(eq(projects.id, projectId));
+    const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [escavacao] = await db.insert(priceItems).values({ catalogId: catalog!.id, code: "C1253", description: "Escavação mecanizada", unit: "M3", itemType: "servico", unitPrice: "142.25" }).returning({ id: priceItems.id });
+    const [transporte] = await db.insert(priceItems).values({ catalogId: catalog!.id, code: "C3144", description: "Transporte de solo", unit: "M3", itemType: "servico", unitPrice: "12.50" }).returning({ id: priceItems.id });
+
+    const linked = await caller.budgets.linkOfficialServiceComposition({
+      projectId,
+      budgetItemId: item!.id,
+      unit: "M3",
+      quantity: 2,
+      quantityEvidence: "CENÁRIO QA Piazza · volume hipotético para validação do fluxo.",
+      quantityEvidenceStatus: "cenario",
+      components: [
+        { officialPriceItemId: escavacao!.id, coefficient: 1 },
+        { officialPriceItemId: transporte!.id, coefficient: 0.5 },
+      ],
+    });
+    const [persisted] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    const [composition] = await db.select().from(serviceCompositions).where(eq(serviceCompositions.id, linked.compositionId));
+    const parts = await db.select().from(compositionComponents).where(eq(compositionComponents.compositionId, linked.compositionId));
+    const audits = await db.select().from(projectAuditEvents).where(eq(projectAuditEvents.projectId, projectId));
+
+    expect(linked).toMatchObject({ budgetItemId: item!.id, unitPrice: "148.50", total: 297 });
+    expect(persisted).toMatchObject({ unit: "M3", quantity: "2.000", unitPrice: "148.50", compositionUnitCost: "148.50", officialPriceItemId: null, quantityEvidenceStatus: "cenario" });
+    expect(composition).toMatchObject({ unit: "M3", status: "validada", sourceCatalogId: catalog!.id, referencePeriod: "028.1" });
+    expect(parts).toHaveLength(2);
+    expect(parts.every(part => part.componentType === "servico")).toBe(true);
+    expect(audits.some(event => event.action === "budget_item_linked_to_analytic_composition")).toBe(true);
+
+    await expect(caller.budgets.linkOfficialServiceComposition({
+      projectId, budgetItemId: item!.id, unit: "M3", quantity: 2, quantityEvidence: "Cenário QA", quantityEvidenceStatus: "cenario",
+      components: [{ officialPriceItemId: escavacao!.id, coefficient: 1 }, { officialPriceItemId: escavacao!.id, coefficient: 0.5 }],
+    })).rejects.toThrow(/serviços repetidos/i);
+
+    const [catalogBa] = await db.insert(priceCatalogs).values({ name: "SEINFRA-BA 028.1", sourceType: "SEINFRA", state: "BA", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [serviceBa] = await db.insert(priceItems).values({ catalogId: catalogBa!.id, code: "C0001-BA", description: "Serviço de outra região", unit: "M3", itemType: "servico", unitPrice: "10.00" }).returning({ id: priceItems.id });
+    await expect(caller.budgets.linkOfficialServiceComposition({
+      projectId, budgetItemId: item!.id, unit: "M3", quantity: 2, quantityEvidence: "Cenário QA", quantityEvidenceStatus: "cenario",
+      components: [{ officialPriceItemId: serviceBa!.id, coefficient: 1 }],
+    })).rejects.toThrow(/Base regional incompatível/i);
+  });
+
   it("não aprova orçamento com placeholders e arquiva a versão aprovada anterior", async () => {
     const [root] = await db.select().from(wbsNodes);
     const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1 — QA", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });

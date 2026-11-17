@@ -24,6 +24,19 @@ type LinhaImportacaoDetalhada = {
   quantityEvidenceStatus: "pendente" | "cenario" | "validada";
 };
 
+type ServicoOficialSelecionado = {
+  id: number;
+  code: string;
+  description: string;
+  unit: string;
+  unitPrice: number | string;
+  sourceType: string;
+  catalogId: number;
+  catalogName: string;
+  referencePeriod?: string | null;
+  coefficient: string;
+};
+
 function moeda(valor: number): string {
   return `R$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -38,6 +51,8 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [buscaComposicao, setBuscaComposicao] = useState("");
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const [buscaServico, setBuscaServico] = useState("");
+  const [servicoParaAdicionar, setServicoParaAdicionar] = useState("");
+  const [componentesServico, setComponentesServico] = useState<ServicoOficialSelecionado[]>([]);
   const utils = trpc.useUtils();
 
   useEffect(() => {
@@ -80,6 +95,13 @@ export function AbaOrcamento({ projetoId }: Props) {
       setErroImportacao(null);
     },
   });
+  const vincularComposicaoMultiservico = trpc.budgets.linkOfficialServiceComposition.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
+      setEditandoId(null);
+      setComponentesServico([]);
+    },
+  });
 
   const items = budget.data?.items ?? [];
   const total = budget.data?.total ?? 0;
@@ -113,6 +135,8 @@ export function AbaOrcamento({ projetoId }: Props) {
       ? String(item.wbsNodeId)
       : "";
     setEditandoId(item.id);
+    setComponentesServico([]);
+    setServicoParaAdicionar("");
     setRascunho({
       code: item.code,
       description: item.description,
@@ -129,6 +153,39 @@ export function AbaOrcamento({ projetoId }: Props) {
     setBuscaComposicao(item.compositionNote ?? "");
     setBuscaServico(item.officialPriceItemId == null ? "" : item.code);
   }
+
+  function adicionarServicoOficial() {
+    const selected = catalogoServicos.data?.items.find(service => String(service.id) === servicoParaAdicionar);
+    if (!selected || componentesServico.some(component => component.id === selected.id)) return;
+    setComponentesServico(current => [...current, {
+      id: selected.id,
+      code: selected.code,
+      description: selected.description,
+      unit: selected.unit,
+      unitPrice: selected.unitPrice,
+      sourceType: selected.sourceType,
+      catalogId: selected.catalogId,
+      catalogName: selected.catalogName,
+      referencePeriod: selected.referencePeriod,
+      coefficient: "1",
+    }]);
+    setServicoParaAdicionar("");
+  }
+
+  function salvarComposicaoMultiservico() {
+    if (editandoId == null || !componentesServico.length || rascunho.quantityEvidenceStatus === "pendente" || !rascunho.quantityEvidence.trim()) return;
+    vincularComposicaoMultiservico.mutate({
+      projectId: Number(projetoId),
+      budgetItemId: editandoId,
+      unit: rascunho.unit,
+      quantity: Number(rascunho.quantity),
+      quantityEvidence: rascunho.quantityEvidence,
+      quantityEvidenceStatus: rascunho.quantityEvidenceStatus,
+      components: componentesServico.map(component => ({ officialPriceItemId: component.id, coefficient: Number(component.coefficient) })),
+    });
+  }
+
+  const precoUnitarioComposto = componentesServico.reduce((sum, component) => sum + Number(component.coefficient || 0) * Number(component.unitPrice), 0);
 
   function salvarEdicao() {
     if (editandoId == null) return;
@@ -410,8 +467,8 @@ export function AbaOrcamento({ projetoId }: Props) {
                           <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Digite código ou serviço SINAPI/SEINFRA (mínimo 2 caracteres)" />
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
-                          Composição oficial vinculada
-                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição oficial vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "" })} disabled={buscaComposicaoDebounced.length < 2 || catalogoComposicoes.isFetching}>
+                          Composição analítica vinculada
+                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "" })} disabled={catalogoComposicoes.isFetching}>
                             <option value="">Sem composição oficial</option>
                             {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
                             {composicoesCandidatas.map(composition => {
@@ -429,11 +486,11 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </div>
                         <label className="orcamento-edit-search orcamento-edit-wide" htmlFor={`servico-oficial-busca-${item.id}`}>
                           Vincular serviço oficial da tabela (preço unitário da própria SEINFRA/SINAPI)
-                          <input id={`servico-oficial-busca-${item.id}`} aria-label="Buscar serviço oficial de tabela" value={buscaServico} onChange={e => setBuscaServico(e.target.value)} placeholder="Busque por código ou descrição (mínimo 2 caracteres)" />
+                          <input id={`servico-oficial-busca-${item.id}`} aria-label="Buscar serviço oficial de tabela" value={buscaServico} onChange={e => { setBuscaServico(e.target.value); setServicoParaAdicionar(""); }} placeholder="Busque por código ou descrição (mínimo 2 caracteres)" />
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`servico-oficial-selecao-${item.id}`}>
                           Serviço oficial vinculado
-                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "" })} disabled={buscaServico.trim().length < 2 || catalogoServicos.isFetching}>
+                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "" })} disabled={catalogoServicos.isFetching}>
                             <option value="">Sem serviço oficial direto</option>
                             {rascunho.officialPriceItemId && !catalogoServicos.data?.items.some(service => String(service.id) === rascunho.officialPriceItemId) && <option value={rascunho.officialPriceItemId}>Serviço oficial atual #{rascunho.officialPriceItemId}</option>}
                             {(catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).map(service => (
@@ -447,6 +504,37 @@ export function AbaOrcamento({ projetoId }: Props) {
                           {buscaServico.trim().length >= 2 && catalogoServicos.isSuccess && !catalogoServicos.isFetching && (catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).length === 0 && <span>Nenhum serviço oficial ativo encontrado para esse termo e unidade.</span>}
                           {rascunho.officialPriceItemId && <span>O preço e a referência vêm diretamente da linha oficial; composição analítica fica desvinculada.</span>}
                         </div>
+                        <section className="orcamento-multiservico orcamento-edit-wide" aria-label="Composição por múltiplos serviços oficiais">
+                          <div className="orcamento-multiservico-heading">
+                            <strong>Compor este pacote com vários serviços SEINFRA/SINAPI</strong>
+                            <span>Coeficiente de cada serviço por 1 {rascunho.unit || "unidade de saída"} do item. A soma forma o preço unitário.{componentesServico.length > 0 ? ` Base: ${componentesServico[0]!.catalogName} · ${componentesServico[0]!.referencePeriod ?? "sem período"}.` : ""}</span>
+                          </div>
+                          <div className="orcamento-multiservico-add">
+                            <select aria-label="Serviço oficial para adicionar à composição" value={servicoParaAdicionar} onChange={event => setServicoParaAdicionar(event.target.value)} disabled={(catalogoServicos.data?.items.length ?? 0) === 0}>
+                              <option value="">Busque acima para escolher um serviço</option>
+                              {(catalogoServicos.data?.items ?? []).filter(service => service.itemType === "servico" && (!componentesServico.length || service.catalogId === componentesServico[0]!.catalogId) && !componentesServico.some(component => component.id === service.id)).map(service => (
+                                <option key={service.id} value={service.id}>{service.code} · {service.description} ({service.unit}) · {service.sourceType} · R$ {Number(service.unitPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</option>
+                              ))}
+                            </select>
+                            <button type="button" className="xl-btn" onClick={adicionarServicoOficial} disabled={!servicoParaAdicionar}>Adicionar serviço</button>
+                          </div>
+                          {componentesServico.length > 0 && <div className="orcamento-multiservico-list">
+                            {componentesServico.map(component => (
+                              <div className="orcamento-multiservico-row" key={component.id}>
+                                <div><strong>{component.code} · {component.description}</strong><span>{component.sourceType} · {component.unit} · {moeda(Number(component.unitPrice))} por {component.unit}</span></div>
+                                <label>Coeficiente por {rascunho.unit || "un"}<input type="number" min="0.000001" step="0.000001" value={component.coefficient} onChange={event => setComponentesServico(current => current.map(row => row.id === component.id ? { ...row, coefficient: event.target.value } : row))} /></label>
+                                <strong>{moeda(Number(component.coefficient) * Number(component.unitPrice))}</strong>
+                                <button type="button" className="xl-btn" aria-label={`Remover ${component.code}`} onClick={() => setComponentesServico(current => current.filter(row => row.id !== component.id))}>Remover</button>
+                              </div>
+                            ))}
+                            <div className="orcamento-multiservico-total"><span>Preço composto por {rascunho.unit || "un"}</span><strong>{moeda(precoUnitarioComposto)}</strong><span>Total do item: {moeda(precoUnitarioComposto * Number(rascunho.quantity || 0))}</span></div>
+                          </div>}
+                          {vincularComposicaoMultiservico.error && <p className="orcamento-edit-error" role="alert">{vincularComposicaoMultiservico.error.message}</p>}
+                          <p className="orcamento-multiservico-note">O vínculo registra uma composição analítica QA com as linhas oficiais, coeficientes, preços de referência e evidência do quantitativo.</p>
+                          <button type="button" className="xl-btn xl-btn-primary" onClick={salvarComposicaoMultiservico} disabled={!componentesServico.length || !rascunho.unit || !Number(rascunho.quantity) || !rascunho.quantityEvidence.trim() || rascunho.quantityEvidenceStatus === "pendente" || vincularComposicaoMultiservico.isPending}>
+                            {vincularComposicaoMultiservico.isPending ? "Salvando composição…" : `Vincular composição de ${componentesServico.length} serviço(s)`}
+                          </button>
+                        </section>
                         <div className="orcamento-edit-actions">
                           <button type="button" className="xl-btn xl-btn-primary" onClick={salvarEdicao} disabled={atualizarItem.isPending}>{atualizarItem.isPending ? "Salvando…" : "Salvar"}</button>
                           <button type="button" className="xl-btn" onClick={() => setEditandoId(null)}>Cancelar</button>
@@ -463,7 +551,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                     <td>{Number(item.quantity).toLocaleString("pt-BR")}</td>
                     <td>{moeda(Number(item.unitPrice))}</td>
                     <td>{moeda(Number(item.quantity) * Number(item.unitPrice))}</td>
-                    <td><span className={`orcamento-row-status ${(item.compositionId != null || item.officialPriceItemId != null) && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "ok" : "warn"}`}>{item.officialPriceItemId != null ? "Serviço oficial rastreado" : item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Composição validável" : /didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Fonte didática" : "Vínculo pendente"}</span><button type="button" className="xl-btn" onClick={() => setDetalheId(detalheId === item.id ? null : item.id)}>{detalheId === item.id ? "Fechar" : "Detalhes"}</button><button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
+                    <td><span className={`orcamento-row-status ${(item.compositionId != null || item.officialPriceItemId != null) && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "ok" : "warn"}`}>{item.officialPriceItemId != null ? "Serviço oficial rastreado" : item.compositionId != null && /composição analítica QA/i.test(String(item.source ?? "")) ? "Composição QA rastreada" : item.compositionId != null && !/didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Composição validável" : /didatic|rateio uniforme/i.test(String(item.source ?? "")) ? "Fonte didática" : "Vínculo pendente"}</span><button type="button" className="xl-btn" onClick={() => setDetalheId(detalheId === item.id ? null : item.id)}>{detalheId === item.id ? "Fechar" : "Detalhes"}</button><button type="button" className="xl-btn" onClick={() => iniciarEdicao(item)}>Editar</button></td>
                   </tr>
                 )}
                 {detalheId === item.id && editandoId !== item.id && <tr key={`${item.id}-detail`} className="orcamento-detail-row"><td colSpan={7}><div><b>Diagnóstico do item</b><span>Fonte do preço: {item.source || "não informada"} · Referência: {item.referencePeriod || "não informada"} · Serviço oficial: {item.officialPriceItemId ? `#${item.officialPriceItemId}` : "não vinculado"} · Composição: {item.compositionId ? `#${item.compositionId}` : "não vinculada"}</span><span>Quantitativo: {item.quantityEvidenceStatus ?? "pendente"} · Evidência: {item.quantityEvidence || "não informada"}</span><small>{item.quantityEvidenceStatus === "cenario" ? "Cenário de planejamento; não representa medição ou execução." : item.quantityEvidenceStatus === "validada" ? "Evidência classificada como validada; confirme a documentação antes do uso executivo." : "Informe a referência e classifique o quantitativo antes de aprovar o orçamento."}</small></div></td></tr>}
