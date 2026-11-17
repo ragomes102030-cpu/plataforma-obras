@@ -3011,6 +3011,233 @@ export const appRouter = router({
           return { id: created.id, versionNumber, status: "em_revisao" as const, copiedItems: sourceItems.length };
         });
       }),
+    replacePlaceholderItems: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        budgetVersionId: z.number().int().positive(),
+        replacements: z.array(z.object({
+          placeholderCode: z.string().trim().min(1).max(48),
+          items: z.array(z.object({
+            code: z.string().trim().min(1).max(48),
+            description: z.string().trim().min(2).max(240),
+            unit: z.string().trim().min(1).max(32),
+            quantity: z.number().positive(),
+            compositionCode: z.string().trim().min(1).max(64).optional(),
+            officialPriceCode: z.string().trim().min(1).max(64).optional(),
+            officialCatalogName: z.string().trim().min(3).max(160),
+            quantityEvidence: z.string().trim().min(1).max(2000),
+            quantityEvidenceStatus: z.enum(["pendente", "cenario", "validada"]),
+          })).min(1).max(2000),
+        })).min(1).max(200),
+      }).superRefine((input, ctx) => {
+        const placeholders = input.replacements.map(row => row.placeholderCode);
+        if (new Set(placeholders).size !== placeholders.length) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cada placeholder pode ser substituído uma única vez." });
+        }
+        const items = input.replacements.flatMap(row => row.items);
+        if (items.length > 2000) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "O detalhamento pode conter até 2.000 linhas." });
+        }
+        const codes = items.map(item => item.code);
+        if (new Set(codes).size !== codes.length) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Os códigos das novas linhas precisam ser únicos." });
+        }
+        for (const item of items) {
+          if (Boolean(item.compositionCode) === Boolean(item.officialPriceCode)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: `A linha ${item.code} precisa apontar para exatamente uma composição ou serviço oficial.` });
+          }
+        }
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const result = await db.transaction(async tx => {
+          const [version] = await tx
+            .select({ id: budgetVersions.id, status: budgetVersions.status })
+            .from(budgetVersions)
+            .where(and(eq(budgetVersions.id, input.budgetVersionId), eq(budgetVersions.projectId, input.projectId)))
+            .for("update")
+            .limit(1);
+          if (!version) throw notFound("Versão de orçamento não encontrada.");
+          if (version.status === "aprovado" || version.status === "arquivado")
+            throw conflict("Esta versão não aceita detalhamento.");
+
+          const placeholderCodes = input.replacements.map(row => row.placeholderCode);
+          const placeholders = await tx.select().from(budgetItems).where(and(
+            eq(budgetItems.budgetVersionId, input.budgetVersionId),
+            inArray(budgetItems.code, placeholderCodes),
+          ));
+          if (placeholders.length !== placeholderCodes.length)
+            throw notFound("Um ou mais placeholders não pertencem à versão de orçamento informada.");
+          for (const placeholder of placeholders) {
+            const symbolicSource = /simb[oó]lic|placeholder/i.test(String(placeholder.source ?? ""));
+            const isSymbolic = placeholder.unit.trim().toLowerCase() === "vb" &&
+              Number(placeholder.quantity) === 1 && Number(placeholder.unitPrice) === 1 &&
+              placeholder.compositionId == null && placeholder.officialPriceItemId == null && symbolicSource;
+            if (!isSymbolic) throw badRequest(`O item ${placeholder.code} não é um placeholder simbólico seguro para substituição.`);
+          }
+
+          const newItems = input.replacements.flatMap(group => group.items.map(item => ({
+            ...item,
+            placeholderCode: group.placeholderCode,
+          })));
+          const newCodes = newItems.map(item => item.code);
+          const collisions = await tx.select({ code: budgetItems.code }).from(budgetItems).where(and(
+            eq(budgetItems.budgetVersionId, input.budgetVersionId),
+            inArray(budgetItems.code, newCodes),
+          ));
+          const replacing = new Set(placeholderCodes);
+          const collision = collisions.find(row => !replacing.has(row.code));
+          if (collision) throw conflict(`O código ${collision.code} já existe nesta versão do orçamento.`);
+
+          const projectNodes = new Map(placeholders.flatMap(item => item.wbsNodeId == null ? [] : [[item.code, item.wbsNodeId] as const]));
+          const nodeIds = placeholders.flatMap(item => item.wbsNodeId == null ? [] : [item.wbsNodeId]);
+          if (nodeIds.length !== placeholders.length)
+            throw badRequest("Associe cada placeholder a um pacote da EAP antes de importar o detalhamento.");
+          const [currentPlan] = await tx.select({ id: projectPlanVersions.id })
+            .from(projectPlanVersions)
+            .where(eq(projectPlanVersions.projectId, input.projectId))
+            .orderBy(desc(projectPlanVersions.versionNumber))
+            .limit(1);
+          const currentPlanScope = currentPlan == null
+            ? and(eq(wbsNodes.projectId, input.projectId), isNull(wbsNodes.versionId))
+            : and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentPlan.id));
+          const currentNodes = await tx.select({ id: wbsNodes.id }).from(wbsNodes)
+            .where(and(currentPlanScope, inArray(wbsNodes.id, nodeIds)));
+          if (currentNodes.length !== new Set(nodeIds).size)
+            throw badRequest("Todo vínculo da EAP deve pertencer à versão de trabalho atual desta obra.");
+
+          const [project] = await tx.select({ location: projects.location }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+          const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1]?.toUpperCase();
+          const activeCatalogs = await tx.select().from(priceCatalogs).where(and(
+            eq(priceCatalogs.status, "ativo"),
+            inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA"]),
+          ));
+
+          const requiredCatalogNames = [...new Set(newItems.map(item => item.officialCatalogName.toLocaleLowerCase()))];
+          const catalogByRequestedName = new Map<string, typeof activeCatalogs[number]>();
+          for (const requestedName of requiredCatalogNames) {
+            const matches = activeCatalogs.filter(catalog => catalog.name.toLocaleLowerCase() === requestedName);
+            if (matches.length !== 1) throw badRequest(`A base oficial ativa “${requestedName}” não foi encontrada de forma única.`);
+            catalogByRequestedName.set(requestedName, matches[0]!);
+          }
+
+          const compositionCodes = [...new Set(newItems.flatMap(item => item.compositionCode ? [item.compositionCode] : []))];
+          const priceCodes = [...new Set(newItems.flatMap(item => item.officialPriceCode ? [item.officialPriceCode] : []))];
+          const compositions = compositionCodes.length
+            ? await tx.select().from(serviceCompositions).where(and(inArray(serviceCompositions.code, compositionCodes), eq(serviceCompositions.status, "validada")))
+            : [];
+          const compositionIds = compositions.map(item => item.id);
+          const compositionParts = compositionIds.length
+            ? await tx.select({
+                compositionId: compositionComponents.compositionId,
+                coefficient: compositionComponents.coefficient,
+                unitPriceSnapshot: compositionComponents.unitPriceSnapshot,
+                priceCatalogId: priceItems.catalogId,
+              }).from(compositionComponents).innerJoin(priceItems, eq(priceItems.id, compositionComponents.priceItemId)).where(inArray(compositionComponents.compositionId, compositionIds))
+            : [];
+          const compositionRows = new Map<number, typeof compositions[number]>();
+          compositions.forEach(item => compositionRows.set(item.id, item));
+          const officialItems = priceCodes.length
+            ? await tx.select({
+                id: priceItems.id,
+                code: priceItems.code,
+                description: priceItems.description,
+                unit: priceItems.unit,
+                itemType: priceItems.itemType,
+                unitPrice: priceItems.unitPrice,
+                catalogId: priceCatalogs.id,
+                catalogName: priceCatalogs.name,
+                sourceType: priceCatalogs.sourceType,
+                state: priceCatalogs.state,
+                referencePeriod: priceCatalogs.referencePeriod,
+              }).from(priceItems).innerJoin(priceCatalogs, eq(priceCatalogs.id, priceItems.catalogId)).where(and(
+                inArray(priceItems.code, priceCodes),
+                eq(priceCatalogs.status, "ativo"),
+                inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA"]),
+              ))
+            : [];
+
+          const calculated = newItems.map(item => {
+            const catalog = catalogByRequestedName.get(item.officialCatalogName.toLocaleLowerCase())!;
+            const nodeId = projectNodes.get(item.placeholderCode)!;
+            if (item.compositionCode) {
+              const matches = compositions.filter(composition => composition.code === item.compositionCode && composition.sourceCatalogId === catalog.id);
+              if (matches.length !== 1) throw badRequest(`A composição ${item.compositionCode} não está validada de forma única em ${catalog.name}.`);
+              const composition = matches[0]!;
+              if (!unitsCompatible(item.unit, composition.unit)) throw badRequest(`Unidade incompatível em ${item.code}: ${item.unit} e ${composition.unit}.`);
+              const parts = compositionParts.filter(part => part.compositionId === composition.id);
+              if (!parts.length || parts.some(part => part.priceCatalogId !== catalog.id))
+                throw badRequest(`A composição ${composition.code} não tem componentes rastreados integralmente na base ${catalog.name}.`);
+              const unitPrice = parts.reduce((sum, part) => sum + Number(part.coefficient) * Number(part.unitPriceSnapshot), 0);
+              return {
+                budgetVersionId: input.budgetVersionId,
+                wbsNodeId: nodeId,
+                code: item.code,
+                description: item.description,
+                unit: item.unit,
+                quantity: item.quantity.toFixed(3),
+                unitPrice: unitPrice.toFixed(2),
+                compositionId: composition.id,
+                compositionUnitCost: unitPrice.toFixed(2),
+                officialPriceItemId: null,
+                source: `${catalog.sourceType} · ${catalog.name}`.slice(0, 80),
+                quantityEvidence: item.quantityEvidence,
+                quantityEvidenceStatus: item.quantityEvidenceStatus,
+                referencePeriod: composition.referencePeriod ?? catalog.referencePeriod,
+                compositionNote: `${composition.code} · ${composition.description}`,
+                sortOrder: placeholders.find(row => row.code === item.placeholderCode)!.sortOrder,
+              };
+            }
+
+            const matches = officialItems.filter(official => official.code === item.officialPriceCode && official.catalogId === catalog.id);
+            if (matches.length !== 1) throw badRequest(`O serviço ${item.officialPriceCode} não foi encontrado de forma única em ${catalog.name}.`);
+            const official = matches[0]!;
+            if (official.itemType !== "servico") throw badRequest(`O código ${official.code} não é um serviço de catálogo.`);
+            if (!unitsCompatible(item.unit, official.unit)) throw badRequest(`Unidade incompatível em ${item.code}: ${item.unit} e ${official.unit}.`);
+            if (projectState && official.state && official.state.toUpperCase() !== projectState)
+              throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${official.state}.`);
+            if (projectState && official.sourceType === "SEINFRA" && official.state?.toUpperCase() !== projectState)
+              throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+            return {
+              budgetVersionId: input.budgetVersionId,
+              wbsNodeId: nodeId,
+              code: item.code,
+              description: item.description,
+              unit: item.unit,
+              quantity: item.quantity.toFixed(3),
+              unitPrice: Number(official.unitPrice).toFixed(2),
+              compositionId: null,
+              compositionUnitCost: null,
+              officialPriceItemId: official.id,
+              source: `${official.sourceType} · ${official.catalogName}`.slice(0, 80),
+              quantityEvidence: item.quantityEvidence,
+              quantityEvidenceStatus: item.quantityEvidenceStatus,
+              referencePeriod: official.referencePeriod,
+              compositionNote: `${official.code} · ${official.description}`,
+              sortOrder: placeholders.find(row => row.code === item.placeholderCode)!.sortOrder,
+            };
+          });
+
+          await tx.delete(budgetItems).where(and(eq(budgetItems.budgetVersionId, input.budgetVersionId), inArray(budgetItems.code, placeholderCodes)));
+          const created = await tx.insert(budgetItems).values(calculated).returning({ id: budgetItems.id, code: budgetItems.code });
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "budget_items_replaced_by_detail_import",
+            payload: {
+              budgetVersionId: input.budgetVersionId,
+              placeholders: placeholders.map(item => ({ id: item.id, code: item.code, description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice, source: item.source, wbsNodeId: item.wbsNodeId })),
+              created: created.map(item => ({ id: item.id, code: item.code })),
+              detailCount: calculated.length,
+            },
+          });
+          return { removed: placeholders.length, created: created.length, versionId: input.budgetVersionId, itemCodes: created.map(item => item.code) };
+        });
+        cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
+        return result;
+      }),
     createVersion: protectedProcedure
       .input(
         z.object({

@@ -12,12 +12,26 @@ type Props = {
   projetoId: number;
 };
 
+type LinhaImportacaoDetalhada = {
+  code: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  compositionCode?: string;
+  officialPriceCode?: string;
+  officialCatalogName: string;
+  quantityEvidence: string;
+  quantityEvidenceStatus: "pendente" | "cenario" | "validada";
+};
+
 function moeda(valor: number): string {
   return `R$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
+  const [arquivoDetalhamento, setArquivoDetalhamento] = useState<{ name: string; replacements: Array<{ placeholderCode: string; items: LinhaImportacaoDetalhada[] }> } | null>(null);
+  const [erroImportacao, setErroImportacao] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
   const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
@@ -58,6 +72,13 @@ export function AbaOrcamento({ projetoId }: Props) {
   });
   const criarRevisao = trpc.budgets.createReviewVersion.useMutation({
     onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
+  });
+  const importarDetalhamento = trpc.budgets.replacePlaceholderItems.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
+      setArquivoDetalhamento(null);
+      setErroImportacao(null);
+    },
   });
 
   const items = budget.data?.items ?? [];
@@ -233,6 +254,39 @@ export function AbaOrcamento({ projetoId }: Props) {
 
       {!carregando && !erro && statusOrcamento !== "pronto" && <section className="orcamento-next-step">
         <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : itensComComposicao < items.length ? "Completar vínculos oficiais do orçamento" : prontidaoEvidencias.status !== "Validado" ? "Fechar evidência dos quantitativos" : "Revisar itens sem vínculo oficial"}</strong><p>{itensComFonte === 0 ? "Use a tabela oficial compatível com a região da obra; confirme a referência de preço e preserve a versão da base." : itensComComposicao < items.length ? "Associe cada serviço a uma composição ou item oficial compatível por código, unidade e escopo." : prontidaoEvidencias.status !== "Validado" ? "Os preços podem estar aprovados para referência; quantitativos em cenário ou pendentes não são quantidade executiva, medição ou avanço." : "Não aprove por rateio. Cada item precisa de código, unidade e referência rastreáveis por composição ou serviço oficial."}</p></div></div>{itensComFonte === 0 || itensComComposicao < items.length ? <button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button> : null}
+      </section>}
+
+      {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && <section className="xl-analise" aria-label="Importar detalhamento rastreável">
+        <div className="xl-analises-topo">
+          <h3>Detalhar itens simbólicos nesta versão</h3>
+          <p>Importe um JSON com substituições dos placeholders R$ 1,00. Cada linha precisa ter vínculo a composição validada ou serviço oficial ativo, unidade compatível e evidência do quantitativo. A operação substitui somente placeholders simbólicos e registra auditoria; não cria revisão nova.</p>
+        </div>
+        <label className="xl-btn" htmlFor="budget-detail-json">Selecionar arquivo JSON</label>
+        <input id="budget-detail-json" type="file" accept="application/json,.json" style={{ display: "none" }} onChange={async event => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          setArquivoDetalhamento(null);
+          setErroImportacao(null);
+          if (!file) return;
+          try {
+            const parsed = JSON.parse(await file.text()) as { replacements?: unknown };
+            if (!Array.isArray(parsed.replacements) || parsed.replacements.length === 0) throw new Error("O arquivo precisa conter replacements com ao menos um placeholder e suas linhas detalhadas.");
+            setArquivoDetalhamento({ name: file.name, replacements: parsed.replacements as Array<{ placeholderCode: string; items: LinhaImportacaoDetalhada[] }> });
+          } catch (error) {
+            setErroImportacao(error instanceof Error ? error.message : "Não foi possível ler o arquivo JSON.");
+          }
+        }} />
+        {arquivoDetalhamento && <div role="status" className="xl-aviso">
+          <strong>{arquivoDetalhamento.name}: {arquivoDetalhamento.replacements.length} placeholder(s), {arquivoDetalhamento.replacements.reduce((sum, group) => sum + (Array.isArray(group.items) ? group.items.length : 0), 0)} linha(s) detalhada(s).</strong>
+          <p>Versão alvo: v{versaoAtiva.versionNumber} · {versaoAtiva.name}. Confirme que códigos, unidades, quantidades e evidências correspondem ao escopo antes de importar.</p>
+          <button type="button" className="xl-btn xl-btn-primary" disabled={importarDetalhamento.isPending} onClick={() => {
+            if (!window.confirm(`Substituir ${arquivoDetalhamento.replacements.length} placeholder(s) da v${versaoAtiva.versionNumber} por ${arquivoDetalhamento.replacements.reduce((sum, group) => sum + group.items.length, 0)} linha(s) detalhada(s)? A versão será mantida e a alteração ficará registrada na auditoria.`)) return;
+            setErroImportacao(null);
+            importarDetalhamento.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, replacements: arquivoDetalhamento.replacements });
+          }}>{importarDetalhamento.isPending ? "Importando…" : "Validar e importar na versão atual"}</button>
+        </div>}
+        {(erroImportacao || importarDetalhamento.isError) && <p className="xl-aviso xl-aviso-erro" role="alert">{erroImportacao ?? importarDetalhamento.error?.message ?? "Falha ao importar detalhamento."}</p>}
+        {importarDetalhamento.isSuccess && <p className="xl-aviso" role="status">Importação concluída: {importarDetalhamento.data.removed} placeholder(s) substituído(s) por {importarDetalhamento.data.created} linha(s). A lista será atualizada.</p>}
       </section>}
 
       {erro && (

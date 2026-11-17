@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { budgetItems, budgetVersions, compositionComponents, priceCatalogs, priceItems, projectPlanVersions, projects, scheduleActivities, serviceCompositions, users, wbsNodes } from "../drizzle/schema";
+import { budgetItems, budgetVersions, compositionComponents, priceCatalogs, priceItems, projectAuditEvents, projectPlanVersions, projects, scheduleActivities, serviceCompositions, users, wbsNodes } from "../drizzle/schema";
 import type { TrpcContext } from "./_core/context";
 import { pgliteComSchema } from "./test-helpers/pglite";
 
@@ -354,6 +354,93 @@ describe("aplicarPropostaEap", () => {
 
     await db.update(budgetVersions).set({ status: "aprovado" }).where(eq(budgetVersions.id, budget!.id));
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
+  });
+
+  it("substitui um placeholder simbólico por itens detalhados com fonte oficial, sem criar outra versão", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Revisão QA v4",
+      versionNumber: 4,
+      status: "em_revisao",
+    }).returning({ id: budgetVersions.id });
+    const [placeholder] = await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "1.1.1",
+      description: "Serviço simbólico",
+      unit: "vb",
+      quantity: "1.000",
+      unitPrice: "1.00",
+      source: "CENÁRIO QA — valor simbólico R$ 1,00; preço oficial pendente",
+      quantityEvidence: "CENÁRIO FICTÍCIO QA · placeholder",
+      quantityEvidenceStatus: "cenario",
+    }).returning({ id: budgetItems.id });
+    const [catalog] = await db.insert(priceCatalogs).values({
+      name: "SEINFRA-CE 028.1 — cenário QA",
+      sourceType: "SEINFRA",
+      state: "CE",
+      referencePeriod: "028.1",
+      status: "ativo",
+      createdBy: ownerId,
+    }).returning({ id: priceCatalogs.id });
+    await db.insert(priceItems).values({
+      catalogId: catalog!.id,
+      code: "SERV-DETALHE",
+      description: "Serviço medido para detalhamento",
+      unit: "M2",
+      itemType: "servico",
+      unitPrice: "12.34",
+    });
+
+    const result = await caller.budgets.replacePlaceholderItems({
+      projectId,
+      budgetVersionId: budget!.id,
+      replacements: [{
+        placeholderCode: "1.1.1",
+        items: [{
+          code: "1.1.1-01",
+          description: "Serviço por área medida",
+          unit: "m²",
+          quantity: 10,
+          officialPriceCode: "SERV-DETALHE",
+          officialCatalogName: "SEINFRA-CE 028.1 — cenário QA",
+          quantityEvidence: "PLANEJAMENTO_PIAZZA.xlsx · aba 13_Quantitativos",
+          quantityEvidenceStatus: "cenario",
+        }],
+      }],
+    });
+
+    const rows = await db.select().from(budgetItems).where(eq(budgetItems.budgetVersionId, budget!.id));
+    const audit = await db.select().from(projectAuditEvents).where(eq(projectAuditEvents.projectId, projectId));
+    const [persistedVersion] = await db.select().from(budgetVersions).where(eq(budgetVersions.id, budget!.id));
+    expect(result).toMatchObject({ removed: 1, created: 1, versionId: budget!.id });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      wbsNodeId: root!.id,
+      code: "1.1.1-01",
+      unit: "m²",
+      quantity: "10.000",
+      unitPrice: "12.34",
+      source: "SEINFRA · SEINFRA-CE 028.1 — cenário QA",
+      officialPriceItemId: expect.any(Number),
+      quantityEvidenceStatus: "cenario",
+    });
+    expect(persistedVersion).toMatchObject({ versionNumber: 4, status: "em_revisao" });
+    expect(audit.some(event => event.action === "budget_items_replaced_by_detail_import")).toBe(true);
+  });
+
+  it("não remove item não simbólico nem de versão aprovada em importação detalhada", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento aprovado", versionNumber: 1, status: "aprovado" }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({ budgetVersionId: budget!.id, wbsNodeId: root!.id, code: "REAL-1", description: "Item real", unit: "m²", quantity: "5.000", unitPrice: "20.00", source: "SEINFRA · catalogo" }).returning({ id: budgetItems.id });
+
+    await expect(caller.budgets.replacePlaceholderItems({
+      projectId,
+      budgetVersionId: budget!.id,
+      replacements: [{ placeholderCode: "REAL-1", items: [{ code: "REAL-1-A", description: "Novo detalhe", unit: "m²", quantity: 5, officialPriceCode: "SEM-CATALOGO", officialCatalogName: "SEINFRA-CE 028.1", quantityEvidence: "evidência QA", quantityEvidenceStatus: "cenario" }] }],
+    })).rejects.toThrow(/não aceita detalhamento/i);
+    expect(await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id))).toHaveLength(1);
   });
 
   it("abre uma revisão em análise copiando os vínculos e preservando o orçamento aprovado", async () => {
