@@ -3536,6 +3536,131 @@ export const appRouter = router({
           .returning({ id: budgetItems.id });
         return { id: createdId.id };
       }),
+    linkOfficialServiceComposition: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        budgetItemId: z.number().int().positive(),
+        unit: z.string().trim().min(1).max(32),
+        quantity: z.number().positive(),
+        quantityEvidence: z.string().trim().min(4).max(2000),
+        quantityEvidenceStatus: z.enum(["cenario", "validada"]),
+        components: z.array(z.object({
+          officialPriceItemId: z.number().int().positive(),
+          coefficient: z.number().positive().refine(value => Number(value.toFixed(6)) === value, "Use até 6 casas decimais no coeficiente."),
+        })).min(1).max(50),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const ids = input.components.map(component => component.officialPriceItemId);
+        if (new Set(ids).size !== ids.length) throw badRequest("Remova serviços repetidos ou some seus coeficientes.");
+
+        const result = await db.transaction(async tx => {
+          const [item] = await tx.select({
+            id: budgetItems.id,
+            code: budgetItems.code,
+            description: budgetItems.description,
+            budgetVersionId: budgetItems.budgetVersionId,
+            status: budgetVersions.status,
+          }).from(budgetItems)
+            .innerJoin(budgetVersions, eq(budgetVersions.id, budgetItems.budgetVersionId))
+            .where(and(eq(budgetItems.id, input.budgetItemId), eq(budgetVersions.projectId, input.projectId)))
+            .limit(1);
+          if (!item) throw notFound("Item de orçamento não encontrado.");
+          if (item.status === "aprovado" || item.status === "arquivado") throw conflict("Esta versão não aceita edição.");
+
+          const rows = await tx.select({
+            id: priceItems.id,
+            code: priceItems.code,
+            description: priceItems.description,
+            unit: priceItems.unit,
+            itemType: priceItems.itemType,
+            unitPrice: priceItems.unitPrice,
+            catalogId: priceCatalogs.id,
+            catalogName: priceCatalogs.name,
+            sourceType: priceCatalogs.sourceType,
+            state: priceCatalogs.state,
+            referencePeriod: priceCatalogs.referencePeriod,
+            catalogStatus: priceCatalogs.status,
+          }).from(priceItems).innerJoin(priceCatalogs, eq(priceCatalogs.id, priceItems.catalogId))
+            .where(inArray(priceItems.id, ids));
+          if (rows.length !== ids.length || rows.some(row => row.itemType !== "servico" || row.catalogStatus !== "ativo" || !["SEINFRA", "SINAPI"].includes(row.sourceType))) {
+            throw badRequest("Selecione somente serviços ativos de catálogo oficial.");
+          }
+          const catalogId = rows[0]!.catalogId;
+          if (rows.some(row => row.catalogId !== catalogId)) throw badRequest("Todos os serviços da composição precisam vir da mesma tabela e período.");
+          const [project] = await tx.select({ location: projects.location }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+          const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1];
+          const catalog = rows[0]!;
+          if (projectState && catalog.state && catalog.state.toUpperCase() !== projectState) throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${catalog.state}.`);
+          if (projectState && catalog.sourceType === "SEINFRA" && catalog.state?.toUpperCase() !== projectState) throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+
+          const totalCents = input.components.reduce((sum, component) => {
+            const row = rows.find(service => service.id === component.officialPriceItemId)!;
+            return sum + Number(row.unitPrice) * Number(component.coefficient.toFixed(6));
+          }, 0);
+          const unitPrice = totalCents.toFixed(2);
+          const code = "QA-" + input.projectId + "-" + input.budgetItemId + "-" + randomUUID().slice(0, 8).toUpperCase();
+          const description = `COMPOSIÇÃO ANALÍTICA QA · ${item.description}`.slice(0, 240);
+          const [composition] = await tx.insert(serviceCompositions).values({
+            code,
+            description,
+            unit: input.unit,
+            sourceCatalogId: catalogId,
+            referencePeriod: catalog.referencePeriod,
+            status: "validada",
+            createdBy: ctx.user.id,
+          }).returning({ id: serviceCompositions.id });
+          await tx.insert(compositionComponents).values(input.components.map(component => {
+            const row = rows.find(service => service.id === component.officialPriceItemId)!;
+            return {
+              compositionId: composition!.id,
+              priceItemId: row.id,
+              componentType: "servico" as const,
+              coefficient: component.coefficient.toFixed(6),
+              unitPriceSnapshot: Number(row.unitPrice).toFixed(2),
+            };
+          }));
+          const [updated] = await tx.update(budgetItems).set({
+            unit: input.unit,
+            quantity: input.quantity.toFixed(3),
+            compositionId: composition!.id,
+            compositionUnitCost: unitPrice,
+            compositionNote: `${code} · ${description}`.slice(0, 240),
+            officialPriceItemId: null,
+            unitPrice,
+            source: `Composição analítica QA · ${catalog.sourceType} ${catalog.catalogName}`.slice(0, 80),
+            referencePeriod: catalog.referencePeriod,
+            quantityEvidence: input.quantityEvidence,
+            quantityEvidenceStatus: input.quantityEvidenceStatus,
+            updatedAt: new Date(),
+          }).where(eq(budgetItems.id, input.budgetItemId)).returning({ id: budgetItems.id });
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "budget_item_linked_to_analytic_composition",
+            payload: {
+              budgetItemId: updated!.id,
+              budgetVersionId: item.budgetVersionId,
+              compositionId: composition!.id,
+              compositionCode: code,
+              outputUnit: input.unit,
+              quantity: input.quantity,
+              unitPrice,
+              quantityEvidenceStatus: input.quantityEvidenceStatus,
+              components: input.components.map(component => {
+                const row = rows.find(service => service.id === component.officialPriceItemId)!;
+                return { code: row.code, description: row.description, unit: row.unit, coefficient: component.coefficient, officialUnitPrice: row.unitPrice };
+              }),
+            },
+          });
+          return { budgetItemId: updated!.id, compositionId: composition!.id, unitPrice, total: Number((Number(unitPrice) * input.quantity).toFixed(2)) };
+        });
+        cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
+        cacheClearPrefix(`catalog.list:`);
+        return result;
+      }),
     updateItem: protectedProcedure
       .input(z.object({
         projectId: z.number().int().positive(),
