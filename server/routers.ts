@@ -2948,6 +2948,69 @@ export const appRouter = router({
         const [updated] = await db.update(budgetVersions).set({ status: input.status, updatedAt: new Date() }).where(eq(budgetVersions.id, input.budgetVersionId)).returning({ id: budgetVersions.id, status: budgetVersions.status });
         return updated;
       }),
+    createReviewVersion: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        return db.transaction(async tx => {
+          const [latest] = await tx
+            .select()
+            .from(budgetVersions)
+            .where(eq(budgetVersions.projectId, input.projectId))
+            .orderBy(desc(budgetVersions.versionNumber))
+            .limit(1);
+          if (!latest) throw notFound("Não existe orçamento para revisar.");
+          if (latest.status !== "aprovado")
+            throw conflict("Já existe uma versão em edição. Conclua essa revisão antes de abrir outra.");
+
+          const sourceItems = await tx
+            .select()
+            .from(budgetItems)
+            .where(eq(budgetItems.budgetVersionId, latest.id))
+            .orderBy(asc(budgetItems.sortOrder), asc(budgetItems.id));
+          if (!sourceItems.length) throw badRequest("O orçamento aprovado não contém itens para copiar.");
+
+          const versionNumber = latest.versionNumber + 1;
+          const [created] = await tx
+            .insert(budgetVersions)
+            .values({
+              projectId: input.projectId,
+              name: `Revisão v${versionNumber} — ${latest.name}`.slice(0, 160),
+              versionNumber,
+              status: "em_revisao",
+              currency: latest.currency,
+              notes: `Cópia integral da versão aprovada ${latest.versionNumber} (ID ${latest.id}) para revisão dos vínculos e fontes. A versão aprovada permanece preservada.`,
+              createdBy: ctx.user.id,
+            })
+            .returning({ id: budgetVersions.id });
+
+          await tx.insert(budgetItems).values(sourceItems.map(item => ({
+            budgetVersionId: created.id,
+            wbsNodeId: item.wbsNodeId,
+            code: item.code,
+            description: item.description,
+            unit: item.unit,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            officialPriceItemId: item.officialPriceItemId,
+            compositionId: item.compositionId,
+            compositionUnitCost: item.compositionUnitCost,
+            productivity: item.productivity,
+            plannedDurationDays: item.plannedDurationDays,
+            source: item.source,
+            quantityEvidence: item.quantityEvidence,
+            quantityEvidenceStatus: item.quantityEvidenceStatus,
+            referencePeriod: item.referencePeriod,
+            compositionNote: item.compositionNote,
+            isPriceException: item.isPriceException,
+            sortOrder: item.sortOrder,
+          })));
+
+          return { id: created.id, versionNumber, status: "em_revisao" as const, copiedItems: sourceItems.length };
+        });
+      }),
     createVersion: protectedProcedure
       .input(
         z.object({
