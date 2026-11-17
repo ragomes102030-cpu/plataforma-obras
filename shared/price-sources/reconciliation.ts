@@ -21,12 +21,25 @@ export interface ReconciliationResult {
 }
 
 function normalizeUnit(unit: string | null | undefined): string {
-  return String(unit ?? "")
+  const normalized = String(unit ?? "")
     .trim()
     .toLowerCase()
     .replaceAll("²", "2")
     .replaceAll("³", "3")
-    .replace(/\s+/g, "");
+    .replace(/[.\s]+/g, "");
+
+  // Canonicalize spelling variants only. A lump-sum "verba" is a valid
+  // composition output unit, but is never interchangeable with one physical
+  // catalog unit (UN); that requires an explicit composition and coefficients.
+  const aliases: Record<string, string> = {
+    uni: "un",
+    und: "un",
+    unid: "un",
+    unidade: "un",
+    unidades: "un",
+    verba: "vb",
+  };
+  return aliases[normalized] ?? normalized;
 }
 
 export function unitsCompatible(left: string | null | undefined, right: string | null | undefined): boolean {
