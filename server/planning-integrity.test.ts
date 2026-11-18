@@ -356,7 +356,7 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
 
-  it("importa serviços SICRO e rejeita reenvio e planilha inválida", async () => {
+  it("importa serviços SICRO de forma idempotente e recusa alterações conflitantes", async () => {
     const XLSX = await import("xlsx");
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
@@ -372,7 +372,13 @@ describe("aplicarPropostaEap", () => {
     expect(services.items.some(item => item.code === "4507958" && item.sourceType === "SICRO" && Number(item.unitPrice) === 16.01)).toBe(true);
     const records = await db.select().from(priceItems).where(eq(priceItems.catalogId, result.catalogId));
     expect(records.find(item => item.code === "0307731")).toBeDefined();
-    await expect(caller.catalog.importSicroSheet(input)).rejects.toThrow(/já existe/);
+    await expect(caller.catalog.importSicroSheet(input)).resolves.toMatchObject({catalogId: result.catalogId, imported: 0, alreadyPresent: 2});
+    await db.update(priceItems).set({unitPrice:"99.00"}).where(eq(priceItems.catalogId, result.catalogId));
+    await expect(caller.catalog.importSicroSheet(input)).rejects.toThrow(/diverge/);
+    const invalid = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(invalid, XLSX.utils.aoa_to_sheet([["Código", "Quantidade"], ["4507958", 1]]), "Sheet1");
+    await expect(caller.catalog.importSicroSheet({...input, name:"inválido", fileDataBase64:XLSX.write(invalid, {type:"buffer",bookType:"xlsx"}).toString("base64")})).rejects.toThrow(/Relatório Sintético/);
+
   });
 
   it.each([[false, "SEINFRA"], [true, "SEINFRA"], [true, "SICRO"]] as const)("importa detalhamento oficial na versão existente (parcial=%s, fonte=%s)", async (parcial, fonte) => {

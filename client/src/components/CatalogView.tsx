@@ -253,7 +253,7 @@ export function CatalogView() {
           <button className="primary-button" disabled={!sicroFile || importarSicro.isPending}>Importar SICRO</button>
         </form>
         {importarSicro.error && <p className="form-error">{importarSicro.error.message}</p>}
-        {importarSicro.data && <p role="status">{importarSicro.data.imported} serviços importados.</p>}
+        {importarSicro.data && <p role="status">{importarSicro.data.imported} serviços importados · {importarSicro.data.alreadyPresent} já existentes.</p>}
       </section>
 
       <section className="module-card">

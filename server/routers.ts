@@ -4943,18 +4943,32 @@ export const appRouter = router({
         });
         if (!records.length || new Set(records.map(record => record.code)).size !== records.length)
           throw badRequest("Planilha SICRO vazia ou com códigos duplicados.");
-        const catalogId = await db.transaction(async tx => {
+        const fileHash = createHash("sha256").update(bytes).digest("hex");
+        const result = await db.transaction(async tx => {
+          const lockKey = JSON.stringify(["SICRO", input.name, input.state.toUpperCase(), input.referencePeriod]);
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
           const matches = await tx.select().from(priceCatalogs).where(and(eq(priceCatalogs.sourceType, "SICRO"), eq(priceCatalogs.name, input.name), eq(priceCatalogs.state, input.state.toUpperCase()), eq(priceCatalogs.referencePeriod, input.referencePeriod)));
-          if (matches.length) throw conflict("Este catálogo SICRO já existe. Confira a versão antes de reimportar.");
-          const [catalog] = await tx.insert(priceCatalogs).values({name: input.name, sourceType: "SICRO", state: input.state.toUpperCase(), referencePeriod: input.referencePeriod, notes: `Arquivo: ${input.fileName}; SHA-256: ${createHash("sha256").update(bytes).digest("hex")}`, createdBy: ctx.user.id}).returning({id: priceCatalogs.id});
+          if (matches.length > 1) throw conflict("Há mais de um catálogo SICRO com este nome, UF e período.");
+          if (matches.length === 1) {
+            const catalog = matches[0]!;
+            if (!catalog.notes?.includes(`SHA-256: ${fileHash}`)) throw conflict("Este catálogo já existe com outro arquivo. Nada foi alterado.");
+            const stored = await tx.select().from(priceItems).where(eq(priceItems.catalogId, catalog.id));
+            const byCode = new Map(stored.map(item => [item.code, item]));
+            if (stored.length !== records.length || records.some(record => {
+              const item = byCode.get(record.code);
+              return !item || item.description !== record.description || item.unit !== record.unit || item.itemType !== record.itemType || Number(item.unitPrice) !== Number(record.unitPrice);
+            })) throw conflict("O catálogo existente diverge da planilha. Nada foi alterado.");
+            return { catalogId: catalog.id, imported: 0, alreadyPresent: stored.length };
+          }
+          const [catalog] = await tx.insert(priceCatalogs).values({name: input.name, sourceType: "SICRO", state: input.state.toUpperCase(), referencePeriod: input.referencePeriod, notes: `Arquivo: ${input.fileName}; SHA-256: ${fileHash}`, createdBy: ctx.user.id}).returning({id: priceCatalogs.id});
           for (let i = 0; i < records.length; i += 500) {
             await tx.insert(priceItems).values(records.slice(i, i + 500).map(record => ({...record, catalogId: catalog!.id})));
           }
-          return catalog!.id;
+          return { catalogId: catalog!.id, imported: records.length, alreadyPresent: 0 };
         });
         cacheClearPrefix("catalog.list:");
         cacheClearPrefix("reconcilePreview:");
-        return { catalogId, imported: records.length };
+        return result;
       }),
     inspectPriceSheet: protectedProcedure
       .input(z.object({
