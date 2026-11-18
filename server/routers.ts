@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { selectOperationalPlanning } from "../shared/operational-planning";
 import { z } from "zod";
@@ -3122,7 +3122,7 @@ export const appRouter = router({
           const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1]?.toUpperCase();
           const activeCatalogs = await tx.select().from(priceCatalogs).where(and(
             eq(priceCatalogs.status, "ativo"),
-            inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA"]),
+            inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA", "SICRO"]),
           ));
 
           const requiredCatalogNames = [...new Set(newItems.map(item => item.officialCatalogName.toLocaleLowerCase()))];
@@ -3165,7 +3165,7 @@ export const appRouter = router({
               }).from(priceItems).innerJoin(priceCatalogs, eq(priceCatalogs.id, priceItems.catalogId)).where(and(
                 inArray(priceItems.code, priceCodes),
                 eq(priceCatalogs.status, "ativo"),
-                inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA"]),
+                inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA", "SICRO"]),
               ))
             : [];
 
@@ -3208,8 +3208,8 @@ export const appRouter = router({
             if (!unitsCompatible(item.unit, official.unit)) throw badRequest(`Unidade incompatível em ${item.code}: ${item.unit} e ${official.unit}.`);
             if (projectState && official.state && official.state.toUpperCase() !== projectState)
               throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${official.state}.`);
-            if (projectState && official.sourceType === "SEINFRA" && official.state?.toUpperCase() !== projectState)
-              throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+            if (projectState && ["SEINFRA", "SICRO"].includes(official.sourceType) && official.state?.toUpperCase() !== projectState)
+              throw badRequest(`A base oficial precisa corresponder à UF da obra (${projectState}).`);
             return {
               budgetVersionId: input.budgetVersionId,
               wbsNodeId: nodeId,
@@ -3596,7 +3596,7 @@ export const appRouter = router({
             catalogStatus: priceCatalogs.status,
           }).from(priceItems).innerJoin(priceCatalogs, eq(priceCatalogs.id, priceItems.catalogId))
             .where(inArray(priceItems.id, ids));
-          if (rows.length !== ids.length || rows.some(row => row.itemType !== "servico" || row.catalogStatus !== "ativo" || !["SEINFRA", "SINAPI"].includes(row.sourceType))) {
+          if (rows.length !== ids.length || rows.some(row => row.itemType !== "servico" || row.catalogStatus !== "ativo" || !["SEINFRA", "SINAPI", "SICRO"].includes(row.sourceType))) {
             throw badRequest("Selecione somente serviços ativos de catálogo oficial.");
           }
           const catalogId = rows[0]!.catalogId;
@@ -3605,7 +3605,7 @@ export const appRouter = router({
           const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1];
           const catalog = rows[0]!;
           if (projectState && catalog.state && catalog.state.toUpperCase() !== projectState) throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${catalog.state}.`);
-          if (projectState && catalog.sourceType === "SEINFRA" && catalog.state?.toUpperCase() !== projectState) throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+          if (projectState && ["SEINFRA", "SICRO"].includes(catalog.sourceType) && catalog.state?.toUpperCase() !== projectState) throw badRequest(`A base oficial precisa corresponder à UF da obra (${projectState}).`);
 
           const totalCents = input.components.reduce((sum, component) => {
             const row = rows.find(service => service.id === component.officialPriceItemId)!;
@@ -3739,8 +3739,8 @@ export const appRouter = router({
               .from(priceCatalogs)
               .where(eq(priceCatalogs.id, composition.sourceCatalogId))
               .limit(1);
-            if (!catalog || catalog.status !== "ativo" || !["SINAPI", "SEINFRA"].includes(catalog.sourceType))
-              throw badRequest("A composição não pertence a uma base oficial ativa SINAPI ou SEINFRA.");
+            if (!catalog || catalog.status !== "ativo" || !["SINAPI", "SEINFRA", "SICRO"].includes(catalog.sourceType))
+              throw badRequest("A composição não pertence a uma base oficial ativa SINAPI, SEINFRA ou SICRO.");
             const [project] = await db
               .select({ location: projects.location })
               .from(projects)
@@ -3749,8 +3749,8 @@ export const appRouter = router({
             const projectState = project?.location.match(/\b([A-Z]{2})\s*$/)?.[1];
             if (projectState && catalog.state && catalog.state.toUpperCase() !== projectState)
               throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${catalog.state}.`);
-            if (projectState && catalog.sourceType === "SEINFRA" && catalog.state?.toUpperCase() !== projectState)
-              throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+            if (projectState && ["SEINFRA", "SICRO"].includes(catalog.sourceType) && catalog.state?.toUpperCase() !== projectState)
+              throw badRequest(`A base oficial precisa corresponder à UF da obra (${projectState}).`);
             const components = await db
               .select({
                 id: compositionComponents.id,
@@ -3801,7 +3801,7 @@ export const appRouter = router({
               .where(eq(priceItems.id, input.officialPriceItemId))
               .limit(1);
             if (!official) throw notFound("Serviço do catálogo não encontrado.");
-            if (official.itemType !== "servico" || official.catalogStatus !== "ativo" || !["SINAPI", "SEINFRA"].includes(official.sourceType)) {
+            if (official.itemType !== "servico" || official.catalogStatus !== "ativo" || !["SINAPI", "SEINFRA", "SICRO"].includes(official.sourceType)) {
               throw badRequest("Vincule somente serviço de catálogo oficial ativo.");
             }
             const itemUnit = input.unit ?? item.unit;
@@ -3813,8 +3813,8 @@ export const appRouter = router({
             if (projectState && official.state && official.state.toUpperCase() !== projectState) {
               throw badRequest(`Base regional incompatível: obra ${projectState}, catálogo ${official.state}.`);
             }
-            if (projectState && official.sourceType === "SEINFRA" && official.state?.toUpperCase() !== projectState) {
-              throw badRequest(`A SEINFRA precisa corresponder à UF da obra (${projectState}).`);
+            if (projectState && ["SEINFRA", "SICRO"].includes(official.sourceType) && official.state?.toUpperCase() !== projectState) {
+              throw badRequest(`A base oficial precisa corresponder à UF da obra (${projectState}).`);
             }
             values.officialPriceItemId = official.id;
             values.compositionId = null;
@@ -4680,7 +4680,7 @@ export const appRouter = router({
           .where(and(
             eq(priceItems.itemType, "servico"),
             eq(priceCatalogs.status, "ativo"),
-            inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA"]),
+            inArray(priceCatalogs.sourceType, ["SINAPI", "SEINFRA", "SICRO"]),
             or(sql`${priceItems.code} ILIKE ${pattern}`, sql`${priceItems.description} ILIKE ${pattern}`),
           ))
           .orderBy(desc(priceCatalogs.createdAt), asc(priceItems.code))
@@ -4691,7 +4691,7 @@ export const appRouter = router({
       .input(
         z.object({
           name: z.string().trim().min(2).max(160),
-          sourceType: z.enum(["propria", "SINAPI", "SEINFRA", "fornecedor"]),
+          sourceType: z.enum(["propria", "SINAPI", "SEINFRA", "SICRO", "fornecedor"]),
           state: z.string().trim().length(2).optional(),
           referencePeriod: z.string().trim().min(2).max(20),
           notes: z.string().trim().max(2000).optional(),
@@ -4916,6 +4916,60 @@ export const appRouter = router({
           aviso: planilha === "insumos" ? "Tabela de Insumos importada corretamente; ela não contém serviços e, portanto, não gera EAP." : null,
         };
       }),
+    importSicroSheet: protectedProcedure
+      .input(z.object({
+        name: z.string().trim().min(2).max(160),
+        state: z.string().trim().length(2),
+        referencePeriod: z.string().trim().min(2).max(20),
+        fileName: z.string().trim().min(1).max(240),
+        fileDataBase64: z.string().min(1).max(40_000_000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        const bytes = Buffer.from(input.fileDataBase64, "base64");
+        const rows = await lerPrimeiraAba(new Uint8Array(bytes));
+        const normalize = (value: unknown) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+        const header = rows.findIndex(row => normalize(row[0]) === "codigo" && normalize(row[1]) === "descricao do servico" && normalize(row[2]) === "unidade" && normalize(row[3]).startsWith("custo unitario"));
+        if (header < 0) throw badRequest("Envie o Relatório Sintético de Composições de Custos SICRO em XLSX.");
+        const records = rows.slice(header + 1).filter(row => row[0] != null).map(row => {
+          const code = String(row[0]).trim();
+          const description = String(row[1] ?? "").trim();
+          const unit = String(row[2] ?? "").trim();
+          const price = Number(row[3]);
+          if (!/^\d{7}$/.test(code) || description.length < 2 || description.length > 240 || !unit || unit.length > 32 || row[3] == null || !Number.isFinite(price) || price < 0)
+            throw badRequest(`Linha SICRO inválida para código ${code}; confira a planilha.`);
+          return { code, description, unit, itemType: "servico" as const, unitPrice: price.toFixed(2) };
+        });
+        if (!records.length || new Set(records.map(record => record.code)).size !== records.length)
+          throw badRequest("Planilha SICRO vazia ou com códigos duplicados.");
+        const fileHash = createHash("sha256").update(bytes).digest("hex");
+        const result = await db.transaction(async tx => {
+          const lockKey = JSON.stringify(["SICRO", input.name, input.state.toUpperCase(), input.referencePeriod]);
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+          const matches = await tx.select().from(priceCatalogs).where(and(eq(priceCatalogs.sourceType, "SICRO"), eq(priceCatalogs.name, input.name), eq(priceCatalogs.state, input.state.toUpperCase()), eq(priceCatalogs.referencePeriod, input.referencePeriod)));
+          if (matches.length > 1) throw conflict("Há mais de um catálogo SICRO com este nome, UF e período.");
+          if (matches.length === 1) {
+            const catalog = matches[0]!;
+            if (!catalog.notes?.includes(`SHA-256: ${fileHash}`)) throw conflict("Este catálogo já existe com outro arquivo. Nada foi alterado.");
+            const stored = await tx.select().from(priceItems).where(eq(priceItems.catalogId, catalog.id));
+            const byCode = new Map(stored.map(item => [item.code, item]));
+            if (stored.length !== records.length || records.some(record => {
+              const item = byCode.get(record.code);
+              return !item || item.description !== record.description || item.unit !== record.unit || item.itemType !== record.itemType || Number(item.unitPrice) !== Number(record.unitPrice);
+            })) throw conflict("O catálogo existente diverge da planilha. Nada foi alterado.");
+            return { catalogId: catalog.id, imported: 0, alreadyPresent: stored.length };
+          }
+          const [catalog] = await tx.insert(priceCatalogs).values({name: input.name, sourceType: "SICRO", state: input.state.toUpperCase(), referencePeriod: input.referencePeriod, notes: `Arquivo: ${input.fileName}; SHA-256: ${fileHash}`, createdBy: ctx.user.id}).returning({id: priceCatalogs.id});
+          for (let i = 0; i < records.length; i += 500) {
+            await tx.insert(priceItems).values(records.slice(i, i + 500).map(record => ({...record, catalogId: catalog!.id})));
+          }
+          return { catalogId: catalog!.id, imported: records.length, alreadyPresent: 0 };
+        });
+        cacheClearPrefix("catalog.list:");
+        cacheClearPrefix("reconcilePreview:");
+        return result;
+      }),
     inspectPriceSheet: protectedProcedure
       .input(z.object({
         fileName: z.string().trim().min(1).max(240),
@@ -4954,7 +5008,7 @@ export const appRouter = router({
       .input(
         z.object({
           query: z.string().trim().min(2).max(240),
-          sourceType: z.enum(["propria", "SINAPI", "SEINFRA", "fornecedor"]).optional(),
+          sourceType: z.enum(["propria", "SINAPI", "SEINFRA", "SICRO", "fornecedor"]).optional(),
           limit: z.number().int().min(1).max(10).default(6),
         })
       )

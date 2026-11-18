@@ -218,7 +218,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const composicoesCandidatas = (catalogoComposicoes.data?.compositions ?? []).filter(
     composition => composition.status === "validada" && composition.sourceCatalogId != null &&
       unitsCompatible(composition.unit, rascunho.unit) &&
-      catalogoComposicoes.data?.catalogs.some(row => row.id === composition.sourceCatalogId && row.status === "ativo" && ["SINAPI", "SEINFRA"].includes(row.sourceType))
+      catalogoComposicoes.data?.catalogs.some(row => row.id === composition.sourceCatalogId && row.status === "ativo" && ["SINAPI", "SEINFRA", "SICRO"].includes(row.sourceType))
   );
 
   return (
@@ -231,7 +231,7 @@ export function AbaOrcamento({ projetoId }: Props) {
           <p>Vincule cada serviço da EAP a uma composição analítica ou a um serviço oficial de tabela, valide o quantitativo e só então libere o custo para EV, Curva S e controle.</p>
           <div className={`orcamento-status-pill ${statusExibicaoOrcamento}`}><span />{statusExibicaoOrcamento === "aprovado" ? "Orçamento aprovado · quantitativos em cenário" : statusExibicaoOrcamento === "pronto" ? "Preços prontos · quantitativos pendentes de validação" : statusExibicaoOrcamento === "em_revisao" ? "Em revisão técnica" : "Aguardando fonte oficial"}</div>
         </div>
-        <div className="orcamento-hero-route"><span>01</span><b>Fonte</b><small>SEINFRA / SINAPI</small><i>→</i><span>02</span><b>Composição</b><small>Coeficientes e unidade</small><i>→</i><span>03</span><b>Validação</b><small>Quantidade e BDI</small></div>
+        <div className="orcamento-hero-route"><span>01</span><b>Fonte</b><small>SEINFRA / SINAPI / SICRO</small><i>→</i><span>02</span><b>Composição</b><small>Coeficientes e unidade</small><i>→</i><span>03</span><b>Validação</b><small>Quantidade e BDI</small></div>
       </div>
       <div className="xl-painel-intro">
         <div>
@@ -480,7 +480,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         )}
                         <label className="orcamento-edit-search orcamento-edit-wide" htmlFor={`composicao-busca-${item.id}`}>
                           Buscar composição oficial por código ou descrição
-                          <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Digite código ou serviço SINAPI/SEINFRA (mínimo 2 caracteres)" />
+                          <input id={`composicao-busca-${item.id}`} aria-label="Buscar composição oficial" value={buscaComposicao} onChange={e => setBuscaComposicao(e.target.value)} placeholder="Digite código ou serviço SINAPI/SEINFRA/SICRO (mínimo 2 caracteres)" />
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
                           Composição analítica vinculada
@@ -501,7 +501,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                           {rascunho.compositionId && <span>Ao salvar, o preço unitário será calculado pelos coeficientes e preços rastreados da composição.</span>}
                         </div>
                         <label className="orcamento-edit-search orcamento-edit-wide" htmlFor={`servico-oficial-busca-${item.id}`}>
-                          Vincular serviço oficial da tabela (preço unitário da própria SEINFRA/SINAPI)
+                          Vincular serviço oficial da tabela (preço unitário da própria SEINFRA/SINAPI/SICRO)
                           <input id={`servico-oficial-busca-${item.id}`} aria-label="Buscar serviço oficial de tabela" value={buscaServico} onChange={e => { setBuscaServico(e.target.value); setServicoParaAdicionar(""); }} placeholder="Busque por código ou descrição (mínimo 2 caracteres)" />
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`servico-oficial-selecao-${item.id}`}>
@@ -548,7 +548,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                           </section>}
                         <section className="orcamento-multiservico orcamento-edit-wide" aria-label="Composição por múltiplos serviços oficiais">
                           <div className="orcamento-multiservico-heading">
-                            <strong>Compor este pacote com vários serviços SEINFRA/SINAPI</strong>
+                            <strong>Compor este pacote com vários serviços SEINFRA/SINAPI/SICRO</strong>
                             <span>Coeficiente de cada serviço por 1 {rascunho.unit || "unidade de saída"} do item. A soma forma o preço unitário.{componentesServico.length > 0 ? ` Base: ${componentesServico[0]!.catalogName} · ${componentesServico[0]!.referencePeriod ?? "sem período"}.` : ""}</span>
                           </div>
                           <div className="orcamento-multiservico-add">

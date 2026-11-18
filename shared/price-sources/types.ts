@@ -24,7 +24,7 @@ export interface PriceParseResult {
 
 export interface PriceSourceAdapter {
   /** Identificador estável da fonte; casa com priceCatalogs.sourceType. */
-  readonly sourceType: "propria" | "SINAPI" | "SEINFRA" | "fornecedor";
+  readonly sourceType: "propria" | "SINAPI" | "SEINFRA" | "SICRO" | "fornecedor";
   /** Se este adapter aceita o arquivo (extensão/conteúdo). */
   canParse(fileName: string, bytes: Uint8Array): boolean;
   /**
