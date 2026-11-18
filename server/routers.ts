@@ -3018,7 +3018,7 @@ export const appRouter = router({
         projectId: z.number().int().positive(),
         budgetVersionId: z.number().int().positive(),
         replacements: z.array(z.object({
-          placeholderCode: z.string().trim().min(1).max(48),
+
           items: z.array(z.object({
             code: z.string().trim().min(1).max(48),
             description: z.string().trim().min(2).max(240),
@@ -3030,7 +3030,14 @@ export const appRouter = router({
             quantityEvidence: z.string().trim().min(1).max(2000),
             quantityEvidenceStatus: z.enum(["pendente", "cenario", "validada"]),
           })).min(1).max(2000),
-        })).min(1).max(200),
+        }).and(z.union([
+          z.object({ placeholderCode: z.string().trim().min(1).max(48), partialPlaceholderCode: z.never().optional() }),
+          z.object({ partialPlaceholderCode: z.string().trim().min(1).max(48), placeholderCode: z.never().optional() }),
+        ])).transform(group => ({
+          placeholderCode: group.partialPlaceholderCode ?? group.placeholderCode!,
+          preservePlaceholder: group.partialPlaceholderCode !== undefined,
+          items: group.items,
+        }))).min(1).max(200),
       }).superRefine((input, ctx) => {
         const placeholders = input.replacements.map(row => row.placeholderCode);
         if (new Set(placeholders).size !== placeholders.length) {
@@ -3089,7 +3096,8 @@ export const appRouter = router({
             eq(budgetItems.budgetVersionId, input.budgetVersionId),
             inArray(budgetItems.code, newCodes),
           ));
-          const replacing = new Set(placeholderCodes);
+          const replacedCodes = input.replacements.filter(group => !group.preservePlaceholder).map(group => group.placeholderCode);
+          const replacing = new Set(replacedCodes);
           const collision = collisions.find(row => !replacing.has(row.code));
           if (collision) throw conflict(`O código ${collision.code} já existe nesta versão do orçamento.`);
 
@@ -3222,7 +3230,9 @@ export const appRouter = router({
             };
           });
 
-          await tx.delete(budgetItems).where(and(eq(budgetItems.budgetVersionId, input.budgetVersionId), inArray(budgetItems.code, placeholderCodes)));
+          if (replacedCodes.length) {
+            await tx.delete(budgetItems).where(and(eq(budgetItems.budgetVersionId, input.budgetVersionId), inArray(budgetItems.code, replacedCodes)));
+          }
           const created = await tx.insert(budgetItems).values(calculated).returning({ id: budgetItems.id, code: budgetItems.code });
           await tx.insert(projectAuditEvents).values({
             projectId: input.projectId,
@@ -3232,10 +3242,11 @@ export const appRouter = router({
               budgetVersionId: input.budgetVersionId,
               placeholders: placeholders.map(item => ({ id: item.id, code: item.code, description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice, source: item.source, wbsNodeId: item.wbsNodeId })),
               created: created.map(item => ({ id: item.id, code: item.code })),
+              preservedCodes: placeholderCodes.filter(code => !replacing.has(code)),
               detailCount: calculated.length,
             },
           });
-          return { removed: placeholders.length, created: created.length, versionId: input.budgetVersionId, itemCodes: created.map(item => item.code) };
+          return { removed: replacedCodes.length, created: created.length, versionId: input.budgetVersionId, itemCodes: created.map(item => item.code) };
         });
         cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
         return result;

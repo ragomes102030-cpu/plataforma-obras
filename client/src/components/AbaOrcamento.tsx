@@ -43,7 +43,7 @@ function moeda(valor: number): string {
 
 export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
-  const [arquivoDetalhamento, setArquivoDetalhamento] = useState<{ name: string; replacements: Array<{ placeholderCode: string; items: LinhaImportacaoDetalhada[] }> } | null>(null);
+  const [arquivoDetalhamento, setArquivoDetalhamento] = useState<{ name: string; replacements: Array<{ placeholderCode: string; preservePlaceholder?: boolean; items: LinhaImportacaoDetalhada[] }> } | null>(null);
   const [erroImportacao, setErroImportacao] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
@@ -52,6 +52,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const [buscaServico, setBuscaServico] = useState("");
   const [servicoParaAdicionar, setServicoParaAdicionar] = useState("");
+  const [parcela, setParcela] = useState({ servico: "", quantidade: "", evidencia: "" });
   const [componentesServico, setComponentesServico] = useState<ServicoOficialSelecionado[]>([]);
   const utils = trpc.useUtils();
 
@@ -76,6 +77,13 @@ export function AbaOrcamento({ projetoId }: Props) {
     { q: buscaServico.trim() },
     { enabled: editandoId !== null && buscaServico.trim().length >= 2, staleTime: 60_000 }
   );
+  const servicoParcela = catalogoServicos.data?.items.find(service => String(service.id) === parcela.servico);
+  const incluirParcela = trpc.budgets.replacePlaceholderItems.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
+      setParcela({ servico: "", quantidade: "", evidencia: "" });
+    },
+  });
   const atualizarItem = trpc.budgets.updateItem.useMutation({
     onSuccess: async () => {
       await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
@@ -151,6 +159,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       officialPriceItemId: item.officialPriceItemId == null ? "" : String(item.officialPriceItemId),
     });
     setBuscaComposicao(item.compositionNote ?? "");
+    setParcela({ servico: "", quantidade: "", evidencia: "" });
     setBuscaServico(item.officialPriceItemId == null ? "" : item.code);
   }
 
@@ -316,7 +325,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && <section className="xl-analise" aria-label="Importar detalhamento rastreável">
         <div className="xl-analises-topo">
           <h3>Detalhar itens simbólicos nesta versão</h3>
-          <p>Importe um JSON com substituições dos placeholders R$ 1,00. Cada linha precisa ter vínculo a composição validada ou serviço oficial ativo, unidade compatível e evidência do quantitativo. A operação substitui somente placeholders simbólicos e registra auditoria; não cria revisão nova.</p>
+          <p>Use partialDetails para acrescentar parcelas e manter o pacote pendente, ou replacements para substituir o pacote completo. Cada linha precisa ter vínculo a composição validada ou serviço oficial ativo, unidade compatível e evidência do quantitativo.</p>
         </div>
         <label className="xl-btn" htmlFor="budget-detail-json">Selecionar arquivo JSON</label>
         <input id="budget-detail-json" type="file" accept="application/json,.json" style={{ display: "none" }} onChange={async event => {
@@ -326,9 +335,12 @@ export function AbaOrcamento({ projetoId }: Props) {
           setErroImportacao(null);
           if (!file) return;
           try {
-            const parsed = JSON.parse(await file.text()) as { replacements?: unknown };
-            if (!Array.isArray(parsed.replacements) || parsed.replacements.length === 0) throw new Error("O arquivo precisa conter replacements com ao menos um placeholder e suas linhas detalhadas.");
-            setArquivoDetalhamento({ name: file.name, replacements: parsed.replacements as Array<{ placeholderCode: string; items: LinhaImportacaoDetalhada[] }> });
+            const parsed = JSON.parse(await file.text());
+            const parcial = Array.isArray(parsed.partialDetails);
+            if (parcial && parsed.replacements !== undefined) throw new Error("Escolha um único modo de importação por arquivo.");
+            const groups = parcial ? parsed.partialDetails : parsed.replacements;
+            if (!Array.isArray(groups) || !groups.length) throw new Error("Informe os pacotes e suas parcelas em partialDetails ou replacements.");
+            setArquivoDetalhamento({ name: file.name, replacements: groups.map(group => ({ ...group, preservePlaceholder: parcial })) });
           } catch (error) {
             setErroImportacao(error instanceof Error ? error.message : "Não foi possível ler o arquivo JSON.");
           }
@@ -337,13 +349,17 @@ export function AbaOrcamento({ projetoId }: Props) {
           <strong>{arquivoDetalhamento.name}: {arquivoDetalhamento.replacements.length} placeholder(s), {arquivoDetalhamento.replacements.reduce((sum, group) => sum + (Array.isArray(group.items) ? group.items.length : 0), 0)} linha(s) detalhada(s).</strong>
           <p>Versão alvo: v{versaoAtiva.versionNumber} · {versaoAtiva.name}. Confirme que códigos, unidades, quantidades e evidências correspondem ao escopo antes de importar.</p>
           <button type="button" className="xl-btn xl-btn-primary" disabled={importarDetalhamento.isPending} onClick={() => {
-            if (!window.confirm(`Substituir ${arquivoDetalhamento.replacements.length} placeholder(s) da v${versaoAtiva.versionNumber} por ${arquivoDetalhamento.replacements.reduce((sum, group) => sum + group.items.length, 0)} linha(s) detalhada(s)? A versão será mantida e a alteração ficará registrada na auditoria.`)) return;
+            const parcial = arquivoDetalhamento.replacements.every(group => group.preservePlaceholder);
+            const acao = parcial ? "Acrescentar as parcelas e manter os pacotes pendentes" : "Substituir os pacotes pelas linhas detalhadas";
+            if (!window.confirm(`${acao} na v${versaoAtiva.versionNumber}?`)) return;
             setErroImportacao(null);
-            importarDetalhamento.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, replacements: arquivoDetalhamento.replacements });
+            importarDetalhamento.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, replacements: arquivoDetalhamento.replacements.map(group => group.preservePlaceholder
+              ? { partialPlaceholderCode: group.placeholderCode, items: group.items }
+              : { placeholderCode: group.placeholderCode, items: group.items }) });
           }}>{importarDetalhamento.isPending ? "Importando…" : "Validar e importar na versão atual"}</button>
         </div>}
         {(erroImportacao || importarDetalhamento.isError) && <p className="xl-aviso xl-aviso-erro" role="alert">{erroImportacao ?? importarDetalhamento.error?.message ?? "Falha ao importar detalhamento."}</p>}
-        {importarDetalhamento.isSuccess && <p className="xl-aviso" role="status">Importação concluída: {importarDetalhamento.data.removed} placeholder(s) substituído(s) por {importarDetalhamento.data.created} linha(s). A lista será atualizada.</p>}
+        {importarDetalhamento.isSuccess && <p className="xl-aviso" role="status">Importação concluída: {importarDetalhamento.data.removed} pacote(s) substituído(s), {importarDetalhamento.data.created} parcela(s) incluída(s). A lista será atualizada.</p>}
       </section>}
 
       {erro && (
@@ -504,6 +520,32 @@ export function AbaOrcamento({ projetoId }: Props) {
                           {buscaServico.trim().length >= 2 && catalogoServicos.isSuccess && !catalogoServicos.isFetching && (catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).length === 0 && <span>Nenhum serviço oficial ativo encontrado para esse termo e unidade.</span>}
                           {rascunho.officialPriceItemId && <span>O preço e a referência vêm diretamente da linha oficial; composição analítica fica desvinculada.</span>}
                         </div>
+                        {versaoAtiva && item.unit.trim().toLowerCase() === "vb" &&
+                          Number(item.quantity) === 1 && Number(item.unitPrice) === 1 &&
+                          !item.officialPriceItemId && !item.compositionId && /simb[oó]lic|placeholder/i.test(item.source ?? "") &&
+                          <section className="orcamento-edit-wide" aria-label="Detalhar parcela do pacote">
+                            <strong>Acrescentar uma parcela ao pacote</strong>
+                            <p>Pesquise o serviço acima. A parcela usa a unidade e o preço da tabela e mantém o pacote aberto para o restante do escopo.</p>
+                            <label>Serviço da parcela<select value={parcela.servico} onChange={e => setParcela({ ...parcela, servico: e.target.value })}>
+                              <option value="">Selecione um serviço</option>
+                              {catalogoServicos.data?.items.map(service => <option key={service.id} value={service.id}>{service.code} · {service.description} · {service.unit} · {service.catalogName} · R$ {service.unitPrice}</option>)}
+                            </select></label>
+                            <label>Quantidade da parcela {servicoParcela && `(${servicoParcela.unit})`}<input type="number" min="0.001" step="0.001" value={parcela.quantidade} onChange={e => setParcela({ ...parcela, quantidade: e.target.value })} /></label>
+                            <label>Origem da quantidade<textarea maxLength={2000} value={parcela.evidencia} onChange={e => setParcela({ ...parcela, evidencia: e.target.value })} placeholder="Prancha, revisão e trecho medido" /></label>
+                            <button type="button" className="xl-btn" disabled={!servicoParcela || Number(parcela.quantidade) < 0.001 || !parcela.evidencia.trim() || incluirParcela.isPending}
+                              onClick={() => {
+                                if (!servicoParcela) return;
+                                incluirParcela.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, replacements: [{
+                                  partialPlaceholderCode: item.code, items: [{
+                                    code: `${item.code}.PR.${servicoParcela.code}`, description: servicoParcela.description.slice(0, 240),
+                                    officialPriceCode: servicoParcela.code, officialCatalogName: servicoParcela.catalogName,
+                                    unit: servicoParcela.unit, quantity: Number(parcela.quantidade), quantityEvidence: parcela.evidencia.trim(), quantityEvidenceStatus: "cenario",
+                                  }],
+                                }] });
+                              }}>Incluir parcela de cenário</button>
+                            {incluirParcela.isError && <p role="alert">{incluirParcela.error.message}</p>}
+                            {incluirParcela.isSuccess && <p role="status">Parcela incluída no orçamento.</p>}
+                          </section>}
                         <section className="orcamento-multiservico orcamento-edit-wide" aria-label="Composição por múltiplos serviços oficiais">
                           <div className="orcamento-multiservico-heading">
                             <strong>Compor este pacote com vários serviços SEINFRA/SINAPI</strong>
