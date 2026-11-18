@@ -356,7 +356,7 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
 
-  it("substitui um placeholder simbólico por itens detalhados com fonte oficial, sem criar outra versão", async () => {
+  it.each([false, true])("importa detalhamento oficial na versão existente (parcial=%s)", async parcial => {
     const [root] = await db.select().from(wbsNodes);
     const [budget] = await db.insert(budgetVersions).values({
       projectId,
@@ -397,7 +397,7 @@ describe("aplicarPropostaEap", () => {
       projectId,
       budgetVersionId: budget!.id,
       replacements: [{
-        placeholderCode: "1.1.1",
+        ...(parcial ? { partialPlaceholderCode: "1.1.1" } : { placeholderCode: "1.1.1" }),
         items: [{
           code: "1.1.1-01",
           description: "Serviço por área medida",
@@ -414,9 +414,10 @@ describe("aplicarPropostaEap", () => {
     const rows = await db.select().from(budgetItems).where(eq(budgetItems.budgetVersionId, budget!.id));
     const audit = await db.select().from(projectAuditEvents).where(eq(projectAuditEvents.projectId, projectId));
     const [persistedVersion] = await db.select().from(budgetVersions).where(eq(budgetVersions.id, budget!.id));
-    expect(result).toMatchObject({ removed: 1, created: 1, versionId: budget!.id });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
+    expect(result).toMatchObject({ removed: parcial ? 0 : 1, created: 1, versionId: budget!.id });
+    expect(rows).toHaveLength(parcial ? 2 : 1);
+    expect(rows.some(row => row.id === placeholder!.id)).toBe(parcial);
+    expect(rows.find(row => row.code === "1.1.1-01")).toMatchObject({
       wbsNodeId: root!.id,
       code: "1.1.1-01",
       unit: "m²",
