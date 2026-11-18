@@ -147,7 +147,7 @@ const enumCostEntriesStatus = pgEnum("cost_entries_status", [
 const enumBudgetVersionsStatus = pgEnum("budget_versions_status", ["rascunho", "em_revisao", "aprovado", "arquivado"]);
 
 /** `price_catalogs_sourceType` — o enum de `price_catalogs.sourceType`. */
-const enumPriceCatalogsSourceType = pgEnum("price_catalogs_sourceType", ["propria", "SINAPI", "SEINFRA", "fornecedor"]);
+const enumPriceCatalogsSourceType = pgEnum("price_catalogs_sourceType", ["propria", "SINAPI", "SEINFRA", "SICRO", "fornecedor"]);
 
 /** `price_catalogs_status` — o enum de `price_catalogs.status`. */
 const enumPriceCatalogsStatus = pgEnum("price_catalogs_status", ["ativo", "arquivado"]);

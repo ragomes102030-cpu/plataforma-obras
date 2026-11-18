@@ -356,7 +356,26 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
 
-  it.each([false, true])("importa detalhamento oficial na versão existente (parcial=%s)", async parcial => {
+  it("importa serviços SICRO e rejeita reenvio e planilha inválida", async () => {
+    const XLSX = await import("xlsx");
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+      ["Código", "Descrição do Serviço", "Unidade", "Custo Unitário\n(R$)"],
+      ["0307731", "Serviço de apoio", "un", 155.44],
+      ["4507958", "Cordoalha engraxada", "kg", 16.01],
+    ]), "Sheet1");
+    const fileDataBase64 = XLSX.write(book, {type:"buffer",bookType:"xlsx"}).toString("base64");
+    const input = {name:"SICRO CE 10/2025",state:"CE",referencePeriod:"10/2025",fileName:"sicro.xlsx",fileDataBase64};
+    const result = await caller.catalog.importSicroSheet(input);
+    expect(result.imported).toBe(2);
+    const services = await caller.catalog.searchOfficialServices({q:"4507958"});
+    expect(services.items.some(item => item.code === "4507958" && item.sourceType === "SICRO" && Number(item.unitPrice) === 16.01)).toBe(true);
+    const records = await db.select().from(priceItems).where(eq(priceItems.catalogId, result.catalogId));
+    expect(records.find(item => item.code === "0307731")).toBeDefined();
+    await expect(caller.catalog.importSicroSheet(input)).rejects.toThrow(/já existe/);
+  });
+
+  it.each([[false, "SEINFRA"], [true, "SEINFRA"], [true, "SICRO"]] as const)("importa detalhamento oficial na versão existente (parcial=%s, fonte=%s)", async (parcial, fonte) => {
     const [root] = await db.select().from(wbsNodes);
     const [budget] = await db.insert(budgetVersions).values({
       projectId,
@@ -378,7 +397,7 @@ describe("aplicarPropostaEap", () => {
     }).returning({ id: budgetItems.id });
     const [catalog] = await db.insert(priceCatalogs).values({
       name: "SEINFRA-CE 028.1 — cenário QA",
-      sourceType: "SEINFRA",
+      sourceType: fonte,
       state: "CE",
       referencePeriod: "028.1",
       status: "ativo",
@@ -423,7 +442,7 @@ describe("aplicarPropostaEap", () => {
       unit: "m²",
       quantity: "10.000",
       unitPrice: "12.34",
-      source: "SEINFRA · SEINFRA-CE 028.1 — cenário QA",
+      source: fonte + " · SEINFRA-CE 028.1 — cenário QA",
       officialPriceItemId: expect.any(Number),
       quantityEvidenceStatus: "cenario",
     });

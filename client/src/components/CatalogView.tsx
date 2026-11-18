@@ -19,6 +19,12 @@ function money(value: number) {
 
 export function CatalogView() {
   const utils = trpc.useUtils();
+  const [sicroFile, setSicroFile] = useState<File | null>(null);
+  const [sicroState, setSicroState] = useState("CE");
+  const [sicroPeriod, setSicroPeriod] = useState("");
+  const importarSicro = trpc.catalog.importSicroSheet.useMutation({
+    onSuccess: async () => { await utils.catalog.list.invalidate(); setSicroFile(null); },
+  });
   const [catalogId, setCatalogId] = useState<number | undefined>();
   const [compositionId, setCompositionId] = useState<number | undefined>();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -62,7 +68,7 @@ export function CatalogView() {
   );
 
   const [catalogName, setCatalogName] = useState("");
-  const [sourceType, setSourceType] = useState<"propria" | "SINAPI" | "SEINFRA" | "fornecedor">("propria");
+  const [sourceType, setSourceType] = useState<"propria" | "SINAPI" | "SEINFRA" | "SICRO" | "fornecedor">("propria");
   const [catalogState, setCatalogState] = useState("");
   const [catalogPeriod, setCatalogPeriod] = useState("");
   const [itemCode, setItemCode] = useState("");
@@ -202,7 +208,7 @@ export function CatalogView() {
       </div>
 
       <div className="catalog-summary-grid">
-        <div className="module-card budget-summary-card"><span className="eyebrow">CATÁLOGOS</span><strong>{carregandoCatalogo ? "…" : (catalogQuery.data?.catalogs.length ?? 0)}</strong><p>SINAPI, SEINFRA, própria ou fornecedor.</p></div>
+        <div className="module-card budget-summary-card"><span className="eyebrow">CATÁLOGOS</span><strong>{carregandoCatalogo ? "…" : (catalogQuery.data?.catalogs.length ?? 0)}</strong><p>SINAPI, SEINFRA, SICRO, própria ou fornecedor.</p></div>
         <div className="module-card budget-summary-card"><span className="eyebrow">ITENS DE PREÇO</span><strong>{carregandoCatalogo ? "…" : totalItens.toLocaleString("pt-BR")}</strong><p>{carregandoCatalogo ? "Carregando o catálogo…" : `${selectedCatalog?.name ?? "Selecione um catálogo"}${buscaDebounced ? " · filtrado pela busca" : ""}.`}</p></div>
         <div className="module-card budget-summary-card budget-total-card"><span className="eyebrow">CUSTO UNITÁRIO</span><strong>{carregandoCatalogo ? "…" : money(catalogQuery.data?.total ?? 0)}</strong><p>Coeficiente × preço congelado na composição.</p></div>
       </div>
@@ -226,12 +232,28 @@ export function CatalogView() {
         <div className="panel-heading"><div><h3>Nova fonte de preços</h3><p>A fonte e o período acompanham cada referência importada ou cadastrada.</p></div><Plus size={18} className="sparkle" /></div>
         <form className="catalog-form-grid" onSubmit={event => { event.preventDefault(); if (catalogName && catalogPeriod) createCatalog.mutate({ name: catalogName, sourceType, state: catalogState || undefined, referencePeriod: catalogPeriod }); }}>
           <label>Nome da fonte<input value={catalogName} onChange={event => setCatalogName(event.target.value)} placeholder="SINAPI São Paulo" required /></label>
-          <label>Tipo<select value={sourceType} onChange={event => setSourceType(event.target.value as typeof sourceType)}><option value="propria">Base própria</option><option value="SINAPI">SINAPI</option><option value="SEINFRA">SEINFRA</option><option value="fornecedor">Fornecedor</option></select></label>
+          <label>Tipo<select value={sourceType} onChange={event => setSourceType(event.target.value as typeof sourceType)}><option value="propria">Base própria</option><option value="SINAPI">SINAPI</option><option value="SEINFRA">SEINFRA</option><option value="SICRO">SICRO</option><option value="fornecedor">Fornecedor</option></select></label>
           <label>UF<input value={catalogState} onChange={event => setCatalogState(event.target.value)} placeholder="SP" maxLength={2} /></label>
           <label>Referência<input value={catalogPeriod} onChange={event => setCatalogPeriod(event.target.value)} placeholder="09/2026" required /></label>
           <div className="catalog-form-footer"><span>Para base oficial, use a importação de planilha logo abaixo — é mais rápido e já traz os códigos.</span><button className="primary-button" disabled={createCatalog.isPending}><Plus size={14} /> Criar fonte</button></div>
         </form>
         {createCatalog.error && <p className="form-error">{createCatalog.error.message}</p>}
+      </section>
+
+      <section className="module-card">
+        <div className="panel-heading"><div><h3>Importar serviços SICRO</h3><p>Selecione o relatório sintético de composições de custos em XLSX do DNIT.</p></div></div>
+        <form className="catalog-form-grid" onSubmit={async event => {
+          event.preventDefault();
+          if (!sicroFile || !sicroPeriod.trim()) return;
+          importarSicro.mutate({ name: `SICRO ${sicroState.toUpperCase()} ${sicroPeriod.trim()}`, state: sicroState.toUpperCase(), referencePeriod: sicroPeriod.trim(), fileName: sicroFile.name, fileDataBase64: await encodeFile(sicroFile) });
+        }}>
+          <label>Arquivo XLSX<input type="file" accept=".xlsx" onChange={event => setSicroFile(event.target.files?.[0] ?? null)} required /></label>
+          <label>UF<input value={sicroState} onChange={event => setSicroState(event.target.value)} minLength={2} maxLength={2} required /></label>
+          <label>Referência<input value={sicroPeriod} onChange={event => setSicroPeriod(event.target.value)} placeholder="10/2025 revisado" required /></label>
+          <button className="primary-button" disabled={!sicroFile || importarSicro.isPending}>Importar SICRO</button>
+        </form>
+        {importarSicro.error && <p className="form-error">{importarSicro.error.message}</p>}
+        {importarSicro.data && <p role="status">{importarSicro.data.imported} serviços importados.</p>}
       </section>
 
       <section className="module-card">
