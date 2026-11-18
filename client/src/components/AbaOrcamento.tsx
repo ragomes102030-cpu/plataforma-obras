@@ -52,6 +52,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const [buscaServico, setBuscaServico] = useState("");
   const [servicoParaAdicionar, setServicoParaAdicionar] = useState("");
+  const [parcela, setParcela] = useState({ servico: "", quantidade: "", evidencia: "" });
   const [componentesServico, setComponentesServico] = useState<ServicoOficialSelecionado[]>([]);
   const utils = trpc.useUtils();
 
@@ -76,6 +77,13 @@ export function AbaOrcamento({ projetoId }: Props) {
     { q: buscaServico.trim() },
     { enabled: editandoId !== null && buscaServico.trim().length >= 2, staleTime: 60_000 }
   );
+  const servicoParcela = catalogoServicos.data?.items.find(service => String(service.id) === parcela.servico);
+  const incluirParcela = trpc.budgets.replacePlaceholderItems.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
+      setParcela({ servico: "", quantidade: "", evidencia: "" });
+    },
+  });
   const atualizarItem = trpc.budgets.updateItem.useMutation({
     onSuccess: async () => {
       await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
@@ -151,6 +159,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       officialPriceItemId: item.officialPriceItemId == null ? "" : String(item.officialPriceItemId),
     });
     setBuscaComposicao(item.compositionNote ?? "");
+    setParcela({ servico: "", quantidade: "", evidencia: "" });
     setBuscaServico(item.officialPriceItemId == null ? "" : item.code);
   }
 
@@ -511,6 +520,32 @@ export function AbaOrcamento({ projetoId }: Props) {
                           {buscaServico.trim().length >= 2 && catalogoServicos.isSuccess && !catalogoServicos.isFetching && (catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).length === 0 && <span>Nenhum serviço oficial ativo encontrado para esse termo e unidade.</span>}
                           {rascunho.officialPriceItemId && <span>O preço e a referência vêm diretamente da linha oficial; composição analítica fica desvinculada.</span>}
                         </div>
+                        {versaoAtiva && item.unit.trim().toLowerCase() === "vb" &&
+                          Number(item.quantity) === 1 && Number(item.unitPrice) === 1 &&
+                          !item.officialPriceItemId && !item.compositionId && /simb[oó]lic|placeholder/i.test(item.source ?? "") &&
+                          <section className="orcamento-edit-wide" aria-label="Detalhar parcela do pacote">
+                            <strong>Acrescentar uma parcela ao pacote</strong>
+                            <p>Pesquise o serviço acima. A parcela usa a unidade e o preço da tabela e mantém o pacote aberto para o restante do escopo.</p>
+                            <label>Serviço da parcela<select value={parcela.servico} onChange={e => setParcela({ ...parcela, servico: e.target.value })}>
+                              <option value="">Selecione um serviço</option>
+                              {catalogoServicos.data?.items.map(service => <option key={service.id} value={service.id}>{service.code} · {service.description} · {service.unit} · {service.catalogName} · R$ {service.unitPrice}</option>)}
+                            </select></label>
+                            <label>Quantidade da parcela {servicoParcela && `(${servicoParcela.unit})`}<input type="number" min="0.001" step="0.001" value={parcela.quantidade} onChange={e => setParcela({ ...parcela, quantidade: e.target.value })} /></label>
+                            <label>Origem da quantidade<textarea maxLength={2000} value={parcela.evidencia} onChange={e => setParcela({ ...parcela, evidencia: e.target.value })} placeholder="Prancha, revisão e trecho medido" /></label>
+                            <button type="button" className="xl-btn" disabled={!servicoParcela || Number(parcela.quantidade) < 0.001 || !parcela.evidencia.trim() || incluirParcela.isPending}
+                              onClick={() => {
+                                if (!servicoParcela) return;
+                                incluirParcela.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, replacements: [{
+                                  partialPlaceholderCode: item.code, items: [{
+                                    code: `${item.code}.PR.${servicoParcela.code}`, description: servicoParcela.description.slice(0, 240),
+                                    officialPriceCode: servicoParcela.code, officialCatalogName: servicoParcela.catalogName,
+                                    unit: servicoParcela.unit, quantity: Number(parcela.quantidade), quantityEvidence: parcela.evidencia.trim(), quantityEvidenceStatus: "cenario",
+                                  }],
+                                }] });
+                              }}>Incluir parcela de cenário</button>
+                            {incluirParcela.isError && <p role="alert">{incluirParcela.error.message}</p>}
+                            {incluirParcela.isSuccess && <p role="status">Parcela incluída no orçamento.</p>}
+                          </section>}
                         <section className="orcamento-multiservico orcamento-edit-wide" aria-label="Composição por múltiplos serviços oficiais">
                           <div className="orcamento-multiservico-heading">
                             <strong>Compor este pacote com vários serviços SEINFRA/SINAPI</strong>
