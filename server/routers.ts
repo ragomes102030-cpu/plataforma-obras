@@ -3102,7 +3102,10 @@ export const appRouter = router({
           const collisionByCode = new Map(collisions.map(row => [row.code, row]));
           const replacedCodes = input.replacements.filter(group => !group.preservePlaceholder).map(group => group.placeholderCode);
           const replacing = new Set(replacedCodes);
-          const collision = collisions.find(row => !replacing.has(row.code));
+          const collision = collisions.find(row => {
+            const alreadyLinked = row.officialPriceItemId != null || row.compositionId != null;
+            return !alreadyLinked && !replacing.has(row.code);
+          });
           if (collision) throw conflict(`O código ${collision.code} já existe nesta versão do orçamento.`);
 
           const projectNodes = new Map(placeholders.flatMap(item => item.wbsNodeId == null ? [] : [[item.code, item.wbsNodeId] as const]));
