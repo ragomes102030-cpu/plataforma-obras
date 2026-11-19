@@ -352,11 +352,11 @@ export function AbaOrcamento({ projetoId }: Props) {
         }} />
         <label htmlFor="budget-detail-text" className="xl-sr-only">Conteúdo JSON do detalhamento</label>
         <textarea id="budget-detail-text" value={textoDetalhamento} onChange={event => setTextoDetalhamento(event.target.value)} placeholder="Cole aqui o JSON se o seletor de arquivo não estiver disponível" rows={3} />
-        <button type="button" className="xl-btn" disabled={!textoDetalhamento.trim()} onClick={() => prepararDetalhamento(textoDetalhamento, "detalhamento-colado.json")}>Ler JSON colado</button>
+        <button type="button" className="xl-btn" data-testid="budget-detail-read-pasted" aria-label="Ler JSON colado" disabled={!textoDetalhamento.trim()} onClick={() => prepararDetalhamento(textoDetalhamento, "detalhamento-colado.json")}>Ler JSON colado</button>
         {arquivoDetalhamento && <div role="status" className="xl-aviso">
           <strong>{arquivoDetalhamento.name}: {arquivoDetalhamento.replacements.length} placeholder(s), {arquivoDetalhamento.replacements.reduce((sum, group) => sum + (Array.isArray(group.items) ? group.items.length : 0), 0)} linha(s) detalhada(s).</strong>
           <p>Versão alvo: v{versaoAtiva.versionNumber} · {versaoAtiva.name}. Confirme que códigos, unidades, quantidades e evidências correspondem ao escopo antes de importar.</p>
-          <button type="button" className="xl-btn xl-btn-primary" disabled={importarDetalhamento.isPending} onClick={() => {
+          <button type="button" className="xl-btn xl-btn-primary" data-testid="budget-detail-import" aria-label="Validar e importar detalhamento na versão atual" disabled={importarDetalhamento.isPending} onClick={() => {
             const parcial = arquivoDetalhamento.replacements.every(group => group.preservePlaceholder);
             const acao = parcial ? "Acrescentar as parcelas e manter os pacotes pendentes" : "Substituir os pacotes pelas linhas detalhadas";
             if (!window.confirm(`${acao} na v${versaoAtiva.versionNumber}?`)) return;
