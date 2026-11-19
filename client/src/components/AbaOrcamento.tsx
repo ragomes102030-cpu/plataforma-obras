@@ -45,6 +45,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [arquivoDetalhamento, setArquivoDetalhamento] = useState<{ name: string; replacements: Array<{ placeholderCode: string; preservePlaceholder?: boolean; items: LinhaImportacaoDetalhada[] }> } | null>(null);
   const [erroImportacao, setErroImportacao] = useState<string | null>(null);
+  const [textoDetalhamento, setTextoDetalhamento] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
   const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
@@ -55,6 +56,21 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [parcela, setParcela] = useState({ servico: "", quantidade: "", evidencia: "" });
   const [componentesServico, setComponentesServico] = useState<ServicoOficialSelecionado[]>([]);
   const utils = trpc.useUtils();
+
+  function prepararDetalhamento(texto: string, nome: string) {
+    setArquivoDetalhamento(null);
+    setErroImportacao(null);
+    try {
+      const parsed = JSON.parse(texto) as { partialDetails?: unknown; replacements?: unknown };
+      const parcial = Array.isArray(parsed.partialDetails);
+      if (parcial && parsed.replacements !== undefined) throw new Error("Escolha um único modo de importação por arquivo.");
+      const groups = parcial ? parsed.partialDetails : parsed.replacements;
+      if (!Array.isArray(groups) || !groups.length) throw new Error("Informe os pacotes e suas parcelas em partialDetails ou replacements.");
+      setArquivoDetalhamento({ name: nome, replacements: (groups as Array<{ placeholderCode: string; preservePlaceholder?: boolean; items: LinhaImportacaoDetalhada[] }>).map(group => ({ ...group, preservePlaceholder: parcial })) });
+    } catch (error) {
+      setErroImportacao(error instanceof Error ? error.message : "Não foi possível ler o arquivo JSON.");
+    }
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => setBuscaComposicaoDebounced(buscaComposicao.trim()), 300);
@@ -331,20 +347,12 @@ export function AbaOrcamento({ projetoId }: Props) {
         <input id="budget-detail-json" type="file" accept="application/json,.json" style={{ display: "none" }} onChange={async event => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = "";
-          setArquivoDetalhamento(null);
-          setErroImportacao(null);
           if (!file) return;
-          try {
-            const parsed = JSON.parse(await file.text());
-            const parcial = Array.isArray(parsed.partialDetails);
-            if (parcial && parsed.replacements !== undefined) throw new Error("Escolha um único modo de importação por arquivo.");
-            const groups = parcial ? parsed.partialDetails : parsed.replacements;
-            if (!Array.isArray(groups) || !groups.length) throw new Error("Informe os pacotes e suas parcelas em partialDetails ou replacements.");
-            setArquivoDetalhamento({ name: file.name, replacements: groups.map(group => ({ ...group, preservePlaceholder: parcial })) });
-          } catch (error) {
-            setErroImportacao(error instanceof Error ? error.message : "Não foi possível ler o arquivo JSON.");
-          }
+          prepararDetalhamento(await file.text(), file.name);
         }} />
+        <label htmlFor="budget-detail-text" className="xl-sr-only">Conteúdo JSON do detalhamento</label>
+        <textarea id="budget-detail-text" value={textoDetalhamento} onChange={event => setTextoDetalhamento(event.target.value)} placeholder="Cole aqui o JSON se o seletor de arquivo não estiver disponível" rows={3} />
+        <button type="button" className="xl-btn" disabled={!textoDetalhamento.trim()} onClick={() => prepararDetalhamento(textoDetalhamento, "detalhamento-colado.json")}>Ler JSON colado</button>
         {arquivoDetalhamento && <div role="status" className="xl-aviso">
           <strong>{arquivoDetalhamento.name}: {arquivoDetalhamento.replacements.length} placeholder(s), {arquivoDetalhamento.replacements.reduce((sum, group) => sum + (Array.isArray(group.items) ? group.items.length : 0), 0)} linha(s) detalhada(s).</strong>
           <p>Versão alvo: v{versaoAtiva.versionNumber} · {versaoAtiva.name}. Confirme que códigos, unidades, quantidades e evidências correspondem ao escopo antes de importar.</p>
