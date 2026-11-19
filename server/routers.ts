@@ -3080,7 +3080,7 @@ export const appRouter = router({
           if (placeholders.length !== placeholderCodes.length)
             throw notFound("Um ou mais placeholders não pertencem à versão de orçamento informada.");
           for (const placeholder of placeholders) {
-            const symbolicSource = /simb[oó]lic|placeholder/i.test(String(placeholder.source ?? ""));
+            const symbolicSource = /simb[oó]lic|placeholder|premissa qa/i.test(String(placeholder.source ?? ""));
             const isSymbolic = placeholder.unit.trim().toLowerCase() === "vb" &&
               Number(placeholder.quantity) === 1 && Number(placeholder.unitPrice) === 1 &&
               placeholder.compositionId == null && placeholder.officialPriceItemId == null && symbolicSource;
