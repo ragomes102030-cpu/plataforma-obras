@@ -3092,10 +3092,14 @@ export const appRouter = router({
             placeholderCode: group.placeholderCode,
           })));
           const newCodes = newItems.map(item => item.code);
-          const collisions = await tx.select({ code: budgetItems.code }).from(budgetItems).where(and(
+          const collisions = await tx.select({ code: budgetItems.code, unit: budgetItems.unit, quantity: budgetItems.quantity, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId }).from(budgetItems).where(and(
             eq(budgetItems.budgetVersionId, input.budgetVersionId),
             inArray(budgetItems.code, newCodes),
           ));
+          // A parcela pode já existir quando um pacote foi importado anteriormente.
+          // Nesse caso, reutilizamos a linha somente se ela já estiver vinculada a
+          // composição/serviço (evita duplicar quantitativos e mantém a importação idempotente).
+          const collisionByCode = new Map(collisions.map(row => [row.code, row]));
           const replacedCodes = input.replacements.filter(group => !group.preservePlaceholder).map(group => group.placeholderCode);
           const replacing = new Set(replacedCodes);
           const collision = collisions.find(row => !replacing.has(row.code));
@@ -3230,10 +3234,22 @@ export const appRouter = router({
             };
           });
 
+          const reusableCodes = new Set(calculated
+            .filter(item => collisionByCode.has(item.code))
+            .map(item => item.code));
+          for (const item of calculated) {
+            const existing = collisionByCode.get(item.code);
+            if (!existing) continue;
+            const linked = existing.officialPriceItemId != null || existing.compositionId != null;
+            if (!linked || existing.unit.trim().toLowerCase() !== item.unit.trim().toLowerCase() || Number(existing.quantity) !== Number(item.quantity)) {
+              throw conflict(`O código ${item.code} já existe com vínculo ou quantitativo incompatível.`);
+            }
+          }
+          const toInsert = calculated.filter(item => !reusableCodes.has(item.code));
           if (replacedCodes.length) {
             await tx.delete(budgetItems).where(and(eq(budgetItems.budgetVersionId, input.budgetVersionId), inArray(budgetItems.code, replacedCodes)));
           }
-          const created = await tx.insert(budgetItems).values(calculated).returning({ id: budgetItems.id, code: budgetItems.code });
+          const created = toInsert.length ? await tx.insert(budgetItems).values(toInsert).returning({ id: budgetItems.id, code: budgetItems.code }) : [];
           await tx.insert(projectAuditEvents).values({
             projectId: input.projectId,
             userId: ctx.user.id,
@@ -3244,6 +3260,7 @@ export const appRouter = router({
               created: created.map(item => ({ id: item.id, code: item.code })),
               preservedCodes: placeholderCodes.filter(code => !replacing.has(code)),
               detailCount: calculated.length,
+              reusedCodes: [...reusableCodes],
             },
           });
           return { removed: replacedCodes.length, created: created.length, versionId: input.budgetVersionId, itemCodes: created.map(item => item.code) };
