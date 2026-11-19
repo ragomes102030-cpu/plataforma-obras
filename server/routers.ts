@@ -3841,6 +3841,37 @@ export const appRouter = router({
         cacheClearPrefix(`reconcilePreview:${input.projectId}:`);
         return { id: updated.id };
       }),
+    applyQaPremises: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        budgetVersionId: z.number().int().positive(),
+        note: z.string().trim().min(4).max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [version] = await db.select({ id: budgetVersions.id, status: budgetVersions.status })
+          .from(budgetVersions)
+          .where(and(eq(budgetVersions.id, input.budgetVersionId), eq(budgetVersions.projectId, input.projectId)))
+          .limit(1);
+        if (!version) throw notFound("Versão de orçamento não encontrada.");
+        if (version.status === "aprovado" || version.status === "arquivado") throw conflict("Esta versão não aceita edição.");
+        const note = input.note ?? "Premissa QA — item sem composição oficial; valor mantido somente para teste do fluxo, não é preço executivo.";
+        const rows = await db.select({ id: budgetItems.id, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId })
+          .from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
+        const targets = rows.filter(row => row.officialPriceItemId == null && row.compositionId == null);
+        for (const row of targets) {
+          await db.update(budgetItems).set({
+            source: note.slice(0, 80),
+            quantityEvidence: note,
+            quantityEvidenceStatus: "cenario",
+            updatedAt: new Date(),
+          }).where(eq(budgetItems.id, row.id));
+        }
+        await db.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "budget_qa_premises_applied", payload: { budgetVersionId: input.budgetVersionId, count: targets.length, note } });
+        return { updated: targets.length, total: rows.length };
+      }),
     createItems: protectedProcedure
       .input(
         z.object({
