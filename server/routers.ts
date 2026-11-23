@@ -6871,12 +6871,13 @@ export const appRouter = router({
           plannedQuantity: atividade.plannedQuantity == null ? null : Number(atividade.plannedQuantity),
           budgetItemId: atividade.budgetItemId ?? null,
         }));
+        const itemIds = new Set(itens.map(item => item.id));
 
         return {
           versao: versao ?? null,
           cobertura: resumirCobertura(atividades, itens),
           pendencias: atividades
-            .filter(atividade => atividade.budgetItemId == null)
+            .filter(atividade => atividade.budgetItemId == null || !itemIds.has(atividade.budgetItemId))
             .map(atividade => ({
               ...atividade,
               sugestoes: sugerirVinculos(atividade, itens, input.limite),

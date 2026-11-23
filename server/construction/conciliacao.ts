@@ -162,6 +162,9 @@ export function resumirCobertura(
 ): CoberturaOrcamentaria {
   const porId = new Map(itens.map(item => [item.id, item]));
   const consumo = new Map<number, number>();
+  const atividadesComItemAtivo = atividades.filter(
+    atividade => atividade.budgetItemId != null && porId.has(atividade.budgetItemId)
+  );
 
   for (const atividade of atividades) {
     if (atividade.budgetItemId == null) continue;
@@ -186,9 +189,9 @@ export function resumirCobertura(
     valorVinculado,
     percentual: valorTotal > 0 ? valorVinculado / valorTotal : 0,
     atividadesTotal: atividades.length,
-    atividadesVinculadas: atividades.filter(atividade => atividade.budgetItemId != null).length,
-    atividadesSemQuantidade: atividades.filter(
-      atividade => atividade.budgetItemId != null && (atividade.plannedQuantity ?? 0) <= 0
+    atividadesVinculadas: atividadesComItemAtivo.length,
+    atividadesSemQuantidade: atividadesComItemAtivo.filter(
+      atividade => (atividade.plannedQuantity ?? 0) <= 0
     ).length,
     itensSemComposicao: itens.filter(item => item.compositionId == null && item.officialPriceItemId == null).length,
     itensTotal: itens.length,

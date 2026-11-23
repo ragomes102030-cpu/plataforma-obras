@@ -201,6 +201,8 @@ describe("resumirCobertura", () => {
     );
     expect(resumo.valorVinculado).toBe(0);
     expect(resumo.percentual).toBe(0);
+    expect(resumo.atividadesVinculadas).toBe(0);
+    expect(resumo.atividadesSemQuantidade).toBe(0);
   });
 
   it("conta itens sem composição — a outra metade do problema do EVM", () => {
