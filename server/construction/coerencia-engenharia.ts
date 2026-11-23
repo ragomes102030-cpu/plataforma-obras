@@ -153,6 +153,8 @@ export type ComposicaoParaCoerencia = {
   somaComponentes: number;
   componentesComPreco: number;
   totalComponentes: number;
+  /** Descricoes oficiais dos servicos/insumos que realmente formam a composicao. */
+  componentDescriptions?: string[];
 };
 
 export type AtividadeParaCoerencia = {
@@ -686,17 +688,25 @@ export function validarCoerenciaEngenharia(input: CoerenciaInput): CoerenciaResu
       if (!it.compositionId) { contar(exclusoes, "sem composicao vinculada"); continue; }
       const comp = composicaoPorId.get(it.compositionId);
       const descComp = comp?.description ?? it.compositionDescription ?? "";
+      const descricoesComponentes = comp?.componentDescriptions?.filter(descricao => descricao.trim()) ?? [];
+      const tituloQAGerado = comp?.code.startsWith("QA-") && descComp.toLocaleLowerCase("pt-BR").startsWith("composição analítica qa");
+      const descricoesParaClassificar = descricoesComponentes.length
+        ? descricoesComponentes
+        : tituloQAGerado
+          ? []
+          : descComp.trim() ? [descComp] : [];
       const descItem = it.description;
-      if (!descComp) {
-        contar(exclusoes, comp ? "composicao sem descricao" : "composicao nao encontrada");
+      if (!descricoesParaClassificar.length) {
+        contar(exclusoes, tituloQAGerado ? "composicao QA sem descricao de componentes" : comp ? "composicao sem descricao" : "composicao nao encontrada");
         continue;
       }
       avaliados++;
 
-      if (contemAlgum(descComp, RADICAIS_ESCRITORIO) && contemAlgum(descItem, RADICAIS_EXECUCAO)) {
+      const descricaoEscritorio = descricoesParaClassificar.find(descricao => contemAlgum(descricao, RADICAIS_ESCRITORIO));
+      if (descricaoEscritorio && contemAlgum(descItem, RADICAIS_EXECUCAO)) {
         achados.push(it.code);
         valor += it.quantity * it.unitPrice;
-        if (!exemplo) exemplo = `"${it.description}" (${it.code}) -> "${it.compositionCode} — ${descComp}"`;
+        if (!exemplo) exemplo = `"${it.description}" (${it.code}) -> "${it.compositionCode} — ${descricaoEscritorio}"`;
       }
     }
     registrarAlcance("1. natureza do servico", "itens", input.itens.length, avaliados, exclusoes);
