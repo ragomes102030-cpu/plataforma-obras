@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { unitsCompatible } from "@shared/price-sources/reconciliation";
 import { findBudgetApprovalBlockers } from "@shared/budget-readiness";
@@ -8,22 +8,10 @@ import { PainelValorGanho } from "./PainelValorGanho";
 import { PainelMedicao } from "./PainelMedicao";
 import { ReadinessGate } from "./ReadinessGate";
 import { summarizeBudgetQuantities, summarizeQuantityEvidence } from "./budget-quantity-readiness";
+import { mapCompositionComponentsForEditor, type SelectedOfficialService } from "./budget-composition-editor";
 
 type Props = {
   projetoId: number;
-};
-
-type ServicoOficialSelecionado = {
-  id: number;
-  code: string;
-  description: string;
-  unit: string;
-  unitPrice: number | string;
-  sourceType: string;
-  catalogId: number;
-  catalogName: string;
-  referencePeriod?: string | null;
-  coefficient: string;
 };
 
 function moeda(valor: number): string {
@@ -40,7 +28,8 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [buscaServico, setBuscaServico] = useState("");
   const [servicoParaAdicionar, setServicoParaAdicionar] = useState("");
   const [parcela, setParcela] = useState({ servico: "", quantidade: "", evidencia: "" });
-  const [componentesServico, setComponentesServico] = useState<ServicoOficialSelecionado[]>([]);
+  const [componentesServico, setComponentesServico] = useState<SelectedOfficialService[]>([]);
+  const composicaoHidratada = useRef("");
   const utils = trpc.useUtils();
 
   useEffect(() => {
@@ -57,9 +46,28 @@ export function AbaOrcamento({ projetoId }: Props) {
     { enabled: Number(projetoId) > 0, retry: false, staleTime: 5 * 60_000 }
   );
   const catalogoComposicoes = trpc.catalog.list.useQuery(
-    { qCompositions: buscaComposicaoDebounced || undefined, limitCompositions: 50 },
-    { enabled: editandoId !== null && buscaComposicaoDebounced.length >= 2, staleTime: 60_000 }
+    {
+      qCompositions: buscaComposicaoDebounced || undefined,
+      compositionId: rascunho.compositionId ? Number(rascunho.compositionId) : undefined,
+      limitCompositions: 50,
+    },
+    { enabled: editandoId !== null && (buscaComposicaoDebounced.length >= 2 || Boolean(rascunho.compositionId)), staleTime: 60_000 }
   );
+  useEffect(() => {
+    const compositionId = Number(rascunho.compositionId);
+    if (editandoId === null || !compositionId || catalogoComposicoes.isFetching || !catalogoComposicoes.data) return;
+    const composition = catalogoComposicoes.data.selectedComposition ??
+      catalogoComposicoes.data.compositions.find(row => row.id === compositionId);
+    if (!composition) return;
+    const hydrationKey = `${editandoId}:${compositionId}`;
+    if (composicaoHidratada.current === hydrationKey) return;
+    setComponentesServico(mapCompositionComponentsForEditor(
+      composition,
+      catalogoComposicoes.data.catalogs,
+      catalogoComposicoes.data.components,
+    ));
+    composicaoHidratada.current = hydrationKey;
+  }, [editandoId, rascunho.compositionId, catalogoComposicoes.data, catalogoComposicoes.isFetching]);
   const catalogoServicos = trpc.catalog.searchOfficialServices.useQuery(
     { q: buscaServico.trim() },
     { enabled: editandoId !== null && buscaServico.trim().length >= 2, staleTime: 60_000 }
@@ -134,6 +142,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       : "";
     setEditandoId(item.id);
     setComponentesServico([]);
+    composicaoHidratada.current = "";
     setServicoParaAdicionar("");
     setRascunho({
       code: item.code,
@@ -462,7 +471,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
                           Composição analítica vinculada
-                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "" })} disabled={catalogoComposicoes.isFetching}>
+                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "" }); }} disabled={catalogoComposicoes.isFetching}>
                             <option value="">Sem composição oficial</option>
                             {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
                             {composicoesCandidatas.map(composition => {
@@ -484,7 +493,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`servico-oficial-selecao-${item.id}`}>
                           Serviço oficial vinculado
-                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "" })} disabled={catalogoServicos.isFetching}>
+                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "" }); }} disabled={catalogoServicos.isFetching}>
                             <option value="">Sem serviço oficial direto</option>
                             {rascunho.officialPriceItemId && !catalogoServicos.data?.items.some(service => String(service.id) === rascunho.officialPriceItemId) && <option value={rascunho.officialPriceItemId}>Serviço oficial atual #{rascunho.officialPriceItemId}</option>}
                             {(catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).map(service => (
@@ -529,6 +538,9 @@ export function AbaOrcamento({ projetoId }: Props) {
                             <strong>Compor este pacote com vários serviços SEINFRA/SINAPI/SICRO</strong>
                             <span>Coeficiente de cada serviço por 1 {rascunho.unit || "unidade de saída"} do item. A soma forma o preço unitário.{componentesServico.length > 0 ? ` Base: ${componentesServico[0]!.catalogName} · ${componentesServico[0]!.referencePeriod ?? "sem período"}.` : ""}</span>
                           </div>
+                          {rascunho.compositionId && catalogoComposicoes.isFetching && componentesServico.length === 0 && <p role="status">Carregando serviços da composição vinculada…</p>}
+                          {rascunho.compositionId && catalogoComposicoes.isError && <p className="orcamento-edit-error" role="alert">Não foi possível ler os componentes da composição vinculada. Tente novamente antes de alterar o pacote.</p>}
+                          {rascunho.compositionId && !catalogoComposicoes.isFetching && catalogoComposicoes.data && !catalogoComposicoes.data.selectedComposition && !catalogoComposicoes.data.compositions.some(composition => String(composition.id) === rascunho.compositionId) && <p className="orcamento-edit-error" role="alert">A composição selecionada não retornou ao catálogo. Confirme a referência antes de alterar o pacote.</p>}
                           <div className="orcamento-multiservico-add">
                             <select aria-label="Serviço oficial para adicionar à composição" value={servicoParaAdicionar} onChange={event => setServicoParaAdicionar(event.target.value)} disabled={(catalogoServicos.data?.items.length ?? 0) === 0}>
                               <option value="">Busque acima para escolher um serviço</option>

@@ -73,6 +73,12 @@ describe("catalog.list não devolve a base inteira", () => {
     expect(bloco).toContain("escaparCuringaLike(");
   });
 
+  it("devolve os dados da composição selecionada mesmo fora do filtro de busca", () => {
+    expect(bloco).toContain("selectedCompositionId != null &&");
+    expect(bloco).toContain("!compositions.some(composition => composition.id === selectedCompositionId)");
+    expect(bloco).toContain("selectedComposition,");
+  });
+
   it("não guarda no cache uma chave por termo digitado", () => {
     expect(bloco).toContain("if (!termo && !termoComposicoes) cacheSet(");
   });

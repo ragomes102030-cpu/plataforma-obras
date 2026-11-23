@@ -4600,6 +4600,7 @@ export const appRouter = router({
           catalogs: typeof priceCatalogs.$inferSelect[];
           priceItems: typeof priceItems.$inferSelect[];
           compositions: typeof serviceCompositions.$inferSelect[];
+          selectedComposition: typeof serviceCompositions.$inferSelect | null;
           components: (typeof compositionComponents.$inferSelect & {
             itemCode: string;
             itemDescription: string;
@@ -4619,6 +4620,7 @@ export const appRouter = router({
             catalogs: [],
             priceItems: [],
             compositions: [],
+            selectedComposition: null,
             components: [],
             total: 0,
             totalItems: 0,
@@ -4677,6 +4679,14 @@ export const appRouter = router({
         // composição aberta a cada tecla digitada.
         const selectedCompositionId =
           input.compositionId ?? (termoComposicoes ? undefined : compositions[0]?.id);
+        const selectedCompositionOutsideSearch = selectedCompositionId != null &&
+          !compositions.some(composition => composition.id === selectedCompositionId)
+          ? await db.select().from(serviceCompositions)
+              .where(eq(serviceCompositions.id, selectedCompositionId))
+              .limit(1)
+          : [];
+        const selectedComposition = selectedCompositionOutsideSearch[0] ??
+          compositions.find(composition => composition.id === selectedCompositionId) ?? null;
         const components = selectedCompositionId
           ? await db.select({
               id: compositionComponents.id,
@@ -4703,6 +4713,7 @@ export const appRouter = router({
           catalogs,
           priceItems: items,
           compositions,
+          selectedComposition,
           components,
           total,
           totalItems: contagemItens?.total ?? items.length,
