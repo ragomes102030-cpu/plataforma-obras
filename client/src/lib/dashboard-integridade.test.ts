@@ -27,7 +27,9 @@ describe("integridade dos indicadores do dashboard", () => {
     expect(avaliarIntegridadeDashboard({...base,lancamentos:[lancamento]}).temProducaoConfirmada).toBe(false);
   });
   it("não habilita régua financeira por fonte didática, cobertura parcial ou rascunho", () => {
-    expect(avaliarIntegridadeDashboard({...base,itens:[{...base.itens[0],source:"Rateio uniforme didático"}]}).orcamentoConfiavel).toBe(false);
+    const didatico = avaliarIntegridadeDashboard({...base,itens:[{...base.itens[0],source:"Rateio uniforme didático"}]});
+    expect(didatico.orcamentoConfiavel).toBe(false);
+    expect(didatico.prontidao.financeiro).toBe("didatico");
     expect(avaliarIntegridadeDashboard({...base,atividades:[...base.atividades,{id:2,budgetItemId:null}]}).orcamentoConfiavel).toBe(false);
     expect(avaliarIntegridadeDashboard({...base,versaoAtivaAprovada:false}).orcamentoConfiavel).toBe(false);
   });
