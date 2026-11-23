@@ -26,6 +26,12 @@ describe("edição do orçamento didático", () => {
     expect(source).toContain("A versão aprovada será preservada e não será alterada.");
   });
 
+  it("permite reabrir a mesma versão aprovada para correções com aviso sobre os indicadores", () => {
+    expect(source).toContain("Reabrir esta versão para correções");
+    expect(source).toContain("Nenhuma nova versão será criada.");
+    expect(source).toContain("approvedForCurve.invalidate");
+  });
+
   it("mostra o motivo quando a gravação de um item falha", () => {
     expect(source).toContain("atualizarItem.isError");
     expect(source).toContain("role=\"alert\">{atualizarItem.error.message}</p>");

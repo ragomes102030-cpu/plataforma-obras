@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { unitsCompatible } from "@shared/price-sources/reconciliation";
+import { findBudgetApprovalBlockers } from "@shared/budget-readiness";
 import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
@@ -77,7 +78,12 @@ export function AbaOrcamento({ projetoId }: Props) {
     },
   });
   const atualizarStatus = trpc.budgets.updateVersionStatus.useMutation({
-    onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
+    onSuccess: async () => {
+      await Promise.all([
+        utils.budgets.list.invalidate({ projectId: Number(projetoId) }),
+        utils.budgets.approvedForCurve.invalidate({ projectId: Number(projetoId) }),
+      ]);
+    },
   });
   const aplicarPremissasQa = trpc.budgets.applyQaPremises.useMutation({
     onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
@@ -101,8 +107,8 @@ export function AbaOrcamento({ projetoId }: Props) {
   const prontidaoEvidencias = summarizeQuantityEvidence(items.map(item => item.quantityEvidenceStatus));
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
   const itensComComposicao = items.filter((i) => i.compositionId != null || i.officialPriceItemId != null).length;
-  const itensComVinculoRastreavel = items.filter((i) => (i.compositionId != null || i.officialPriceItemId != null) && Number(i.unitPrice) > 0 && !/didatic|rateio uniforme|premissa qa|placeholder|simb[oó]lic/i.test(String(i.source ?? "")) && Boolean(i.quantityEvidence?.trim()) && i.quantityEvidenceStatus !== "pendente").length;
-  const prontoParaAprovar = items.length > 0 && itensComVinculoRastreavel === items.length;
+  const itensComBloqueio = new Set(findBudgetApprovalBlockers(items).map(item => item.code));
+  const prontoParaAprovar = items.length > 0 && itensComBloqueio.size === 0;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
   const statusOrcamento = cobertura === 100 && itensComValor === items.length && itensComComposicao > 0 ? "pronto" : itensComFonte > 0 ? "em_revisao" : "pendente";
   const versaoAtiva = budget.data?.versions?.find((v) => v.id === budget.data?.activeVersionId);
@@ -239,7 +245,7 @@ export function AbaOrcamento({ projetoId }: Props) {
           {!carregando && !erro && versaoAtiva?.status === "aprovado" && errosDeEngenharia.length > 0 && (
             <div className="xl-aviso" role="status">
               <strong>Revisão técnica necessária antes de usar este orçamento como controle.</strong>
-              <p>{errosDeEngenharia.length} incompatibilidade(s) de engenharia foram identificadas. A aprovação existente foi preservada; corrija em uma nova versão antes de substituir a referência atual.</p>
+              <p>{errosDeEngenharia.length} incompatibilidade(s) de engenharia foram identificadas. Reabra esta versão para corrigir; valor agregado e Curva S ficam suspensos até a nova aprovação.</p>
             </div>
           )}
           {!carregando && !erro && versaoAtiva?.status === "aprovado" && (
@@ -247,6 +253,19 @@ export function AbaOrcamento({ projetoId }: Props) {
               <button
                 type="button"
                 className="xl-btn xl-btn-primary"
+                disabled={atualizarStatus.isPending}
+                onClick={() => {
+                  if (window.confirm(`Reabrir a versão v${versaoAtiva.versionNumber} para edição? Nenhuma nova versão será criada. Os itens continuarão na v${versaoAtiva.versionNumber}; valor agregado e Curva S ficam suspensos até a nova aprovação.`)) {
+                    atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "em_revisao" });
+                  }
+                }}
+              >
+                {atualizarStatus.isPending ? "Reabrindo versão…" : "Reabrir esta versão para correções"}
+              </button>
+              <small>Esta ação mantém os itens no mesmo número de versão. Nenhuma nova versão será criada; o orçamento precisará ser aprovado novamente depois das correções.</small>
+              <button
+                type="button"
+                className="xl-btn"
                 disabled={criarRevisao.isPending}
                 onClick={() => {
                   if (window.confirm(`Criar uma revisão v${versaoAtiva.versionNumber + 1} copiando os ${items.length} itens atuais? A versão aprovada será preservada e não será alterada.`)) {
@@ -263,7 +282,7 @@ export function AbaOrcamento({ projetoId }: Props) {
             <div className="xl-acoes-versao">
               <button type="button" className="xl-btn" disabled={atualizarStatus.isPending} onClick={() => atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "em_revisao" })}>Enviar para revisão</button>
               <button type="button" className="xl-btn xl-btn-primary" disabled={atualizarStatus.isPending || !prontoParaAprovar} title={!prontoParaAprovar ? "Vincule cada item a uma fonte oficial, informe evidência e classifique o quantitativo antes de aprovar." : undefined} onClick={() => { if (window.confirm("Aprovar somente se todos os preços, fontes e quantitativos estiverem validados pelo engenheiro.")) atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "aprovado" }); }}>Aprovar orçamento</button>
-              {!prontoParaAprovar && <small className="xl-acoes-versao-aviso">Aprovação bloqueada: {items.length - itensComVinculoRastreavel} item(ns) ainda precisam de vínculo oficial, preço e evidência de quantidade.</small>}
+              {!prontoParaAprovar && <small className="xl-acoes-versao-aviso">{items.length === 0 ? "Inclua itens para aprovar o orçamento." : `Aprovação bloqueada: revise preço, fonte e evidência de quantidade em ${itensComBloqueio.size} item(ns).`}</small>}
             </div>
           )}
           {atualizarStatus.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{atualizarStatus.error.message}</p>}
@@ -481,7 +500,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </div>
                         {versaoAtiva && item.unit.trim().toLowerCase() === "vb" &&
                           Number(item.quantity) === 1 && Number(item.unitPrice) === 1 &&
-                          !item.officialPriceItemId && !item.compositionId && /simb[oó]lic|placeholder/i.test(item.source ?? "") &&
+                          !item.officialPriceItemId && !item.compositionId && /simb[oó]lic|placeholder|premissa qa/i.test(item.source ?? "") &&
                           <section className="orcamento-edit-wide" aria-label="Detalhar parcela do pacote">
                             <strong>Acrescentar uma parcela ao pacote</strong>
                             <p>Pesquise o serviço acima. A parcela usa a unidade e o preço da tabela e mantém o pacote aberto para o restante do escopo.</p>

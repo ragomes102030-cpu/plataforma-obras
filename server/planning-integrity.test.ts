@@ -624,4 +624,48 @@ describe("aplicarPropostaEap", () => {
     expect(versions.find(version => version.id === previous!.id)?.status).toBe("arquivado");
     expect(versions.find(version => version.id === draft!.id)?.status).toBe("aprovado");
   });
+
+  it("reabre uma versão aprovada para editar os mesmos itens e registra a transição", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [version] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Orçamento referência v4",
+      versionNumber: 4,
+      status: "aprovado",
+    }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({
+      budgetVersionId: version!.id,
+      wbsNodeId: root!.id,
+      code: "ITEM-V4",
+      description: "Serviço aprovado para revisão",
+      unit: "M3",
+      quantity: "1.000",
+      unitPrice: "100.00",
+      source: "SEINFRA-CE 028.1",
+    }).returning({ id: budgetItems.id });
+
+    const reopened = await caller.budgets.updateVersionStatus({
+      projectId,
+      budgetVersionId: version!.id,
+      status: "em_revisao",
+    });
+    await caller.budgets.updateItem({
+      projectId,
+      budgetItemId: item!.id,
+      quantityEvidence: "Premissa QA: volume de cenário para validar o fluxo; não é medição real.",
+      quantityEvidenceStatus: "cenario",
+    });
+
+    const [persistedVersion] = await db.select().from(budgetVersions).where(eq(budgetVersions.id, version!.id));
+    const [persistedItem] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    const audits = await db.select().from(projectAuditEvents).where(eq(projectAuditEvents.projectId, projectId));
+
+    expect(reopened).toMatchObject({ id: version!.id, status: "em_revisao" });
+    expect(persistedVersion).toMatchObject({ id: version!.id, versionNumber: 4, status: "em_revisao" });
+    expect(persistedItem).toMatchObject({ budgetVersionId: version!.id, quantityEvidenceStatus: "cenario" });
+    expect(audits).toContainEqual(expect.objectContaining({
+      action: "budget_version_reopened_for_corrections",
+      payload: expect.objectContaining({ budgetVersionId: version!.id, versionNumber: 4, from: "aprovado", to: "em_revisao" }),
+    }));
+  });
 });

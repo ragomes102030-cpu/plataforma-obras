@@ -2927,28 +2927,38 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        const [version] = await db.select({ id: budgetVersions.id, status: budgetVersions.status }).from(budgetVersions).where(and(eq(budgetVersions.id, input.budgetVersionId), eq(budgetVersions.projectId, input.projectId))).limit(1);
-        if (!version) throw notFound("Versão de orçamento não encontrada.");
-        if (version.status === "arquivado") throw conflict("Uma versão arquivada não pode voltar ao fluxo.");
-        if (input.status === "aprovado") {
-          const items = await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId, isPriceException: budgetItems.isPriceException, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
-          if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
-          const pendencias = findBudgetApprovalBlockers(items);
-          if (pendencias.length) {
-            const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
-            const quantitativos = pendencias.filter(item => item.reason === "sem_evidencia_quantidade" || item.reason === "quantidade_pendente").length;
-            const semRastreio = pendencias.filter(item => item.reason === "sem_vinculo_rastreavel" || item.reason === "fonte_pendente").length;
-            throw badRequest(
-              `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação: ${pendencias.slice(0, 5).map(item => `${item.code} (${item.reason})`).join(", ")}.` +
-              (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "") +
-              (semRastreio ? ` ${semRastreio} item(ns) não têm vínculo de preço rastreável ou ainda usam valor simbólico/pendente.` : "") +
-              (quantitativos ? ` ${quantitativos} pendência(s) de quantitativo; informe a evidência e classifique como cenário ou validada.` : "")
-            );
+        return db.transaction(async tx => {
+          const [version] = await tx.select({ id: budgetVersions.id, versionNumber: budgetVersions.versionNumber, status: budgetVersions.status }).from(budgetVersions).where(and(eq(budgetVersions.id, input.budgetVersionId), eq(budgetVersions.projectId, input.projectId))).limit(1);
+          if (!version) throw notFound("Versão de orçamento não encontrada.");
+          if (version.status === "arquivado") throw conflict("Uma versão arquivada não pode voltar ao fluxo.");
+          if (input.status === "aprovado") {
+            const items = await tx.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, source: budgetItems.source, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId, isPriceException: budgetItems.isPriceException, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus }).from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
+            if (!items.length) throw badRequest("O orçamento precisa ter itens antes da aprovação.");
+            const pendencias = findBudgetApprovalBlockers(items);
+            if (pendencias.length) {
+              const didaticos = pendencias.filter(item => item.reason === "fonte_didatica").length;
+              const quantitativos = pendencias.filter(item => item.reason === "sem_evidencia_quantidade" || item.reason === "quantidade_pendente").length;
+              const semRastreio = pendencias.filter(item => item.reason === "sem_vinculo_rastreavel" || item.reason === "fonte_pendente").length;
+              throw badRequest(
+                `O orçamento ainda tem ${pendencias.length} bloqueio(s) de aprovação: ${pendencias.slice(0, 5).map(item => `${item.code} (${item.reason})`).join(", ")}.` +
+                (didaticos ? ` ${didaticos} item(ns) usam fonte didática; substitua por composição ou fonte de custo validada.` : "") +
+                (semRastreio ? ` ${semRastreio} item(ns) não têm vínculo de preço rastreável ou ainda usam valor simbólico/pendente.` : "") +
+                (quantitativos ? ` ${quantitativos} pendência(s) de quantitativo; informe a evidência e classifique como cenário ou validada.` : "")
+              );
+            }
+            await tx.update(budgetVersions).set({ status: "arquivado", updatedAt: new Date() }).where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado"), ne(budgetVersions.id, input.budgetVersionId)));
           }
-          await db.update(budgetVersions).set({ status: "arquivado", updatedAt: new Date() }).where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado"), ne(budgetVersions.id, input.budgetVersionId)));
-        }
-        const [updated] = await db.update(budgetVersions).set({ status: input.status, updatedAt: new Date() }).where(eq(budgetVersions.id, input.budgetVersionId)).returning({ id: budgetVersions.id, status: budgetVersions.status });
-        return updated;
+          const [updated] = await tx.update(budgetVersions).set({ status: input.status, updatedAt: new Date() }).where(eq(budgetVersions.id, input.budgetVersionId)).returning({ id: budgetVersions.id, status: budgetVersions.status });
+          if (version.status === "aprovado" && input.status === "em_revisao") {
+            await tx.insert(projectAuditEvents).values({
+              projectId: input.projectId,
+              userId: ctx.user.id,
+              action: "budget_version_reopened_for_corrections",
+              payload: { budgetVersionId: version.id, versionNumber: version.versionNumber, from: version.status, to: input.status },
+            });
+          }
+          return updated;
+        });
       }),
     createReviewVersion: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
