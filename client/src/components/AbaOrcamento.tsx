@@ -12,18 +12,6 @@ type Props = {
   projetoId: number;
 };
 
-type LinhaImportacaoDetalhada = {
-  code: string;
-  description: string;
-  unit: string;
-  quantity: number;
-  compositionCode?: string;
-  officialPriceCode?: string;
-  officialCatalogName: string;
-  quantityEvidence: string;
-  quantityEvidenceStatus: "pendente" | "cenario" | "validada";
-};
-
 type ServicoOficialSelecionado = {
   id: number;
   code: string;
@@ -43,9 +31,6 @@ function moeda(valor: number): string {
 
 export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
-  const [arquivoDetalhamento, setArquivoDetalhamento] = useState<{ name: string; replacements: Array<{ placeholderCode: string; preservePlaceholder?: boolean; items: LinhaImportacaoDetalhada[] }> } | null>(null);
-  const [erroImportacao, setErroImportacao] = useState<string | null>(null);
-  const [textoDetalhamento, setTextoDetalhamento] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
   const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
@@ -56,21 +41,6 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [parcela, setParcela] = useState({ servico: "", quantidade: "", evidencia: "" });
   const [componentesServico, setComponentesServico] = useState<ServicoOficialSelecionado[]>([]);
   const utils = trpc.useUtils();
-
-  function prepararDetalhamento(texto: string, nome: string) {
-    setArquivoDetalhamento(null);
-    setErroImportacao(null);
-    try {
-      const parsed = JSON.parse(texto) as { partialDetails?: unknown; replacements?: unknown };
-      const parcial = Array.isArray(parsed.partialDetails);
-      if (parcial && parsed.replacements !== undefined) throw new Error("Escolha um único modo de importação por arquivo.");
-      const groups = parcial ? parsed.partialDetails : parsed.replacements;
-      if (!Array.isArray(groups) || !groups.length) throw new Error("Informe os pacotes e suas parcelas em partialDetails ou replacements.");
-      setArquivoDetalhamento({ name: nome, replacements: (groups as Array<{ placeholderCode: string; preservePlaceholder?: boolean; items: LinhaImportacaoDetalhada[] }>).map(group => ({ ...group, preservePlaceholder: parcial })) });
-    } catch (error) {
-      setErroImportacao(error instanceof Error ? error.message : "Não foi possível ler o arquivo JSON.");
-    }
-  }
 
   useEffect(() => {
     const timer = setTimeout(() => setBuscaComposicaoDebounced(buscaComposicao.trim()), 300);
@@ -115,13 +85,6 @@ export function AbaOrcamento({ projetoId }: Props) {
   const criarRevisao = trpc.budgets.createReviewVersion.useMutation({
     onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
   });
-  const importarDetalhamento = trpc.budgets.replacePlaceholderItems.useMutation({
-    onSuccess: async () => {
-      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
-      setArquivoDetalhamento(null);
-      setErroImportacao(null);
-    },
-  });
   const vincularComposicaoMultiservico = trpc.budgets.linkOfficialServiceComposition.useMutation({
     onSuccess: async () => {
       await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
@@ -138,6 +101,8 @@ export function AbaOrcamento({ projetoId }: Props) {
   const prontidaoEvidencias = summarizeQuantityEvidence(items.map(item => item.quantityEvidenceStatus));
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
   const itensComComposicao = items.filter((i) => i.compositionId != null || i.officialPriceItemId != null).length;
+  const itensComVinculoRastreavel = items.filter((i) => (i.compositionId != null || i.officialPriceItemId != null) && Number(i.unitPrice) > 0 && !/didatic|rateio uniforme|premissa qa|placeholder|simb[oó]lic/i.test(String(i.source ?? "")) && Boolean(i.quantityEvidence?.trim()) && i.quantityEvidenceStatus !== "pendente").length;
+  const prontoParaAprovar = items.length > 0 && itensComVinculoRastreavel === items.length;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
   const statusOrcamento = cobertura === 100 && itensComValor === items.length && itensComComposicao > 0 ? "pronto" : itensComFonte > 0 ? "em_revisao" : "pendente";
   const versaoAtiva = budget.data?.versions?.find((v) => v.id === budget.data?.activeVersionId);
@@ -297,7 +262,8 @@ export function AbaOrcamento({ projetoId }: Props) {
           {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && (
             <div className="xl-acoes-versao">
               <button type="button" className="xl-btn" disabled={atualizarStatus.isPending} onClick={() => atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "em_revisao" })}>Enviar para revisão</button>
-              <button type="button" className="xl-btn xl-btn-primary" disabled={atualizarStatus.isPending} onClick={() => { if (window.confirm("Aprovar somente se todos os preços e fontes estiverem validados pelo engenheiro.")) atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "aprovado" }); }}>Aprovar orçamento</button>
+              <button type="button" className="xl-btn xl-btn-primary" disabled={atualizarStatus.isPending || !prontoParaAprovar} title={!prontoParaAprovar ? "Vincule cada item a uma fonte oficial, informe evidência e classifique o quantitativo antes de aprovar." : undefined} onClick={() => { if (window.confirm("Aprovar somente se todos os preços, fontes e quantitativos estiverem validados pelo engenheiro.")) atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "aprovado" }); }}>Aprovar orçamento</button>
+              {!prontoParaAprovar && <small className="xl-acoes-versao-aviso">Aprovação bloqueada: {items.length - itensComVinculoRastreavel} item(ns) ainda precisam de vínculo oficial, preço e evidência de quantidade.</small>}
             </div>
           )}
           {atualizarStatus.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{atualizarStatus.error.message}</p>}
@@ -344,36 +310,15 @@ export function AbaOrcamento({ projetoId }: Props) {
       {aplicarPremissasQa.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{aplicarPremissasQa.error.message}</p>}
       {aplicarPremissasQa.isSuccess && <p className="xl-aviso" role="status">{aplicarPremissasQa.data.updated} item(ns) receberam Premissa QA. Vínculos oficiais continuam separados.</p>}
 
-      {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && <section className="xl-analise" aria-label="Importar detalhamento rastreável">
+      {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && <section className="xl-analise" aria-label="Validação item a item">
         <div className="xl-analises-topo">
-          <h3>Detalhar itens simbólicos nesta versão</h3>
-          <p>Use partialDetails para acrescentar parcelas e manter o pacote pendente, ou replacements para substituir o pacote completo. Cada linha precisa ter vínculo a composição validada ou serviço oficial ativo, unidade compatível e evidência do quantitativo.</p>
+          <h3>Validar insumos um a um</h3>
+          <p>Selecione <strong>Editar</strong> em cada linha e associe o serviço ou a composição diretamente no catálogo oficial. O engenheiro confere código, unidade, preço, quantidade e evidência na própria tela; nenhum arquivo JSON é necessário para fechar o orçamento.</p>
         </div>
-        <label className="xl-btn" htmlFor="budget-detail-json">Selecionar arquivo JSON</label>
-        <input id="budget-detail-json" type="file" accept="application/json,.json" style={{ display: "none" }} onChange={async event => {
-          const file = event.currentTarget.files?.[0];
-          event.currentTarget.value = "";
-          if (!file) return;
-          prepararDetalhamento(await file.text(), file.name);
-        }} />
-        <label htmlFor="budget-detail-text" className="xl-sr-only">Conteúdo JSON do detalhamento</label>
-        <textarea id="budget-detail-text" value={textoDetalhamento} onChange={event => setTextoDetalhamento(event.target.value)} placeholder="Cole aqui o JSON se o seletor de arquivo não estiver disponível" rows={3} />
-        <button type="button" className="xl-btn" data-testid="budget-detail-read-pasted" aria-label="Ler JSON colado" disabled={!textoDetalhamento.trim()} onClick={() => prepararDetalhamento(textoDetalhamento, "detalhamento-colado.json")}>Ler JSON colado</button>
-        {arquivoDetalhamento && <div role="status" className="xl-aviso">
-          <strong>{arquivoDetalhamento.name}: {arquivoDetalhamento.replacements.length} placeholder(s), {arquivoDetalhamento.replacements.reduce((sum, group) => sum + (Array.isArray(group.items) ? group.items.length : 0), 0)} linha(s) detalhada(s).</strong>
-          <p>Versão alvo: v{versaoAtiva.versionNumber} · {versaoAtiva.name}. Confirme que códigos, unidades, quantidades e evidências correspondem ao escopo antes de importar.</p>
-          <button type="button" className="xl-btn xl-btn-primary" data-testid="budget-detail-import" aria-label="Validar e importar detalhamento na versão atual" disabled={importarDetalhamento.isPending} onClick={() => {
-            const parcial = arquivoDetalhamento.replacements.every(group => group.preservePlaceholder);
-            const acao = parcial ? "Acrescentar as parcelas e manter os pacotes pendentes" : "Substituir os pacotes pelas linhas detalhadas";
-            if (!window.confirm(`${acao} na v${versaoAtiva.versionNumber}?`)) return;
-            setErroImportacao(null);
-            importarDetalhamento.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, replacements: arquivoDetalhamento.replacements.map(group => group.preservePlaceholder
-              ? { partialPlaceholderCode: group.placeholderCode, items: group.items }
-              : { placeholderCode: group.placeholderCode, items: group.items }) });
-          }}>{importarDetalhamento.isPending ? "Importando…" : "Validar e importar na versão atual"}</button>
-        </div>}
-        {(erroImportacao || importarDetalhamento.isError) && <p className="xl-aviso xl-aviso-erro" role="alert">{erroImportacao ?? importarDetalhamento.error?.message ?? "Falha ao importar detalhamento."}</p>}
-        {importarDetalhamento.isSuccess && <p className="xl-aviso" role="status">Importação concluída: {importarDetalhamento.data.removed} pacote(s) substituído(s), {importarDetalhamento.data.created} parcela(s) incluída(s). A lista será atualizada.</p>}
+        <div className="xl-aviso" role="status">
+          <strong>{items.filter(item => item.compositionId == null && item.officialPriceItemId == null).length} item(ns) aguardando vínculo oficial.</strong>
+          <p>Use o botão <strong>Editar</strong> da própria linha. A seleção grava o vínculo, o preço da fonte e a evidência de quantidade individualmente, com auditoria por item.</p>
+        </div>
       </section>}
 
       {erro && (
