@@ -7012,18 +7012,24 @@ export const appRouter = router({
             .from(serviceCompositions).where(inArray(serviceCompositions.id,idsComposicao))
         : [];
       const componentes = idsComposicao.length
-        ? await db.select({compositionId:compositionComponents.compositionId,coefficient:compositionComponents.coefficient,unitPriceSnapshot:compositionComponents.unitPriceSnapshot})
-            .from(compositionComponents).where(inArray(compositionComponents.compositionId,idsComposicao))
+        ? await db.select({compositionId:compositionComponents.compositionId,coefficient:compositionComponents.coefficient,unitPriceSnapshot:compositionComponents.unitPriceSnapshot,description:priceItems.description})
+            .from(compositionComponents).leftJoin(priceItems,eq(priceItems.id,compositionComponents.priceItemId)).where(inArray(compositionComponents.compositionId,idsComposicao))
         : [];
 
       const somaPorComp=new Map<number,number>();
       const comPrecoPorComp=new Map<number,number>();
       const totalPorComp=new Map<number,number>();
+      const descricoesPorComp=new Map<number,string[]>();
       for(const c of componentes){
         const id=c.compositionId;
         somaPorComp.set(id,(somaPorComp.get(id)??0)+Number(c.coefficient)*Number(c.unitPriceSnapshot));
         totalPorComp.set(id,(totalPorComp.get(id)??0)+1);
         if(Number(c.unitPriceSnapshot)>0) comPrecoPorComp.set(id,(comPrecoPorComp.get(id)??0)+1);
+        if(c.description?.trim()) {
+          const descricoes=descricoesPorComp.get(id)??[];
+          descricoes.push(c.description);
+          descricoesPorComp.set(id,descricoes);
+        }
       }
       const compPorId=new Map(comps.map(c=>[c.id,c]));
 
@@ -7130,6 +7136,7 @@ export const appRouter = router({
           somaComponentes:somaPorComp.get(c.id)??0,
           componentesComPreco:comPrecoPorComp.get(c.id)??0,
           totalComponentes:totalPorComp.get(c.id)??0,
+          componentDescriptions:descricoesPorComp.get(c.id)??[],
         })),
         atividades:atividades.map(a=>({
           id:a.id, wbsCode:a.wbsCode, name:a.name, durationDays:a.durationDays,

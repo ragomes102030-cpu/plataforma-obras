@@ -605,6 +605,37 @@ describe("aplicarPropostaEap", () => {
     })).rejects.toThrow(/Base regional incompatível/i);
   });
 
+  it("usa a descrição dos componentes oficiais para evitar falso alerta no título da composição QA", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento QA de fundação", versionNumber: 1, status: "em_revisao" }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "1.2.6",
+      description: "Ensaios, liberação e reaterro das fundações",
+      unit: "vb",
+      quantity: "1.000",
+      unitPrice: "1.00",
+      source: "CENÁRIO QA",
+    }).returning({ id: budgetItems.id });
+    await db.update(projects).set({ location: "Fortaleza-CE" }).where(eq(projects.id, projectId));
+    const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [reaterro] = await db.insert(priceItems).values({ catalogId: catalog!.id, code: "C2920", description: "Reaterro mecânico controlado com material da vala", unit: "M3", itemType: "servico", unitPrice: "27.47" }).returning({ id: priceItems.id });
+
+    await caller.budgets.linkOfficialServiceComposition({
+      projectId,
+      budgetItemId: item!.id,
+      unit: "vb",
+      quantity: 1,
+      quantityEvidence: "Premissa QA: coeficiente de amostra de 1 m³ por vb; não é medição real.",
+      quantityEvidenceStatus: "cenario",
+      components: [{ officialPriceItemId: reaterro!.id, coefficient: 1 }],
+    });
+
+    const result = await caller.planning.validateEngineeringCoherence({ projectId });
+    expect(result.issues.map(issue => issue.code)).not.toContain("eng_natureza_servico_incompativel");
+  });
+
   it("não aprova orçamento com placeholders e arquiva a versão aprovada anterior", async () => {
     const [root] = await db.select().from(wbsNodes);
     const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1 — QA", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
@@ -667,5 +698,48 @@ describe("aplicarPropostaEap", () => {
       action: "budget_version_reopened_for_corrections",
       payload: expect.objectContaining({ budgetVersionId: version!.id, versionNumber: 4, from: "aprovado", to: "em_revisao" }),
     }));
+  });
+});
+
+describe("aplicarConciliacao", () => {
+  it("persiste um vínculo unitário na versão de plano ativa", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [activity] = await db.insert(scheduleActivities).values({
+      projectId,
+      versionId: root!.versionId,
+      wbsNodeId: root!.id,
+      wbsCode: "1.1",
+      name: "Serviço de teste",
+      phase: "Execução",
+      unit: "vb",
+      startOffset: 0,
+      durationDays: 1,
+    }).returning({ id: scheduleActivities.id });
+    const [version] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Orçamento referência v4",
+      versionNumber: 4,
+      status: "em_revisao",
+    }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({
+      budgetVersionId: version!.id,
+      wbsNodeId: root!.id,
+      code: "1.1",
+      description: "Serviço de teste",
+      unit: "vb",
+      quantity: "1.000",
+      unitPrice: "10.00",
+    }).returning({ id: budgetItems.id });
+
+    const result = await caller.planning.aplicarConciliacao({
+      projectId,
+      vinculos: [{ activityId: activity!.id, budgetItemId: item!.id, plannedQuantity: 1 }],
+    });
+
+    const [persisted] = await db.select().from(scheduleActivities).where(eq(scheduleActivities.id, activity!.id));
+    const [audit] = await db.select().from(projectAuditEvents).where(eq(projectAuditEvents.projectId, projectId));
+    expect(result).toEqual({ aplicados: 1 });
+    expect(persisted).toMatchObject({ budgetItemId: item!.id, plannedQuantity: "1.000" });
+    expect(audit).toMatchObject({ action: "schedule_budget_linked" });
   });
 });

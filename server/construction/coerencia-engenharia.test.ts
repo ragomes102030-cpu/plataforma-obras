@@ -846,6 +846,38 @@ describe("revisao 3 - R1-03: o vocabulario de escritorio era fechado demais", ()
     }
   });
 
+  it("nao classifica pelo titulo do pacote QA quando os componentes oficiais sao de execucao", () => {
+    const titulo = "COMPOSIÇÃO ANALÍTICA QA · Ensaios, liberação e reaterro das fundações";
+    const resultado = validarCoerenciaEngenharia({
+      obra: obraBase,
+      itens: [
+        item({
+          code: "1.2.6",
+          description: "Ensaios, liberação e reaterro das fundações",
+          unit: "vb",
+          quantity: 1,
+          unitPrice: 27.47,
+          compositionId: 26694,
+          compositionCode: "QA-26-447-21B684DB",
+          compositionDescription: titulo,
+          compositionUnit: "vb",
+        }),
+      ],
+      composicoes: [composicao({
+        id: 26694,
+        code: "QA-26-447-21B684DB",
+        description: titulo,
+        unit: "vb",
+        somaComponentes: 27.47,
+        componentesComPreco: 1,
+        totalComponentes: 1,
+        componentDescriptions: ["C2920 · REATERRO MECÂNICO CONTROLADO COM MATERIAL DA VALA"],
+      })],
+    });
+
+    expect(resultado.issues.map(i => i.code)).not.toContain("eng_natureza_servico_incompativel");
+  });
+
   it("R1-04 (ABERTO POR DECISAO): composicao de EXECUCAO que cita 'projeto executivo' segue acusada", () => {
     // Trava o falso positivo conhecido que NAO foi corrigido nesta rodada, para
     // que a pendencia seja consciente: o texto nao separa "o projeto" (assunto)
