@@ -101,6 +101,8 @@ export function AbaOrcamento({ projetoId }: Props) {
   const prontidaoEvidencias = summarizeQuantityEvidence(items.map(item => item.quantityEvidenceStatus));
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
   const itensComComposicao = items.filter((i) => i.compositionId != null || i.officialPriceItemId != null).length;
+  const itensComVinculoRastreavel = items.filter((i) => (i.compositionId != null || i.officialPriceItemId != null) && Number(i.unitPrice) > 0 && !/didatic|rateio uniforme|premissa qa|placeholder|simb[oó]lic/i.test(String(i.source ?? "")) && Boolean(i.quantityEvidence?.trim()) && i.quantityEvidenceStatus !== "pendente").length;
+  const prontoParaAprovar = items.length > 0 && itensComVinculoRastreavel === items.length;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
   const statusOrcamento = cobertura === 100 && itensComValor === items.length && itensComComposicao > 0 ? "pronto" : itensComFonte > 0 ? "em_revisao" : "pendente";
   const versaoAtiva = budget.data?.versions?.find((v) => v.id === budget.data?.activeVersionId);
@@ -260,7 +262,8 @@ export function AbaOrcamento({ projetoId }: Props) {
           {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && (
             <div className="xl-acoes-versao">
               <button type="button" className="xl-btn" disabled={atualizarStatus.isPending} onClick={() => atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "em_revisao" })}>Enviar para revisão</button>
-              <button type="button" className="xl-btn xl-btn-primary" disabled={atualizarStatus.isPending} onClick={() => { if (window.confirm("Aprovar somente se todos os preços e fontes estiverem validados pelo engenheiro.")) atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "aprovado" }); }}>Aprovar orçamento</button>
+              <button type="button" className="xl-btn xl-btn-primary" disabled={atualizarStatus.isPending || !prontoParaAprovar} title={!prontoParaAprovar ? "Vincule cada item a uma fonte oficial, informe evidência e classifique o quantitativo antes de aprovar." : undefined} onClick={() => { if (window.confirm("Aprovar somente se todos os preços, fontes e quantitativos estiverem validados pelo engenheiro.")) atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "aprovado" }); }}>Aprovar orçamento</button>
+              {!prontoParaAprovar && <small className="xl-acoes-versao-aviso">Aprovação bloqueada: {items.length - itensComVinculoRastreavel} item(ns) ainda precisam de vínculo oficial, preço e evidência de quantidade.</small>}
             </div>
           )}
           {atualizarStatus.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{atualizarStatus.error.message}</p>}
