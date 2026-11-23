@@ -78,7 +78,12 @@ export function AbaOrcamento({ projetoId }: Props) {
     },
   });
   const atualizarStatus = trpc.budgets.updateVersionStatus.useMutation({
-    onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
+    onSuccess: async () => {
+      await Promise.all([
+        utils.budgets.list.invalidate({ projectId: Number(projetoId) }),
+        utils.budgets.approvedForCurve.invalidate({ projectId: Number(projetoId) }),
+      ]);
+    },
   });
   const aplicarPremissasQa = trpc.budgets.applyQaPremises.useMutation({
     onSuccess: async () => { await utils.budgets.list.invalidate({ projectId: Number(projetoId) }); },
@@ -240,7 +245,7 @@ export function AbaOrcamento({ projetoId }: Props) {
           {!carregando && !erro && versaoAtiva?.status === "aprovado" && errosDeEngenharia.length > 0 && (
             <div className="xl-aviso" role="status">
               <strong>Revisão técnica necessária antes de usar este orçamento como controle.</strong>
-              <p>{errosDeEngenharia.length} incompatibilidade(s) de engenharia foram identificadas. A aprovação existente foi preservada; corrija em uma nova versão antes de substituir a referência atual.</p>
+              <p>{errosDeEngenharia.length} incompatibilidade(s) de engenharia foram identificadas. Reabra esta versão para corrigir; valor agregado e Curva S ficam suspensos até a nova aprovação.</p>
             </div>
           )}
           {!carregando && !erro && versaoAtiva?.status === "aprovado" && (
@@ -248,6 +253,19 @@ export function AbaOrcamento({ projetoId }: Props) {
               <button
                 type="button"
                 className="xl-btn xl-btn-primary"
+                disabled={atualizarStatus.isPending}
+                onClick={() => {
+                  if (window.confirm(`Reabrir a versão v${versaoAtiva.versionNumber} para edição? Nenhuma nova versão será criada. Os itens continuarão na v${versaoAtiva.versionNumber}; valor agregado e Curva S ficam suspensos até a nova aprovação.`)) {
+                    atualizarStatus.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id, status: "em_revisao" });
+                  }
+                }}
+              >
+                {atualizarStatus.isPending ? "Reabrindo versão…" : "Reabrir esta versão para correções"}
+              </button>
+              <small>Esta ação mantém os itens no mesmo número de versão. Nenhuma nova versão será criada; o orçamento precisará ser aprovado novamente depois das correções.</small>
+              <button
+                type="button"
+                className="xl-btn"
                 disabled={criarRevisao.isPending}
                 onClick={() => {
                   if (window.confirm(`Criar uma revisão v${versaoAtiva.versionNumber + 1} copiando os ${items.length} itens atuais? A versão aprovada será preservada e não será alterada.`)) {

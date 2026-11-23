@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 23/nov/2026 — Reabrir orçamento aprovado mantendo o mesmo número
+
+**Sintoma:** itens de uma versão aprovada estavam protegidos contra edição, mas a tela oferecia apenas criar uma nova versão. Isso impedia corrigir a referência QA dentro da versão já ativa.
+
+**Correção:** a aba de orçamento agora permite reabrir a versão ativa aprovada em `em_revisao`, com confirmação de que valor agregado e Curva S ficam suspensos até a aprovação seguinte. Os itens permanecem no mesmo `budgetVersionId`; a transição gera evento de auditoria. A rota mantém a aprovação bloqueada até preço, fonte e evidência atenderem às regras vigentes.
+
+**Validação:** regressões cobrem a reabertura auditada, a edição do mesmo item e a ação da interface. Alteração local em revisão, sem publicação; a versão QA ao vivo permanece intacta até a correção ser disponibilizada.
+
 ## 14/nov/2026 — Não bloquear atividade-raiz da rede no dashboard
 
 **Achado:** a prontidão contava toda atividade sem predecessora como falha, inclusive o início legítimo do cronograma. Na Piazza, a rede aprovada tinha 83 atividades, 83 vínculos e CPM calculado; `1.1.1 Compatibilizar e liberar projetos` é a raiz da cadeia. O aviso do dashboard contradizia o diagnóstico de rede conectada.
