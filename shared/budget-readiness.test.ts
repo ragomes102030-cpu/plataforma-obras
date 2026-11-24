@@ -24,6 +24,14 @@ describe("prontidao de aprovacao do orcamento", () => {
   it("aceita exceção de preço quando a fonte identifica proposta rastreável", () => {
     expect(findBudgetApprovalBlockers([{ code: "1.8", unitPrice: 350, source: "Proposta fornecedor QA 2026-11-15, ref. Q-018", isPriceException: true, quantityEvidence: "Memória QA", quantityEvidenceStatus: "cenario" }])).toEqual([]);
   });
+  it("aceita exceção QA rastreável por referência pública do PNCP", () => {
+    expect(findBudgetApprovalBlockers([{ code: "1.3.3", unitPrice: 8500, source: "Premissa QA · PNCP 64372423000115-1-000001/2026 · SAMAE Porto Belo/SC", isPriceException: true, quantityEvidence: "Aviso PNCP 64372423000115-1-000001/2026; 1 SERV de cenário, não é medição", quantityEvidenceStatus: "cenario" }])).toEqual([]);
+  });
+  it("bloqueia referência PNCP quando a evidência não repete o número de controle", () => {
+    expect(findBudgetApprovalBlockers([{ code: "1.3.3", unitPrice: 8500, source: "Premissa QA · PNCP 64372423000115-1-000001/2026", isPriceException: true, quantityEvidence: "1 SERV comparado a aviso público; não é medição", quantityEvidenceStatus: "cenario" }])).toEqual([
+      { code: "1.3.3", reason: "sem_vinculo_rastreavel" },
+    ]);
+  });
   it("bloqueia quantitativo sem evidência ou ainda pendente", () => {
     expect(findBudgetApprovalBlockers([{ code: "1.4", unitPrice: 10, source: "SINAPI", quantityEvidence: " ", quantityEvidenceStatus: "pendente" }])).toEqual([
       { code: "1.4", reason: "sem_vinculo_rastreavel" },
