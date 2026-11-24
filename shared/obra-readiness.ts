@@ -14,7 +14,7 @@ export type BloqueioProntidao = {
 export type SnapshotProntidao = {
   escopo?: { declarado: boolean; validado: boolean };
   eap?: { existe: boolean; aprovada: boolean; folhas: number };
-  orcamento?: { existe: boolean; aprovado: boolean; itens: number; semComposicao: number; didaticos: number };
+  orcamento?: { existe: boolean; aprovado: boolean; itens: number; semComposicao: number; itensComBloqueioDeAprovacao: number };
   atividades?: { total: number; semLocal: number; semDuracao: number };
   rede?: { totalAtividades: number; totalDependencias: number; ciclos: number; desconectada?: boolean };
   cpm?: { calculadoEm: string | null; alteradoDepois: boolean; atividadesCalculadas: number };
@@ -50,8 +50,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   const orcBloqueios: BloqueioProntidao[] = [];
   if (!orc?.existe || orc.itens === 0) orcBloqueios.push(bloqueio("ORCAMENTO_AUSENTE", "Orçamento inexistente", "Não há itens para formar custo planejado.", "Crie uma versão de orçamento a partir das folhas da EAP.", ["orcamento", "execucao"], "critica"));
   else {
-    if (orc.didaticos > 0) orcBloqueios.push(bloqueio("ORCAMENTO_DIDATICO", "Preço didático impede controle financeiro", `${orc.didaticos} item(ns) usam fonte didática.`, "Concilie cada item com composição oficial SEINFRA/SINAPI ou marque uma exceção justificada.", ["orcamento", "execucao"], "critica"));
-    if (orc.semComposicao > 0) orcBloqueios.push(bloqueio("ORCAMENTO_SEM_COMPOSICAO", "Preço sem referência oficial", `${orc.semComposicao} item(ns) têm preço sem composição analítica ou serviço oficial vinculado.`, "Vincule uma composição analítica ou um serviço oficial SEINFRA/SINAPI compatível em código, unidade, região e período.", ["orcamento", "execucao"], "alta"));
+    if (orc.itensComBloqueioDeAprovacao > 0) orcBloqueios.push(bloqueio("ORCAMENTO_ITENS_PENDENTES", "Orçamento com itens pendentes de validação", `${orc.itensComBloqueioDeAprovacao} item(ns) ainda têm bloqueio de preço, origem rastreável ou evidência de quantidade.`, "Abra Orçamento e Custos, corrija os bloqueios listados e documente exceções com fonte e evidência verificáveis.", ["orcamento", "execucao"], "alta"));
   }
   add("orcamento", orcBloqueios.length ? "incompleto" : orc?.aprovado ? "aprovado" : "pronto_revisao", orcBloqueios);
 

@@ -9,6 +9,11 @@ export type BudgetApprovalItem = {
   quantityEvidenceStatus?: string | null;
 };
 
+/** Exceção de preço e vínculo oficial são mutuamente exclusivos. */
+export function canMarkPriceException(item: Pick<BudgetApprovalItem, "compositionId" | "officialPriceItemId">): boolean {
+  return !(Number(item.compositionId) > 0 || Number(item.officialPriceItemId) > 0);
+}
+
 export type BudgetApprovalBlocker = {
   code: string;
   reason: "sem_preco" | "sem_fonte" | "fonte_didatica" | "fonte_pendente" | "sem_vinculo_rastreavel" | "sem_evidencia_quantidade" | "quantidade_pendente";

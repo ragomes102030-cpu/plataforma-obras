@@ -5251,7 +5251,7 @@ export const appRouter = router({
         const dependencies = plan ? await db.select({ id: scheduleDependencies.id, projectId: scheduleDependencies.projectId, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId, lag: scheduleDependencies.lag }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
         const [budget] = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
-        const budgetRows = budget ? await db.select({ compositionId: budgetItems.compositionId, officialPriceItemId: budgetItems.officialPriceItemId, source: budgetItems.source }).from(budgetItems).where(eq(budgetItems.budgetVersionId, budget.id)) : [];
+        const budgetRows = budget ? await db.select({ code: budgetItems.code, unitPrice: budgetItems.unitPrice, compositionId: budgetItems.compositionId, officialPriceItemId: budgetItems.officialPriceItemId, source: budgetItems.source, isPriceException: budgetItems.isPriceException, quantityEvidence: budgetItems.quantityEvidence, quantityEvidenceStatus: budgetItems.quantityEvidenceStatus }).from(budgetItems).where(eq(budgetItems.budgetVersionId, budget.id)) : [];
         const [baseline] = await db.select({ status: scheduleBaselines.status }).from(scheduleBaselines)
           .where(and(eq(scheduleBaselines.projectId, input.projectId), eq(scheduleBaselines.status, "ativa"))).limit(1);
         const measurementRows = await db.select({ id: measurements.id, status: measurements.status }).from(measurements).where(eq(measurements.projectId, input.projectId));
@@ -5320,7 +5320,7 @@ export const appRouter = router({
           // próprio fluxo; antes isso gerava um falso bloqueio no Dashboard.
           escopo: { declarado: Boolean(project?.descricao && project.location && project.tipoDeObra), validado: Boolean(project?.descricao && plan?.status === "approved") },
           eap: { existe: nodes.length > 0, aprovada: plan?.status === "approved", folhas: nodes.filter(item => item.nodeType === "pacote" || item.nodeType === "entrega").length },
-          orcamento: { existe: Boolean(budget), aprovado: budget?.status === "aprovado", itens: budgetRows.length, semComposicao: budgetRows.filter(item => !item.compositionId && !item.officialPriceItemId).length, didaticos: budgetRows.filter(item => /didatic|rateio uniforme/i.test(String(item.source ?? ""))).length },
+          orcamento: { existe: Boolean(budget), aprovado: budget?.status === "aprovado", itens: budgetRows.length, semComposicao: budgetRows.filter(item => !item.compositionId && !item.officialPriceItemId).length, itensComBloqueioDeAprovacao: budgetRows.filter(item => findBudgetApprovalBlockers([item]).length > 0).length },
           atividades: { total: activities.length, semLocal: activities.filter(item => !item.pavimento).length, semDuracao: activities.filter(item => !item.durationDays || item.durationDays < 1).length },
           rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, desconectada: disconnected },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
@@ -6862,6 +6862,10 @@ export const appRouter = router({
                 unitPrice: budgetItems.unitPrice,
                 compositionId: budgetItems.compositionId,
                 officialPriceItemId: budgetItems.officialPriceItemId,
+                source: budgetItems.source,
+                isPriceException: budgetItems.isPriceException,
+                quantityEvidence: budgetItems.quantityEvidence,
+                quantityEvidenceStatus: budgetItems.quantityEvidenceStatus,
               })
               .from(budgetItems)
               .leftJoin(wbsNodes, eq(wbsNodes.id, budgetItems.wbsNodeId))
@@ -6895,6 +6899,10 @@ export const appRouter = router({
           unitPrice: Number(item.unitPrice ?? 0),
           compositionId: item.compositionId ?? null,
           officialPriceItemId: item.officialPriceItemId ?? null,
+          source: item.source ?? null,
+          isPriceException: item.isPriceException ?? false,
+          quantityEvidence: item.quantityEvidence ?? null,
+          quantityEvidenceStatus: item.quantityEvidenceStatus ?? null,
         }));
 
         const atividades: AtividadeConciliacao[] = atividadesDb.map(atividade => ({

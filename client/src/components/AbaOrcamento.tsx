@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { unitsCompatible } from "@shared/price-sources/reconciliation";
-import { findBudgetApprovalBlockers } from "@shared/budget-readiness";
+import { canMarkPriceException, findBudgetApprovalBlockers } from "@shared/budget-readiness";
 import { PainelCoerenciaEngenharia } from "./PainelCoerenciaEngenharia";
 import { PainelConciliacao } from "./PainelConciliacao";
 import { PainelValorGanho } from "./PainelValorGanho";
@@ -160,7 +160,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       wbsNodeId: nodeAtual,
       compositionId: item.compositionId == null ? "" : String(item.compositionId),
       officialPriceItemId: item.officialPriceItemId == null ? "" : String(item.officialPriceItemId),
-      isPriceException: item.isPriceException === true,
+      isPriceException: item.isPriceException === true && canMarkPriceException(item),
     });
     setBuscaComposicao(item.compositionNote ?? "");
     setParcela({ servico: "", quantidade: "", evidencia: "" });

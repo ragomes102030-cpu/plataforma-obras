@@ -1,4 +1,5 @@
 import { normalizeForMatch, trigramSimilarity } from "../../shared/price-sources/matching";
+import { findBudgetApprovalBlockers } from "../../shared/budget-readiness";
 
 /**
  * Conciliação entre cronograma e orçamento.
@@ -24,6 +25,10 @@ export type ItemOrcamento = {
   unitPrice: number;
   compositionId: number | null;
   officialPriceItemId?: number | null;
+  source?: string | null;
+  isPriceException?: boolean | null;
+  quantityEvidence?: string | null;
+  quantityEvidenceStatus?: string | null;
 };
 
 export type AtividadeConciliacao = {
@@ -144,6 +149,8 @@ export type CoberturaOrcamentaria = {
   atividadesVinculadas: number;
   atividadesSemQuantidade: number;
   itensSemComposicao: number;
+  itensComBloqueioDeCusto: number;
+  itensComExcecaoDePrecoRastreavel: number;
   itensTotal: number;
 };
 
@@ -216,6 +223,13 @@ export function resumirCobertura(
       atividade => (atividade.plannedQuantity ?? 0) <= 0
     ).length,
     itensSemComposicao: itens.filter(item => item.compositionId == null && item.officialPriceItemId == null).length,
+    itensComBloqueioDeCusto: itens.filter(item => findBudgetApprovalBlockers([{ ...item, source: item.source ?? null }]).length > 0).length,
+    itensComExcecaoDePrecoRastreavel: itens.filter(item =>
+      item.isPriceException === true &&
+      item.compositionId == null &&
+      item.officialPriceItemId == null &&
+      findBudgetApprovalBlockers([{ ...item, source: item.source ?? null }]).length === 0
+    ).length,
     itensTotal: itens.length,
   };
 }

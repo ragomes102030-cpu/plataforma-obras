@@ -201,7 +201,7 @@ export function PainelConciliacao({ projetoId }: { projetoId: number }) {
               <strong>
                 {cobertura.itensSemComposicao}/{cobertura.itensTotal}
               </strong>
-              <small>custo unitário sem origem rastreável</small>
+              <small>{cobertura.itensComBloqueioDeCusto} com bloqueio de custo ou quantidade</small>
             </div>
           </div>
         </>
@@ -312,8 +312,9 @@ export function PainelConciliacao({ projetoId }: { projetoId: number }) {
             <div>
               <strong>Itens de orçamento sem composição</strong>
               <span>
-                {cobertura.itensSemComposicao} item(ns) têm preço digitado mas nenhuma composição que o
-                sustente. Sem isso o custo não é rastreável e o EVM compara previsto com previsto.
+                {cobertura.itensSemComposicao} item(ns) estão sem composição analítica ou serviço oficial;
+                {` ${cobertura.itensComExcecaoDePrecoRastreavel} têm exceção de preço rastreável, que não é composição de catálogo.`}
+                {cobertura.itensComBloqueioDeCusto > 0 && ` ${cobertura.itensComBloqueioDeCusto} ainda têm bloqueios de custo ou quantidade.`}
               </span>
             </div>
             <button
