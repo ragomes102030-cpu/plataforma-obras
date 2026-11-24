@@ -48,4 +48,15 @@ describe("vínculo de produção entre versões de EAP", () => {
     expect(repetidas.has("1.2.3")).toBe(false);
     expect(resolverAtividadeDaProducao(5, "1.2.3", idsAtuais, repetidas)).toBe(5);
   });
+
+  it("oferece revínculo para códigos que continuam na versão atual", async () => {
+    const modulo = await import("./producao-vinculo") as unknown as {
+      temLancamentoRevinculavel?: (vinculos: readonly string[]) => boolean;
+    };
+    expect(modulo.temLancamentoRevinculavel).toBeDefined();
+    expect(modulo.temLancamentoRevinculavel?.(["versao_anterior"])).toBe(true);
+    expect(modulo.temLancamentoRevinculavel?.(["perdido"])).toBe(true);
+    expect(modulo.temLancamentoRevinculavel?.(["atual"])).toBe(false);
+    expect(modulo.temLancamentoRevinculavel?.([])).toBe(false);
+  });
 });

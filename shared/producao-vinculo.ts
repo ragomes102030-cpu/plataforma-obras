@@ -52,3 +52,14 @@ export function indexarAtividadesPorCodigo(
   for (const codigo of duplicados) indice.delete(codigo);
   return indice;
 }
+
+/**
+ * Indica quando há lançamentos que ainda podem ser apontados para o plano atual.
+ * Tanto códigos preservados entre versões quanto códigos sem correspondência
+ * precisam aparecer na revisão; a rotina de revínculo informa os não resolvidos.
+ */
+export function temLancamentoRevinculavel(
+  vinculos: ReadonlyArray<"atual" | "versao_anterior" | "perdido">
+): boolean {
+  return vinculos.some(vinculo => vinculo !== "atual");
+}
