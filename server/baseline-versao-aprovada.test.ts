@@ -134,6 +134,53 @@ describe("versão aprovada x versão de trabalho", () => {
     expect(final.activities[1]).toMatchObject({ pavimento: null, wbsLocation: "por torre/local", wbsLocationIsProductionUnit: false });
   });
 
+  it("resolve o local da EAP pela WBS exata quando o ID da atividade aponta para outra versão", async () => {
+    const db = drizzlePglite(pg);
+    const [aprovada] = await db.select().from(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 1));
+    const [rascunho] = await db.select().from(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 2));
+    const [raizAprovada] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: aprovada.id, code: "1", name: "Obra", level: 1, nodeType: "grupo",
+    }).returning({ id: wbsNodes.id });
+    const [folhaAprovada] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: aprovada.id, parentId: raizAprovada.id, code: "1.2.1", name: "Estacas Torre A",
+      level: 2, nodeType: "pacote", location: "Torre A",
+    }).returning({ id: wbsNodes.id });
+    const [folhaAprovadaParecida] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: aprovada.id, parentId: raizAprovada.id, code: "1.2.10", name: "Pacote sem correspondência",
+      level: 2, nodeType: "pacote",
+    }).returning({ id: wbsNodes.id });
+    const [raizRascunho] = await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: rascunho.id, code: "1", name: "Obra", level: 1, nodeType: "grupo",
+    }).returning({ id: wbsNodes.id });
+    await db.insert(wbsNodes).values({
+      projectId: obraId, versionId: rascunho.id, parentId: raizRascunho.id, code: "1.2.1", name: "Estacas Torre A",
+      level: 2, nodeType: "pacote", location: "Torre A",
+    });
+    await db.insert(productionUnits).values({ projectId: obraId, code: "TORRE-A", name: "Torre A", unitType: "torre" });
+    await db.insert(scheduleActivities).values([
+      {
+        projectId: obraId, versionId: rascunho.id, wbsNodeId: folhaAprovada.id, wbsCode: "1.2.1",
+        name: "Atividade com ID antigo", phase: "Execução", startOffset: 0, durationDays: 8,
+      },
+      {
+        projectId: obraId, versionId: rascunho.id, wbsNodeId: folhaAprovadaParecida.id, wbsCode: "1.2.10",
+        name: "Código apenas parecido", phase: "Execução", startOffset: 0, durationDays: 8,
+      },
+    ]);
+
+    const dono = appRouter.createCaller(contexto({ id: donoId, openId: "aprov-dono", name: "Engenheiro responsável" }));
+    const plano = await dono.planning.list({ projectId: obraId });
+
+    expect(plano.activities.find(activity => activity.name === "Atividade com ID antigo")).toMatchObject({
+      wbsLocation: "Torre A",
+      wbsLocationIsProductionUnit: true,
+    });
+    expect(plano.activities.find(activity => activity.name === "Código apenas parecido")).toMatchObject({
+      wbsLocation: null,
+      wbsLocationIsProductionUnit: false,
+    });
+  });
+
   it.each(["desconectada", "cíclica", "operacional com QA isolado"] as const)("mantém diagnóstico e gate coerentes para rede %s", async tipo => {
     const db = drizzlePglite(pg);
     const [versao] = await db.select().from(projectPlanVersions).where(eq(projectPlanVersions.versionNumber, 2));
