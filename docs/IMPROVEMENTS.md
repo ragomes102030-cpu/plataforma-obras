@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 24/nov/2026 — Exibir revínculo para lançamentos do plano anterior
+
+**Achado:** na obra 26, um lançamento confirmado da atividade `1.2.1` continuava com o mesmo código WBS no plano vigente, mas a interface só exibia a ação de revínculo para códigos sem correspondência. O servidor já permitia revincular ambos os casos por código exato.
+
+**Correção:** a aba Produção agora oferece a ação quando qualquer lançamento não aponta para a atividade atual. O revínculo mantém data, quantidade e estado do lançamento; códigos sem correspondência seguem apresentados como não resolvidos.
+
+**Validação:** teste de regressão confirma os estados `versao_anterior`, `perdido` e `atual`; teste focado, `pnpm check` e a suíte completa (`1.591` testes passaram; `8` ignorados) passaram. Validar a correção do lançamento ao vivo após a publicação.
+
 ## 24/nov/2026 — Resolver local da atividade pelo WBS da versão vigente
 
 **Achado:** na obra 26, a folha `1.2.1` da EAP vigente declara o local “Torre A”, mas a atividade com o mesmo WBS mostrava “Local não declarado na EAP”. A leitura da API procurava somente pelo ID interno da folha, que pode mudar quando uma versão é clonada.

@@ -5,6 +5,7 @@ import { PainelLookahead } from "./PainelLookahead";
 import { ListaLancamentosProducao } from "./ListaLancamentosProducao";
 import { EstadoCarregando } from "./EstadoCarregando";
 import { selectConfirmedProductionEntries } from "@shared/production-entries";
+import { temLancamentoRevinculavel } from "@shared/producao-vinculo";
 import { calcularAvancoMedioDasAtividadesMedidas } from "./production-summary";
 
 /**
@@ -420,10 +421,10 @@ export function AbaProducao({ projetoId }: { projetoId: number }) {
           confirme de novo.
         </p>
       </div>
-      {todosLancamentos.some(l => l.vinculo === "perdido") && (
+      {temLancamentoRevinculavel(todosLancamentos.map(l => l.vinculo)) && (
         <div className="prod-revinculo-aviso" role="status">
           <div>
-            <strong>Há lançamentos confirmados de uma versão anterior.</strong>
+            <strong>Há lançamentos que ainda não apontam para o plano atual.</strong>
             <span>O sistema pode revincular automaticamente apenas os códigos EAP que continuam iguais na versão atual; data e quantidade não são alteradas.</span>
           </div>
           <button
