@@ -3752,6 +3752,9 @@ export const appRouter = router({
             values.compositionUnitCost = null;
             values.compositionNote = null;
             values.officialPriceItemId = null;
+            // Removing a catalog composition also removes its catalog reference.
+            // A manual/QA reference may be supplied explicitly in this mutation.
+            values.referencePeriod = input.referencePeriod ?? null;
           } else {
             const [composition] = await db
               .select()

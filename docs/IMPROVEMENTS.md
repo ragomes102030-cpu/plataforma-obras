@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 24/nov/2026 — Remover referência obsoleta ao desvincular composição
+
+**Achado:** ao corrigir o item 1.3.3 da obra 26, a interface permitiu remover a composição C3507, mas a referência `028.1` permaneceu gravada. A referência não tinha campo editável, fazendo o item sem preço oficial parecer ainda ligado à tabela.
+
+**Correção:** a edição mostra e salva a referência do preço; remover uma composição limpa a referência herdada quando nenhuma referência nova é informada. O item permanece sem preço rastreável até que memorial e cotação/composição compatível estejam disponíveis.
+
+**Regressão:** teste do servidor cobre a remoção da composição e da referência; teste da tela confirma que a referência pode ser editada e enviada. `pnpm check`, 26 testes focados de edição/integridade, 11 testes da conciliação e `pnpm build` passaram. A validação da gravação ao vivo na versão ativa permanece pendente até a publicação da correção.
+
 ## 23/nov/2026 — Reabrir orçamento aprovado mantendo o mesmo número
 
 **Sintoma:** itens de uma versão aprovada estavam protegidos contra edição, mas a tela oferecia apenas criar uma nova versão. Isso impedia corrigir a referência QA dentro da versão já ativa.

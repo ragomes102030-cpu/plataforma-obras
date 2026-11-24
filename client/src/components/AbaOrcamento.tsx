@@ -22,7 +22,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
-  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
+  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", referencePeriod: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
   const [buscaComposicao, setBuscaComposicao] = useState("");
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const [buscaServico, setBuscaServico] = useState("");
@@ -151,6 +151,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantity: String(item.quantity),
       unitPrice: String(item.unitPrice),
       source: item.source ?? "",
+      referencePeriod: item.referencePeriod ?? "",
       quantityEvidence: item.quantityEvidence ?? "",
       quantityEvidenceStatus: (item.quantityEvidenceStatus ?? "pendente") as typeof rascunho.quantityEvidenceStatus,
       wbsNodeId: nodeAtual,
@@ -206,6 +207,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantity: Number(rascunho.quantity),
       unitPrice: Number(rascunho.unitPrice),
       source: rascunho.source || null,
+      referencePeriod: rascunho.referencePeriod || null,
       quantityEvidence: rascunho.quantityEvidence || null,
       quantityEvidenceStatus: rascunho.quantityEvidenceStatus,
       ...(rascunho.wbsNodeId ? { wbsNodeId: Number(rascunho.wbsNodeId) } : {}),
@@ -451,6 +453,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         <label>Quantidade<input aria-label="Quantidade do item" type="number" min="0.001" step="0.001" value={rascunho.quantity} onChange={e => setRascunho({ ...rascunho, quantity: e.target.value })} /></label>
                         <label>Preço unitário<input aria-label="Preço unitário do item" type="number" min="0" step="0.01" value={rascunho.unitPrice} onChange={e => setRascunho({ ...rascunho, unitPrice: e.target.value })} /></label>
                         <label className="orcamento-edit-wide">Fonte do preço<input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} /></label>
+                        <label>Referência do preço<input aria-label="Referência do preço" value={rascunho.referencePeriod} onChange={e => setRascunho({ ...rascunho, referencePeriod: e.target.value })} maxLength={20} placeholder="028.1, mês-base ou cotação" disabled={Boolean(rascunho.compositionId || rascunho.officialPriceItemId)} /></label>
                         <label className="orcamento-edit-wide">Evidência do quantitativo<textarea aria-label="Evidência do quantitativo" value={rascunho.quantityEvidence} onChange={e => setRascunho({ ...rascunho, quantityEvidence: e.target.value })} placeholder="Prancha, revisão, pavimento, memória de cálculo ou referência rastreável" maxLength={2000} /></label>
                         <label>Situação do quantitativo<select aria-label="Situação do quantitativo" value={rascunho.quantityEvidenceStatus} onChange={e => setRascunho({ ...rascunho, quantityEvidenceStatus: e.target.value as typeof rascunho.quantityEvidenceStatus })}><option value="pendente">Pendente</option><option value="cenario">Cenário de planejamento</option><option value="validada">Validada</option></select></label>
                         <label className="orcamento-edit-wide" htmlFor={`item-eap-${item.id}`}>
@@ -471,7 +474,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
                           Composição analítica vinculada
-                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "" }); }} disabled={catalogoComposicoes.isFetching}>
+                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "", referencePeriod: e.target.value ? rascunho.referencePeriod : "" }); }} disabled={catalogoComposicoes.isFetching}>
                             <option value="">Sem composição oficial</option>
                             {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
                             {composicoesCandidatas.map(composition => {
@@ -493,7 +496,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`servico-oficial-selecao-${item.id}`}>
                           Serviço oficial vinculado
-                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "" }); }} disabled={catalogoServicos.isFetching}>
+                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "", referencePeriod: e.target.value ? rascunho.referencePeriod : "" }); }} disabled={catalogoServicos.isFetching}>
                             <option value="">Sem serviço oficial direto</option>
                             {rascunho.officialPriceItemId && !catalogoServicos.data?.items.some(service => String(service.id) === rascunho.officialPriceItemId) && <option value={rascunho.officialPriceItemId}>Serviço oficial atual #{rascunho.officialPriceItemId}</option>}
                             {(catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).map(service => (

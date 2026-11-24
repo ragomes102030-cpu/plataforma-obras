@@ -545,6 +545,46 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, compositionId: otherComposition!.id })).rejects.toThrow(/Base regional incompatível/i);
   });
 
+  it("limpa a referência do catálogo quando a composição é removida", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento sem composição", versionNumber: 1, status: "em_revisao" }).returning({ id: budgetVersions.id });
+    const [catalog] = await db.insert(priceCatalogs).values({ name: "SEINFRA-CE 028.1", sourceType: "SEINFRA", state: "CE", referencePeriod: "028.1", status: "ativo", createdBy: ownerId }).returning({ id: priceCatalogs.id });
+    const [composition] = await db.insert(serviceCompositions).values({ code: "COMP-SEM-ESCOPO", description: "Composição incompatível de teste", unit: "campanha", sourceCatalogId: catalog!.id, referencePeriod: "028.1", status: "validada" }).returning({ id: serviceCompositions.id });
+    const [item] = await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "ITEM-SEM-COMPOSICAO",
+      description: "Serviço sem composição compatível",
+      unit: "campanha",
+      quantity: "1.000",
+      unitPrice: "28.68",
+      source: "SEINFRA · SEINFRA-CE 028.1",
+      compositionId: composition!.id,
+      compositionUnitCost: "28.68",
+      compositionNote: "C3507 · Projeto estrutural",
+      referencePeriod: "028.1",
+    }).returning({ id: budgetItems.id });
+
+    await caller.budgets.updateItem({
+      projectId,
+      budgetItemId: item!.id,
+      compositionId: null,
+      unitPrice: 0,
+      source: "Premissa QA — cotação pendente",
+    });
+
+    const [persisted] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    expect(persisted).toMatchObject({
+      compositionId: null,
+      compositionUnitCost: null,
+      compositionNote: null,
+      officialPriceItemId: null,
+      referencePeriod: null,
+      unitPrice: "0.00",
+      source: "Premissa QA — cotação pendente",
+    });
+  });
+
   it("vincula serviço oficial do catálogo separado e usa o preço oficial da linha", async () => {
     const [root] = await db.select().from(wbsNodes);
     const [budget] = await db.insert(budgetVersions).values({ projectId, name: "Orçamento por serviço oficial", versionNumber: 1, status: "em_revisao" }).returning({ id: budgetVersions.id });
