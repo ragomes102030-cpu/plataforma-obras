@@ -356,6 +356,82 @@ describe("aplicarPropostaEap", () => {
     await expect(caller.budgets.updateItem({ projectId, budgetItemId: item!.id, unitPrice: 99 })).rejects.toThrow(/não aceita edição/i);
   });
 
+  it("grava exceção QA de preço com referência pública do PNCP", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Orçamento QA",
+      versionNumber: 4,
+      status: "em_revisao",
+    }).returning({ id: budgetVersions.id });
+    const [item] = await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "1.3.3",
+      description: "Monitoramento de recalques",
+      unit: "SERV",
+      quantity: "1.000",
+      unitPrice: "8500.00",
+      source: "Premissa QA · PNCP 64372423000115-1-000001/2026 · SAMAE Porto Belo/SC",
+      quantityEvidence: "1 SERV comparado a aviso público; não é medição.",
+      quantityEvidenceStatus: "cenario",
+    }).returning({ id: budgetItems.id });
+
+    await caller.budgets.updateItem({
+      projectId,
+      budgetItemId: item!.id,
+      isPriceException: true,
+    });
+
+    const [persisted] = await db.select().from(budgetItems).where(eq(budgetItems.id, item!.id));
+    expect(persisted).toMatchObject({ isPriceException: true, source: "Premissa QA · PNCP 64372423000115-1-000001/2026 · SAMAE Porto Belo/SC" });
+  });
+
+  it("preserva exceção PNCP ao aplicar premissas QA aos demais itens sem catálogo", async () => {
+    const [root] = await db.select().from(wbsNodes);
+    const [budget] = await db.insert(budgetVersions).values({
+      projectId,
+      name: "Orçamento QA",
+      versionNumber: 5,
+      status: "em_revisao",
+    }).returning({ id: budgetVersions.id });
+    const [exception] = await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "PNCP-EXCEPTION",
+      description: "Monitoramento de recalques",
+      unit: "SERV",
+      quantity: "1.000",
+      unitPrice: "8500.00",
+      source: "Premissa QA · PNCP 64372423000115-1-000001/2026 · SAMAE Porto Belo/SC",
+      referencePeriod: "PNCP 2026-03",
+      isPriceException: true,
+      quantityEvidence: "Referência PNCP preservada como cenário.",
+      quantityEvidenceStatus: "cenario",
+    }).returning({ id: budgetItems.id });
+    await db.insert(budgetItems).values({
+      budgetVersionId: budget!.id,
+      wbsNodeId: root!.id,
+      code: "QA-PLACEHOLDER",
+      description: "Item ainda sem preço oficial",
+      unit: "vb",
+      quantity: "1.000",
+      unitPrice: "1.00",
+      source: "placeholder",
+    });
+
+    const result = await caller.budgets.applyQaPremises({ projectId, budgetVersionId: budget!.id });
+    const [persistedException] = await db.select().from(budgetItems).where(eq(budgetItems.id, exception!.id));
+
+    expect(result).toMatchObject({ updated: 1, total: 2 });
+    expect(persistedException).toMatchObject({
+      isPriceException: true,
+      source: "Premissa QA · PNCP 64372423000115-1-000001/2026 · SAMAE Porto Belo/SC",
+      referencePeriod: "PNCP 2026-03",
+      quantityEvidence: "Referência PNCP preservada como cenário.",
+    });
+  });
+
   it("importa serviços SICRO de forma idempotente e recusa alterações conflitantes", async () => {
     const XLSX = await import("xlsx");
     const book = XLSX.utils.book_new();

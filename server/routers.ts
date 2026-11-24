@@ -3712,6 +3712,7 @@ export const appRouter = router({
         quantity: z.number().positive().optional(),
         unitPrice: z.number().nonnegative().optional(),
         source: z.string().trim().max(80).nullable().optional(),
+        isPriceException: z.boolean().optional(),
         quantityEvidence: z.string().trim().max(2000).nullable().optional(),
         quantityEvidenceStatus: z.enum(["pendente", "cenario", "validada"]).optional(),
         referencePeriod: z.string().trim().max(20).nullable().optional(),
@@ -3730,6 +3731,8 @@ export const appRouter = router({
             id: budgetItems.id,
             budgetVersionId: budgetItems.budgetVersionId,
             unit: budgetItems.unit,
+            officialPriceItemId: budgetItems.officialPriceItemId,
+            compositionId: budgetItems.compositionId,
             status: budgetVersions.status,
           })
           .from(budgetItems)
@@ -3867,6 +3870,15 @@ export const appRouter = router({
         if (input.quantityEvidence !== undefined) values.quantityEvidence = input.quantityEvidence;
         if (input.quantityEvidenceStatus !== undefined) values.quantityEvidenceStatus = input.quantityEvidenceStatus;
         if (input.referencePeriod !== undefined && !(input.compositionId && input.compositionId > 0) && !(input.officialPriceItemId && input.officialPriceItemId > 0)) values.referencePeriod = input.referencePeriod;
+        const compositionId = input.compositionId !== undefined ? input.compositionId : item.compositionId;
+        const officialPriceItemId = input.officialPriceItemId !== undefined ? input.officialPriceItemId : item.officialPriceItemId;
+        if (input.isPriceException === true && (compositionId != null || officialPriceItemId != null)) {
+          throw badRequest("A exceção de preço só pode ser marcada quando o item não tem vínculo oficial.");
+        }
+        if (input.isPriceException !== undefined) values.isPriceException = input.isPriceException;
+        if ((input.compositionId != null && input.compositionId > 0) || (input.officialPriceItemId != null && input.officialPriceItemId > 0)) {
+          values.isPriceException = false;
+        }
         if (input.productivity !== undefined) values.productivity = input.productivity == null ? null : input.productivity.toFixed(3);
         if (input.plannedDurationDays !== undefined) values.plannedDurationDays = input.plannedDurationDays;
         if (input.wbsNodeId !== undefined) values.wbsNodeId = input.wbsNodeId;
@@ -3891,9 +3903,9 @@ export const appRouter = router({
         if (!version) throw notFound("Versão de orçamento não encontrada.");
         if (version.status === "aprovado" || version.status === "arquivado") throw conflict("Esta versão não aceita edição.");
         const note = input.note ?? "Premissa QA — item sem composição oficial; valor mantido somente para teste do fluxo, não é preço executivo.";
-        const rows = await db.select({ id: budgetItems.id, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId })
+        const rows = await db.select({ id: budgetItems.id, officialPriceItemId: budgetItems.officialPriceItemId, compositionId: budgetItems.compositionId, isPriceException: budgetItems.isPriceException })
           .from(budgetItems).where(eq(budgetItems.budgetVersionId, input.budgetVersionId));
-        const targets = rows.filter(row => row.officialPriceItemId == null && row.compositionId == null);
+        const targets = rows.filter(row => row.officialPriceItemId == null && row.compositionId == null && !row.isPriceException);
         for (const row of targets) {
           await db.update(budgetItems).set({
             source: note.slice(0, 80),

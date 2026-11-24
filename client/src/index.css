@@ -4435,6 +4435,9 @@
 .orcamento-edit-panel>label.orcamento-edit-wide{grid-column:span 2}
 .orcamento-edit-panel>label input,.orcamento-edit-panel>label select{box-sizing:border-box;width:100%;min-width:0;min-height:36px;border:1px solid #cad9e1;border-radius:6px;background:#fff;color:#183544;padding:7px 9px;font:inherit;font-size:12px;font-weight:500}
 .orcamento-edit-panel>label input:focus,.orcamento-edit-panel>label select:focus{outline:2px solid #b9d7e2;outline-offset:1px}
+.orcamento-edit-panel>label.orcamento-edit-checkbox{display:flex;grid-column:span 4;align-items:center;gap:8px}
+.orcamento-edit-panel>label.orcamento-edit-checkbox input{width:16px;min-width:16px;min-height:16px;flex:0 0 auto;padding:0}
+.orcamento-edit-exception-note{grid-column:span 4;margin:-6px 0 0;color:#56717d;font-size:11px;line-height:1.4}
 .orcamento-edit-feedback{grid-column:span 3;align-self:center;display:grid;gap:4px;color:#56717d;font-size:11px;line-height:1.4}
 .orcamento-edit-feedback .orcamento-edit-error{color:#a23b32}
 .orcamento-edit-actions{grid-column:4;display:flex;justify-content:flex-end;gap:8px;align-self:center}
@@ -4454,6 +4457,7 @@
 .orcamento-multiservico-total strong{font-size:14px;color:#0f7188}
 .orcamento-multiservico .orcamento-edit-error{color:#a23b32;font-size:11px}
 @media(max-width:760px){.orcamento-edit-panel{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px;gap:9px}.orcamento-edit-panel>label.orcamento-edit-wide{grid-column:span 2}.orcamento-edit-feedback{grid-column:span 2}.orcamento-edit-actions{grid-column:span 2;justify-content:flex-start}}
+@media(max-width:760px){.orcamento-edit-panel>label.orcamento-edit-checkbox,.orcamento-edit-exception-note{grid-column:span 2}}
 @media(max-width:760px){.orcamento-multiservico-add{grid-template-columns:1fr}.orcamento-multiservico-row{grid-template-columns:1fr 120px}.orcamento-multiservico-row>strong{justify-self:end}.orcamento-multiservico-total{flex-wrap:wrap}}
 @media(max-width:760px){.orcamento-edit-panel>.orcamento-multiservico{grid-column:span 2}}
 .module-card p, .panel p, .module-hero p, .muted, .metric-detail, .planning-row span, .gantt-help, .lob-copy p:not(.eyebrow), .lob-chart-title span { color: var(--muted-foreground); }

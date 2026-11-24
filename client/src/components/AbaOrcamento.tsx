@@ -22,7 +22,7 @@ export function AbaOrcamento({ projetoId }: Props) {
   const [filtro, setFiltro] = useState<string>("todos");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [detalheId, setDetalheId] = useState<number | null>(null);
-  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", referencePeriod: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "" });
+  const [rascunho, setRascunho] = useState({ code: "", description: "", unit: "", quantity: "", unitPrice: "", source: "", referencePeriod: "", quantityEvidence: "", quantityEvidenceStatus: "pendente" as "pendente" | "cenario" | "validada", wbsNodeId: "", compositionId: "", officialPriceItemId: "", isPriceException: false });
   const [buscaComposicao, setBuscaComposicao] = useState("");
   const [buscaComposicaoDebounced, setBuscaComposicaoDebounced] = useState("");
   const [buscaServico, setBuscaServico] = useState("");
@@ -115,6 +115,9 @@ export function AbaOrcamento({ projetoId }: Props) {
   const prontidaoEvidencias = summarizeQuantityEvidence(items.map(item => item.quantityEvidenceStatus));
   const itensComFonte = items.filter((i) => Boolean(i.source && !/didatic|rateio uniforme/i.test(String(i.source)))).length;
   const itensComComposicao = items.filter((i) => i.compositionId != null || i.officialPriceItemId != null).length;
+  const itensSemVinculoOficial = items.filter((i) => i.compositionId == null && i.officialPriceItemId == null).length;
+  const itensComExcecaoDePreco = items.filter((i) => i.isPriceException && i.compositionId == null && i.officialPriceItemId == null).length;
+  const itensAguardandoVinculoOficial = itensSemVinculoOficial - itensComExcecaoDePreco;
   const itensComBloqueio = new Set(findBudgetApprovalBlockers(items).map(item => item.code));
   const prontoParaAprovar = items.length > 0 && itensComBloqueio.size === 0;
   const cobertura = items.length ? Math.round((itensComFonte / items.length) * 100) : 0;
@@ -157,6 +160,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       wbsNodeId: nodeAtual,
       compositionId: item.compositionId == null ? "" : String(item.compositionId),
       officialPriceItemId: item.officialPriceItemId == null ? "" : String(item.officialPriceItemId),
+      isPriceException: item.isPriceException === true,
     });
     setBuscaComposicao(item.compositionNote ?? "");
     setParcela({ servico: "", quantidade: "", evidencia: "" });
@@ -207,6 +211,7 @@ export function AbaOrcamento({ projetoId }: Props) {
       quantity: Number(rascunho.quantity),
       unitPrice: Number(rascunho.unitPrice),
       source: rascunho.source || null,
+      isPriceException: rascunho.isPriceException,
       referencePeriod: rascunho.referencePeriod || null,
       quantityEvidence: rascunho.quantityEvidence || null,
       quantityEvidenceStatus: rascunho.quantityEvidenceStatus,
@@ -328,14 +333,14 @@ export function AbaOrcamento({ projetoId }: Props) {
 
       {!carregando && !erro && <section className="orcamento-kpis" aria-label="Prontidão do orçamento">
         <div className="orcamento-kpi"><span>COBERTURA DE FONTE</span><strong>{cobertura}%</strong><small>{itensComFonte} de {items.length} itens sem fonte didática</small><div><i style={{width:`${cobertura}%`}} /></div></div>
-        <div className="orcamento-kpi"><span>VÍNCULOS OFICIAIS</span><strong>{itensComComposicao}</strong><small>{items.length - itensComComposicao} itens ainda sem composição ou serviço oficial</small></div>
+        <div className="orcamento-kpi"><span>VÍNCULOS OFICIAIS</span><strong>{itensComComposicao}</strong><small>{itensSemVinculoOficial} sem vínculo oficial; {itensComExcecaoDePreco} exceção(ões) de preço marcada(s)</small></div>
         <div className="orcamento-kpi"><span>PREÇOS UNITÁRIOS</span><strong>{prontidaoQuantitativos.status}</strong><small>{prontidaoQuantitativos.description}</small></div>
         <div className="orcamento-kpi"><span>EVIDÊNCIA DOS QUANTITATIVOS</span><strong>{prontidaoEvidencias.status}</strong><small>{prontidaoEvidencias.description}</small></div>
       </section>}
 
       {!carregando && !erro && statusOrcamento !== "pronto" && <section className="orcamento-next-step">
-        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : itensComComposicao < items.length ? "Completar vínculos oficiais do orçamento" : prontidaoEvidencias.status !== "Validado" ? "Fechar evidência dos quantitativos" : "Revisar itens sem vínculo oficial"}</strong><p>{itensComFonte === 0 ? "Use a tabela oficial compatível com a região da obra; confirme a referência de preço e preserve a versão da base." : itensComComposicao < items.length ? "Associe cada serviço a uma composição ou item oficial compatível por código, unidade e escopo." : prontidaoEvidencias.status !== "Validado" ? "Os preços podem estar aprovados para referência; quantitativos em cenário ou pendentes não são quantidade executiva, medição ou avanço." : "Não aprove por rateio. Cada item precisa de código, unidade e referência rastreáveis por composição ou serviço oficial."}</p></div></div>{itensComFonte === 0 || itensComComposicao < items.length ? <button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button> : null}
-        {versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && items.some(item => item.compositionId == null && item.officialPriceItemId == null) && <button type="button" className="xl-btn" disabled={aplicarPremissasQa.isPending} onClick={() => { if (window.confirm("Marcar itens sem vínculo como Premissa QA? Isso não cria vínculo oficial nem aprova o orçamento.")) aplicarPremissasQa.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id }); }}>{aplicarPremissasQa.isPending ? "Aplicando QA…" : "Marcar pendências como Premissa QA"}</button>}
+        <div><span className="orcamento-next-icon">!</span><div><b>Próximo passo recomendado</b><strong>{itensComFonte === 0 ? "Importar uma base oficial no Catálogo de Insumos" : itensAguardandoVinculoOficial > 0 ? "Completar vínculos oficiais do orçamento" : prontidaoEvidencias.status !== "Validado" ? "Fechar evidência dos quantitativos" : "Revisar itens sem vínculo oficial"}</strong><p>{itensComFonte === 0 ? "Use a tabela oficial compatível com a região da obra; confirme a referência de preço e preserve a versão da base." : itensAguardandoVinculoOficial > 0 ? "Associe serviços a composições oficiais quando houver correspondência de código, unidade e escopo. Se não houver, documente a exceção rastreável." : prontidaoEvidencias.status !== "Validado" ? "Os preços podem estar aprovados para referência; quantitativos em cenário ou pendentes não são quantidade executiva, medição ou avanço." : "Não aprove por rateio. Cada item precisa de código, unidade e referência rastreáveis por composição ou serviço oficial."}</p></div></div>{itensComFonte === 0 || itensAguardandoVinculoOficial > 0 ? <button type="button" className="xl-btn xl-btn-primary" onClick={() => window.dispatchEvent(new CustomEvent("abrir-catalogo"))}>Abrir catálogo →</button> : null}
+        {versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && items.some(item => item.compositionId == null && item.officialPriceItemId == null && !item.isPriceException) && <button type="button" className="xl-btn" disabled={aplicarPremissasQa.isPending} onClick={() => { if (window.confirm("Marcar itens sem vínculo como Premissa QA? Isso não cria vínculo oficial nem aprova o orçamento.")) aplicarPremissasQa.mutate({ projectId: Number(projetoId), budgetVersionId: versaoAtiva.id }); }}>{aplicarPremissasQa.isPending ? "Aplicando QA…" : "Marcar pendências como Premissa QA"}</button>}
       </section>}
       {aplicarPremissasQa.isError && <p className="xl-aviso xl-aviso-erro" role="alert">{aplicarPremissasQa.error.message}</p>}
       {aplicarPremissasQa.isSuccess && <p className="xl-aviso" role="status">{aplicarPremissasQa.data.updated} item(ns) receberam Premissa QA. Vínculos oficiais continuam separados.</p>}
@@ -343,11 +348,11 @@ export function AbaOrcamento({ projetoId }: Props) {
       {!carregando && !erro && versaoAtiva && versaoAtiva.status !== "aprovado" && versaoAtiva.status !== "arquivado" && <section className="xl-analise" aria-label="Validação item a item">
         <div className="xl-analises-topo">
           <h3>Validar insumos um a um</h3>
-          <p>Selecione <strong>Editar</strong> em cada linha e associe o serviço ou a composição diretamente no catálogo oficial. O engenheiro confere código, unidade, preço, quantidade e evidência na própria tela; nenhum arquivo JSON é necessário para fechar o orçamento.</p>
+          <p>Selecione <strong>Editar</strong> para vincular um serviço oficial compatível ou documentar uma exceção de preço quando o catálogo não oferecer correspondência. Premissas QA continuam identificadas como cenário, não como medição real.</p>
         </div>
         <div className="xl-aviso" role="status">
-          <strong>{items.filter(item => item.compositionId == null && item.officialPriceItemId == null).length} item(ns) aguardando vínculo oficial.</strong>
-          <p>Use o botão <strong>Editar</strong> da própria linha. A seleção grava o vínculo, o preço da fonte e a evidência de quantidade individualmente, com auditoria por item.</p>
+          <strong>{itensAguardandoVinculoOficial} item(ns) aguardando vínculo oficial; {itensComExcecaoDePreco} exceção(ões) de preço marcada(s).</strong>
+          <p>Use <strong>Editar</strong> na linha. Itens com exceção não recebem vínculo oficial fictício; valide código, unidade, fonte, referência e evidência individualmente.</p>
         </div>
       </section>}
 
@@ -453,6 +458,11 @@ export function AbaOrcamento({ projetoId }: Props) {
                         <label>Quantidade<input aria-label="Quantidade do item" type="number" min="0.001" step="0.001" value={rascunho.quantity} onChange={e => setRascunho({ ...rascunho, quantity: e.target.value })} /></label>
                         <label>Preço unitário<input aria-label="Preço unitário do item" type="number" min="0" step="0.01" value={rascunho.unitPrice} onChange={e => setRascunho({ ...rascunho, unitPrice: e.target.value })} /></label>
                         <label className="orcamento-edit-wide">Fonte do preço<input aria-label="Fonte do item" value={rascunho.source} onChange={e => setRascunho({ ...rascunho, source: e.target.value })} /></label>
+                        <label className="orcamento-edit-checkbox orcamento-edit-wide">
+                          <input aria-label="Exceção de preço documentada" type="checkbox" checked={rascunho.isPriceException} disabled={Boolean(rascunho.compositionId || rascunho.officialPriceItemId)} onChange={e => setRascunho({ ...rascunho, isPriceException: e.target.checked })} />
+                          Exceção de preço rastreável fora do catálogo
+                        </label>
+                        <p className="orcamento-edit-exception-note">Marque somente com referência identificável no PNCP (número de controle), cotação, proposta ou contrato. A exceção não transforma Premissa QA em medição real.</p>
                         <label>Referência do preço<input aria-label="Referência do preço" value={rascunho.referencePeriod} onChange={e => setRascunho({ ...rascunho, referencePeriod: e.target.value })} maxLength={20} placeholder="028.1, mês-base ou cotação" disabled={Boolean(rascunho.compositionId || rascunho.officialPriceItemId)} /></label>
                         <label className="orcamento-edit-wide">Evidência do quantitativo<textarea aria-label="Evidência do quantitativo" value={rascunho.quantityEvidence} onChange={e => setRascunho({ ...rascunho, quantityEvidence: e.target.value })} placeholder="Prancha, revisão, pavimento, memória de cálculo ou referência rastreável" maxLength={2000} /></label>
                         <label>Situação do quantitativo<select aria-label="Situação do quantitativo" value={rascunho.quantityEvidenceStatus} onChange={e => setRascunho({ ...rascunho, quantityEvidenceStatus: e.target.value as typeof rascunho.quantityEvidenceStatus })}><option value="pendente">Pendente</option><option value="cenario">Cenário de planejamento</option><option value="validada">Validada</option></select></label>
@@ -474,7 +484,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`composicao-selecao-${item.id}`}>
                           Composição analítica vinculada
-                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "", referencePeriod: e.target.value ? rascunho.referencePeriod : "" }); }} disabled={catalogoComposicoes.isFetching}>
+                          <select id={`composicao-selecao-${item.id}`} aria-label="Composição analítica vinculada" value={rascunho.compositionId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, compositionId: e.target.value, officialPriceItemId: "", referencePeriod: e.target.value ? rascunho.referencePeriod : "", isPriceException: false }); }} disabled={catalogoComposicoes.isFetching}>
                             <option value="">Sem composição oficial</option>
                             {rascunho.compositionId && !composicoesCandidatas.some(composition => String(composition.id) === rascunho.compositionId) && <option value={rascunho.compositionId}>Composição atual #{rascunho.compositionId}</option>}
                             {composicoesCandidatas.map(composition => {
@@ -496,7 +506,7 @@ export function AbaOrcamento({ projetoId }: Props) {
                         </label>
                         <label className="orcamento-edit-wide" htmlFor={`servico-oficial-selecao-${item.id}`}>
                           Serviço oficial vinculado
-                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "", referencePeriod: e.target.value ? rascunho.referencePeriod : "" }); }} disabled={catalogoServicos.isFetching}>
+                          <select id={`servico-oficial-selecao-${item.id}`} aria-label="Serviço oficial vinculado" value={rascunho.officialPriceItemId} onChange={e => { composicaoHidratada.current = ""; setComponentesServico([]); setRascunho({ ...rascunho, officialPriceItemId: e.target.value, compositionId: "", referencePeriod: e.target.value ? rascunho.referencePeriod : "", isPriceException: false }); }} disabled={catalogoServicos.isFetching}>
                             <option value="">Sem serviço oficial direto</option>
                             {rascunho.officialPriceItemId && !catalogoServicos.data?.items.some(service => String(service.id) === rascunho.officialPriceItemId) && <option value={rascunho.officialPriceItemId}>Serviço oficial atual #{rascunho.officialPriceItemId}</option>}
                             {(catalogoServicos.data?.items ?? []).filter(service => unitsCompatible(service.unit, rascunho.unit)).map(service => (
