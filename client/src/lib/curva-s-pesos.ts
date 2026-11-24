@@ -7,10 +7,11 @@
  * e a curva S abre dizendo apenas "o valor do orçamento não chegou às
  * atividades" — sem dizer que o valor existe e está no lugar errado.
  *
- * O código da EAP ("1.2.3") identifica o pacote em qualquer versão, então ele
- * é o plano B: primeiro tenta o nó, depois o código. O que não casar de jeito
- * nenhum é devolvido em `valorSemDestino` para a tela poder dizer quanto dinheiro
- * ficou de fora — em reais, não em porcentagem.
+ * O código da folha EAP ("1.2.3") identifica o pacote em qualquer versão.
+ * Depois de tentar o nó, usa o código da folha resolvido pela API e, por
+ * último, o código do item. O que não casar de jeito nenhum é devolvido em
+ * `valorSemDestino` para a tela poder dizer quanto dinheiro ficou de fora —
+ * em reais, não em porcentagem.
  */
 
 export type AtividadeDaCurva = {
@@ -21,6 +22,8 @@ export type AtividadeDaCurva = {
 
 export type ItemDaCurva = {
   wbsNodeId: number | null;
+  /** Código da folha EAP resolvido pelo servidor para o nó vinculado ao item. */
+  wbsCode?: string | null;
   code: string | null;
   quantity: number | string;
   unitPrice: number | string;
@@ -32,7 +35,7 @@ export type PesosDaCurva = {
   total: number;
   valorSemDestino: number;
   itensSemDestino: number;
-  /** Itens que só casaram pelo código, porque o nó é de outra versão da EAP. */
+  /** Itens que só casaram pelo código da folha EAP ou do item. */
   itensCasadosPorCodigo: number;
 };
 
@@ -69,6 +72,14 @@ export function calcularPesosDaCurva(
     total += valor;
 
     let atividadeId = item.wbsNodeId != null ? atividadeDoNo.get(item.wbsNodeId) : undefined;
+    if (atividadeId == null) {
+      const codigo = item.wbsCode?.trim();
+      const porCodigo = codigo ? atividadeDoCodigo.get(codigo) : undefined;
+      if (porCodigo != null) {
+        atividadeId = porCodigo;
+        itensCasadosPorCodigo += 1;
+      }
+    }
     if (atividadeId == null) {
       const codigo = item.code?.trim();
       const porCodigo = codigo ? atividadeDoCodigo.get(codigo) : undefined;

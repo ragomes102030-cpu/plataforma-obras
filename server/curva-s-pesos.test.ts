@@ -50,6 +50,21 @@ describe("pesos da curva S", () => {
     expect(resultado.itensCasadosPorCodigo).toBe(1);
   });
 
+  it("casa pelo código da folha EAP associada quando IDs atuais e antigos divergem", () => {
+    const itemDesdobrado = {
+      ...item("1.2.4.TB.0202.D8", 538, 881.64, 11.96),
+      wbsCode: "1.2.4",
+    };
+    const resultado = calcularPesosDaCurva(
+      [atividade(42, "1.2.4", 421)],
+      [itemDesdobrado]
+    );
+
+    expect(resultado.custoPorAtividade.get(42)).toBeCloseTo(881.64 * 11.96);
+    expect(resultado.valorSemDestino).toBe(0);
+    expect(resultado.itensCasadosPorCodigo).toBe(1);
+  });
+
   it("não esconde dinheiro que ficou sem destino", () => {
     const resultado = calcularPesosDaCurva(
       [atividade(1, "1.1", 10)],
