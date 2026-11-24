@@ -1,6 +1,6 @@
 # Controle de integridade da EAP e aprendizado do Arquimedes
 
-Última atualização: 2026-10-05
+Última atualização: 2026-11-24 (commit `fe3bef1`)
 
 ## Objetivo
 Documento obrigatório antes de avançar da EAP para Atividades. Registra os incidentes da AURORA TESTE (OB-PUPOCN) e transforma cada falha em regra permanente, teste de regressão e critério de liberação.
@@ -177,6 +177,13 @@ Efeito: a árvore mostrava 8 nós enquanto o validador ainda exibia 0 nós e o f
 Correção: invalidar, em conjunto, `projects.wbs`, `eap.validateWbsStructure` e `eap.eapArquimedesReview` após aplicar a proposta como rascunho.
 Regressão: `client/src/components/escopo-eap-studio.test.ts` exige as três invalidações no fluxo de aplicação inicial.
 Lição: após mutação versionada, atualizar todas as leituras que compõem o estado visível antes de permitir aprovação ou passagem de etapa.
+
+### Incidente H — local da EAP não resolvido quando o ID da folha muda entre versões
+**Sintoma:** na obra 26, a atividade com WBS `1.2.1` aparecia sem local, embora a folha `1.2.1` da versão de trabalho declarasse “Torre A”.
+**Causa:** `planning.list` consultava os nós da versão vigente, mas resolvia `wbsLocation` somente pelo ID salvo na atividade. Quando esse ID pertencia a uma versão anterior, o código não encontrava o nó vigente.
+**Correção:** preservar o ID como primeira escolha; quando não existir na versão vigente, resolver apenas por WBS exato e único dentro dos nós já filtrados por `projectId + versionId` da versão corrente. A leitura do local não grava o campo da atividade.
+**Barreira:** `wbsLocationIsProductionUnit` continua exigindo correspondência exata entre o local EAP e o nome de unidade física cadastrada. Escopo amplo ou textual não vira unidade operacional automaticamente.
+**Regressão:** `server/baseline-versao-aprovada.test.ts` verifica o ID antigo, a localização pela WBS exata e a rejeição de um código semelhante.
 
 ## 12. Checklist obrigatório antes de qualquer próxima etapa
 - identificar projectId;

@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 24/nov/2026 — Resolver local da atividade pelo WBS da versão vigente
+
+**Achado:** na obra 26, a folha `1.2.1` da EAP vigente declara o local “Torre A”, mas a atividade com o mesmo WBS mostrava “Local não declarado na EAP”. A leitura da API procurava somente pelo ID interno da folha, que pode mudar quando uma versão é clonada.
+
+**Correção:** a API continua priorizando o vínculo por ID quando ele pertence à versão vigente; se o ID não pertence a essa versão, busca o código WBS exato dentro dos nós da versão vigente. O escopo textual continua separado da unidade física operacional: a indicação de unidade cadastrada só é positiva quando o local coincide exatamente com o catálogo de unidades físicas.
+
+**Regressão:** `server/baseline-versao-aprovada.test.ts` reproduz o ID antigo, exige o local pelo WBS exato e garante que um código apenas parecido não seja associado. A validação ao vivo será feita após o deploy.
+
 ## 24/nov/2026 — Conciliar custos detalhados pelo código exato da EAP
 
 **Achado:** na obra 26, todas as 86 atividades tinham item orçamentário, mas o resumo financeiro apontava 88% do valor vinculado. A cobertura somava apenas `budgetItemId` explícito e ignorava linhas detalhadas já associadas à folha EAP correspondente.

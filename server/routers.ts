@@ -5668,8 +5668,9 @@ export const appRouter = router({
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
         const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
-        const versionNodes = currentVersion ? await db.select({ id: wbsNodes.id, location: wbsNodes.location }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id))) : [];
-        const locationByNode = new Map(versionNodes.map(node => [node.id, node.location?.trim() || null]));
+        const versionNodes = currentVersion ? await db.select({ id: wbsNodes.id, code: wbsNodes.code, location: wbsNodes.location }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id))) : [];
+        const nodeById = new Map(versionNodes.map(node => [node.id, node]));
+        const nodeByWbs = new Map(versionNodes.map(node => [node.code.trim(), node]));
         const physicalUnits = await db.select({ name: productionUnits.name }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId));
         const physicalUnitNames = new Set(physicalUnits.map(unit => unit.name.trim()));
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), dependencyScope));
@@ -5703,12 +5704,19 @@ export const appRouter = router({
             evidenceByActivity.set(activityId, payload ?? {});
           }
         }
-        const activitiesWithEvidence = activities.map(activity => ({
-          ...activity,
-          wbsLocation: activity.wbsNodeId == null ? null : locationByNode.get(activity.wbsNodeId) ?? null,
-          wbsLocationIsProductionUnit: activity.wbsNodeId != null && physicalUnitNames.has(locationByNode.get(activity.wbsNodeId) ?? ""),
-          planningEvidence: evidenceByActivity.get(activity.id) ?? null,
-        }));
+        const activitiesWithEvidence = activities.map(activity => {
+          // Atividades podem conservar o ID da folha de uma versão anterior da EAP.
+          // Só usamos o WBS exato da versão atual quando o ID não pertence a ela.
+          const node = (activity.wbsNodeId == null ? undefined : nodeById.get(activity.wbsNodeId))
+            ?? nodeByWbs.get(activity.wbsCode.trim());
+          const wbsLocation = node?.location?.trim() || null;
+          return {
+            ...activity,
+            wbsLocation,
+            wbsLocationIsProductionUnit: node != null && physicalUnitNames.has(wbsLocation ?? ""),
+            planningEvidence: evidenceByActivity.get(activity.id) ?? null,
+          };
+        });
         // A tela de Atividades auto-dispara `generateFromEap` ao montar. Sem isto,
         // uma obra ainda não aprovada recebe o erro "A EAP precisa estar aprovada
         // antes de gerar atividades" como se fosse falha do usuário, em vez da
