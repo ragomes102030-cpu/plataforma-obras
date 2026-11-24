@@ -162,18 +162,40 @@ export function resumirCobertura(
 ): CoberturaOrcamentaria {
   const porId = new Map(itens.map(item => [item.id, item]));
   const consumo = new Map<number, number>();
+  const itensComVinculoExplicito = new Set<number>();
   const atividadesComItemAtivo = atividades.filter(
     atividade => atividade.budgetItemId != null && porId.has(atividade.budgetItemId)
   );
+  const atividadesPorCodigo = new Map<string, AtividadeConciliacao[]>();
 
   for (const atividade of atividades) {
+    const codigo = chaveDeCodigo(atividade.wbsCode);
+    if (codigo) {
+      const correspondentes = atividadesPorCodigo.get(codigo) ?? [];
+      atividadesPorCodigo.set(codigo, [...correspondentes, atividade]);
+    }
+
     if (atividade.budgetItemId == null) continue;
     const item = porId.get(atividade.budgetItemId);
     if (!item) continue;
+    itensComVinculoExplicito.add(item.id);
     const quantidade = atividade.plannedQuantity ?? 0;
     if (quantidade <= 0) continue;
     const fracao = item.quantity > 0 ? Math.min(1, quantidade / item.quantity) : 1;
     consumo.set(item.id, Math.min(1, (consumo.get(item.id) ?? 0) + fracao));
+  }
+
+  // A linha detalhada pode não ser o budgetItemId direto da atividade. Quando
+  // seu WBS vem da folha EAP e casa exatamente com uma única atividade, todo o
+  // valor daquela linha pertence à mesma atividade. Vínculos explícitos têm
+  // precedência (inclusive quando a quantidade ainda está pendente); códigos
+  // ambíguos nunca recebem associação automática.
+  for (const item of itens) {
+    if (itensComVinculoExplicito.has(item.id)) continue;
+    const codigo = chaveDeCodigo(item.wbsCode ?? "");
+    if (!codigo) continue;
+    const correspondentes = atividadesPorCodigo.get(codigo) ?? [];
+    if (correspondentes.length === 1) consumo.set(item.id, 1);
   }
 
   let valorTotal = 0;
