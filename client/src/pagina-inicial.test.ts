@@ -134,6 +134,11 @@ describe("a tela inicial não pode ficar esperando para sempre", () => {
     expect(semEstilo, "classes sem estilo: " + semEstilo.join(", ")).toEqual([]);
   });
 
+  it("reserva área rolável para o último comando sob o atalho flutuante", () => {
+    expect(CSS).toMatch(/\.xl-app:has\(\.janela-agente-abrir\)\s+\.xl-area\s*\{[^}]*padding-bottom:\s*96px;[^}]*scroll-padding-bottom:\s*96px;/s);
+    expect(CSS).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.xl-app:has\(\.janela-agente-abrir\)\s+\.xl-area\s*\{[^}]*padding-bottom:\s*calc\(128px \+ env\(safe-area-inset-bottom\)\)\s*;/s);
+  });
+
   it("o App nao esconde a Home atras de um gate que nao existe", () => {
     // Se o App decidir quem ve o que, essa decisao tem de estar no App. O
     // defeito aconteceu porque o gate estava no Home, longe de quem renderiza.

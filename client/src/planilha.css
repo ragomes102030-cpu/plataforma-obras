@@ -28,6 +28,21 @@
   background: #ffffff;
 }
 
+/* O atalho fixo do Arquimedes ocupa o canto inferior direito. Quando está
+   recolhido, reserve rolagem no conteúdo para que o último comando de tabelas
+   permaneça acima dele e receba cliques normalmente. */
+.xl-app:has(.janela-agente-abrir) .xl-area {
+  padding-bottom: 96px;
+  scroll-padding-bottom: 96px;
+}
+
+@media (max-width: 760px) {
+  .xl-app:has(.janela-agente-abrir) .xl-area {
+    padding-bottom: calc(128px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(128px + env(safe-area-inset-bottom));
+  }
+}
+
 /* ---------------------------------------------------------- barra de titulo */
 
 .xl-titlebar {
