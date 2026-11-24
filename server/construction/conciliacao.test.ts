@@ -184,10 +184,45 @@ describe("resumirCobertura", () => {
     expect(resumo.percentual).toBe(1);
   });
 
+  it("inclui custos detalhados associados à atividade pelo código exato da folha EAP", () => {
+    const atividade = { ...atividadeBase, id: 1, wbsCode: "1.1.1", unit: "m3", budgetItemId: 201, plannedQuantity: 100 };
+    const itemDetalhado = {
+      id: 204,
+      code: "1.1.1.ARM",
+      wbsCode: "1-1-1",
+      description: "Aço dos pilares",
+      unit: "kg",
+      quantity: 200,
+      unitPrice: 5,
+      compositionId: 55,
+    };
+
+    const resumo = resumirCobertura([atividade], [itens[0]!, itemDetalhado]);
+
+    expect(resumo.valorTotal).toBe(2000);
+    expect(resumo.valorVinculado).toBe(2000);
+    expect(resumo.percentual).toBe(1);
+    expect(resumo.atividadesVinculadas).toBe(1);
+  });
+
+  it("não distribui custo por EAP quando o código da atividade é ambíguo", () => {
+    const atividades = [
+      { ...atividadeBase, id: 1, wbsCode: "1.1.1", unit: "m3", plannedQuantity: 100 },
+      { ...atividadeBase, id: 2, wbsCode: "1-1-1", unit: "m3", plannedQuantity: 100 },
+    ];
+    const itemDetalhado = { ...itens[0]!, wbsCode: "1.1.1" };
+
+    const resumo = resumirCobertura(atividades, [itemDetalhado]);
+
+    expect(resumo.valorVinculado).toBe(0);
+    expect(resumo.percentual).toBe(0);
+  });
+
   it("atividade vinculada sem quantidade não cobre valor e é contada à parte", () => {
+    const itemComWbs = { ...itens[0]!, wbsCode: "1.1.1" };
     const resumo = resumirCobertura(
-      [{ ...atividadeBase, id: 1, budgetItemId: 201, plannedQuantity: null }],
-      [itens[0]]
+      [{ ...atividadeBase, id: 1, wbsCode: "1.1.1", budgetItemId: 201, plannedQuantity: null }],
+      [itemComWbs]
     );
     expect(resumo.valorVinculado).toBe(0);
     expect(resumo.atividadesVinculadas).toBe(1);

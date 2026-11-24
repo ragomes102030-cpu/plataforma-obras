@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 24/nov/2026 — Conciliar custos detalhados pelo código exato da EAP
+
+**Achado:** na obra 26, todas as 86 atividades tinham item orçamentário, mas o resumo financeiro apontava 88% do valor vinculado. A cobertura somava apenas `budgetItemId` explícito e ignorava linhas detalhadas já associadas à folha EAP correspondente.
+
+**Correção:** uma linha sem vínculo explícito entra na cobertura quando o código WBS de sua folha EAP coincide exatamente com uma única atividade. Vínculos explícitos mantêm precedência; códigos de atividade duplicados continuam sem distribuição automática.
+
+**Regressão:** `server/construction/conciliacao.test.ts` cobre o custo detalhado por WBS e o caso de código ambíguo. `pnpm check` e os 16 testes da conciliação passaram. Validar a cobertura recalculada na obra 26 após a publicação.
+
 ## 24/nov/2026 — Remover referência obsoleta ao desvincular composição
 
 **Achado:** ao corrigir o item 1.3.3 da obra 26, a interface permitiu remover a composição C3507, mas a referência `028.1` permaneceu gravada. A referência não tinha campo editável, fazendo o item sem preço oficial parecer ainda ligado à tabela.
