@@ -9,6 +9,7 @@ describe("edição do orçamento didático", () => {
     expect(source).toContain("Editar");
     expect(source).toContain("Salvar");
     expect(source).toContain("Preço unitário do item");
+    expect(source).toContain("Referência do preço");
     expect(source).toContain("Quantidade do item");
     expect(source).toContain("Buscar composição oficial");
     expect(source).toContain("Composição analítica vinculada");
@@ -20,6 +21,7 @@ describe("edição do orçamento didático", () => {
     expect(source).toContain("Pacote EAP associado");
     expect(source).toContain("wbsNodeId: Number(rascunho.wbsNodeId)");
     expect(source).toContain("quantityEvidenceStatus: rascunho.quantityEvidenceStatus");
+    expect(source).toContain("referencePeriod: rascunho.referencePeriod || null");
     expect(source).toContain("compositionId: rascunho.compositionId ? Number(rascunho.compositionId) : null");
   });
 
