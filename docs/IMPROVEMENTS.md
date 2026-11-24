@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 24/nov/2026 — Liberar ações sob o atalho flutuante do Arquimedes
+
+**Achado:** na obra 26, o atalho fixo do Arquimedes cobria a ação Editar da última linha do orçamento. A área rolável terminava junto à tabela e não permitia deslocar a linha para fora do botão.
+
+**Correção:** a área rolável reserva espaço inferior enquanto o atalho estiver recolhido, com margem adicional em telas estreitas e respeitando a área segura do dispositivo.
+
+**Regressão:** teste focado da tela (15 testes), `pnpm check` e `pnpm build` passaram. A validação visual e a reabertura da edição da linha final ficam pendentes da publicação.
+
 ## 24/nov/2026 — Exibir revínculo para lançamentos do plano anterior
 
 **Achado:** na obra 26, um lançamento confirmado da atividade `1.2.1` continuava com o mesmo código WBS no plano vigente, mas a interface só exibia a ação de revínculo para códigos sem correspondência. O servidor já permitia revincular ambos os casos por código exato.
