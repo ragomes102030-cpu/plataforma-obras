@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { findBudgetApprovalBlockers } from "./budget-readiness";
+import { canMarkPriceException, findBudgetApprovalBlockers } from "./budget-readiness";
 
 describe("prontidao de aprovacao do orcamento", () => {
+  it("não permite manter exceção de preço em item que já tem composição", () => {
+    expect(canMarkPriceException({ compositionId: 23589, officialPriceItemId: null })).toBe(false);
+    expect(canMarkPriceException({ compositionId: null, officialPriceItemId: null })).toBe(true);
+  });
+
   it("bloqueia fonte didatica mesmo com preco preenchido", () => {
     expect(findBudgetApprovalBlockers([{ code: "1.1", unitPrice: 100, source: "RATEIO UNIFORME DIDÁTICO — não representa custo real", quantityEvidence: "Memória QA", quantityEvidenceStatus: "cenario" }])).toEqual([{ code: "1.1", reason: "fonte_didatica" }, { code: "1.1", reason: "sem_vinculo_rastreavel" }]);
   });

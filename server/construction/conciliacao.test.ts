@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resumirCobertura, sugerirVinculos } from "./conciliacao";
+import { resumirCobertura, sugerirVinculos, type ItemOrcamento } from "./conciliacao";
 
 /**
  * Contrato da conciliação cronograma ↔ orçamento.
@@ -157,6 +157,23 @@ describe("sugerirVinculos", () => {
 });
 
 describe("resumirCobertura", () => {
+  it("separa exceção PNCP rastreável de composição ausente", () => {
+    const item = {
+      ...itens[1]!,
+      id: 204,
+      code: "1.3.3",
+      source: "Premissa QA · PNCP 64372423000115-1-000001/2026 · SAMAE Porto Belo/SC",
+      isPriceException: true,
+      quantityEvidence: "Aviso PNCP 64372423000115-1-000001/2026; cenário QA, não medição",
+      quantityEvidenceStatus: "cenario",
+    } as unknown as ItemOrcamento;
+    const resumo = resumirCobertura([], [item]);
+
+    expect(resumo.itensSemComposicao).toBe(1);
+    expect(resumo.itensComBloqueioDeCusto).toBe(0);
+    expect(resumo.itensComExcecaoDePrecoRastreavel).toBe(1);
+  });
+
   it("mede a cobertura por valor, não por contagem de atividades", () => {
     const resumo = resumirCobertura(
       [

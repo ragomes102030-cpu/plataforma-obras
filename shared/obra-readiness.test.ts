@@ -1,12 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { avaliarProntidaoObra } from "./obra-readiness";
+import { avaliarProntidaoObra, type SnapshotProntidao } from "./obra-readiness";
 
 describe("motor de prontidão integrada", () => {
+  it("não confunde exceção de preço rastreável com item sem composição", () => {
+    const orcamento = {
+      existe: true,
+      aprovado: true,
+      itens: 1,
+      semComposicao: 1,
+      semRastreabilidade: 0,
+      didaticos: 0,
+    } as unknown as NonNullable<SnapshotProntidao["orcamento"]>;
+    const result = avaliarProntidaoObra({ orcamento });
+
+    expect(result.etapas.orcamento.bloqueios.map(item => item.codigo)).not.toContain("ORCAMENTO_SEM_COMPOSICAO");
+    expect(result.etapas.orcamento.estado).toBe("aprovado");
+  });
+
   it("bloqueia a cadeia quando o orçamento tem item didático", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },
       eap: { existe: true, aprovada: true, folhas: 3 },
-      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 1 },
+      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, itensComBloqueioDeAprovacao: 1 },
       atividades: { total: 3, semLocal: 0, semDuracao: 0 },
       rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
@@ -14,7 +29,7 @@ describe("motor de prontidão integrada", () => {
       execucao: { medicoes: 1, comUnidade: 1, confirmadas: 1 },
     });
     expect(result.etapas.orcamento.estado).toBe("incompleto");
-    expect(result.primeiraBarreira?.codigo).toBe("ORCAMENTO_DIDATICO");
+    expect(result.primeiraBarreira?.codigo).toBe("ORCAMENTO_ITENS_PENDENTES");
     expect(result.prontoParaPlanejamento).toBe(true);
     expect(result.prontoParaAcompanhamento).toBe(false);
   });
@@ -23,7 +38,7 @@ describe("motor de prontidão integrada", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },
       eap: { existe: true, aprovada: true, folhas: 3 },
-      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
+      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, itensComBloqueioDeAprovacao: 0 },
       atividades: { total: 3, semLocal: 0, semDuracao: 0 },
       rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
@@ -40,7 +55,7 @@ describe("motor de prontidão integrada", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },
       eap: { existe: true, aprovada: true, folhas: 3 },
-      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
+      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, itensComBloqueioDeAprovacao: 0 },
       atividades: { total: 3, semLocal: 0, semDuracao: 0 },
       rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
@@ -63,7 +78,7 @@ describe("motor de prontidão integrada", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },
       eap: { existe: true, aprovada: true, folhas: 3 },
-      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, didaticos: 0 },
+      orcamento: { existe: true, aprovado: true, itens: 3, semComposicao: 0, itensComBloqueioDeAprovacao: 0 },
       atividades: { total: 3, semLocal: 3, semDuracao: 0 },
       rede: { totalAtividades: 3, totalDependencias: 2, ciclos: 0 },
       cpm: { calculadoEm: "2026-11-06T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 3 },
@@ -81,7 +96,7 @@ describe("motor de prontidão integrada", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },
       eap: { existe: true, aprovada: true, folhas: 2 },
-      orcamento: { existe: true, aprovado: true, itens: 2, semComposicao: 0, didaticos: 0 },
+      orcamento: { existe: true, aprovado: true, itens: 2, semComposicao: 0, itensComBloqueioDeAprovacao: 0 },
       atividades: { total: 2, semLocal: 0, semDuracao: 0 },
       rede: { totalAtividades: 2, totalDependencias: 1, ciclos: 0, desconectada: true },
       cpm: { calculadoEm: null, alteradoDepois: false, atividadesCalculadas: 0 },
