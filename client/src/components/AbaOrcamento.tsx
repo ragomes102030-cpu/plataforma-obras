@@ -81,7 +81,11 @@ export function AbaOrcamento({ projetoId }: Props) {
   });
   const atualizarItem = trpc.budgets.updateItem.useMutation({
     onSuccess: async () => {
-      await utils.budgets.list.invalidate({ projectId: Number(projetoId) });
+      await Promise.all([
+        utils.budgets.list.invalidate({ projectId: Number(projetoId) }),
+        utils.planning.conciliacao.invalidate({ projectId: Number(projetoId) }),
+        utils.budgets.reconcilePreview.invalidate({ projectId: Number(projetoId) }),
+      ]);
       setEditandoId(null);
     },
   });

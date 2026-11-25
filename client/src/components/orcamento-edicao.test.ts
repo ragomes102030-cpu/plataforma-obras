@@ -46,4 +46,9 @@ describe("edição do orçamento didático", () => {
     expect(source).toContain("hasDocumentedPriceException(item)");
     expect(source).toContain("Exceção de preço rastreável");
   });
+
+  it("revalida a conciliação atividade-orçamento após editar um item", () => {
+    expect(source).toContain("utils.planning.conciliacao.invalidate({ projectId: Number(projetoId) })");
+    expect(source).toContain("utils.budgets.reconcilePreview.invalidate({ projectId: Number(projetoId) })");
+  });
 });
