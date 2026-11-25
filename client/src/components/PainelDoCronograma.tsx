@@ -6,6 +6,7 @@ import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { classificarEstadoAtividadesDashboard, excluirAtividadesDeDemonstracao } from "@/lib/dashboard-work-scope";
 import { avaliarPrazoDashboard } from "@/lib/prazo-dashboard";
 import { avaliarIntegridadeDashboard } from "@/lib/dashboard-integridade";
+import { isPhysicalWeightQaEvidence } from "@shared/physical-weight-qa";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
 import { selecionarSemanaDashboard } from "@/lib/dashboard-lookahead";
@@ -136,7 +137,7 @@ export function PainelDoCronograma({
     [codigosExemplo, linhas],
   );
   const agregadoDaObra = linhas ? agregadoDoCronograma(linhasDaObra) : agregado;
-  const atividadesOperacionais = (plano.data?.activities ?? []).filter(a => !codigosExemplo.has(a.wbsCode ?? ""));
+  const atividadesOperacionais = (plano.data?.activities ?? []).filter(a => Number(a.exemplo ?? 0) !== 1 && !codigosExemplo.has(a.wbsCode ?? ""));
   const prontidaoPesos = plano.isError ? null : {
     total: atividadesOperacionais.length,
     comQuantidade: atividadesOperacionais.filter(a => Number(a.plannedQuantity) > 0).length,
@@ -146,6 +147,8 @@ export function PainelDoCronograma({
     somaPesos: atividadesOperacionais.reduce((sum, a) => sum + (Number(a.physicalWeight) || 0), 0),
     semVinculoOrcamento: atividadesOperacionais.filter(a => a.budgetItemId == null).length,
     eapStatus: plano.data?.currentVersionStatus ?? null,
+    cenarioQa: atividadesOperacionais.length > 0 && atividadesOperacionais.every(a => a.physicalWeightApprovedAt != null && isPhysicalWeightQaEvidence(a.physicalWeightEvidence)),
+    foraDaLobQa: plano.data?.lobQaExcludedCount ?? 0,
   };
   const estadoAtividades = classificarEstadoAtividadesDashboard({
     carregandoPlano: plano.isPending,

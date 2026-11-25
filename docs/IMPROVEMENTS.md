@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 25/nov/2026 — Liberar o cenário QA sem abrir nova versão
+
+**Achado:** a versão aprovada da obra 26 estava congelada para edição; a aprovação normal de pesos exigia evidência de medição que não existe na obra demonstrativa. Atividades sem unidade cadastrada também apareciam como bloqueio da Linha de Balanço.
+
+**Correção:** criar uma ação QA separada que exige orçamento aprovado com todos os quantitativos classificados como cenário, distribui 100% igualmente pelas atividades operacionais, grava `Premissa QA:` em cada atividade e audita a decisão na própria versão. Locais só são vinculados por correspondência exata entre EAP e unidade física existente; atividades sem local ou parcela existente ficam explicitamente fora da LOB neste cenário. Recalcular o CPM após a gravação. Dashboard, EV e Curva S exibem a identificação QA; a aprovação normal segue rejeitando essa evidência.
+
+**Validação local:** suíte completa aprovada (`193` arquivos, `1.612` testes passaram e `8` foram ignorados); `pnpm check` e `pnpm build` passaram. Regressões cobrem rateio, auditoria, mapeamento exato, exclusão explícita da LOB, recusa fora da versão aprovada e ausência de criação de versão. Validação na obra ao vivo após o deploy.
+
 ## 24/nov/2026 — Liberar ações sob o atalho flutuante do Arquimedes
 
 **Achado:** na obra 26, o atalho fixo do Arquimedes cobria a ação Editar da última linha do orçamento. A área rolável terminava junto à tabela e não permitia deslocar a linha para fora do botão.

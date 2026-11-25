@@ -46,6 +46,8 @@ type Props = {
     somaPesos: number;
     semVinculoOrcamento: number;
     eapStatus: string | null;
+    cenarioQa: boolean;
+    foraDaLobQa: number;
   } | null;
   hoje: string;
   resumo: ResumoDoPainel;
@@ -112,20 +114,22 @@ export function ControlTowerDashboard({
   const atrasadaFisico = fisico.pontos < -0.5;
   const fisicoDisponivel = prontidao.fisico === "disponivel";
   const financeiroDisponivel = prontidao.financeiro === "disponivel";
+  const cenarioQa = prontidaoPesos?.cenarioQa === true;
   // A meta planejada continua sendo informativa quando os pesos existem,
   // mesmo que ainda não haja uma medição confirmada para o realizado.
   const planejadoDisponivel = fisicoDisponivel || prontidao.fisico === "sem_producao";
   const textoRealizado = fisicoDisponivel ? percentual(fisico.real) : "Sem dado";
   const textoPlanejado = planejadoDisponivel ? percentual(fisico.planejado) : "Indisponível";
   const textoDesvio = fisicoDisponivel ? ponto(fisico.pontos) : "Sem dado";
-  const textoEv = prontidao.evDisponivel ? dinheiro(valor.executado)
+  const textoEv = prontidao.evDisponivel ? `${dinheiro(valor.executado)}${cenarioQa ? " · QA" : ""}`
     : prontidao.financeiro === "didatico" ? "Orçamento de teste"
     : prontidao.financeiro === "cobertura_incompleta" ? "Cobertura incompleta"
     : prontidao.financeiro === "sem_orcamento" ? "Sem orçamento aprovado"
     : prontidao.financeiro === "erro" ? "Indisponível"
     : prontidao.fisico === "sem_pesos" ? "Pesos físicos pendentes"
     : "Sem produção confirmada";
-  const detalheEv = prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
+  const detalheEv = cenarioQa && prontidao.evDisponivel ? "Indicador do cenário QA; quantitativos e pesos são premissas, não medição real"
+    : prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
     : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido"
     : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura"
     : !prontidao.evDisponivel && prontidao.fisico === "sem_pesos" ? "Aguardando pesos físicos aprovados"
@@ -133,7 +137,8 @@ export function ControlTowerDashboard({
     : !prontidao.evDisponivel && prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
     : !prontidao.evDisponivel ? "Aguardando dados do avanço físico"
     : "Orçamento: " + dinheiro(valor.total);
-  const tituloStatus = prontidao.fisico === "erro" ? "Avanço físico indisponível."
+  const tituloStatus = cenarioQa ? "Cenário QA liberado com premissas sintéticas."
+    : prontidao.fisico === "erro" ? "Avanço físico indisponível."
     : prontidao.fisico === "sem_pesos" ? "Avanço físico ainda sem pesos aprovados."
     : prontidao.fisico === "sem_producao" ? "Produção ainda não apurada."
     : fisico.rotulo === "atrasada" ? "A execução está abaixo do planejado."
@@ -143,7 +148,8 @@ export function ControlTowerDashboard({
     : "Acompanhe o desempenho da obra.";
   const corStatus = !fisicoDisponivel ? "atencao" : atrasadaFisico || selo.tipo === "atrasada" ? "atrasada"
     : selo.tipo === "atencao" || selo.tipo === "sem_plano" ? "atencao" : "em-dia";
-  const statusTexto = prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
+  const statusTexto = cenarioQa ? "Cenário QA liberado"
+    : prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
     : prontidao.fisico === "sem_pesos" ? "Pesos físicos ainda não aprovados"
     : prontidao.fisico === "sem_producao" ? "Sem produção confirmada"
     : atrasadaFisico ? "Abaixo do planejado"
@@ -161,7 +167,7 @@ export function ControlTowerDashboard({
     prazo: { titulo: "Prazo e cronograma", desc: prazoConfianca.confiavel ? "Data calculada no plano atual; atraso no término exige comparação com a baseline aprovada." : "A data exibida na grade é provisória. Ela não deve orientar decisões de prazo até a EAP e o CPM estarem válidos.", itens: [
       ["Início da grade", dataBr(prazo.inicio)], ["Término da grade", dataBr(prazo.fim)], ["Estado", prazoConfianca.motivo], ["Dias restantes", prazoConfianca.confiavel && prazo.diasRestantes !== null ? String(prazo.diasRestantes) : "Não validado"], ["Prazo decorrido", prazoConfianca.confiavel ? percentual(prazo.fracaoDecorrida) : "Não validado"],
     ], acao: "Ver no Gantt" },
-    valor: { titulo: "Valor agregado (EV)", desc: "Valor orçado do trabalho executado, não faturamento nem desembolso. Parte sem atividade não entra na ponderação.", itens: [
+    valor: { titulo: "Valor agregado (EV)", desc: cenarioQa ? "Valor estimado para o cenário QA. Quantitativos e pesos são premissas sintéticas; não representa valor agregado real." : "Valor orçado do trabalho executado, não faturamento nem desembolso. Parte sem atividade não entra na ponderação.", itens: [
       ["EV", textoEv], ["Orçamento ativo", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valor.total)], ["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valorSemDestino)], ["Percentual do total", !fisicoDisponivel || valor.pctExecutado == null ? "Indisponível" : percentual(valor.pctExecutado)],
     ], acao: "Ver orçamento e custos" },
     atividades: { titulo: "Situação das atividades", desc: "Contagem de atividades, não ponderada por valor. Os estados vêm do cronograma ativo.", itens: [
@@ -186,13 +192,19 @@ export function ControlTowerDashboard({
         <AlertTriangle size={17}/>{erroComplementos ? "Parte das consultas falhou. Os indicadores dependentes dessas fontes podem estar incompletos; não interprete ausência de dado como zero." : "Conferindo orçamento, produção e compromissos; informações complementares ainda estão sendo carregadas."}
       </div>}
 
+      {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note">
+        <AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> pesos uniformes e quantitativos são premissas para testar o sistema. Os valores exibidos não são medição real. {prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) sem unidade exata estão classificadas fora da Linha de Balanço neste cenário.</span>
+      </div>}
+
       {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={abrirAba} />}
 
       <section className={"ct-hero ct-hero-" + corStatus} aria-label="Resumo do desempenho">
         <div className="ct-hero-main">
           <span className="ct-status"><span className="ct-status-dot" aria-hidden="true"/>{statusTexto.toUpperCase()} · {dataBr(hoje)}</span>
           <h2>{tituloStatus}</h2>
-          <p>{fisicoDisponivel
+          <p>{cenarioQa
+            ? `O painel está liberado para validar os indicadores da obra demonstrativa. Pesos e classificações sem unidade repetitiva são premissas QA; ${prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) permanecem fora da Linha de Balanço sem local físico documentado.`
+            : fisicoDisponivel
             ? "O avanço executado é comparado à meta física acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano."
             : prontidao.fisico === "erro"
               ? "Uma fonte do acompanhamento físico não foi consultada. Atualize a leitura antes de interpretar o desempenho."
@@ -209,7 +221,7 @@ export function ControlTowerDashboard({
         <div className="ct-hero-side">
           {fisicoDisponivel ? <div className="ct-gauge" role="img" aria-label={"Avanço realizado " + percentual(fisico.real)}>
             <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="41" fill="none" stroke="#304859" strokeWidth="11" pathLength="100"/><circle cx="50" cy="50" r="41" fill="none" stroke="#58cbd0" strokeWidth="11" strokeLinecap="round" strokeDasharray={reduzir(fisico.real * 100) + " 100"} pathLength="100" transform="rotate(-90 50 50)"/></svg>
-            <div><strong>{percentual(fisico.real)}</strong><small>EXECUTADO</small></div>
+            <div><strong>{percentual(fisico.real)}</strong><small>{cenarioQa ? "CENÁRIO QA" : "EXECUTADO"}</small></div>
           </div> : <div className="ct-gauge ct-gauge-indisponivel" role="status"><strong>—</strong><small>SEM AGREGADO</small></div>}
           {planejadoDisponivel && <div className="ct-hero-compare">
             <span>Meta até hoje</span><strong>{percentual(fisico.planejado)}</strong>
@@ -227,7 +239,7 @@ export function ControlTowerDashboard({
 
       <section className="ct-kpis" aria-label="Indicadores essenciais">
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">{prazoConfianca.confiavel ? "TÉRMINO CALCULADO" : "PRAZO EM REVISÃO"} <CalendarDays size={18}/></span><strong>{prazoConfianca.confiavel ? dataBr(prazo.fim) : "Não validado"}</strong><small>{prazoConfianca.confiavel ? (prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido") + " · " + percentual(prazo.fracaoDecorrida) + " transcorrido" : prazoConfianca.motivo}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
-        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{detalheEv}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
+        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">{cenarioQa ? "VALOR AGREGADO · CENÁRIO QA" : "VALOR AGREGADO (EV)"} <Wallet size={18}/></span><strong>{textoEv}</strong><small>{detalheEv}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("atividades")}><span className="ct-kpi-head">ATIVIDADES DO PLANO <ListChecks size={18}/></span><strong>{status.total} atividades</strong><small>{statusConfere ? status.atrasadas + " atrasadas · " + status.concluidas + " concluídas" : "Distribuição de status inconsistente"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">{semana?.situacao === "futura" ? "COMPROMISSOS DA PRÓXIMA SEMANA" : "COMPROMISSOS DA SEMANA"} <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Nenhum compromisso" : comprometidos + " compromissos"}</strong><small>{ppcDaSemana != null ? "PPC avaliado: " + numero.format(ppcDaSemana) + "%" : "PPC não apurado"}{semana ? " · " + dataBr(semana.inicio) + " a " + dataBr(semana.fim) : ""}{bloqueadasDaSemana != null ? " · " + bloqueadasDaSemana + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
       </section>
