@@ -95,6 +95,7 @@ async function criarAtividade(
       startOffset: sobre.startOffset,
       durationDays: sobre.durationDays ?? 5,
       plannedQuantity: (sobre.quantity ?? 100).toFixed(3),
+      unit: "m3",
       exemplo: sobre.exemplo ?? 0,
     })
     .returning({ id: scheduleActivities.id });
@@ -242,6 +243,14 @@ describe("coletarDadosLookahead — datas e janela", () => {
         measurementUnit: "m3",
         productionDate: new Date("2026-01-07T00:00:00"),
         status: "rascunho",
+      },
+      {
+        projectId,
+        activityId: atividadeId,
+        quantity: "12.000",
+        measurementUnit: "un",
+        productionDate: new Date("2026-01-08T00:00:00"),
+        status: "confirmada",
       },
     ]);
 

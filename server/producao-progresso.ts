@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { productionEntries, scheduleActivities } from "../drizzle/schema";
 import { getCurrentPlanVersion } from "./construction/plan-versions";
 import type { getDb } from "./db";
+import { unitsCompatible } from "../shared/price-sources/reconciliation";
 
 /**
  * O AVANÇO REAL DA OBRA, LIGADO POR CÓDIGO DA EAP — NÃO POR ID DE LINHA.
@@ -25,12 +26,14 @@ export type AtividadeParaProgresso = {
   versionId: number | null;
   wbsCode: string;
   plannedQuantity: string | number | null;
+  unit?: string | null;
 };
 
 export type LancamentoConfirmado = {
   activityId: number;
   quantity: string | number;
   status: string;
+  measurementUnit?: string | null;
 };
 
 export type ProgressoDaAtividade = {
@@ -76,6 +79,9 @@ export function calcularProgressoReal(
     // visível na tela como "perdido" e não inventa progresso.
     if (!origem) continue;
     const alvo = atuaisPorCodigo.get(origem.wbsCode) ?? origem;
+    // A quantidade só pode ser somada à atividade de destino se a unidade
+    // registrada corresponder à unidade planejada na versão atual.
+    if (!unitsCompatible(lancamento.measurementUnit, alvo.unit)) continue;
     somas.set(alvo.id, (somas.get(alvo.id) ?? 0) + Number(lancamento.quantity ?? 0));
   }
 
@@ -141,6 +147,7 @@ export async function recalcularAvancoReal(
       versionId: scheduleActivities.versionId,
       wbsCode: scheduleActivities.wbsCode,
       plannedQuantity: scheduleActivities.plannedQuantity,
+      unit: scheduleActivities.unit,
     })
     .from(scheduleActivities)
     .where(eq(scheduleActivities.projectId, projectId));
@@ -150,6 +157,7 @@ export async function recalcularAvancoReal(
       activityId: productionEntries.activityId,
       quantity: productionEntries.quantity,
       status: productionEntries.status,
+      measurementUnit: productionEntries.measurementUnit,
     })
     .from(productionEntries)
     .where(and(eq(productionEntries.projectId, projectId), eq(productionEntries.status, "confirmada")));

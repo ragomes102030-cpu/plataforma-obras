@@ -1,8 +1,9 @@
 import { findBudgetApprovalBlockers, type BudgetApprovalItem } from "@shared/budget-readiness";
 import { avaliarProntidaoDeAvanco } from "@shared/progress-readiness";
+import { unitsCompatible } from "@shared/price-sources/reconciliation";
 
 type Item = BudgetApprovalItem & { id: number; quantity: number | string };
-type Atividade = { id: number; budgetItemId: number | null };
+type Atividade = { id: number; budgetItemId: number | null; unit?: string | null };
 type Lancamento = {
   activityId: number;
   productionDate: Date | string;
@@ -10,6 +11,7 @@ type Lancamento = {
   status: string;
   exemplo?: number | null;
   vinculo?: string;
+  measurementUnit?: string | null;
 };
 
 /** Ausência de medição não comprova execução zero; orçamento de teste não é régua financeira. */
@@ -25,6 +27,7 @@ export function avaliarIntegridadeDashboard(input: {
   erroFinanceiro?: boolean;
 }) {
   const ids = new Set(input.atividades.map(a => a.id));
+  const unidadePorAtividade = new Map(input.atividades.map(a => [a.id, a.unit]));
   const itens = new Set(input.itens.map(i => i.id));
   const bloqueiosOrcamento = findBudgetApprovalBlockers(input.itens);
   const orcamentoDidatico = bloqueiosOrcamento.some(item => item.reason === "fonte_didatica");
@@ -44,6 +47,7 @@ export function avaliarIntegridadeDashboard(input: {
     const dataValida = /^\d{4}-\d{2}-\d{2}$/.test(data) && Number.isFinite(dataCivil.getTime()) && dataCivil.toISOString().slice(0, 10) === data;
     return l.status === "confirmada" && Number(l.exemplo ?? 0) !== 1 &&
       ids.has(l.activityId) && (!l.vinculo || l.vinculo === "atual") &&
+      unitsCompatible(l.measurementUnit, unidadePorAtividade.get(l.activityId)) &&
       dataValida && data <= input.hoje &&
       l.quantity != null && String(l.quantity).trim() !== "" && Number.isFinite(Number(l.quantity)) && Number(l.quantity) >= 0;
   });

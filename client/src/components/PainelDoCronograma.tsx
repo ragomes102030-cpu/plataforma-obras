@@ -125,6 +125,7 @@ export function PainelDoCronograma({
     wbsNodeId: a.wbsNodeId,
     wbsCode: a.wbsCode,
     budgetItemId: a.budgetItemId ?? null,
+    unit: a.unit ?? null,
     plannedQuantity: a.plannedQuantity ?? null,
     physicalWeight: a.physicalWeight ?? null,
     physicalWeightEvidence: a.physicalWeightEvidence ?? null,
@@ -479,8 +480,12 @@ export function PainelDoCronograma({
         codigo: l.codigoEap ?? "—",
         atividade: l.atividadeNome ?? "Atividade fora do plano",
         quantidade: Number(l.quantity ?? 0),
-        unidade: l.unidade ?? "",
-        situacao: l.status === "confirmada"
+      unidade: l.measurementUnit ?? "",
+      unidadePlanejada: l.unidadePlanejada ?? l.unidade ?? null,
+      unidadeCompativel: l.unidadeCompativel,
+      situacao: l.unidadeCompativel === false
+        ? l.unidadePlanejada ? `unidade divergente (plano ${l.unidadePlanejada})` : "unidade planejada ausente"
+        : l.status === "confirmada"
           ? l.vinculo && l.vinculo !== "atual" ? "fora do plano" : "confirmada"
           : "rascunho",
       }))}

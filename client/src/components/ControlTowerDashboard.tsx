@@ -29,6 +29,8 @@ export type LancamentoControl = {
   atividade: string;
   quantidade: number;
   unidade: string;
+  unidadePlanejada?: string | null;
+  unidadeCompativel?: boolean;
   situacao: string;
 };
 

@@ -87,15 +87,15 @@ describe("coletarLancamentosExecutados", () => {
 describe("alocarProducaoNaVersaoAtual", () => {
   it("não duplica produção quando duas atividades atuais compartilham o WBS", () => {
     const resultado = alocarProducaoNaVersaoAtual(
-      [{ id: 101, wbsCode: "1.8.1" }, { id: 102, wbsCode: "1.8.1" }],
+      [{ id: 101, wbsCode: "1.8.1", unit: "M" }, { id: 102, wbsCode: "1.8.1", unit: "M" }],
       [
-        { id: 99, wbsCode: "1.8.1" },
-        { id: 101, wbsCode: "1.8.1" },
-        { id: 102, wbsCode: "1.8.1" },
+        { id: 99, wbsCode: "1.8.1", unit: "M" },
+        { id: 101, wbsCode: "1.8.1", unit: "M" },
+        { id: 102, wbsCode: "1.8.1", unit: "M" },
       ],
       [
-        { activityId: 101, quantity: "7.000" },
-        { activityId: 99, quantity: "5.000" },
+        { activityId: 101, quantity: "7.000", measurementUnit: "M" },
+        { activityId: 99, quantity: "5.000", measurementUnit: "M" },
       ],
     );
 
@@ -106,16 +106,36 @@ describe("alocarProducaoNaVersaoAtual", () => {
       wbsCode: "1.8.1",
       quantidade: 5,
       motivo: "codigo_ambiguo_na_versao_atual",
+      unidadeRegistrada: "M",
+      unidadePlanejada: null,
     }]);
   });
 
   it("migra produção histórica quando o WBS tem uma única atividade atual", () => {
     const resultado = alocarProducaoNaVersaoAtual(
-      [{ id: 201, wbsCode: "2.1" }],
-      [{ id: 150, wbsCode: "2.1" }, { id: 201, wbsCode: "2.1" }],
-      [{ activityId: 150, quantity: 3 }],
+      [{ id: 201, wbsCode: "2.1", unit: "M" }],
+      [{ id: 150, wbsCode: "2.1", unit: "M" }, { id: 201, wbsCode: "2.1", unit: "M" }],
+      [{ activityId: 150, quantity: 3, measurementUnit: "M" }],
     );
     expect(resultado.executadoPorAtividade.get(201)).toBe(3);
     expect(resultado.producaoSemAlocacao).toEqual([]);
+  });
+
+  it("não aloca produção quando a unidade registrada diverge da unidade vigente", () => {
+    const resultado = alocarProducaoNaVersaoAtual(
+      [{ id: 201, wbsCode: "2.1", unit: "M" }],
+      [{ id: 201, wbsCode: "2.1", unit: "M" }],
+      [{ activityId: 201, quantity: 12, measurementUnit: "un" }],
+    );
+
+    expect(resultado.executadoPorAtividade.has(201)).toBe(false);
+    expect(resultado.producaoSemAlocacao).toEqual([{
+      activityIdOriginal: 201,
+      wbsCode: "2.1",
+      quantidade: 12,
+      motivo: "unidade_incompativel",
+      unidadeRegistrada: "un",
+      unidadePlanejada: "M",
+    }]);
   });
 });

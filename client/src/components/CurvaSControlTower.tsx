@@ -104,7 +104,7 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
       });
     }
     const confirmados = producao.data
-      .filter(e => e.status === "confirmada" && Number(e.exemplo ?? 0) !== 1)
+      .filter(e => e.status === "confirmada" && e.unidadeCompativel === true && Number(e.exemplo ?? 0) !== 1)
       .map(e => {
         const data = e.productionDate instanceof Date ? e.productionDate.toISOString().slice(0, 10) : String(e.productionDate).slice(0, 10);
         return { codigo: e.codigoEap ?? null, quantidade: Number(e.quantity ?? 0), data };

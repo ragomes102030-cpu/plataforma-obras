@@ -2,6 +2,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { productionEntries, scheduleActivities } from "../../drizzle/schema";
 import type { DbConexao } from "./lookahead-dados";
 import { isoToLocalDate } from "./calendario-obra";
+import { unitsCompatible } from "../../shared/price-sources/reconciliation";
 
 /** Retorna somente produção confirmada, real e ocorrida até a data de referência. */
 export function coletarLancamentosExecutados(
@@ -17,6 +18,7 @@ export function coletarLancamentosExecutados(
       activityId: productionEntries.activityId,
       productionDate: productionEntries.productionDate,
       quantity: productionEntries.quantity,
+      measurementUnit: productionEntries.measurementUnit,
     })
     .from(productionEntries)
     .innerJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
@@ -35,7 +37,18 @@ export type ProducaoSemAlocacao = {
   activityIdOriginal: number;
   wbsCode: string;
   quantidade: number;
-  motivo: "codigo_ambiguo_na_versao_atual" | "atividade_sem_codigo";
+  motivo: "codigo_ambiguo_na_versao_atual" | "atividade_sem_codigo" | "unidade_planejada_ausente" | "unidade_incompativel";
+  unidadeRegistrada: string | null;
+  unidadePlanejada: string | null;
+};
+
+export type LancamentoAlocado = {
+  activityIdOriginal: number;
+  activityId: number;
+  wbsCode: string;
+  quantity: string | number;
+  measurementUnit: string;
+  productionDate?: Date | string;
 };
 
 /**
@@ -44,9 +57,9 @@ export type ProducaoSemAlocacao = {
  * versão atual; caso contrário ele fica explícito para conciliação humana.
  */
 export function alocarProducaoNaVersaoAtual(
-  atividadesAtuais: readonly { id: number; wbsCode: string }[],
-  todasAtividades: readonly { id: number; wbsCode: string }[],
-  lancamentos: readonly { activityId: number; quantity: string | number }[],
+  atividadesAtuais: readonly { id: number; wbsCode: string; unit?: string | null }[],
+  todasAtividades: readonly { id: number; wbsCode: string; unit?: string | null }[],
+  lancamentos: readonly { activityId: number; quantity: string | number; measurementUnit?: string | null; productionDate?: Date | string }[],
 ) {
   const atualPorId = new Map(atividadesAtuais.map(atividade => [atividade.id, atividade]));
   const codigoPorId = new Map(todasAtividades.map(atividade => [atividade.id, atividade.wbsCode]));
@@ -59,39 +72,70 @@ export function alocarProducaoNaVersaoAtual(
 
   const executadoPorAtividade = new Map<number, number>();
   const producaoSemAlocacao: ProducaoSemAlocacao[] = [];
+  const lancamentosAlocados: LancamentoAlocado[] = [];
   for (const lancamento of lancamentos) {
     const quantidade = Number(lancamento.quantity);
     if (!Number.isFinite(quantidade)) continue;
-    const atividadeAtual = atualPorId.get(lancamento.activityId);
-    if (atividadeAtual) {
-      executadoPorAtividade.set(
-        atividadeAtual.id,
-        (executadoPorAtividade.get(atividadeAtual.id) ?? 0) + quantidade,
-      );
-      continue;
-    }
+    let destino = atualPorId.get(lancamento.activityId);
     const codigo = codigoPorId.get(lancamento.activityId);
-    if (!codigo) {
+    if (!destino && !codigo) {
       producaoSemAlocacao.push({
         activityIdOriginal: lancamento.activityId,
         wbsCode: "",
         quantidade,
         motivo: "atividade_sem_codigo",
+        unidadeRegistrada: lancamento.measurementUnit ?? null,
+        unidadePlanejada: null,
       });
       continue;
     }
-    const candidatas = atuaisPorCodigo.get(codigo) ?? [];
-    if (candidatas.length === 1) {
-      const id = candidatas[0]!;
-      executadoPorAtividade.set(id, (executadoPorAtividade.get(id) ?? 0) + quantidade);
+    if (!destino) {
+      const candidatas = atuaisPorCodigo.get(codigo!) ?? [];
+      if (candidatas.length === 1) destino = atualPorId.get(candidatas[0]!);
+      else {
+        producaoSemAlocacao.push({
+          activityIdOriginal: lancamento.activityId,
+          wbsCode: codigo!,
+          quantidade,
+          motivo: "codigo_ambiguo_na_versao_atual",
+          unidadeRegistrada: lancamento.measurementUnit ?? null,
+          unidadePlanejada: null,
+        });
+        continue;
+      }
+    }
+    if (!destino) continue;
+    if (!destino.unit?.trim()) {
+      producaoSemAlocacao.push({
+        activityIdOriginal: lancamento.activityId,
+        wbsCode: destino.wbsCode,
+        quantidade,
+        motivo: "unidade_planejada_ausente",
+        unidadeRegistrada: lancamento.measurementUnit ?? null,
+        unidadePlanejada: null,
+      });
       continue;
     }
-    producaoSemAlocacao.push({
+    if (!unitsCompatible(lancamento.measurementUnit, destino.unit)) {
+      producaoSemAlocacao.push({
+        activityIdOriginal: lancamento.activityId,
+        wbsCode: destino.wbsCode,
+        quantidade,
+        motivo: "unidade_incompativel",
+        unidadeRegistrada: lancamento.measurementUnit ?? null,
+        unidadePlanejada: destino.unit,
+      });
+      continue;
+    }
+    executadoPorAtividade.set(destino.id, (executadoPorAtividade.get(destino.id) ?? 0) + quantidade);
+    lancamentosAlocados.push({
       activityIdOriginal: lancamento.activityId,
-      wbsCode: codigo,
-      quantidade,
-      motivo: "codigo_ambiguo_na_versao_atual",
+      activityId: destino.id,
+      wbsCode: destino.wbsCode,
+      quantity: lancamento.quantity,
+      measurementUnit: lancamento.measurementUnit!,
+      ...(lancamento.productionDate ? { productionDate: lancamento.productionDate } : {}),
     });
   }
-  return { executadoPorAtividade, producaoSemAlocacao };
+  return { executadoPorAtividade, producaoSemAlocacao, lancamentosAlocados };
 }

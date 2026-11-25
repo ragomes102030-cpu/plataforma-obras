@@ -9,6 +9,7 @@ import {
 import type { getDb } from "../db";
 import { carregarCalendarioDoPeriodo, localIso, isoToLocalDate } from "./calendario-obra";
 import { dateAt } from "../../shared/work-calendar";
+import { unitsCompatible } from "../../shared/price-sources/reconciliation";
 import {
   segundaFeira,
   somarDias,
@@ -111,6 +112,7 @@ export async function coletarDadosLookahead(
     .select({
       activityId: productionEntries.activityId,
       quantity: productionEntries.quantity,
+      measurementUnit: productionEntries.measurementUnit,
     })
     .from(productionEntries)
     .where(
@@ -123,8 +125,11 @@ export async function coletarDadosLookahead(
     );
 
   const executadoPorAtividade = new Map<number, number>();
+  const atividadePorId = new Map(linhasDeAtividade.map(linha => [linha.id, linha]));
   for (const entry of entries) {
     if (entry.activityId == null || !idsDeAtividadesOperacionais.has(entry.activityId)) continue;
+    const atividade = atividadePorId.get(entry.activityId);
+    if (!atividade || !unitsCompatible(entry.measurementUnit, atividade.unit)) continue;
     executadoPorAtividade.set(
       entry.activityId,
       (executadoPorAtividade.get(entry.activityId) ?? 0) + Number(entry.quantity)
