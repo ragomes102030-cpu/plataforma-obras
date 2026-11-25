@@ -224,8 +224,8 @@ export function ControlTowerDashboard({
             <div><strong>{percentual(fisico.real)}</strong><small>{cenarioQa ? "CENÁRIO QA" : "EXECUTADO"}</small></div>
           </div> : <div className="ct-gauge ct-gauge-indisponivel" role="status"><strong>—</strong><small>SEM AGREGADO</small></div>}
           {planejadoDisponivel && <div className="ct-hero-compare">
-            <span>Meta até hoje</span><strong>{percentual(fisico.planejado)}</strong>
-            <div className="ct-compare-line"><span>Planejado</span><b>{percentual(fisico.planejado)}</b></div><div className="ct-progress"><span style={{ width: reduzir(fisico.planejado * 100) + "%" }}/></div>
+            <span>Meta física até hoje</span><strong>{percentual(fisico.planejado)}</strong>
+            <div className="ct-compare-line"><span>Plano físico</span><b>{percentual(fisico.planejado)}</b></div><div className="ct-progress"><span style={{ width: reduzir(fisico.planejado * 100) + "%" }}/></div>
             <div className="ct-compare-line"><span>Realizado</span><b>{textoRealizado}</b></div>{fisicoDisponivel && <div className="ct-progress"><span className="real" style={{ width: reduzir(fisico.real * 100) + "%" }}/></div>}
           </div>}
         </div>

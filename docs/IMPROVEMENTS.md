@@ -1,5 +1,15 @@
 # Melhorias e Mudanças
 
+## 25/nov/2026 — Separar avanço físico da Curva S ponderada por orçamento
+
+**Achado:** no cenário QA, o resumo mostrava 1,7% planejado enquanto o ponto de 25/11 na Curva S mostrava 0,0%. Os cálculos usam bases diferentes: o resumo pondera pelo peso físico uniforme; a Curva S distribui percentuais pelo custo orçamentário. Sem esse rótulo, os indicadores pareciam contraditórios.
+
+**Correção:** o resumo passa a nomear “Meta física” e “Plano físico”; a Curva S informa que é ponderada pelo valor do orçamento e identifica as séries de plano, produção e baseline como “por valor”. A nota QA esclarece que essa curva não é avanço físico nem medição real. O ponto da curva é exibido com uma casa decimal.
+
+**Base de produto:** segue a separação entre planejamento/produção e custo/valor previsto adotada nos fluxos documentados do Primavera P6 e Autodesk Forecast (Decisão 26).
+
+**Validação:** regressão de rótulos e teste ao vivo da Dashboard após o deploy. Nenhum dado da obra ou versão foi alterado.
+
 ## 25/nov/2026 — Barreiras da obra apontam para o domínio responsável
 
 **Achado:** a primeira barreira podia enviar atividades e dependências para Escopo, e a falta de unidade na Linha de Balanço podia receber o rótulo de revisão financeira. A orientação da baseline também pedia validar orçamento mesmo quando só o prazo seria congelado. Na obra 26, o botão QA ficou desabilitado apesar de a versão de planejamento estar aprovada.

@@ -148,20 +148,20 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
   return (
     <section className="ct-card ct-curve" aria-labelledby="ct-curve-title">
       <div className="ct-card-head">
-        <div><span className="ct-overline">LEITURA TEMPORAL</span><h3 id="ct-curve-title">Curva S de desempenho</h3><p>{cenarioQa ? "Séries do cenário QA, com quantidades e pesos sintéticos identificados." : "Planejamento atualizado, produção confirmada e baseline, quando aprovada."}</p></div>
+        <div><span className="ct-overline">LEITURA TEMPORAL · VALOR ORÇAMENTÁRIO</span><h3 id="ct-curve-title">Curva S ponderada pelo valor do orçamento</h3><p>{cenarioQa ? "Percentual do valor orçamentário planejado por data; não equivale ao avanço físico QA." : "Valor do orçamento distribuído pelas datas do CPM; produção confirmada ponderada pelos custos das atividades."}</p></div>
         {pronto && <div className="ct-filtros" role="group" aria-label="Período da Curva S">
           {([{ key: "90", label: "90 dias" }, { key: "365", label: "12 meses" }, { key: "total", label: "Toda obra" }] as const).map(f =>
             <button key={f.key} type="button" onClick={() => { setFaixa(f.key); setPontoSelecionado(null); }} aria-pressed={faixa === f.key} className={faixa === f.key ? "selecionado" : ""}>{f.label}</button>
           )}
         </div>}
       </div>
-      {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note"><AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> percentuais de planejamento e produção servem para demonstrar o sistema nesta obra de teste. Não representam medição real.</span></div>}
+      {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note"><AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> esta curva mostra percentuais do valor do orçamento; não representa avanço físico nem medição real.</span></div>}
       {emCarregamento ? <div className="ct-chart-empty" role="status"><span className="ct-skeleton" />Preparando a série de produção e o cronograma…</div>
         : falhou ? <div className="ct-chart-empty" role="alert"><AlertTriangle size={22} />Não foi possível consultar a série de planejamento. <button type="button" onClick={() => abrirAba("curva-s")}>Abrir diagnóstico da Curva S</button></div>
         : !pronto ? <div className="ct-chart-empty"><ChartNoAxesCombined size={25} /><strong>Curva S ainda não disponível</strong><span>É necessário um CPM calculado, orçamento aprovado associado às atividades e calendário válido. Nenhum histórico é inventado.</span><button type="button" onClick={() => abrirAba("curva-s")}>Ver o que falta <ArrowUpRight size={14}/></button></div>
         : <>
-          <div className="ct-chart-key"><span className="ct-key-plano">Planejado</span>{acumuladoConfirmado && <span className="ct-key-real">{cenarioQa ? "Produção QA" : "Realizado"}</span>}{planoAprovado && <span className="ct-key-base">Baseline</span>}</div>
-          <div className="ct-chart-box" role="img" aria-label={cenarioQa ? "Curva S do cenário QA, com premissas sintéticas de planejamento e produção." : "Curva S com séries reais de planejamento e produção, em porcentagem, desde o início da obra. " + (!acumuladoConfirmado ? "Sem lançamentos confirmados válidos para o realizado." : "Realizado obtido de lançamentos confirmados.")}>
+          <div className="ct-chart-key"><span className="ct-key-plano">Plano por valor</span>{acumuladoConfirmado && <span className="ct-key-real">{cenarioQa ? "Produção QA por valor" : "Realizado por valor"}</span>}{planoAprovado && <span className="ct-key-base">Baseline por valor</span>}</div>
+          <div className="ct-chart-box" role="img" aria-label={cenarioQa ? "Curva S por valor do orçamento no cenário QA; não representa avanço físico." : "Curva S ponderada pelo valor do orçamento, com produção confirmada. Percentuais em relação ao valor total."}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={curvaDados!.dados} margin={{ top: 12, right: 14, left: -12, bottom: 6 }}>
                 <CartesianGrid strokeDasharray="3 6" stroke="#e6edf1" vertical={false} />
@@ -171,9 +171,9 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
                 <Tooltip formatter={v => pctExibir(v)} labelFormatter={v => cal && inicio ? dataBr(dateAt(cal, inicio, Number(v))) : String(v)}
                   contentStyle={{ borderRadius: 10, border: "1px solid #dce6eb", fontSize: 12 }} />
                 {hojeNum >= curvaDados!.inicio && hojeNum <= curvaDados!.fim && <ReferenceLine x={hojeNum} stroke="#d59d4b" strokeDasharray="4 5" />}
-                <Line dataKey="planejado" name="Planejado" stroke="#187d9c" strokeWidth={3} dot={false} isAnimationActive={false} type="monotone" />
-                {acumuladoConfirmado && <Line dataKey="realizado" name={cenarioQa ? "Produção QA" : "Realizado"} stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
-                {planoAprovado && <Line dataKey="baseline" name="Baseline" stroke="#899aaa" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} type="monotone" />}
+                <Line dataKey="planejado" name="Plano por valor" stroke="#187d9c" strokeWidth={3} dot={false} isAnimationActive={false} type="monotone" />
+                {acumuladoConfirmado && <Line dataKey="realizado" name={cenarioQa ? "Produção QA por valor" : "Realizado por valor"} stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
+                {planoAprovado && <Line dataKey="baseline" name="Baseline por valor" stroke="#899aaa" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} type="monotone" />}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -182,12 +182,12 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
             <input id="ct-cursor-data" aria-label="Selecionar ponto da série acumulada no tempo" type="range" min={0} max={Math.max(0, curvaDados!.dados.length - 1)} value={indiceSelecionado}
               onChange={e => setPontoSelecionado(Number(e.target.value))} />
             <output htmlFor="ct-cursor-data" aria-live="polite">
-              {dataBr(dateAt(cal!, inicio!, itemSelecionado.dia))} · Planejado {pct(itemSelecionado.planejado)}
-              {itemSelecionado.realizado == null ? (cenarioQa ? " · Sem produção QA apurada" : " · Sem realizado apurado") : (cenarioQa ? " · Produção QA " : " · Realizado ") + pct(itemSelecionado.realizado)}
+              {dataBr(dateAt(cal!, inicio!, itemSelecionado.dia))} · Plano por valor {pct(itemSelecionado.planejado)}
+              {itemSelecionado.realizado == null ? (cenarioQa ? " · Sem produção QA apurada" : " · Sem realizado apurado") : (cenarioQa ? " · Produção QA por valor " : " · Realizado por valor ") + pct(itemSelecionado.realizado)}
             </output>
           </div>}
           <div className="ct-chart-footer">
-            <span>{cenarioQa ? (!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes no cenário QA." : "Série baseada nos apontamentos confirmados da obra demonstrativa.") : (!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes: realizado não exibido." : "Realizado datado pela produção confirmada.")}</span>
+            <span>{cenarioQa ? (!acumuladoConfirmado ? "Valor orçamentário distribuído pelo CPM; sem apontamentos confirmados suficientes para a produção QA." : "Valor orçamentário distribuído pelo CPM; produção QA ponderada pelos mesmos valores e apontamentos confirmados.") : (!acumuladoConfirmado ? "Valor orçamentário planejado pelo CPM; sem apontamentos confirmados suficientes para exibir o realizado." : "Valor orçamentário planejado pelo CPM; realizado ponderado pela produção confirmada.")}</span>
             <button type="button" onClick={() => abrirAba("curva-s")}>Abrir Curva S <ArrowUpRight size={14}/></button>
           </div>
         </>}
