@@ -58,6 +58,13 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(curva).not.toContain("Os percentuais desta curva");
     expect(curva).not.toContain("dadosDemonstrativos");
   });
+  it("distingue o avanço físico planejado da Curva S ponderada pelo orçamento", () => {
+    expect(control).toContain("Meta física até hoje");
+    expect(control).toContain("Plano físico");
+    expect(curva).toContain("Curva S ponderada pelo valor do orçamento");
+    expect(curva).toContain("Plano por valor");
+    expect(curva).toContain("não representa avanço físico");
+  });
   it("trata estados vazios, dados parciais, teclado, celular e movimento reduzido", () => {
     expect(control).toContain("carregandoComplementos");
     expect(control).toContain('prontidao.fisico === "disponivel"');
