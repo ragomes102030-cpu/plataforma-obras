@@ -14,15 +14,17 @@ describe("destinos e rótulos da prontidão por domínio", () => {
     expect(destinoDaBarreira(barreira("ORCAMENTO_AUSENTE", ["orcamento"]))).toBe("financeiro");
   });
 
-  it("separa pendências de LOB e de medição e identifica o domínio do bloqueio", () => {
+  it("separa LOB de boletim contratual e aponta o módulo financeiro", () => {
     const lob = barreira("LOB_ATIVIDADES_SEM_UNIDADE", ["execucao"]);
     const medicao = barreira("MEDICAO_AUSENTE", ["execucao"]);
+    const itensMedicao = barreira("MEDICAO_SEM_ITENS", ["execucao"]);
     const orcamento = barreira("ORCAMENTO_ITENS_PENDENTES", ["orcamento"]);
 
     expect(destinoDaBarreira(lob)).toBe("linha-balanco");
-    expect(destinoDaBarreira(medicao)).toBe("producao");
+    expect(destinoDaBarreira(medicao)).toBe("financeiro");
+    expect(destinoDaBarreira(itensMedicao)).toBe("financeiro");
     expect(rotuloDaBarreira(lob, true)).toContain("LINHA DE BALANÇO");
-    expect(rotuloDaBarreira(medicao, true)).toContain("AGUARDA MEDIÇÃO");
+    expect(rotuloDaBarreira(medicao, true)).toContain("MEDIÇÃO CONTRATUAL");
     expect(rotuloDaBarreira(orcamento, true)).toContain("CONTROLE FINANCEIRO");
     expect(rotuloDaBarreira(orcamento, false)).toBe("GOVERNANÇA DO PLANEJAMENTO");
   });
