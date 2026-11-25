@@ -121,6 +121,17 @@ describe("motor de prontidão integrada", () => {
     expect(result.etapas.execucao.bloqueios[0].codigo).toBe("MEDICAO_SEM_ITENS");
   });
 
+  it("distingue boletim contratual de apontamento de produção", () => {
+    const result = avaliarProntidaoObra({
+      execucao: { medicoes: 0, comUnidade: 0, confirmadas: 0 },
+    });
+    const bloqueioMedicao = result.etapas.execucao.bloqueios.find(item => item.codigo === "MEDICAO_AUSENTE");
+
+    expect(bloqueioMedicao?.titulo).toBe("Boletim de medição contratual pendente");
+    expect(bloqueioMedicao?.explicacao).toMatch(/lançamentos de produção confirmados/i);
+    expect(bloqueioMedicao?.comoResolver).toContain("Orçamento e Custos");
+  });
+
   it("aceita a atividade raiz sem predecessora quando a rede está conectada", () => {
     const result = avaliarProntidaoObra({
       atividades: { total: 2, semLocal: 0, semDuracao: 0 },

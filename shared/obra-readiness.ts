@@ -88,8 +88,22 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   if (lob?.orfas) execBloqueios.push(bloqueio("LOB_PARCELAS_ORFAS", "Parcelas sem atividade válida", `${lob.orfas} parcela(s) referenciam atividades ausentes na versão corrente.`, "Revise as referências na versão de trabalho antes da homologação.", ["execucao"], "critica"));
   if (lob?.parcelasEmLocaisDidaticos) execBloqueios.push(bloqueio("LOB_LOCAL_DIDATICO", "Parcelas em locais demonstrativos", `${lob.parcelasEmLocaisDidaticos} parcela(s) estão atribuídas a locais identificados como didáticos.`, "Revise a localização física de cada serviço na versão de trabalho. Serviços globais não devem gerar repetição artificial entre pavimentos.", ["execucao"], "critica"));
   if (lob?.foraJanelaCpm) execBloqueios.push(bloqueio("LOB_FORA_JANELA_CPM", "Linha de Balanço contradiz o CPM", `${lob.foraJanelaCpm} parcela(s) estão fora da janela oficial de execução da atividade.`, "Revise datas e locais na versão de trabalho, respeitando o calendário da obra. Não invente escadinhas.", ["execucao"], "critica"));
-  if (!execucao?.medicoes) execBloqueios.push(bloqueio("MEDICAO_AUSENTE", "Execução sem medições", "Não há registros confirmados para comparar planejado e realizado.", "Registre medições com quantidade, unidade, data e evidência na aba Controle.", ["execucao"], "media"));
-  else if (!execucao.comUnidade) execBloqueios.push(bloqueio("MEDICAO_SEM_ITENS", "Medições sem itens", "Há documentos de medição, mas nenhum item quantitativo vinculado.", "Abra cada medição, vincule os itens do orçamento e informe quantidade e unidade antes de acompanhar o avanço.", ["execucao"], "alta"));
+  if (!execucao?.medicoes) execBloqueios.push(bloqueio(
+    "MEDICAO_AUSENTE",
+    "Boletim de medição contratual pendente",
+    "Não há boletim de medição aprovado, faturado ou pago. Lançamentos de produção confirmados no Controle são apontamentos de campo e não substituem o boletim contratual.",
+    "Abra Orçamento e Custos > Medição e desembolso para conferir itens, quantidades, unidades, período e evidências; aprove o boletim somente após validar a medição real.",
+    ["execucao"],
+    "media"
+  ));
+  else if (!execucao.comUnidade) execBloqueios.push(bloqueio(
+    "MEDICAO_SEM_ITENS",
+    "Boletim contratual sem itens quantitativos vinculados",
+    "Há boletim(ns) aprovados, faturados ou pagos, mas nenhum item quantitativo do orçamento está vinculado. Lançamentos de produção, sozinhos, não formam um boletim contratual.",
+    "Abra Orçamento e Custos > Medição e desembolso, vincule os itens corretos e confira quantidade, unidade, período e evidência antes da aprovação.",
+    ["execucao"],
+    "alta"
+  ));
   add("execucao", execBloqueios.length ? "incompleto" : "pronto_revisao", execBloqueios);
   const ordem: EtapaProntidao[] = ["escopo", "eap", "orcamento", "atividades", "rede", "cpm", "baseline", "execucao"];
   const primeiraBarreira = ordem.flatMap(etapa => etapas[etapa].bloqueios)[0] ?? null;
