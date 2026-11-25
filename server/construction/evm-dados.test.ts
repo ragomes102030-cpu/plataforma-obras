@@ -275,7 +275,7 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
    * Cenário mínimo: uma obra, um item aprovado de 100 m³ a R$ 1.000, uma
    * atividade de 10 dias que consome o item inteiro.
    */
-  async function cenario() {
+  async function cenario(sobre: { activityExample?: boolean } = {}) {
     const { projectId } = await criarObra();
     const versao = await criarVersao(projectId, {
       versionNumber: 1,
@@ -298,9 +298,10 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
         plannedQuantity: "100.000",
         unit: "m3",
         budgetItemId: itemId,
+        exemplo: sobre.activityExample ? 1 : 0,
       })
       .returning({ id: scheduleActivities.id });
-    return { projectId, itemId, activityId: atividade.id, planVersionId: versaoDoPlano };
+    return { projectId, itemId, activityId: atividade.id, planVersionId: versaoDoPlano, wbsNodeId: no };
   }
 
   it("produção com data POSTERIOR ao asOf não entra no avanço", async () => {
@@ -366,6 +367,70 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
     );
 
     expect(dados.actualByActivity.get(activityId)).toBe(40);
+  });
+
+  it("não soma produção sintética marcada como exemplo QA no valor ganho", async () => {
+    const { projectId, activityId, planVersionId } = await cenario();
+    await db.insert(productionEntries).values([
+      {
+        projectId,
+        activityId,
+        quantity: "40.000",
+        measurementUnit: "m3",
+        productionDate: new Date("2026-01-10T00:00:00"),
+        status: "confirmada",
+      },
+      {
+        projectId,
+        activityId,
+        quantity: "60.000",
+        measurementUnit: "m3",
+        productionDate: new Date("2026-01-11T00:00:00"),
+        status: "confirmada",
+        exemplo: 1,
+      },
+    ]);
+
+    const dados = await coletarDadosEvms(
+      db,
+      projectId,
+      new Date("2026-01-31T00:00:00"),
+      planVersionId,
+    );
+
+    expect(dados.actualByActivity.get(activityId)).toBe(40);
+  });
+
+  it("não reconcilia produção antiga ligada a atividade de exemplo com atividade operacional de mesmo WBS", async () => {
+    const { projectId, activityId, planVersionId, itemId, wbsNodeId } = await cenario({ activityExample: true });
+    const [atividadeOperacional] = await db.insert(scheduleActivities).values({
+      projectId,
+      versionId: planVersionId,
+      wbsNodeId,
+      wbsCode: "1.1",
+      name: "Escavação operacional",
+      phase: "Execução",
+      startOffset: 0,
+      durationDays: 10,
+      plannedQuantity: "100.000",
+      unit: "m3",
+      budgetItemId: itemId,
+    }).returning({ id: scheduleActivities.id });
+    await db.insert(productionEntries).values({
+      projectId,
+      activityId,
+      quantity: "50.000",
+      measurementUnit: "m3",
+      productionDate: new Date("2026-01-10T00:00:00"),
+      status: "confirmada",
+      // Registro legado: a atividade de origem está explicitamente marcada QA,
+      // mas o lançamento ainda não recebeu a marca de exemplo.
+      exemplo: 0,
+    });
+
+    const dados = await coletarDadosEvms(db, projectId, new Date("2026-01-31T00:00:00"), planVersionId);
+
+    expect(dados.actualByActivity.get(atividadeOperacional.id)).toBeUndefined();
   });
 
   it("custo é classificado: atividade, item e sem vínculo", async () => {

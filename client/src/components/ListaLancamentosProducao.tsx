@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { isClearlyQaExampleNote } from "@shared/production-entries";
 
 /**
  * O HISTÓRICO DA PRODUÇÃO, COM CONSERTO.
@@ -24,6 +25,7 @@ type Lancamento = {
   quantity: string | number;
   measurementUnit: string;
   status: string;
+  exemplo?: number | null;
   activityId: number;
   notes?: string | null;
   codigoEap?: string | null;
@@ -67,10 +69,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   const [erro, setErro] = useState<string | null>(null);
 
   const atualizarTelas = async () => {
-    await Promise.all([
-      utils.production.entries.invalidate({ projectId: projetoId }),
-      utils.planning.list.invalidate({ projectId: projetoId }),
-    ]);
+    await utils.invalidate();
   };
 
   const aoFalhar = (e: { message: string }) => {
@@ -126,6 +125,15 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
     onError: aoFalhar,
   });
 
+  const marcarComoQa = trpc.production.markAsQaExample.useMutation({
+    onSuccess: async () => {
+      setErro(null);
+      setMensagem("Lançamento classificado como Premissa QA; permanece no histórico e não conta como execução real.");
+      await atualizarTelas();
+    },
+    onError: aoFalhar,
+  });
+
   const excluir = trpc.production.deleteEntry.useMutation({
     onSuccess: async () => {
       setErro(null);
@@ -142,7 +150,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   const visiveis = useMemo(
     () =>
       somenteComProblema
-        ? lancamentos.filter(l => (l.vinculo ?? "atual") !== "atual" || l.unidadeCompativel === false)
+        ? lancamentos.filter(l => (l.vinculo ?? "atual") !== "atual" || l.unidadeCompativel === false || l.exemplo === 1)
         : lancamentos,
     [lancamentos, somenteComProblema]
   );
@@ -152,6 +160,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
     confirmar.isPending ||
     desfazer.isPending ||
     editar.isPending ||
+    marcarComoQa.isPending ||
     excluir.isPending;
 
   if (!lancamentos.length) return null;
@@ -176,7 +185,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
               checked={somenteComProblema}
               onChange={e => setSomenteComProblema(e.target.checked)}
             />
-            só lançamentos com vínculo ou unidade pendente
+            só pendências de vínculo/unidade e exemplos QA
           </label>
           <button
             type="button"
@@ -216,7 +225,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
             {visiveis.length === 0 ? (
               <tr>
                 <td className="xl-vazia" colSpan={5}>
-                  <strong>Nenhum lançamento com vínculo ou unidade pendente</strong>
+                  <strong>Nenhum lançamento pendente ou exemplo QA</strong>
                   <span>Desmarque o filtro para ver todas as medições.</span>
                 </td>
               </tr>
@@ -279,6 +288,22 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                       <span className={`producao-tag producao-tag-${confirmada ? "confirmada" : "rascunho"}`}>
                         {confirmada ? "confirmada" : "rascunho"}
                       </span>
+                      {l.exemplo === 1 && (
+                        <span
+                          className="producao-tag producao-tag-aviso"
+                          title="Este é um dado sintético de cenário. Fica no histórico, mas não entra no avanço, Curva S, EVM ou medição financeira real."
+                        >
+                          Premissa QA · não real
+                        </span>
+                      )}
+                      {l.exemplo !== 1 && isClearlyQaExampleNote(l.notes) && (
+                        <span
+                          className="producao-tag producao-tag-aviso"
+                          title={l.notes ?? "A nota identifica dado sintético de QA."}
+                        >
+                          nota identifica QA
+                        </span>
+                      )}
                       {vinculo !== "atual" && (
                         <span
                           className="producao-tag producao-tag-aviso"
@@ -287,7 +312,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           {vinculo === "versao_anterior" ? "plano anterior" : "sem vínculo"}
                         </span>
                       )}
-                      {l.unidadeCompativel === false && (
+                      {l.unidadeCompativel === false && l.exemplo !== 1 && (
                         <span
                           className="producao-tag producao-tag-aviso"
                           title={l.unidadePlanejada
@@ -371,6 +396,21 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                                 Excluir
                               </button>
                             </>
+                          )}
+                          {l.exemplo !== 1 && isClearlyQaExampleNote(l.notes) && (
+                            <button
+                              type="button"
+                              className="outline-button"
+                              disabled={ocupado}
+                              title="A nota já identifica uma simulação QA. A classificação mantém o registro no histórico e o retira dos indicadores reais."
+                              onClick={() => {
+                                if (window.confirm(`Classificar ${quantidadeBr(l.quantity)} ${l.measurementUnit} como Premissa QA? O valor continuará no histórico, mas não contará como execução real.`)) {
+                                  marcarComoQa.mutate({ projectId: projetoId, entryId: l.id });
+                                }
+                              }}
+                            >
+                              {marcarComoQa.isPending ? "Classificando…" : "Marcar Premissa QA"}
+                            </button>
                           )}
                         </>
                       )}

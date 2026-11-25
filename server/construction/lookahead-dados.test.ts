@@ -252,6 +252,15 @@ describe("coletarDadosLookahead — datas e janela", () => {
         productionDate: new Date("2026-01-08T00:00:00"),
         status: "confirmada",
       },
+      {
+        projectId,
+        activityId: atividadeId,
+        quantity: "25.000",
+        measurementUnit: "m3",
+        productionDate: new Date("2026-01-09T00:00:00"),
+        status: "confirmada",
+        exemplo: 1,
+      },
     ]);
 
     const dados = await coletarDadosLookahead(

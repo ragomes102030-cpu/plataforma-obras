@@ -153,7 +153,11 @@ export async function coletarDadosEvms(
       unit: scheduleActivities.unit,
     })
     .from(scheduleActivities)
-    .where(and(eq(scheduleActivities.projectId, projectId), versionScope));
+    .where(and(
+      eq(scheduleActivities.projectId, projectId),
+      versionScope,
+      eq(scheduleActivities.exemplo, 0),
+    ));
 
   const activities: EvmActivity[] = linhasDeAtividade.map(activity => ({
     id: activity.id,
@@ -174,11 +178,15 @@ export async function coletarDadosEvms(
       codigoEap: scheduleActivities.wbsCode,
     })
     .from(productionEntries)
-    .leftJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
+    .leftJoin(scheduleActivities, and(
+      eq(productionEntries.activityId, scheduleActivities.id),
+      eq(scheduleActivities.exemplo, 0),
+    ))
     .where(
       and(
         eq(productionEntries.projectId, projectId),
         eq(productionEntries.status, "confirmada"),
+        eq(productionEntries.exemplo, 0),
         // Corte por data. Sem isto o EVM de uma data passada inclui produção
         // futura, e o EV de setembro muda quando alguém lança outubro.
         lte(productionEntries.productionDate, asOf)

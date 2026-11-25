@@ -105,6 +105,22 @@ describe("calcularProgressoReal", () => {
     );
     expect(mapa.get(10)).toEqual({ progress: 0, total: 0, planned: 100 });
   });
+
+  it("exclui lançamento marcado como exemplo QA do avanço real", () => {
+    const atividades = [atual(10, "1.1", 100)];
+    const exemploQa = { activityId: 10, quantity: 40, status: "confirmada", measurementUnit: "M", exemplo: 1 };
+    const mapa = calcularProgressoReal([exemploQa], atividades, 2);
+
+    expect(mapa.get(10)).toEqual({ progress: 0, total: 0, planned: 100 });
+  });
+
+  it("exclui produção legada vinculada a atividade marcada como exemplo QA", () => {
+    const atividades = [{ ...atual(10, "1.1", 100), exemplo: 1 }];
+    const lancamento = { activityId: 10, quantity: 40, status: "confirmada", measurementUnit: "M" };
+    const mapa = calcularProgressoReal([lancamento], atividades, 2);
+
+    expect(mapa.size).toBe(0);
+  });
 });
 
 describe("ehDataFutura", () => {
