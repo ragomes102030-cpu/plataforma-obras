@@ -126,6 +126,40 @@ const EXTENSOES_DE_DOCUMENTO = new Set([
   "jpg",
 ]);
 
+function validarUnidadeDaProducao(unidadeRegistrada: string, unidadePlanejada: string | null | undefined) {
+  const planejada = unidadePlanejada?.trim();
+  if (!planejada) throw badRequest("Defina a unidade planejada da atividade antes de lançar ou confirmar produção.");
+  if (!unitsCompatible(unidadeRegistrada, planejada)) {
+    throw badRequest(`A unidade registrada (${unidadeRegistrada}) deve corresponder à unidade planejada da atividade (${planejada}).`);
+  }
+}
+
+async function obterUnidadePlanejadaAtualDaProducao(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  activityId: number,
+) {
+  const [origem] = await db
+    .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId, wbsCode: scheduleActivities.wbsCode, unit: scheduleActivities.unit })
+    .from(scheduleActivities)
+    .where(and(eq(scheduleActivities.projectId, projectId), eq(scheduleActivities.id, activityId)))
+    .limit(1);
+  if (!origem) throw badRequest("A atividade do lançamento não pertence a esta obra.");
+  const versaoAtual = await getCurrentPlanVersion(projectId);
+  if (ehDaVersaoAtual(origem, versaoAtual?.id ?? null)) return origem.unit;
+  const escopoAtual = versaoAtual ? eq(scheduleActivities.versionId, versaoAtual.id) : isNull(scheduleActivities.versionId);
+  const atuais = await db
+    .select({ id: scheduleActivities.id, unit: scheduleActivities.unit })
+    .from(scheduleActivities)
+    .where(and(
+      eq(scheduleActivities.projectId, projectId),
+      eq(scheduleActivities.wbsCode, origem.wbsCode),
+      escopoAtual,
+    ));
+  if (atuais.length !== 1) throw badRequest("Não foi possível identificar uma única atividade atual para este lançamento.");
+  return atuais[0]?.unit;
+}
+
 async function requireApprovedEapVersion(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number
@@ -2481,11 +2515,14 @@ export const appRouter = router({
         return lancamentos.map(lancamento => {
           const origem = porId.get(lancamento.activityId);
           const atual = origem ? atualPorCodigo.get(origem.wbsCode) : undefined;
+          const unidadePlanejada = atual?.unit ?? origem?.unit ?? null;
           return {
             ...lancamento,
             codigoEap: origem?.wbsCode ?? null,
             atividadeNome: atual?.name ?? origem?.name ?? null,
-            unidade: atual?.unit ?? origem?.unit ?? null,
+            unidade: unidadePlanejada,
+            unidadePlanejada,
+            unidadeCompativel: unitsCompatible(lancamento.measurementUnit, unidadePlanejada),
             vinculo: classificarLancamento(lancamento.activityId, atividades, versaoAtualId),
           };
         });
@@ -2582,10 +2619,7 @@ export const appRouter = router({
         if (!activity.length) {
           throw badRequest("A atividade do lançamento não pertence a esta obra.");
         }
-        const unidadePlanejada = activity[0]?.unit?.trim();
-        if (unidadePlanejada && input.measurementUnit.trim().toLocaleLowerCase("pt-BR") !== unidadePlanejada.toLocaleLowerCase("pt-BR")) {
-          throw badRequest(`A unidade do lançamento deve corresponder à atividade (${unidadePlanejada}).`);
-        }
+        validarUnidadeDaProducao(input.measurementUnit, activity[0]?.unit);
         if (input.frontId && !front.length) throw badRequest("A frente informada não pertence a esta obra.");
         if (input.teamId && !team.length) throw badRequest("A equipe informada não pertence a esta obra.");
         if (input.unitId && !unit.length) throw badRequest("A unidade informada não pertence a esta obra.");
@@ -2645,7 +2679,7 @@ export const appRouter = router({
           frontIds.length ? db.select({ id: productionFronts.id }).from(productionFronts).where(and(eq(productionFronts.projectId, input.projectId), inArray(productionFronts.id, frontIds))) : Promise.resolve([]),
           teamIds.length ? db.select({ id: productionTeams.id }).from(productionTeams).where(and(eq(productionTeams.projectId, input.projectId), inArray(productionTeams.id, teamIds))) : Promise.resolve([]),
           unitIds.length ? db.select({ id: productionUnits.id }).from(productionUnits).where(and(eq(productionUnits.projectId, input.projectId), inArray(productionUnits.id, unitIds))) : Promise.resolve([]),
-          db.select({ id: scheduleActivities.id }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, activityIds))),
+          db.select({ id: scheduleActivities.id, unit: scheduleActivities.unit }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, activityIds))),
         ]);
         if (
           fronts.length !== frontIds.length ||
@@ -2654,6 +2688,10 @@ export const appRouter = router({
           activitiesFound.length !== activityIds.length
         )
           throw forbidden("Uma ou mais referências não pertencem à obra.");
+        const unidadePorAtividade = new Map(activitiesFound.map(activity => [activity.id, activity.unit]));
+        for (const item of input.entries) {
+          validarUnidadeDaProducao(item.measurementUnit, unidadePorAtividade.get(item.activityId));
+        }
         await db.insert(productionEntries).values(
           input.entries.map(item => ({
             projectId: input.projectId,
@@ -2678,6 +2716,8 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
         if (!entry) throw notFound("Medição não encontrada nesta obra.");
+        const unidadePlanejada = await obterUnidadePlanejadaAtualDaProducao(db, input.projectId, entry.activityId);
+        validarUnidadeDaProducao(entry.measurementUnit, unidadePlanejada);
         await db.update(productionEntries).set({ status: "confirmada" }).where(eq(productionEntries.id, input.entryId));
         // Antes a conta era feita aqui, somando só `entry.activityId`: lançamento
         // preso a uma versão antiga da EAP não mexia em atividade nenhuma. Agora
@@ -2733,6 +2773,14 @@ export const appRouter = router({
           throw badRequest(
             `A data do lançamento (${input.productionDate.toLocaleDateString("pt-BR", { timeZone: "UTC" })}) está no futuro. Produção registra o que já aconteceu.`
           );
+        const unidadeRegistrada = input.measurementUnit ?? entry.measurementUnit;
+        const unidadePlanejada = await obterUnidadePlanejadaAtualDaProducao(db, input.projectId, entry.activityId);
+        validarUnidadeDaProducao(unidadeRegistrada, unidadePlanejada);
+        if (input.measurementUnit && input.measurementUnit !== entry.measurementUnit && (
+          !input.notes?.trim() || input.notes.trim() === (entry.notes ?? "").trim()
+        )) {
+          throw badRequest("Informe uma nova referência da medição para justificar a correção da unidade.");
+        }
         const [atualizado] = await db
           .update(productionEntries)
           .set({
@@ -5820,7 +5868,7 @@ export const appRouter = router({
           // Todas as versões: o lançamento de produção aponta para a linha do dia
           // em que foi digitado. Sem isso, medição de versão anterior virava
           // "executado 0" no cronograma (o caso dos 10 lançamentos da AURORA).
-          db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
+          db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode, unit: scheduleActivities.unit }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
           coletarLancamentosExecutados(db, input.projectId, hoje),
         ]);
         const inicio = project[0]?.plannedStart ?? new Date();
@@ -5840,9 +5888,7 @@ export const appRouter = router({
         const calendarioDaGrade = (await carregarCalendarioDoPeriodo(
           db, input.projectId, inicio.getFullYear(), anoFinalDaGrade
         )).calendar;
-        const codigoPorAtividade = new Map<number,string>();
-        for (const atividade of todasAtividades) codigoPorAtividade.set(atividade.id, atividade.wbsCode);
-        const { executadoPorAtividade, producaoSemAlocacao } = alocarProducaoNaVersaoAtual(
+        const { executadoPorAtividade, producaoSemAlocacao, lancamentosAlocados } = alocarProducaoNaVersaoAtual(
           activities,
           todasAtividades,
           entries,
@@ -5856,8 +5902,8 @@ export const appRouter = router({
         const linhasDerivadas = gradeDoCronograma(calendarioDaGrade,hoje,entradas);
         const linhas = linhasDerivadas;
         const grade:Record<string,Record<string,string>>={}; const porAtividade:Record<string,string>={};
-        for(const entry of entries){const codigo=codigoPorAtividade.get(entry.activityId); if(!codigo) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
-        const datas=Object.keys(grade).sort(); const totalGeral=entries.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
+        for(const entry of lancamentosAlocados){if(!entry.productionDate) continue; const day=new Date(entry.productionDate).toISOString().slice(0,10); const codigo=entry.wbsCode; grade[day]??={}; grade[day][codigo]=(Number(grade[day][codigo]??0)+Number(entry.quantity)).toFixed(3); porAtividade[codigo]=(Number(porAtividade[codigo]??0)+Number(entry.quantity)).toFixed(3);}
+        const datas=Object.keys(grade).sort(); const totalGeral=lancamentosAlocados.reduce((sum,e)=>sum+Number(e.quantity),0).toFixed(3);
         const exemploPorCodigo = Object.fromEntries(
           activities.filter(a => a.exemplo === 1).map(a => [a.wbsCode, true])
         );
@@ -6375,6 +6421,7 @@ export const appRouter = router({
           .select({
             activityId: productionEntries.activityId,
             quantity: productionEntries.quantity,
+            measurementUnit: productionEntries.measurementUnit,
             codigoEap: scheduleActivities.wbsCode,
           })
           .from(productionEntries)
@@ -6386,12 +6433,14 @@ export const appRouter = router({
           ));
         const idsAtuais = new Set(activities.map(activity => activity.id));
         const idPorCodigo = indexarAtividadesPorCodigo(activities);
+        const atividadeAtualPorId = new Map(activities.map(activity => [activity.id, activity]));
         const actualByActivity = new Map<number, number>();
         for (const entry of entries) {
           const id = resolverAtividadeDaProducao(
             entry.activityId, entry.codigoEap, idsAtuais, idPorCodigo
           );
-          if (id != null) {
+          const atividade = id == null ? undefined : atividadeAtualPorId.get(id);
+          if (id != null && atividade && unitsCompatible(entry.measurementUnit, atividade.unit)) {
             actualByActivity.set(id, (actualByActivity.get(id) ?? 0) + Number(entry.quantity));
           }
         }

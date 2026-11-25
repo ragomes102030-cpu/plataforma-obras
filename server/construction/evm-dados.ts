@@ -15,6 +15,7 @@ import {
 } from "./calendario-obra";
 import type { EvmActivity, EvmBaseline, EvmBudgetItem } from "./evm";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../../shared/producao-vinculo";
+import { unitsCompatible } from "../../shared/price-sources/reconciliation";
 import type { IsoDate, WorkCalendar } from "../../shared/work-calendar";
 
 /**
@@ -149,6 +150,7 @@ export async function coletarDadosEvms(
       earlyStart: scheduleActivities.earlyStart,
       startOffset: scheduleActivities.startOffset,
       budgetItemId: scheduleActivities.budgetItemId,
+      unit: scheduleActivities.unit,
     })
     .from(scheduleActivities)
     .where(and(eq(scheduleActivities.projectId, projectId), versionScope));
@@ -168,6 +170,7 @@ export async function coletarDadosEvms(
     .select({
       activityId: productionEntries.activityId,
       quantity: productionEntries.quantity,
+      measurementUnit: productionEntries.measurementUnit,
       codigoEap: scheduleActivities.wbsCode,
     })
     .from(productionEntries)
@@ -182,11 +185,14 @@ export async function coletarDadosEvms(
       )
     );
   const actualByActivity = new Map<number, number>();
+  const atividadePorId = new Map(linhasDeAtividade.map(atividade => [atividade.id, atividade]));
   for (const entry of entries) {
     // Lançamento de versão anterior da EAP: o id não existe mais, mas o código
     // reencontra a atividade. Sem isto o EVM lia 0% enquanto o painel lia 15,1%.
     const activityId = resolverAtividadeDaProducao(entry.activityId, entry.codigoEap, idsAtuais, idPorCodigo);
     if (activityId == null) continue;
+    const atividade = atividadePorId.get(activityId);
+    if (!atividade || !unitsCompatible(entry.measurementUnit, atividade.unit)) continue;
     actualByActivity.set(activityId, (actualByActivity.get(activityId) ?? 0) + Number(entry.quantity));
   }
 

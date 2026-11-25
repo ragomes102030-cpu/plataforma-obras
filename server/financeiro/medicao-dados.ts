@@ -13,6 +13,7 @@ import type {
   ItemDeOrcamento,
   QuantidadePorItem,
 } from "./medicao";
+import { unitsCompatible } from "../../shared/price-sources/reconciliation";
 
 /**
  * Leitura dos dados da medição.
@@ -97,10 +98,13 @@ export async function coletarDadosMedicao(
   // Somente produção não didática da versão aprovada vigente e com vínculo
   // com item do orçamento aprovado. Lançamentos legados/de QA não faturam.
   const validBudgetItemIds = itens.map(item => item.budgetItemId);
-  const produzidas = approvedPlan && validBudgetItemIds.length
+  const unidadePorItem = new Map(itens.map(item => [item.budgetItemId, item.unit]));
+  const produzidasBrutas = approvedPlan && validBudgetItemIds.length
     ? await db.select({
         budgetItemId: scheduleActivities.budgetItemId,
         quantity: productionEntries.quantity,
+        measurementUnit: productionEntries.measurementUnit,
+        activityUnit: scheduleActivities.unit,
       })
       .from(productionEntries)
       .innerJoin(scheduleActivities, eq(scheduleActivities.id, productionEntries.activityId))
@@ -115,12 +119,19 @@ export async function coletarDadosMedicao(
         lte(productionEntries.productionDate, periodEnd),
       ))
     : [];
+  const produzidas = produzidasBrutas.filter(linha =>
+    linha.budgetItemId != null &&
+    unitsCompatible(linha.measurementUnit, linha.activityUnit) &&
+    unitsCompatible(linha.activityUnit, unidadePorItem.get(linha.budgetItemId))
+  );
 
   // O filtro financeiro nao pode ocultar alertas de servicos produzidos mas
   // sem item do orçamento. Eles nao sao cobrados, porem continuam reportados.
-  const producaoSemVinculo = approvedPlan ? await db.select({
+  const producaoSemVinculoBruta = approvedPlan ? await db.select({
     budgetItemId: scheduleActivities.budgetItemId,
     quantity: productionEntries.quantity,
+    measurementUnit: productionEntries.measurementUnit,
+    activityUnit: scheduleActivities.unit,
   }).from(productionEntries)
     .innerJoin(scheduleActivities, eq(scheduleActivities.id, productionEntries.activityId))
     .where(and(
@@ -133,6 +144,9 @@ export async function coletarDadosMedicao(
       isNull(scheduleActivities.budgetItemId),
       lte(productionEntries.productionDate, periodEnd),
     )) : [];
+  const producaoSemVinculo = producaoSemVinculoBruta.filter(linha =>
+    unitsCompatible(linha.measurementUnit, linha.activityUnit)
+  );
 
   const jaMedidas = await db
     .select({

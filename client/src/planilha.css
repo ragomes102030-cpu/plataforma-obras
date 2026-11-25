@@ -6021,6 +6021,16 @@ tr:hover .xl-codigo {
   flex-wrap: wrap;
   gap: 6px;
 }
+.producao-edicao-medicao {
+  display: grid;
+  gap: 4px;
+  min-width: 110px;
+}
+.producao-edicao-medicao input {
+  box-sizing: border-box;
+  max-width: 190px;
+  width: 100%;
+}
 .producao-tag {
   display: inline-block;
   margin-right: 4px;

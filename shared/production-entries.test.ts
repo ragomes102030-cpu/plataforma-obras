@@ -10,4 +10,13 @@ describe("selectConfirmedProductionEntries", () => {
 
     expect(selectConfirmedProductionEntries(entries)).toEqual([entries[0]]);
   });
+
+  it("does not count a confirmed entry with an incompatible unit", () => {
+    const entries = [
+      { id: 1, quantity: "12.000", status: "confirmada", unidadeCompativel: false },
+      { id: 2, quantity: "8.000", status: "confirmada", unidadeCompativel: true },
+    ];
+
+    expect(selectConfirmedProductionEntries(entries)).toEqual([entries[1]]);
+  });
 });

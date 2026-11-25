@@ -224,6 +224,30 @@ describe("coletarDadosMedicao — produção no período", () => {
     expect(aprovado.medidoAcumuladoAnterior).toEqual([{ budgetItemId: itemId, quantity: 20 }]);
   });
 
+  it("não lança na medição contratual uma produção com unidade incompatível", async () => {
+    const { projectId } = await criarObra();
+    const versaoId = await criarVersao(projectId, 1, "aprovado");
+    const itemId = await criarItem(versaoId, "01.01", "100.000", "10.00");
+    const atividadeId = await criarAtividade(projectId, { budgetItemId: itemId });
+    await lancarProducao(projectId, atividadeId, "2026-02-04", "60.000");
+    await db.insert(productionEntries).values({
+      projectId,
+      activityId: atividadeId,
+      productionDate: new Date("2026-02-05T12:00:00Z"),
+      quantity: "12.000",
+      measurementUnit: "un",
+      status: "confirmada",
+    });
+
+    const resultado = await coletarDadosMedicao(
+      db, projectId,
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-28T23:59:59Z")
+    );
+
+    expect(resultado.produzidoAcumulado).toEqual([{ budgetItemId: itemId, quantity: 60 }]);
+  });
+
 
   it("inclui o último dia do período e exclui o primeiro dia do seguinte", async () => {
     const { projectId } = await criarObra();

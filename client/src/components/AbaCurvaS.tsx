@@ -187,7 +187,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     () =>
       acumularRealizado(
         (producao.data ?? [])
-          .filter(entrada => entrada.status === "confirmada")
+          .filter(entrada => entrada.status === "confirmada" && entrada.unidadeCompativel === true)
           .map(entrada => ({
             codigo: entrada.codigoEap ?? null,
             quantidade: Number(entrada.quantity ?? 0),

@@ -169,7 +169,66 @@ describe("avanço real por código da EAP", () => {
       quantity: 5,
       measurementUnit: "kg",
       status: "confirmada",
-    })).rejects.toThrow(/unidade do lançamento deve corresponder à atividade/i);
+    })).rejects.toThrow(/unidade registrada .* deve corresponder à unidade planejada/i);
+  });
+
+  it("aplica a mesma validação ao lançamento em lote", async () => {
+    await expect(chamador().production.createEntries({
+      projectId: obraId,
+      entries: [{
+        activityId: atividadeAtualId,
+        productionDate: new Date("2026-10-10T00:00:00.000Z"),
+        quantity: 5,
+        measurementUnit: "kg",
+        status: "confirmada",
+      }],
+    })).rejects.toThrow(/unidade registrada .* deve corresponder à unidade planejada/i);
+  });
+
+  it("não reconfirma lançamento legado com unidade incompatível", async () => {
+    const db = drizzlePglite(pg);
+    await db.update(productionEntries)
+      .set({ status: "rascunho", measurementUnit: "kg" })
+      .where(eq(productionEntries.id, lancamentoId));
+
+    await expect(chamador().production.confirmEntry({
+      projectId: obraId,
+      entryId: lancamentoId,
+    })).rejects.toThrow(/unidade registrada .* deve corresponder à unidade planejada/i);
+
+    const [lancamento] = await db.select({ status: productionEntries.status })
+      .from(productionEntries)
+      .where(eq(productionEntries.id, lancamentoId));
+    expect(lancamento.status).toBe("rascunho");
+  });
+
+  it("exige referência nova ao corrigir a unidade de um rascunho", async () => {
+    const db = drizzlePglite(pg);
+    const [rascunho] = await db.insert(productionEntries).values({
+      projectId: obraId,
+      activityId: atividadeAtualId,
+      productionDate: new Date("2026-10-10T00:00:00.000Z"),
+      quantity: "5.000",
+      measurementUnit: "kg",
+      notes: "Referência antiga",
+      status: "rascunho",
+    }).returning({ id: productionEntries.id });
+
+    await expect(chamador().production.updateEntry({
+      projectId: obraId,
+      entryId: rascunho.id,
+      measurementUnit: "m2",
+      notes: "Referência antiga",
+    })).rejects.toThrow(/nova referência da medição/i);
+
+    const corrigido = await chamador().production.updateEntry({
+      projectId: obraId,
+      entryId: rascunho.id,
+      measurementUnit: "m2",
+      notes: "Boletim de campo QA 10/10",
+    });
+    expect(corrigido?.measurementUnit).toBe("m2");
+    expect(corrigido?.notes).toBe("Boletim de campo QA 10/10");
   });
 
   it("medição confirmada não pode ser editada nem excluída direto", async () => {

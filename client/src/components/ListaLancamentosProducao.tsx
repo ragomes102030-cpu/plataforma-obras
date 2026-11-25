@@ -28,6 +28,8 @@ type Lancamento = {
   notes?: string | null;
   codigoEap?: string | null;
   atividadeNome?: string | null;
+  unidadePlanejada?: string | null;
+  unidadeCompativel?: boolean;
   vinculo?: "atual" | "versao_anterior" | "perdido";
 };
 
@@ -58,6 +60,8 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [dataEdicao, setDataEdicao] = useState("");
   const [quantidadeEdicao, setQuantidadeEdicao] = useState("");
+  const [unidadeEdicao, setUnidadeEdicao] = useState("");
+  const [notasEdicao, setNotasEdicao] = useState("");
   const [somenteComProblema, setSomenteComProblema] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -138,7 +142,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
   const visiveis = useMemo(
     () =>
       somenteComProblema
-        ? lancamentos.filter(l => (l.vinculo ?? "atual") !== "atual")
+        ? lancamentos.filter(l => (l.vinculo ?? "atual") !== "atual" || l.unidadeCompativel === false)
         : lancamentos,
     [lancamentos, somenteComProblema]
   );
@@ -172,7 +176,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
               checked={somenteComProblema}
               onChange={e => setSomenteComProblema(e.target.checked)}
             />
-            só lançamentos fora do plano atual
+            só lançamentos com vínculo ou unidade pendente
           </label>
           <button
             type="button"
@@ -212,7 +216,7 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
             {visiveis.length === 0 ? (
               <tr>
                 <td className="xl-vazia" colSpan={5}>
-                  <strong>Nenhum lançamento fora do plano atual</strong>
+                  <strong>Nenhum lançamento com vínculo ou unidade pendente</strong>
                   <span>Desmarque o filtro para ver todas as medições.</span>
                 </td>
               </tr>
@@ -240,11 +244,33 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                     </td>
                     <td className="xl-tabela-celula">
                       {emEdicao ? (
-                        <input
-                          inputMode="decimal"
-                          value={quantidadeEdicao}
-                          onChange={e => setQuantidadeEdicao(e.target.value)}
-                        />
+                        <div className="producao-edicao-medicao">
+                          <input
+                            aria-label="Quantidade medida"
+                            inputMode="decimal"
+                            value={quantidadeEdicao}
+                            onChange={e => setQuantidadeEdicao(e.target.value)}
+                          />
+                          <input
+                            aria-label="Unidade registrada"
+                            value={unidadeEdicao}
+                            onChange={e => {
+                              const novaUnidade = e.target.value;
+                              setUnidadeEdicao(novaUnidade);
+                              if (unidadeEdicao.trim() === l.measurementUnit && novaUnidade.trim() !== l.measurementUnit) {
+                                setNotasEdicao("");
+                              }
+                            }}
+                          />
+                          {unidadeEdicao.trim() !== l.measurementUnit && (
+                            <input
+                              aria-label="Referência da correção da unidade"
+                              placeholder="Referência da medição"
+                              value={notasEdicao}
+                              onChange={e => setNotasEdicao(e.target.value)}
+                            />
+                          )}
+                        </div>
                       ) : (
                         `${quantidadeBr(l.quantity)} ${l.measurementUnit}`
                       )}
@@ -261,6 +287,16 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           {vinculo === "versao_anterior" ? "plano anterior" : "sem vínculo"}
                         </span>
                       )}
+                      {l.unidadeCompativel === false && (
+                        <span
+                          className="producao-tag producao-tag-aviso"
+                          title={l.unidadePlanejada
+                            ? `O lançamento está em ${l.measurementUnit}; a atividade atual exige ${l.unidadePlanejada}. Ele fica fora dos indicadores até a unidade ser conferida.`
+                            : "A atividade não tem unidade planejada. O lançamento fica fora dos indicadores até a unidade ser definida."}
+                        >
+                          {l.unidadePlanejada ? "unidade divergente" : "unidade planejada ausente"}
+                        </span>
+                      )}
                     </td>
                     <td className="xl-tabela-celula producao-acoes-linha">
                       {emEdicao ? (
@@ -268,13 +304,15 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           <button
                             type="button"
                             className="eap-btn"
-                            disabled={ocupado || !quantidadeEdicao.trim() || Number(quantidadeEdicao) <= 0}
+                            disabled={ocupado || !quantidadeEdicao.trim() || Number(quantidadeEdicao) <= 0 || !unidadeEdicao.trim() || (unidadeEdicao.trim() !== l.measurementUnit && !notasEdicao.trim())}
                             onClick={() =>
                               editar.mutate({
                                 projectId: projetoId,
                                 entryId: l.id,
                                 quantity: Number(quantidadeEdicao),
+                                measurementUnit: unidadeEdicao.trim(),
                                 productionDate: dataEdicao || undefined,
+                                notes: notasEdicao.trim() || undefined,
                               })
                             }
                           >
@@ -315,6 +353,8 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                                   setEditandoId(l.id);
                                   setDataEdicao(dataIso(l.productionDate));
                                   setQuantidadeEdicao(String(l.quantity));
+                                  setUnidadeEdicao(l.measurementUnit);
+                                  setNotasEdicao(l.notes ?? "");
                                 }}
                               >
                                 Editar

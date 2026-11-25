@@ -296,17 +296,18 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
         startOffset: 0,
         durationDays: 10,
         plannedQuantity: "100.000",
+        unit: "m3",
         budgetItemId: itemId,
       })
       .returning({ id: scheduleActivities.id });
-    return { projectId, itemId, activityId: atividade.id };
+    return { projectId, itemId, activityId: atividade.id, planVersionId: versaoDoPlano };
   }
 
   it("produção com data POSTERIOR ao asOf não entra no avanço", async () => {
     // O defeito antigo: `production_entries` era somada inteira, sem olhar
     // `productionDate`. O EV de setembro mudava quando alguém lançava outubro,
     // e o relatório do passado se reescrevia sozinho.
-    const { projectId, activityId } = await cenario();
+    const { projectId, activityId, planVersionId } = await cenario();
     await db.insert(productionEntries).values([
       {
         projectId,
@@ -330,14 +331,45 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
       db,
       projectId,
       new Date("2026-01-31T00:00:00"),
-      null
+      planVersionId
     );
 
     expect(corte.actualByActivity.get(activityId)).toBe(40);
   });
 
+  it("não mistura unidade registrada incompatível com a unidade da atividade", async () => {
+    const { projectId, activityId, planVersionId } = await cenario();
+    await db.insert(productionEntries).values([
+      {
+        projectId,
+        activityId,
+        quantity: "40.000",
+        measurementUnit: "m3",
+        productionDate: new Date("2026-01-10T00:00:00"),
+        status: "confirmada",
+      },
+      {
+        projectId,
+        activityId,
+        quantity: "12.000",
+        measurementUnit: "un",
+        productionDate: new Date("2026-01-11T00:00:00"),
+        status: "confirmada",
+      },
+    ]);
+
+    const dados = await coletarDadosEvms(
+      db,
+      projectId,
+      new Date("2026-01-31T00:00:00"),
+      planVersionId,
+    );
+
+    expect(dados.actualByActivity.get(activityId)).toBe(40);
+  });
+
   it("custo é classificado: atividade, item e sem vínculo", async () => {
-    const { projectId, itemId, activityId } = await cenario();
+    const { projectId, itemId, activityId, planVersionId } = await cenario();
     await db.insert(costEntries).values([
       {
         projectId,
@@ -365,7 +397,7 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
       db,
       projectId,
       new Date("2026-01-31T00:00:00"),
-      null
+      planVersionId
     );
 
     expect(dados.costByActivity.get(activityId)).toBe(1_500);
@@ -375,7 +407,7 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
   });
 
   it("custo cancelado ou com competência futura não entra no AC", async () => {
-    const { projectId, activityId } = await cenario();
+    const { projectId, activityId, planVersionId } = await cenario();
     await db.insert(costEntries).values([
       {
         projectId,
@@ -404,7 +436,7 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
       db,
       projectId,
       new Date("2026-01-31T00:00:00"),
-      null
+      planVersionId
     );
 
     expect(dados.costEntryCount).toBe(0);
@@ -412,7 +444,7 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
   });
 
   it("lançamento com as duas pontas conta uma vez só, na atividade", async () => {
-    const { projectId, itemId, activityId } = await cenario();
+    const { projectId, itemId, activityId, planVersionId } = await cenario();
     await db.insert(costEntries).values({
       projectId,
       activityId,
@@ -426,7 +458,7 @@ describe("coletarDadosEvms — corte por data e custo real", () => {
       db,
       projectId,
       new Date("2026-01-31T00:00:00"),
-      null
+      planVersionId
     );
 
     expect(dados.costByActivity.get(activityId)).toBe(2_000);
