@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 25/nov/2026 — Separar valor agregado real da simulação QA
+
+**Achado:** a Dashboard rotulava a linha de realizado como “Produção QA” somente porque os pesos eram premissas QA, embora o cálculo excluísse os lançamentos sintéticos. A tela também não oferecia uma série financeira separada para apontamentos QA compatíveis.
+
+**Correção:** o EV real e o realizado da Curva S continuam usando apenas produção real confirmada. Uma série independente calcula o EV QA somente com apontamentos explicitamente marcados como exemplo, confirmados, com unidade compatível e vinculados à versão atual; a quantidade acumulada é limitada ao planejado. O cartão e a Curva S mostram esse resultado como simulação, sem alterar a prontidão nem os valores reais.
+
+**Validação local:** regressões cobrem rejeição de rascunho, registro real, unidade incompatível, versão anterior, data inválida/futura e limite de quantidade. Testes de apresentação conferem os rótulos separados; a suíte completa, TypeScript e build foram executados nesta alteração.
+
 ## 25/nov/2026 — Separar avanço físico da Curva S ponderada por orçamento
 
 **Achado:** no cenário QA, o resumo mostrava 1,7% planejado enquanto o ponto de 25/11 na Curva S mostrava 0,0%. Os cálculos usam bases diferentes: o resumo pondera pelo peso físico uniforme; a Curva S distribui percentuais pelo custo orçamentário. Sem esse rótulo, os indicadores pareciam contraditórios.

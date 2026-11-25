@@ -1,5 +1,15 @@
 # Decisões de Arquitetura
 
+## Decisão 27 — EV QA e EV real são séries distintas
+
+- **Quando:** 25/11/2026.
+- **Decisão:** a produção real confirmada e a simulação QA nunca compartilham a mesma série, KPI ou prontidão. EV QA só considera registro confirmado com marca explícita de exemplo, unidade compatível, atividade vinculada à versão atual e quantidade válida até a data de referência.
+- **Cálculo:** a quantidade sintética é acumulada por atividade e limitada ao quantitativo planejado; o valor é ponderado pelo custo orçado da atividade. Apontamentos incompatíveis, fora da versão ou sem custo/quantidade permanecem fora da simulação e são identificados.
+- **Interface:** “EV real” continua sem dado quando não há produção real confirmada. “EV QA (simulação)” e sua série pontilhada aparecem separadamente, com nota de que não representam medição de campo nem valor agregado real.
+- **Motivo:** permitir demonstrar o fluxo financeiro em uma obra de teste sem misturar premissas com execução real ou habilitar controle contratual.
+
+> **Documento normativo.** Última atualização: 25/11/2026.
+
 ## Decisão 26 — prontidão independente por domínio
 
 - **Quando:** 25/11/2026.
