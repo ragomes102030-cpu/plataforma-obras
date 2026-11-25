@@ -119,6 +119,7 @@ export async function coletarDadosLookahead(
       and(
         eq(productionEntries.projectId, projectId),
         eq(productionEntries.status, "confirmada"),
+        eq(productionEntries.exemplo, 0),
         // Corte em hoje: produção lançada com data futura ainda não aconteceu.
         lte(productionEntries.productionDate, asOf)
       )

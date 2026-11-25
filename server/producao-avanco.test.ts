@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   productionEntries,
   productionFronts,
+  projectAuditEvents,
   projects,
   projectPlanVersions,
   scheduleActivities,
@@ -161,6 +162,104 @@ describe("avanço real por código da EAP", () => {
     expect(lancamento.vinculo).toBe("versao_anterior");
   });
 
+  it("não consolida o avanço do projeto incluindo atividade marcada como exemplo QA", async () => {
+    const db = drizzlePglite(pg);
+    const [operacional] = await db.select({ wbsNodeId: scheduleActivities.wbsNodeId })
+      .from(scheduleActivities).where(eq(scheduleActivities.id, atividadeAtualId));
+    await db.insert(scheduleActivities).values({
+      projectId: obraId,
+      versionId: 2,
+      wbsNodeId: operacional.wbsNodeId,
+      wbsCode: "QA-PROJ-PCT",
+      name: "Atividade sintética",
+      phase: "Execução",
+      startOffset: 0,
+      durationDays: 20,
+      plannedQuantity: "1.000",
+      unit: "m2",
+      progress: 100,
+      exemplo: 1,
+    });
+
+    await chamador().production.recalcularAvanco({ projectId: obraId });
+    const [obra] = await db.select({ progress: projects.progress }).from(projects).where(eq(projects.id, obraId));
+
+    // A produção real existente continua valendo (50/200 = 25%); a atividade
+    // QA com 100% não pode diluir o agregado do projeto.
+    expect(obra.progress).toBe(25);
+  });
+
+  it("não conta produção ligada a atividade QA no controle e na Curva S", async () => {
+    const db = drizzlePglite(pg);
+    await db.update(productionEntries).set({ exemplo: 1 }).where(eq(productionEntries.id, lancamentoId));
+    const [operacional] = await db.select({ wbsNodeId: scheduleActivities.wbsNodeId })
+      .from(scheduleActivities).where(eq(scheduleActivities.id, atividadeAtualId));
+    const [qa] = await db.insert(scheduleActivities).values({
+      projectId: obraId,
+      versionId: 2,
+      wbsNodeId: operacional.wbsNodeId,
+      wbsCode: "1.2.3",
+      name: "Atividade QA com mesmo WBS",
+      phase: "Execução",
+      startOffset: 0,
+      durationDays: 1,
+      plannedQuantity: "1.000",
+      unit: "m2",
+      exemplo: 1,
+    }).returning({ id: scheduleActivities.id });
+    const [lancamentoQa] = await db.insert(productionEntries).values({
+      projectId: obraId,
+      activityId: qa.id,
+      productionDate: new Date("2026-10-02T00:00:00Z"),
+      quantity: "50.000",
+      measurementUnit: "m2",
+      status: "confirmada",
+      exemplo: 0,
+    }).returning({ id: productionEntries.id });
+
+    const control = await chamador().planning.control({ projectId: obraId, asOf: new Date("2026-10-03T00:00:00Z") });
+    const activityControl = control.activities.find(activity => activity.id === atividadeAtualId);
+    const curva = await chamador().planning.scurve({ projectId: obraId, asOf: new Date("2026-10-03T00:00:00Z") });
+    const historico = await chamador().production.entries({ projectId: obraId });
+
+    expect(activityControl?.actualQuantity).toBe(0);
+    expect(curva.points[curva.points.length - 1]?.actualPct).toBe(0);
+    expect(historico.find(entry => entry.id === lancamentoQa.id)?.exemplo).toBe(1);
+  });
+
+  it("não classifica como vínculo perdido a produção ligada a atividade de exemplo QA", async () => {
+    const db = drizzlePglite(pg);
+    await db.update(productionEntries).set({ exemplo: 1 }).where(eq(productionEntries.id, lancamentoId));
+    const [atividadeAtual] = await db.select({ wbsNodeId: scheduleActivities.wbsNodeId })
+      .from(scheduleActivities).where(eq(scheduleActivities.id, atividadeAtualId));
+    const [atividadeQa] = await db.insert(scheduleActivities).values({
+      projectId: obraId,
+      versionId: 2,
+      wbsNodeId: atividadeAtual.wbsNodeId,
+      wbsCode: "SEM-ALVO-QA",
+      name: "Atividade QA sem equivalente operacional",
+      phase: "Execução",
+      startOffset: 0,
+      durationDays: 1,
+      plannedQuantity: "10.000",
+      unit: "m2",
+      exemplo: 1,
+    }).returning({ id: scheduleActivities.id });
+    await db.insert(productionEntries).values({
+      projectId: obraId,
+      activityId: atividadeQa.id,
+      productionDate: new Date("2026-10-02T00:00:00Z"),
+      quantity: "10.000",
+      measurementUnit: "m2",
+      status: "confirmada",
+      exemplo: 0,
+    });
+
+    const resultado = await chamador().production.recalcularAvanco({ projectId: obraId });
+
+    expect(resultado.lancamentosSemVinculo).toBe(0);
+  });
+
   it("recusa medição em unidade diferente da atividade planejada", async () => {
     await expect(chamador().production.createEntry({
       projectId: obraId,
@@ -183,6 +282,142 @@ describe("avanço real por código da EAP", () => {
         status: "confirmada",
       }],
     })).rejects.toThrow(/unidade registrada .* deve corresponder à unidade planejada/i);
+  });
+
+  it("marca como QA toda produção criada para uma atividade de exemplo", async () => {
+    const db = drizzlePglite(pg);
+    const [pacoteQa] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: 2,
+      code: "QA.1",
+      name: "Pacote demonstrativo",
+      level: 3,
+      nodeType: "pacote",
+    }).returning({ id: wbsNodes.id });
+    const [atividadeQa] = await db.insert(scheduleActivities).values({
+      projectId: obraId,
+      versionId: 2,
+      wbsNodeId: pacoteQa.id,
+      wbsCode: "QA.1",
+      name: "Atividade demonstrativa",
+      phase: "Execução",
+      startOffset: 0,
+      durationDays: 1,
+      plannedQuantity: "10.000",
+      unit: "m2",
+      exemplo: 1,
+    }).returning({ id: scheduleActivities.id });
+
+    await chamador().production.createEntry({
+      projectId: obraId,
+      activityId: atividadeQa.id,
+      productionDate: new Date("2026-10-10T00:00:00.000Z"),
+      quantity: 5,
+      measurementUnit: "m2",
+      status: "confirmada",
+    });
+
+    const [lancamentoQa] = await db.select({ exemplo: productionEntries.exemplo })
+      .from(productionEntries)
+      .where(eq(productionEntries.activityId, atividadeQa.id));
+    expect(lancamentoQa.exemplo).toBe(1);
+  });
+
+  it("marca como QA cada item de lote vinculado a uma atividade de exemplo", async () => {
+    const db = drizzlePglite(pg);
+    const [pacoteQa] = await db.insert(wbsNodes).values({
+      projectId: obraId,
+      versionId: 2,
+      code: "QA.2",
+      name: "Pacote demonstrativo em lote",
+      level: 3,
+      nodeType: "pacote",
+    }).returning({ id: wbsNodes.id });
+    const [atividadeQa] = await db.insert(scheduleActivities).values({
+      projectId: obraId,
+      versionId: 2,
+      wbsNodeId: pacoteQa.id,
+      wbsCode: "QA.2",
+      name: "Atividade demonstrativa em lote",
+      phase: "Execução",
+      startOffset: 0,
+      durationDays: 1,
+      plannedQuantity: "10.000",
+      unit: "m2",
+      exemplo: 1,
+    }).returning({ id: scheduleActivities.id });
+
+    await chamador().production.createEntries({
+      projectId: obraId,
+      entries: [{
+        activityId: atividadeQa.id,
+        productionDate: new Date("2026-10-10T00:00:00.000Z"),
+        quantity: 5,
+        measurementUnit: "m2",
+        status: "confirmada",
+      }],
+    });
+
+    const [lancamentoQa] = await db.select({ exemplo: productionEntries.exemplo })
+      .from(productionEntries)
+      .where(eq(productionEntries.activityId, atividadeQa.id));
+    expect(lancamentoQa.exemplo).toBe(1);
+  });
+
+  it("marca como QA um lançamento cuja nota identifica simulação, mesmo em atividade real", async () => {
+    const db = drizzlePglite(pg);
+    await chamador().production.createEntry({
+      projectId: obraId,
+      activityId: atividadeAtualId,
+      productionDate: new Date("2026-10-10T00:00:00.000Z"),
+      quantity: 5,
+      measurementUnit: "m2",
+      notes: "Premissa QA: quantidade sintética para demonstração.",
+      status: "confirmada",
+    });
+
+    const [lancamento] = await db.select({ exemplo: productionEntries.exemplo })
+      .from(productionEntries)
+      .where(eq(productionEntries.activityId, atividadeAtualId));
+    expect(lancamento.exemplo).toBe(1);
+  });
+
+  it("classifica como exemplo QA somente quando a nota identifica simulação", async () => {
+    const db = drizzlePglite(pg);
+    await chamador().production.recalcularAvanco({ projectId: obraId });
+    const [antes] = await db.select({ progress: scheduleActivities.progress })
+      .from(scheduleActivities).where(eq(scheduleActivities.id, atividadeAtualId));
+    await db.update(productionEntries).set({ notes: "SIMULAÇÃO QA — quantidade sintética, não execução real." })
+      .where(eq(productionEntries.id, lancamentoId));
+
+    const resultado = await chamador().production.markAsQaExample({ projectId: obraId, entryId: lancamentoId });
+    const [lancamento] = await db.select({ exemplo: productionEntries.exemplo, status: productionEntries.status })
+      .from(productionEntries).where(eq(productionEntries.id, lancamentoId));
+    const [depois] = await db.select({ progress: scheduleActivities.progress })
+      .from(scheduleActivities).where(eq(scheduleActivities.id, atividadeAtualId));
+    const [auditoria] = await db.select({ action: projectAuditEvents.action, payload: projectAuditEvents.payload })
+      .from(projectAuditEvents).where(eq(projectAuditEvents.action, "production_entry_marked_qa_example"));
+
+    expect(resultado.marked).toBe(true);
+    expect(lancamento).toEqual({ exemplo: 1, status: "confirmada" });
+    expect(antes.progress).toBe(25);
+    expect(depois.progress).toBe(0);
+    expect(auditoria?.action).toBe("production_entry_marked_qa_example");
+  });
+
+  it("recusa classificar como QA uma medição sem nota explícita de simulação", async () => {
+    await expect(chamador().production.markAsQaExample({ projectId: obraId, entryId: lancamentoId }))
+      .rejects.toThrow(/nota precisa identificar explicitamente/i);
+  });
+
+  it("não permite confirmar como real um rascunho cuja nota já identifica QA", async () => {
+    const db = drizzlePglite(pg);
+    await db.update(productionEntries)
+      .set({ status: "rascunho", notes: "SIMULAÇÃO QA — valor sintético para cenário." })
+      .where(eq(productionEntries.id, lancamentoId));
+
+    await expect(chamador().production.confirmEntry({ projectId: obraId, entryId: lancamentoId }))
+      .rejects.toThrow(/classifique como Premissa QA/i);
   });
 
   it("não reconfirma lançamento legado com unidade incompatível", async () => {

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-o
 import { TRPCError } from "@trpc/server";
 import { createHash, randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
+import { isClearlyQaExampleNote } from "../shared/production-entries";
 import { selectOperationalPlanning } from "../shared/operational-planning";
 import { isPhysicalWeightQaEvidence, physicalWeightQaEvidence } from "../shared/physical-weight-qa";
 import { z } from "zod";
@@ -489,7 +490,11 @@ async function recomputeProjectProgress(
       durationDays: scheduleActivities.durationDays,
     })
     .from(scheduleActivities)
-    .where(and(eq(scheduleActivities.projectId, projectId), escopoVersao));
+    .where(and(
+      eq(scheduleActivities.projectId, projectId),
+      escopoVersao,
+      eq(scheduleActivities.exemplo, 0),
+    ));
   const progress = deriveProjectProgress(
     rows.map(row => ({
       progress: Number(row.progress ?? 0),
@@ -2497,6 +2502,7 @@ export const appRouter = router({
               name: scheduleActivities.name,
               unit: scheduleActivities.unit,
               plannedQuantity: scheduleActivities.plannedQuantity,
+              exemplo: scheduleActivities.exemplo,
             })
             .from(scheduleActivities)
             .where(eq(scheduleActivities.projectId, input.projectId)),
@@ -2522,6 +2528,7 @@ export const appRouter = router({
             atividadeNome: atual?.name ?? origem?.name ?? null,
             unidade: unidadePlanejada,
             unidadePlanejada,
+            exemplo: Number(lancamento.exemplo ?? 0) === 1 || Number(origem?.exemplo ?? 0) === 1 ? 1 : 0,
             unidadeCompativel: unitsCompatible(lancamento.measurementUnit, unidadePlanejada),
             vinculo: classificarLancamento(lancamento.activityId, atividades, versaoAtualId),
           };
@@ -2598,7 +2605,7 @@ export const appRouter = router({
                 .limit(1)
             : Promise.resolve([{ id: 0 }]),
           db
-            .select({ id: scheduleActivities.id, unit: scheduleActivities.unit })
+            .select({ id: scheduleActivities.id, unit: scheduleActivities.unit, exemplo: scheduleActivities.exemplo })
             .from(scheduleActivities)
             .where(
               and(
@@ -2636,6 +2643,7 @@ export const appRouter = router({
             measurementUnit: input.measurementUnit,
             notes: input.notes || null,
             status: input.status,
+            exemplo: Number(activity[0]?.exemplo ?? 0) === 1 || isClearlyQaExampleNote(input.notes) ? 1 : 0,
             createdBy: ctx.user.id,
           })
           .returning({ id: productionEntries.id });
@@ -2679,7 +2687,7 @@ export const appRouter = router({
           frontIds.length ? db.select({ id: productionFronts.id }).from(productionFronts).where(and(eq(productionFronts.projectId, input.projectId), inArray(productionFronts.id, frontIds))) : Promise.resolve([]),
           teamIds.length ? db.select({ id: productionTeams.id }).from(productionTeams).where(and(eq(productionTeams.projectId, input.projectId), inArray(productionTeams.id, teamIds))) : Promise.resolve([]),
           unitIds.length ? db.select({ id: productionUnits.id }).from(productionUnits).where(and(eq(productionUnits.projectId, input.projectId), inArray(productionUnits.id, unitIds))) : Promise.resolve([]),
-          db.select({ id: scheduleActivities.id, unit: scheduleActivities.unit }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, activityIds))),
+          db.select({ id: scheduleActivities.id, unit: scheduleActivities.unit, exemplo: scheduleActivities.exemplo }).from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), inArray(scheduleActivities.id, activityIds))),
         ]);
         if (
           fronts.length !== frontIds.length ||
@@ -2688,9 +2696,9 @@ export const appRouter = router({
           activitiesFound.length !== activityIds.length
         )
           throw forbidden("Uma ou mais referências não pertencem à obra.");
-        const unidadePorAtividade = new Map(activitiesFound.map(activity => [activity.id, activity.unit]));
+        const atividadePorId = new Map(activitiesFound.map(activity => [activity.id, activity]));
         for (const item of input.entries) {
-          validarUnidadeDaProducao(item.measurementUnit, unidadePorAtividade.get(item.activityId));
+          validarUnidadeDaProducao(item.measurementUnit, atividadePorId.get(item.activityId)?.unit);
         }
         await db.insert(productionEntries).values(
           input.entries.map(item => ({
@@ -2704,6 +2712,7 @@ export const appRouter = router({
             measurementUnit: item.measurementUnit,
             notes: item.notes ?? null,
             status: item.status,
+            exemplo: Number(atividadePorId.get(item.activityId)?.exemplo ?? 0) === 1 || isClearlyQaExampleNote(item.notes) ? 1 : 0,
           }))
         );
         return { created: input.entries.length };
@@ -2716,6 +2725,9 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
         if (!entry) throw notFound("Medição não encontrada nesta obra.");
+        if (entry.exemplo !== 1 && isClearlyQaExampleNote(entry.notes)) {
+          throw badRequest("A nota identifica uma simulação QA. Classifique como Premissa QA antes de confirmar, pois esse valor não é medição real.");
+        }
         const unidadePlanejada = await obterUnidadePlanejadaAtualDaProducao(db, input.projectId, entry.activityId);
         validarUnidadeDaProducao(entry.measurementUnit, unidadePlanejada);
         await db.update(productionEntries).set({ status: "confirmada" }).where(eq(productionEntries.id, input.entryId));
@@ -2781,21 +2793,101 @@ export const appRouter = router({
         )) {
           throw badRequest("Informe uma nova referência da medição para justificar a correção da unidade.");
         }
-        const [atualizado] = await db
-          .update(productionEntries)
-          .set({
-            ...(input.productionDate ? { productionDate: input.productionDate } : {}),
-            ...(input.quantity !== undefined ? { quantity: input.quantity.toFixed(3) } : {}),
-            ...(input.measurementUnit ? { measurementUnit: input.measurementUnit } : {}),
-            ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
-            ...(input.frontId ? { frontId: input.frontId } : {}),
-            ...(input.teamId ? { teamId: input.teamId } : {}),
-            ...(input.unitId ? { unitId: input.unitId } : {}),
-            updatedAt: new Date(),
-          })
-          .where(eq(productionEntries.id, input.entryId))
-          .returning();
+        const marcarComoExemploQa = entry.exemplo !== 1 && isClearlyQaExampleNote(input.notes);
+        const atualizado = await db.transaction(async tx => {
+          const [updated] = await tx
+            .update(productionEntries)
+            .set({
+              ...(input.productionDate ? { productionDate: input.productionDate } : {}),
+              ...(input.quantity !== undefined ? { quantity: input.quantity.toFixed(3) } : {}),
+              ...(input.measurementUnit ? { measurementUnit: input.measurementUnit } : {}),
+              ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+              ...(marcarComoExemploQa ? { exemplo: 1 } : {}),
+              ...(input.frontId ? { frontId: input.frontId } : {}),
+              ...(input.teamId ? { teamId: input.teamId } : {}),
+              ...(input.unitId ? { unitId: input.unitId } : {}),
+              updatedAt: new Date(),
+            })
+            .where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId)))
+            .returning();
+          if (marcarComoExemploQa && updated) {
+            await tx.insert(projectAuditEvents).values({
+              projectId: input.projectId,
+              userId: ctx.user.id,
+              action: "production_entry_marked_qa_example",
+              payload: {
+                entryId: entry.id,
+                previousStatus: entry.status,
+                quantity: updated.quantity,
+                measurementUnit: updated.measurementUnit,
+                notes: updated.notes,
+                classification: "qa_example_not_real_production",
+              },
+            });
+          }
+          return updated;
+        });
+        if (!atualizado) throw notFound("Medição não encontrada nesta obra.");
+        if (marcarComoExemploQa) {
+          await recalcularAvancoReal(db, input.projectId);
+          await recomputeProjectProgress(db, input.projectId);
+        }
         return atualizado;
+      }),
+    markAsQaExample: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), entryId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [entry] = await db
+          .select()
+          .from(productionEntries)
+          .where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId)))
+          .limit(1);
+        if (!entry) throw notFound("Lançamento de produção não encontrado nesta obra.");
+        if (entry.exemplo === 1) return { marked: false as const, countedAsReal: false as const };
+        if (!isClearlyQaExampleNote(entry.notes)) {
+          throw badRequest("A nota precisa identificar explicitamente Premissa QA, Simulação QA ou dado sintético para classificar o lançamento como exemplo.");
+        }
+
+        const marcou = await db.transaction(async tx => {
+          const [updated] = await tx.update(productionEntries)
+            .set({ exemplo: 1, updatedAt: new Date() })
+            .where(and(
+              eq(productionEntries.id, input.entryId),
+              eq(productionEntries.projectId, input.projectId),
+              eq(productionEntries.exemplo, 0),
+              eq(productionEntries.notes, entry.notes!),
+            ))
+            .returning({ id: productionEntries.id });
+          if (!updated) return false;
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "production_entry_marked_qa_example",
+            payload: {
+              entryId: entry.id,
+              previousStatus: entry.status,
+              quantity: entry.quantity,
+              measurementUnit: entry.measurementUnit,
+              notes: entry.notes,
+              classification: "qa_example_not_real_production",
+            },
+          });
+          return true;
+        });
+        if (!marcou) {
+          const [atual] = await db.select({ exemplo: productionEntries.exemplo })
+            .from(productionEntries)
+            .where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId)))
+            .limit(1);
+          if (atual?.exemplo === 1) return { marked: false as const, countedAsReal: false as const };
+          throw conflict("O lançamento foi alterado durante a classificação. Atualize a lista e tente novamente.");
+        }
+        await recalcularAvancoReal(db, input.projectId);
+        await recomputeProjectProgress(db, input.projectId);
+        return { marked: true as const, countedAsReal: false as const };
       }),
     revincularVersaoAtual: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
@@ -5748,7 +5840,7 @@ export const appRouter = router({
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const dependencyScope = currentVersion ? eq(scheduleDependencies.versionId, currentVersion.id) : isNull(scheduleDependencies.versionId);
-        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope, eq(scheduleActivities.exemplo, 0))).orderBy(scheduleActivities.sortOrder);
         const versionNodes = currentVersion ? await db.select({ id: wbsNodes.id, code: wbsNodes.code, location: wbsNodes.location }).from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, currentVersion.id))) : [];
         const nodeById = new Map(versionNodes.map(node => [node.id, node]));
         const nodeByWbs = new Map(versionNodes.map(node => [node.code.trim(), node]));
@@ -6412,7 +6504,11 @@ export const appRouter = router({
         const currentVersion = await getCurrentPlanVersion(input.projectId);
         const versionScope = currentVersion ? eq(scheduleActivities.versionId, currentVersion.id) : isNull(scheduleActivities.versionId);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope)).orderBy(scheduleActivities.sortOrder);
+        const activities = await db.select().from(scheduleActivities).where(and(
+          eq(scheduleActivities.projectId, input.projectId),
+          versionScope,
+          eq(scheduleActivities.exemplo, 0),
+        )).orderBy(scheduleActivities.sortOrder);
         const asOf = input.asOf ?? new Date();
         // Mesmo corte histórico e reconciliação entre versões aplicados pelo EVM:
         // um lançamento posterior ao asOf não pode alterar o passado, e o
@@ -6425,10 +6521,14 @@ export const appRouter = router({
             codigoEap: scheduleActivities.wbsCode,
           })
           .from(productionEntries)
-          .leftJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
+          .leftJoin(scheduleActivities, and(
+            eq(productionEntries.activityId, scheduleActivities.id),
+            eq(scheduleActivities.exemplo, 0),
+          ))
           .where(and(
             eq(productionEntries.projectId, input.projectId),
             eq(productionEntries.status, "confirmada"),
+            eq(productionEntries.exemplo, 0),
             lte(productionEntries.productionDate, asOf),
           ));
         const idsAtuais = new Set(activities.map(activity => activity.id));
@@ -8695,8 +8795,13 @@ export const appRouter = router({
         if (!db) return { available: false as const, points: [] as { date: string; plannedPct: number; actualPct: number }[], note: "Banco de dados não configurado." };
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const activities = await db.select().from(scheduleActivities).where(eq(scheduleActivities.projectId, input.projectId));
-        const entries = await db.select({ productionDate: productionEntries.productionDate, quantity: productionEntries.quantity, activityId: productionEntries.activityId }).from(productionEntries).where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada")));
+        const activities = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.exemplo, 0)));
+        const entries = await db.select({ productionDate: productionEntries.productionDate, quantity: productionEntries.quantity, activityId: productionEntries.activityId }).from(productionEntries)
+          .innerJoin(scheduleActivities, and(
+            eq(productionEntries.activityId, scheduleActivities.id),
+            eq(scheduleActivities.exemplo, 0),
+          ))
+          .where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada"), eq(productionEntries.exemplo, 0)));
         if (!activities.length) return { available: true as const, points: [] as { date: string; plannedPct: number; actualPct: number }[], note: "Sem atividades no cronograma." };
         const asOf = input.asOf ?? new Date();
         const inicioProjeto = project?.plannedStart ?? asOf;

@@ -27,6 +27,7 @@ export type AtividadeParaProgresso = {
   wbsCode: string;
   plannedQuantity: string | number | null;
   unit?: string | null;
+  exemplo?: number | null;
 };
 
 export type LancamentoConfirmado = {
@@ -34,6 +35,8 @@ export type LancamentoConfirmado = {
   quantity: string | number;
   status: string;
   measurementUnit?: string | null;
+  exemplo?: number | null;
+  atividadeExemplo?: number | null;
 };
 
 export type ProgressoDaAtividade = {
@@ -66,18 +69,22 @@ export function calcularProgressoReal(
   const porId = new Map(atividades.map(a => [a.id, a]));
   const atuaisPorCodigo = new Map<string, AtividadeParaProgresso>();
   for (const atividade of atividades) {
-    if (ehDaVersaoAtual(atividade, versaoAtualId)) {
+    if (Number(atividade.exemplo ?? 0) !== 1 && ehDaVersaoAtual(atividade, versaoAtualId)) {
       atuaisPorCodigo.set(atividade.wbsCode, atividade);
     }
   }
 
   const somas = new Map<number, number>();
   for (const lancamento of lancamentos) {
-    if (lancamento.status !== "confirmada") continue;
+    if (
+      lancamento.status !== "confirmada" ||
+      Number(lancamento.exemplo ?? 0) === 1 ||
+      Number(lancamento.atividadeExemplo ?? 0) === 1
+    ) continue;
     const origem = porId.get(lancamento.activityId);
     // Atividade de origem apagada: não há código para casar, o lançamento fica
     // visível na tela como "perdido" e não inventa progresso.
-    if (!origem) continue;
+    if (!origem || Number(origem.exemplo ?? 0) === 1) continue;
     const alvo = atuaisPorCodigo.get(origem.wbsCode) ?? origem;
     // A quantidade só pode ser somada à atividade de destino se a unidade
     // registrada corresponder à unidade planejada na versão atual.
@@ -148,6 +155,7 @@ export async function recalcularAvancoReal(
       wbsCode: scheduleActivities.wbsCode,
       plannedQuantity: scheduleActivities.plannedQuantity,
       unit: scheduleActivities.unit,
+      exemplo: scheduleActivities.exemplo,
     })
     .from(scheduleActivities)
     .where(eq(scheduleActivities.projectId, projectId));
@@ -158,13 +166,23 @@ export async function recalcularAvancoReal(
       quantity: productionEntries.quantity,
       status: productionEntries.status,
       measurementUnit: productionEntries.measurementUnit,
+      exemplo: productionEntries.exemplo,
+      atividadeExemplo: scheduleActivities.exemplo,
     })
     .from(productionEntries)
-    .where(and(eq(productionEntries.projectId, projectId), eq(productionEntries.status, "confirmada")));
+    .leftJoin(scheduleActivities, eq(productionEntries.activityId, scheduleActivities.id))
+    .where(and(
+      eq(productionEntries.projectId, projectId),
+      eq(productionEntries.status, "confirmada"),
+      eq(productionEntries.exemplo, 0),
+    ));
 
   const progresso = calcularProgressoReal(lancamentos, atividades, versaoAtualId);
   const perdidos = lancamentos.filter(
-    lancamento => classificarLancamento(lancamento.activityId, atividades, versaoAtualId) === "perdido"
+    lancamento =>
+      Number(lancamento.exemplo ?? 0) !== 1 &&
+      Number(lancamento.atividadeExemplo ?? 0) !== 1 &&
+      classificarLancamento(lancamento.activityId, atividades, versaoAtualId) === "perdido"
   ).length;
 
   let atualizadas = 0;
