@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canMarkPriceException, findBudgetApprovalBlockers } from "./budget-readiness";
+import { canMarkPriceException, findBudgetApprovalBlockers, hasDocumentedPriceException } from "./budget-readiness";
 
 describe("prontidao de aprovacao do orcamento", () => {
   it("não permite manter exceção de preço em item que já tem composição", () => {
@@ -38,14 +38,16 @@ describe("prontidao de aprovacao do orcamento", () => {
     ]);
   });
   it("aceita exceção de preço por edital público quando o identificador também consta na evidência", () => {
-    expect(findBudgetApprovalBlockers([{
+    const item = {
       code: "1.2.1",
       unitPrice: "121.40",
       source: "Edital CGA 90002/2025 · CDHU 12.12.074 · SEI 024.00193632/2024-14",
       isPriceException: true,
       quantityEvidence: "Premissa QA: referência de preço Edital CGA 90002/2025, item 4.11; quantitativo de cenário, não medição.",
       quantityEvidenceStatus: "cenario",
-    }])).toEqual([]);
+    };
+    expect(hasDocumentedPriceException(item)).toBe(true);
+    expect(findBudgetApprovalBlockers([item])).toEqual([]);
   });
   it("não aceita edital sem número rastreável como exceção de preço", () => {
     expect(findBudgetApprovalBlockers([{

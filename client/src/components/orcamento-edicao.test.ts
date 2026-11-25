@@ -41,4 +41,9 @@ describe("edição do orçamento didático", () => {
     expect(source).toContain("atualizarItem.isError");
     expect(source).toContain("role=\"alert\">{atualizarItem.error.message}</p>");
   });
+
+  it("mostra exceções documentadas com a mesma regra de rastreabilidade da aprovação", () => {
+    expect(source).toContain("hasDocumentedPriceException(item)");
+    expect(source).toContain("Exceção de preço rastreável");
+  });
 });
