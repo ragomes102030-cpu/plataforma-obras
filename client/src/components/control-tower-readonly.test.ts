@@ -7,6 +7,7 @@ const curva = readFileSync("client/src/components/CurvaSControlTower.tsx", "utf8
 const styles = readFileSync("client/src/control-tower.css", "utf8");
 const home = readFileSync("client/src/pages/Home.tsx", "utf8");
 const scope = readFileSync("client/src/lib/dashboard-work-scope.ts", "utf8");
+const qaSimulation = readFileSync("shared/qa-production-simulation.ts", "utf8");
 
 describe("Control Tower — integração V1 somente leitura", () => {
   it("reaproveita cálculo do painel e dados da data de referência do cronograma", () => {
@@ -63,7 +64,18 @@ describe("Control Tower — integração V1 somente leitura", () => {
     expect(control).toContain("Plano físico");
     expect(curva).toContain("Curva S ponderada pelo valor do orçamento");
     expect(curva).toContain("Plano por valor");
-    expect(curva).toContain("não representa avanço físico");
+    expect(curva).toContain("não é medição real");
+  });
+  it("mantém o EV real separado da simulação QA e exibe cada série com sua origem", () => {
+    expect(painel).toContain("calcularProducaoQa");
+    expect(control).toContain("EV QA (simulação)");
+    expect(control).toContain("Sem produção confirmada");
+    expect(curva).toContain("calcularProducaoQa(");
+    expect(qaSimulation).toContain('Number(entry.exemplo ?? 0) === 1');
+    expect(curva).toContain('e.vinculo === "atual"');
+    expect(curva).toContain('dataKey="simulacaoQa"');
+    expect(curva).toContain('name="Realizado por valor"');
+    expect(curva).not.toContain('cenarioQa ? "Produção QA por valor" : "Realizado por valor"');
   });
   it("trata estados vazios, dados parciais, teclado, celular e movimento reduzido", () => {
     expect(control).toContain("carregandoComplementos");

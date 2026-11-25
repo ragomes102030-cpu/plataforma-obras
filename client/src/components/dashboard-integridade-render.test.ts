@@ -14,6 +14,7 @@ const resumo = montarResumo({
 });
 const props = {
   projetoId:25,nomeObra:"Escola",codigosExemplo:new Set<string>(),hoje:"2026-11-05",resumo,
+  simulacaoQa:{valorAgregado:0,percentual:0,lancamentosValidos:0,lancamentosUnidadeIncompativel:0,lancamentosForaDaVersao:0,pontos:[]},
   prazoConfianca:{confiavel:true,motivo:"CPM atual"},alertas:[],valorSemDestino:0,ultimos:[],
   ppc:null,bloqueadas:null,compromissosPendentes:null,carregandoComplementos:false,erroComplementos:false,
   orcamentoEstado:"ok" as const,producaoEstado:"ok" as const,semanaEstado:"ok" as const,abrirAba:()=>{},
@@ -66,7 +67,9 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     }));
     expect(html).toContain("CENÁRIO QA");
     expect(html).toContain("não são medição real");
-    expect(html).toContain("VALOR AGREGADO · CENÁRIO QA");
+    expect(html).toContain("VALOR AGREGADO (EV)");
+    expect(html).toContain("EV QA (simulação): Sem apontamento QA compatível");
+    expect(html).not.toContain("VALOR AGREGADO · CENÁRIO QA");
     expect(html).toContain("40 atividade(s) sem unidade exata");
   });
 });

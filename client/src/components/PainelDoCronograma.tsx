@@ -7,6 +7,7 @@ import { classificarEstadoAtividadesDashboard, excluirAtividadesDeDemonstracao }
 import { avaliarPrazoDashboard } from "@/lib/prazo-dashboard";
 import { avaliarIntegridadeDashboard } from "@/lib/dashboard-integridade";
 import { isPhysicalWeightQaEvidence } from "@shared/physical-weight-qa";
+import { calcularProducaoQa } from "@shared/qa-production-simulation";
 import { EstadoCarregando } from "@/components/EstadoCarregando";
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
 import { selecionarSemanaDashboard } from "@/lib/dashboard-lookahead";
@@ -160,6 +161,28 @@ export function PainelDoCronograma({
 
   const dados = useMemo(() => {
     const custo = calcularPesosDaCurva(atividades, orcamento.data?.items ?? []);
+    const custoQaPorCodigo = new Map<string, { valorOrcado: number; quantidadePlanejada: number }>();
+    for (const atividade of atividades) {
+      if (!atividade.wbsCode || custoQaPorCodigo.has(atividade.wbsCode)) continue;
+      custoQaPorCodigo.set(atividade.wbsCode, {
+        valorOrcado: custo.custoPorAtividade.get(atividade.id) ?? 0,
+        quantidadePlanejada: Number(atividade.plannedQuantity ?? 0),
+      });
+    }
+    const simulacaoQa = calcularProducaoQa(
+      (producao.data ?? []).map(l => ({
+        status: l.status,
+        exemplo: l.exemplo,
+        unidadeCompativel: l.unidadeCompativel,
+        vinculo: l.vinculo,
+        codigo: l.codigoEap ?? null,
+        quantidade: Number(l.quantity ?? 0),
+        data: isoDoValor(l.productionDate),
+      })),
+      custoQaPorCodigo,
+      custo.total,
+      hoje,
+    );
 
     const pctPorAtividade = new Map<number, number>();
     const planejadoPorAtividade = new Map<number, number>();
@@ -243,6 +266,7 @@ export function PainelDoCronograma({
     return {
       resumo,
       integridade,
+      simulacaoQa,
       avancoFinanceiro: avancoPorValor,
       valorSemDestino: custo.valorSemDestino,
       ultimos: [...lancamentos]
@@ -363,7 +387,7 @@ export function PainelDoCronograma({
     );
   }
 
-  const { resumo, integridade, valorSemDestino, ultimos, semana } = dados;
+  const { resumo, integridade, simulacaoQa, valorSemDestino, ultimos, semana } = dados;
   const { prazo, fisico, valor, status, selo, alertas } = resumo;
   const prazoConfianca = avaliarPrazoDashboard({
     fim: prazo.fim,
@@ -454,6 +478,7 @@ export function PainelDoCronograma({
       codigosExemplo={codigosExemplo}
       prontidao={integridade.prontidao}
       prontidaoPesos={prontidaoPesos}
+      simulacaoQa={simulacaoQa}
       hoje={hoje}
       resumo={resumo}
       prazoConfianca={prazoConfianca}

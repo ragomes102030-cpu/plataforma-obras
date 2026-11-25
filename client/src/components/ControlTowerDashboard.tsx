@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type { AlertaDoPainel, ResumoDoPainel } from "@shared/painel-obra";
 import type { ProntidaoDeAvanco } from "@shared/progress-readiness";
+import type { ResultadoProducaoQa } from "@shared/qa-production-simulation";
 import { CurvaSControlTower } from "./CurvaSControlTower";
 import { OrientacaoDeEtapa } from "./OrientacaoDeEtapa";
 import { ReadinessGate } from "./ReadinessGate";
@@ -39,6 +40,7 @@ type Props = {
   nomeObra: string;
   codigosExemplo: ReadonlySet<string>;
   prontidao: ProntidaoDeAvanco;
+  simulacaoQa: ResultadoProducaoQa;
   prontidaoPesos?: {
     total: number;
     comQuantidade: number;
@@ -84,7 +86,7 @@ const destinos: Record<Detalhe, string> = {
 };
 
 export function ControlTowerDashboard({
-  projetoId, nomeObra, codigosExemplo, prontidao, prontidaoPesos, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
+  projetoId, nomeObra, codigosExemplo, prontidao, prontidaoPesos, simulacaoQa, hoje, resumo, prazoConfianca, alertas, valorSemDestino,
   semana, ultimos, ppc, bloqueadas, compromissosPendentes,
   carregandoComplementos, erroComplementos, orcamentoEstado, producaoEstado, semanaEstado, abrirAba,
 }: Props) {
@@ -117,21 +119,22 @@ export function ControlTowerDashboard({
   const fisicoDisponivel = prontidao.fisico === "disponivel";
   const financeiroDisponivel = prontidao.financeiro === "disponivel";
   const cenarioQa = prontidaoPesos?.cenarioQa === true;
+  const exibirEvQa = cenarioQa || simulacaoQa.lancamentosValidos > 0 || simulacaoQa.lancamentosUnidadeIncompativel > 0 || simulacaoQa.lancamentosForaDaVersao > 0;
+  const textoEvQa = simulacaoQa.lancamentosValidos > 0 ? dinheiro(simulacaoQa.valorAgregado) : "Sem apontamento QA compatível";
   // A meta planejada continua sendo informativa quando os pesos existem,
   // mesmo que ainda não haja uma medição confirmada para o realizado.
   const planejadoDisponivel = fisicoDisponivel || prontidao.fisico === "sem_producao";
   const textoRealizado = fisicoDisponivel ? percentual(fisico.real) : "Sem dado";
   const textoPlanejado = planejadoDisponivel ? percentual(fisico.planejado) : "Indisponível";
   const textoDesvio = fisicoDisponivel ? ponto(fisico.pontos) : "Sem dado";
-  const textoEv = prontidao.evDisponivel ? `${dinheiro(valor.executado)}${cenarioQa ? " · QA" : ""}`
+  const textoEv = prontidao.evDisponivel ? dinheiro(valor.executado)
     : prontidao.financeiro === "didatico" ? "Orçamento de teste"
     : prontidao.financeiro === "cobertura_incompleta" ? "Cobertura incompleta"
     : prontidao.financeiro === "sem_orcamento" ? "Sem orçamento aprovado"
     : prontidao.financeiro === "erro" ? "Indisponível"
     : prontidao.fisico === "sem_pesos" ? "Pesos físicos pendentes"
     : "Sem produção confirmada";
-  const detalheEv = cenarioQa && prontidao.evDisponivel ? "Indicador do cenário QA; quantitativos e pesos são premissas, não medição real"
-    : prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
+  const detalheEv = prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
     : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido"
     : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura"
     : !prontidao.evDisponivel && prontidao.fisico === "sem_pesos" ? "Aguardando pesos físicos aprovados"
@@ -169,8 +172,8 @@ export function ControlTowerDashboard({
     prazo: { titulo: "Prazo e cronograma", desc: prazoConfianca.confiavel ? "Data calculada no plano atual; atraso no término exige comparação com a baseline aprovada." : "A data exibida na grade é provisória. Ela não deve orientar decisões de prazo até a EAP e o CPM estarem válidos.", itens: [
       ["Início da grade", dataBr(prazo.inicio)], ["Término da grade", dataBr(prazo.fim)], ["Estado", prazoConfianca.motivo], ["Dias restantes", prazoConfianca.confiavel && prazo.diasRestantes !== null ? String(prazo.diasRestantes) : "Não validado"], ["Prazo decorrido", prazoConfianca.confiavel ? percentual(prazo.fracaoDecorrida) : "Não validado"],
     ], acao: "Ver no Gantt" },
-    valor: { titulo: "Valor agregado (EV)", desc: cenarioQa ? "Valor estimado para o cenário QA. Quantitativos e pesos são premissas sintéticas; não representa valor agregado real." : "Valor orçado do trabalho executado, não faturamento nem desembolso. Parte sem atividade não entra na ponderação.", itens: [
-      ["EV", textoEv], ["Orçamento ativo", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valor.total)], ["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valorSemDestino)], ["Percentual do total", !fisicoDisponivel || valor.pctExecutado == null ? "Indisponível" : percentual(valor.pctExecutado)],
+    valor: { titulo: "Valor agregado (EV)", desc: cenarioQa ? "O EV real usa apenas produção real confirmada. A simulação QA fica em uma série separada e usa premissas sintéticas." : "Valor orçado do trabalho executado, não faturamento nem desembolso. Parte sem atividade não entra na ponderação.", itens: [
+      ["EV real", textoEv], ["EV QA (simulação)", simulacaoQa.lancamentosValidos > 0 ? dinheiro(simulacaoQa.valorAgregado) : "Sem apontamento QA compatível"], ["Apontamentos QA válidos", String(simulacaoQa.lancamentosValidos)], ["Orçamento ativo", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valor.total)], ["Valor sem atividade", orcamentoEstado !== "ok" ? "Não disponível" : dinheiro(valorSemDestino)], ["Percentual do total", !fisicoDisponivel || valor.pctExecutado == null ? "Indisponível" : percentual(valor.pctExecutado)],
     ], acao: "Ver orçamento e custos" },
     atividades: { titulo: "Situação das atividades", desc: "Contagem de atividades, não ponderada por valor. Os estados vêm do cronograma ativo.", itens: [
       ["Total", String(status.total)], ["Concluídas", String(status.concluidas)], ["Em andamento", String(status.emAndamento)], ["Atrasadas", String(status.atrasadas)], ["Não iniciadas", String(status.naoIniciadas)],
@@ -241,7 +244,7 @@ export function ControlTowerDashboard({
 
       <section className="ct-kpis" aria-label="Indicadores essenciais">
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">{prazoConfianca.confiavel ? "TÉRMINO CALCULADO" : "PRAZO EM REVISÃO"} <CalendarDays size={18}/></span><strong>{prazoConfianca.confiavel ? dataBr(prazo.fim) : "Não validado"}</strong><small>{prazoConfianca.confiavel ? (prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido") + " · " + percentual(prazo.fracaoDecorrida) + " transcorrido" : prazoConfianca.motivo}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
-        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">{cenarioQa ? "VALOR AGREGADO · CENÁRIO QA" : "VALOR AGREGADO (EV)"} <Wallet size={18}/></span><strong>{textoEv}</strong><small>{detalheEv}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
+        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{detalheEv}</small>{exibirEvQa && <small data-testid="ev-qa-simulation">EV QA (simulação): {textoEvQa} · {simulacaoQa.lancamentosValidos} lançamento(s) compatível(is){simulacaoQa.lancamentosUnidadeIncompativel > 0 ? ` · ${simulacaoQa.lancamentosUnidadeIncompativel} excluído(s) por unidade` : ""}{simulacaoQa.lancamentosForaDaVersao > 0 ? ` · ${simulacaoQa.lancamentosForaDaVersao} excluído(s) por vínculo de versão` : ""}</small>}<span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("atividades")}><span className="ct-kpi-head">ATIVIDADES DO PLANO <ListChecks size={18}/></span><strong>{status.total} atividades</strong><small>{statusConfere ? status.atrasadas + " atrasadas · " + status.concluidas + " concluídas" : "Distribuição de status inconsistente"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">{semana?.situacao === "futura" ? "COMPROMISSOS DA PRÓXIMA SEMANA" : "COMPROMISSOS DA SEMANA"} <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Nenhum compromisso" : comprometidos + " compromissos"}</strong><small>{ppcDaSemana != null ? "PPC avaliado: " + numero.format(ppcDaSemana) + "%" : "PPC não apurado"}{semana ? " · " + dataBr(semana.inicio) + " a " + dataBr(semana.fim) : ""}{bloqueadasDaSemana != null ? " · " + bloqueadasDaSemana + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
       </section>

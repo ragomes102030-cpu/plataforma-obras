@@ -9,6 +9,7 @@ import { acumularRealizado, realizadoNoDia } from "@shared/curva-realizado";
 import { dateAt, indexOf } from "@shared/work-calendar";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { isPhysicalWeightQaEvidence } from "@shared/physical-weight-qa";
+import { calcularProducaoQa } from "@shared/qa-production-simulation";
 import { AlertTriangle, ArrowUpRight, ChartNoAxesCombined } from "lucide-react";
 
 /**
@@ -104,7 +105,7 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
       });
     }
     const confirmados = producao.data
-      .filter(e => e.status === "confirmada" && e.unidadeCompativel === true && Number(e.exemplo ?? 0) !== 1)
+      .filter(e => e.status === "confirmada" && e.unidadeCompativel === true && Number(e.exemplo ?? 0) !== 1 && e.vinculo === "atual")
       .map(e => {
         const data = e.productionDate instanceof Date ? e.productionDate.toISOString().slice(0, 10) : String(e.productionDate).slice(0, 10);
         return { codigo: e.codigoEap ?? null, quantidade: Number(e.quantity ?? 0), data };
@@ -113,6 +114,40 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
     if (!confirmados.some(e => Boolean(e.codigo && pesosPorCodigo.has(e.codigo) && pesosPorCodigo.get(e.codigo)!.planejado > 0 && e.quantidade > 0))) return null;
     return acumularRealizado(confirmados, pesosPorCodigo, data => indexOf(cal, inicio, data));
   }, [calendario.data, inicio, serie, producao.data, atividadesDaObra, pesos.total, pesos.custoPorAtividade]);
+
+  const simulacaoQa = useMemo(() => {
+    if (!producao.data || !planejamento.data) return null;
+    const custosPorCodigo = new Map<string, { valorOrcado: number; quantidadePlanejada: number }>();
+    for (const atividade of atividadesDaObra) {
+      if (!atividade.wbsCode || custosPorCodigo.has(atividade.wbsCode)) continue;
+      custosPorCodigo.set(atividade.wbsCode, {
+        valorOrcado: pesos.custoPorAtividade.get(atividade.id) ?? 0,
+        quantidadePlanejada: Number(atividade.plannedQuantity ?? 0),
+      });
+    }
+    return calcularProducaoQa(
+      producao.data.map(e => ({
+        status: e.status,
+        exemplo: e.exemplo,
+        unidadeCompativel: e.unidadeCompativel,
+        vinculo: e.vinculo,
+        codigo: e.codigoEap ?? null,
+        quantidade: Number(e.quantity ?? 0),
+        data: e.productionDate instanceof Date ? e.productionDate.toISOString().slice(0, 10) : String(e.productionDate).slice(0, 10),
+      })),
+      custosPorCodigo,
+      pesos.total,
+      hoje,
+    );
+  }, [atividadesDaObra, hoje, planejamento.data, pesos.custoPorAtividade, pesos.total, producao.data]);
+
+  const pontosQa = useMemo(() => {
+    if (!cal || !inicio || !simulacaoQa?.pontos.length) return null;
+    return [
+      { dia: 0, percentual: 0 },
+      ...simulacaoQa.pontos.map(ponto => ({ dia: Math.max(0, indexOf(cal, inicio, ponto.data)), percentual: ponto.percentual })),
+    ];
+  }, [cal, inicio, simulacaoQa]);
 
   const curvaDados = useMemo(() => {
     if (!serie || !cal || !inicio) return null;
@@ -128,10 +163,11 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
       dia,
       planejado: soFinito(serie.points[Math.min(dia, serie.duration)]?.planned ?? 0),
       realizado: acumuladoConfirmado && dia <= hojeNum ? soFinito(realizadoNoDia(acumuladoConfirmado, dia)) : null,
+      simulacaoQa: pontosQa && dia <= hojeNum ? soFinito(realizadoNoDia(pontosQa, dia)) : null,
       baseline: planoAprovado ? soFinito(planoAprovado.points[Math.min(dia, planoAprovado.duration)]?.planned ?? 0) : null,
     }));
     return { dados, inicio: limiteInicio, fim: limiteFinal };
-  }, [serie, planoAprovado, acumuladoConfirmado, cal, inicio, faixa, hojeNum]);
+  }, [serie, planoAprovado, acumuladoConfirmado, pontosQa, cal, inicio, faixa, hojeNum]);
 
   const temBaseline = (planejamento.data?.baselines?.length ?? 0) > 0;
   // A leitura inicial usa a DATA DE REFERÊNCIA, não o fim futuro da obra.
@@ -148,20 +184,20 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
   return (
     <section className="ct-card ct-curve" aria-labelledby="ct-curve-title">
       <div className="ct-card-head">
-        <div><span className="ct-overline">LEITURA TEMPORAL · VALOR ORÇAMENTÁRIO</span><h3 id="ct-curve-title">Curva S ponderada pelo valor do orçamento</h3><p>{cenarioQa ? "Percentual do valor orçamentário planejado por data; não equivale ao avanço físico QA." : "Valor do orçamento distribuído pelas datas do CPM; produção confirmada ponderada pelos custos das atividades."}</p></div>
+        <div><span className="ct-overline">LEITURA TEMPORAL · VALOR ORÇAMENTÁRIO</span><h3 id="ct-curve-title">Curva S ponderada pelo valor do orçamento</h3><p>Plano e realizado real por valor; quando houver lançamentos sintéticos compatíveis, a simulação QA aparece em série separada.</p></div>
         {pronto && <div className="ct-filtros" role="group" aria-label="Período da Curva S">
           {([{ key: "90", label: "90 dias" }, { key: "365", label: "12 meses" }, { key: "total", label: "Toda obra" }] as const).map(f =>
             <button key={f.key} type="button" onClick={() => { setFaixa(f.key); setPontoSelecionado(null); }} aria-pressed={faixa === f.key} className={faixa === f.key ? "selecionado" : ""}>{f.label}</button>
           )}
         </div>}
       </div>
-      {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note"><AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> esta curva mostra percentuais do valor do orçamento; não representa avanço físico nem medição real.</span></div>}
+      {(cenarioQa || simulacaoQa?.lancamentosValidos) && <div className="ct-data-note ct-data-note-qa" role="note"><AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> a linha de simulação usa somente lançamentos QA compatíveis, ligados ao plano atual e confirmados; não é medição real. A linha de realizado continua separada.</span></div>}
       {emCarregamento ? <div className="ct-chart-empty" role="status"><span className="ct-skeleton" />Preparando a série de produção e o cronograma…</div>
         : falhou ? <div className="ct-chart-empty" role="alert"><AlertTriangle size={22} />Não foi possível consultar a série de planejamento. <button type="button" onClick={() => abrirAba("curva-s")}>Abrir diagnóstico da Curva S</button></div>
         : !pronto ? <div className="ct-chart-empty"><ChartNoAxesCombined size={25} /><strong>Curva S ainda não disponível</strong><span>É necessário um CPM calculado, orçamento aprovado associado às atividades e calendário válido. Nenhum histórico é inventado.</span><button type="button" onClick={() => abrirAba("curva-s")}>Ver o que falta <ArrowUpRight size={14}/></button></div>
         : <>
-          <div className="ct-chart-key"><span className="ct-key-plano">Plano por valor</span>{acumuladoConfirmado && <span className="ct-key-real">{cenarioQa ? "Produção QA por valor" : "Realizado por valor"}</span>}{planoAprovado && <span className="ct-key-base">Baseline por valor</span>}</div>
-          <div className="ct-chart-box" role="img" aria-label={cenarioQa ? "Curva S por valor do orçamento no cenário QA; não representa avanço físico." : "Curva S ponderada pelo valor do orçamento, com produção confirmada. Percentuais em relação ao valor total."}>
+          <div className="ct-chart-key"><span className="ct-key-plano">Plano por valor</span>{acumuladoConfirmado && <span className="ct-key-real">Realizado por valor</span>}{pontosQa && <span className="ct-key-base">Simulação QA por valor</span>}{planoAprovado && <span className="ct-key-base">Baseline por valor</span>}</div>
+          <div className="ct-chart-box" role="img" aria-label="Curva S ponderada pelo valor do orçamento. O realizado real e a simulação QA, quando disponíveis, aparecem em séries separadas. Percentuais em relação ao valor total.">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={curvaDados!.dados} margin={{ top: 12, right: 14, left: -12, bottom: 6 }}>
                 <CartesianGrid strokeDasharray="3 6" stroke="#e6edf1" vertical={false} />
@@ -172,7 +208,8 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
                   contentStyle={{ borderRadius: 10, border: "1px solid #dce6eb", fontSize: 12 }} />
                 {hojeNum >= curvaDados!.inicio && hojeNum <= curvaDados!.fim && <ReferenceLine x={hojeNum} stroke="#d59d4b" strokeDasharray="4 5" />}
                 <Line dataKey="planejado" name="Plano por valor" stroke="#187d9c" strokeWidth={3} dot={false} isAnimationActive={false} type="monotone" />
-                {acumuladoConfirmado && <Line dataKey="realizado" name={cenarioQa ? "Produção QA por valor" : "Realizado por valor"} stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
+                {acumuladoConfirmado && <Line dataKey="realizado" name="Realizado por valor" stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
+                {pontosQa && <Line dataKey="simulacaoQa" name="Simulação QA por valor" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
                 {planoAprovado && <Line dataKey="baseline" name="Baseline por valor" stroke="#899aaa" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} type="monotone" />}
               </LineChart>
             </ResponsiveContainer>
@@ -183,11 +220,12 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
               onChange={e => setPontoSelecionado(Number(e.target.value))} />
             <output htmlFor="ct-cursor-data" aria-live="polite">
               {dataBr(dateAt(cal!, inicio!, itemSelecionado.dia))} · Plano por valor {pct(itemSelecionado.planejado)}
-              {itemSelecionado.realizado == null ? (cenarioQa ? " · Sem produção QA apurada" : " · Sem realizado apurado") : (cenarioQa ? " · Produção QA por valor " : " · Realizado por valor ") + pct(itemSelecionado.realizado)}
+              {itemSelecionado.realizado == null ? " · Sem realizado real apurado" : " · Realizado por valor " + pct(itemSelecionado.realizado)}
+              {itemSelecionado.simulacaoQa == null ? " · Sem simulação QA compatível" : " · Simulação QA por valor " + pct(itemSelecionado.simulacaoQa)}
             </output>
           </div>}
           <div className="ct-chart-footer">
-            <span>{cenarioQa ? (!acumuladoConfirmado ? "Valor orçamentário distribuído pelo CPM; sem apontamentos confirmados suficientes para a produção QA." : "Valor orçamentário distribuído pelo CPM; produção QA ponderada pelos mesmos valores e apontamentos confirmados.") : (!acumuladoConfirmado ? "Valor orçamentário planejado pelo CPM; sem apontamentos confirmados suficientes para exibir o realizado." : "Valor orçamentário planejado pelo CPM; realizado ponderado pela produção confirmada.")}</span>
+            <span>{!acumuladoConfirmado ? "Sem realizado real compatível para exibir." : "Realizado ponderado por produção real confirmada e vinculada à versão atual."}{simulacaoQa?.lancamentosValidos ? ` Simulação QA separada: ${simulacaoQa.lancamentosValidos} lançamento(s), EV QA ${simulacaoQa.percentual.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%.` : " Sem apontamento QA compatível para a série de simulação."}{simulacaoQa?.lancamentosUnidadeIncompativel ? ` ${simulacaoQa.lancamentosUnidadeIncompativel} QA excluído(s) por unidade incompatível.` : ""}{simulacaoQa?.lancamentosForaDaVersao ? ` ${simulacaoQa.lancamentosForaDaVersao} QA excluído(s) por vínculo com versão anterior.` : ""}</span>
             <button type="button" onClick={() => abrirAba("curva-s")}>Abrir Curva S <ArrowUpRight size={14}/></button>
           </div>
         </>}
