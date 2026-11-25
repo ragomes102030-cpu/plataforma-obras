@@ -123,7 +123,16 @@ export function ControlTowerDashboard({
     : prontidao.financeiro === "cobertura_incompleta" ? "Cobertura incompleta"
     : prontidao.financeiro === "sem_orcamento" ? "Sem orçamento aprovado"
     : prontidao.financeiro === "erro" ? "Indisponível"
+    : prontidao.fisico === "sem_pesos" ? "Pesos físicos pendentes"
     : "Sem produção confirmada";
+  const detalheEv = prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
+    : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido"
+    : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura"
+    : !prontidao.evDisponivel && prontidao.fisico === "sem_pesos" ? "Aguardando pesos físicos aprovados"
+    : !prontidao.evDisponivel && prontidao.fisico === "sem_producao" ? "Aguardando produção confirmada"
+    : !prontidao.evDisponivel && prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
+    : !prontidao.evDisponivel ? "Aguardando dados do avanço físico"
+    : "Orçamento: " + dinheiro(valor.total);
   const tituloStatus = prontidao.fisico === "erro" ? "Avanço físico indisponível."
     : prontidao.fisico === "sem_pesos" ? "Avanço físico ainda sem pesos aprovados."
     : prontidao.fisico === "sem_producao" ? "Produção ainda não apurada."
@@ -218,7 +227,7 @@ export function ControlTowerDashboard({
 
       <section className="ct-kpis" aria-label="Indicadores essenciais">
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("prazo")}><span className="ct-kpi-head">{prazoConfianca.confiavel ? "TÉRMINO CALCULADO" : "PRAZO EM REVISÃO"} <CalendarDays size={18}/></span><strong>{prazoConfianca.confiavel ? dataBr(prazo.fim) : "Não validado"}</strong><small>{prazoConfianca.confiavel ? (prazo.diasRestantes == null ? "Sem prazo definido" : prazo.diasRestantes >= 0 ? prazo.diasRestantes + " dias restantes" : "Prazo vencido") + " · " + percentual(prazo.fracaoDecorrida) + " transcorrido" : prazoConfianca.motivo}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
-        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro" : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido" : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura" : !prontidao.evDisponivel ? "Aguardando produção confirmada e pesos físicos" : "Orçamento: " + dinheiro(valor.total)}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
+        <button className="ct-kpi ct-card" type="button" onClick={() => abrir("valor")}><span className="ct-kpi-head">VALOR AGREGADO (EV) <Wallet size={18}/></span><strong>{textoEv}</strong><small>{detalheEv}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("atividades")}><span className="ct-kpi-head">ATIVIDADES DO PLANO <ListChecks size={18}/></span><strong>{status.total} atividades</strong><small>{statusConfere ? status.atrasadas + " atrasadas · " + status.concluidas + " concluídas" : "Distribuição de status inconsistente"}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
         <button className="ct-kpi ct-card" type="button" onClick={() => abrir("semana")}><span className="ct-kpi-head">{semana?.situacao === "futura" ? "COMPROMISSOS DA PRÓXIMA SEMANA" : "COMPROMISSOS DA SEMANA"} <ClipboardList size={18}/></span><strong>{semanaEstado === "erro" ? "Indisponível" : semanaEstado === "pendente" ? "Consultando…" : comprometidos == null ? "Sem dados" : comprometidos === 0 ? "Nenhum compromisso" : comprometidos + " compromissos"}</strong><small>{ppcDaSemana != null ? "PPC avaliado: " + numero.format(ppcDaSemana) + "%" : "PPC não apurado"}{semana ? " · " + dataBr(semana.inicio) + " a " + dataBr(semana.fim) : ""}{bloqueadasDaSemana != null ? " · " + bloqueadasDaSemana + " bloqueadas" : ""}</small><span className="ct-kpi-hint">Ver contexto <ArrowUpRight size={13}/></span></button>
       </section>

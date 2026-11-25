@@ -41,6 +41,17 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     expect(html).not.toContain("A execução está abaixo");
     expect(html).not.toContain("Avanço realizado 0,0%");
   });
+  it("informa que faltam pesos quando já existe produção confirmada", () => {
+    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{
+      ...props,
+      ultimos:[{id:1,data:"2026-11-16",codigo:"1.2.1",atividade:"Estacas hélice contínua Ø600 — Torre A",quantidade:12,unidade:"M",situacao:"confirmada"}],
+      prontidao:prontidao("sem_pesos","disponivel"),
+    }));
+    expect(html).toContain("12,0 M · confirmada");
+    expect(html).toContain("Pesos físicos pendentes");
+    expect(html).toContain("Aguardando pesos físicos aprovados");
+    expect(html).not.toContain("Sem produção confirmada");
+  });
   it("aceita execução zero quando existem pesos e medição confirmados", () => {
     const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{...props,prontidao:prontidao("disponivel","disponivel",true)}));
     expect(html).toContain("Avanço realizado 0,0%");
