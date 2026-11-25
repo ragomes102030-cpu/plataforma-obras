@@ -37,6 +37,36 @@ describe("prontidao de aprovacao do orcamento", () => {
       { code: "1.3.3", reason: "sem_vinculo_rastreavel" },
     ]);
   });
+  it("aceita exceção de preço por edital público quando o identificador também consta na evidência", () => {
+    expect(findBudgetApprovalBlockers([{
+      code: "1.2.1",
+      unitPrice: "121.40",
+      source: "Edital CGA 90002/2025 · CDHU 12.12.074 · SEI 024.00193632/2024-14",
+      isPriceException: true,
+      quantityEvidence: "Premissa QA: referência de preço Edital CGA 90002/2025, item 4.11; quantitativo de cenário, não medição.",
+      quantityEvidenceStatus: "cenario",
+    }])).toEqual([]);
+  });
+  it("não aceita edital sem número rastreável como exceção de preço", () => {
+    expect(findBudgetApprovalBlockers([{
+      code: "1.2.1",
+      unitPrice: 121.4,
+      source: "Edital público 2025 · CDHU 12.12.074",
+      isPriceException: true,
+      quantityEvidence: "Premissa QA de cenário, não é medição.",
+      quantityEvidenceStatus: "cenario",
+    }])).toEqual([{ code: "1.2.1", reason: "sem_vinculo_rastreavel" }]);
+  });
+  it("não aceita edital quando a evidência não repete o identificador", () => {
+    expect(findBudgetApprovalBlockers([{
+      code: "1.2.1",
+      unitPrice: 121.4,
+      source: "Edital CGA 90002/2025 · CDHU 12.12.074",
+      isPriceException: true,
+      quantityEvidence: "Premissa QA; item 4.11, não é medição.",
+      quantityEvidenceStatus: "cenario",
+    }])).toEqual([{ code: "1.2.1", reason: "sem_vinculo_rastreavel" }]);
+  });
   it("bloqueia quantitativo sem evidência ou ainda pendente", () => {
     expect(findBudgetApprovalBlockers([{ code: "1.4", unitPrice: 10, source: "SINAPI", quantityEvidence: " ", quantityEvidenceStatus: "pendente" }])).toEqual([
       { code: "1.4", reason: "sem_vinculo_rastreavel" },
