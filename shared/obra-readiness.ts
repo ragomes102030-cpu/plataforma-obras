@@ -78,7 +78,7 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
 
   const baseline = snapshot.baseline;
   const baselineBloqueios: BloqueioProntidao[] = [];
-  if (!baseline?.existe || !baseline.aprovada) baselineBloqueios.push(bloqueio("BASELINE_AUSENTE", "Baseline não aprovada", "Ainda não existe uma referência congelada para comparar o realizado.", "Aprove a EAP, valide o orçamento e recalcule o CPM antes de criar a baseline.", ["baseline", "execucao"], "alta"));
+  if (!baseline?.existe || !baseline.aprovada) baselineBloqueios.push(bloqueio("BASELINE_AUSENTE", "Baseline não aprovada", "Ainda não existe uma referência congelada para comparar o realizado.", "Aprove a EAP, recalcule o CPM e capture a baseline de prazo. O orçamento continua no fluxo financeiro e não é pré-requisito para congelar o cronograma.", ["baseline", "execucao"], "alta"));
   add("baseline", baselineBloqueios.length ? "bloqueado" : "aprovado", baselineBloqueios);
 
   const execucao = snapshot.execucao;

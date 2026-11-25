@@ -44,6 +44,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
   const [versaoDaProposta, setVersaoDaProposta] = useState<number | null>(null);
   const [duracoes, setDuracoes] = useState<Record<number, string>>({});
   const [edicoes, setEdicoes] = useState<Record<string, string>>({});
+  const [liberandoPesosQa, setLiberandoPesosQa] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [mensagem, setMensagem] = useState<string | null>(null);
@@ -127,6 +128,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         : "Os pesos QA foram gravados na versão atual. O CPM não fechou; revise as dependências antes de usar prazo ou baseline.");
     },
     onError: error => setMensagem(error.message),
+    onSettled: () => setLiberandoPesosQa(false),
   });
 
   const activities = plano.data?.activities ?? [];
@@ -349,12 +351,16 @@ export function PainelPlanejamento({ projetoId }: Props) {
         <div className="pl-atividades-header-actions">
           {plano.data?.currentVersionStatus !== "approved" && <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comQuantidade !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>}
           {plano.data?.currentVersionStatus === "approved" && !resumoPesos.aprovados && <button type="button" className="pl-atividades-btn secondary"
-            disabled={aprovarPesosQa.isPending || recalcularCpm.isPending}
+            disabled={liberandoPesosQa}
             onClick={() => {
+              if (liberandoPesosQa) return;
               const confirmado = window.confirm("Liberar cenário QA nesta versão aprovada? O sistema substituirá pesos sem evidência por rateio uniforme, preservará quantidades, vinculará apenas locais com correspondência exata na EAP e classificará atividades sem unidade como fora da LOB. Isso não é medição real. A versão de planejamento e o orçamento atuais serão mantidos.");
-              if (confirmado) aprovarPesosQa.mutate({ projectId: projetoId, confirmarPremissasQa: true });
+              if (confirmado) {
+                setLiberandoPesosQa(true);
+                aprovarPesosQa.mutate({ projectId: projetoId, confirmarPremissasQa: true });
+              }
             }}>
-            Liberar pesos do cenário QA
+            {liberandoPesosQa ? "Liberando cenário QA…" : "Liberar pesos do cenário QA"}
           </button>}
         </div>
       </div>}

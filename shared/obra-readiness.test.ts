@@ -17,6 +17,20 @@ describe("motor de prontidão integrada", () => {
     expect(result.etapas.orcamento.estado).toBe("aprovado");
   });
 
+  it("não torna o orçamento pré-requisito para capturar baseline de prazo", () => {
+    const result = avaliarProntidaoObra({
+      escopo: { declarado: true, validado: true },
+      eap: { existe: true, aprovada: true, folhas: 2 },
+      atividades: { total: 2, semLocal: 2, semDuracao: 0 },
+      rede: { totalAtividades: 2, totalDependencias: 1, ciclos: 0 },
+      cpm: { calculadoEm: "2026-11-25T10:00:00Z", alteradoDepois: false, atividadesCalculadas: 2 },
+      baseline: { existe: false, aprovada: false },
+    });
+
+    expect(result.etapas.baseline.bloqueios[0].comoResolver).toContain("não é pré-requisito");
+    expect(result.prontoParaPlanejamento).toBe(true);
+  });
+
   it("bloqueia a cadeia quando o orçamento tem item didático", () => {
     const result = avaliarProntidaoObra({
       escopo: { declarado: true, validado: true },

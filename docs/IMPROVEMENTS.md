@@ -1,5 +1,15 @@
 # Melhorias e Mudanças
 
+## 25/nov/2026 — Barreiras da obra apontam para o domínio responsável
+
+**Achado:** a primeira barreira podia enviar atividades e dependências para Escopo, e a falta de unidade na Linha de Balanço podia receber o rótulo de revisão financeira. A orientação da baseline também pedia validar orçamento mesmo quando só o prazo seria congelado. Na obra 26, o botão QA ficou desabilitado apesar de a versão de planejamento estar aprovada.
+
+**Correção:** destinos e rótulos agora distinguem Escopo/EAP, atividades, rede, CPM, baseline, orçamento, medição e Linha de Balanço. O texto de baseline esclarece que orçamento não é pré-requisito. O envio QA usa estado local de submissão, em vez de depender de flags de mutações que estavam mantendo a ação desabilitada em repouso.
+
+**Base de produto:** decisão 26 adapta a separação entre Activities/custos do Primavera P6 e Schedule/Workplan/Forecast da Autodesk. Cada fluxo tem seu gate; os indicadores financeiros e de execução não são liberados sem seus próprios dados.
+
+**Validação:** testes focados para destino e rótulo por domínio, regressão da prontidão de baseline, TypeScript, build e teste ao vivo da ação QA após o deploy. Sem nova versão de EAP/orçamento.
+
 ## 25/nov/2026 — Liberar o cenário QA sem abrir nova versão
 
 **Achado:** a versão aprovada da obra 26 estava congelada para edição; a aprovação normal de pesos exigia evidência de medição que não existe na obra demonstrativa. Atividades sem unidade cadastrada também apareciam como bloqueio da Linha de Balanço.
