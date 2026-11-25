@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, CheckCircle2, Filter, ListPlus, Plus, RefreshCw, Search, Layers3 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { isPhysicalWeightQaEvidence } from "@shared/physical-weight-qa";
 
 type Props = { projetoId: number };
 
@@ -105,6 +106,28 @@ export function PainelPlanejamento({ projetoId }: Props) {
     },
     onError: error => setMensagem(error.message),
   });
+  const recalcularCpm = trpc.planning.calculateCpm.useMutation({ onError: error => setMensagem(error.message) });
+  const aprovarPesosQa = trpc.planning.aprovarPesosFisicosQa.useMutation({
+    onSuccess: async resultado => {
+      let cpmValido = false;
+      try {
+        const cpm = await recalcularCpm.mutateAsync({ projectId: projetoId });
+        cpmValido = cpm.valid;
+      } catch {
+        // A liberação já foi gravada em transação; deixe claro se o recálculo
+        // posterior falhar em vez de sugerir que a gravação também falhou.
+      }
+      await Promise.all([
+        utils.planning.list.invalidate({ projectId: projetoId }),
+        utils.planning.grade.invalidate({ projectId: projetoId }),
+        utils.planning.readiness.invalidate({ projectId: projetoId }),
+      ]);
+      setMensagem(cpmValido
+        ? `Cenário QA liberado na versão atual: ${resultado.activityCount} pesos registrados, ${resultado.unitLinksFromEap} unidades vinculadas por correspondência exata e ${resultado.classifiedOutsideLob} atividades classificadas fora da LOB. CPM recalculado; nenhuma versão foi criada.`
+        : "Os pesos QA foram gravados na versão atual. O CPM não fechou; revise as dependências antes de usar prazo ou baseline.");
+    },
+    onError: error => setMensagem(error.message),
+  });
 
   const activities = plano.data?.activities ?? [];
 
@@ -178,7 +201,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
     const comEvidencia = operacionais.filter(activity => (activity.physicalWeightEvidence?.trim().length ?? 0) >= 12).length;
     const comQuantidade = operacionais.filter(activity => Number(activity.plannedQuantity ?? 0) > 0).length;
     const aprovados = operacionais.length > 0 && completos === operacionais.length && comEvidencia === operacionais.length && operacionais.every(activity => activity.physicalWeightApprovedAt != null) && Math.abs(soma - 100) <= 0.01;
-    return { total: operacionais.length, completos, comEvidencia, comQuantidade, soma, aprovados };
+    const cenarioQa = aprovados && operacionais.every(activity => isPhysicalWeightQaEvidence(activity.physicalWeightEvidence));
+    return { total: operacionais.length, completos, comEvidencia, comQuantidade, soma, aprovados, cenarioQa };
   }, [activities]);
 
   const propostaFiltrada = useMemo(() => {
@@ -318,10 +342,20 @@ export function PainelPlanejamento({ projetoId }: Props) {
       )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
       {activities.length > 0 && <div className="pl-atividades-alerta" role="status">
-        <strong>Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} informados · {resumoPesos.comQuantidade}/{resumoPesos.total} quantidades · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? "aprovados" : "aguardando validação"}.</strong>{" "}
-        Para aprovar, cada atividade precisa de quantidade mensurável, peso e memória rastreável com fonte, revisão/localização e critério de medição. Rateio uniforme não é aceito como base de avanço físico.
+        <strong>{resumoPesos.cenarioQa ? "CENÁRIO QA — " : ""}Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} informados · {resumoPesos.comQuantidade}/{resumoPesos.total} quantidades · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? (resumoPesos.cenarioQa ? "premissas QA liberadas" : "aprovados") : "aguardando validação"}.</strong>{" "}
+        {resumoPesos.cenarioQa
+          ? `Rateio e classificações operacionais são premissas sintéticas da obra de teste, não medição real. ${plano.data?.lobQaExcludedCount ?? 0} atividade(s) ficaram fora da Linha de Balanço por não terem unidade física exata cadastrada.`
+          : "Pesos reais exigem memória rastreável com fonte, revisão/localização e critério de medição. Rateio uniforme só pode ser liberado no fluxo específico de cenário QA."}
         <div className="pl-atividades-header-actions">
-          <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comQuantidade !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>
+          {plano.data?.currentVersionStatus !== "approved" && <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comQuantidade !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>}
+          {plano.data?.currentVersionStatus === "approved" && !resumoPesos.aprovados && <button type="button" className="pl-atividades-btn secondary"
+            disabled={aprovarPesosQa.isPending || recalcularCpm.isPending}
+            onClick={() => {
+              const confirmado = window.confirm("Liberar cenário QA nesta versão aprovada? O sistema substituirá pesos sem evidência por rateio uniforme, preservará quantidades, vinculará apenas locais com correspondência exata na EAP e classificará atividades sem unidade como fora da LOB. Isso não é medição real. A versão de planejamento e o orçamento atuais serão mantidos.");
+              if (confirmado) aprovarPesosQa.mutate({ projectId: projetoId, confirmarPremissasQa: true });
+            }}>
+            Liberar pesos do cenário QA
+          </button>}
         </div>
       </div>}
       {!propostaAprovada && proposta.length > 0 && <div className="pl-atividades-alerta">A prévia mostra as lacunas da EAP v{versaoDaProposta}. As atividades ficam disponíveis para criação depois da aprovação desta versão.</div>}
@@ -364,11 +398,12 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|pavimento"]: event.target.value }))}
                     onBlur={() => salvarEdicao(activity.id, "pavimento")}
                     aria-label={"Unidade física de " + activity.name}
-                    placeholder="sem unidade específica" title="Unidade física cadastrada para execução e Linha de Balanço. O escopo textual da EAP aparece abaixo e não é convertido automaticamente em unidade." />
+                    placeholder="sem unidade específica" title={activity.pavimentoIsProductionUnit ? "Unidade física cadastrada e vinculada por nome exato." : "Informe uma unidade física cadastrada. O escopo textual da EAP só é ligado quando coincide exatamente com uma unidade."} />
                   {!activity.pavimento && activity.wbsLocation && <small className="pl-local-eap" title={activity.wbsLocationIsProductionUnit ? "Este escopo coincide com unidade cadastrada; salve-o no campo acima para usar na Linha de Balanço." : "Escopo textual da EAP; não equivale a uma unidade operacional cadastrada."}>
                     Escopo EAP: {activity.wbsLocation}
                   </small>}
                   {!activity.pavimento && !activity.wbsLocation && <small className="pl-local-eap pendente">Local não declarado na EAP</small>}
+                  {activity.lobQaNonrepetitive && <small className="pl-local-eap" title={plano.data?.lobQaExclusionJustification ?? "Premissa QA: atividade fora da Linha de Balanço neste cenário."}>Fora da LOB · premissa QA</small>}
                 </td>
                 <td className="type-col"><span className="pl-atividade-tag">Task</span></td>
                 <td className="dur-col">

@@ -58,4 +58,15 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     expect(html).toContain("A execução está abaixo");
     expect(html).toContain("−40,0 p.p.");
   });
+  it("identifica pesos, EV e classificações sintéticas no cenário QA liberado", () => {
+    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{
+      ...props,
+      prontidao:prontidao("disponivel","disponivel",true),
+      prontidaoPesos:{total:86,comQuantidade:86,comPeso:86,comEvidencia:86,aprovadas:86,somaPesos:100,semVinculoOrcamento:0,eapStatus:"approved",cenarioQa:true,foraDaLobQa:40},
+    }));
+    expect(html).toContain("CENÁRIO QA");
+    expect(html).toContain("não são medição real");
+    expect(html).toContain("VALOR AGREGADO · CENÁRIO QA");
+    expect(html).toContain("40 atividade(s) sem unidade exata");
+  });
 });

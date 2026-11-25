@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { createHash, randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { selectOperationalPlanning } from "../shared/operational-planning";
+import { isPhysicalWeightQaEvidence, physicalWeightQaEvidence } from "../shared/physical-weight-qa";
 import { z } from "zod";
 import type { ArquimedesEapProposal, ArquimedesProjectContext } from "./agent/core/types";
 import { parseEapProposal, proposeEapWithArquimedes } from "./agent/core/arquimedes";
@@ -5248,6 +5249,20 @@ export const appRouter = router({
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
         const activities = plan ? await db.select({ id: scheduleActivities.id, projectId: scheduleActivities.projectId, name: scheduleActivities.name, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset, plannedQuantity: scheduleActivities.plannedQuantity })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
+        const qaReleaseRows = plan ? await db.select({ id: projectAuditEvents.id, payload: projectAuditEvents.payload })
+          .from(projectAuditEvents)
+          .where(and(
+            eq(projectAuditEvents.projectId, input.projectId),
+            eq(projectAuditEvents.action, "physical_weights_qa_released"),
+          ))
+          .orderBy(desc(projectAuditEvents.createdAt), desc(projectAuditEvents.id)) : [];
+        const qaRelease = qaReleaseRows.find(row => Number((row.payload as Record<string, unknown> | null)?.versionId) === plan.id);
+        const qaPayload = qaRelease?.payload as Record<string, unknown> | undefined;
+        const lobQaExcludedIds = new Set(
+          Array.isArray(qaPayload?.lobExcludedActivityIds)
+            ? qaPayload.lobExcludedActivityIds.map(Number).filter(Number.isInteger)
+            : []
+        );
         const dependencies = plan ? await db.select({ id: scheduleDependencies.id, projectId: scheduleDependencies.projectId, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId, lag: scheduleDependencies.lag }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
         const [budget] = await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, input.projectId)).orderBy(desc(budgetVersions.versionNumber)).limit(1);
@@ -5267,10 +5282,12 @@ export const appRouter = router({
           eq(lobActivityLocations.versionId, plan.id)
         )) : [];
         const activityById = new Map(activities.map(activity => [activity.id, activity]));
-        const unidadesDaObra = lobSegments.length ? await db.select({
+        const unidadesDaObra = await db.select({
           id: productionUnits.id,
           name: productionUnits.name,
-        }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId)) : [];
+        }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId));
+        const nomesUnidadesFisicas = new Set(unidadesDaObra.map(unidade => unidade.name.trim()));
+        const atividadeIdsComParcelaLob = new Set(lobSegments.map(segment => segment.activityId));
         const unidadesDidaticas = new Set(unidadesDaObra
           .filter(unit => /did[aá]tic/i.test(unit.name)).map(unit => unit.id));
         const unidadesPorParcela = lobSegments.length ? await db.select({
@@ -5325,7 +5342,11 @@ export const appRouter = router({
           rede: { totalAtividades: activities.length, totalDependencias: dependencies.length, ciclos: cycles, desconectada: disconnected },
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
-          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos, atividadesSemLocalOperacional: activities.filter(item => !item.pavimento?.trim()).length },
+          lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos, atividadesSemLocalOperacional: activities.filter(item =>
+            !nomesUnidadesFisicas.has(item.pavimento?.trim() ?? "") &&
+            !atividadeIdsComParcelaLob.has(item.id) &&
+            !lobQaExcludedIds.has(item.id)
+          ).length },
           execucao: { medicoes: approvedMeasurementRows.length, comUnidade: measurementItemRows.length, confirmadas: approvedMeasurementRows.length },
         });
       }),
@@ -5708,6 +5729,20 @@ export const appRouter = router({
               ))
               .orderBy(desc(projectAuditEvents.createdAt))
           : [];
+        const qaReleaseRows = currentVersion ? await db.select({ id: projectAuditEvents.id, payload: projectAuditEvents.payload })
+          .from(projectAuditEvents)
+          .where(and(
+            eq(projectAuditEvents.projectId, input.projectId),
+            eq(projectAuditEvents.action, "physical_weights_qa_released"),
+          ))
+          .orderBy(desc(projectAuditEvents.createdAt), desc(projectAuditEvents.id)) : [];
+        const qaRelease = currentVersion ? qaReleaseRows.find(row => Number((row.payload as Record<string, unknown> | null)?.versionId) === currentVersion.id) : undefined;
+        const qaPayload = qaRelease?.payload as Record<string, unknown> | undefined;
+        const lobQaExcludedIds = new Set(
+          Array.isArray(qaPayload?.lobExcludedActivityIds)
+            ? qaPayload.lobExcludedActivityIds.map(Number).filter(Number.isInteger)
+            : []
+        );
         const evidenceByActivity = new Map<number, Record<string, unknown>>();
         for (const row of evidenceRows) {
           const payload = row.payload as Record<string, unknown> | null;
@@ -5726,6 +5761,8 @@ export const appRouter = router({
             ...activity,
             wbsLocation,
             wbsLocationIsProductionUnit: node != null && physicalUnitNames.has(wbsLocation ?? ""),
+            pavimentoIsProductionUnit: physicalUnitNames.has(activity.pavimento?.trim() ?? ""),
+            lobQaNonrepetitive: lobQaExcludedIds.has(activity.id),
             planningEvidence: evidenceByActivity.get(activity.id) ?? null,
           };
         });
@@ -5763,6 +5800,8 @@ export const appRouter = router({
           approvedVersionId: approved?.id ?? null,
           currentVersionNumber: currentVersion?.versionNumber ?? null,
           currentVersionStatus: currentVersion?.status ?? null,
+          lobQaExcludedCount: lobQaExcludedIds.size,
+          lobQaExclusionJustification: typeof qaPayload?.lobExclusionJustification === "string" ? qaPayload.lobExclusionJustification : null,
           networkValidation,
         };
       }),
@@ -6185,6 +6224,9 @@ export const appRouter = router({
         const atividades = await db.select({ id: scheduleActivities.id, peso: scheduleActivities.physicalWeight, quantidade: scheduleActivities.plannedQuantity, evidencia: scheduleActivities.physicalWeightEvidence }).from(scheduleActivities).where(and(
           eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, versao.id), eq(scheduleActivities.exemplo, 0),
         ));
+        if (atividades.some(atividade => isPhysicalWeightQaEvidence(atividade.evidencia))) {
+          throw badRequest("Premissa QA não pode ser aprovada como evidência de medição real. Use a liberação de cenário QA ou registre a memória rastreável de cada peso.");
+        }
         const soma = atividades.reduce((total, atividade) => total + Number(atividade.peso ?? 0), 0);
         if (!atividades.length || atividades.some(atividade => Number(atividade.quantidade ?? 0) <= 0) || atividades.some(atividade => Number(atividade.peso ?? 0) <= 0) || atividades.some(atividade => (atividade.evidencia?.trim().length ?? 0) < 12) || Math.abs(soma - 100) > 0.01) {
           throw badRequest(`Revise pesos, evidências e quantitativos: cada atividade precisa de quantidade mensurável, peso positivo, evidência rastreável com no mínimo 12 caracteres e a soma deve ser 100% (atual: ${soma.toFixed(2)}%).`);
@@ -6197,6 +6239,123 @@ export const appRouter = router({
           await tx.insert(projectAuditEvents).values({ projectId: input.projectId, userId: ctx.user.id, action: "physical_weights_approved", payload: { versionId: versao.id, activityCount: atividades.length, total: soma, pesos: atividades.map(atividade => ({ activityId: atividade.id, peso: Number(atividade.peso), evidencia: atividade.evidencia })), approvedAt: aprovadoEm.toISOString() } });
         });
         return { approved: true as const, total: soma, activityCount: atividades.length };
+      }),
+    aprovarPesosFisicosQa: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), confirmarPremissasQa: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versao = await getCurrentPlanVersion(input.projectId);
+        if (!versao || versao.status !== "approved") {
+          throw conflict("A liberação de cenário QA exige a versão aprovada atual. Nenhuma nova versão será criada.");
+        }
+        const [orcamento] = await db.select({ id: budgetVersions.id, versionNumber: budgetVersions.versionNumber })
+          .from(budgetVersions)
+          .where(and(eq(budgetVersions.projectId, input.projectId), eq(budgetVersions.status, "aprovado")))
+          .orderBy(desc(budgetVersions.versionNumber))
+          .limit(1);
+        if (!orcamento) throw conflict("Aprove primeiro o orçamento de referência existente para liberar o cenário QA.");
+        const itensOrcamentarios = await db.select({
+          quantityEvidence: budgetItems.quantityEvidence,
+          quantityEvidenceStatus: budgetItems.quantityEvidenceStatus,
+        }).from(budgetItems).where(eq(budgetItems.budgetVersionId, orcamento.id));
+        if (!itensOrcamentarios.length || itensOrcamentarios.some(item =>
+          item.quantityEvidenceStatus !== "cenario" || !item.quantityEvidence?.trim()
+        )) {
+          throw conflict("A liberação QA exige que todos os quantitativos do orçamento aprovado estejam classificados e justificados como cenário QA.");
+        }
+
+        const atividades = await db.select().from(scheduleActivities).where(and(
+          eq(scheduleActivities.projectId, input.projectId),
+          eq(scheduleActivities.versionId, versao.id),
+          eq(scheduleActivities.exemplo, 0),
+        )).orderBy(asc(scheduleActivities.sortOrder), asc(scheduleActivities.id));
+        if (!atividades.length) throw badRequest("A versão aprovada não tem atividades operacionais para ponderar.");
+        if (atividades.some(atividade => Number(atividade.plannedQuantity ?? 0) <= 0)) {
+          throw badRequest("Cada atividade operacional precisa de quantidade positiva e identificada como cenário QA antes da liberação dos pesos.");
+        }
+        if (atividades.some(atividade => atividade.physicalWeightEvidence?.trim() && !isPhysicalWeightQaEvidence(atividade.physicalWeightEvidence))) {
+          throw conflict("Há evidência de peso registrada em uma ou mais atividades. Revise-a pelo fluxo normal antes de aplicar premissas QA; nenhum valor existente foi substituído.");
+        }
+
+        const nosEap = await db.select({ id: wbsNodes.id, code: wbsNodes.code, location: wbsNodes.location }).from(wbsNodes)
+          .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, versao.id)));
+        const unidades = await db.select({ name: productionUnits.name }).from(productionUnits)
+          .where(eq(productionUnits.projectId, input.projectId));
+        const parcelasExistentes = await db.select({ activityId: lobActivityLocations.activityId }).from(lobActivityLocations)
+          .where(and(eq(lobActivityLocations.projectId, input.projectId), eq(lobActivityLocations.versionId, versao.id)));
+        const atividadesComParcelas = new Set(parcelasExistentes.map(parcela => parcela.activityId));
+        const nomesUnidades = new Set(unidades.map(unidade => unidade.name.trim()));
+        const noPorId = new Map(nosEap.map(no => [no.id, no]));
+        const noPorWbs = new Map(nosEap.map(no => [no.code.trim(), no]));
+        const pesoBase = Math.floor((100 / atividades.length) * 1_000_000) / 1_000_000;
+        if (pesoBase <= 0) throw badRequest("O número de atividades excede a precisão suportada pelo peso percentual QA.");
+        const pesos = atividades.map((_, index) => index === atividades.length - 1
+          ? Number((100 - pesoBase * (atividades.length - 1)).toFixed(6))
+          : pesoBase);
+        const somaPesosQa = Number(pesos.reduce((sum, peso) => sum + peso, 0).toFixed(6));
+        const aprovadoEm = new Date();
+        const justificativaLob = "Premissa QA: atividade sem correspondência exata com unidade física cadastrada tratada como serviço sem repetição neste cenário; não distribuir automaticamente na Linha de Balanço.";
+        const linksEapExatos: { activityId: number; unit: string; wbsCode: string }[] = [];
+        const foraDaLob: { activityId: number; wbsCode: string; name: string }[] = [];
+
+        await db.transaction(async tx => {
+          for (const [index, atividade] of atividades.entries()) {
+            const no = (atividade.wbsNodeId == null ? undefined : noPorId.get(atividade.wbsNodeId))
+              ?? noPorWbs.get(atividade.wbsCode.trim());
+            const localEap = no?.location?.trim() ?? "";
+            const localAtual = atividade.pavimento?.trim() ?? "";
+            const unidadeAtualValida = nomesUnidades.has(localAtual);
+            const unidadeEapValida = nomesUnidades.has(localEap);
+            const unidadeVinculada = unidadeAtualValida ? localAtual : unidadeEapValida ? localEap : null;
+            if (!unidadeVinculada && !atividadesComParcelas.has(atividade.id)) foraDaLob.push({ activityId: atividade.id, wbsCode: atividade.wbsCode, name: atividade.name });
+            if (!unidadeAtualValida && unidadeEapValida) {
+              linksEapExatos.push({ activityId: atividade.id, unit: localEap, wbsCode: atividade.wbsCode });
+            }
+            await tx.update(scheduleActivities).set({
+              physicalWeight: pesos[index]!.toFixed(6),
+              physicalWeightEvidence: physicalWeightQaEvidence(pesos[index]!, atividades.length),
+              physicalWeightApprovedAt: aprovadoEm,
+              ...(!unidadeAtualValida && unidadeEapValida ? { pavimento: localEap } : {}),
+            }).where(and(
+              eq(scheduleActivities.id, atividade.id),
+              eq(scheduleActivities.projectId, input.projectId),
+              eq(scheduleActivities.versionId, versao.id),
+            ));
+          }
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "physical_weights_qa_released",
+            payload: {
+              versionId: versao.id,
+              versionNumber: versao.versionNumber,
+              budgetVersionId: orcamento.id,
+              budgetVersionNumber: orcamento.versionNumber,
+              activityCount: atividades.length,
+              total: somaPesosQa,
+              mode: "premissa_qa_uniforme",
+              justification: "Obra de teste sem documentos de medição. Rateio igualitário sintético para validar os indicadores; não representa avanço físico real.",
+              weights: atividades.map((atividade, index) => ({ activityId: atividade.id, wbsCode: atividade.wbsCode, peso: pesos[index] })),
+              eapUnitLinks: linksEapExatos,
+              lobExcludedActivityIds: foraDaLob.map(atividade => atividade.activityId),
+              lobExclusionJustification: justificativaLob,
+              approvedAt: aprovadoEm.toISOString(),
+            },
+          });
+        });
+        await recomputeProjectProgress(db, input.projectId);
+        return {
+          approved: true as const,
+          total: somaPesosQa,
+          activityCount: atividades.length,
+          scenario: "premissa_qa" as const,
+          versionId: versao.id,
+          budgetVersionId: orcamento.id,
+          unitLinksFromEap: linksEapExatos.length,
+          classifiedOutsideLob: foraDaLob.length,
+        };
       }),
     control: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), asOf: z.coerce.date().optional() }))

@@ -1,5 +1,17 @@
 # Decisões de Arquitetura
 
+## Decisão 25 — Liberar pesos sintéticos em um cenário QA auditado
+
+- **Quando:** 25/11/2026.
+- **Decisão:** uma versão de planejamento aprovada pode receber pesos físicos uniformes pelo fluxo específico de QA quando o orçamento aprovado já classifica todos os quantitativos como cenário e cada atividade tem quantidade positiva. A ação usa a versão existente, preserva o orçamento e não cria versão de planejamento.
+- **Rastreabilidade:** cada atividade recebe evidência `Premissa QA:` e aprovação QA; um evento de auditoria registra a distribuição, a versão do plano/orçamento, locais vinculados por correspondência exata e atividades sem unidade operacional.
+- **Locais e LOB:** uma localização textual da EAP só é ligada quando coincide exatamente com uma unidade física cadastrada. Atividades sem correspondência nem parcela LOB existente são classificadas fora da LOB para este cenário sintético, com justificativa QA; nenhuma unidade física fictícia é criada.
+- **Indicadores:** Dashboard, valor agregado e Curva S identificam visualmente o cenário. A aprovação normal continua recusando a evidência QA como memória de medição real.
+- **Motivo:** a obra demonstrativa não tem documentação de medição. Um cenário explicitamente sintético permite validar o sistema sem converter estimativas em fatos de execução.
+- **Limite:** o cenário QA não atesta quantidade executada, peso real, localização física nem orçamento executivo.
+
+> **Documento normativo.** Última atualização: 25/11/2026.
+
 ## Decisão 24 — Baseline de prazo e estados verificáveis do planejamento
 
 - **Quando:** 05/11/2026.

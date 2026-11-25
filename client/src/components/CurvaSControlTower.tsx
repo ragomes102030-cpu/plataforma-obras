@@ -8,6 +8,7 @@ import { buildSCurve } from "@shared/s-curve";
 import { acumularRealizado, realizadoNoDia } from "@shared/curva-realizado";
 import { dateAt, indexOf } from "@shared/work-calendar";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
+import { isPhysicalWeightQaEvidence } from "@shared/physical-weight-qa";
 import { AlertTriangle, ArrowUpRight, ChartNoAxesCombined } from "lucide-react";
 
 /**
@@ -49,6 +50,7 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
     () => (planejamento.data?.activities ?? []).filter(a => !codigosExemplo.has(a.wbsCode ?? "")),
     [codigosExemplo, planejamento.data],
   );
+  const cenarioQa = atividadesDaObra.length > 0 && atividadesDaObra.every(a => a.physicalWeightApprovedAt != null && isPhysicalWeightQaEvidence(a.physicalWeightEvidence));
   const idsDasAtividadesDaObra = useMemo(() => new Set(atividadesDaObra.map(a => a.id)), [atividadesDaObra]);
   const pesos = useMemo(
     () => calcularPesosDaCurva(atividadesDaObra, budget.data?.items ?? []),
@@ -146,19 +148,20 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
   return (
     <section className="ct-card ct-curve" aria-labelledby="ct-curve-title">
       <div className="ct-card-head">
-        <div><span className="ct-overline">LEITURA TEMPORAL</span><h3 id="ct-curve-title">Curva S de desempenho</h3><p>Planejamento atualizado, produção confirmada e baseline, quando aprovada.</p></div>
+        <div><span className="ct-overline">LEITURA TEMPORAL</span><h3 id="ct-curve-title">Curva S de desempenho</h3><p>{cenarioQa ? "Séries do cenário QA, com quantidades e pesos sintéticos identificados." : "Planejamento atualizado, produção confirmada e baseline, quando aprovada."}</p></div>
         {pronto && <div className="ct-filtros" role="group" aria-label="Período da Curva S">
           {([{ key: "90", label: "90 dias" }, { key: "365", label: "12 meses" }, { key: "total", label: "Toda obra" }] as const).map(f =>
             <button key={f.key} type="button" onClick={() => { setFaixa(f.key); setPontoSelecionado(null); }} aria-pressed={faixa === f.key} className={faixa === f.key ? "selecionado" : ""}>{f.label}</button>
           )}
         </div>}
       </div>
+      {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note"><AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> percentuais de planejamento e produção servem para demonstrar o sistema nesta obra de teste. Não representam medição real.</span></div>}
       {emCarregamento ? <div className="ct-chart-empty" role="status"><span className="ct-skeleton" />Preparando a série de produção e o cronograma…</div>
         : falhou ? <div className="ct-chart-empty" role="alert"><AlertTriangle size={22} />Não foi possível consultar a série de planejamento. <button type="button" onClick={() => abrirAba("curva-s")}>Abrir diagnóstico da Curva S</button></div>
         : !pronto ? <div className="ct-chart-empty"><ChartNoAxesCombined size={25} /><strong>Curva S ainda não disponível</strong><span>É necessário um CPM calculado, orçamento aprovado associado às atividades e calendário válido. Nenhum histórico é inventado.</span><button type="button" onClick={() => abrirAba("curva-s")}>Ver o que falta <ArrowUpRight size={14}/></button></div>
         : <>
-          <div className="ct-chart-key"><span className="ct-key-plano">Planejado</span>{acumuladoConfirmado && <span className="ct-key-real">Realizado</span>}{planoAprovado && <span className="ct-key-base">Baseline</span>}</div>
-          <div className="ct-chart-box" role="img" aria-label={"Curva S com séries reais de planejamento e produção, em porcentagem, desde o início da obra. " + (!acumuladoConfirmado ? "Sem lançamentos confirmados válidos para o realizado." : "Realizado obtido de lançamentos confirmados.")}>
+          <div className="ct-chart-key"><span className="ct-key-plano">Planejado</span>{acumuladoConfirmado && <span className="ct-key-real">{cenarioQa ? "Produção QA" : "Realizado"}</span>}{planoAprovado && <span className="ct-key-base">Baseline</span>}</div>
+          <div className="ct-chart-box" role="img" aria-label={cenarioQa ? "Curva S do cenário QA, com premissas sintéticas de planejamento e produção." : "Curva S com séries reais de planejamento e produção, em porcentagem, desde o início da obra. " + (!acumuladoConfirmado ? "Sem lançamentos confirmados válidos para o realizado." : "Realizado obtido de lançamentos confirmados.")}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={curvaDados!.dados} margin={{ top: 12, right: 14, left: -12, bottom: 6 }}>
                 <CartesianGrid strokeDasharray="3 6" stroke="#e6edf1" vertical={false} />
@@ -169,7 +172,7 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
                   contentStyle={{ borderRadius: 10, border: "1px solid #dce6eb", fontSize: 12 }} />
                 {hojeNum >= curvaDados!.inicio && hojeNum <= curvaDados!.fim && <ReferenceLine x={hojeNum} stroke="#d59d4b" strokeDasharray="4 5" />}
                 <Line dataKey="planejado" name="Planejado" stroke="#187d9c" strokeWidth={3} dot={false} isAnimationActive={false} type="monotone" />
-                {acumuladoConfirmado && <Line dataKey="realizado" name="Realizado" stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
+                {acumuladoConfirmado && <Line dataKey="realizado" name={cenarioQa ? "Produção QA" : "Realizado"} stroke="#25a6a0" strokeWidth={3} dot={false} isAnimationActive={false} type="stepAfter" connectNulls={false} />}
                 {planoAprovado && <Line dataKey="baseline" name="Baseline" stroke="#899aaa" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} type="monotone" />}
               </LineChart>
             </ResponsiveContainer>
@@ -180,11 +183,11 @@ export function CurvaSControlTower({ projetoId, codigosExemplo, hoje, abrirAba }
               onChange={e => setPontoSelecionado(Number(e.target.value))} />
             <output htmlFor="ct-cursor-data" aria-live="polite">
               {dataBr(dateAt(cal!, inicio!, itemSelecionado.dia))} · Planejado {pct(itemSelecionado.planejado)}
-              {itemSelecionado.realizado == null ? " · Sem realizado apurado" : " · Realizado " + pct(itemSelecionado.realizado)}
+              {itemSelecionado.realizado == null ? (cenarioQa ? " · Sem produção QA apurada" : " · Sem realizado apurado") : (cenarioQa ? " · Produção QA " : " · Realizado ") + pct(itemSelecionado.realizado)}
             </output>
           </div>}
           <div className="ct-chart-footer">
-            <span>{!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes: realizado não exibido." : "Realizado datado pela produção confirmada."}</span>
+            <span>{cenarioQa ? (!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes no cenário QA." : "Série baseada nos apontamentos confirmados da obra demonstrativa.") : (!acumuladoConfirmado ? "Sem apontamentos confirmados suficientes: realizado não exibido." : "Realizado datado pela produção confirmada.")}</span>
             <button type="button" onClick={() => abrirAba("curva-s")}>Abrir Curva S <ArrowUpRight size={14}/></button>
           </div>
         </>}
