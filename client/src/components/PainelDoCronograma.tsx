@@ -238,12 +238,15 @@ export function PainelDoCronograma({
     });
     const foraDoPlano = confirmados.filter((l) => l.vinculo && l.vinculo !== "atual").length;
 
-    const linhasAvaliadas = linhasDaObra;
-    const maiorAtraso = linhasAvaliadas
-      .filter((l) => l.status === "Atrasado" && l.fim)
-      .map((l) => diasEntre(l.fim, hoje) ?? 0)
+    // A data planejada pode ter vencido sem que exista uma posição de campo.
+    // Só relatos temporais atuais podem alimentar o radar de atraso observado.
+    const estadosPrazo = andamentoPrazo.data?.currentStates ?? [];
+    const previsoesVencidas = estadosPrazo
+      .filter((estado) => estado.status !== "concluida" && estado.forecastFinishDate != null && estado.forecastFinishDate < hoje)
+      .map((estado) => diasEntre(estado.forecastFinishDate, hoje) ?? 0)
       .filter((d) => d > 0)
-      .sort((a, b) => b - a)[0];
+      .sort((a, b) => b - a);
+    const maiorAtraso = previsoesVencidas[0];
 
     const resumo = montarResumo({
       hoje,
@@ -257,12 +260,12 @@ export function PainelDoCronograma({
         total: agregadoDaObra?.totalAtividades ?? 0,
         concluidas: agregadoDaObra?.contagemPorStatus.Concluido ?? 0,
         emAndamento: agregadoDaObra?.contagemPorStatus["Em andamento"] ?? 0,
-        atrasadas: agregadoDaObra?.contagemPorStatus.Atrasado ?? 0,
+        atrasadas: andamentoPrazo.data?.overdueCount ?? 0,
         naoIniciadas: agregadoDaObra?.contagemPorStatus["Nao iniciado"] ?? 0,
       },
       valor: { total, distribuido, executado },
       alertas: {
-        atrasadas: agregadoDaObra?.contagemPorStatus.Atrasado ?? 0,
+        atrasadas: andamentoPrazo.data == null ? undefined : andamentoPrazo.data.overdueCount,
         maiorAtrasoDias: maiorAtraso ?? null,
         semQuantidade: agregadoDaObra?.linhasSemQuantidade ?? 0,
         foraDoPlano,
@@ -284,7 +287,7 @@ export function PainelDoCronograma({
         .slice(0, 5),
       semana: selecionarSemanaDashboard(lookahead.data?.semanas ?? []),
     };
-  }, [agregadoDaObra, baseline.data, codigosExemplo, hoje, linhasDaObra, lookahead.data, orcamento.data, plano.data, producao.data]);
+  }, [agregadoDaObra, andamentoPrazo.data, baseline.data, codigosExemplo, hoje, linhasDaObra, lookahead.data, orcamento.data, plano.data, producao.data]);
 
   const aindaCarregando = carregandoGrade || !agregado || estadoAtividades === "carregando";
 
