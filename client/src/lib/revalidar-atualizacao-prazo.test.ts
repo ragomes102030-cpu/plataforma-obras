@@ -15,7 +15,7 @@ describe("revalidação após apontamento de prazo", () => {
     await revalidarAtualizacaoPrazo(utils, 26, 1727);
 
     expect(utils.planning.activityScheduleUpdates.invalidate).toHaveBeenCalledWith({ projectId: 26, activityId: 1727 });
-    expect(utils.planning.activityScheduleStatusSummary.invalidate).toHaveBeenCalledWith({ projectId: 26 });
-    expect(utils.planning.activityScheduleForecast.invalidate).toHaveBeenCalledWith({ projectId: 26 });
+    expect(utils.planning.activityScheduleStatusSummary.invalidate).toHaveBeenCalledWith();
+    expect(utils.planning.activityScheduleForecast.invalidate).toHaveBeenCalledWith();
   });
 });

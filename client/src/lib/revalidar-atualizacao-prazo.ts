@@ -1,4 +1,4 @@
-type ConsultaAtualizacao<T> = { invalidate: (input: T) => Promise<unknown> };
+type ConsultaAtualizacao<T> = { invalidate: (input?: T) => Promise<unknown> };
 type LeiturasDePrazo = {
   planning: {
     activityScheduleUpdates: ConsultaAtualizacao<{ projectId: number; activityId: number }>;
@@ -11,7 +11,7 @@ type LeiturasDePrazo = {
 export async function revalidarAtualizacaoPrazo(utils: LeiturasDePrazo, projectId: number, activityId: number) {
   await Promise.all([
     utils.planning.activityScheduleUpdates.invalidate({ projectId, activityId }),
-    utils.planning.activityScheduleStatusSummary.invalidate({ projectId }),
-    utils.planning.activityScheduleForecast.invalidate({ projectId }),
+    utils.planning.activityScheduleStatusSummary.invalidate(),
+    utils.planning.activityScheduleForecast.invalidate(),
   ]);
 }
