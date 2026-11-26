@@ -84,6 +84,12 @@ describe("alvoDoStatement", () => {
     ).toEqual({ tipo: "constraint", tabela: "budget_items", nome: "fk_wbs" });
   });
 
+  it("reconhece ALTER TABLE DROP CONSTRAINT como alvo ausente", () => {
+    expect(
+      alvoDoStatement(`ALTER TABLE "activity_schedule_updates" DROP CONSTRAINT IF EXISTS "activity_schedule_updates_status_valid";`)
+    ).toEqual({ tipo: "constraint_absent", tabela: "activity_schedule_updates", nome: "activity_schedule_updates_status_valid" });
+  });
+
   it("devolve null para o que nao e DDL rastreavel", () => {
     expect(alvoDoStatement(`SELECT 1;`)).toBeNull();
     expect(alvoDoStatement(`INSERT INTO "x" VALUES (1);`)).toBeNull();
@@ -108,6 +114,10 @@ describe("queryDeExistencia", () => {
 
     const trigger = queryDeExistencia({ tipo: "trigger", tabela: "users", nome: "trg_a" });
     expect(trigger.params).toEqual(["users", "trg_a"]);
+
+    const removedConstraint = queryDeExistencia({ tipo: "constraint_absent", tabela: "users", nome: "old_check" });
+    expect(removedConstraint.sql).toContain("NOT EXISTS");
+    expect(removedConstraint.params).toEqual(["users", "old_check"]);
 
     // O tipo e a função não têm tabela: só o nome.
     expect(queryDeExistencia({ tipo: "type", nome: "users_role" }).params).toEqual([

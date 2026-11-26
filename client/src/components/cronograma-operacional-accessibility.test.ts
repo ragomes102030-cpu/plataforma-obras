@@ -20,4 +20,10 @@ describe("acessibilidade do cronograma operacional",()=>{
     expect(cronograma).toContain("Crítica");
     expect(css).toContain(":focus-visible");
   });
+  it("expõe invalidação justificada sem converter relato inválido em estado de execução",()=>{
+    expect(inspetor).toContain("Invalidar relato");
+    expect(inspetor).toContain("Confirmar invalidação");
+    expect(inspetor).toContain("nenhum estado de execução foi presumido");
+    expect(inspetor).toContain("Removido da projeção atual; evento mantido para auditoria.");
+  });
 });

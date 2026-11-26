@@ -116,6 +116,59 @@ describe("acompanhamento temporal por atividade", () => {
     expect(await db.select().from(projectAuditEvents)).toHaveLength(3);
   });
 
+  it("invalida um relato sem registrá-lo como não iniciado nem criar produção", async () => {
+    const { db, project, currentActivity, currentVersion, caller } = await preparar();
+    const update = await caller.planning.registerActivityScheduleUpdate({
+      projectId: project.id,
+      activityId: currentActivity.id,
+      positionDate: "2026-11-20",
+      status: "em_andamento",
+      actualStartDate: "2026-11-18",
+      remainingDurationDays: 2,
+      note: "Registro de cenário sem diário de obra.",
+    });
+
+    const invalidation = await caller.planning.invalidateActivityScheduleUpdate({
+      projectId: project.id,
+      activityId: currentActivity.id,
+      updateId: update.id,
+      reason: "Registro de cenário sem evidência de campo.",
+    });
+
+    const history = await caller.planning.activityScheduleUpdates({
+      projectId: project.id,
+      activityId: currentActivity.id,
+    });
+    expect(invalidation).toMatchObject({ invalidated: true });
+    expect(history.current).toBeNull();
+    expect(history.history).toHaveLength(2);
+    expect(history.history.find(item => item.id === invalidation.id)).toMatchObject({
+      status: "relato_invalidado",
+      vigente: false,
+      corrigivel: false,
+      note: "Registro de cenário sem evidência de campo.",
+    });
+    expect(history.history.find(item => item.id === update.id)).toMatchObject({
+      vigente: false,
+      corrigivel: false,
+    });
+
+    const summary = await caller.planning.activityScheduleStatusSummary({
+      projectId: project.id,
+      asOf: "2026-11-26",
+    });
+    expect(summary).toMatchObject({
+      versionId: currentVersion.id,
+      totalActivities: 1,
+      activitiesWithUpdate: 0,
+      activitiesWithoutUpdate: 1,
+      statusCounts: { nao_iniciada: 0, em_andamento: 0, concluida: 0, bloqueada: 0 },
+    });
+    expect(await db.select().from(productionEntries)).toHaveLength(0);
+    expect(await db.select().from(activityScheduleUpdates)).toHaveLength(2);
+    expect(await db.select().from(projectAuditEvents)).toHaveLength(2);
+  });
+
   it("bloqueia versão substituída, campos incompletos e data de posição futura", async () => {
     const { project, oldActivity, currentActivity, caller } = await preparar();
     await expect(caller.planning.registerActivityScheduleUpdate({

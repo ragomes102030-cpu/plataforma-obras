@@ -1,16 +1,17 @@
 import {FormEvent,useEffect,useRef,useState} from "react";
-import {ArrowUpRight,Clock3,History,Save,Undo2,X} from "lucide-react";
+import {ArrowUpRight,Ban,Clock3,History,Save,Undo2,X} from "lucide-react";
 import type {LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
 import {trpc} from "@/lib/trpc";
 import {revalidarAtualizacaoPrazo} from "@/lib/revalidar-atualizacao-prazo";
 
 type Baseline={estado:"carregando"|"erro"|"ausente"}|{estado:"pronto";inicio:number|null;fim:number|null;deltaFim:number|null};
 type EstadoPrazo="nao_iniciada"|"em_andamento"|"concluida"|"bloqueada";
+type EstadoHistoricoPrazo=EstadoPrazo|"relato_invalidado";
 type ApplicabilidadeLob="pendente"|"aplicavel"|"fora_lob";
 type Props={projetoId:number;linha:LinhaCronogramaOperacional;predecessoras:number;sucessoras:number;restricoesAbertas:number|null;baseline:Baseline;onFechar:()=>void;onAbrirAba:(aba:string)=>void};
 const valor=(dado:unknown,sufixo="")=>dado===null||dado===undefined||dado===""?"Sem dado":`${dado}${sufixo}`;
 const hojeLocal=()=>{const agora=new Date();return new Date(agora.getTime()-agora.getTimezoneOffset()*60000).toISOString().slice(0,10)};
-const estados:Record<EstadoPrazo,string>={nao_iniciada:"Não iniciada",em_andamento:"Em andamento",concluida:"Concluída",bloqueada:"Bloqueada"};
+const estados:Record<EstadoHistoricoPrazo,string>={nao_iniciada:"Não iniciada",em_andamento:"Em andamento",concluida:"Concluída",bloqueada:"Bloqueada",relato_invalidado:"Relato invalidado"};
 const dataBr=(data:string|null|undefined)=>data?new Date(`${data}T00:00:00Z`).toLocaleDateString("pt-BR",{timeZone:"UTC"}):"Sem dado";
 export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,restricoesAbertas,baseline,onFechar,onAbrirAba}:Props){
   const fecharRef=useRef<HTMLButtonElement>(null);
@@ -30,12 +31,19 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
   const [evidenceRef,setEvidenceRef]=useState("");
   const [correctsUpdateId,setCorrectsUpdateId]=useState<number|null>(null);
   const [feedback,setFeedback]=useState<string|null>(null);
+  const [invalidatingUpdateId,setInvalidatingUpdateId]=useState<number|null>(null);
+  const [invalidationReason,setInvalidationReason]=useState("");
+  const [invalidationFeedback,setInvalidationFeedback]=useState<string|null>(null);
   const [lobApplicability,setLobApplicability]=useState<ApplicabilidadeLob>(linha.lobApplicability??"pendente");
   const [lobReason,setLobReason]=useState(linha.lobApplicabilityReason??"");
   const [lobFeedback,setLobFeedback]=useState<string|null>(null);
   const gravar=trpc.planning.registerActivityScheduleUpdate.useMutation({
     onSuccess:async()=>{setFeedback("Atualização de prazo registrada no histórico.");setCorrectsUpdateId(null);setNote("");setEvidenceRef("");await revalidarAtualizacaoPrazo(utils,projetoId,linha.activityId,hojeLocal());},
     onError:error=>setFeedback(error.message),
+  });
+  const invalidar=trpc.planning.invalidateActivityScheduleUpdate.useMutation({
+    onSuccess:async()=>{setInvalidationFeedback("Relato invalidado; histórico preservado e a atividade voltou a sem relato.");setInvalidatingUpdateId(null);setInvalidationReason("");await revalidarAtualizacaoPrazo(utils,projetoId,linha.activityId,hojeLocal());},
+    onError:error=>setInvalidationFeedback(error.message),
   });
   const classificarLob=trpc.planning.setActivityLobApplicability.useMutation({
     onSuccess:async()=>{setLobFeedback("Aplicabilidade registrada no histórico da obra.");await Promise.all([utils.planning.list.invalidate({projectId:projetoId}),utils.planning.readiness.invalidate({projectId:projetoId})]);},
@@ -79,6 +87,12 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
     setFeedback(`Corrigindo o registro de ${dataBr(item.positionDate)}. O original será preservado.`);
   };
   const limparCorrecao=()=>{setCorrectsUpdateId(null);setFeedback(null);};
+  const prepararInvalidacao=(updateId:number)=>{setInvalidatingUpdateId(updateId);setInvalidationReason("");setInvalidationFeedback(null);};
+  const cancelarInvalidacao=()=>{setInvalidatingUpdateId(null);setInvalidationReason("");setInvalidationFeedback(null);};
+  const confirmarInvalidacao=(evento:FormEvent<HTMLFormElement>,updateId:number)=>{
+    evento.preventDefault();setInvalidationFeedback(null);
+    invalidar.mutate({projectId:projetoId,activityId:linha.activityId,updateId,reason:invalidationReason.trim()});
+  };
   const salvarApplicabilidadeLob=(evento:FormEvent<HTMLFormElement>)=>{
     evento.preventDefault();setLobFeedback(null);
     if(lobApplicability==="pendente")return;
@@ -103,6 +117,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
         <section className="cronograma-atualizacao" aria-labelledby="inspetor-atualizar">
           <div><h3 id="inspetor-atualizar"><Clock3 size={14}/> Atualizar andamento</h3><small>Relato de prazo separado de quantidade medida.</small></div>
           {historico.data?.current&&<p className="cronograma-atualizacao-atual" role="status">Estado vigente: <strong>{estados[historico.data.current.status as EstadoPrazo]??historico.data.current.status}</strong> · posição {dataBr(historico.data.current.positionDate)}{historico.data.current.forecastFinishDate?` · previsão ${dataBr(historico.data.current.forecastFinishDate)}`:""}</p>}
+          {!historico.data?.current&&historico.data?.history[0]?.status==="relato_invalidado"&&<p className="cronograma-atualizacao-atual" role="status">Sem relato vigente. A invalidação foi registrada e o histórico continua disponível; nenhum estado de execução foi presumido.</p>}
           {historico.data&&!historico.data.canUpdate&&<p role="note">Esta atividade pertence a uma versão substituída. O histórico está disponível para consulta.</p>}
           {historico.isError&&<p role="alert">Não foi possível carregar o histórico. Tente novamente antes de registrar.</p>}
           <form onSubmit={registrar}>
@@ -137,11 +152,20 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
         </section>}
         <section className="cronograma-historico" aria-labelledby="inspetor-historico"><div><h3 id="inspetor-historico"><History size={14}/> Histórico de prazo</h3><span>{historico.data?.history.length??0} registro(s)</span></div>
           {historico.isPending?<p>Carregando histórico…</p>:historico.data?.history.length? <ol>{historico.data.history.map(item=><li key={item.id} className={item.vigente?"vigente":"corrigido"}>
-            <div><strong>{estados[item.status as EstadoPrazo]??item.status}</strong><time dateTime={item.positionDate}>{dataBr(item.positionDate)}</time></div>
+            <div><strong>{estados[item.status as EstadoHistoricoPrazo]??item.status}</strong><time dateTime={item.positionDate}>{dataBr(item.positionDate)}</time></div>
             <p>{item.actualStartDate?`Início real ${dataBr(item.actualStartDate)} · `:""}{item.actualFinishDate?`Término real ${dataBr(item.actualFinishDate)} · `:""}{item.forecastFinishDate?`Previsão ${dataBr(item.forecastFinishDate)} · `:""}{item.remainingDurationDays!=null?`${item.remainingDurationDays} dias restantes · `:""}{item.blockerReason?`Bloqueio: ${item.blockerReason} · `:""}{item.note||"Sem observação."}</p>
-            <small>Registrado por {item.authorName??`usuário ${item.authorUserId}`} em {new Date(item.createdAt).toLocaleString("pt-BR")}</small>{item.evidenceRef&&<small>Evidência: {item.evidenceRef}</small>}{item.supersedesId!=null&&<small>Corrige o registro #{item.supersedesId}.</small>}{!item.vigente&&<small>Substituído; mantido para auditoria.</small>}
+            <small>Registrado por {item.authorName??`usuário ${item.authorUserId}`} em {new Date(item.createdAt).toLocaleString("pt-BR")}</small>{item.evidenceRef&&<small>Evidência: {item.evidenceRef}</small>}{item.supersedesId!=null&&<small>{item.status==="relato_invalidado"?"Invalida":"Corrige"} o registro #{item.supersedesId}.</small>}{item.status==="relato_invalidado"?<small>Removido da projeção atual; evento mantido para auditoria.</small>:!item.vigente&&<small>Substituído; mantido para auditoria.</small>}
             {item.corrigivel&&<button type="button" onClick={()=>prepararCorrecao(item)}>Corrigir este registro</button>}
+            {item.corrigivel&&<button type="button" className="cronograma-invalidar-abrir" onClick={()=>prepararInvalidacao(item.id)}><Ban size={13}/> Invalidar relato</button>}
+            {invalidatingUpdateId===item.id&&<form className="cronograma-invalidacao" onSubmit={evento=>confirmarInvalidacao(evento,item.id)}>
+              <strong>Retirar este relato da posição atual?</strong>
+              <p>O registro sairá da projeção vigente, continuará no histórico e não criará produção nem estado de execução.</p>
+              <label>Justificativa<textarea required minLength={12} maxLength={2000} value={invalidationReason} onChange={evento=>setInvalidationReason(evento.target.value)} placeholder="Ex.: cenário de teste, sem diário de obra ou evidência de campo." /></label>
+              {invalidationFeedback&&<p role="status">{invalidationFeedback}</p>}
+              <div><button type="submit" disabled={invalidar.isPending||invalidationReason.trim().length<12}><Ban size={13}/>{invalidar.isPending?"Invalidando…":"Confirmar invalidação"}</button><button type="button" onClick={cancelarInvalidacao}>Cancelar</button></div>
+            </form>}
           </li>)}</ol>:<p>Nenhuma atualização registrada. O tempo decorrido não será interpretado como avanço físico.</p>}
+          {invalidationFeedback&&invalidatingUpdateId==null&&<p className="cronograma-atualizacao-feedback" role="status">{invalidationFeedback}</p>}
         </section>
         {secoes.map(secao=><section key={secao.titulo} aria-labelledby={`inspetor-${secao.titulo}`}>
         <div><h3 id={`inspetor-${secao.titulo}`}>{secao.titulo}</h3><button type="button" onClick={()=>onAbrirAba(secao.aba)}>Resolver no módulo <ArrowUpRight size={13}/></button></div>
