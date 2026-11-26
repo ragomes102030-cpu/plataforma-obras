@@ -46,7 +46,10 @@ export async function coletarDadosDesembolso(
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
-  const plannedStartIso = localIso(project?.plannedStart ?? isoToLocalDate(asOfIso));
+  if (!project?.plannedStart) {
+    throw new Error("Defina o início planejado da obra antes de calcular a curva de desembolso.");
+  }
+  const plannedStartIso = localIso(project.plannedStart);
 
   const calendar = await carregarCalendarioDoPeriodo(
     db,

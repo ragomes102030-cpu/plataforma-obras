@@ -110,17 +110,16 @@ describe("isolamento entre obras", () => {
     expect(obra.plannedFinish.toISOString()).toBe("2026-12-20T00:00:00.000Z");
   });
 
-  it("o dono atualiza o periodo cadastrado da propria obra", async () => {
+  it("o dono atualiza o início planejado e invalida o término derivado do CPM", async () => {
     const dono = appRouter.createCaller(contexto({ id: donoId, openId: "iso-dono", name: "Dono da obra" }));
-    const plannedStart = new Date("2026-01-05T00:00:00Z");
-    const plannedFinish = new Date("2028-12-28T00:00:00Z");
+    const plannedStart = new Date("2027-01-05T00:00:00Z");
 
     await dono.projects.updateScope({
       projectId: obraDoDono,
       location: "Cidade do dono",
       tipoDeObra: "edificio",
       descricao: "Escopo original confirmado para a obra de teste.",
-      plannedFinish,
+      plannedStart,
     });
 
     const db = drizzlePglite(pg);
@@ -129,20 +128,27 @@ describe("isolamento entre obras", () => {
       .from(projects)
       .where(eq(projects.id, obraDoDono));
     expect(obra.plannedStart.toISOString()).toBe(plannedStart.toISOString());
-    expect(obra.plannedFinish.toISOString()).toBe(plannedFinish.toISOString());
+    expect(obra.plannedFinish).toBeNull();
   });
 
-  it("o periodo cadastrado exige termino posterior ao inicio", async () => {
+  it("permite limpar a data inicial sem presumir outra data ou término", async () => {
     const dono = appRouter.createCaller(contexto({ id: donoId, openId: "iso-dono", name: "Dono da obra" }));
 
-    await expect(dono.projects.updateScope({
+    await dono.projects.updateScope({
       projectId: obraDoDono,
       location: "Cidade do dono",
       tipoDeObra: "edificio",
       descricao: "Escopo original confirmado para a obra de teste.",
-      plannedStart: new Date("2028-12-29T00:00:00Z"),
-      plannedFinish: new Date("2028-12-28T00:00:00Z"),
-    })).rejects.toThrow(/término da obra deve ser posterior ao início/i);
+      plannedStart: null,
+    });
+
+    const db = drizzlePglite(pg);
+    const [obra] = await db
+      .select({ plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish })
+      .from(projects)
+      .where(eq(projects.id, obraDoDono));
+    expect(obra.plannedStart).toBeNull();
+    expect(obra.plannedFinish).toBeNull();
   });
 
   it("obra inexistente responde igual a obra alheia (nao vaza existencia)", async () => {

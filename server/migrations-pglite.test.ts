@@ -48,7 +48,7 @@ describe("as migrations constroem um schema utilizavel", () => {
     }
   });
 
-  it("cria as 44 tabelas e os 39 tipos de enum", async () => {
+  it("cria as 45 tabelas e os 39 tipos de enum", async () => {
     const pg = await PGlite.create();
     try {
       for (const sql of migrationsEmDisco()) await aplicarMigrations(pg, sql);
@@ -57,10 +57,10 @@ describe("as migrations constroem um schema utilizavel", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
-      // 44, e nao 45. A tabela `__drizzle_migrations` NAO vem de migration: e o
+      // 45, e nao 46. A tabela `__drizzle_migrations` NAO vem de migration: e o
       // migrador que a cria, para registrar o que ja aplicou. Contar ela aqui
       // seria esperar que o arquivo criasse a propria ficha de controle.
-      expect(tabelas.rows[0]!.n).toBe(44);
+      expect(tabelas.rows[0]!.n).toBe(45);
 
       const enums = await pg.query<{ n: number }>(
         "SELECT COUNT(*)::int AS n FROM pg_type t" +
@@ -68,6 +68,89 @@ describe("as migrations constroem um schema utilizavel", () => {
           " WHERE n.nspname = 'public' AND t.typtype = 'e'"
       );
       expect(enums.rows[0]!.n).toBe(39);
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it("preserva datas existentes e aceita rascunho sem início ou término civil", async () => {
+    const pg = await PGlite.create();
+    try {
+      const migrations = migrationsEmDisco();
+      for (const sql of migrations.slice(0, -1)) await aplicarMigrations(pg, sql);
+      await pg.exec(`
+        INSERT INTO "users" ("openId", "role", "name") VALUES ('schedule-dates-test', 'user', 'Teste');
+        INSERT INTO "projects" ("ownerUserId", "code", "name", "location", "status", "progress", "plannedStart", "plannedFinish")
+        SELECT "id", 'LEGACY-DATE-TEST', 'Obra anterior', 'Local', 'Planejamento', 0,
+          '2026-02-03T00:00:00Z'::timestamptz, '2026-08-15T00:00:00Z'::timestamptz
+        FROM "users" WHERE "openId" = 'schedule-dates-test';
+      `);
+      await aplicarMigrations(pg, migrations[migrations.length - 1]!);
+      const legada = await pg.query<{ plannedStart: string; plannedFinish: string }>(
+        `SELECT to_char("plannedStart" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "plannedStart", to_char("plannedFinish" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "plannedFinish" FROM "projects" WHERE "code" = 'LEGACY-DATE-TEST'`
+      );
+      expect(legada.rows[0]).toEqual({ plannedStart: "2026-02-03", plannedFinish: "2026-08-15" });
+      await pg.exec(`
+        INSERT INTO "projects" ("code", "name", "location", "status", "progress", "plannedStart", "plannedFinish")
+        VALUES ('DRAFT-NO-DATE', 'Rascunho sem datas', 'Local', 'Planejamento', 0, NULL, NULL)
+      `);
+      const rascunho = await pg.query<{ plannedStart: string | null; plannedFinish: string | null }>(
+        `SELECT "plannedStart", "plannedFinish" FROM "projects" WHERE "code" = 'DRAFT-NO-DATE'`
+      );
+      expect(rascunho.rows[0]).toEqual({ plannedStart: null, plannedFinish: null });
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it("restringe os relatos temporais ao backend e mantém a escrita append-only", async () => {
+    const pg = await PGlite.create();
+    try {
+      await pg.exec(`
+        CREATE ROLE anon;
+        CREATE ROLE authenticated;
+        CREATE ROLE service_role;
+        CREATE ROLE arquimedes_app;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+          GRANT ALL PRIVILEGES ON TABLES TO anon, authenticated, service_role, arquimedes_app;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+          GRANT ALL PRIVILEGES ON SEQUENCES TO anon, authenticated, service_role, arquimedes_app;
+      `);
+      for (const sql of migrationsEmDisco()) await aplicarMigrations(pg, sql);
+
+      const grants = await pg.query<{
+        anonRead: boolean;
+        authenticatedRead: boolean;
+        serviceRoleRead: boolean;
+        appRead: boolean;
+        appInsert: boolean;
+        appUpdate: boolean;
+        appDelete: boolean;
+        appSequenceUsage: boolean;
+        anonSequenceUsage: boolean;
+      }>(`
+        SELECT
+          has_table_privilege('anon', 'public.activity_schedule_updates', 'SELECT') AS "anonRead",
+          has_table_privilege('authenticated', 'public.activity_schedule_updates', 'SELECT') AS "authenticatedRead",
+          has_table_privilege('service_role', 'public.activity_schedule_updates', 'SELECT') AS "serviceRoleRead",
+          has_table_privilege('arquimedes_app', 'public.activity_schedule_updates', 'SELECT') AS "appRead",
+          has_table_privilege('arquimedes_app', 'public.activity_schedule_updates', 'INSERT') AS "appInsert",
+          has_table_privilege('arquimedes_app', 'public.activity_schedule_updates', 'UPDATE') AS "appUpdate",
+          has_table_privilege('arquimedes_app', 'public.activity_schedule_updates', 'DELETE') AS "appDelete",
+          has_sequence_privilege('arquimedes_app', 'public.activity_schedule_updates_id_seq', 'USAGE') AS "appSequenceUsage",
+          has_sequence_privilege('anon', 'public.activity_schedule_updates_id_seq', 'USAGE') AS "anonSequenceUsage"
+      `);
+      expect(grants.rows[0]).toEqual({
+        anonRead: false,
+        authenticatedRead: false,
+        serviceRoleRead: false,
+        appRead: true,
+        appInsert: true,
+        appUpdate: false,
+        appDelete: false,
+        appSequenceUsage: true,
+        anonSequenceUsage: false,
+      });
     } finally {
       await pg.close();
     }

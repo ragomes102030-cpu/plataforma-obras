@@ -65,7 +65,8 @@ import "@/escopo-eap-studio.css";
 
 type TipoDeObra = "edificio" | "reforma" | "pavimentacao" | "saneamento" | "todos";
 
-function dataIsoDoProjeto(value: Date | string): string {
+function dataIsoDoProjeto(value: Date | string | null | undefined): string {
+  if (value == null) return "";
   const data = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(data.getTime())) return "";
   return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}-${String(data.getUTCDate()).padStart(2, "0")}`;
@@ -113,8 +114,8 @@ export default function Home() {
     enabled: Boolean(user),
     retry: false,
   });
-  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null; plannedStart: Date | string; plannedFinish: Date | string }> =
-    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null; plannedStart: Date | string; plannedFinish: Date | string }> | undefined) ?? [];
+  const lista: Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null; plannedStart: Date | string | null; plannedFinish: Date | string | null }> =
+    (obras.data as Array<{ id: number; name: string; code: string; location?: string; descricao?: string | null; tipoDeObra?: TipoDeObra | null; cubValor?: string | number | null; cubUf?: string | null; cubMes?: string | null; bdiDeclarado?: string | number | null; plannedStart: Date | string | null; plannedFinish: Date | string | null }> | undefined) ?? [];
   const obra =
     idNaUrl == null || Number.isNaN(idNaUrl)
       ? undefined
@@ -484,8 +485,8 @@ function Obra({
   cubUf: string;
   cubMes: string;
   bdiDeclarado: string;
-  plannedStart: Date | string;
-  plannedFinish: Date | string;
+  plannedStart: Date | string | null;
+  plannedFinish: Date | string | null;
   aba: IdDaAba;
   onAba: (aba: IdDaAba) => void;
   usuario: { name?: string | null; role?: string | null } | null;
@@ -752,6 +753,7 @@ function Obra({
           <PainelDoCronograma
             agregado={agregado}
             linhas={grade.data?.linhas}
+            inicioObra={grade.data?.inicioObra ?? null}
             projetoId={projetoId}
             nomeObra={obra}
             hojeReferencia={hoje}
@@ -774,6 +776,8 @@ function Obra({
           <AbaBaseline projetoId={projetoId} />
         ) : aba === "cronograma" ? (
           <CronogramaOperacional projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} titulo={obra} codigoObra={codigoObra} localObra={localizacao} finsCalculados={finsCalculados} codigosExemplo={exemploPorCodigo} layoutProfissional={layoutProfissional} />
+        ) : aba === "gantt" && !grade.data?.inicioObra ? (
+          <CronogramaOperacional projetoId={projetoId} linhas={linhas} inicioObra={null} hoje={hoje} titulo={obra} codigoObra={codigoObra} localObra={localizacao} finsCalculados={finsCalculados} codigosExemplo={exemploPorCodigo} layoutProfissional={layoutProfissional} />
         ) : aba === "gantt" ? (
           <VisualizacaoPlanejamento projetoId={projetoId} linhas={linhas} inicioObra={grade.data?.inicioObra ?? null} hoje={hoje} view="gantt" titulo={obra} codigoObra={codigoObra} layoutProfissional={layoutProfissional} localObra={localizacao} finsCalculados={finsCalculados} />
         ) : aba === "linha-balanco" ? (
@@ -830,7 +834,7 @@ function Obra({
 }
 
 /** Escopo: workspace do que a obra contém, entrega e deixa de entregar. */
-function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado, plannedStart, plannedFinish }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | ""; cubValor: string; cubUf: string; cubMes: string; bdiDeclarado: string; plannedStart: Date | string; plannedFinish: Date | string }) {
+function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado, plannedStart, plannedFinish }: { projetoId: number; obra: string; localizacao: string; descricao: string; tipoDeObra: TipoDeObra | ""; cubValor: string; cubUf: string; cubMes: string; bdiDeclarado: string; plannedStart: Date | string | null; plannedFinish: Date | string | null }) {
   const utils = trpc.useUtils();
   const [editando, setEditando] = useState(false);
   const [descricaoEditada, setDescricaoEditada] = useState(descricao);
@@ -841,7 +845,6 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const [cubMesEditado, setCubMesEditado] = useState(cubMes);
   const [bdiEditado, setBdiEditado] = useState(bdiDeclarado);
   const [inicioObraEditado, setInicioObraEditado] = useState(() => dataIsoDoProjeto(plannedStart));
-  const [terminoObraEditado, setTerminoObraEditado] = useState(() => dataIsoDoProjeto(plannedFinish));
   useEffect(() => {
     setDescricaoEditada(descricao);
     setLocalizacaoEditada(localizacao);
@@ -851,15 +854,13 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
     setCubMesEditado(cubMes);
     setBdiEditado(bdiDeclarado);
     setInicioObraEditado(dataIsoDoProjeto(plannedStart));
-    setTerminoObraEditado(dataIsoDoProjeto(plannedFinish));
   }, [descricao, localizacao, tipoDeObra, cubValor, cubUf, cubMes, bdiDeclarado, plannedStart, plannedFinish]);
   const salvarEscopo = trpc.projects.updateScope.useMutation({
     onSuccess: async (salvo) => {
       // Só encerra a edição depois de confirmar que o período retornado pelo
       // servidor corresponde ao que o usuário enviou e que a lista foi relida.
       if (
-        dataIsoDoProjeto(salvo.plannedStart) !== inicioObraEditado ||
-        dataIsoDoProjeto(salvo.plannedFinish) !== terminoObraEditado
+        dataIsoDoProjeto(salvo.plannedStart) !== inicioObraEditado
       ) {
         throw new Error("O servidor não confirmou as datas informadas. Revise os campos e tente novamente.");
       }
@@ -868,8 +869,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       const obraAtualizada = obrasAtualizadas.find(item => item.id === projetoId);
       if (
         !obraAtualizada ||
-        dataIsoDoProjeto(obraAtualizada.plannedStart) !== inicioObraEditado ||
-        dataIsoDoProjeto(obraAtualizada.plannedFinish) !== terminoObraEditado
+        dataIsoDoProjeto(obraAtualizada.plannedStart) !== inicioObraEditado
       ) {
         throw new Error("A releitura da obra não confirmou as datas salvas. Mantenha a edição aberta e tente novamente.");
       }
@@ -890,7 +890,6 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
   const cubMesValido = cubMesEditado.trim() === "" || /^\d{4}-(0[1-9]|1[0-2])$/.test(cubMesEditado.trim());
   const cubBdiValidos = cubValorNum !== "invalido" && bdiNum !== "invalido"
     && (bdiNum === null || (bdiNum >= 0 && bdiNum <= 1));
-  const periodoObraValido = inicioObraEditado.trim() !== "" && terminoObraEditado.trim() !== "" && terminoObraEditado > inicioObraEditado;
   const formatarReal = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v; };
   const formatarPct = (v: string) => { const n = Number(String(v).replace(",", ".")); return Number.isFinite(n) ? (n * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + "%" : v; };
   // Quantidades em m², m³, un etc. não podem ser somadas em um total adimensional.
@@ -994,8 +993,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
         <div className="scopo-header-actions">
           {editando ? (
             <>
-              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2 || !cubBdiValidos || !cubUfValida || !cubMesValido || !periodoObraValido} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim(), cubValor: cubValorNum === "invalido" ? null : cubValorNum, cubUf: cubUfEditada.trim() === "" ? null : cubUfEditada.trim().toUpperCase(), cubMes: cubMesEditado.trim() === "" ? null : cubMesEditado.trim(), bdiDeclarado: bdiNum === "invalido" ? null : bdiNum, plannedStart: inicioObraEditado !== dataIsoDoProjeto(plannedStart) ? new Date(`${inicioObraEditado}T12:00:00`) : undefined, plannedFinish: terminoObraEditado !== dataIsoDoProjeto(plannedFinish) ? new Date(`${terminoObraEditado}T12:00:00`) : undefined })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
-              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setCubValorEditado(cubValor); setCubUfEditada(cubUf); setCubMesEditado(cubMes); setBdiEditado(bdiDeclarado); setInicioObraEditado(dataIsoDoProjeto(plannedStart)); setTerminoObraEditado(dataIsoDoProjeto(plannedFinish)); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending || localizacaoEditada.trim().length < 2 || !cubBdiValidos || !cubUfValida || !cubMesValido} onClick={() => salvarEscopo.mutate({ projectId: projetoId, location: localizacaoEditada.trim(), tipoDeObra: tipoDeObraEditado || null, descricao: descricaoEditada.trim(), cubValor: cubValorNum === "invalido" ? null : cubValorNum, cubUf: cubUfEditada.trim() === "" ? null : cubUfEditada.trim().toUpperCase(), cubMes: cubMesEditado.trim() === "" ? null : cubMesEditado.trim(), bdiDeclarado: bdiNum === "invalido" ? null : bdiNum, plannedStart: inicioObraEditado !== dataIsoDoProjeto(plannedStart) ? inicioObraEditado ? new Date(`${inicioObraEditado}T12:00:00`) : null : undefined })}>{salvarEscopo.isPending ? "Salvando…" : "Salvar escopo"}</button>
+              <button type="button" className="scopo-btn secondary" disabled={salvarEscopo.isPending} onClick={() => { setDescricaoEditada(descricao); setLocalizacaoEditada(localizacao); setTipoDeObraEditado(tipoDeObra); setCubValorEditado(cubValor); setCubUfEditada(cubUf); setCubMesEditado(cubMes); setBdiEditado(bdiDeclarado); setInicioObraEditado(dataIsoDoProjeto(plannedStart)); setEditando(false); salvarEscopo.reset(); }}>Cancelar</button>
             </>
           ) : (
             <button type="button" className="scopo-btn secondary" onClick={() => setEditando(true)}><ClipboardList size={14}/> Editar escopo</button>
@@ -1067,8 +1066,8 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       {editando && (
         <section className="scopo-detail scopo-edit-form">
           <div className="scopo-detail-body">
-            <label><strong>Início previsto da obra</strong><input type="date" value={inicioObraEditado} onChange={event => setInicioObraEditado(event.target.value)} /></label>
-            <label><strong>Término previsto da obra</strong><input type="date" value={terminoObraEditado} onChange={event => setTerminoObraEditado(event.target.value)} /><small>O período cadastrado precisa abranger as janelas oficiais do CPM para aceitar os trechos da Linha de Balanço.</small>{!periodoObraValido && <small role="alert">Informe início e término, com o término posterior ao início.</small>}</label>
+            <label><strong>Início planejado</strong><input type="date" value={inicioObraEditado} onChange={event => setInicioObraEditado(event.target.value)} /><small>Opcional durante a estruturação. Necessário para calcular datas civis e capturar a baseline de prazo.</small></label>
+            <div><strong>Término calculado pelo CPM</strong><p>{plannedFinish ? dataIsoDoProjeto(plannedFinish) : "Ainda indisponível. Defina o início e calcule o CPM."}</p></div>
             <label><strong>Localização da obra</strong><input value={localizacaoEditada} onChange={event => setLocalizacaoEditada(event.target.value)} minLength={2} maxLength={180} placeholder="Cidade, endereço ou região" /></label>
             <label><strong>Natureza da obra</strong>
               <select value={tipoDeObraEditado} onChange={event => setTipoDeObraEditado(event.target.value as TipoDeObra | "")}>
@@ -1226,7 +1225,6 @@ type NovaObraValues = {
   name: string;
   location: string;
   plannedStart?: Date;
-  plannedFinish?: Date;
   tipoDeObra: TipoDeObra;
   descricao?: string;
 };
@@ -1245,7 +1243,6 @@ function NovaObraDialog({
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [plannedStart, setPlannedStart] = useState("");
-  const [plannedFinish, setPlannedFinish] = useState("");
   const [tipoDeObra, setTipoDeObra] =
     useState<NovaObraValues["tipoDeObra"]>("edificio");
   const [descricao, setDescricao] = useState("");
@@ -1257,7 +1254,6 @@ function NovaObraDialog({
       name: name.trim(),
       location: location.trim(),
       plannedStart: plannedStart ? new Date(`${plannedStart}T12:00:00`) : undefined,
-      plannedFinish: plannedFinish ? new Date(`${plannedFinish}T12:00:00`) : undefined,
       tipoDeObra,
       descricao: descricao.trim(),
     });
@@ -1381,15 +1377,11 @@ function NovaObraDialog({
                   onChange={event => setPlannedStart(event.target.value)} />
               </label>
               <label>
-                <span>Término previsto</span>
-                <input type="date" value={plannedFinish}
-                  onChange={event => setPlannedFinish(event.target.value)} />
+                <span>Término calculado pelo CPM</span>
+                <p>Será exibido depois que a data inicial, as atividades, durações e dependências forem definidas.</p>
               </label>
             </div>
 
-            {plannedStart && plannedFinish && plannedFinish <= plannedStart && (
-              <p className="nova-obra-erro">O término deve ser posterior ao início.</p>
-            )}
           </section>
 
           {error && <div className="nova-obra-alert" role="alert">{error}</div>}
@@ -1404,7 +1396,7 @@ function NovaObraDialog({
             <button type="button" onClick={onClose} disabled={busy} className="nova-obra-cancelar">Cancelar</button>
             <button
               type="submit"
-              disabled={busy || !name.trim() || !location.trim() || descricao.trim().length < 20 || (!!plannedStart && !!plannedFinish && plannedFinish <= plannedStart)}
+              disabled={busy || !name.trim() || !location.trim() || descricao.trim().length < 20}
               className="nova-obra-criar"
             >
               {busy ? "Criando obra…" : "Criar e abrir EAP"}

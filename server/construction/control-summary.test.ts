@@ -28,4 +28,14 @@ describe("controle: consolidação por valor aprovado", () => {
   it("rejeita preço zero e quantidade ausente como peso", () => {
     expect(consolidateControlProgress(rows, [{ id: 11, unitPrice: 0 }, { id: 22, unitPrice: 10 }]).reason).toBe("cobertura_incompleta");
   });
+  it("mantém o realizado, mas não compara prazo sem início civil", () => {
+    expect(consolidateControlProgress([
+      { id: 1, budgetItemId: 11, plannedQuantity: 10, plannedProgress: null, actualProgress: 40 },
+    ], [{ id: 11, unitPrice: 100 }])).toMatchObject({
+      plannedProgress: null,
+      actualProgress: 40,
+      variance: null,
+      reason: "inicio_planejado_ausente",
+    });
+  });
 });

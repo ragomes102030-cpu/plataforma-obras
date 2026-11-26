@@ -12,6 +12,7 @@ export type BloqueioProntidao = {
 };
 
 export type SnapshotProntidao = {
+  inicioPlanejado?: boolean;
   escopo?: { declarado: boolean; validado: boolean };
   eap?: { existe: boolean; aprovada: boolean; folhas: number };
   orcamento?: { existe: boolean; aprovado: boolean; itens: number; semComposicao: number; itensComBloqueioDeAprovacao: number };
@@ -25,6 +26,13 @@ export type SnapshotProntidao = {
 
 export type ResultadoProntidao = {
   etapas: Record<EtapaProntidao, { estado: EstadoProntidao; bloqueios: BloqueioProntidao[] }>;
+  dominios: {
+    cronograma: { bloqueios: BloqueioProntidao[]; podeExibirCalculoAtual: boolean };
+    acompanhamento: { bloqueios: BloqueioProntidao[]; podeRegistrarAtualizacao: boolean };
+    baseline: { bloqueios: BloqueioProntidao[]; podeComparar: boolean };
+    financeiro: { bloqueios: BloqueioProntidao[] };
+    linhaDeBalanco: { bloqueios: BloqueioProntidao[] };
+  };
   primeiraBarreira: BloqueioProntidao | null;
   /** O planejamento pode ser usado mesmo enquanto o gate financeiro está em revisão. */
   prontoParaPlanejamento: boolean;
@@ -73,7 +81,8 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
 
   const cpm = snapshot.cpm;
   const cpmBloqueios: BloqueioProntidao[] = [];
-  if (!cpm?.calculadoEm || cpm.alteradoDepois) cpmBloqueios.push(bloqueio("CPM_DESATUALIZADO", "CPM ausente ou desatualizado", "Datas, durações ou dependências mudaram depois do último cálculo.", "Corrija a rede e execute Calcular CPM antes de confiar em prazo, folgas ou caminho crítico.", ["cpm", "baseline"], "critica"));
+  if (snapshot.inicioPlanejado === false) cpmBloqueios.push(bloqueio("INICIO_PLANEJADO_AUSENTE", "Início planejado não definido", "A EAP e as atividades podem ser estruturadas, mas ainda não existe uma data inicial para calcular datas civis.", "Informe a data inicial planejada em Escopo e depois calcule o CPM. O término será derivado das atividades.", ["cpm", "baseline"], "alta"));
+  else if (!cpm?.calculadoEm || cpm.alteradoDepois) cpmBloqueios.push(bloqueio("CPM_DESATUALIZADO", "CPM ausente ou desatualizado", "Datas, durações ou dependências mudaram depois do último cálculo.", "Corrija a rede e execute Calcular CPM antes de confiar em prazo, folgas ou caminho crítico.", ["cpm", "baseline"], "critica"));
   add("cpm", cpmBloqueios.length ? "desatualizado" : "pronto_revisao", cpmBloqueios);
 
   const baseline = snapshot.baseline;
@@ -113,10 +122,30 @@ export function avaliarProntidaoObra(snapshot: SnapshotProntidao): ResultadoPron
   // rede ou CPM coerentes.
   const gateEstrutural = ["escopo", "eap", "atividades", "rede", "cpm"] as EtapaProntidao[];
   const prontoParaPlanejamento = gateEstrutural.every(etapa => etapas[etapa].bloqueios.length === 0);
+  const bloqueiosCronograma = ["escopo", "eap", "atividades", "rede", "cpm"]
+    .flatMap(etapa => etapas[etapa as EtapaProntidao].bloqueios);
+  const bloqueiosAcompanhamento = atividades?.total
+    ? []
+    : etapas.atividades.bloqueios.filter(item => item.codigo === "ATIVIDADES_AUSENTES");
+  const bloqueiosBaseline = ["escopo", "eap", "atividades", "rede", "cpm", "baseline"]
+    .flatMap(etapa => etapas[etapa as EtapaProntidao].bloqueios);
+  const bloqueiosFinanceiros = [
+    ...etapas.orcamento.bloqueios,
+    ...etapas.execucao.bloqueios.filter(item => item.codigo.startsWith("MEDICAO_")),
+  ];
+  const bloqueiosLob = etapas.execucao.bloqueios.filter(item => item.codigo.startsWith("LOB_"));
   return {
     etapas,
+    dominios: {
+      cronograma: { bloqueios: bloqueiosCronograma, podeExibirCalculoAtual: bloqueiosCronograma.length === 0 },
+      acompanhamento: { bloqueios: bloqueiosAcompanhamento, podeRegistrarAtualizacao: bloqueiosAcompanhamento.length === 0 },
+      baseline: { bloqueios: bloqueiosBaseline, podeComparar: bloqueiosBaseline.length === 0 },
+      financeiro: { bloqueios: bloqueiosFinanceiros },
+      linhaDeBalanco: { bloqueios: bloqueiosLob },
+    },
     primeiraBarreira,
     prontoParaPlanejamento,
-    prontoParaAcompanhamento: !primeiraBarreira,
+    // Registro de andamento não depende de custo, CPM atualizado, baseline ou LOB.
+    prontoParaAcompanhamento: bloqueiosAcompanhamento.length === 0,
   };
 }

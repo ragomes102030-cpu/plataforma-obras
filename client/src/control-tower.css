@@ -141,3 +141,42 @@
 
 .ct-readiness-gate{display:flex;justify-content:space-between;gap:20px;align-items:center;margin:0 0 16px;padding:16px 18px;border:1px solid #e1c98f;border-left:4px solid #c88b28;background:#fffaf0}.ct-readiness-gate strong{display:block;margin:4px 0;color:#183e50;font-size:16px}.ct-readiness-gate p{margin:4px 0;color:#5d737d;font-size:12px}.ct-readiness-gate small{color:#4b6570;font-size:11px}@media(max-width:760px){.ct-readiness-gate{display:block}.ct-readiness-gate .ct-button{margin-top:12px}}
 .ct-readiness-gate--planning-ready{border-color:#a9d8c2;border-left-color:#17845b;background:#f3fbf7}.ct-readiness-gate--planning-ready .ct-overline{color:#16704f}
+.ct-prazo{display:grid;gap:14px;margin:18px 0;padding:22px;border:1px solid #cadde3;border-radius:14px;background:#fff;box-shadow:0 8px 24px #163c4c0a}.ct-prazo-topo{display:flex;align-items:center;justify-content:space-between;gap:18px}.ct-prazo-topo h2{margin:4px 0;color:#11394d;font-size:22px}.ct-prazo-topo p{margin:5px 0 0;color:#647b85;font-size:12px}.ct-prazo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.ct-prazo-kpis article{display:grid;align-content:start;gap:7px;min-width:0;padding:14px;border:1px solid #e0e9ec;border-radius:9px;background:#f8fbfc}.ct-prazo-kpis small{color:#557482;font-size:9px;font-weight:900;letter-spacing:.08em}.ct-prazo-kpis strong{color:#123c50;font-size:17px;overflow-wrap:anywhere}.ct-prazo-kpis span{color:#71868f;font-size:10px;line-height:1.4}.ct-prazo-status{display:flex;gap:8px;flex-wrap:wrap}.ct-prazo-status span{padding:8px 10px;border:1px solid #dbe7ea;border-radius:7px;background:#f7fafb;color:#56717c;font-size:11px}.ct-prazo-status b{color:#143e51;font-size:14px}.ct-prazo-proximas{padding-top:11px;border-top:1px solid #e4ecef}.ct-prazo-proximas>strong{color:#244b5c;font-size:12px}.ct-prazo-proximas ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:8px 0 0;padding:0;list-style:none}.ct-prazo-proximas li{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;padding:8px;border-radius:7px;background:#f5f9fa;color:#315563;font-size:11px}.ct-prazo-proximas li>span{color:#14728a;font-weight:900}.ct-prazo-proximas li small{grid-column:2;color:#748992;font-size:10px}
+@media(max-width:900px){.ct-prazo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.ct-prazo{padding:15px}.ct-prazo-topo{align-items:flex-start;flex-direction:column}.ct-prazo-kpis,.ct-prazo-proximas ul{grid-template-columns:1fr}.ct-prazo-proximas li small{grid-column:1/-1}}
+
+.ct-service-guide{display:grid;gap:16px;margin:18px 0;padding:22px;border:1px solid #c9dfe5;border-radius:15px;background:linear-gradient(135deg,#f8fcfd 0%,#fff 78%);box-shadow:0 8px 24px #163c4c0a}
+.ct-service-guide-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.ct-service-guide-heading h2{margin:4px 0;color:#123b50;font-size:22px;letter-spacing:-.025em}
+.ct-service-guide-heading p{max-width:760px;margin:5px 0 0;color:#617985;font-size:12px;line-height:1.6}
+.ct-service-guide-optional{flex:none;padding:8px 11px;border:1px solid #b7d8e0;border-radius:999px;background:#eaf7f9;color:#14677a;font-size:10px;font-weight:850;letter-spacing:.04em;text-transform:uppercase}
+.ct-service-guide-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;padding:0;list-style:none;counter-reset:servico}
+.ct-service-guide-steps li{display:flex;align-items:flex-start;gap:9px;min-width:0;min-height:96px;padding:11px;border:1px solid #e0e9ec;border-radius:10px;background:#fff}
+.ct-service-guide-steps li.atual{border-color:#40a6b7;background:#eff9fb;box-shadow:0 0 0 2px #e1f3f6}
+.ct-service-guide-steps li.concluida{border-color:#b9e0d0;background:#f4fbf7}
+.ct-service-guide-number{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:50%;background:#e8eff2;color:#345b68;font-size:11px;font-weight:900}
+.ct-service-guide-steps li.atual .ct-service-guide-number{background:#14758a;color:#fff}
+.ct-service-guide-steps li.concluida .ct-service-guide-number{background:#16835d;color:#fff}
+.ct-service-guide-steps li>div{display:grid;gap:5px;min-width:0}
+.ct-service-guide-steps strong{color:#1c4354;font-size:11px;line-height:1.35}
+.ct-service-guide-steps small{color:#70848c;font-size:9.5px;line-height:1.45}
+.ct-service-guide-next{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border-radius:10px;background:#11394c;color:#fff}
+.ct-service-guide-next>div{display:grid;gap:3px}
+.ct-service-guide-next small{color:#a5c9d3;font-size:9px;font-weight:900;letter-spacing:.1em}
+.ct-service-guide-next strong{font-size:13px}
+.ct-service-guide-next span{color:#c3d6dc;font-size:10px;line-height:1.45}
+.ct-service-guide-next button{display:flex;align-items:center;gap:7px;flex:none;padding:10px 12px;border:1px solid #84d2df;border-radius:7px;background:#0e7890;color:#fff;font-size:11px;font-weight:800}
+.ct-service-guide-next button:hover{background:#1488a0}
+.ct-service-forecast{display:grid;gap:9px;padding-top:13px;border-top:1px solid #e1ebee}
+.ct-service-forecast-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ct-service-forecast-title>div{display:grid;gap:4px}
+.ct-service-forecast-title small,.ct-service-forecast-details small{color:#607b86;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.ct-service-forecast-title strong{color:#145c71;font-size:14px}
+.ct-service-forecast-title>span{color:#5e7882;font-size:10px;font-weight:750}
+.ct-service-forecast-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ct-service-forecast-details>span{display:grid;gap:4px;padding:9px 11px;border:1px solid #e1eaed;border-radius:8px;background:#fff}
+.ct-service-forecast-details strong{color:#274c5a;font-size:12px}
+.ct-service-forecast-warning{margin:0;padding:9px 11px;border-left:3px solid #d18a2d;border-radius:4px;background:#fff8eb;color:#69491b;font-size:10px;line-height:1.5}
+.ct-service-forecast-note{color:#758992;font-size:9px;line-height:1.45}
+@media(max-width:1000px){.ct-service-guide-steps{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.ct-service-guide{padding:15px}.ct-service-guide-heading{flex-direction:column}.ct-service-guide-steps{grid-template-columns:1fr}.ct-service-guide-steps li{min-height:0}.ct-service-guide-next{align-items:flex-start;flex-direction:column}.ct-service-guide-next button{width:100%;justify-content:center}.ct-service-forecast-title{align-items:flex-start;flex-direction:column}.ct-service-forecast-details{grid-template-columns:1fr}}

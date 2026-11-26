@@ -70,7 +70,10 @@ export async function coletarDadosLookahead(
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
-  const plannedStartIso = localIso(project?.plannedStart ?? isoToLocalDate(hojeIso));
+  if (!project?.plannedStart) {
+    throw new Error("Defina o início planejado da obra antes de calcular datas do lookahead.");
+  }
+  const plannedStartIso = localIso(project.plannedStart);
 
   const base = segundaFeira(semanaBaseIso);
   // Duas semanas de folga além da janela para o calendário cobrir o último dia.

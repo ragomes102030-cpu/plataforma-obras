@@ -280,8 +280,10 @@ async function startServer() {
         [project] = await db.select().from(projects).where(eq(projects.id, project.id)).limit(1);
       }
       if (!project) {
-        const plannedStart = new Date(); const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
-        const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish }).$returningIds();
+        // A data inicial é uma âncora explícita do fixture QA; término é derivado
+        // somente após cálculo CPM e não recebe horizonte fictício.
+        const plannedStart = new Date();
+        const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish: null }).$returningIds();
         if (!projectId) throw new Error("Não foi possível criar a obra QA.");
         await db.insert(projectPlanVersions).values({ projectId, versionNumber: 1, status: "draft", baseVersionId: null, createdBy: owner.id, notes: "Versão inicial exclusiva para testes automatizados do Arquimedes." });
         const mcpRows = ([["eap", process.env.MCP_EAP_URL], ["cronograma", process.env.MCP_CRONOGRAMA_URL], ["ganttLob", process.env.MCP_GANTT_LOB_URL]] as const).map(([provider, baseUrl]) => ({ projectId, provider, externalProjectId: "ARQUIMEDES-QA", endpointUrl: baseUrl ? String(baseUrl).replace(/\/$/, "") + (String(baseUrl).endsWith("/mcp") ? "" : "/mcp") : "", syncState: "pending" as const, lastError: null }));
@@ -404,9 +406,10 @@ async function startServer() {
             [project] = await db.select().from(projects).where(eq(projects.id, project.id)).limit(1);
           }
           if (!project) {
+            // A data inicial é uma âncora explícita do fixture QA; término é
+            // derivado somente após cálculo CPM e não recebe horizonte fictício.
             const plannedStart = new Date();
-            const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
-            const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish }).$returningIds();
+            const [projectId] = await db.insert(projects).values({ ownerUserId: owner.id, code: "ARQUIMEDES-QA", name: "ARQUIMEDES — Ambiente QA", location: "Ambiente isolado de testes", descricao: "Obra técnica exclusiva para testes automatizados do Arquimedes. Não representa obra de cliente.", tipoDeObra: "edificio", status: "Planejamento", progress: 0, plannedStart, plannedFinish: null }).$returningIds();
             if (!projectId) throw new Error("Não foi possível criar a obra QA.");
             await db.insert(projectPlanVersions).values({ projectId, versionNumber: 1, status: "draft", baseVersionId: null, createdBy: owner.id, notes: "Versão inicial exclusiva para testes automatizados do Arquimedes." });
             const mcpRows = ([["eap", process.env.MCP_EAP_URL], ["cronograma", process.env.MCP_CRONOGRAMA_URL], ["ganttLob", process.env.MCP_GANTT_LOB_URL]] as const).map(([provider, baseUrl]) => ({ projectId, provider, externalProjectId: "ARQUIMEDES-QA", endpointUrl: baseUrl ? String(baseUrl).replace(/\/$/, "") + (String(baseUrl).endsWith("/mcp") ? "" : "/mcp") : "", syncState: "pending" as const, lastError: null }));

@@ -23,6 +23,7 @@ type Props = {
   projetoId: number;
   agregado?: AgregadoDoCronograma | null;
   linhas?: LinhaDoCronograma[];
+  inicioObra?: string | null;
   carregandoGrade?: boolean;
   nomeObra?: string;
   hojeReferencia?: string;
@@ -83,6 +84,7 @@ export function PainelDoCronograma({
   projetoId,
   agregado,
   linhas,
+  inicioObra,
   carregandoGrade,
   nomeObra,
   hojeReferencia,
@@ -106,6 +108,14 @@ export function PainelDoCronograma({
   );
   const lookahead = trpc.planning.lookahead.useQuery(
     { projectId: projetoId, hoje },
+    { enabled: projetoId > 0, retry: false }
+  );
+  const andamentoPrazo = trpc.planning.activityScheduleStatusSummary.useQuery(
+    { projectId: projetoId, asOf: hoje },
+    { enabled: projetoId > 0, retry: false }
+  );
+  const previsaoPrazo = trpc.planning.activityScheduleForecast.useQuery(
+    { projectId: projetoId, asOf: hoje },
     { enabled: projetoId > 0, retry: false }
   );
   const baseline = trpc.planning.compararComBaseline.useQuery(
@@ -468,8 +478,51 @@ export function PainelDoCronograma({
 
   const alertasVisiveis = [...(alertaDeOrcamento ? [alertaDeOrcamento] : []), ...(alertaCoberturaOrcamentaria ? [alertaCoberturaOrcamentaria] : []), ...(alertaOrcamentoDidatico ? [alertaOrcamentoDidatico] : []), ...(alertaCpmDesatualizado ? [alertaCpmDesatualizado] : []), ...alertas].slice(0, 6);
   // Campos que chegam do backend, sem mutações. Zero só quando a fonte confirmou zero.
-  const carregandoComplementos = plano.isPending || orcamento.isPending || producao.isPending || lookahead.isPending || baseline.isPending || coerencia.isPending;
-  const erroComplementos = plano.isError || orcamento.isError || producao.isError || lookahead.isError || baseline.isError || coerencia.isError;
+  const carregandoComplementos = plano.isPending || orcamento.isPending || producao.isPending || lookahead.isPending || andamentoPrazo.isPending || baseline.isPending || coerencia.isPending;
+  const erroComplementos = plano.isError || orcamento.isError || producao.isError || lookahead.isError || andamentoPrazo.isError || baseline.isError || coerencia.isError;
+
+  const prazoOperacional = {
+    fimPrevisto: prazoConfianca.confiavel ? isoDoValor(prazo.fim) || null : null,
+    motivo: prazoConfianca.motivo,
+    variacaoBaseline: baseline.data?.resumo?.atrasoNoFim ?? null,
+    criticas: atividadesOperacionais.filter(a => Number(a.critical) === 1).length,
+    atrasadas: andamentoPrazo.data?.overdueCount ?? null,
+    proximas: lookahead.data?.available ? (semana?.atividades.length ?? 0) : null,
+    bloqueadas: andamentoPrazo.data?.statusCounts.bloqueada ?? null,
+    emAndamento: andamentoPrazo.data?.statusCounts.em_andamento ?? null,
+    concluidas: andamentoPrazo.data?.statusCounts.concluida ?? null,
+    naoIniciadas: andamentoPrazo.data?.statusCounts.nao_iniciada ?? null,
+    semAtualizacao: andamentoPrazo.data?.activitiesWithoutUpdate ?? null,
+    totalAtividades: andamentoPrazo.data?.totalActivities ?? atividadesOperacionais.length,
+    dataUltimaPosicao: andamentoPrazo.data?.lastPositionDate ?? null,
+  };
+  const roteiroReadiness = {
+    eapApproved: Boolean(plano.data?.hasApprovedEap),
+    activityCount: atividadesOperacionais.length,
+    durationsComplete: atividadesOperacionais.length > 0 && atividadesOperacionais.every(activity => Number(activity.durationDays) > 0),
+    networkValid: Boolean(plano.data?.networkValidation?.valid),
+    plannedStartDefined: Boolean(inicioObra),
+    cpmCurrent: atividadesOperacionais.length > 0 && atividadesOperacionais.every(activity =>
+      activity.cpmCalculatedAt != null && activity.updatedAt != null &&
+      new Date(activity.cpmCalculatedAt).getTime() >= new Date(activity.updatedAt).getTime()
+    ),
+    baselineActive: Boolean(plano.data?.baselines.some(item => item.status === "ativa")),
+    totalActivities: atividadesOperacionais.length,
+    activitiesWithUpdate: andamentoPrazo.data?.activitiesWithUpdate ?? 0,
+  };
+  const roteiroForecast = {
+    loading: previsaoPrazo.isPending,
+    available: previsaoPrazo.data?.available ?? false,
+    plannedFinishDate: previsaoPrazo.data?.plannedFinishDate ?? null,
+    forecastFinishDate: previsaoPrazo.data?.forecastFinishDate ?? null,
+    activitiesWithUpdate: previsaoPrazo.data?.activitiesWithUpdate ?? 0,
+    totalActivities: previsaoPrazo.data?.totalActivities ?? atividadesOperacionais.length,
+    outOfSequenceActivityIds: previsaoPrazo.data?.outOfSequenceActivityIds ?? [],
+    warnings: previsaoPrazo.data?.warnings ?? [],
+    unavailableReason: previsaoPrazo.isError
+      ? "Não foi possível consultar a previsão de prazo. Atualize a Dashboard e tente novamente."
+      : previsaoPrazo.data?.unavailableReason ?? null,
+  };
 
   return (
     <ControlTowerDashboard
@@ -482,6 +535,9 @@ export function PainelDoCronograma({
       hoje={hoje}
       resumo={resumo}
       prazoConfianca={prazoConfianca}
+      prazoOperacional={prazoOperacional}
+      roteiroReadiness={roteiroReadiness}
+      roteiroForecast={roteiroForecast}
       alertas={alertasVisiveis}
       valorSemDestino={valorSemDestino}
       semana={semana ? {

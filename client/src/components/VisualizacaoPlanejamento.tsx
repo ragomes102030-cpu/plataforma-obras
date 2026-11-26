@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { trpc } from "@/lib/trpc";
 import { ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, GitBranch, GanttChartSquare, Maximize2, Minimize2, Printer, Scan, Search, Tags, TrendingUp, ZoomIn, ZoomOut } from "lucide-react";
 import type { EntradaDaLinha } from "@shared/cronograma-colunas";
+import type { ActivityScheduleStatus } from "@shared/activity-schedule-update";
 import type { IsoDate } from "@shared/work-calendar";
 import { prepararBarrasBaselineGantt, resumirBaselineNoGantt, type BarraBaselineGantt } from "@shared/gantt-baseline-visual";
 import { linhasVisiveis, linhasCriticasVisiveisGantt, montarArvore, type NoDoGantt } from "@shared/gantt-arvore";
@@ -30,6 +31,8 @@ type Props = {
   layoutProfissional?: boolean;
   finsCalculados?: Record<string,string>;
   codigosExemplo?: ReadonlySet<string>;
+  /** Relatos de prazo atuais; separados de medição e percentual físico. */
+  situacoesTemporais?: ReadonlyMap<number, { status: ActivityScheduleStatus; positionDate: string; forecastFinishDate: string | null }>;
   atividadeSelecionadaId?: number | null;
   onSelecionarAtividade?: (activityId:number|null)=>void;
 };
@@ -72,6 +75,7 @@ export function VisualizacaoPlanejamento({
   layoutProfissional = true,
   finsCalculados = {},
   codigosExemplo,
+  situacoesTemporais,
   atividadeSelecionadaId,
   onSelecionarAtividade,
 }: Props & { view?: PlanejamentoView }) {
@@ -283,8 +287,13 @@ export function VisualizacaoPlanejamento({
            "Carregando as datas congeladas da baseline vigente…"}
         </div>
       )}
+      {view === "gantt" && (situacoesTemporais?.size ?? 0) > 0 && (
+        <div className="pl-gantt-status-note" role="note">
+          Estado e posição são relatos de prazo. O percentual de execução continua dependendo de medição física confirmada.
+        </div>
+      )}
       {view === "gantt" ? (
-        <Gantt linhas={linhasGantt} atividades={atividadePorId} dependencias={dependenciasGantt} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} cpmValido={cpmValido}
+        <Gantt linhas={linhasGantt} atividades={atividadePorId} dependencias={dependenciasGantt} dados={dados} hoje={hoje} inicioObra={inicioObra} titulo={titulo} codigoObra={codigoObra} localObra={localObra} layoutProfissional={layoutProfissional} finsCalculados={finsCalculados} situacoesTemporais={situacoesTemporais} cpmValido={cpmValido}
           compararBaseline={compararBaseline} onAlternarBaseline={() => setCompararBaseline(v=>!v)}
           baselineDisponivel={baselineVigente !== null}
           baselinePronta={baselinePronta} barrasBaseline={barrasBaseline}
@@ -368,6 +377,7 @@ function Gantt({
   localObra,
   layoutProfissional = true,
   finsCalculados,
+  situacoesTemporais,
   cpmValido,
   compararBaseline,
   onAlternarBaseline,
@@ -398,6 +408,7 @@ function Gantt({
   inicioObra: IsoDate | null;
   layoutProfissional?: boolean;
   finsCalculados: Readonly<Record<string, string>>;
+  situacoesTemporais?: ReadonlyMap<number, { status: ActivityScheduleStatus; positionDate: string; forecastFinishDate: string | null }>;
   cpmValido: boolean;
   compararBaseline: boolean;
   onAlternarBaseline: () => void;
@@ -1084,13 +1095,23 @@ function Gantt({
               const inicioBarra = Math.max(0, posicao(no.inicio));
               const larguraBarra = Math.max(6, Math.min(larguraDoTempo - inicioBarra, (Math.round((dateMs(no.fim)-dateMs(no.inicio))/86400000)+1) * px));
               const resumo = no.temFilhos;
+      const relatoPrazo = no.activityId == null ? undefined : situacoesTemporais?.get(no.activityId);
+      const rotulosRelato: Record<ActivityScheduleStatus, string> = {
+        nao_iniciada: "Não iniciada",
+        em_andamento: "Em andamento",
+        concluida: "Concluída",
+        bloqueada: "Bloqueada",
+      };
+      const descricaoRelato = relatoPrazo
+        ? ` · Relato de prazo: ${rotulosRelato[relatoPrazo.status]} na posição ${fmtComAno(relatoPrazo.positionDate, true)}${relatoPrazo.forecastFinishDate ? ` · previsão ${fmtComAno(relatoPrazo.forecastFinishDate, true)}` : ""}`
+        : "";
               // Marco não tem barra: é um losango na data. O rótulo e o ponto de
               // avanço passam a nascer do losango, não do fim de uma barra.
               const marco = !resumo && no.marco;
               const fimVisual = marco ? inicioBarra : inicioBarra + larguraBarra;
               const descricao = marco
-                ? `${no.codigo} ${no.nome} · marco em ${fmt(no.inicio)} · ${no.progressoDisponivel ? (no.progresso >= 100 ? "concluído" : "não concluído") : "sem medição confirmada"}${no.critica ? " · caminho crítico" : ""}`
-                : `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${no.progressoDisponivel ? `${Math.round(no.progresso)}% executado` : resumo ? "agregado indisponível (exige pesos aprovados e medições completas)" : "sem medição confirmada"}${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}`;
+                ? `${no.codigo} ${no.nome} · marco em ${fmt(no.inicio)} · ${no.progressoDisponivel ? (no.progresso >= 100 ? "concluído" : "não concluído") : "sem medição confirmada"}${no.critica ? " · caminho crítico" : ""}${descricaoRelato}`
+                : `${no.codigo} ${no.nome} · ${fmt(no.inicio)} a ${fmt(no.fim)} · ${no.duracao} dias · ${no.progressoDisponivel ? `${Math.round(no.progresso)}% executado` : resumo ? "agregado indisponível (exige pesos aprovados e medições completas)" : "sem medição confirmada"}${no.critica ? " · caminho crítico" : ""}${resumo ? ` · ${no.filhos.length} atividade(s) abaixo` : ""}${descricaoRelato}`;
               return (
                 <div
                   key={no.chave}
@@ -1134,6 +1155,10 @@ function Gantt({
                         {no.critica && !resumo && <i className="pg-ponto-critico" title="Caminho crítico" aria-hidden="true" />}
                         <span className="pg-codigo">{no.codigo}</span>
                         <span className="pg-nome" title={no.nome}>{no.nome}</span>
+                        {relatoPrazo && <span className={`pg-status-temporal pg-status-${relatoPrazo.status}`}
+                          title={`Relato de prazo em ${fmtComAno(relatoPrazo.positionDate, true)}${relatoPrazo.forecastFinishDate ? `; previsão de término ${fmtComAno(relatoPrazo.forecastFinishDate, true)}` : ""}`}>
+                          {rotulosRelato[relatoPrazo.status]} · {fmtComAno(relatoPrazo.positionDate, true)}
+                        </span>}
                       </span>
                       {!estreita && (
                         <>

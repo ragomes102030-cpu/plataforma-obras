@@ -1,5 +1,17 @@
 # Decisões de Arquitetura
 
+## Decisão 28 — entrada guiada e previsão de prazo por serviços
+
+- **Quando:** 26/11/2026.
+- **Decisão:** o primeiro fluxo da Dashboard ensina a sequência EAP → duração → dependências → data inicial/CPM/baseline → relatos de campo. Preço, orçamento, pesos físicos e medição não bloqueiam a programação de prazo.
+- **Previsão:** `planning.activityScheduleForecast` é uma consulta de leitura. Usa o CPM e calendário atuais, os relatos não substituídos da versão atual até a data de corte, e apresenta cobertura incompleta, execução fora de sequência, restrições inviáveis e bloqueios sem estimativa.
+- **Integridade:** um serviço concluído fica ancorado no término real; um serviço em execução projeta o saldo a partir do próximo dia útil; tarefas sem relato mantêm a duração planejada com aviso. A consulta não altera atividades, CPM salvo, baseline, produção, medição ou custo.
+- **Interface:** Dashboard identifica separadamente plano calculado e previsão pelos relatos. Controles de peso físico e cenário QA ficam em uma seção opcional na aba Atividades. O guia de primeira utilização define EAP, atividade, CPM, baseline e relato de prazo.
+- **Referência operacional:** ver [Guia de planejamento de obra por serviços](GUIA-PLANEJAMENTO-POR-SERVICOS.md).
+- **Motivo:** uma obra pode ser planejada e acompanhada pelo tempo e pelos serviços sem orçamento; custo e avanço físico permanecem eixos próprios, com seus requisitos de evidência.
+
+> **Documento normativo.** Última atualização: 26/11/2026.
+
 ## Decisão 27 — EV QA e EV real são séries distintas
 
 - **Quando:** 25/11/2026.
@@ -360,3 +372,15 @@
 - **Bloqueios:** todo gate deve apresentar o que ocorreu, por que impede o próximo passo, passos ordenados, módulo responsável e evidência que confirma a resolução.
 - **Visual:** hoje e início são linhas sólidas rotuladas; baseline é hachurada; crítico possui texto/marcador; seleção realça somente relações diretas. Cor nunca é a única evidência.
 - **Escala e compatibilidade:** filtros trabalham sem mutar as fontes e a lista usa renderização progressiva acima de 50 linhas. Gantt e Linha de Balanço antigos permanecem acessíveis durante o piloto.
+
+## Decisão 25 — planejamento e atualização por prazo sem dependência de orçamento
+
+- **Decisão:** uma obra pode nascer como rascunho sem orçamento e sem datas civis. `plannedStart` é opcional; `plannedFinish` só é derivado após CPM válido. Durações e posições relativas D+ continuam disponíveis enquanto não há âncora civil.
+- **Quando:** 26/11/2026.
+- **Motivo:** o acompanhamento de atividades e prazo não pode ser bloqueado por preço, medição contratual, pesos físicos ou Linha de Balanço. Data presumida e duração transcorrida não são medição nem avanço.
+- **Atualizações de campo:** `activity_schedule_updates` conserva posição, estado, início/término reais, previsão, motivo de bloqueio, observação, evidência e autor. Correções são eventos novos que apontam o registro corrigido. A gravação não escreve em produção, custo, medição, CPM ou baseline.
+- **Linha de Balanço:** aplicabilidade é independente do cronograma. Serviço sem repetição pode ser classificado fora da LOB com justificativa; a decisão é auditada por projeto, atividade e versão. Sem justificativa, o aviso permanece no domínio de LOB.
+- **Migração:** `0028_planning_schedule_updates_and_nullable_dates` remove `NOT NULL` das datas sem reescrever valores existentes e cria a tabela temporal. A consulta PGlite confirmou preservação das datas legadas e aceitação de rascunhos sem datas.
+- **Indicadores:** Dashboard destaca término, comparação com baseline quando disponível, estado temporal declarado, previsões vencidas explícitas e cobertura de atualização. Curva S financeira continua dependente de orçamento aprovado e produção; ausência de orçamento não vira avanço zero.
+- **Validação local:** `pnpm check`; 16 arquivos / 96 testes focados; `pnpm db:verify:scratch` (5 testes); `pnpm build`. Build concluído com avisos de Node 24.21.0 fora do requisito Node 22.x, analytics sem configuração e bundle acima de 500 kB.
+- **Limite de validação:** sem publicação, alteração da obra 26 ou conferência ao vivo da Dashboard. O fluxo completo em navegador isolado permanece pendente.

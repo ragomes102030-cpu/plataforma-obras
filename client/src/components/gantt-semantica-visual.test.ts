@@ -21,4 +21,10 @@ describe("semântica visual operacional do Gantt",()=>{
     expect(componente).toContain("Caminho crítico");
     expect(componente).toContain("relacionada");
   });
+  it("exibe estado de prazo como relato separado da medição física",()=>{
+    expect(componente).toContain("pg-status-temporal");
+    expect(componente).toContain("Relato de prazo:");
+    expect(componente).toContain("Estado e posição são relatos de prazo");
+    expect(css).toContain(".pg-status-temporal");
+  });
 });

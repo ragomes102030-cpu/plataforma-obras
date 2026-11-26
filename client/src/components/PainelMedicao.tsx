@@ -422,6 +422,12 @@ export function PainelMedicao({ projetoId }: { projetoId: number }) {
         </div>
       </header>
 
+      {fluxo && !fluxo.available && fluxo.note && (
+        <p className="pl-med-aviso" role="status">
+          <TriangleAlert size={14} /> {fluxo.note}
+        </p>
+      )}
+
       {fluxo && fluxo.available && (
         <>
           <div className="pl-med-kpis">

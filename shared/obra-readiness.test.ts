@@ -45,7 +45,8 @@ describe("motor de prontidão integrada", () => {
     expect(result.etapas.orcamento.estado).toBe("incompleto");
     expect(result.primeiraBarreira?.codigo).toBe("ORCAMENTO_ITENS_PENDENTES");
     expect(result.prontoParaPlanejamento).toBe(true);
-    expect(result.prontoParaAcompanhamento).toBe(false);
+    expect(result.prontoParaAcompanhamento).toBe(true);
+    expect(result.dominios.financeiro.bloqueios.map(item => item.codigo)).toContain("ORCAMENTO_ITENS_PENDENTES");
   });
 
   it("bloqueia acompanhamento se parcelas LOB contradizem a rede CPM, sem bloquear edição do planejamento", () => {
@@ -62,7 +63,7 @@ describe("motor de prontidão integrada", () => {
     });
     expect(result.etapas.execucao.bloqueios.map(b => b.codigo)).toContain("LOB_FORA_JANELA_CPM");
     expect(result.prontoParaPlanejamento).toBe(true);
-    expect(result.prontoParaAcompanhamento).toBe(false);
+    expect(result.prontoParaAcompanhamento).toBe(true);
   });
 
   it("não aprova acompanhamento com parcelas em locais didáticos mesmo quando datas CPM são compatíveis", () => {
@@ -79,7 +80,7 @@ describe("motor de prontidão integrada", () => {
     });
     expect(result.etapas.execucao.bloqueios.map(b => b.codigo)).toContain("LOB_LOCAL_DIDATICO");
     expect(result.prontoParaPlanejamento).toBe(true);
-    expect(result.prontoParaAcompanhamento).toBe(false);
+    expect(result.prontoParaAcompanhamento).toBe(true);
   });
 
   it("explica como resolver uma rede com ciclo", () => {
@@ -103,7 +104,27 @@ describe("motor de prontidão integrada", () => {
     expect(result.etapas.atividades.bloqueios).toHaveLength(0);
     expect(result.prontoParaPlanejamento).toBe(true);
     expect(result.etapas.execucao.bloqueios.map(item => item.codigo)).toContain("LOB_ATIVIDADES_SEM_UNIDADE");
-    expect(result.prontoParaAcompanhamento).toBe(false);
+    expect(result.prontoParaAcompanhamento).toBe(true);
+    expect(result.dominios.linhaDeBalanco.bloqueios.map(item => item.codigo)).toContain("LOB_ATIVIDADES_SEM_UNIDADE");
+  });
+
+  it("separa registro de andamento de CPM, baseline, financeiro e Linha de Balanço", () => {
+    const result = avaliarProntidaoObra({
+      escopo: { declarado: true, validado: true },
+      eap: { existe: true, aprovada: true, folhas: 1 },
+      atividades: { total: 1, semLocal: 1, semDuracao: 0 },
+      cpm: { calculadoEm: null, alteradoDepois: true, atividadesCalculadas: 0 },
+      baseline: { existe: false, aprovada: false },
+      orcamento: { existe: false, aprovado: false, itens: 0, semComposicao: 0, itensComBloqueioDeAprovacao: 0 },
+      lob: { parcelas: 0, foraJanelaCpm: 0, orfas: 0, atividadesSemLocalOperacional: 1 },
+    });
+
+    expect(result.prontoParaAcompanhamento).toBe(true);
+    expect(result.dominios.acompanhamento.podeRegistrarAtualizacao).toBe(true);
+    expect(result.dominios.cronograma.podeExibirCalculoAtual).toBe(false);
+    expect(result.dominios.baseline.bloqueios.map(item => item.codigo)).toContain("BASELINE_AUSENTE");
+    expect(result.dominios.financeiro.bloqueios.map(item => item.codigo)).toContain("ORCAMENTO_AUSENTE");
+    expect(result.dominios.linhaDeBalanco.bloqueios.map(item => item.codigo)).toContain("LOB_ATIVIDADES_SEM_UNIDADE");
   });
 
   it("bloqueia atividade órfã e medição sem itens", () => {

@@ -16,6 +16,7 @@ const props = {
   projetoId:25,nomeObra:"Escola",codigosExemplo:new Set<string>(),hoje:"2026-11-05",resumo,
   simulacaoQa:{valorAgregado:0,percentual:0,lancamentosValidos:0,lancamentosUnidadeIncompativel:0,lancamentosForaDaVersao:0,pontos:[]},
   prazoConfianca:{confiavel:true,motivo:"CPM atual"},alertas:[],valorSemDestino:0,ultimos:[],
+  prazoOperacional:{fimPrevisto:"2027-01-01",motivo:"CPM atual",variacaoBaseline:null,criticas:1,atrasadas:0,proximas:1,bloqueadas:0,emAndamento:0,concluidas:0,naoIniciadas:1,semAtualizacao:1,totalAtividades:1,dataUltimaPosicao:null},
   ppc:null,bloqueadas:null,compromissosPendentes:null,carregandoComplementos:false,erroComplementos:false,
   orcamentoEstado:"ok" as const,producaoEstado:"ok" as const,semanaEstado:"ok" as const,abrirAba:()=>{},
 };
@@ -59,6 +60,19 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     expect(html).toContain("A execução está abaixo");
     expect(html).toContain("−40,0 p.p.");
   });
+  it("mantém a programação e as atualizações de prazo visíveis sem orçamento ou pesos", () => {
+    const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{
+      ...props,
+      prontidao:prontidao("sem_pesos","sem_orcamento"),
+      prazoOperacional:{...props.prazoOperacional,fimPrevisto:null,motivo:"Defina a data inicial planejada",atrasadas:null,proximas:null,semAtualizacao:1},
+    }));
+    expect(html).toContain("PLANEJAMENTO DE PRAZO");
+    expect(html).toContain("1 atividade");
+    expect(html).toContain("PLANO CALCULADO");
+    expect(html).toContain("Não calculado");
+    expect(html).toContain("1 sem atualização");
+    expect(html).toContain("Sem orçamento aprovado");
+  });
   it("identifica pesos, EV e classificações sintéticas no cenário QA liberado", () => {
     const html=renderToStaticMarkup(createElement(ControlTowerDashboard,{
       ...props,
@@ -71,5 +85,38 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     expect(html).toContain("EV QA (simulação): Sem apontamento QA compatível");
     expect(html).not.toContain("VALOR AGREGADO · CENÁRIO QA");
     expect(html).toContain("40 atividade(s) sem unidade exata");
+  });
+
+  it("explica o caminho por serviços antes dos indicadores financeiros", () => {
+    const html = renderToStaticMarkup(createElement(ControlTowerDashboard, {
+      ...props,
+      prontidao: prontidao("sem_pesos", "sem_orcamento"),
+      roteiroReadiness: {
+        eapApproved: true,
+        activityCount: 2,
+        durationsComplete: true,
+        networkValid: true,
+        plannedStartDefined: true,
+        cpmCurrent: true,
+        baselineActive: true,
+        totalActivities: 2,
+        activitiesWithUpdate: 1,
+      },
+      roteiroForecast: {
+        loading: false,
+        available: true,
+        plannedFinishDate: "2027-01-01",
+        forecastFinishDate: "2027-01-04",
+        activitiesWithUpdate: 1,
+        totalActivities: 2,
+        outOfSequenceActivityIds: [],
+        warnings: [],
+        unavailableReason: null,
+      },
+    }));
+    expect(html.indexOf("Como planejar esta obra")).toBeLessThan(html.indexOf("Resumo do desempenho"));
+    expect(html).toContain("Orçamento opcional");
+    expect(html).toContain("Previsão pelos relatos: 04/01/2027");
+    expect(html).toContain("1 de 2 serviços atualizados");
   });
 });

@@ -25,16 +25,18 @@ function corpoDeGeracaoDaEap(): string {
 }
 
 function corpoDoCreate(): string {
-  const inicio = router.indexOf("\n    create: protectedProcedure");
+  const projetos = router.indexOf("projects: router({");
+  expect(projetos, "projects router não existe").toBeGreaterThan(-1);
+  const inicio = router.indexOf("\n    create: protectedProcedure", projetos);
   expect(inicio, "projects.create não existe").toBeGreaterThan(-1);
   const fim = router.indexOf("\n    initializePlan:", inicio);
   return router.slice(inicio, fim === -1 ? inicio + 9000 : fim);
 }
 
 describe("nova obra nasce com plano inicial revisável", () => {
-  it("projects.create chama o seeder do plano inicial", () => {
+  it("projects.create deixa a EAP em branco para revisão explícita", () => {
     expect(corpoDoCreate()).not.toMatch(/semearEapDoCatalogo\s*\(/);
-    expect(corpoDoCreate()).toMatch(/seedStarterPlan\s*\(/);
+    expect(corpoDoCreate()).not.toMatch(/seedStarterPlan\s*\(/);
   });
 
   it("projects.create mantém a descrição do cliente para o planejamento", () => {
@@ -44,6 +46,25 @@ describe("nova obra nasce com plano inicial revisável", () => {
   it("projects.create cria a versão inicial do plano em rascunho", () => {
     expect(corpoDoCreate()).toMatch(/status:\s*"draft"/);
     expect(corpoDoCreate()).toMatch(/EAP_PROPOSTA/);
+  });
+
+  it("projects.create não inventa datas nem um prazo final de 180 dias", () => {
+    const corpo = corpoDoCreate();
+    expect(corpo).not.toMatch(/input\.plannedStart\s*\?\?\s*new Date\(\)/);
+    expect(corpo).not.toMatch(/plannedStart\.getTime\(\)\s*\+\s*180\s*\*\s*86400000/);
+    expect(corpo).toMatch(/plannedStart:\s*input\.plannedStart\s*\?\?\s*null/);
+    expect(corpo).toMatch(/plannedFinish:\s*null/);
+  });
+
+  it("criação não pede término manual e explica que ele vem do CPM", () => {
+    expect(home).not.toMatch(/<span>Término previsto<\/span>\s*<input type="date"/);
+    expect(home).toMatch(/término.*calculado.*CPM/i);
+  });
+
+  it("CPM civil exige início planejado e não ancora a obra em hoje silenciosamente", () => {
+    expect(router).toMatch(/Defina o início planejado da obra antes de calcular o CPM/);
+    expect(router).not.toMatch(/const inicioProjeto = project\?\.plannedStart \?\? new Date\(\)/);
+    expect(router).not.toMatch(/const inicioCalendario = localIso\(project\?\.plannedStart \?\? new Date\(\)\)/);
   });
 });
 

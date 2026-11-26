@@ -573,3 +573,46 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 **Integridade:** dados ausentes são “Sem dado”, nunca zero. Orçamento didático não libera EV. Produção confirmada sem pesos físicos mantém o acompanhamento por atividade, mas não publica agregado inventado. Mudança de duração ou dependência invalida CPM antes de permitir nova baseline.
 
 **Validação:** testes focados cobrem identidade duplicada, orientação, rede, prontidão, semântica do Gantt, 2.000 atividades, teclado e cadeia CPM → baseline. A validação completa e ao vivo fica registrada no fechamento do release.
+
+## 26/nov/2026 — acompanhamento de obra por atividades e prazo
+
+### Problema
+- O fluxo de planejamento misturava prontidão financeira, física e de Linha de Balanço com a programação por atividades.
+- A criação preenchia datas que o usuário não havia informado, e a tela sem início civil não oferecia atividades selecionáveis para registrar andamento.
+- O produto não tinha histórico temporal próprio para início real, bloqueio, previsão e conclusão.
+
+### Correções
+- Separadas as prontidões por domínio. Orçamento, medição, pesos físicos e LOB deixaram de ser pré-requisitos para estruturar ou acompanhar prazo.
+- Início passou a ser opcional na criação; término é derivado do CPM. Sem âncora civil, o Cronograma mostra início e duração em D+ e permite abrir o inspetor e registrar atualizações.
+- Atualizações temporais ganharam histórico append-only, correções auditáveis e isolamento por obra e versão. Não são gravadas como produção, custo ou medição.
+- Dashboard ganhou uma visão de prazo com término calculado, comparação com baseline quando disponível, relatos de atividade, previsão vencida explícita e atualização pendente.
+- Atividades sem unidade podem ficar fora da LOB com justificativa auditada. Se houver unidade ou parcela física, a classificação é recusada.
+- A migration `0028` permite rascunhos sem início e cria o histórico temporal, preservando as datas existentes.
+
+### Validação
+- `pnpm check`: PASSOU.
+- Testes focados: PASSOU, 16 arquivos / 96 testes.
+- `pnpm db:verify:scratch`: PASSOU, 5 testes; schema criado do zero e datas legadas preservadas.
+- `pnpm build`: PASSOU. Avisos: ambiente usa Node 24.21.0 embora o projeto declare 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
+- Estado: código local no worktree `fix/piazza-warning-readiness`; nenhuma publicação, teste de navegador ao vivo ou alteração da obra 26. O fluxo completo da Dashboard em ambiente isolado segue pendente.
+
+## 26/nov/2026 — primeira utilização por serviços e previsão após relatos
+
+### Problema
+- A Dashboard reunia prontidões de prazo, avanço físico e finanças, mas não mostrava ao engenheiro novo uma sequência simples para começar a planejar pelos serviços.
+- O fim do CPM era apresentado sem uma projeção geral recalculada a partir dos relatos de campo.
+- A tela de Atividades dava destaque a pesos físicos e ao cenário QA, dimensões opcionais para a programação de prazo.
+
+### Correções
+- Dashboard ganhou trilha EAP → duração → dependências → data inicial/CPM/baseline → atualização de campo e uma única próxima ação.
+- A trilha declara que orçamento e preço não são necessários para programar prazo e que unidade repetitiva só é necessária para Linha de Balanço.
+- `planning.activityScheduleForecast` calcula uma previsão de leitura a partir do CPM, calendário, restrições e relatos atuais; informa cobertura, bloqueios sem estimativa, início fora de sequência e datas-limite inviáveis. Não altera plano, CPM salvo, baseline, produção ou orçamento.
+- A Dashboard separa “Plano calculado” de “Previsão pelos relatos”. Pesos físicos e ações QA ficam em uma área opcional recolhida; o manual de primeira utilização foi adicionado em `GUIA-PLANEJAMENTO-POR-SERVICOS.md`.
+
+### Validação
+- `pnpm check`: PASSOU.
+- `pnpm test`: PASSOU — 201 arquivos; 1.684 testes aprovados e 8 ignorados.
+- `pnpm db:verify:scratch`: PASSOU — 5 testes; schema com 45 tabelas, 39 enums e 31 triggers, com datas legadas preservadas.
+- `pnpm build`: PASSOU. Avisos do ambiente: Node 24.21.0 enquanto o projeto declara Node 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
+- `git diff --check`: PASSOU.
+- Estado: código no worktree local; sem publicação, validação em navegador ao vivo ou alterações na obra 26.
