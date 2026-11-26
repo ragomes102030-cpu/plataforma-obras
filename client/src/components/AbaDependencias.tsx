@@ -163,7 +163,7 @@ export function AbaDependencias({ projetoId }: Props) {
         <p className="pl-tabela-legenda">Versão v{plano.data.currentVersionNumber} · verificação de ciclos, referências e conectividade das atividades operacionais.</p>
         {plano.data.networkValidation.issues.length > 0
           ? <ul>{plano.data.networkValidation.issues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul>
-          : <p className="pl-tabela-legenda">A revisão da sequência de execução continua necessária antes de congelar a baseline.</p>}
+          : <p className="pl-tabela-legenda">A validação confirma apenas ciclos, referências e conectividade. Confirme a sequência executiva conforme método construtivo, liberações e restrições antes de usar as datas como plano.</p>}
       </section>}
 
       {plano.data?.currentVersionStatus === "approved" && plano.data.hasApprovedEap && (

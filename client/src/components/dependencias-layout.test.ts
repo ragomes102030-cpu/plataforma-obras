@@ -32,4 +32,10 @@ describe("rede de dependências legível e protegida", () => {
     expect(fonte.match(/remover\.mutate/g)).toHaveLength(1);
     expect(fonte).toContain("dependencyId: confirmarRemocao.id");
   });
+
+  it("não declara que falta congelar uma baseline quando a rede está estruturalmente válida", () => {
+    expect(fonte).toContain("A validação confirma apenas ciclos, referências e conectividade.");
+    expect(fonte).toContain("Confirme a sequência executiva conforme método construtivo, liberações e restrições antes de usar as datas como plano.");
+    expect(fonte).not.toContain("antes de congelar a baseline");
+  });
 });
