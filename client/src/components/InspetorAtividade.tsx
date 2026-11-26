@@ -34,7 +34,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
   const [lobReason,setLobReason]=useState(linha.lobApplicabilityReason??"");
   const [lobFeedback,setLobFeedback]=useState<string|null>(null);
   const gravar=trpc.planning.registerActivityScheduleUpdate.useMutation({
-    onSuccess:async()=>{setFeedback("Atualização de prazo registrada no histórico.");setCorrectsUpdateId(null);setNote("");setEvidenceRef("");await revalidarAtualizacaoPrazo(utils,projetoId,linha.activityId);},
+    onSuccess:async()=>{setFeedback("Atualização de prazo registrada no histórico.");setCorrectsUpdateId(null);setNote("");setEvidenceRef("");await revalidarAtualizacaoPrazo(utils,projetoId,linha.activityId,hojeLocal());},
     onError:error=>setFeedback(error.message),
   });
   const classificarLob=trpc.planning.setActivityLobApplicability.useMutation({
