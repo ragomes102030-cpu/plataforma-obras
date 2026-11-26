@@ -409,7 +409,7 @@ function EscolhaDeObra({ obras, carregando, onEscolher, onNovaObra, onObraDemo, 
           <div className="arq-obras-vazio">
             <span className="arq-obras-vazio-icone"><Layers3 size={27} /></span>
             <h2>{termo ? "Nenhuma obra encontrada" : "Seu espaço começa aqui"}</h2>
-            <p>{termo ? "Tente outro nome, código ou local." : "Crie a primeira obra para começar a estruturar a EAP, os quantitativos e o cronograma."}</p>
+            <p>{termo ? "Tente outro nome, código ou local." : "Crie a primeira obra para organizar os serviços e calcular o prazo. Orçamento é opcional."}</p>
             {termo ? (
               <button type="button" className="arq-obras-btn-secundario" onClick={() => setBusca("")}>Limpar busca</button>
             ) : (
@@ -1107,7 +1107,7 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
       )}
 
       <div className="scopo-flow" aria-label="Fluxo de planejamento da obra">
-        <strong>Objeto e requisitos</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP · entregáveis e pacotes</span><span>→</span><span>Planejamento integrado: Quantitativos e orçamento + atividades e dependências</span><span>→</span><span>Revisão e baseline</span><span>→</span><span>Execução e controle</span><span>→</span><span>Entrega e encerramento</span>
+        <strong>Objeto e requisitos</strong><span>→</span><span className="ativo">Escopo</span><span>→</span><span>EAP · entregáveis e pacotes</span><span>→</span><span>Atividades, durações e dependências</span><span>→</span><span>Revisar CPM e registrar baseline de prazo</span><span>→</span><span>Atualizar serviços em campo</span><span>→</span><span>Entrega e encerramento</span>
       </div>
 
       <section className="scopo-metrics" aria-label="Resumo dos dados de escopo e planejamento">
@@ -1153,12 +1153,12 @@ function EscopoInicial({ projetoId, obra, localizacao, descricao, tipoDeObra, cu
           </div>
         </details>
         <details open className="scopo-detail">
-          <summary>Conexão do escopo ao custo e ao cronograma</summary>
+          <summary>Conexão do escopo ao planejamento por serviços</summary>
           <div className="scopo-detail-body">
-            <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP / PACOTES</span><b>→</b><span>QUANTITATIVOS E CUSTOS</span><b>+</b><span>ATIVIDADES E REDE</span></div>
+            <div className="scopo-trace"><span>ESCOPO</span><b>→</b><span>EAP / PACOTES</span><b>→</b><span>ATIVIDADES, DURAÇÕES E DEPENDÊNCIAS</span><b>→</b><span>CPM / BASELINE</span></div><small>ORÇAMENTO OPCIONAL · útil para controle financeiro; não bloqueia o prazo</small>
             <p>{temPlanejamento
-              ? `${plural(atividades.length, "atividade", "atividades")} no cronograma, ${plural(frentes.length, "frente", "frentes")} e ${plural(pavimentos.length, "local", "locais")}. ${comQuantidade} têm quantidade informada. Confira unidade, critério de medição e vínculo de custo; a existência da atividade, sozinha, não comprova quantitativo nem orçamento.`
-              : "Quantidades podem ser levantadas por pacote da EAP antes das atividades do cronograma. Orçamento e cronograma são desenvolvidos a partir do escopo e refinados em conjunto; a medição exige unidade e critério definidos."}</p>
+              ? `${plural(atividades.length, "atividade", "atividades")} no cronograma, ${plural(frentes.length, "frente", "frentes")} e ${plural(pavimentos.length, "local", "locais")}. ${comQuantidade} têm quantidade informada. Revise duração, calendário e predecessoras para calcular o prazo. Unidade e quantidade apoiam a medição da produção, mas não são requisito para calcular o prazo; vínculo de custo só é necessário para indicadores financeiros.`
+              : "O prazo é planejado com atividades, durações e dependências. Quantidades e unidades servem para medir a produção física, mas não são requisito para calcular o prazo; preços, orçamento e suprimentos ficam disponíveis quando o controle financeiro for necessário."}</p>
           </div>
         </details>
       </section>
@@ -1279,7 +1279,7 @@ function NovaObraDialog({
           <div>
             <div className="nova-obra-kicker"><Sparkles size={14} /> ARQUIMEDES · PLANEJAMENTO</div>
             <h2 id="nova-obra-titulo">Nova obra</h2>
-            <p>Descreva o empreendimento. O Arquimedes usa esse contexto para propor a primeira EAP.</p>
+            <p>Descreva o empreendimento. O Arquimedes usa esse contexto para propor a primeira EAP. Atividades, durações e dependências montam o prazo; orçamento é opcional.</p>
           </div>
           <button
             type="button"

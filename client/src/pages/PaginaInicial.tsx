@@ -19,29 +19,29 @@ const RECURSOS = [
     texto: "Organize a obra em fases, serviços e pacotes de trabalho, com critérios de aceitação e informações rastreáveis.",
   },
   {
-    icone: BarChart3,
-    titulo: "Quantitativos e orçamento",
-    texto: "Estruture os quantitativos por serviço e conecte o escopo às informações necessárias para compor o orçamento.",
-  },
-  {
     icone: Network,
-    titulo: "Atividades e dependências",
-    texto: "Transforme os pacotes em atividades, defina durações e relações lógicas entre os serviços.",
+    titulo: "Planejamento por serviços e prazo",
+    texto: "Defina atividades, durações e dependências, calcule o CPM e acompanhe cada serviço. Orçamento é opcional para programar o prazo.",
   },
   {
     icone: CalendarDays,
-    titulo: "CPM e linha de base",
-    texto: "Calcule a rede, identifique o caminho crítico e estabeleça uma referência aprovada para acompanhar o prazo.",
+    titulo: "CPM e baseline",
+    texto: "Calcule a rede, identifique o caminho crítico e registre uma referência aprovada para acompanhar as datas.",
   },
   {
     icone: Layers3,
     titulo: "Gantt e Linha de Balanço",
-    texto: "Visualize a programação no tempo e, em obras repetitivas, acompanhe a distribuição dos serviços por unidade ou frente.",
+    texto: "Visualize a programação no tempo; use a Linha de Balanço quando os serviços tiverem unidades físicas repetitivas confirmadas.",
   },
   {
     icone: BarChart3,
-    titulo: "Medição e controle",
-    texto: "Compare o avanço planejado com o realizado, observe desvios e apoie decisões com informações organizadas.",
+    titulo: "Atualização dos serviços",
+    texto: "Registre início, conclusão, duração restante e bloqueios. Quantidades e unidades ajudam a medir a produção.",
+  },
+  {
+    icone: BarChart3,
+    titulo: "Custos e Curva S financeira (opcional)",
+    texto: "Use preços e orçamento aprovado quando precisar de suprimentos, valor agregado ou acompanhamento financeiro.",
   },
 ];
 
@@ -149,7 +149,7 @@ export default function PaginaInicial() {
           <p className="arq-overline">DA EAP À ENTREGA</p>
           <h1>Obras bem planejadas começam com <em>clareza.</em></h1>
           <p className="arq-hero-descricao">
-            Uma plataforma de planejamento e controle de obras que organiza o escopo e conecta EAP, quantitativos, orçamento, atividades, dependências e cronograma — ajudando o engenheiro a estruturar o plano e acompanhar sua execução com mais clareza.
+            Planeje a obra por serviços: organize o escopo na EAP, defina atividades, durações e dependências, calcule o CPM e acompanhe a execução. Preços e orçamento são opcionais para programar o prazo.
           </p>
           <div className="arq-hero-acoes">
             <button type="button" className="arq-btn arq-btn--primary" onClick={() => setLocation(autenticado ? "/obras" : "/login")}>
@@ -161,7 +161,7 @@ export default function PaginaInicial() {
           <div className="arq-hero-pilares">
             <span><Check size={14} /> EAP estruturada</span>
             <span><Check size={14} /> CPM e linha de base</span>
-            <span><Check size={14} /> Medição integrada</span>
+            <span><Check size={14} /> Atualização por serviço</span>
           </div>
         </div>
         <IlustracaoTecnica />
