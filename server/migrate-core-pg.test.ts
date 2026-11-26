@@ -218,7 +218,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
     ).toEqual([]);
   });
 
-  it("reconhece as 44 tabelas, os 39 tipos e as 31 triggers", () => {
+  it("reconhece as 45 tabelas, os 39 tipos e as 31 triggers", () => {
     const conta = { table: 0, type: 0, trigger: 0 };
     for (const arquivo of arquivos) {
       for (const stmt of statementsDe(arquivo)) {
@@ -226,7 +226,7 @@ describe("as MIGRATIONS REAIS sao reconhecidas", () => {
         if (alvo && alvo.tipo in conta) conta[alvo.tipo as keyof typeof conta] += 1;
       }
     }
-    expect(conta).toEqual({ table: 44, type: 39, trigger: 31 });
+    expect(conta).toEqual({ table: 45, type: 39, trigger: 31 });
   });
 });
 
@@ -254,7 +254,16 @@ describe("aplicarMigracoes num banco vazio", () => {
   function conexao(pg: PGlite) {
     return {
       query: async (sql: string, params?: unknown[]) => {
-        const r = await pg.query(sql, params as never[]);
+        // O PGlite interpreta os comandos internos de um bloco DO como vários
+        // comandos em modo preparado; execute-o pelo protocolo simples, como o
+        // pg faz para SQL sem parâmetros.
+        if (/^\s*DO\s+\$\$/i.test(sql)) {
+          await pg.exec(sql);
+          return { rows: [], rowCount: 1 };
+        }
+        const r = params === undefined
+          ? await pg.query(sql)
+          : await pg.query(sql, params as never[]);
         return { rows: r.rows, rowCount: r.affectedRows };
       },
     };
@@ -304,8 +313,8 @@ describe("aplicarMigracoes num banco vazio", () => {
         "SELECT COUNT(*)::int AS n FROM information_schema.tables" +
           " WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
       );
-      // 42 do schema + a de registro.
-      expect(tabelas.rows[0]!.n).toBe(45);
+      // 45 tabelas do schema + a de registro.
+      expect(tabelas.rows[0]!.n).toBe(46);
     } finally {
       await pg.close();
     }

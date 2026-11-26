@@ -3,6 +3,7 @@ import {
   boolean,
   customType,
   check,
+  date,
   integer,
   pgEnum,
   pgTable,
@@ -240,8 +241,9 @@ export const projects = pgTable("projects", {
   // sendo construído; a EAP em si vem do catálogo de preços, não daqui.
   descricao: text("descricao"),
   tipoDeObra: varchar("tipoDeObra", { length: 32 }),
-  plannedStart: timestamp("plannedStart", { withTimezone: true }).notNull(),
-  plannedFinish: timestamp("plannedFinish", { withTimezone: true }).notNull(),
+  plannedStart: timestamp("plannedStart", { withTimezone: true }),
+  /** Término calculado pelo CPM; nulo até existir âncora e programação válida. */
+  plannedFinish: timestamp("plannedFinish", { withTimezone: true }),
   baseReferencia: enumProjectsBaseReferencia("baseReferencia"),
   baseReferenciaRef: varchar("baseReferenciaRef", { length: 20 }),
   // CUB declarado da obra (R$/m2), com UF e mes de referencia (AAAA-MM).
@@ -561,6 +563,50 @@ export const scheduleActivities = pgTable(
     index("schedule_activities_project_idx").on(table.projectId),
     index("schedule_activities_plan_version_idx").on(table.versionId),
     index("schedule_activities_wbs_node_idx").on(table.wbsNodeId),
+  ]
+);
+
+/** Relato temporal append-only por atividade; nunca representa medição física. */
+export const activityScheduleUpdates = pgTable(
+  "activity_schedule_updates",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    projectId: integer("projectId").notNull().references(() => projects.id),
+    activityId: integer("activityId").notNull().references(() => scheduleActivities.id),
+    versionId: integer("versionId").references(() => projectPlanVersions.id),
+    positionDate: date("positionDate", { mode: "string" }).notNull(),
+    status: varchar("status", { length: 24 }).notNull(),
+    actualStartDate: date("actualStartDate", { mode: "string" }),
+    actualFinishDate: date("actualFinishDate", { mode: "string" }),
+    remainingDurationDays: integer("remainingDurationDays"),
+    forecastFinishDate: date("forecastFinishDate", { mode: "string" }),
+    note: text("note"),
+    blockerReason: text("blockerReason"),
+    evidenceRef: varchar("evidenceRef", { length: 500 }),
+    supersedesId: integer("supersedesId").references(
+      (): AnyPgColumn => activityScheduleUpdates.id
+    ),
+    authorUserId: integer("authorUserId").notNull().references(() => users.id),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  },
+  table => [
+    check(
+      "activity_schedule_updates_status_valid",
+      drizzleSql`${table.status} in ('nao_iniciada', 'em_andamento', 'concluida', 'bloqueada')`
+    ),
+    check(
+      "activity_schedule_updates_remaining_positive",
+      drizzleSql`${table.remainingDurationDays} is null or ${table.remainingDurationDays} > 0`
+    ),
+    uniqueIndex("activity_schedule_updates_single_correction_idx")
+      .on(table.supersedesId)
+      .where(drizzleSql`${table.supersedesId} is not null`),
+    index("activity_schedule_updates_project_activity_idx").on(
+      table.projectId,
+      table.activityId,
+      table.positionDate
+    ),
+    index("activity_schedule_updates_version_idx").on(table.versionId),
   ]
 );
 

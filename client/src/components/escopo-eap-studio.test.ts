@@ -12,9 +12,10 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
   });
   it("mantém edição de escopo e encaminhamento explícito",()=>{
     expect(home).toContain("trpc.projects.updateScope.useMutation");
-    expect(home).toContain("dataIsoDoProjeto(salvo.plannedFinish) !== terminoObraEditado");
+    expect(home).toContain("dataIsoDoProjeto(salvo.plannedStart) !== inicioObraEditado");
     expect(home).toContain("utils.projects.list.fetch()");
     expect(home).toContain("A releitura da obra não confirmou as datas salvas");
+    expect(home).toContain("Término calculado pelo CPM");
     expect(home).toContain('const irParaEap = () => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "eap" } }))');
     expect(home).toContain('className="ct-escopo-etapa"');
     expect(home).toContain("dadosMinimosEscopo");

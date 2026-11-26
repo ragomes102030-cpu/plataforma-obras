@@ -3,6 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { createHash, randomUUID } from "node:crypto";
 import { indexarAtividadesPorCodigo, resolverAtividadeDaProducao } from "../shared/producao-vinculo";
 import { isClearlyQaExampleNote } from "../shared/production-entries";
+import { ACTIVITY_SCHEDULE_STATUSES, validarAtualizacaoDePrazo } from "../shared/activity-schedule-update";
+import { calcularPrevisaoDePrazo } from "../shared/activity-schedule-forecast";
 import { selectOperationalPlanning } from "../shared/operational-planning";
 import { isPhysicalWeightQaEvidence, physicalWeightQaEvidence } from "../shared/physical-weight-qa";
 import { z } from "zod";
@@ -27,6 +29,7 @@ import {
   agentFindings,
   agentMemories,
   scheduleActivities,
+  activityScheduleUpdates,
   scheduleDependencies,
   wbsNodes,
   budgetVersions,
@@ -49,6 +52,7 @@ import {
   calendarExceptions,
   agentRuns,
   arquimedesCapabilities,
+  users,
 } from "../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { seinfraAdapter, lerPrimeiraAba, reconhecerPlanilhaSeinfra, consolidarRegistrosSeinfra } from "@shared/price-sources/seinfra";
@@ -220,13 +224,14 @@ import {
   carregarCalendarioDoPeriodo,
   hojeNoBrasil,
   idDoCalendarioDaObra,
+  isoToLocalDate,
   localIso,
   removerExcecaoDoCalendario,
   salvarCalendarioDaObra,
   salvarExcecaoDoCalendario,
   semearCalendarioPadrao,
 } from "./construction/calendario-obra";
-import { dateAt, indexOf as calendarIndexOf } from "../shared/work-calendar";
+import { dateAt, indexOf as calendarIndexOf, isWorkingDay, nextWorkingDay } from "../shared/work-calendar";
 import { congelarDatasBaseline, lerDatasCapturadasBaseline } from "../shared/baseline-dates";
 import {
   allowedSourcesFor,
@@ -327,6 +332,7 @@ async function markCpmStaleForVersion(
         eq(scheduleActivities.versionId, versionId)
       )
     );
+  await db.update(projects).set({ plannedFinish: null, updatedAt: new Date() }).where(eq(projects.id, projectId));
 }
 
 const demoProjects = [
@@ -768,6 +774,31 @@ async function getCurrentPlanVersionId(
   return version?.id ?? null;
 }
 
+type ActivityLobApplicability = { applicability: "aplicavel" | "fora_lob"; reason: string | null };
+
+async function loadActivityLobApplicability(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  projectId: number,
+  versionId: number | null,
+): Promise<Map<number, ActivityLobApplicability>> {
+  if (versionId == null) return new Map();
+  const rows = await db.select({ id: projectAuditEvents.id, payload: projectAuditEvents.payload })
+    .from(projectAuditEvents)
+    .where(and(eq(projectAuditEvents.projectId, projectId), eq(projectAuditEvents.action, "activity_lob_applicability_changed")))
+    .orderBy(desc(projectAuditEvents.createdAt), desc(projectAuditEvents.id));
+  const current = new Map<number, ActivityLobApplicability>();
+  for (const row of rows) {
+    const payload = row.payload as Record<string, unknown> | null;
+    if (Number(payload?.versionId) !== versionId) continue;
+    const activityId = Number(payload?.activityId);
+    const applicability = payload?.applicability;
+    if (!Number.isSafeInteger(activityId) || (applicability !== "aplicavel" && applicability !== "fora_lob") || current.has(activityId)) continue;
+    const reason = typeof payload?.reason === "string" ? payload.reason.trim() : "";
+    current.set(activityId, { applicability, reason: reason || null });
+  }
+  return current;
+}
+
 async function assertCurrentPlanWbsLinks(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   projectId: number,
@@ -1146,6 +1177,9 @@ async function persistPhase7Plan(
     .where(eq(projects.id, projectId))
     .limit(1);
   if (!project) throw notFound("Obra não encontrada para importar o plano.");
+  if (!project.plannedStart && plan.activities.some(activity => activity.startDate)) {
+    throw badRequest("Defina o início planejado da obra antes de importar atividades com datas civis.");
+  }
   return db.transaction(async tx => {
     const localWbsByExternalId = new Map<string, number>();
     for (const node of plan.wbsNodes) {
@@ -1236,7 +1270,7 @@ async function persistPhase7Plan(
         wbsCode: activity.eapRef,
         name: activity.name,
         phase: activity.phase,
-        startOffset: activity.startDate
+        startOffset: activity.startDate && project.plannedStart
           ? Math.max(
               0,
               Math.round(
@@ -1531,27 +1565,25 @@ export const appRouter = router({
         cubUf: z.string().trim().toUpperCase().length(2).nullable().optional(),
         cubMes: z.string().trim().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use o formato AAAA-MM.").nullable().optional(),
         bdiDeclarado: z.number().min(0).max(1).nullable().optional(),
-        plannedStart: z.date().optional(),
-        plannedFinish: z.date().optional(),
+        plannedStart: z.date().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new Error("Banco de dados não configurado.");
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
-        if (input.plannedStart !== undefined || input.plannedFinish !== undefined) {
-          const [periodoAtual] = await db
-            .select({ plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish })
-            .from(projects)
-            .where(eq(projects.id, input.projectId))
-            .limit(1);
-          if (!periodoAtual) throw notFound("Obra não encontrada para atualizar o período.");
-          const inicio = input.plannedStart ?? periodoAtual.plannedStart;
-          const termino = input.plannedFinish ?? periodoAtual.plannedFinish;
-          if (termino <= inicio) throw badRequest("O término da obra deve ser posterior ao início.");
-        }
-        const [updated] = await db
-          .update(projects)
-          .set({
+        const [periodoAtual] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        if (!periodoAtual) throw notFound("Obra não encontrada para atualizar o período.");
+        const inicioAlterado = input.plannedStart !== undefined &&
+          (input.plannedStart?.getTime() ?? null) !== (periodoAtual.plannedStart?.getTime() ?? null);
+        const currentVersion = inicioAlterado ? await getCurrentPlanVersion(input.projectId) : null;
+        const updated = await db.transaction(async tx => {
+          const [saved] = await tx
+            .update(projects)
+            .set({
             location: input.location,
             tipoDeObra: input.tipoDeObra,
             descricao: input.descricao || null,
@@ -1561,7 +1593,7 @@ export const appRouter = router({
             cubMes: input.cubMes === undefined ? undefined : input.cubMes || null,
             bdiDeclarado: input.bdiDeclarado === undefined ? undefined : input.bdiDeclarado == null ? null : input.bdiDeclarado.toFixed(6),
             plannedStart: input.plannedStart,
-            plannedFinish: input.plannedFinish,
+            plannedFinish: inicioAlterado ? null : undefined,
             updatedAt: new Date(),
           })
           .where(and(
@@ -1569,7 +1601,24 @@ export const appRouter = router({
             eq(projects.ownerUserId, ctx.user.id),
             isNull(projects.deletedAt),
           ))
-          .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, cubValor: projects.cubValor, cubUf: projects.cubUf, cubMes: projects.cubMes, bdiDeclarado: projects.bdiDeclarado, plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish, updatedAt: projects.updatedAt });
+            .returning({ id: projects.id, name: projects.name, location: projects.location, descricao: projects.descricao, tipoDeObra: projects.tipoDeObra, cubValor: projects.cubValor, cubUf: projects.cubUf, cubMes: projects.cubMes, bdiDeclarado: projects.bdiDeclarado, plannedStart: projects.plannedStart, plannedFinish: projects.plannedFinish, updatedAt: projects.updatedAt });
+          if (inicioAlterado) {
+            const versionScope = currentVersion
+              ? eq(scheduleActivities.versionId, currentVersion.id)
+              : isNull(scheduleActivities.versionId);
+            await tx.update(scheduleActivities).set({
+              critical: 0,
+              earlyStart: null,
+              earlyFinish: null,
+              lateStart: null,
+              lateFinish: null,
+              totalFloat: null,
+              freeFloat: null,
+              cpmCalculatedAt: null,
+            }).where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+          }
+          return saved;
+        });
         if (!updated) throw notFound("Obra não encontrada para atualizar o escopo.");
         return updated;
       }),
@@ -2043,8 +2092,9 @@ export const appRouter = router({
         .limit(1);
       if (existingDemo) return existingDemo;
 
+      // Cenário explicitamente demonstrativo: mantém uma âncora visual, mas o
+      // término é calculado somente depois do CPM.
       const plannedStart = new Date();
-      const plannedFinish = new Date(plannedStart.getTime() + 180 * 86400000);
       const code = `DEMO-${Date.now().toString(36).slice(-6).toUpperCase()}`;
       const [createdId] = await db.insert(projects).values({
         ownerUserId: ctx.user.id,
@@ -2054,7 +2104,7 @@ export const appRouter = router({
         status: "Planejamento",
         progress: 0,
         plannedStart,
-        plannedFinish,
+        plannedFinish: null,
       }).returning({ id: projects.id });
       await seedStarterPlan(db, createdId.id);
       const [created] = await db.select().from(projects).where(eq(projects.id, createdId.id)).limit(1);
@@ -2066,21 +2116,10 @@ export const appRouter = router({
           .object({
             name: z.string().trim().min(2).max(180),
             location: z.string().trim().min(2).max(180).default("A cadastrar"),
-            plannedStart: z.coerce.date().optional(),
-            plannedFinish: z.coerce.date().optional(),
+            plannedStart: z.date().nullable().optional(),
             descricao: z.string().trim().max(4000).optional(),
             tipoDeObra: z.enum(["edificio", "reforma", "pavimentacao", "saneamento", "todos"]).optional(),
           })
-          .refine(
-            data =>
-              !data.plannedStart ||
-              !data.plannedFinish ||
-              data.plannedFinish.getTime() > data.plannedStart.getTime(),
-            {
-              message: "A data de término deve ser posterior à data de início.",
-              path: ["plannedFinish"],
-            }
-          )
       )
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -2088,10 +2127,6 @@ export const appRouter = router({
           throw new Error(
             "Banco de dados não configurado; a obra não foi persistida."
           );
-        const plannedStart = input.plannedStart ?? new Date();
-        const plannedFinish =
-          input.plannedFinish ??
-          new Date(plannedStart.getTime() + 180 * 86400000);
         const code = `OB-${Date.now().toString(36).slice(-6).toUpperCase()}`;
         return db.transaction(async tx => {
           const [createdId] = await tx
@@ -2105,8 +2140,8 @@ export const appRouter = router({
               tipoDeObra: input.tipoDeObra ?? null,
               status: "Planejamento",
               progress: 0,
-              plannedStart,
-              plannedFinish,
+              plannedStart: input.plannedStart ?? null,
+              plannedFinish: null,
             })
             .returning({ id: projects.id });
           const [planVersion] = await tx.insert(projectPlanVersions).values({ projectId: createdId.id, versionNumber: 1, status: "draft", notes: "Versão inicial aguardando proposta e revisão da EAP pelo Arquimedes.", createdBy: ctx.user.id }).returning({ id: projectPlanVersions.id });
@@ -5385,9 +5420,9 @@ export const appRouter = router({
         const [plan] = await db.select().from(projectPlanVersions)
           .where(eq(projectPlanVersions.projectId, input.projectId))
           .orderBy(desc(projectPlanVersions.versionNumber)).limit(1);
-        const nodes = plan ? await db.select({ id: wbsNodes.id, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus, location: wbsNodes.location })
+        const nodes = plan ? await db.select({ id: wbsNodes.id, code: wbsNodes.code, nodeType: wbsNodes.nodeType, scopeStatus: wbsNodes.scopeStatus, location: wbsNodes.location })
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
-        const activities = plan ? await db.select({ id: scheduleActivities.id, projectId: scheduleActivities.projectId, name: scheduleActivities.name, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset, plannedQuantity: scheduleActivities.plannedQuantity })
+        const activities = plan ? await db.select({ id: scheduleActivities.id, projectId: scheduleActivities.projectId, wbsNodeId: scheduleActivities.wbsNodeId, wbsCode: scheduleActivities.wbsCode, name: scheduleActivities.name, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset, plannedQuantity: scheduleActivities.plannedQuantity })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
         const qaReleaseRows = plan ? await db.select({ id: projectAuditEvents.id, payload: projectAuditEvents.payload })
           .from(projectAuditEvents)
@@ -5402,6 +5437,12 @@ export const appRouter = router({
           Array.isArray(qaPayload?.lobExcludedActivityIds)
             ? qaPayload.lobExcludedActivityIds.map(Number).filter(Number.isInteger)
             : []
+        );
+        const applicabilityByActivity = await loadActivityLobApplicability(db, input.projectId, plan?.id ?? null);
+        const activitiesClassifiedOutsideLob = new Set(
+          [...applicabilityByActivity.entries()]
+            .filter(([, item]) => item.applicability === "fora_lob" && Boolean(item.reason))
+            .map(([activityId]) => activityId)
         );
         const dependencies = plan ? await db.select({ id: scheduleDependencies.id, projectId: scheduleDependencies.projectId, predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId, lag: scheduleDependencies.lag }).from(scheduleDependencies)
           .where(and(eq(scheduleDependencies.projectId, input.projectId), eq(scheduleDependencies.versionId, plan.id))) : [];
@@ -5427,6 +5468,12 @@ export const appRouter = router({
           name: productionUnits.name,
         }).from(productionUnits).where(eq(productionUnits.projectId, input.projectId));
         const nomesUnidadesFisicas = new Set(unidadesDaObra.map(unidade => unidade.name.trim()));
+        const nodeByIdForLocation = new Map(nodes.map(node => [node.id, node]));
+        const nodeByCodeForLocation = new Map(nodes.map(node => [node.code.trim(), node]));
+        const atividadeIdsComUnidadeFisica = new Set(activities.filter(activity => {
+          const node = nodeByIdForLocation.get(activity.wbsNodeId) ?? nodeByCodeForLocation.get(activity.wbsCode.trim());
+          return [activity.pavimento?.trim(), node?.location?.trim()].some(location => Boolean(location && nomesUnidadesFisicas.has(location)));
+        }).map(activity => activity.id));
         const atividadeIdsComParcelaLob = new Set(lobSegments.map(segment => segment.activityId));
         const unidadesDidaticas = new Set(unidadesDaObra
           .filter(unit => /did[aá]tic/i.test(unit.name)).map(unit => unit.id));
@@ -5471,6 +5518,7 @@ export const appRouter = router({
         const calculated = activities.filter(item => item.cpmCalculatedAt).length;
         const alteredAfterCpm = activities.some(item => item.cpmCalculatedAt && item.updatedAt > item.cpmCalculatedAt);
         return avaliarProntidaoObra({
+          inicioPlanejado: project?.plannedStart != null,
           // A validação do escopo é governada pelo cadastro declarado e pela
           // versão aprovada da EAP. `scopeStatus` dos nós é um detalhe de
           // inspeção/editoração e não pode rebaixar uma EAP já aprovada no
@@ -5483,9 +5531,10 @@ export const appRouter = router({
           cpm: { calculadoEm: calculated ? activities.find(item => item.cpmCalculatedAt)?.cpmCalculatedAt?.toISOString() ?? null : null, alteradoDepois: alteredAfterCpm, atividadesCalculadas: calculated },
           baseline: { existe: Boolean(baseline), aprovada: baseline?.status === "ativa" },
           lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos, atividadesSemLocalOperacional: activities.filter(item =>
-            !nomesUnidadesFisicas.has(item.pavimento?.trim() ?? "") &&
+            !atividadeIdsComUnidadeFisica.has(item.id) &&
             !atividadeIdsComParcelaLob.has(item.id) &&
-            !lobQaExcludedIds.has(item.id)
+            !lobQaExcludedIds.has(item.id) &&
+            !activitiesClassifiedOutsideLob.has(item.id)
           ).length },
           execucao: { medicoes: approvedMeasurementRows.length, comUnidade: measurementItemRows.length, confirmadas: approvedMeasurementRows.length },
         });
@@ -5516,6 +5565,57 @@ export const appRouter = router({
           eq(lobActivityLocations.projectId,input.projectId),
           eq(lobActivityLocations.versionId,versionId)
         )).orderBy(lobActivityLocations.activityId,lobActivityLocations.startDate,lobActivityLocations.unitId);
+      }),
+    setActivityLobApplicability: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        activityId: z.number().int().positive(),
+        applicability: z.enum(["aplicavel", "fora_lob"]),
+        reason: z.string().trim().max(1500).nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        if (input.applicability === "fora_lob" && (input.reason?.trim().length ?? 0) < 12) {
+          throw badRequest("Justifique por que esta atividade não se repete por unidade física (mínimo de 12 caracteres).");
+        }
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
+        const [activity] = await db.select({ versionId: scheduleActivities.versionId, wbsCode: scheduleActivities.wbsCode, pavimento: scheduleActivities.pavimento })
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId)))
+          .limit(1);
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        if (activity.versionId !== versionId) throw conflict("A classificação de LOB só pode ser alterada na versão operacional atual.");
+        if (input.applicability === "fora_lob") {
+          const [node] = versionId == null ? [] : await db.select({ location: wbsNodes.location })
+            .from(wbsNodes)
+            .where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, versionId), eq(wbsNodes.code, activity.wbsCode)))
+            .limit(1);
+          const locaisFisicos = [...new Set([activity.pavimento?.trim(), node?.location?.trim()].filter((value): value is string => Boolean(value)))];
+          const units = locaisFisicos.length
+            ? await db.select({ id: productionUnits.id }).from(productionUnits)
+                .where(and(eq(productionUnits.projectId, input.projectId), inArray(productionUnits.name, locaisFisicos)))
+            : [];
+          const [segment] = versionId == null ? [] : await db.select({ id: lobActivityLocations.id })
+            .from(lobActivityLocations)
+            .where(and(eq(lobActivityLocations.projectId, input.projectId), eq(lobActivityLocations.activityId, input.activityId), eq(lobActivityLocations.versionId, versionId)))
+            .limit(1);
+          if (units.length || segment) throw badRequest("A atividade já tem unidade ou parcela física vinculada. Revise esse vínculo antes de classificá-la fora da LOB.");
+        }
+        const [event] = await db.insert(projectAuditEvents).values({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          action: "activity_lob_applicability_changed",
+          payload: {
+            activityId: input.activityId,
+            versionId,
+            applicability: input.applicability,
+            reason: input.applicability === "fora_lob" ? input.reason!.trim() : null,
+            at: new Date().toISOString(),
+          },
+        }).returning({ id: projectAuditEvents.id });
+        return { id: event.id, applicability: input.applicability, reason: input.applicability === "fora_lob" ? input.reason!.trim() : null };
       }),
     /** Salva um segmento de UMA atividade em UMA unidade.
      * Quantidades por atividade nunca podem exceder o total; nenhuma data do CPM é alterada.
@@ -5883,6 +5983,7 @@ export const appRouter = router({
             ? qaPayload.lobExcludedActivityIds.map(Number).filter(Number.isInteger)
             : []
         );
+        const applicabilityByActivity = await loadActivityLobApplicability(db, input.projectId, currentVersion?.id ?? null);
         const evidenceByActivity = new Map<number, Record<string, unknown>>();
         for (const row of evidenceRows) {
           const payload = row.payload as Record<string, unknown> | null;
@@ -5903,6 +6004,8 @@ export const appRouter = router({
             wbsLocationIsProductionUnit: node != null && physicalUnitNames.has(wbsLocation ?? ""),
             pavimentoIsProductionUnit: physicalUnitNames.has(activity.pavimento?.trim() ?? ""),
             lobQaNonrepetitive: lobQaExcludedIds.has(activity.id),
+            lobApplicability: applicabilityByActivity.get(activity.id)?.applicability ?? null,
+            lobApplicabilityReason: applicabilityByActivity.get(activity.id)?.reason ?? null,
             planningEvidence: evidenceByActivity.get(activity.id) ?? null,
           };
         });
@@ -5963,7 +6066,22 @@ export const appRouter = router({
           db.select({ id: scheduleActivities.id, wbsCode: scheduleActivities.wbsCode, unit: scheduleActivities.unit }).from(scheduleActivities).where(eq(scheduleActivities.projectId,input.projectId)),
           coletarLancamentosExecutados(db, input.projectId, hoje),
         ]);
-        const inicio = project[0]?.plannedStart ?? new Date();
+        const projetoAtual = project[0];
+        const inicio = projetoAtual?.plannedStart;
+        if (!inicio) return {
+          hoje,
+          inicioObra: null,
+          linhas: [],
+          datas: [],
+          grade: {},
+          porAtividade: {},
+          totalGeral: "0.000",
+          agregado: undefined,
+          pesosFisicosAprovados: false,
+          exemploPorCodigo: {},
+          producaoSemAlocacao: [],
+          aviso: "Defina o início planejado da obra para exibir datas civis. EAP, atividades, durações e dependências podem ser estruturadas antes disso.",
+        };
         const inicioIso = localIso(inicio);
         const maiorIndiceDoPlano = Math.max(0, ...activities.map(a =>
           deslocamentoEmDiasUteis(a) + duracaoEmDiasUteis(a) - 1
@@ -5974,7 +6092,7 @@ export const appRouter = router({
         const horizonteCivil = new Date(inicio);
         horizonteCivil.setDate(horizonteCivil.getDate() + maiorIndiceDoPlano * 7);
         const anoFinalDaGrade = Math.max(
-          project[0]?.plannedFinish?.getFullYear() ?? inicio.getFullYear(),
+          projetoAtual?.plannedFinish?.getFullYear() ?? inicio.getFullYear(),
           horizonteCivil.getFullYear()
         );
         const calendarioDaGrade = (await carregarCalendarioDoPeriodo(
@@ -6290,7 +6408,8 @@ export const appRouter = router({
         if (input.campo === "inicio") {
           const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
           const startDate = new Date(input.valor);
-          if (!project || Number.isNaN(startDate.getTime())) throw badRequest("Data de início inválida.");
+          if (!project?.plannedStart) throw badRequest("Defina o início planejado da obra antes de informar início civil para a atividade.");
+          if (Number.isNaN(startDate.getTime())) throw badRequest("Data de início inválida.");
           patch.startOffset = Math.max(0, Math.floor((startDate.getTime() - project.plannedStart.getTime()) / 86400000));
         }
 
@@ -6326,6 +6445,9 @@ export const appRouter = router({
             eq(scheduleActivities.projectId, input.projectId),
              activity.versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, activity.versionId)
           ));
+          if (invalidatesCpm) {
+            await tx.update(projects).set({ plannedFinish: null, updatedAt: new Date() }).where(eq(projects.id, input.projectId));
+          }
 
           await tx.insert(projectAuditEvents).values({
             projectId: input.projectId,
@@ -6544,15 +6666,17 @@ export const appRouter = router({
             actualByActivity.set(id, (actualByActivity.get(id) ?? 0) + Number(entry.quantity));
           }
         }
-        const start = project?.plannedStart?.getTime() ?? asOf.getTime();
-        const elapsedDays = Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
+        const start = project?.plannedStart?.getTime() ?? null;
+        const elapsedDays = start == null ? null : Math.max(0, Math.floor((asOf.getTime() - start) / 86400000));
         const rows = activities.map(activity => {
           const plannedQuantity = Number(activity.plannedQuantity ?? 0);
           const actualQuantity = actualByActivity.get(activity.id) ?? 0;
           const plannedStart = activity.earlyStart ?? activity.startOffset;
-          const plannedProgress = plannedQuantity > 0 ? Math.max(0, Math.min(100, ((elapsedDays - plannedStart) / Math.max(1, activity.durationDays)) * 100)) : 0;
+          const plannedProgress = start != null && elapsedDays != null
+            ? plannedQuantity > 0 ? Math.max(0, Math.min(100, ((elapsedDays - plannedStart) / Math.max(1, activity.durationDays)) * 100)) : 0
+            : null;
           const actualProgress = plannedQuantity > 0 ? Math.max(0, Math.min(100, (actualQuantity / plannedQuantity) * 100)) : 0;
-          return { id: activity.id, wbsCode: activity.wbsCode, name: activity.name, phase: activity.phase, plannedQuantity, actualQuantity, plannedProgress: Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: Math.round((actualProgress - plannedProgress) * 10) / 10, critical: activity.critical === 1, status: activity.status };
+          return { id: activity.id, wbsCode: activity.wbsCode, name: activity.name, phase: activity.phase, plannedQuantity, actualQuantity, plannedProgress: plannedProgress == null ? null : Math.round(plannedProgress * 10) / 10, actualProgress: Math.round(actualProgress * 10) / 10, variance: plannedProgress == null ? null : Math.round((actualProgress - plannedProgress) * 10) / 10, critical: activity.critical === 1, status: activity.status };
         });
         // Somar m², m³ e unidades para calcular peso da obra é incorreto.
         // Sem orçamento aprovado e cobertura integral, o agregado declara
@@ -6951,7 +7075,8 @@ export const appRouter = router({
         const activities = planejamentoOperacional.activities;
 
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
-        const inicioProjeto = project?.plannedStart ?? new Date();
+        if (!project?.plannedStart) throw badRequest("Defina o início planejado da obra antes de calcular o CPM.");
+        const inicioProjeto = project.plannedStart;
         const inicioCalendario = localIso(inicioProjeto);
         const calendarioObra = await carregarCalendarioDoPeriodo(
           db,
@@ -6975,6 +7100,11 @@ export const appRouter = router({
         );
 
         if (!result.valid || !result.schedule) {
+          await db.transaction(async tx => {
+            await tx.update(scheduleActivities).set({ critical: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null, totalFloat: null, freeFloat: null })
+              .where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+            await tx.update(projects).set({ plannedFinish: null, updatedAt: new Date() }).where(eq(projects.id, input.projectId));
+          });
           return {
             valid: false,
             schedule: null,
@@ -6985,9 +7115,16 @@ export const appRouter = router({
           };
         }
 
-        const persisted = await db.transaction(tx =>
-          persistCpmResult(tx as any, input.projectId, currentVersion?.id ?? null, result.schedule!)
+        const terminoPlanejado = dateAt(
+          calendarioObra.calendar,
+          inicioCalendario,
+          Math.max(0, result.schedule.projectDuration - 1),
         );
+        const persisted = await db.transaction(async tx => {
+          const count = await persistCpmResult(tx as any, input.projectId, currentVersion?.id ?? null, result.schedule!);
+          await tx.update(projects).set({ plannedFinish: isoToLocalDate(terminoPlanejado), updatedAt: new Date() }).where(eq(projects.id, input.projectId));
+          return count;
+        });
 
         return {
           valid: true,
@@ -7018,16 +7155,18 @@ export const appRouter = router({
           throw badRequest("Não é possível calcular o CPM: a versão atual não possui atividades operacionais.");
         }
         const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id,input.projectId)).limit(1);
-        const ano = project?.plannedStart?.getFullYear?.() ?? new Date().getFullYear();
-        const inicioCalendario = localIso(project?.plannedStart ?? new Date());
+        if (!project?.plannedStart) throw badRequest("Defina o início planejado da obra antes de calcular o CPM.");
+        const inicioProjeto = project.plannedStart;
+        const ano = inicioProjeto.getFullYear();
+        const inicioCalendario = localIso(inicioProjeto);
         const calendarioObra = await carregarCalendarioDoPeriodo(
           db,
           input.projectId,
           ano,
-          anoFinalCalendarioCpm(project?.plannedStart ?? new Date(), activities)
+          anoFinalCalendarioCpm(inicioProjeto, activities)
         );
         const enrichedActivities = activities.map(activity => {
-          const dataInicioCivil = new Date(project?.plannedStart ?? new Date());
+          const dataInicioCivil = new Date(inicioProjeto);
           dataInicioCivil.setDate(dataInicioCivil.getDate() + Number(activity.startOffset ?? 0));
           return {
             ...activity,
@@ -7038,10 +7177,22 @@ export const appRouter = router({
         });
         const restricoesDeclaradas = enrichedActivities.filter(activity => activity.mustStartOnDay != null || activity.finishNoLaterThanDay != null).length;
         const result = calculateDeterministicCpm(enrichedActivities, planejamentoOperacional.dependencies);
-        if (!result.valid || !result.schedule) return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, atividadesExemploExcluidas:planejamentoOperacional.excludedExampleActivities, dependenciasExemploExcluidas:planejamentoOperacional.excludedExampleDependencies, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
+        if (!result.valid || !result.schedule) {
+          await db.transaction(async tx => {
+            await tx.update(scheduleActivities).set({ critical: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null, totalFloat: null, freeFloat: null })
+              .where(and(eq(scheduleActivities.projectId, input.projectId), versionScope));
+            await tx.update(projects).set({ plannedFinish: null, updatedAt: new Date() }).where(eq(projects.id, input.projectId));
+          });
+          return { valid:false as const, projectDuration:0, criticalPath:[], issues:result.issues, restricoes:{ declaradas:restricoesDeclaradas, aplicadas:0 }, atividadesExemploExcluidas:planejamentoOperacional.excludedExampleActivities, dependenciasExemploExcluidas:planejamentoOperacional.excludedExampleDependencies, calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano } };
+        }
         const calculatedAt = new Date();
         const schedule = result.schedule;
         const items = schedule.activities;
+        const terminoPlanejado = dateAt(
+          calendarioObra.calendar,
+          inicioCalendario,
+          Math.max(0, schedule.projectDuration - 1),
+        );
         if (items.length) {
           await db.transaction(async tx => {
             for (const item of items) {
@@ -7068,6 +7219,7 @@ export const appRouter = router({
                   )
                 );
             }
+            await tx.update(projects).set({ plannedFinish: isoToLocalDate(terminoPlanejado), updatedAt: calculatedAt }).where(eq(projects.id, input.projectId));
           });
         }
         return {valid:true as const,projectDuration:schedule.projectDuration,criticalPath:schedule.criticalPath.map(Number),issues:result.issues,restricoes:{declaradas:restricoesDeclaradas,aplicadas:restricoesDeclaradas},atividadesExemploExcluidas:planejamentoOperacional.excludedExampleActivities,dependenciasExemploExcluidas:planejamentoOperacional.excludedExampleDependencies,calendario: { origem: calendarioObra.origem, nome: calendarioObra.nome, ano: calendarioObra.ano }};
@@ -7504,6 +7656,439 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [createdId] = await db.insert(planningResources).values({ projectId: input.projectId, name: input.name, resourceType: input.resourceType, unit: input.unit, capacityPerDay: input.capacityPerDay?.toFixed(3), costPerDay: input.costPerDay?.toFixed(2) }).returning({ id: planningResources.id });
         return { id: createdId.id };
+      }),
+    activityScheduleUpdates: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), activityId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [activity] = await db
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.id, input.activityId)))
+          .limit(1);
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+
+        const [currentPlanId, rows] = await Promise.all([
+          getCurrentPlanVersionId(db, input.projectId),
+          db.select({
+            id: activityScheduleUpdates.id,
+            versionId: activityScheduleUpdates.versionId,
+            positionDate: activityScheduleUpdates.positionDate,
+            status: activityScheduleUpdates.status,
+            actualStartDate: activityScheduleUpdates.actualStartDate,
+            actualFinishDate: activityScheduleUpdates.actualFinishDate,
+            remainingDurationDays: activityScheduleUpdates.remainingDurationDays,
+            forecastFinishDate: activityScheduleUpdates.forecastFinishDate,
+            note: activityScheduleUpdates.note,
+            blockerReason: activityScheduleUpdates.blockerReason,
+            evidenceRef: activityScheduleUpdates.evidenceRef,
+            supersedesId: activityScheduleUpdates.supersedesId,
+            authorUserId: activityScheduleUpdates.authorUserId,
+            authorName: users.name,
+            createdAt: activityScheduleUpdates.createdAt,
+          })
+            .from(activityScheduleUpdates)
+            .leftJoin(users, eq(activityScheduleUpdates.authorUserId, users.id))
+            .where(and(
+              eq(activityScheduleUpdates.projectId, input.projectId),
+              eq(activityScheduleUpdates.activityId, input.activityId),
+            ))
+            .orderBy(desc(activityScheduleUpdates.positionDate), desc(activityScheduleUpdates.createdAt), desc(activityScheduleUpdates.id)),
+        ]);
+        const currentVersionMatches = activity.versionId === currentPlanId;
+        const supersededIds = new Set(rows.flatMap(row => row.supersedesId == null ? [] : [row.supersedesId]));
+        const current = rows.find(row => !supersededIds.has(row.id)) ?? null;
+        return {
+          canUpdate: currentVersionMatches,
+          current,
+          history: rows.map(row => ({
+            ...row,
+            vigente: !supersededIds.has(row.id),
+            corrigivel: currentVersionMatches && !supersededIds.has(row.id),
+          })),
+        };
+      }),
+    activityScheduleForecast: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+
+        const asOf = input.asOf ?? hojeNoBrasil();
+        const dataAsOf = new Date(`${asOf}T00:00:00.000Z`);
+        if (Number.isNaN(dataAsOf.getTime()) || dataAsOf.toISOString().slice(0, 10) !== asOf) {
+          throw badRequest("Informe uma data de corte válida.");
+        }
+        if (asOf > hojeNoBrasil()) throw badRequest("A data de corte não pode estar no futuro.");
+
+        const [project] = await db.select({ plannedStart: projects.plannedStart })
+          .from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
+        const activityScope = versionId == null
+          ? isNull(scheduleActivities.versionId)
+          : eq(scheduleActivities.versionId, versionId);
+        const dependencyScope = versionId == null
+          ? isNull(scheduleDependencies.versionId)
+          : eq(scheduleDependencies.versionId, versionId);
+        const activities = await db.select({
+          id: scheduleActivities.id,
+          wbsCode: scheduleActivities.wbsCode,
+          name: scheduleActivities.name,
+          durationDays: scheduleActivities.durationDays,
+          isMilestone: scheduleActivities.isMilestone,
+          startOffset: scheduleActivities.startOffset,
+          earlyStart: scheduleActivities.earlyStart,
+          earlyFinish: scheduleActivities.earlyFinish,
+          mustStartOn: scheduleActivities.mustStartOn,
+          finishNoLaterThan: scheduleActivities.finishNoLaterThan,
+          cpmCalculatedAt: scheduleActivities.cpmCalculatedAt,
+          updatedAt: scheduleActivities.updatedAt,
+          exemplo: scheduleActivities.exemplo,
+        }).from(scheduleActivities).where(and(
+          eq(scheduleActivities.projectId, input.projectId),
+          activityScope,
+          eq(scheduleActivities.exemplo, 0),
+        )).orderBy(scheduleActivities.sortOrder);
+        const activityIds = activities.map(activity => activity.id);
+        const dependencies = activityIds.length
+          ? await db.select({ predecessorId: scheduleDependencies.predecessorId, successorId: scheduleDependencies.successorId, type: scheduleDependencies.type, lag: scheduleDependencies.lag })
+              .from(scheduleDependencies).where(and(
+                eq(scheduleDependencies.projectId, input.projectId),
+                dependencyScope,
+                inArray(scheduleDependencies.predecessorId, activityIds),
+                inArray(scheduleDependencies.successorId, activityIds),
+              ))
+          : [];
+        const updateRows = activityIds.length
+          ? await db.select({
+              id: activityScheduleUpdates.id,
+              activityId: activityScheduleUpdates.activityId,
+              positionDate: activityScheduleUpdates.positionDate,
+              status: activityScheduleUpdates.status,
+              actualStartDate: activityScheduleUpdates.actualStartDate,
+              actualFinishDate: activityScheduleUpdates.actualFinishDate,
+              remainingDurationDays: activityScheduleUpdates.remainingDurationDays,
+              forecastFinishDate: activityScheduleUpdates.forecastFinishDate,
+              blockerReason: activityScheduleUpdates.blockerReason,
+              supersedesId: activityScheduleUpdates.supersedesId,
+              createdAt: activityScheduleUpdates.createdAt,
+            }).from(activityScheduleUpdates).where(and(
+              eq(activityScheduleUpdates.projectId, input.projectId),
+              versionId == null ? isNull(activityScheduleUpdates.versionId) : eq(activityScheduleUpdates.versionId, versionId),
+              lte(activityScheduleUpdates.positionDate, asOf),
+              inArray(activityScheduleUpdates.activityId, activityIds),
+            )).orderBy(desc(activityScheduleUpdates.positionDate), desc(activityScheduleUpdates.createdAt), desc(activityScheduleUpdates.id))
+          : [];
+        const supersededIds = new Set(updateRows.flatMap(update => update.supersedesId == null ? [] : [update.supersedesId]));
+        const currentByActivity = new Map<number, typeof updateRows[number]>();
+        for (const update of updateRows) {
+          if (!supersededIds.has(update.id) && !currentByActivity.has(update.activityId)) {
+            currentByActivity.set(update.activityId, update);
+          }
+        }
+        const totalActivities = activities.length;
+        const activitiesWithUpdate = currentByActivity.size;
+        const activitiesWithoutUpdate = Math.max(0, totalActivities - activitiesWithUpdate);
+        const responseBase = {
+          projectId: input.projectId,
+          versionId,
+          asOf,
+          totalActivities,
+          activitiesWithUpdate,
+          activitiesWithoutUpdate,
+          plannedFinishOffset: null as number | null,
+          plannedFinishDate: null as string | null,
+          projectFinishOffset: null as number | null,
+          forecastFinishDate: null as string | null,
+          activities: [] as ReturnType<typeof calcularPrevisaoDePrazo>["activities"],
+          outOfSequenceActivityIds: [] as string[],
+          warnings: [] as ReturnType<typeof calcularPrevisaoDePrazo>["warnings"],
+          calendarName: null as string | null,
+          calendarOrigin: null as string | null,
+        };
+        if (!project?.plannedStart) {
+          return { ...responseBase, available: false, unavailableReason: "Defina a data inicial planejada da obra na aba Escopo para converter o CPM em datas civis." };
+        }
+        if (totalActivities === 0) {
+          return { ...responseBase, available: false, unavailableReason: "Cadastre atividades executáveis na versão atual antes de projetar o término." };
+        }
+        const cpmIncomplete = activities.find(activity =>
+          activity.earlyStart == null || activity.earlyFinish == null || activity.cpmCalculatedAt == null ||
+          activity.updatedAt.getTime() > activity.cpmCalculatedAt.getTime()
+        );
+        if (cpmIncomplete) {
+          return {
+            ...responseBase,
+            available: false,
+            unavailableReason: `Recalcule o CPM da versão atual; ${cpmIncomplete.wbsCode ?? cpmIncomplete.name} está sem resultado atual.`,
+          };
+        }
+
+        const plannedStartIso = localIso(project.plannedStart);
+        const plannedFinishOffset = Math.max(0, ...activities.map(activity => Number(activity.earlyFinish)));
+        const horizonOffset = plannedFinishOffset + activities.reduce((sum, activity) => sum + Number(activity.durationDays), 0);
+        const anosLimite = activities.flatMap(activity => [
+          activity.mustStartOn?.getFullYear(),
+          activity.finishNoLaterThan?.getFullYear(),
+        ]).filter((year): year is number => year != null);
+        const anosDePrevisao = updateRows
+          .map(update => update.forecastFinishDate ? Number(update.forecastFinishDate.slice(0, 4)) : null)
+          .filter((year): year is number => year != null);
+        const anoFim = Math.min(2102, Math.max(
+          project.plannedStart.getFullYear() + Math.ceil(horizonOffset / 245) + 1,
+          Number(asOf.slice(0, 4)),
+          ...anosLimite,
+          ...anosDePrevisao,
+        ));
+        const carregado = await carregarCalendarioDoPeriodo(db, input.projectId, project.plannedStart.getFullYear(), anoFim);
+        const calendario = carregado.calendar;
+        const inicioCivil = dateAt(calendario, plannedStartIso, 0);
+        const primeiroDiaAposCorte = nextWorkingDay(calendario, asOf);
+        const cutoffOffset = Math.max(0, calendarIndexOf(calendario, inicioCivil, primeiroDiaAposCorte));
+        const plannedFinishDate = dateAt(calendario, inicioCivil, Math.max(0, plannedFinishOffset - 1));
+        const activityById = new Map(activities.map(activity => [activity.id, activity]));
+        const updates = [...currentByActivity.values()].map(update => {
+          const activity = activityById.get(update.activityId)!;
+          const actualStartOffset = update.actualStartDate == null
+            ? null
+            : Math.max(0, calendarIndexOf(calendario, inicioCivil, update.actualStartDate));
+          const actualFinishOffset = update.actualFinishDate == null
+            ? null
+            : Math.max(0, calendarIndexOf(calendario, inicioCivil, update.actualFinishDate) +
+              (isWorkingDay(calendario, isoToLocalDate(update.actualFinishDate)) ? 1 : 0));
+          let forecastRemainingDays: number | null = null;
+          if (update.forecastFinishDate != null) {
+            const finishOffset = calendarIndexOf(calendario, inicioCivil, update.forecastFinishDate) +
+              (isWorkingDay(calendario, isoToLocalDate(update.forecastFinishDate)) ? 1 : 0);
+            const startOffset = update.status === "em_andamento" ||
+              (update.status === "bloqueada" && update.actualStartDate != null)
+              ? cutoffOffset
+              : Math.max(cutoffOffset, Number(activity.earlyStart));
+            forecastRemainingDays = finishOffset - startOffset;
+          }
+          return {
+            activityId: String(update.activityId),
+            status: update.status as (typeof ACTIVITY_SCHEDULE_STATUSES)[number],
+            actualStartOffset,
+            actualFinishOffset,
+            remainingDurationDays: update.remainingDurationDays,
+            forecastRemainingDays,
+            blockerReason: update.blockerReason,
+          };
+        });
+        const previsao = calcularPrevisaoDePrazo({
+          cutoffOffset,
+          activities: activities.map(activity => ({
+            id: String(activity.id),
+            name: activity.name,
+            duration: activity.isMilestone ? 0 : activity.durationDays,
+            isMilestone: activity.isMilestone,
+            startOffsetDay: Number(activity.earlyStart),
+            mustStartOn: activity.mustStartOn
+              ? calendarIndexOf(calendario, inicioCivil, localIso(new Date(activity.mustStartOn)))
+              : undefined,
+            finishNoLaterThan: activity.finishNoLaterThan
+              ? calendarIndexOf(calendario, inicioCivil, localIso(new Date(activity.finishNoLaterThan)))
+              : undefined,
+          })),
+          dependencies: dependencies.map(dependency => ({
+            predecessorId: String(dependency.predecessorId),
+            successorId: String(dependency.successorId),
+            type: dependency.type,
+            lag: dependency.lag,
+          })),
+          updates,
+        });
+        return {
+          ...responseBase,
+          plannedFinishOffset,
+          plannedFinishDate,
+          projectFinishOffset: previsao.projectFinishOffset,
+          forecastFinishDate: previsao.projectFinishOffset == null
+            ? null
+            : dateAt(calendario, inicioCivil, Math.max(0, previsao.projectFinishOffset - 1)),
+          activities: previsao.activities,
+          outOfSequenceActivityIds: previsao.outOfSequenceActivityIds,
+          warnings: previsao.warnings,
+          calendarName: carregado.nome,
+          calendarOrigin: carregado.origem,
+          available: previsao.unavailableReason == null,
+          unavailableReason: previsao.unavailableReason,
+        };
+      }),
+    activityScheduleStatusSummary: protectedProcedure
+      .input(z.object({ projectId: z.number().int().positive(), asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const versionId = await getCurrentPlanVersionId(db, input.projectId);
+        const scope = versionId == null
+          ? isNull(scheduleActivities.versionId)
+          : eq(scheduleActivities.versionId, versionId);
+        const activities = await db.select({ id: scheduleActivities.id, exemplo: scheduleActivities.exemplo })
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), scope, eq(scheduleActivities.exemplo, 0)));
+        const activityIds = activities.map(activity => activity.id);
+        const updates = activityIds.length
+          ? await db.select({
+              id: activityScheduleUpdates.id,
+              activityId: activityScheduleUpdates.activityId,
+              positionDate: activityScheduleUpdates.positionDate,
+              status: activityScheduleUpdates.status,
+              actualStartDate: activityScheduleUpdates.actualStartDate,
+              actualFinishDate: activityScheduleUpdates.actualFinishDate,
+              remainingDurationDays: activityScheduleUpdates.remainingDurationDays,
+              forecastFinishDate: activityScheduleUpdates.forecastFinishDate,
+              blockerReason: activityScheduleUpdates.blockerReason,
+              supersedesId: activityScheduleUpdates.supersedesId,
+              createdAt: activityScheduleUpdates.createdAt,
+            }).from(activityScheduleUpdates).where(and(
+              eq(activityScheduleUpdates.projectId, input.projectId),
+              versionId == null ? isNull(activityScheduleUpdates.versionId) : eq(activityScheduleUpdates.versionId, versionId),
+              inArray(activityScheduleUpdates.activityId, activityIds),
+            )).orderBy(desc(activityScheduleUpdates.positionDate), desc(activityScheduleUpdates.createdAt), desc(activityScheduleUpdates.id))
+          : [];
+        const supersededIds = new Set(updates.flatMap(update => update.supersedesId == null ? [] : [update.supersedesId]));
+        const currentByActivity = new Map<number, typeof updates[number]>();
+        for (const update of updates) {
+          if (!supersededIds.has(update.id) && !currentByActivity.has(update.activityId)) {
+            currentByActivity.set(update.activityId, update);
+          }
+        }
+        const statusCounts = { nao_iniciada: 0, em_andamento: 0, concluida: 0, bloqueada: 0 };
+        for (const update of currentByActivity.values()) {
+          if (update.status in statusCounts) statusCounts[update.status as keyof typeof statusCounts] += 1;
+        }
+        const latest = [...currentByActivity.values()].sort((a, b) =>
+          b.positionDate.localeCompare(a.positionDate) || b.createdAt.getTime() - a.createdAt.getTime()
+        )[0] ?? null;
+        const asOf = input.asOf ?? hojeNoBrasil();
+        return {
+          projectId: input.projectId,
+          versionId,
+          totalActivities: activities.length,
+          activitiesWithUpdate: currentByActivity.size,
+          activitiesWithoutUpdate: Math.max(0, activities.length - currentByActivity.size),
+          statusCounts,
+          overdueCount: [...currentByActivity.values()].filter(update =>
+            update.status !== "concluida" && update.forecastFinishDate != null && update.forecastFinishDate < asOf
+          ).length,
+          currentStates: [...currentByActivity.values()].map(update => ({
+            activityId: update.activityId,
+            status: update.status,
+            positionDate: update.positionDate,
+            actualStartDate: update.actualStartDate,
+            actualFinishDate: update.actualFinishDate,
+            forecastFinishDate: update.forecastFinishDate,
+            remainingDurationDays: update.remainingDurationDays,
+            blockerReason: update.blockerReason,
+          })),
+          lastPositionDate: latest?.positionDate ?? null,
+          lastRecordedAt: latest?.createdAt ?? null,
+        };
+      }),
+    registerActivityScheduleUpdate: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        activityId: z.number().int().positive(),
+        positionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        status: z.enum(ACTIVITY_SCHEDULE_STATUSES),
+        actualStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        actualFinishDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        remainingDurationDays: z.number().int().positive().nullable().optional(),
+        forecastFinishDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        note: z.string().trim().max(4000).nullable().optional(),
+        blockerReason: z.string().trim().max(2000).nullable().optional(),
+        evidenceRef: z.string().trim().max(500).nullable().optional(),
+        correctsUpdateId: z.number().int().positive().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const erroValidacao = validarAtualizacaoDePrazo(input);
+        if (erroValidacao) throw badRequest(erroValidacao);
+        if (input.positionDate > hojeNoBrasil()) {
+          throw badRequest("A data de posição não pode estar no futuro.");
+        }
+
+        const [activity] = await db
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.id, input.activityId)))
+          .limit(1);
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        if (activity.versionId !== currentVersionId) {
+          throw conflict("Atualizações de prazo só podem ser registradas na versão operacional atual; versões substituídas ficam somente para consulta.");
+        }
+        if (currentVersionId != null) {
+          const [version] = await db.select({ status: projectPlanVersions.status })
+            .from(projectPlanVersions)
+            .where(and(eq(projectPlanVersions.id, currentVersionId), eq(projectPlanVersions.projectId, input.projectId)))
+            .limit(1);
+          if (!version || version.status === "superseded") {
+            throw conflict("A versão do plano foi substituída e está somente para consulta.");
+          }
+        }
+
+        const created = await db.transaction(async tx => {
+          if (input.correctsUpdateId != null) {
+            const [original] = await tx.select({ id: activityScheduleUpdates.id })
+              .from(activityScheduleUpdates)
+              .where(and(
+                eq(activityScheduleUpdates.id, input.correctsUpdateId),
+                eq(activityScheduleUpdates.projectId, input.projectId),
+                eq(activityScheduleUpdates.activityId, input.activityId),
+                currentVersionId == null
+                  ? isNull(activityScheduleUpdates.versionId)
+                  : eq(activityScheduleUpdates.versionId, currentVersionId),
+              ))
+              .limit(1);
+            if (!original) throw badRequest("O registro a corrigir não pertence à atividade e versão atuais.");
+            const [alreadyCorrected] = await tx.select({ id: activityScheduleUpdates.id })
+              .from(activityScheduleUpdates)
+              .where(eq(activityScheduleUpdates.supersedesId, input.correctsUpdateId))
+              .limit(1);
+            if (alreadyCorrected) throw conflict("Este registro já foi corrigido. Corrija a versão vigente para manter o histórico linear.");
+          }
+          const [row] = await tx.insert(activityScheduleUpdates).values({
+            projectId: input.projectId,
+            activityId: input.activityId,
+            versionId: currentVersionId,
+            positionDate: input.positionDate,
+            status: input.status,
+            actualStartDate: input.actualStartDate ?? null,
+            actualFinishDate: input.actualFinishDate ?? null,
+            remainingDurationDays: input.remainingDurationDays ?? null,
+            forecastFinishDate: input.forecastFinishDate ?? null,
+            note: input.note || null,
+            blockerReason: input.blockerReason || null,
+            evidenceRef: input.evidenceRef || null,
+            supersedesId: input.correctsUpdateId ?? null,
+            authorUserId: ctx.user.id,
+          }).returning({ id: activityScheduleUpdates.id });
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: input.correctsUpdateId == null ? "activity_schedule_updated" : "activity_schedule_update_corrected",
+            payload: {
+              activityId: input.activityId,
+              versionId: currentVersionId,
+              updateId: row.id,
+              correctsUpdateId: input.correctsUpdateId ?? null,
+              positionDate: input.positionDate,
+              status: input.status,
+              at: new Date().toISOString(),
+            },
+          });
+          return row;
+        });
+        return { id: created.id, recorded: true as const };
       }),
     createActivity: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), wbsCode: z.string().trim().min(1).max(32), name: z.string().trim().min(2).max(220), phase: z.string().trim().min(2).max(80), startOffset: z.number().int().min(0), plannedQuantity: z.number().positive().optional(), productivity: z.number().positive().optional(), durationDays: z.number().int().positive().optional(), budgetItemId: z.number().int().positive().optional() }))
@@ -8119,6 +8704,17 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) return semBanco;
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [project] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        if (!project?.plannedStart) {
+          return {
+            ...semBanco,
+            note: "Defina o início planejado da obra para calcular o Valor Ganho por período.",
+          };
+        }
         const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
         const dados = await coletarDadosEvms(
           db,
@@ -8407,6 +9003,20 @@ export const appRouter = router({
         }
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
 
+        const [project] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        if (!project?.plannedStart) {
+          return {
+            available: false as const,
+            note: "Defina o início planejado da obra para converter as durações em datas do lookahead.",
+            restricoes: [],
+            atividadesSemData: 0,
+            ...computeLookahead({ atividades: [], compromissos: [], semanaBaseIso, hojeIso }),
+          };
+        }
         const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
         const dados = await coletarDadosLookahead(
           db,
@@ -8804,7 +9414,14 @@ export const appRouter = router({
           .where(and(eq(productionEntries.projectId, input.projectId), eq(productionEntries.status, "confirmada"), eq(productionEntries.exemplo, 0)));
         if (!activities.length) return { available: true as const, points: [] as { date: string; plannedPct: number; actualPct: number }[], note: "Sem atividades no cronograma." };
         const asOf = input.asOf ?? new Date();
-        const inicioProjeto = project?.plannedStart ?? asOf;
+        if (!project?.plannedStart) {
+          return {
+            available: false as const,
+            points: [] as { date: string; plannedPct: number; actualPct: number }[],
+            note: "Defina o início planejado da obra para converter o cronograma em datas da Curva S.",
+          };
+        }
+        const inicioProjeto = project.plannedStart;
         const inicioIso = localIso(inicioProjeto);
         const calendario = (await carregarCalendarioDaObra(db, input.projectId, inicioProjeto.getFullYear())).calendar;
         const ultimoDiaDoPlano = fimDoPlanoEmDias(activities);
@@ -8939,6 +9556,8 @@ export const appRouter = router({
         const versionId = currentVersion?.id ?? null;
         const [activity] = await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.id, input.activityId), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).limit(1);
         if (!activity) throw notFound("Atividade não encontrada.");
+        const [project] = await db.select({ plannedStart: projects.plannedStart }).from(projects).where(eq(projects.id, input.projectId)).limit(1);
+        if (!project?.plannedStart) throw badRequest("Defina o início planejado da obra antes de aplicar o nivelamento por datas.");
         const float = activity.totalFloat ?? 0;
         const current = activity.earlyStart ?? activity.startOffset;
         if (activity.critical === 1 && input.newStartOffset !== current) {
@@ -8947,19 +9566,34 @@ export const appRouter = router({
         if (input.newStartOffset < current || input.newStartOffset > current + float) {
           throw badRequest(`Deslocamento fora da folga total (${float} dia(s)).`);
         }
-        await db.update(scheduleActivities).set({ startOffset: input.newStartOffset, earlyStart: input.newStartOffset }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
         const dependencies = await db.select().from(scheduleDependencies).where(and(eq(scheduleDependencies.projectId, input.projectId), versionId == null ? isNull(scheduleDependencies.versionId) : eq(scheduleDependencies.versionId, versionId)));
         const all = (await db.select().from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId))).orderBy(scheduleActivities.sortOrder))
           .filter(activity => Number(activity.exemplo ?? 0) !== 1);
+        const shifted = all.map(item => item.id === activity.id
+          ? { ...item, startOffset: input.newStartOffset, earlyStart: input.newStartOffset }
+          : item);
         const operationalIds = new Set(all.map(activity => activity.id));
         const operationalDependencies = dependencies.filter(dependency => operationalIds.has(dependency.predecessorId) && operationalIds.has(dependency.successorId));
-        const result = calculateDeterministicCpm(all, operationalDependencies);
+        const result = calculateDeterministicCpm(shifted, operationalDependencies);
+        let finishIso: string | null = null;
         if (result.valid && result.schedule) {
-          const calculatedAt = new Date();
-          for (const item of result.schedule.activities) {
-            await db.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
-          }
+          const startIso = localIso(project.plannedStart);
+          const calendar = await carregarCalendarioDoPeriodo(db, input.projectId, project.plannedStart.getFullYear(), anoFinalCalendarioCpm(project.plannedStart, shifted)).then(result => result.calendar);
+          finishIso = dateAt(calendar, startIso, Math.max(0, result.schedule.projectDuration - 1));
         }
+        const calculatedAt = new Date();
+        await db.transaction(async tx => {
+          await tx.update(scheduleActivities).set({ startOffset: input.newStartOffset, ...(result.valid ? { earlyStart: input.newStartOffset } : {}) }).where(and(eq(scheduleActivities.id, activity.id), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
+          if (result.valid && result.schedule) {
+            for (const item of result.schedule.activities) {
+              await tx.update(scheduleActivities).set({ critical: item.critical ? 1 : 0, earlyStart: item.earlyStart, earlyFinish: item.earlyFinish, lateStart: item.lateStart, lateFinish: item.lateFinish, totalFloat: item.totalFloat, freeFloat: item.freeFloat, cpmCalculatedAt: calculatedAt }).where(and(eq(scheduleActivities.id, Number(item.id)), eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
+            }
+            await tx.update(projects).set({ plannedFinish: isoToLocalDate(finishIso!), updatedAt: calculatedAt }).where(eq(projects.id, input.projectId));
+          } else {
+            await tx.update(scheduleActivities).set({ critical: 0, earlyStart: null, earlyFinish: null, lateStart: null, lateFinish: null, totalFloat: null, freeFloat: null }).where(and(eq(scheduleActivities.projectId, input.projectId), versionId == null ? isNull(scheduleActivities.versionId) : eq(scheduleActivities.versionId, versionId)));
+            await tx.update(projects).set({ plannedFinish: null, updatedAt: calculatedAt }).where(eq(projects.id, input.projectId));
+          }
+        });
         return { ok: true as const, newStartOffset: input.newStartOffset, cpmValid: result.valid };
               }),
           }),
@@ -10234,6 +10868,22 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
 
         const asOfIso = input.asOf ?? hojeNoBrasil();
+        const [project] = await db
+          .select({ plannedStart: projects.plannedStart })
+          .from(projects)
+          .where(eq(projects.id, input.projectId))
+          .limit(1);
+        if (!project?.plannedStart) {
+          return {
+            available: false as const,
+            asOf: asOfIso,
+            meses: [],
+            alertas: [],
+            cpi: null,
+            atividadesSemItem: 0,
+            note: "Defina o início planejado da obra para calcular a curva de desembolso.",
+          };
+        }
         const currentPlanVersionId = await getCurrentPlanVersionId(db, input.projectId);
 
         const dados = await coletarDadosDesembolso(

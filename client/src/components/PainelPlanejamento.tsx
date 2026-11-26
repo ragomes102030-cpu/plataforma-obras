@@ -343,7 +343,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
         </div>
       )}
       {mensagem && <div className="pl-atividades-alerta">{mensagem}</div>}
-      {activities.length > 0 && <div className="pl-atividades-alerta" role="status">
+      {activities.length > 0 && <details className="pl-atividades-fisico-opcional">
+        <summary>Avanço físico (opcional) · {resumoPesos.completos}/{resumoPesos.total} pesos informados</summary>
+        <div className="pl-atividades-alerta" role="status">
         <strong>{resumoPesos.cenarioQa ? "CENÁRIO QA — " : ""}Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} informados · {resumoPesos.comQuantidade}/{resumoPesos.total} quantidades · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? (resumoPesos.cenarioQa ? "premissas QA liberadas" : "aprovados") : "aguardando validação"}.</strong>{" "}
         {resumoPesos.cenarioQa
           ? `Rateio e classificações operacionais são premissas sintéticas da obra de teste, não medição real. ${plano.data?.lobQaExcludedCount ?? 0} atividade(s) ficaram fora da Linha de Balanço por não terem unidade física exata cadastrada.`
@@ -363,7 +365,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
             {liberandoPesosQa ? "Liberando cenário QA…" : "Liberar pesos do cenário QA"}
           </button>}
         </div>
-      </div>}
+        </div>
+      </details>}
       {!propostaAprovada && proposta.length > 0 && <div className="pl-atividades-alerta">A prévia mostra as lacunas da EAP v{versaoDaProposta}. As atividades ficam disponíveis para criação depois da aprovação desta versão.</div>}
 
       <div className="pl-atividades-table-wrap">
@@ -381,7 +384,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
               <th className="unit-col">Unidade</th>
               <th className="prod-col">Produtividade</th>
               <th className="qtd-col">Quantidade</th>
-              <th className="qtd-col">Peso físico (%)</th>
+              <th className="qtd-col">Avanço físico (opcional)</th>
               <th className="status-col">Estado</th>
               <th className="action-col">Observação</th>
             </tr>
@@ -490,7 +493,9 @@ export function PainelPlanejamento({ projetoId }: Props) {
                   />
                 </td>
                 <td className="qtd-col">
-                  <div className="pl-peso-editor">
+                  <details className="pl-peso-opcional">
+                    <summary>Editar peso</summary>
+                    <div className="pl-peso-editor">
                     <input className="pl-duracao-input" type="number" min="0.000001" max="100" step="0.000001"
                       value={valorEdicao(activity, "peso_fisico")}
                       onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|peso_fisico"]: event.target.value }))}
@@ -505,7 +510,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     <button type="button" className="pl-atividades-btn secondary"
                       disabled={atualizarAtividade.isPending}
                       onClick={() => salvarPesoFisico(activity)}>Salvar peso e evidência</button>
-                  </div>
+                    </div>
+                  </details>
                 </td>
                 <td className="status-col"><span className="pl-status-badge criada">Criada</span></td>
                 <td className="action-col">

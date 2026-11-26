@@ -1,4 +1,17 @@
-import type { BloqueioProntidao } from "@shared/obra-readiness";
+import type { BloqueioProntidao, ResultadoProntidao } from "@shared/obra-readiness";
+
+export type ContextoReadinessGate = "dashboard" | "cronograma" | "baseline" | "financeiro" | "linha-balanco";
+
+export function primeiraBarreiraDoContexto(
+  readiness: ResultadoProntidao,
+  contexto: ContextoReadinessGate,
+): BloqueioProntidao | null {
+  if (contexto === "cronograma") return readiness.dominios.cronograma.bloqueios[0] ?? null;
+  if (contexto === "baseline") return readiness.dominios.baseline.bloqueios[0] ?? null;
+  if (contexto === "financeiro") return readiness.dominios.financeiro.bloqueios[0] ?? null;
+  if (contexto === "linha-balanco") return readiness.dominios.linhaDeBalanco.bloqueios[0] ?? null;
+  return readiness.dominios.cronograma.bloqueios[0] ?? readiness.primeiraBarreira;
+}
 
 const ABA_POR_ETAPA = {
   escopo: "escopo",

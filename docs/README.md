@@ -38,6 +38,7 @@
 | --- | --- |
 | [PLANO-EXPANSAO-PLANEJAMENTO.md](PLANO-EXPANSAO-PLANEJAMENTO.md) | Estado e próximos passos do sistema de planejamento (EAP/Gantt/CPM) |
 | [PLANNING_ENGINE.md](PLANNING_ENGINE.md) | Como o motor de planejamento funciona |
+| [GUIA-PLANEJAMENTO-POR-SERVICOS.md](GUIA-PLANEJAMENTO-POR-SERVICOS.md) | Primeiro uso: organizar serviços, calcular prazo e acompanhar a execução sem orçamento |
 | [CPM-NATIVO.md](CPM-NATIVO.md) | Caminho crítico nativo |
 | [LOOKAHEAD-PPC.md](LOOKAHEAD-PPC.md) | Lookahead de 4 semanas, restrições e PPC (Last Planner) |
 | [MEDICAO-FATURAMENTO.md](MEDICAO-FATURAMENTO.md) | Medição, faturamento e curva de desembolso (ciclo planeja → executa → mede → recebe) |

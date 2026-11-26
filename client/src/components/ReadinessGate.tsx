@@ -1,10 +1,10 @@
 import { ArrowRight, TriangleAlert } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { destinoDaBarreira, rotuloDaBarreira } from "@/lib/readiness-gate";
+import { destinoDaBarreira, primeiraBarreiraDoContexto, rotuloDaBarreira, type ContextoReadinessGate } from "@/lib/readiness-gate";
 
-export function ReadinessGate({ projetoId, abrirAba }: { projetoId: number; abrirAba: (aba: string) => void }) {
+export function ReadinessGate({ projetoId, abrirAba, contexto = "dashboard" }: { projetoId: number; abrirAba: (aba: string) => void; contexto?: ContextoReadinessGate }) {
   const readiness = trpc.planning.readiness.useQuery({ projectId: projetoId }, { staleTime: 30_000 });
-  const barrier = readiness.data?.primeiraBarreira;
+  const barrier = readiness.data ? primeiraBarreiraDoContexto(readiness.data, contexto) : null;
   if (!barrier) return null;
   const planejamentoLiberado = readiness.data?.prontoParaPlanejamento === true;
   const aba = destinoDaBarreira(barrier);

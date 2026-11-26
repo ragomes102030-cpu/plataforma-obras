@@ -19,4 +19,17 @@ describe("Cronograma Operacional integrado",()=>{
     expect(inspetor).toContain('evento.key !== "Tab"');
     expect(inspetor).toContain("focoAnterior");
   });
+  it("mantém atividades selecionáveis em dias relativos enquanto falta a âncora civil",()=>{
+    expect(cronograma).toContain("Planejamento em dias relativos");
+    expect(cronograma).toContain("`D+${offset}`");
+    expect(cronograma).toContain("registrar o andamento de cada atividade nesta tela");
+    expect(cronograma).toContain("Gantt civil aguardando data inicial");
+    expect(inspetor).toContain("Planejado (dias relativos)");
+  });
+  it("permite justificar que uma atividade sem unidade não se aplica à Linha de Balanço",()=>{
+    expect(inspetor).toContain("Linha de Balanço (opcional)");
+    expect(inspetor).toContain("Não se aplica: serviço sem repetição por unidade");
+    expect(inspetor).toContain("Justificativa");
+    expect(cronograma).toContain("pendência não impede o planejamento por prazo");
+  });
 });

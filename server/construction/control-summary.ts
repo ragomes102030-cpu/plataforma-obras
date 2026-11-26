@@ -7,7 +7,7 @@ export type ControlProgressRow = {
   id: number;
   budgetItemId: number | null;
   plannedQuantity: number;
-  plannedProgress: number;
+  plannedProgress: number | null;
   actualProgress: number;
 };
 export type ApprovedBudgetWeight = { id: number; unitPrice: string | number };
@@ -37,11 +37,22 @@ export function consolidateControlProgress(
     if (!Number.isFinite(weight) || weight <= 0) continue;
     covered++;
     totalWeight += weight;
-    weightedPlanned += weight * row.plannedProgress;
+    weightedPlanned += weight * (row.plannedProgress ?? 0);
     weightedActual += weight * row.actualProgress;
   }
   if (covered !== count || totalWeight <= 0) return empty("cobertura_incompleta", covered);
   const round = (n: number) => Math.round(n * 10) / 10;
+  if (rows.some(row => row.plannedProgress == null)) {
+    return {
+      plannedProgress: null,
+      actualProgress: round(weightedActual / totalWeight),
+      variance: null,
+      basis: "approved_budget_value" as const,
+      coveredActivities: covered,
+      totalActivities: count,
+      reason: "inicio_planejado_ausente" as const,
+    };
+  }
   const planned = round(weightedPlanned / totalWeight);
   const actual = round(weightedActual / totalWeight);
   return {

@@ -91,7 +91,10 @@ export async function coletarDadosEvms(
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
-  const plannedStart = project?.plannedStart ?? asOf;
+  if (!project?.plannedStart) {
+    throw new Error("Defina o início planejado da obra antes de calcular o Valor Ganho.");
+  }
+  const plannedStart = project.plannedStart;
 
   // A2: dias úteis, na mesma régua do CPM. Um cronograma de 14 meses cruza a
   // virada do ano, e sem os feriados do segundo ano o 1º de janeiro conta

@@ -210,7 +210,10 @@ export function LinhaBalancoEscadinha({
     ...pontosVisiveis,
     ...(mostrarPendentes && pavimento === "todos" ? geraisVisiveis.map(g=>({...g,repetitiva:false})) : []),
   ]);
-  const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2026-01-01");
+  const temEixoCivil = periodoAutomatico !== null || dataValida(inicioObra);
+  // Só existe para manter os cálculos auxiliares totais; a tela não desenha nem
+  // rotula esse eixo enquanto a obra não tiver data civil ou datas explícitas.
+  const baseInicio = periodoAutomatico?.primeiro ?? (dataValida(inicioObra)?inicioObra:"2000-01-01");
   const baseFim = periodoAutomatico?.ultimo ?? baseInicio;
   const obraComecaAntesDaLob = dataValida(inicioObra) &&
     periodoFoco !== null && diaUtc(inicioObra) < diaUtc(periodoFoco.primeiro);
@@ -458,7 +461,16 @@ export function LinhaBalancoEscadinha({
           {integrado.parcelasForaDaJanelaCpm} parcela(s) cadastrada(s) antes da data oficial do CPM foram retiradas apenas da visualização. Os registros permanecem preservados para correção em versão de trabalho. Revise calendário, dependências e ritmo por local antes de homologar.
         </p>
       )}
-      {repetitivas.length === 0 && atividadesGerais.length === 0 ? (
+      {!temEixoCivil ? (
+        <div className="lob-stairs-empty" role="status">
+          <h3>DATAS CIVIS AINDA NÃO DEFINIDAS</h3>
+          <p>A Linha de Balanço depende de uma âncora de início da obra para transformar durações em datas por local. Você pode estruturar atividades e precedências antes disso; informe o início no Escopo quando estiver definido.</p>
+          <div className="lob-stairs-empty-actions">
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "escopo" } }))}>Definir início planejado</button>
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba: "gantt" } }))}>Ver cronograma relativo</button>
+          </div>
+        </div>
+      ) : repetitivas.length === 0 && atividadesGerais.length === 0 ? (
         <div className="lob-stairs-empty" role="status">
           <h3>LINHA DE RITMO AINDA NÃO DISPONÍVEL</h3>
           <p>O cronograma ainda não contém o mesmo serviço em dois ou mais pavimentos físicos distintos. A escadinha não une atividades diferentes ou disciplinas como se fossem pavimentos.</p>

@@ -133,7 +133,7 @@ export function AbaBaseline({ projetoId }: Props) {
 
   return (
     <section className="pl-planejamento-panel">
-      {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={aba => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }))} />}
+      {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={aba => window.dispatchEvent(new CustomEvent("abrir-aba", { detail: { aba } }))} contexto="baseline" />}
       <header className="pl-planejamento-head">
         <div>
           <div className="pl-planejamento-kicker"><LockKeyhole size={13} /> BASELINE DO CRONOGRAMA</div>

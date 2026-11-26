@@ -35,6 +35,7 @@ import * as schema from "../drizzle/schema";
 
 /** Tabela → colunas, em ordem alfabética. Extraído do schema, não digitado. */
 const CONTRATO: Record<string, string[]> = {
+  activity_schedule_updates: ["activityId", "actualFinishDate", "actualStartDate", "authorUserId", "blockerReason", "createdAt", "evidenceRef", "forecastFinishDate", "id", "note", "positionDate", "projectId", "remainingDurationDays", "status", "supersedesId", "versionId"],
   arquimedes_capabilities: ["createdAt", "dependenciesJson", "description", "domain", "enabled", "id", "installedAt", "installedBy", "kind", "name", "removable", "status", "updatedAt", "version"],
   arquimedes_capability_events: ["action", "capabilityId", "createdAt", "detail", "fromStatus", "id", "toStatus", "userId"],
   activity_resource_allocations: ["activityId", "createdAt", "id", "productivity", "quantity", "resourceId"],
@@ -124,7 +125,12 @@ function superficie(): Record<string, string[]> {
 }
 
 describe("contrato do schema", () => {
-  it("tem as 44 tabelas do contrato", () => {
+  it("permite criar obra sem âncora civil ou término CPM calculado", () => {
+    expect(schema.projects.plannedStart.notNull).toBe(false);
+    expect(schema.projects.plannedFinish.notNull).toBe(false);
+  });
+
+  it("tem as 45 tabelas do contrato", () => {
     const nomes = Object.keys(superficie()).sort();
     expect(nomes).toEqual(Object.keys(CONTRATO).sort());
   });
@@ -152,7 +158,7 @@ describe("contrato do schema", () => {
     expect(problemas).toEqual([]);
   });
 
-  it("o total de colunas inclui evidência do quantitativo e vínculo oficial de preço (516)", () => {
+  it("o total de colunas inclui a nova linha do tempo de prazo (533)", () => {
     // Contagem bruta proposital: pega coluna duplicada dentro de uma tabela, que
     // a comparação de conjuntos acima deixaria passar.
     // 406 -> 410 no R6-02 (projects ganhou cubValor/cubUf/cubMes/bdiDeclarado).
@@ -162,8 +168,8 @@ describe("contrato do schema", () => {
     // 438 -> 464 no Last Planner (planning_constraints + weekly_commitments).
     // 464 -> 488 na medição (measurements + measurement_items).
     // 488 -> 489 no marco do cronograma (is_milestone em schedule_activities).
-    // 499 -> 511 no registro persistente de riscos; 513 com pesos físicos; 515 com origem do quantitativo; 516 com vínculo a serviço oficial direto; 517 com evidência dos pesos.
+    // 499 -> 511 no registro persistente de riscos; 513 com pesos físicos; 515 com origem do quantitativo; 516 com vínculo a serviço oficial direto; 517 com evidência dos pesos; 533 com atualizações temporais por atividade.
     const total = Object.values(superficie()).reduce((s, c) => s + c.length, 0);
-    expect(total).toBe(517);
+    expect(total).toBe(533);
   });
 });

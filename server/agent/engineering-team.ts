@@ -118,7 +118,7 @@ function contextSummary(context: AgentProjectContext) {
     `Local: ${context.project.location}`,
     `Status: ${context.project.status}`,
     `Avanço: ${context.project.progress}%`,
-    `Planejamento: ${new Date(context.project.plannedStart).toISOString().slice(0, 10)} a ${new Date(context.project.plannedFinish).toISOString().slice(0, 10)}`,
+    `Planejamento: ${context.project.plannedStart ? new Date(context.project.plannedStart).toISOString().slice(0, 10) : "início não definido"} a ${context.project.plannedFinish ? new Date(context.project.plannedFinish).toISOString().slice(0, 10) : "término ainda não calculado pelo CPM"}`,
   ].join("\n");
 }
 
