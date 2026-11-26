@@ -1,8 +1,15 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { buildSCurve, type SCurveResult } from "@shared/s-curve";
-import { acumularRealizado, realizadoNoDia, type PontoRealizado } from "@shared/curva-realizado";
+import {
+  acumularRealizado,
+  avaliarSituacaoCurva,
+  calcularProgressoRealPorCodigo,
+  realizadoNoDia,
+  type PontoRealizado,
+} from "@shared/curva-realizado";
 import { indexOf } from "@shared/work-calendar";
+import { selectConfirmedProductionEntries } from "@shared/production-entries";
 import { calcularPesosDaCurva } from "@/lib/curva-s-pesos";
 import { EstadoCarregando } from "./EstadoCarregando";
 
@@ -17,10 +24,11 @@ function ppBr(valor: number): string {
 }
 
 /**
- * Aba CURVA S — valor planejado acumulado × valor realizado acumulado.
+ * Aba CURVA S FINANCEIRA — valor planejado acumulado × valor realizado acumulado.
  *
  * Mostra se a obra está adiantada, no prazo ou atrasada, e quanto do valor
- * total deveria estar pronto hoje vs quanto está.
+ * total deveria estar pronto hoje vs quanto foi medido. Sem produção real, o
+ * status é indisponível; ausência de medição não é percentual zero.
  *
  * Usa o motor puro de `shared/s-curve.ts` com dados reais do banco:
  * - Atividades com CPM calculado (earlyStart, durationDays)
@@ -77,7 +85,9 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           id: a.id.toString(),
           duration: a.durationDays,
           plannedPercent: weight,
-          actualPercent: a.progress ?? 0,
+          // O realizado é calculado abaixo a partir dos lançamentos compatíveis;
+          // o campo persistido pode estar desatualizado ou conter dado QA legado.
+          actualPercent: 0,
           earlyStart: a.earlyStart ?? 0,
         };
       })
@@ -179,6 +189,29 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     { enabled: Number(projetoId) > 0 }
   );
 
+  const entradasReais = useMemo(
+    () => selectConfirmedProductionEntries(producao.data ?? [])
+      .filter(entrada => entrada.unidadeCompativel === true),
+    [producao.data]
+  );
+
+  const progressoRealPorCodigo = useMemo(
+    () => calcularProgressoRealPorCodigo(
+      entradasReais.map(entrada => ({
+        codigo: entrada.codigoEap ?? null,
+        quantidade: entrada.quantity ?? 0,
+        status: entrada.status,
+        exemplo: entrada.exemplo,
+        unidadeCompativel: entrada.unidadeCompativel,
+      })),
+      (planejamento.data?.activities ?? []).map(atividade => ({
+        codigo: atividade.wbsCode ?? null,
+        planejado: atividade.plannedQuantity ?? 0,
+      })),
+    ),
+    [entradasReais, planejamento.data?.activities]
+  );
+
   // REALIZADO DATADO PELA PRODUÇÃO: o que foi confirmado até cada dia. Antes o
   // realizado era "planejado × % concluído" espalhado dentro da janela PLANEJADA
   // — atividade feita fora do prazo não aparecia e o realizado podia "voltar no
@@ -186,9 +219,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
   const pontosRealizado: PontoRealizado[] = useMemo(
     () =>
       acumularRealizado(
-        (producao.data ?? [])
-          .filter(entrada => entrada.status === "confirmada" && entrada.unidadeCompativel === true)
-          .map(entrada => ({
+        entradasReais.map(entrada => ({
             codigo: entrada.codigoEap ?? null,
             quantidade: Number(entrada.quantity ?? 0),
             data: new Date(entrada.productionDate).toISOString().slice(0, 10),
@@ -196,9 +227,12 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         pesosPorCodigo,
         data => (calendario && inicioObra ? indexOf(calendario, inicioObra, data) : 0)
       ),
-    [producao.data, pesosPorCodigo, calendario, inicioObra]
+    [entradasReais, pesosPorCodigo, calendario, inicioObra]
   );
   const realizadoHoje = realizadoNoDia(pontosRealizado, hojeNum);
+  const temRealizadoAteHoje = pontosRealizado.some(
+    ponto => ponto.dia <= hojeNum && ponto.percentual > 0
+  );
 
   // A linha verde só existe até onde há lançamento; estendê-la com o último valor
   // até hoje evita a impressão de que a execução "parou" no último apontamento.
@@ -224,8 +258,8 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     return (
       <div className="xl-painel">
         <EstadoCarregando
-          rotulo="Carregando atividades e orçamento…"
-          detalhe="A curva S cruza o caminho crítico com o valor de cada item de orçamento."
+          rotulo="Carregando plano e orçamento…"
+          detalhe="A Curva S financeira distribui o valor orçado pelo cronograma e pela produção confirmada."
           linhas={4}
         />
       </div>
@@ -267,11 +301,10 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         <div className="xl-painel-intro">
           <div>
             <span className="xl-painel-kicker">CURVA S</span>
-            <h2>Sem dados para curva S</h2>
+            <h2>Curva S financeira indisponível</h2>
             <p>
-              {motivos.length > 0
-                ? `Falta: ${motivos.join("; ")}.`
-                : "Nenhuma atividade ficou com peso de custo — o valor do orçamento não chegou às atividades."}
+              Esta visão compara prazo e produção real ponderados pelo orçamento aprovado. Para planejar os serviços sem preço, continue em Cronograma: orçamento é opcional para planejar o prazo.
+              {motivos.length > 0 ? ` Requisito financeiro: ${motivos.join("; ")}.` : ""}
             </p>
           </div>
         </div>
@@ -284,14 +317,14 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     curve.points[0];
   // Desvio = realizado (pela produção) menos planejado (até hoje), em pontos
   // percentuais da obra.
-  const desvio = realizadoHoje - planejadoHoje.planned;
-  const statusHoje = aindaNaoComecou
-    ? "indeterminado"
-    : desvio > 0.5
-      ? "adiantado"
-      : desvio < -0.5
-        ? "atrasado"
-        : "no_prazo";
+  const situacao = avaliarSituacaoCurva({
+    antesDoInicio: aindaNaoComecou,
+    temRealizadoAteHoje,
+    planejado: planejadoHoje.planned,
+    realizado: realizadoHoje,
+  });
+  const desvio = situacao.desvio;
+  const statusHoje = situacao.status;
   // Eixo comum às três curvas: a baseline pode ser mais longa (ou mais curta)
   // que o plano de hoje, e escalas diferentes fariam a comparação mentir.
   const eixoDias = Math.max(curve.duration, curvaBaseline?.duration ?? 0) || curve.duration;
@@ -301,22 +334,25 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
     <div className="xl-painel">
       <div className="xl-painel-intro">
         <div>
-          <span className="xl-painel-kicker">CURVA S — CONTROLE DE PRAZO</span>
+          <span className="xl-painel-kicker">CURVA S FINANCEIRA — PRAZO E VALOR</span>
           <h2>
-            {aindaNaoComecou && "Obra ainda não começou"}
-            {!aindaNaoComecou && statusHoje === "adiantado" && "Obra adiantada"}
-            {!aindaNaoComecou && statusHoje === "no_prazo" && "Obra no prazo"}
-            {!aindaNaoComecou && statusHoje === "atrasado" && "Obra atrasada"}
+            {statusHoje === "antes_do_inicio" && "Obra ainda não começou"}
+            {statusHoje === "sem_medicao" && "Aguardando produção real"}
+            {statusHoje === "adiantado" && "Obra adiantada"}
+            {statusHoje === "no_prazo" && "Obra no prazo"}
+            {statusHoje === "atrasado" && "Obra atrasada"}
           </h2>
           <p>
-            {aindaNaoComecou
+            {statusHoje === "antes_do_inicio"
               ? `Início planejado em ${dataDeInicio ?? "data não definida"} — não existe atraso antes de a obra começar.`
-              : `Planejado até hoje: ${pctBr(planejadoHoje.planned)} — Realizado: ${pctBr(realizadoHoje)} — Desvio: ${ppBr(desvio)}`}
+              : temRealizadoAteHoje
+                ? `Planejado até hoje: ${pctBr(planejadoHoje.planned)} — Realizado: ${pctBr(realizadoHoje)} — Desvio: ${ppBr(desvio!)}`
+                : `Planejado até hoje: ${pctBr(planejadoHoje.planned)} — Realizado: sem medição real confirmada — desvio indisponível.`}
           </p>
           <p className="xl-curva-regua">
-            Tudo nesta tela é ponderado pelo valor do orçamento — a mesma régua do painel da obra.
-            Os dois percentuais batem. A diferença de 0,1 p.p. entre esta tela e o painel vem só do
-            arredondamento da curva.
+            Plano e produção real são ponderados pelo valor do orçamento aprovado. Premissas QA não
+            contam como execução; sem medição confirmada, esta tela não declara a obra no prazo nem
+            adiantada.
           </p>
         </div>
         <button
@@ -330,7 +366,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
 
       {/* Gráfico SVG simples */}
       <div className="xl-curva-container">
-        <svg viewBox="0 0 600 300" className="xl-curva-svg" style={{ width: "100%", maxHeight: "300px" }}>
+        <svg viewBox="0 0 600 300" className="xl-curva-svg" role="img" aria-label={temRealizadoAteHoje ? "Curva S financeira com produção real confirmada." : "Curva S financeira sem produção real confirmada; série realizada indisponível."} style={{ width: "100%", maxHeight: "300px" }}>
           {/* Eixos */}
           <line x1="50" y1="20" x2="50" y2="260" stroke="#334155" strokeWidth="1" />
           <line x1="50" y1="260" x2="580" y2="260" stroke="#334155" strokeWidth="1" />
@@ -381,18 +417,24 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
           />
 
           {/* Curva real — datada pela produção confirmada, não pelo planejado */}
-          <polyline
-            fill="none"
-            stroke={desvio < 0 ? "#ef4444" : "#22c55e"}
-            strokeWidth="2"
-            points={serieRealizado.map(p => `${x(p.dia)},${260 - p.percentual * 2.4}`).join(" ")}
-          />
+          {temRealizadoAteHoje && (
+            <polyline
+              fill="none"
+              stroke={desvio != null && desvio < 0 ? "#ef4444" : "#22c55e"}
+              strokeWidth="2"
+              points={serieRealizado.map(p => `${x(p.dia)},${260 - p.percentual * 2.4}`).join(" ")}
+            />
+          )}
 
           {/* Legenda */}
           <rect x="380" y="10" width="12" height="3" fill="#3b82f6" />
           <text x="396" y="15" fontSize="10" fill="#94a3b8">Planejado</text>
-          <rect x="380" y="25" width="12" height="3" fill={desvio < 0 ? "#ef4444" : "#22c55e"} />
-          <text x="396" y="30" fontSize="10" fill="#94a3b8">Realizado</text>
+          {temRealizadoAteHoje && (
+            <>
+              <rect x="380" y="25" width="12" height="3" fill={desvio != null && desvio < 0 ? "#ef4444" : "#22c55e"} />
+              <text x="396" y="30" fontSize="10" fill="#94a3b8">Realizado</text>
+            </>
+          )}
           {hojeNum > 0 && hojeNum <= eixoDias && (
             <>
               <rect x="380" y="40" width="12" height="3" fill="#f59e0b" />
@@ -426,18 +468,20 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
         </div>
         <div className="xl-cartao">
           <span className="xl-cartao-titulo">Realizado até hoje</span>
-          <strong className="xl-cartao-valor">{pctBr(realizadoHoje)}</strong>
-          <span className="xl-cartao-nota">por valor lançado na produção</span>
+          <strong className="xl-cartao-valor">{temRealizadoAteHoje ? pctBr(realizadoHoje) : "Sem dado"}</strong>
+          <span className="xl-cartao-nota">por valor de produção real confirmada</span>
         </div>
-        <div className={`xl-cartao ${desvio < 0 ? "xl-cartao-ruim" : "xl-cartao-bom"}`}>
+        <div className={`xl-cartao ${desvio == null ? "" : desvio < 0 ? "xl-cartao-ruim" : "xl-cartao-bom"}`}>
           <span className="xl-cartao-titulo">Desvio até hoje</span>
-          <strong className="xl-cartao-valor">{ppBr(desvio)}</strong>
+          <strong className="xl-cartao-valor">{desvio == null ? "—" : ppBr(desvio)}</strong>
           <span className="xl-cartao-nota">
-            {aindaNaoComecou
+            {statusHoje === "antes_do_inicio"
               ? "obra ainda não começou"
-              : desvio < 0
+              : statusHoje === "sem_medicao"
+                ? "sem medição real confirmada"
+                : desvio! < 0
                 ? "atrasado"
-                : desvio > 0
+                : desvio! > 0
                   ? "adiantado"
                   : "em cima do planejado"}
           </span>
@@ -453,7 +497,7 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
                 <th>Atividade</th>
                 <th>Início</th>
                 <th>Duração</th>
-                <th>Peso</th>
+                <th>Peso orçamentário</th>
                 <th>Realizado</th>
                 <th>Status</th>
               </tr>
@@ -467,14 +511,15 @@ export function AbaCurvaS({ projetoId, hoje }: Props) {
                   // 0,0% para todo mundo enquanto o gráfico desenhava a curva.
                   const cost = pesos.custoPorAtividade.get(a.id) ?? 0;
                   const weight = pesos.total > 0 ? (cost / pesos.total) * 100 : 0;
+                  const progressoReal = a.wbsCode ? progressoRealPorCodigo.get(a.wbsCode) : undefined;
                   return (
                     <tr key={a.id}>
                       <td>{a.name}</td>
                       <td>{a.earlyStart}d</td>
                       <td>{a.durationDays}d</td>
                       <td>{pctBr(weight)}</td>
-                      <td>{a.progress ?? 0}%</td>
-                      <td>{(a.progress ?? 0) >= 100 ? "Concluído" : (a.progress ?? 0) > 0 ? "Em andamento" : "Não iniciado"}</td>
+                      <td>{progressoReal == null ? "Sem medição" : pctBr(progressoReal)}</td>
+                      <td>{progressoReal == null ? "Sem medição" : progressoReal >= 100 ? "Concluído" : progressoReal > 0 ? "Em andamento" : "Não iniciado"}</td>
                     </tr>
                   );
                 })}

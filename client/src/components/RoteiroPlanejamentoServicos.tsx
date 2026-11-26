@@ -64,13 +64,17 @@ export function RoteiroPlanejamentoServicos({ readiness, forecast, onOpen }: Rot
       ? "Revisar o acompanhamento dos serviços"
       : next.titulo;
   const inicioCampo = Math.max(0, Math.min(etapas.length - 1, nextIndex));
+  const totalCoberturaForecast = forecast.totalActivities > 0 ? forecast.totalActivities : totalActivities;
+  const atualizadasForecast = forecast.totalActivities > 0 ? forecast.activitiesWithUpdate : activitiesWithUpdate;
+  const semRelatosDeCampo = !forecast.loading && forecast.available && totalCoberturaForecast > 0 && atualizadasForecast === 0;
   const labelForecast = forecast.loading
     ? "Calculando a previsão pelos relatos…"
     : forecast.available
-      ? `Previsão pelos relatos: ${dataBr(forecast.forecastFinishDate)}`
+      ? semRelatosDeCampo
+        ? `Cenário conservador sem relatos: ${dataBr(forecast.forecastFinishDate)}`
+        : `Previsão pelos relatos: ${dataBr(forecast.forecastFinishDate)}`
       : "Previsão pelos relatos indisponível";
-  const totalCoberturaForecast = forecast.totalActivities > 0 ? forecast.totalActivities : totalActivities;
-  const atualizadasForecast = forecast.totalActivities > 0 ? forecast.activitiesWithUpdate : activitiesWithUpdate;
+  const labelFimForecast = semRelatosDeCampo ? "Prazo no cenário sem relatos" : "Previsão após relatos";
 
   return (
     <section className="ct-service-guide" aria-labelledby="ct-service-guide-title" data-testid="roteiro-planejamento-servicos">
@@ -106,14 +110,14 @@ export function RoteiroPlanejamentoServicos({ readiness, forecast, onOpen }: Rot
         </button>
       </div>
 
-      <section className="ct-service-forecast" aria-label="Previsão de término por relatos de campo" aria-live="polite">
+      <section className="ct-service-forecast" aria-label={semRelatosDeCampo ? "Cenário conservador de término sem relatos" : "Previsão de término por relatos de campo"} aria-live="polite">
         <div className="ct-service-forecast-title">
           <div><small>PRAZO A PARTIR DO CAMPO</small><strong>{labelForecast}</strong></div>
           <span>{forecast.loading ? "Lendo relatos" : totalCoberturaForecast > 0 ? `${Math.min(atualizadasForecast, totalCoberturaForecast)} de ${totalCoberturaForecast} serviços atualizados` : "Aguardando atividades"}</span>
         </div>
         <div className="ct-service-forecast-details">
           <span><small>Plano calculado</small><strong>{dataBr(forecast.plannedFinishDate)}</strong></span>
-          <span><small>Previsão após relatos</small><strong>{forecast.available ? dataBr(forecast.forecastFinishDate) : "Indisponível"}</strong></span>
+          <span><small>{labelFimForecast}</small><strong>{forecast.available ? dataBr(forecast.forecastFinishDate) : "Indisponível"}</strong></span>
           <span><small>Orçamento</small><strong>Opcional para o prazo</strong></span>
         </div>
         {!forecast.loading && !forecast.available && forecast.unavailableReason && (
@@ -122,6 +126,9 @@ export function RoteiroPlanejamentoServicos({ readiness, forecast, onOpen }: Rot
         {forecast.warnings.map(warning => (
           <p className="ct-service-forecast-warning" key={warning.code} role="note">{warning.message}</p>
         ))}
+        {semRelatosDeCampo && (
+          <p className="ct-service-forecast-warning" role="note">Sem relatos, serviços com início planejado até a data de corte são tratados como não iniciados e mantêm a duração planejada. É um cenário conservador; não confirma atraso nem execução.</p>
+        )}
         <small className="ct-service-forecast-note">A projeção usa o CPM, o calendário e as posições informadas. Ela não altera a baseline nem representa avanço físico ou custo.</small>
       </section>
     </section>

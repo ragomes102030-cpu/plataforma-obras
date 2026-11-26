@@ -71,6 +71,10 @@ medição ou custo.
   o calendário e as atualizações de prazo da versão atual até a data de posição.
 - **Serviços atualizados:** cobertura dos relatos temporais. Um serviço sem relato
   conserva a duração planejada para a projeção, mas isso não confirma execução.
+- **Sem relatos de campo:** o sistema apresenta um cenário conservador, não um
+  atraso medido. Serviços com início planejado até a data de corte são tratados
+  como não iniciados e mantêm a duração planejada; registre a posição real antes
+  de interpretar a diferença para o plano.
 - **Fora de sequência:** uma atividade começou antes da janela indicada pela rede;
   revise o relato e as predecessoras.
 - **Previsão indisponível:** a tela informa o requisito exato. Exemplos: data
@@ -93,7 +97,9 @@ O cálculo não altera atividades, CPM salvo ou baseline.
 
 Ausência de relatório não significa execução zero. Estado temporal e duração não
 geram percentual físico. A Curva S financeira não substitui a programação de
-serviços, e um plano de prazo não autoriza medição contratual.
+serviços, e um plano de prazo não autoriza medição contratual. Sem produção real
+confirmada e compatível, a Curva S financeira deve mostrar o realizado como
+indisponível e não classificar a obra como adiantada, no prazo ou atrasada.
 
 ## Vocabulário
 
