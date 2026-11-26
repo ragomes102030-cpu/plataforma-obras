@@ -420,6 +420,21 @@ describe("avanço real por código da EAP", () => {
       .rejects.toThrow(/classifique como Premissa QA/i);
   });
 
+  it("não permite confirmar como produção real um lançamento já marcado como Premissa QA", async () => {
+    const db = drizzlePglite(pg);
+    await db.update(productionEntries)
+      .set({ status: "rascunho", notes: null, exemplo: 1 })
+      .where(eq(productionEntries.id, lancamentoId));
+
+    await expect(chamador().production.confirmEntry({ projectId: obraId, entryId: lancamentoId }))
+      .rejects.toThrow(/Premissa QA não pode ser confirmada como produção real/i);
+
+    const [lancamento] = await db.select({ status: productionEntries.status, exemplo: productionEntries.exemplo })
+      .from(productionEntries)
+      .where(eq(productionEntries.id, lancamentoId));
+    expect(lancamento).toEqual({ status: "rascunho", exemplo: 1 });
+  });
+
   it("não reconfirma lançamento legado com unidade incompatível", async () => {
     const db = drizzlePglite(pg);
     await db.update(productionEntries)

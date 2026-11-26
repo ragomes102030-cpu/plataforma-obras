@@ -361,15 +361,24 @@ export function ListaLancamentosProducao({ projetoId, lancamentos }: Props) {
                           )}
                           {!confirmada && (
                             <>
-                              <button
-                                type="button"
-                                className="eap-btn"
-                                disabled={ocupado}
-                                title="Volta a contar no avanço real."
-                                onClick={() => confirmar.mutate({ projectId: projetoId, entryId: l.id })}
-                              >
-                                Confirmar
-                              </button>
+                              {l.exemplo === 1 ? (
+                                <span
+                                  className="producao-tag producao-tag-aviso"
+                                  title="Premissas QA permanecem no histórico e não podem ser confirmadas como produção real. Registre a medição de campo separadamente."
+                                >
+                                  não confirmável como produção
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="eap-btn"
+                                  disabled={ocupado}
+                                  title="Confirma a medição de campo como produção real."
+                                  onClick={() => confirmar.mutate({ projectId: projetoId, entryId: l.id })}
+                                >
+                                  Confirmar
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="outline-button"

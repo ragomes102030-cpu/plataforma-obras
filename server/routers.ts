@@ -2760,7 +2760,10 @@ export const appRouter = router({
         await assertAccessibleProject(db, input.projectId, ctx.user.id);
         const [entry] = await db.select().from(productionEntries).where(and(eq(productionEntries.id, input.entryId), eq(productionEntries.projectId, input.projectId))).limit(1);
         if (!entry) throw notFound("Medição não encontrada nesta obra.");
-        if (entry.exemplo !== 1 && isClearlyQaExampleNote(entry.notes)) {
+        if (entry.exemplo === 1) {
+          throw badRequest("Premissa QA não pode ser confirmada como produção real. Registre a medição de campo separadamente com evidência rastreável.");
+        }
+        if (isClearlyQaExampleNote(entry.notes)) {
           throw badRequest("A nota identifica uma simulação QA. Classifique como Premissa QA antes de confirmar, pois esse valor não é medição real.");
         }
         const unidadePlanejada = await obterUnidadePlanejadaAtualDaProducao(db, input.projectId, entry.activityId);
