@@ -24,7 +24,7 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
   });
   it("separa dados de entrada do escopo da rastreabilidade posterior do cronograma",()=>{
     expect(home).toContain("Conferência do objeto para estruturar a EAP");
-    expect(home).toContain("Conexão do escopo ao custo e ao cronograma");
+    expect(home).toContain("Conexão do escopo ao planejamento por serviços");
     expect(home).toContain("não são pré-requisitos para declarar o escopo inicial");
     expect(home).not.toContain("Critérios para aprovação do escopo");
     expect(home).not.toContain("Escopo formal declarado");
@@ -34,12 +34,12 @@ describe("Escopo → EAP Studio, sem mutação automática",()=>{
   it("não condiciona quantitativos e orçamento à criação prévia de atividades",()=>{
     expect(home).not.toContain("Sem atividade não há quantidade");
     expect(home).not.toContain("sem quantidade a cadeia escopo → EAP → orçamento não fecha");
-    expect(home).toContain("Quantidades podem ser levantadas por pacote da EAP antes das atividades do cronograma");
+    expect(home).toContain("O prazo é planejado com atividades, durações e dependências");
   });
-  it("apresenta custos e cronograma como ramos integrados antes da baseline",()=>{
-    expect(home).toContain("Planejamento integrado");
-    expect(home).toContain("Quantitativos e orçamento + atividades e dependências");
-    expect(home).toContain("Revisão e baseline");
+  it("apresenta o fluxo de prazo e deixa o orçamento como opção",()=>{
+    expect(home).toContain("Revisar CPM e registrar baseline de prazo");
+    expect(home).toContain("ATIVIDADES, DURAÇÕES E DEPENDÊNCIAS");
+    expect(home).toContain("Atualizar serviços em campo");
     expect(home).not.toContain("EAP</span><span>Quantitativos</span><span>→</span><span>Orçamento</span><span>→</span><span>Atividades");
   });
   it("não rotula dados derivados do cronograma como dimensões completas do escopo",()=>{

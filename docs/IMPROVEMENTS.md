@@ -662,3 +662,22 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 - `pnpm build`: PASSOU. Avisos: Node 24.21.0 embora o projeto declare 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
 - Publicação: pendente.
 - Estado: correção no branch `audit/planejamento-ponta-a-ponta`; nenhum dado da obra 26 foi alterado.
+
+## 26/nov/2026 — tornar serviços e prazo o caminho principal para uma obra nova
+
+### Problema
+- A página inicial, a lista vazia de obras e o fluxo de Escopo ainda davam a entender que quantitativos e orçamento faziam parte do caminho obrigatório antes de planejar o cronograma.
+
+### Correção
+- O primeiro uso agora apresenta EAP → atividades, durações e dependências → CPM e baseline de prazo → atualizações de campo.
+- A criação de obra e o Escopo esclarecem que preço/orçamento não são requisitos do cronograma. Quantidade e unidade são apresentadas como apoio à medição física, e a Linha de Balanço segue condicionada a unidades repetitivas confirmadas.
+- Custos, suprimentos e Curva S são identificados como recursos financeiros opcionais.
+
+### Validação
+- Teste de regressão de primeira utilização: PASSOU — landing, criação de obra e fluxo do Escopo declaram o caminho por serviços e o orçamento opcional.
+- `pnpm check`: PASSOU.
+- `pnpm test`: PASSOU — 205 arquivos; 1.700 testes aprovados e 8 ignorados.
+- `pnpm build`: PASSOU. Avisos do ambiente: Node 24.21.0 enquanto o projeto declara Node 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
+- `git diff --check`: PASSOU.
+- Deploy e conferência ao vivo: pendentes.
+- Estado: alterações locais; nenhuma versão ou dado de execução da obra 26 foi criado ou alterado.
