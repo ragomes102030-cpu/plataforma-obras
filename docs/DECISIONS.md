@@ -384,3 +384,11 @@
 - **Indicadores:** Dashboard destaca término, comparação com baseline quando disponível, estado temporal declarado, previsões vencidas explícitas e cobertura de atualização. Curva S financeira continua dependente de orçamento aprovado e produção; ausência de orçamento não vira avanço zero.
 - **Validação local:** `pnpm check`; 16 arquivos / 96 testes focados; `pnpm db:verify:scratch` (5 testes); `pnpm build`. Build concluído com avisos de Node 24.21.0 fora do requisito Node 22.x, analytics sem configuração e bundle acima de 500 kB.
 - **Limite de validação:** sem publicação, alteração da obra 26 ou conferência ao vivo da Dashboard. O fluxo completo em navegador isolado permanece pendente.
+
+## Decisão 26 — invalidar relato temporal sem inventar estado de execução
+
+- **Decisão:** um relato de prazo lançado por engano pode ser invalidado por evento append-only, com justificativa e vínculo ao relato original. A invalidação o retira da projeção vigente e preserva a auditoria.
+- **Motivo:** “corrigir” um relato exige escolher um estado real (`não iniciada`, `em andamento`, `concluída` ou `bloqueada`). Quando não existe evidência de campo, nenhum desses estados descreve a ausência de dado; registrar “não iniciada” seria uma afirmação sem prova.
+- **Efeitos:** invalidar não apaga histórico, não cria produção, não modifica datas planejadas, CPM, baseline, quantidades ou custos. A atividade volta a aparecer como sem relato até existir uma nova posição válida.
+- **Controle:** somente o relato vigente da versão operacional pode ser invalidado; a justificativa e o autor são auditados. A linha de invalidação não entra na previsão nem na contagem de atividade atualizada.
+- **Migração:** `0029_activity_schedule_update_invalidation_event` amplia a restrição de status da tabela temporal; não altera registros existentes.

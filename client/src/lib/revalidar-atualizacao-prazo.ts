@@ -7,7 +7,7 @@ type LeiturasDePrazo = {
   };
 };
 
-/** Mantém os indicadores de prazo sincronizados após registrar ou corrigir um relato. */
+/** Mantém os indicadores de prazo sincronizados após registrar, corrigir ou invalidar um relato. */
 export async function revalidarAtualizacaoPrazo(utils: LeiturasDePrazo, projectId: number, activityId: number, asOf: string) {
   await Promise.all([
     utils.planning.activityScheduleUpdates.invalidate({ projectId, activityId }),

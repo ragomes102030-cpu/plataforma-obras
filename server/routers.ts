@@ -7699,14 +7699,14 @@ export const appRouter = router({
         ]);
         const currentVersionMatches = activity.versionId === currentPlanId;
         const supersededIds = new Set(rows.flatMap(row => row.supersedesId == null ? [] : [row.supersedesId]));
-        const current = rows.find(row => !supersededIds.has(row.id)) ?? null;
+        const current = rows.find(row => !supersededIds.has(row.id) && row.status !== "relato_invalidado") ?? null;
         return {
           canUpdate: currentVersionMatches,
           current,
           history: rows.map(row => ({
             ...row,
-            vigente: !supersededIds.has(row.id),
-            corrigivel: currentVersionMatches && !supersededIds.has(row.id),
+            vigente: !supersededIds.has(row.id) && row.status !== "relato_invalidado",
+            corrigivel: currentVersionMatches && !supersededIds.has(row.id) && row.status !== "relato_invalidado",
           })),
         };
       }),
@@ -7785,7 +7785,7 @@ export const appRouter = router({
         const supersededIds = new Set(updateRows.flatMap(update => update.supersedesId == null ? [] : [update.supersedesId]));
         const currentByActivity = new Map<number, typeof updateRows[number]>();
         for (const update of updateRows) {
-          if (!supersededIds.has(update.id) && !currentByActivity.has(update.activityId)) {
+          if (update.status !== "relato_invalidado" && !supersededIds.has(update.id) && !currentByActivity.has(update.activityId)) {
             currentByActivity.set(update.activityId, update);
           }
         }
@@ -7955,7 +7955,7 @@ export const appRouter = router({
         const supersededIds = new Set(updates.flatMap(update => update.supersedesId == null ? [] : [update.supersedesId]));
         const currentByActivity = new Map<number, typeof updates[number]>();
         for (const update of updates) {
-          if (!supersededIds.has(update.id) && !currentByActivity.has(update.activityId)) {
+          if (update.status !== "relato_invalidado" && !supersededIds.has(update.id) && !currentByActivity.has(update.activityId)) {
             currentByActivity.set(update.activityId, update);
           }
         }
@@ -8089,6 +8089,84 @@ export const appRouter = router({
           return row;
         });
         return { id: created.id, recorded: true as const };
+      }),
+    invalidateActivityScheduleUpdate: protectedProcedure
+      .input(z.object({
+        projectId: z.number().int().positive(),
+        activityId: z.number().int().positive(),
+        updateId: z.number().int().positive(),
+        reason: z.string().trim().min(12).max(2000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Banco de dados não configurado.");
+        await assertAccessibleProject(db, input.projectId, ctx.user.id);
+        const [activity] = await db
+          .select({ id: scheduleActivities.id, versionId: scheduleActivities.versionId })
+          .from(scheduleActivities)
+          .where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.id, input.activityId)))
+          .limit(1);
+        if (!activity) throw notFound("Atividade não encontrada nesta obra.");
+        const currentVersionId = await getCurrentPlanVersionId(db, input.projectId);
+        if (activity.versionId !== currentVersionId) {
+          throw conflict("Relatos de versões substituídas ficam somente para consulta.");
+        }
+        if (currentVersionId != null) {
+          const [version] = await db.select({ status: projectPlanVersions.status })
+            .from(projectPlanVersions)
+            .where(and(eq(projectPlanVersions.id, currentVersionId), eq(projectPlanVersions.projectId, input.projectId)))
+            .limit(1);
+          if (!version || version.status === "superseded") {
+            throw conflict("A versão do plano foi substituída e está somente para consulta.");
+          }
+        }
+
+        const invalidation = await db.transaction(async tx => {
+          const [original] = await tx.select({ id: activityScheduleUpdates.id, status: activityScheduleUpdates.status })
+            .from(activityScheduleUpdates)
+            .where(and(
+              eq(activityScheduleUpdates.id, input.updateId),
+              eq(activityScheduleUpdates.projectId, input.projectId),
+              eq(activityScheduleUpdates.activityId, input.activityId),
+              currentVersionId == null
+                ? isNull(activityScheduleUpdates.versionId)
+                : eq(activityScheduleUpdates.versionId, currentVersionId),
+            ))
+            .limit(1);
+          if (!original) throw badRequest("O relato a invalidar não pertence à atividade e versão atuais.");
+          if (original.status === "relato_invalidado") throw conflict("Este evento de invalidação não é um relato de andamento.");
+          const [alreadySuperseded] = await tx.select({ id: activityScheduleUpdates.id })
+            .from(activityScheduleUpdates)
+            .where(eq(activityScheduleUpdates.supersedesId, input.updateId))
+            .limit(1);
+          if (alreadySuperseded) throw conflict("Somente o relato vigente pode ser invalidado.");
+
+          const [row] = await tx.insert(activityScheduleUpdates).values({
+            projectId: input.projectId,
+            activityId: input.activityId,
+            versionId: currentVersionId,
+            positionDate: hojeNoBrasil(),
+            status: "relato_invalidado",
+            note: input.reason,
+            supersedesId: input.updateId,
+            authorUserId: ctx.user.id,
+          }).returning({ id: activityScheduleUpdates.id });
+          await tx.insert(projectAuditEvents).values({
+            projectId: input.projectId,
+            userId: ctx.user.id,
+            action: "activity_schedule_update_invalidated",
+            payload: {
+              activityId: input.activityId,
+              versionId: currentVersionId,
+              updateId: row.id,
+              invalidatedUpdateId: input.updateId,
+              reason: input.reason,
+              at: new Date().toISOString(),
+            },
+          });
+          return row;
+        });
+        return { id: invalidation.id, invalidated: true as const };
       }),
     createActivity: protectedProcedure
       .input(z.object({ projectId: z.number().int().positive(), wbsCode: z.string().trim().min(1).max(32), name: z.string().trim().min(2).max(220), phase: z.string().trim().min(2).max(80), startOffset: z.number().int().min(0), plannedQuantity: z.number().positive().optional(), productivity: z.number().positive().optional(), durationDays: z.number().int().positive().optional(), budgetItemId: z.number().int().positive().optional() }))

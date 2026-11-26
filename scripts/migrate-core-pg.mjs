@@ -52,6 +52,12 @@ export const CONSULTA_POR_TIPO = {
       " WHERE constraint_schema = current_schema() AND table_name = $1 AND constraint_name = $2",
     params: alvo => [alvo.tabela, alvo.nome],
   },
+  constraint_absent: {
+    sql:
+      "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM information_schema.table_constraints" +
+      " WHERE constraint_schema = current_schema() AND table_name = $1 AND constraint_name = $2)",
+    params: alvo => [alvo.tabela, alvo.nome],
+  },
   index: {
     // `information_schema` não expõe índice no PostgreSQL. A view `pg_indexes`
     // é o caminho oficial e devolve `schemaname`, `tablename` e `indexname`.
@@ -141,6 +147,8 @@ export async function verificarSeDdlEstaNoBanco({ conn, migrations, jaAplicado }
 
   for (const m of marcadas) {
     const faltando = [];
+    const alvos = [];
+    const indiceDeConstraint = new Map();
 
     for (const stmt of m.sql) {
       // O comentario de cabecalho vem grudado no primeiro statement quando o
@@ -164,8 +172,26 @@ export async function verificarSeDdlEstaNoBanco({ conn, migrations, jaAplicado }
       // confiar. Fica de fora, e a auditoria reporta a lacuna.
       if (!alvo) continue;
 
-      if (!(await jaExiste(alvo))) faltando.push(alvo);
+      // Uma migration pode remover e recriar a mesma constraint para trocar
+      // sua expressão. A conferência da migration aplicada precisa refletir o
+      // estado FINAL do objeto, não exigir simultaneamente que ele esteja
+      // ausente (DROP) e presente (ADD). Na execução, cada statement continua
+      // usando seu próprio alvo para que retries sejam seguros.
+      if (alvo.tipo === "constraint" || alvo.tipo === "constraint_absent") {
+        const chave = `${alvo.tabela}:${alvo.nome}`;
+        const indiceExistente = indiceDeConstraint.get(chave);
+        if (indiceExistente === undefined) {
+          indiceDeConstraint.set(chave, alvos.length);
+          alvos.push(alvo);
+        } else {
+          alvos[indiceExistente] = alvo;
+        }
+      } else {
+        alvos.push(alvo);
+      }
     }
+
+    for (const alvo of alvos) if (!(await jaExiste(alvo))) faltando.push(alvo);
 
     if (faltando.length > 0) pendentes.push({ folderMillis: m.folderMillis, faltando });
   }
@@ -212,6 +238,14 @@ export function alvoDoStatement(stmt) {
   );
   if (addConstraint)
     return { tipo: "constraint", tabela: addConstraint[1], nome: addConstraint[2] };
+
+  // DROP precisa ser conferido como alvo ausente. Consultar só a existência do
+  // nome da constraint faria o migrador pular justamente a remoção necessária.
+  const dropConstraint = stmt.match(
+    /^\s*ALTER\s+TABLE\s+(?:ONLY\s+)?(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s+DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/i
+  );
+  if (dropConstraint)
+    return { tipo: "constraint_absent", tabela: dropConstraint[1] ?? dropConstraint[2], nome: dropConstraint[3] };
 
   const criarIndex = stmt.match(
     /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+|IF\s+NOT\s+EXISTS\s+)?"([^"]+)"\s+ON\s+(?:ONLY\s+)?"([^"]+)"/i

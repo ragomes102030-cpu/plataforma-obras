@@ -592,7 +592,7 @@ export const activityScheduleUpdates = pgTable(
   table => [
     check(
       "activity_schedule_updates_status_valid",
-      drizzleSql`${table.status} in ('nao_iniciada', 'em_andamento', 'concluida', 'bloqueada')`
+      drizzleSql`${table.status} in ('nao_iniciada', 'em_andamento', 'concluida', 'bloqueada', 'relato_invalidado')`
     ),
     check(
       "activity_schedule_updates_remaining_positive",

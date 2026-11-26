@@ -1,5 +1,13 @@
 # Melhorias e Mudanças
 
+## 26/nov/2026 — invalidar relato de campo sem converter cenário em fato
+
+**Achado:** o fluxo permitia corrigir um relato de prazo somente escolhendo um estado de execução. A obra fictícia tinha atualizações explicitamente simuladas; sem um caminho de invalidação, elas continuavam na projeção, ou a correção exigiria registrar um estado real não comprovado.
+
+**Correção:** incluída invalidação append-only com justificativa, autor e vínculo ao relato original. O evento preserva o histórico, remove a atualização da previsão/contagem vigente e não cria produção nem altera plano, CPM, baseline, quantidade ou custo. A tela só oferece a ação para o relato vigente.
+
+**Validação:** teste de regressão cobre ausência de relato após invalidar, histórico auditável, contagens, produção inalterada e proteção de versão. `pnpm check`, testes focados, migração PGlite e build; validação ao vivo após publicação.
+
 ## 25/nov/2026 — Separar valor agregado real da simulação QA
 
 **Achado:** a Dashboard rotulava a linha de realizado como “Produção QA” somente porque os pesos eram premissas QA, embora o cálculo excluísse os lançamentos sintéticos. A tela também não oferecia uma série financeira separada para apontamentos QA compatíveis.
