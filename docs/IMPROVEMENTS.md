@@ -646,3 +646,19 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 - `pnpm check` e `pnpm build`: PASSOU. Avisos do ambiente: Node 24.21.0 embora o projeto declare 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
 - Homologação E2E: o fluxo local sintético passou; os três MCPs públicos ficaram offline por `URL do MCP não configurada` neste ambiente.
 - Estado: código local no branch `audit/planejamento-ponta-a-ponta`; obra 26 e orçamento sem alteração; publicação e confirmação visual pós-deploy pendentes.
+
+## 26/nov/2026 — separar atraso observado de prazo planejado vencido
+
+### Problema
+- A Dashboard contava uma linha com término planejado passado e sem posição de campo como “atividade atrasada”, enquanto o painel de prazo informava zero previsões vencidas. A contagem inferia atraso real pela data do plano, sem relato de execução.
+
+### Correção
+- O radar de atraso usa somente previsões vencidas presentes nas atualizações temporais atuais. Um plano sem relatos deixa o alerta de atraso observado vazio; previsões vencidas informadas em campo continuam sendo contadas com seus dias de atraso.
+
+### Validação
+- Testes de comportamento da Dashboard: 2 passaram; cobrem ausência de relato e previsão vencida real.
+- `pnpm check`: PASSOU.
+- `pnpm test`: PASSOU — 204 arquivos; 1.697 testes aprovados e 8 ignorados.
+- `pnpm build`: PASSOU. Avisos: Node 24.21.0 embora o projeto declare 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
+- Publicação: pendente.
+- Estado: correção no branch `audit/planejamento-ponta-a-ponta`; nenhum dado da obra 26 foi alterado.
