@@ -616,3 +616,33 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 - `pnpm build`: PASSOU. Avisos do ambiente: Node 24.21.0 enquanto o projeto declara Node 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
 - `git diff --check`: PASSOU.
 - Estado: código no worktree local; sem publicação, validação em navegador ao vivo ou alterações na obra 26.
+
+## 26/nov/2026 — explicar o cenário de prazo sem relatos
+
+### Problema
+- Com 0/86 relatos, a Dashboard mostrava 17/05/2029 como “Previsão pelos relatos”, embora o plano CPM terminasse em 04/05/2029. A regra desloca para depois da data de corte os serviços sem relato cuja janela já começou, mantendo sua duração; o valor é um cenário conservador e não atraso observado.
+
+### Correção
+- A trilha agora nomeia o resultado “Cenário conservador sem relatos”, identifica a coluna de término como prazo do cenário e explica como os serviços não reportados são tratados.
+- O manual de planejamento explicita que o cenário não confirma atraso nem execução.
+
+### Validação
+- Teste de regressão reproduziu o rótulo ambíguo antes da correção e passou após a correção.
+- Testes focados: PASSOU — 3 arquivos, 14 testes.
+- Estado: correção local no branch `audit/planejamento-ponta-a-ponta`; não publicada; nenhum dado da obra 26 foi alterado.
+
+## 26/nov/2026 — separar premissas QA do realizado na Curva S
+
+### Problema
+- A Curva S tratava qualquer lançamento confirmado como produção real, inclusive registros `Premissa QA`; também podia mostrar progresso persistido obsoleto em linhas sem medição e classificar uma obra sem produção como “no prazo”.
+
+### Correção
+- A tela agora calcula avanço por código EAP somente com produção confirmada, unidade compatível e registro não QA. Sem evidência real, mostra “Sem medição” e “Aguardando produção real”, sem percentual de realizado ou julgamento de prazo.
+- A aba identifica-se como Curva S financeira e orienta o planejamento sem preço para o Cronograma. O progresso nas linhas deriva das medições reais filtradas, não de estado armazenado isolado.
+
+### Validação
+- `pnpm test`: PASSOU — 203 arquivos; 1.695 testes aprovados e 8 ignorados.
+- Testes focados: PASSOU — 4 arquivos, 37 testes da Curva S e produção; após atualizar expectativas que ainda dependiam da lógica antiga, os testes de Curva S passaram 20/20.
+- `pnpm check` e `pnpm build`: PASSOU. Avisos do ambiente: Node 24.21.0 embora o projeto declare 22.x; variáveis de analytics ausentes; bundle principal acima de 500 kB.
+- Homologação E2E: o fluxo local sintético passou; os três MCPs públicos ficaram offline por `URL do MCP não configurada` neste ambiente.
+- Estado: código local no branch `audit/planejamento-ponta-a-ponta`; obra 26 e orçamento sem alteração; publicação e confirmação visual pós-deploy pendentes.

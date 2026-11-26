@@ -72,9 +72,19 @@ describe("roteiro inicial do planejamento por serviços", () => {
         totalActivities: 3,
         activitiesWithUpdate: 1,
       },
+      forecast: {
+        ...base.forecast,
+        available: true,
+        plannedFinishDate: "2029-05-04",
+        forecastFinishDate: "2029-05-07",
+        totalActivities: 3,
+        activitiesWithUpdate: 1,
+      },
     }));
     expect(html).toContain("Atualizar os serviços em campo");
     expect(html).toContain("1 de 3 serviços atualizados");
+    expect(html).toContain("Previsão pelos relatos: 07/05/2029");
+    expect(html).not.toContain("Cenário conservador sem relatos");
     expect(html).toContain('data-next-action="gantt"');
   });
 
@@ -101,5 +111,39 @@ describe("roteiro inicial do planejamento por serviços", () => {
     }));
     expect(html).toContain("Previsão pelos relatos indisponível");
     expect(html).toContain("ligação elétrica está bloqueada sem estimativa");
+  });
+
+  it("identifica o término como cenário conservador quando ainda não há relato de campo", () => {
+    const html = renderToStaticMarkup(createElement(RoteiroPlanejamentoServicos, {
+      ...base,
+      readiness: {
+        eapApproved: true,
+        activityCount: 2,
+        durationsComplete: true,
+        networkValid: true,
+        plannedStartDefined: true,
+        cpmCurrent: true,
+        baselineActive: true,
+        totalActivities: 2,
+        activitiesWithUpdate: 0,
+      },
+      forecast: {
+        ...base.forecast,
+        available: true,
+        plannedFinishDate: "2029-05-04",
+        forecastFinishDate: "2029-05-17",
+        totalActivities: 2,
+        activitiesWithUpdate: 0,
+        warnings: [{
+          code: "COBERTURA_INCOMPLETA",
+          activityIds: ["1", "2"],
+          message: "2 serviços sem relato conservam a duração planejada; isso não confirma execução.",
+        }],
+      },
+    }));
+
+    expect(html).toContain("Cenário conservador sem relatos: 17/05/2029");
+    expect(html).toContain("Prazo no cenário sem relatos");
+    expect(html).toContain("não confirma atraso nem execução");
   });
 });

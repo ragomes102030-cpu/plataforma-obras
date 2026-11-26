@@ -35,6 +35,76 @@ export type PontoRealizado = {
   percentual: number;
 };
 
+export type EntradaDeProducaoParaCurva = {
+  codigo: string | null;
+  quantidade: number | string | null;
+  status: string;
+  exemplo?: number | null;
+  unidadeCompativel?: boolean | null;
+};
+
+export type AtividadePlanejadaParaCurva = {
+  codigo: string | null;
+  planejado: number | string | null;
+};
+
+export type SituacaoDaCurva = "antes_do_inicio" | "sem_medicao" | "adiantado" | "no_prazo" | "atrasado";
+
+/**
+ * Percentual real por código EAP, sempre derivado de produção confirmada,
+ * compatível com a unidade planejada e que não seja exemplo QA.
+ *
+ * Atividades sem medição não entram no mapa: ausência de registro não significa
+ * execução zero. O excedente não ultrapassa 100% no percentual exibido.
+ */
+export function calcularProgressoRealPorCodigo(
+  entradas: EntradaDeProducaoParaCurva[],
+  atividades: AtividadePlanejadaParaCurva[],
+): Map<string, number> {
+  const quantidadeRealPorCodigo = new Map<string, number>();
+  for (const entrada of entradas) {
+    const codigo = entrada.codigo?.trim();
+    const quantidade = Number(entrada.quantidade ?? 0);
+    if (
+      !codigo ||
+      entrada.status !== "confirmada" ||
+      Number(entrada.exemplo ?? 0) === 1 ||
+      entrada.unidadeCompativel !== true ||
+      !Number.isFinite(quantidade) ||
+      quantidade <= 0
+    ) continue;
+    quantidadeRealPorCodigo.set(codigo, (quantidadeRealPorCodigo.get(codigo) ?? 0) + quantidade);
+  }
+
+  const progressoPorCodigo = new Map<string, number>();
+  for (const atividade of atividades) {
+    const codigo = atividade.codigo?.trim();
+    const planejado = Number(atividade.planejado ?? 0);
+    const realizado = codigo ? quantidadeRealPorCodigo.get(codigo) : undefined;
+    if (!codigo || realizado == null || !Number.isFinite(planejado) || planejado <= 0) continue;
+    progressoPorCodigo.set(codigo, Math.min(100, Math.max(0, (realizado / planejado) * 100)));
+  }
+  return progressoPorCodigo;
+}
+
+export function avaliarSituacaoCurva(input: {
+  antesDoInicio: boolean;
+  temRealizadoAteHoje: boolean;
+  planejado: number;
+  realizado: number;
+  tolerancia?: number;
+}): { status: SituacaoDaCurva; desvio: number | null } {
+  if (input.antesDoInicio) return { status: "antes_do_inicio", desvio: null };
+  if (!input.temRealizadoAteHoje) return { status: "sem_medicao", desvio: null };
+
+  const desvio = input.realizado - input.planejado;
+  const tolerancia = input.tolerancia ?? 0.5;
+  return {
+    status: desvio > tolerancia ? "adiantado" : desvio < -tolerancia ? "atrasado" : "no_prazo",
+    desvio,
+  };
+}
+
 /**
  * Acumula os lançamentos confirmados por dia e devolve a série do realizado.
  *

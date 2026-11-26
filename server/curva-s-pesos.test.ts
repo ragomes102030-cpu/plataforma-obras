@@ -106,9 +106,11 @@ describe("pesos da curva S", () => {
  */
 describe("cabeçalho da curva S", () => {
   const FONTE = readFileSync("client/src/components/AbaCurvaS.tsx", "utf-8");
+  const FONTE_REALIZADO = readFileSync("shared/curva-realizado.ts", "utf-8");
 
   it("calcula o desvio a partir de hoje: realizado pela produção − planejado", () => {
-    expect(FONTE).toContain("const desvio = realizadoHoje - planejadoHoje.planned");
+    expect(FONTE).toContain("avaliarSituacaoCurva({");
+    expect(FONTE_REALIZADO).toContain("const desvio = input.realizado - input.planejado");
     expect(FONTE).not.toContain("const desvio = curve.deviation");
   });
 
@@ -122,7 +124,10 @@ describe("cabeçalho da curva S", () => {
 
   it("o realizado é datado pelos lançamentos confirmados", () => {
     expect(FONTE).toContain("acumularRealizado(");
-    expect(FONTE).toContain('entrada.status === "confirmada"');
+    expect(FONTE).toContain("selectConfirmedProductionEntries(producao.data ?? [])");
+    expect(FONTE).toContain("entrada.unidadeCompativel === true");
+    expect(FONTE_REALIZADO).toContain('entrada.status !== "confirmada"');
+    expect(FONTE_REALIZADO).toContain("Number(entrada.exemplo ?? 0) === 1");
     expect(FONTE).toContain("realizadoNoDia(pontosRealizado, hojeNum)");
   });
 
