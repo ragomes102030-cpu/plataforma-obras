@@ -2,6 +2,7 @@ import {FormEvent,useEffect,useRef,useState} from "react";
 import {ArrowUpRight,Clock3,History,Save,Undo2,X} from "lucide-react";
 import type {LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
 import {trpc} from "@/lib/trpc";
+import {revalidarAtualizacaoPrazo} from "@/lib/revalidar-atualizacao-prazo";
 
 type Baseline={estado:"carregando"|"erro"|"ausente"}|{estado:"pronto";inicio:number|null;fim:number|null;deltaFim:number|null};
 type EstadoPrazo="nao_iniciada"|"em_andamento"|"concluida"|"bloqueada";
@@ -33,7 +34,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
   const [lobReason,setLobReason]=useState(linha.lobApplicabilityReason??"");
   const [lobFeedback,setLobFeedback]=useState<string|null>(null);
   const gravar=trpc.planning.registerActivityScheduleUpdate.useMutation({
-    onSuccess:async()=>{setFeedback("Atualização de prazo registrada no histórico.");setCorrectsUpdateId(null);setNote("");setEvidenceRef("");await Promise.all([utils.planning.activityScheduleUpdates.invalidate({projectId:projetoId,activityId:linha.activityId}),utils.planning.activityScheduleStatusSummary.invalidate({projectId:projetoId})]);},
+    onSuccess:async()=>{setFeedback("Atualização de prazo registrada no histórico.");setCorrectsUpdateId(null);setNote("");setEvidenceRef("");await revalidarAtualizacaoPrazo(utils,projetoId,linha.activityId);},
     onError:error=>setFeedback(error.message),
   });
   const classificarLob=trpc.planning.setActivityLobApplicability.useMutation({
