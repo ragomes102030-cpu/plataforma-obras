@@ -135,25 +135,25 @@ export function ControlTowerDashboard({
   }, [detalhe]);
 
   const atrasadaFisico = fisico.pontos < -0.5;
-  const fisicoDisponivel = prontidao.fisico === "disponivel";
+  const fisicoDisponivel = prontidao.fisico === "disponivel" && prontidaoPesos?.cenarioQa !== true;
   const financeiroDisponivel = prontidao.financeiro === "disponivel";
   const cenarioQa = prontidaoPesos?.cenarioQa === true;
   const exibirEvQa = cenarioQa || simulacaoQa.lancamentosValidos > 0 || simulacaoQa.lancamentosUnidadeIncompativel > 0 || simulacaoQa.lancamentosForaDaVersao > 0;
   const textoEvQa = simulacaoQa.lancamentosValidos > 0 ? dinheiro(simulacaoQa.valorAgregado) : "Sem apontamento QA compatível";
   // A meta planejada continua sendo informativa quando os pesos existem,
   // mesmo que ainda não haja uma medição confirmada para o realizado.
-  const planejadoDisponivel = fisicoDisponivel || prontidao.fisico === "sem_producao";
+  const planejadoDisponivel = !cenarioQa && (fisicoDisponivel || prontidao.fisico === "sem_producao");
   const textoRealizado = fisicoDisponivel ? percentual(fisico.real) : "Sem dado";
   const textoPlanejado = planejadoDisponivel ? percentual(fisico.planejado) : "Indisponível";
   const textoDesvio = fisicoDisponivel ? ponto(fisico.pontos) : "Sem dado";
-  const textoEv = prontidao.evDisponivel ? dinheiro(valor.executado)
+  const textoEv = cenarioQa ? "Referência não validada" : prontidao.evDisponivel ? dinheiro(valor.executado)
     : prontidao.financeiro === "didatico" ? "Orçamento de teste"
     : prontidao.financeiro === "cobertura_incompleta" ? "Cobertura incompleta"
     : prontidao.financeiro === "sem_orcamento" ? "Sem orçamento aprovado"
     : prontidao.financeiro === "erro" ? "Indisponível"
     : prontidao.fisico === "sem_pesos" ? "Pesos físicos pendentes"
     : "Sem produção confirmada";
-  const detalheEv = prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
+  const detalheEv = cenarioQa ? "Valide pesos e quantitativos para apurar o valor agregado" : prontidao.financeiro === "didatico" ? "Valores de teste não habilitam controle financeiro"
     : prontidao.financeiro === "cobertura_incompleta" ? "Existem atividades operacionais sem custo válido"
     : !financeiroDisponivel ? "Exige orçamento aprovado, rastreável e com cobertura"
     : !prontidao.evDisponivel && prontidao.fisico === "sem_pesos" ? "Aguardando pesos físicos aprovados"
@@ -161,7 +161,7 @@ export function ControlTowerDashboard({
     : !prontidao.evDisponivel && prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
     : !prontidao.evDisponivel ? "Aguardando dados do avanço físico"
     : "Orçamento: " + dinheiro(valor.total);
-  const tituloStatus = cenarioQa ? "Cenário QA liberado com premissas sintéticas."
+  const tituloStatus = cenarioQa ? "Controle físico aguardando validação."
     : prontidao.fisico === "erro" ? "Avanço físico indisponível."
     : prontidao.fisico === "sem_pesos" ? "Avanço físico ainda sem pesos aprovados."
     : prontidao.fisico === "sem_producao" ? "Produção ainda não apurada."
@@ -172,7 +172,7 @@ export function ControlTowerDashboard({
     : "Acompanhe o desempenho da obra.";
   const corStatus = !fisicoDisponivel ? "atencao" : atrasadaFisico || selo.tipo === "atrasada" ? "atrasada"
     : selo.tipo === "atencao" || selo.tipo === "sem_plano" ? "atencao" : "em-dia";
-  const statusTexto = cenarioQa ? "Cenário QA liberado"
+  const statusTexto = cenarioQa ? "Pesos de teste — sem agregado real"
     : prontidao.fisico === "erro" ? "Falha na consulta do avanço físico"
     : prontidao.fisico === "sem_pesos" ? "Pesos físicos ainda não aprovados"
     : prontidao.fisico === "sem_producao" ? "Sem produção confirmada"
@@ -210,18 +210,18 @@ export function ControlTowerDashboard({
         <button type="button" className="ct-button ct-button-primary" onClick={() => abrir("fisico")}>Investigar desempenho <ArrowUpRight size={16}/></button>
       </header>
 
-      {roteiroReadiness && roteiroForecast && <RoteiroPlanejamentoServicos
+      {roteiroReadiness && roteiroForecast && <details className="ct-metodo"><summary>Etapas do planejamento e critérios de previsão</summary><RoteiroPlanejamentoServicos
         readiness={roteiroReadiness}
         forecast={roteiroForecast}
         onOpen={abrirAba}
-      />}
+      /></details>}
 
       {(carregandoComplementos || erroComplementos) && <div className="ct-data-note" role={erroComplementos ? "alert" : "status"}>
         <AlertTriangle size={17}/>{erroComplementos ? "Parte das consultas falhou. Os indicadores dependentes dessas fontes podem estar incompletos; não interprete ausência de dado como zero." : "Conferindo orçamento, produção e compromissos; informações complementares ainda estão sendo carregadas."}
       </div>}
 
       {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note">
-        <AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> pesos uniformes e quantitativos são premissas para testar o sistema. Os valores exibidos não são medição real. {prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) sem unidade exata estão classificadas fora da Linha de Balanço neste cenário.</span>
+        <AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> pesos de teste; não são medição real. {prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) com histórico QA de local não confirmado; a aplicabilidade da LOB requer revisão.</span>
       </div>}
 
       {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={abrirAba} />}
@@ -243,7 +243,7 @@ export function ControlTowerDashboard({
           <span className="ct-status"><span className="ct-status-dot" aria-hidden="true"/>{statusTexto.toUpperCase()} · {dataBr(hoje)}</span>
           <h2>{tituloStatus}</h2>
           <p>{cenarioQa
-            ? `O painel está liberado para validar os indicadores da obra demonstrativa. Pesos e classificações sem unidade repetitiva são premissas QA; ${prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) permanecem fora da Linha de Balanço sem local físico documentado.`
+            ? `Valide os pesos físicos com documentação de engenharia. O cronograma e os registros por serviço continuam disponíveis.`
             : fisicoDisponivel
             ? "O avanço executado é comparado à meta física acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano."
             : prontidao.fisico === "erro"
@@ -272,9 +272,9 @@ export function ControlTowerDashboard({
       </section>
 
       {prontidao.orientacoes.length > 0 && (
-        <section className="ct-prontidao" aria-label="Como liberar os indicadores">
+        <details className="ct-prontidao" aria-label="Como liberar os indicadores"><summary>O que falta para liberar os indicadores ({prontidao.orientacoes.length})</summary>
           {prontidao.orientacoes.map(orientacao => <OrientacaoDeEtapa key={orientacao.id} orientacao={orientacao} />)}
-        </section>
+        </details>
       )}
 
       <section className="ct-kpis" aria-label="Indicadores essenciais">
@@ -288,7 +288,7 @@ export function ControlTowerDashboard({
         <CurvaFisicaDashboard projetoId={projetoId} codigosExemplo={codigosExemplo} hoje={hoje} abrirAba={abrirAba}/>
         <section className="ct-card ct-prioridades" aria-labelledby="ct-prioridades">
           <span className="ct-overline">RADAR DE DECISÕES</span><h3 id="ct-prioridades">Onde atuar primeiro</h3><p>A origem do alerta e o módulo indicado estão conectados aos dados da obra.</p>
-          {alertas.length === 0 ? <div className="ct-nada"><CheckCircle2 size={22}/><strong>Sem alertas técnicos registrados</strong><span>Continue acompanhando avanço, prazo e lançamentos. Ausência de alerta não substitui conferência do planejamento.</span></div>
+          {alertas.length === 0 ? <div className="ct-nada"><CheckCircle2 size={22}/><strong>Nenhum alerta de campo registrado</strong><span>A ausência de alertas não significa que a obra esteja validada.</span></div>
             : <ul className="ct-alertas">{alertas.slice(0, 5).map(a => <li key={a.id} className={"ct-alerta ct-alerta-" + a.nivel}>
               <div className="ct-alerta-icon"><ShieldAlert size={17}/></div>
               <div><strong>{a.titulo}</strong><p>{a.detalhe}</p>{a.aba && <button type="button" onClick={() => abrirAba(a.aba!)}>{a.acao ?? "Investigar no módulo"} <ArrowRight size={14}/></button>}</div>

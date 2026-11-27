@@ -64,7 +64,7 @@ export function CurvaFisicaDashboard({
             a.plannedQuantity == null ? null : Number(a.plannedQuantity),
           pesoFisico:
             a.physicalWeight == null ? null : Number(a.physicalWeight),
-          pesoFisicoAprovado: a.physicalWeightApprovedAt != null,
+          pesoFisicoAprovado: a.physicalWeightApprovedAt != null && !isPhysicalWeightQaEvidence(a.physicalWeightEvidence),
         }))
       ),
     [atividades]
@@ -183,7 +183,7 @@ export function CurvaFisicaDashboard({
       </div>
       {qa && (
         <div className="ct-data-note ct-data-note-qa" role="note">
-          Os pesos incluem premissas de teste; não representam medição real.
+          Curva operacional aguardando pesos físicos validados.
         </div>
       )}
       {carregando ? (
@@ -198,7 +198,7 @@ export function CurvaFisicaDashboard({
         <div className="ct-chart-empty">
           <strong>Curva física ainda não disponível</strong>
           <span>
-            Confira quantidades, pesos aprovados, calendário e CPM atualizado.
+            {qa ? "Substitua os pesos de teste por critérios físicos validados." : "Confira quantidades, pesos aprovados, calendário e CPM atualizado."}
           </span>
           <button type="button" onClick={() => abrirAba("atividades")}>
             Conferir atividades

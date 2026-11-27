@@ -30,7 +30,7 @@ export function avaliarIntegridadeDashboard(input: {
   const unidadePorAtividade = new Map(input.atividades.map(a => [a.id, a.unit]));
   const itens = new Set(input.itens.map(i => i.id));
   const bloqueiosOrcamento = findBudgetApprovalBlockers(input.itens);
-  const orcamentoDidatico = bloqueiosOrcamento.some(item => item.reason === "fonte_didatica");
+  const orcamentoDidatico = bloqueiosOrcamento.some(item => item.reason === "fonte_didatica") || input.itens.some(item => item.quantityEvidenceStatus === "cenario");
   const orcamentoAprovado = input.versaoAtivaAprovada && input.itens.length > 0 &&
     bloqueiosOrcamento.every(item => item.reason === "fonte_didatica") &&
     input.itens.every(i => Number.isFinite(Number(i.quantity)) && Number(i.quantity) > 0) &&

@@ -103,7 +103,7 @@ describe("pesos físicos do cronograma", () => {
     const plan = await caller.planning.list({ projectId });
     const readiness = await caller.planning.readiness({ projectId });
 
-    expect(result).toMatchObject({ approved: true, total: 100, activityCount: 2, scenario: "premissa_qa", unitLinksFromEap: 1, classifiedOutsideLob: 1 });
+    expect(result).toMatchObject({ approved: true, total: 100, activityCount: 2, scenario: "premissa_qa", unitLinksFromEap: 1, classifiedOutsideLob: 0, unresolvedLobActivities: 1 });
     expect(rows.map(row => Number(row.physicalWeight))).toEqual([50, 50]);
     expect(rows.every(row => row.physicalWeightEvidence?.startsWith("Premissa QA:") && row.physicalWeightApprovedAt != null)).toBe(true);
     expect(rows.find(row => row.wbsCode === "1.1")?.pavimento).toBe("Torre A");
@@ -111,9 +111,19 @@ describe("pesos físicos do cronograma", () => {
     expect(versions).toHaveLength(1);
     expect(versions[0]!.status).toBe("approved");
     expect(events.some(event => event.action === "physical_weights_qa_released")).toBe(true);
-    expect(plan.lobQaExcludedCount).toBe(1);
-    expect(plan.activities.filter(activity => activity.lobQaNonrepetitive)).toHaveLength(1);
-    expect(readiness.etapas.execucao.bloqueios.map(item => item.codigo)).not.toContain("LOB_ATIVIDADES_SEM_UNIDADE");
+    expect(plan.lobQaExcludedCount).toBe(0);
+    expect(plan.lobQaUnresolvedCount).toBe(1);
+    expect(plan.activities.filter(activity => activity.lobQaNonrepetitive)).toHaveLength(0);
+    expect(plan.activities.filter(activity => activity.lobQaUnresolved)).toHaveLength(1);
+    expect(readiness.dominios.linhaDeBalanco.bloqueios.map(item => item.codigo)).toContain("LOB_ATIVIDADES_SEM_UNIDADE");
+    // Eventos históricos de QA não podem mais suprimir pendência operacional.
+    const event = events.find(item => item.action === "physical_weights_qa_released")!;
+    const payload = event.payload as Record<string, unknown>;
+    const legacy = {...payload, lobExcludedActivityIds: payload.lobUnresolvedActivityIds};
+    delete (legacy as Record<string, unknown>).lobUnresolvedActivityIds;
+    await db.update(projectAuditEvents).set({payload:legacy}).where(eq(projectAuditEvents.id,event.id));
+    expect((await caller.planning.list({projectId})).lobQaUnresolvedCount).toBe(1);
+    expect((await caller.planning.readiness({projectId})).dominios.linhaDeBalanco.bloqueios.map(item=>item.codigo)).toContain("LOB_ATIVIDADES_SEM_UNIDADE");
   });
 
   it("rejeita liberação QA fora de uma versão aprovada com orçamento cenário aprovado", async () => {

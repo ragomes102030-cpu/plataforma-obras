@@ -126,7 +126,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         utils.planning.readiness.invalidate({ projectId: projetoId }),
       ]);
       setMensagem(cpmValido
-        ? `Cenário QA liberado na versão atual: ${resultado.activityCount} pesos registrados, ${resultado.unitLinksFromEap} unidades vinculadas por correspondência exata e ${resultado.classifiedOutsideLob} atividades classificadas fora da LOB. CPM recalculado; nenhuma versão foi criada.`
+        ? `Cenário QA liberado na versão atual: ${resultado.activityCount} pesos registrados, ${resultado.unitLinksFromEap} unidades vinculadas por correspondência exata e ${resultado.unresolvedLobActivities} atividades com local a revisar. CPM recalculado; nenhuma versão foi criada.`
         : "Os pesos QA foram gravados na versão atual. O CPM não fechou; revise as dependências antes de usar prazo ou baseline.");
     },
     onError: error => setMensagem(error.message),
@@ -350,7 +350,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
         <div className="pl-atividades-alerta" role="status">
         <strong>{resumoPesos.cenarioQa ? "CENÁRIO QA — " : ""}Pesos físicos: {resumoPesos.completos}/{resumoPesos.total} informados · {resumoPesos.comQuantidade}/{resumoPesos.total} quantidades · {resumoPesos.comEvidencia}/{resumoPesos.total} evidências · soma {resumoPesos.soma.toFixed(2)}% · {resumoPesos.aprovados ? (resumoPesos.cenarioQa ? "premissas QA liberadas" : "aprovados") : "aguardando validação"}.</strong>{" "}
         {resumoPesos.cenarioQa
-          ? `Rateio e classificações operacionais são premissas sintéticas da obra de teste, não medição real. ${plano.data?.lobQaExcludedCount ?? 0} atividade(s) ficaram fora da Linha de Balanço por não terem unidade física exata cadastrada.`
+          ? `Pesos sintéticos para teste, não medição real. ${plano.data?.lobQaUnresolvedCount ?? 0} atividade(s) têm histórico QA de local não confirmado. A classificação operacional depende de revisão.`
           : "Pesos reais exigem memória rastreável com fonte, revisão/localização e critério de medição. Rateio uniforme só pode ser liberado no fluxo específico de cenário QA."}
         <div className="pl-atividades-header-actions">
           {plano.data?.currentVersionStatus !== "approved" && <button type="button" className="pl-atividades-btn" disabled={resumoPesos.aprovados || resumoPesos.completos !== resumoPesos.total || resumoPesos.comQuantidade !== resumoPesos.total || resumoPesos.comEvidencia !== resumoPesos.total || Math.abs(resumoPesos.soma - 100) > 0.01 || aprovarPesos.isPending} onClick={() => aprovarPesos.mutate({ projectId: projetoId })}>Aprovar pesos físicos</button>}
@@ -409,12 +409,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|pavimento"]: event.target.value }))}
                     onBlur={() => salvarEdicao(activity.id, "pavimento")}
                     aria-label={"Unidade física de " + activity.name}
-                    placeholder="sem unidade específica" title={activity.pavimentoIsProductionUnit ? "Unidade física cadastrada e vinculada por nome exato." : "Informe uma unidade física cadastrada. O escopo textual da EAP só é ligado quando coincide exatamente com uma unidade."} />
-                  {!activity.pavimento && activity.wbsLocation && <small className="pl-local-eap" title={activity.wbsLocationIsProductionUnit ? "Este escopo coincide com unidade cadastrada; salve-o no campo acima para usar na Linha de Balanço." : "Escopo textual da EAP; não equivale a uma unidade operacional cadastrada."}>
-                    Escopo EAP: {activity.wbsLocation}
-                  </small>}
-                  {!activity.pavimento && !activity.wbsLocation && <small className="pl-local-eap pendente">Local não declarado na EAP</small>}
-                  {activity.lobQaNonrepetitive && <small className="pl-local-eap" title={plano.data?.lobQaExclusionJustification ?? "Premissa QA: atividade fora da Linha de Balanço neste cenário."}>Fora da LOB · premissa QA</small>}
+                    placeholder={identificarLocalOperacional({atividade:activity.name,pavimento:activity.pavimentoIsProductionUnit?activity.pavimento:activity.wbsLocationIsProductionUnit?activity.wbsLocation:null,localEap:activity.wbsLocation,localDeclarado:activity.pavimento,isMilestone:activity.isMilestone,lobApplicability:activity.lobApplicability,lobApplicabilityReason:activity.lobApplicabilityReason}).rotulo} title={identificarLocalOperacional({atividade:activity.name,pavimento:activity.pavimentoIsProductionUnit?activity.pavimento:activity.wbsLocationIsProductionUnit?activity.wbsLocation:null,localEap:activity.wbsLocation,localDeclarado:activity.pavimento,isMilestone:activity.isMilestone,lobApplicability:activity.lobApplicability,lobApplicabilityReason:activity.lobApplicabilityReason}).detalhe} />
+                  {activity.wbsLocation&&!activity.wbsLocationIsProductionUnit&&<small className="pl-local-eap" title={activity.wbsLocation}>Escopo EAP: {activity.wbsLocation}</small>}
                 </td>
                 <td className="type-col"><span className="pl-atividade-tag">Task</span></td>
                 <td className="dur-col">
