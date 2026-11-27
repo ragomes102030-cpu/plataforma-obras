@@ -23,6 +23,7 @@ import { runEapValidatorQaSuiteV2 } from "../qa/eap-validator-qa-suite-v2";
 import { runCompleteEapQaSuite } from "../qa/complete-eap-qa-suite";
 import { runBrainSkillsQaSuite } from "../qa/brain-skills-qa-suite";
 import { startTrashRetentionJob } from "../trash-retention";
+import { registerReadonlyQaApi } from "../qa/readonly-api";
 
 // O schema e responsabilidade de `scripts/migrate-db.mjs`, rodado no
 // pre-deploy. Nao ha, e nao deve haver, DDL no boot do servidor: um remendo
@@ -163,6 +164,7 @@ async function startServer() {
   );
   registerStorageProxy(app);
   registerGitHubOAuthRoutes(app);
+  registerReadonlyQaApi(app);
   app.get("/healthz", (_req, res) => {
     // A identificacao do deploy vem de `./deploy-info`: funcao pura, com testes
     // proprios. O metodo mudou de proposito.
