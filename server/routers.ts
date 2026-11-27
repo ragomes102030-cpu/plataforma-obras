@@ -5428,20 +5428,6 @@ export const appRouter = router({
           .from(wbsNodes).where(and(eq(wbsNodes.projectId, input.projectId), eq(wbsNodes.versionId, plan.id))) : [];
         const activities = plan ? await db.select({ id: scheduleActivities.id, projectId: scheduleActivities.projectId, wbsNodeId: scheduleActivities.wbsNodeId, wbsCode: scheduleActivities.wbsCode, name: scheduleActivities.name, durationDays: scheduleActivities.durationDays, pavimento: scheduleActivities.pavimento, updatedAt: scheduleActivities.updatedAt, cpmCalculatedAt: scheduleActivities.cpmCalculatedAt, earlyStart: scheduleActivities.earlyStart, startOffset: scheduleActivities.startOffset, plannedQuantity: scheduleActivities.plannedQuantity })
           .from(scheduleActivities).where(and(eq(scheduleActivities.projectId, input.projectId), eq(scheduleActivities.versionId, plan.id))) : [];
-        const qaReleaseRows = plan ? await db.select({ id: projectAuditEvents.id, payload: projectAuditEvents.payload })
-          .from(projectAuditEvents)
-          .where(and(
-            eq(projectAuditEvents.projectId, input.projectId),
-            eq(projectAuditEvents.action, "physical_weights_qa_released"),
-          ))
-          .orderBy(desc(projectAuditEvents.createdAt), desc(projectAuditEvents.id)) : [];
-        const qaRelease = qaReleaseRows.find(row => Number((row.payload as Record<string, unknown> | null)?.versionId) === plan.id);
-        const qaPayload = qaRelease?.payload as Record<string, unknown> | undefined;
-        const lobQaExcludedIds = new Set(
-          Array.isArray(qaPayload?.lobExcludedActivityIds)
-            ? qaPayload.lobExcludedActivityIds.map(Number).filter(Number.isInteger)
-            : []
-        );
         const applicabilityByActivity = await loadActivityLobApplicability(db, input.projectId, plan?.id ?? null);
         const activitiesClassifiedOutsideLob = new Set(
           [...applicabilityByActivity.entries()]
@@ -5537,7 +5523,6 @@ export const appRouter = router({
           lob: { parcelas: lobSegments.length, foraJanelaCpm: lobForaJanela, orfas: lobOrfas, parcelasEmLocaisDidaticos, atividadesSemLocalOperacional: activities.filter(item =>
             !atividadeIdsComUnidadeFisica.has(item.id) &&
             !atividadeIdsComParcelaLob.has(item.id) &&
-            !lobQaExcludedIds.has(item.id) &&
             !activitiesClassifiedOutsideLob.has(item.id)
           ).length },
           execucao: { medicoes: approvedMeasurementRows.length, comUnidade: measurementItemRows.length, confirmadas: approvedMeasurementRows.length },
@@ -5982,11 +5967,8 @@ export const appRouter = router({
           .orderBy(desc(projectAuditEvents.createdAt), desc(projectAuditEvents.id)) : [];
         const qaRelease = currentVersion ? qaReleaseRows.find(row => Number((row.payload as Record<string, unknown> | null)?.versionId) === currentVersion.id) : undefined;
         const qaPayload = qaRelease?.payload as Record<string, unknown> | undefined;
-        const lobQaExcludedIds = new Set(
-          Array.isArray(qaPayload?.lobExcludedActivityIds)
-            ? qaPayload.lobExcludedActivityIds.map(Number).filter(Number.isInteger)
-            : []
-        );
+        const qaUnresolved = qaPayload?.lobUnresolvedActivityIds ?? qaPayload?.lobExcludedActivityIds;
+        const lobQaUnresolvedIds = new Set(Array.isArray(qaUnresolved) ? qaUnresolved.map(Number).filter(Number.isInteger) : []);
         const applicabilityByActivity = await loadActivityLobApplicability(db, input.projectId, currentVersion?.id ?? null);
         const evidenceByActivity = new Map<number, Record<string, unknown>>();
         for (const row of evidenceRows) {
@@ -6007,7 +5989,8 @@ export const appRouter = router({
             wbsLocation,
             wbsLocationIsProductionUnit: node != null && physicalUnitNames.has(wbsLocation ?? ""),
             pavimentoIsProductionUnit: physicalUnitNames.has(activity.pavimento?.trim() ?? ""),
-            lobQaNonrepetitive: lobQaExcludedIds.has(activity.id),
+            lobQaNonrepetitive: false,
+            lobQaUnresolved: lobQaUnresolvedIds.has(activity.id) && !physicalUnitNames.has(activity.pavimento?.trim() ?? "") && !physicalUnitNames.has(wbsLocation ?? "") && applicabilityByActivity.get(activity.id)?.applicability !== "fora_lob",
             lobApplicability: applicabilityByActivity.get(activity.id)?.applicability ?? null,
             lobApplicabilityReason: applicabilityByActivity.get(activity.id)?.reason ?? null,
             planningEvidence: evidenceByActivity.get(activity.id) ?? null,
@@ -6047,8 +6030,10 @@ export const appRouter = router({
           approvedVersionId: approved?.id ?? null,
           currentVersionNumber: currentVersion?.versionNumber ?? null,
           currentVersionStatus: currentVersion?.status ?? null,
-          lobQaExcludedCount: lobQaExcludedIds.size,
-          lobQaExclusionJustification: typeof qaPayload?.lobExclusionJustification === "string" ? qaPayload.lobExclusionJustification : null,
+          lobQaExcludedCount: 0,
+          lobQaUnresolvedCount: activitiesWithEvidence.filter(activity => activity.lobQaUnresolved).length,
+          lobQaExclusionJustification: null,
+          lobQaUnresolvedNote: "Local não confirmado no cenário QA; a ausência de unidade não comprova que o serviço seja não repetitivo.",
           networkValidation,
         };
       }),
@@ -6572,7 +6557,7 @@ export const appRouter = router({
           : pesoBase);
         const somaPesosQa = Number(pesos.reduce((sum, peso) => sum + peso, 0).toFixed(6));
         const aprovadoEm = new Date();
-        const justificativaLob = "Premissa QA: atividade sem correspondência exata com unidade física cadastrada tratada como serviço sem repetição neste cenário; não distribuir automaticamente na Linha de Balanço.";
+        const justificativaLob = "Premissa QA: atividade sem unidade física confirmada permanece a revisar. Não classificar como serviço sem repetição nem distribuir automaticamente.";
         const linksEapExatos: { activityId: number; unit: string; wbsCode: string }[] = [];
         const foraDaLob: { activityId: number; wbsCode: string; name: string }[] = [];
 
@@ -6615,8 +6600,8 @@ export const appRouter = router({
               justification: "Obra de teste sem documentos de medição. Rateio igualitário sintético para validar os indicadores; não representa avanço físico real.",
               weights: atividades.map((atividade, index) => ({ activityId: atividade.id, wbsCode: atividade.wbsCode, peso: pesos[index] })),
               eapUnitLinks: linksEapExatos,
-              lobExcludedActivityIds: foraDaLob.map(atividade => atividade.activityId),
-              lobExclusionJustification: justificativaLob,
+              lobUnresolvedActivityIds: foraDaLob.map(atividade => atividade.activityId),
+              lobUnresolvedNote: justificativaLob,
               approvedAt: aprovadoEm.toISOString(),
             },
           });
@@ -6630,7 +6615,8 @@ export const appRouter = router({
           versionId: versao.id,
           budgetVersionId: orcamento.id,
           unitLinksFromEap: linksEapExatos.length,
-          classifiedOutsideLob: foraDaLob.length,
+          classifiedOutsideLob: 0,
+          unresolvedLobActivities: foraDaLob.length,
         };
       }),
     control: protectedProcedure
