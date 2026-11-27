@@ -3,7 +3,7 @@ import { avaliarIntegridadeDashboard } from "./dashboard-integridade";
 
 const base = {
   hoje: "2026-11-05", atividades: [{id:1,budgetItemId:10,unit:"M"}],
-  itens: [{id:10,code:"1.1",quantity:5,unitPrice:100,source:"SEINFRA 028",officialPriceItemId:1,quantityEvidence:"Memória de cenário QA",quantityEvidenceStatus:"cenario"}],
+  itens: [{id:10,code:"1.1",quantity:5,unitPrice:100,source:"SEINFRA 028",officialPriceItemId:1,quantityEvidence:"Memória de levantamento conferida",quantityEvidenceStatus:"validada"}],
   versaoAtivaAprovada: true, custoPorAtividade: new Map([[1,500]]), lancamentos: [],
   pesosFisicosAprovados: true,
 };
@@ -31,6 +31,11 @@ describe("integridade dos indicadores do dashboard", () => {
     {...medicao,productionDate:"2026-01-99"}, {...medicao,quantity:""}, {...medicao,productionDate:new Date("invalida")},
   ])("não usa lançamento inválido, futuro ou sem vínculo atual: %j", lancamento => {
     expect(avaliarIntegridadeDashboard({...base,lancamentos:[lancamento]}).temProducaoConfirmada).toBe(false);
+  });
+  it("não habilita EV real com quantitativos de cenário mesmo que o preço seja oficial", () => {
+    const resultado=avaliarIntegridadeDashboard({...base,lancamentos:[medicao],itens:[{...base.itens[0],quantityEvidenceStatus:"cenario"}]});
+    expect(resultado.prontidao.financeiro).toBe("didatico");
+    expect(resultado.prontidao.evDisponivel).toBe(false);
   });
   it("não habilita régua financeira por fonte didática, cobertura parcial ou rascunho", () => {
     const didatico = avaliarIntegridadeDashboard({...base,itens:[{...base.itens[0],source:"Rateio uniforme didático"}]});
