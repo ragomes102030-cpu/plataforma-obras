@@ -27,9 +27,15 @@ try{
  const baselines=await q(`select id,"versionId" from schedule_baselines where "projectId"=$1 and status='ativa'`,[projectId]);
  await check("baseline_unica",baselines.length===1&&baselines[0].versionId===version,baselines,"pesos");
  if(baselines.length!==1||baselines[0].versionId!==version)throw new Error("Baseline incompatível");
- const acts=await q('select id,name,"physicalWeight","physicalWeightApprovedAt","plannedQuantity",unit,progress,"earlyStart","earlyFinish","durationDays" from schedule_activities where "projectId"=$1 and "versionId"=$2',[projectId,version]);
+ const acts=await q('select id,name,"physicalWeight","physicalWeightApprovedAt","plannedQuantity",unit,progress,"earlyStart","earlyFinish","durationDays","cpmCalculatedAt","updatedAt",exemplo from schedule_activities where "projectId"=$1 and "versionId"=$2',[projectId,version]);
  const sum=acts.reduce((s,a)=>s+Number(a.physicalWeight),0);
  await check("pesos_aprovados",acts.length>0&&acts.every(a=>a.physicalWeight!==null&&Number(a.physicalWeight)>=0&&a.physicalWeightApprovedAt)&&Math.abs(sum-100)<0.0001,{count:acts.length,sum},"comparar baseline");
+ const population=acts.filter(a=>Number(a.exemplo)!==1);
+ const curveWeight=population.reduce((total,a)=>total+Number(a.physicalWeight),0);
+ const invalidQuantity=population.filter(a=>a.plannedQuantity===null||!Number.isFinite(Number(a.plannedQuantity))||Number(a.plannedQuantity)<=0).map(a=>a.id);
+ const invalidWeight=population.filter(a=>!a.physicalWeightApprovedAt||!Number.isFinite(Number(a.physicalWeight))||Number(a.physicalWeight)<=0).map(a=>a.id);
+ const staleCpm=population.filter(a=>!a.cpmCalculatedAt||!a.updatedAt||!Number.isFinite(Date.parse(a.cpmCalculatedAt))||!Number.isFinite(Date.parse(a.updatedAt))||Date.parse(a.cpmCalculatedAt)<Date.parse(a.updatedAt)||!(a.durationDays>0)||a.earlyStart===null).map(a=>a.id);
+ await check("pre_requisitos_curva_fisica",population.length>0&&Math.abs(curveWeight-100)<=0.01&&invalidQuantity.length===0&&invalidWeight.length===0&&staleCpm.length===0,{population:population.length,excludedExamples:acts.length-population.length,curveWeight,invalidQuantity,invalidWeight,staleCpm},"comparar baseline");
  const items=await q('select "activityId","earlyStart","earlyFinish","durationDays" from schedule_baseline_items where "baselineId"=$1',[baselines[0].id]);
  const map=new Map(items.map(b=>[b.activityId,b]));
  const mismatches=acts.filter(a=>{const b=map.get(a.id);return !b||a.earlyStart!==b.earlyStart||a.earlyFinish!==b.earlyFinish||a.durationDays!==b.durationDays;}).map(a=>a.id);
@@ -41,7 +47,7 @@ try{
  await check("exemplos_nao_confirmados",confirmedExamples.length===0,{officialCount:official.length,examples,confirmedExamples},"simulacao");
  const updates=await q('select id,status,"activityId","supersedesId","positionDate" from activity_schedule_updates where "projectId"=$1 and "versionId"=$2 and "positionDate"<=$3::date order by id',[projectId,version,position]);
  const superseded=new Set(updates.map(u=>u.supersedesId));report.scheduleUpdates=updates.filter(u=>!superseded.has(u.id));
- const a=acts.find(x=>x.id===targetId);
+ const a=population.find(x=>x.id===targetId);
  report.scenario=a&&a.physicalWeight!==null&&Number(a.plannedQuantity)>0?{hypothetical:true,persisted:false,activityId:a.id,name:a.name,percent,quantity:Number(a.plannedQuantity)*percent/100,unit:a.unit,contributionPercentagePoints:Number(a.physicalWeight)*percent/100}:{status:"not_run",reason:"Informe QA_ACTIVITY_ID válido"};
  report.next="validar interface e Curva S em QA";
  report.status=report.checks.every(c=>c.status==="pass")?"passed_readonly":"failed";
