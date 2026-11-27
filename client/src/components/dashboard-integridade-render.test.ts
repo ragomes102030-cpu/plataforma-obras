@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { montarResumo } from "@shared/painel-obra";
 
 vi.mock("./CurvaSControlTower", () => ({CurvaSControlTower:()=>null}));
+vi.mock("./CurvaFisicaDashboard", () => ({CurvaFisicaDashboard:()=>null}));
 import { ControlTowerDashboard } from "./ControlTowerDashboard";
 
 const resumo = montarResumo({

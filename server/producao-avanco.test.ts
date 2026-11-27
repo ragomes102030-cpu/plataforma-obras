@@ -162,6 +162,18 @@ describe("avanço real por código da EAP", () => {
     expect(lancamento.vinculo).toBe("versao_anterior");
   });
 
+  it("usa a unidade da atividade exata quando o código EAP é compartilhado", async () => {
+    const db = drizzlePglite(pg);
+    const [atual] = await db.select().from(scheduleActivities).where(eq(scheduleActivities.id, atividadeAtualId));
+    await db.insert(scheduleActivities).values({ projectId: obraId, versionId: atual.versionId, wbsNodeId: atual.wbsNodeId, wbsCode: atual.wbsCode, name: "Concreto", phase: "Estrutura", startOffset: 0, durationDays: 5, plannedQuantity: "10", unit: "m3" });
+    await db.insert(productionEntries).values({ projectId: obraId, activityId: atividadeAtualId, productionDate: new Date("2026-10-04T00:00:00Z"), quantity: "5", measurementUnit: "m2", status: "confirmada" });
+    const lancamentos = await chamador().production.entries({ projectId: obraId });
+    const registro = lancamentos.find(item => item.activityId === atividadeAtualId);
+    expect(registro?.unidadePlanejada).toBe("m2");
+    expect(registro?.unidadeCompativel).toBe(true);
+    expect(registro?.atividadeNome).toBe("Alvenaria de bloco");
+  });
+
   it("não consolida o avanço do projeto incluindo atividade marcada como exemplo QA", async () => {
     const db = drizzlePglite(pg);
     const [operacional] = await db.select({ wbsNodeId: scheduleActivities.wbsNodeId })

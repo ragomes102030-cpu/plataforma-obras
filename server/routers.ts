@@ -2545,17 +2545,18 @@ export const appRouter = router({
         ]);
         const versaoAtualId = versaoAtual?.id ?? null;
         const porId = new Map(atividades.map(atividade => [atividade.id, atividade]));
-        const atualPorCodigo = new Map(
-          atividades
-            .filter(atividade => ehDaVersaoAtual(atividade, versaoAtualId))
-            .map(atividade => [atividade.wbsCode, atividade])
-        );
+        const atualPorCodigo = new Map<string, typeof atividades[number] | null>();
+        for (const atividade of atividades.filter(item => ehDaVersaoAtual(item, versaoAtualId))) {
+          atualPorCodigo.set(atividade.wbsCode, atualPorCodigo.has(atividade.wbsCode) ? null : atividade);
+        }
         // Cada lançamento carrega o código da EAP e o nome da atividade de HOJE,
         // para a tela não mostrar um lançamento "solto" quando a versão do plano
         // muda. `vinculo` diz se ele ainda fecha com o cronograma atual.
         return lancamentos.map(lancamento => {
           const origem = porId.get(lancamento.activityId);
-          const atual = origem ? atualPorCodigo.get(origem.wbsCode) : undefined;
+          const atual = origem && ehDaVersaoAtual(origem, versaoAtualId)
+            ? origem
+            : origem ? atualPorCodigo.get(origem.wbsCode) : undefined;
           const unidadePlanejada = atual?.unit ?? origem?.unit ?? null;
           return {
             ...lancamento,

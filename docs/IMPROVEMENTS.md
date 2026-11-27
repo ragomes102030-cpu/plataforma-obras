@@ -689,3 +689,9 @@ Evidência e escopo detalhados em `docs/AUDITORIA-EXECUTIVA-2026-10-28.md`. Vali
 - `git diff --check`: PASSOU.
 - Deploy e conferência ao vivo: pendentes.
 - Estado: alterações locais; nenhuma versão ou dado de execução da obra 26 foi criado ou alterado.
+
+## 27/nov/2026 — curva física na Dashboard
+
+- A Dashboard apresenta a curva com pesos físicos aprovados, sem exigir orçamento. Lançamentos reais confirmados são associados pela identidade da atividade; a cobertura de registros é informada e o traçado é identificado como parcial.
+- A consulta de produção usa a unidade da atividade atual quando existem atividades com o mesmo código da EAP e não escolhe automaticamente uma correspondência ambígua de versão anterior.
+- A linha de base permanece no cronograma; premissas QA continuam identificadas. A verificação local e o deploy devem ser conferidos nos resultados desta alteração.
