@@ -221,7 +221,7 @@ export function ControlTowerDashboard({
       </div>}
 
       {cenarioQa && <div className="ct-data-note ct-data-note-qa" role="note">
-        <AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> pesos uniformes e quantitativos são premissas para testar o sistema. Os valores exibidos não são medição real. {prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) sem unidade exata estão classificadas fora da Linha de Balanço neste cenário.</span>
+        <AlertTriangle size={17}/><span><strong>CENÁRIO QA:</strong> pesos e quantitativos de teste, não medição real. {prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) com histórico QA de local não confirmado; a aplicabilidade da LOB requer revisão.</span>
       </div>}
 
       {typeof window !== "undefined" && <ReadinessGate projetoId={projetoId} abrirAba={abrirAba} />}
@@ -243,7 +243,7 @@ export function ControlTowerDashboard({
           <span className="ct-status"><span className="ct-status-dot" aria-hidden="true"/>{statusTexto.toUpperCase()} · {dataBr(hoje)}</span>
           <h2>{tituloStatus}</h2>
           <p>{cenarioQa
-            ? `O painel está liberado para validar os indicadores da obra demonstrativa. Pesos e classificações sem unidade repetitiva são premissas QA; ${prontidaoPesos?.foraDaLobQa ?? 0} atividade(s) permanecem fora da Linha de Balanço sem local físico documentado.`
+            ? `Obra demonstrativa: pesos sintéticos não representam controle real. Consulte as pendências de localização e os critérios dos indicadores.`
             : fisicoDisponivel
             ? "O avanço executado é comparado à meta física acumulada na data de referência. Confira os serviços que explicam a diferença antes de revisar o plano."
             : prontidao.fisico === "erro"
