@@ -159,7 +159,7 @@ export function PainelDoCronograma({
     somaPesos: atividadesOperacionais.reduce((sum, a) => sum + (Number(a.physicalWeight) || 0), 0),
     semVinculoOrcamento: atividadesOperacionais.filter(a => a.budgetItemId == null).length,
     eapStatus: plano.data?.currentVersionStatus ?? null,
-    cenarioQa: atividadesOperacionais.length > 0 && atividadesOperacionais.every(a => a.physicalWeightApprovedAt != null && isPhysicalWeightQaEvidence(a.physicalWeightEvidence)),
+    cenarioQa: atividadesOperacionais.some(a => isPhysicalWeightQaEvidence(a.physicalWeightEvidence)),
     foraDaLobQa: plano.data?.lobQaUnresolvedCount ?? 0,
   };
   const estadoAtividades = classificarEstadoAtividadesDashboard({
@@ -232,7 +232,7 @@ export function PainelDoCronograma({
       hoje, atividades, itens: orcamento.data?.items ?? [],
       versaoAtivaAprovada: orcamento.data?.versions?.find(v => v.id === orcamento.data?.activeVersionId)?.status === "aprovado",
       custoPorAtividade: custo.custoPorAtividade, lancamentos,
-      pesosFisicosAprovados: agregadoDaObra?.pesosFisicosAprovados === true,
+      pesosFisicosAprovados: agregadoDaObra?.pesosFisicosAprovados === true && !atividades.some(a => isPhysicalWeightQaEvidence(a.physicalWeightEvidence)),
       erroFisico: producao.isError,
       erroFinanceiro: orcamento.isError,
     });
