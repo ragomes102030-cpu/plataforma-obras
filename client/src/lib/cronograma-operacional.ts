@@ -11,8 +11,18 @@ export type LinhaCronogramaOperacional={
   executado:number|null;quantidade:number|null;unidade:string|null;pavimento:string|null;
   critica:boolean;atrasada:boolean;bloqueada:boolean|null;estadoRelatado?:string|null;dataPosicao?:string|null;previsaoRelatada?:string|null;precisaVincularLocal?:boolean;
   planejamentoRelativo?:boolean;restricoesAbertas?:number|null;
+  localEap?:string|null;localDeclarado?:string|null;estadoConsultaLocal?:"carregando"|"erro"|"pronto";
   lobApplicability?:"aplicavel"|"fora_lob"|null;lobApplicabilityReason?:string|null;
 };
+export function identificarLocalOperacional(linha:Pick<LinhaCronogramaOperacional,"pavimento"|"localEap"|"localDeclarado"|"estadoConsultaLocal"|"lobApplicability"|"lobApplicabilityReason">){
+  const escopo=linha.localEap?.trim()||linha.localDeclarado?.trim()||null;
+  if(linha.estadoConsultaLocal==="carregando")return {estado:"consulta" as const,rotulo:"Consultando local",detalhe:"Aguardando a leitura do planejamento."};
+  if(linha.estadoConsultaLocal==="erro")return {estado:"consulta" as const,rotulo:"Local não consultado",detalhe:"Não foi possível confirmar os dados de localização. Tente novamente."};
+  if(linha.lobApplicability==="fora_lob")return {estado:"fora_lob" as const,rotulo:"Fora da LOB",detalhe:linha.lobApplicabilityReason||"Serviço classificado sem repetição por unidade física."};
+  if(linha.pavimento?.trim())return {estado:"vinculado" as const,rotulo:linha.pavimento,detalhe:"Unidade física cadastrada e reconhecida."};
+  if(escopo)return {estado:"escopo" as const,rotulo:"Escopo localizado",detalhe:escopo+" — localização descrita, sem unidade física confirmada."};
+  return {estado:"a_definir" as const,rotulo:linha.lobApplicability==="aplicavel"?"Unidade a vincular":"Local a definir",detalhe:"Sem local declarado. Defina o escopo físico ou justifique a não aplicação da LOB; o planejamento por prazo não é bloqueado."};
+}
 const modos=new Set<ModoCronogramaOperacional>(["cronograma","fluxo","rede"]);
 const filtros=new Set<FiltroCronogramaOperacional>(["todas","criticas","atrasadas","bloqueadas","sem_medicao"]);
 export const ESTADO_CRONOGRAMA_INICIAL:EstadoCronogramaOperacional={atividadeSelecionadaId:null,modo:"cronograma",busca:"",filtro:"todas"};
@@ -24,8 +34,8 @@ export function selecionarLinhasOperacionais(linhas:readonly LinhaCronogramaOper
   for(const original of linhas){
     if(vistos.has(original.activityId))continue;
     vistos.add(original.activityId);
-    const item=estado.modo==="fluxo"?{...original,precisaVincularLocal:!original.pavimento}:original;
-    if(termo&&!`${item.codigo} ${item.atividade} ${item.pavimento??""}`.toLocaleLowerCase("pt-BR").includes(termo))continue;
+    const item=estado.modo==="fluxo"?{...original,precisaVincularLocal:!original.pavimento&&original.lobApplicability!=="fora_lob"&&(!original.estadoConsultaLocal||original.estadoConsultaLocal==="pronto")}:original;
+    if(termo&&!`${item.codigo} ${item.atividade} ${item.pavimento??""} ${item.localEap??""} ${item.localDeclarado??""} ${identificarLocalOperacional(item).rotulo}`.toLocaleLowerCase("pt-BR").includes(termo))continue;
     if(estado.filtro==="criticas"&&!item.critica)continue;
     if(estado.filtro==="atrasadas"&&!item.atrasada)continue;
     if(estado.filtro==="bloqueadas"&&!item.bloqueada)continue;
