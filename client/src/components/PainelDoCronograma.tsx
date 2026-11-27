@@ -160,7 +160,7 @@ export function PainelDoCronograma({
     semVinculoOrcamento: atividadesOperacionais.filter(a => a.budgetItemId == null).length,
     eapStatus: plano.data?.currentVersionStatus ?? null,
     cenarioQa: atividadesOperacionais.length > 0 && atividadesOperacionais.every(a => a.physicalWeightApprovedAt != null && isPhysicalWeightQaEvidence(a.physicalWeightEvidence)),
-    foraDaLobQa: plano.data?.lobQaExcludedCount ?? 0,
+    foraDaLobQa: plano.data?.lobQaUnresolvedCount ?? 0,
   };
   const estadoAtividades = classificarEstadoAtividadesDashboard({
     carregandoPlano: plano.isPending,
