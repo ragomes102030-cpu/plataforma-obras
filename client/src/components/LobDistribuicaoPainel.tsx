@@ -1,4 +1,4 @@
-import {useMemo,useState} from "react";
+import React, {useMemo,useState} from "react";
 import type {EntradaDaLinha} from "@shared/cronograma-colunas";
 import type {AtividadeIdLob,DistribuicaoLob,UnidadeLob} from "./lob-distribuicao-modelo";
 import "./lob-distribuicao-painel.css";
