@@ -105,7 +105,7 @@ export function LinhaBalancoEscadinha({
     [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes,finsCalculados]
   );
   const locaisConfirmados = useMemo(
-    ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades),
+    ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades,integrado.atividadeIdsDistribuidos,integrado.codigosDistribuidos),
     [integrado,nodosEap,unidades]
   );
   const todosConfirmados = useMemo(
