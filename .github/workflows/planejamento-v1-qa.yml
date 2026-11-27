@@ -22,10 +22,10 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Validar integração dos motores (sem banco)
+      - name: Validar motores e persistência (PostgreSQL isolado)
         run: |
           mkdir -p qa-results
-          pnpm exec vitest run server/qa/planejamento-v1.integration.test.ts --reporter=default --reporter=json --outputFile=qa-results/planejamento-v1.json
+          pnpm exec vitest run server/qa/planejamento-v1.integration.test.ts server/qa/planejamento-v1.persistence.test.ts --reporter=default --reporter=json --outputFile=qa-results/planejamento-v1.json
       - name: Preservar relatório de homologação
         if: always()
         uses: actions/upload-artifact@v4
