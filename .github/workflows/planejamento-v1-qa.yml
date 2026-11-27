@@ -1,0 +1,36 @@
+name: Homologação do planejamento v1
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: planejamento-v1-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  homologacao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validar integração dos motores (sem banco)
+        run: |
+          mkdir -p qa-results
+          pnpm exec vitest run server/qa/planejamento-v1.integration.test.ts --reporter=default --reporter=json --outputFile=qa-results/planejamento-v1.json
+      - name: Preservar relatório de homologação
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: planejamento-v1-qa
+          path: qa-results/planejamento-v1.json
+          if-no-files-found: warn
+          retention-days: 14
