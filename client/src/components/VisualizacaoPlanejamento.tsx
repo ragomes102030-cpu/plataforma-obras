@@ -105,22 +105,6 @@ export function VisualizacaoPlanejamento({
   const definirLocalLob = trpc.planning.definirLocalLob.useMutation({
     onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
   });
-  const definirLocaisLobEmLote = trpc.planning.definirLocaisLobEmLote.useMutation({
-    onSuccess:()=>utilsLob.projects.wbs.invalidate({projectId:projetoId}),
-  });
-  const definirTodosLocaisLob = async (unitId:number) => {
-    const codigos = new Set(atividadesLob.map(activity=>activity.wbsCode));
-    const codigosPendentes = [...new Set(linhas
-      .filter(linha=>codigos.has(linha.codigo))
-      .map(linha=>linha.codigo))];
-    if (codigosPendentes.length) {
-      // Envie os códigos diretamente. O servidor resolve todas as ocorrências
-      // da versão atual e filtra folhas; isso evita perder atividades quando
-      // há códigos repetidos na grade (ex.: pacotes 1.8.1/1.8.2).
-      await definirLocaisLobEmLote.mutateAsync({projectId:projetoId,nodeCodes:codigosPendentes,unitId});
-    }
-    await utilsLob.projects.wbs.invalidate({projectId:projetoId});
-  };
   const criarUnidadeLob = trpc.production.createUnit.useMutation({
     onSuccess:()=>utilsLob.production.units.invalidate({projectId:projetoId}),
   });
@@ -308,10 +292,9 @@ export function VisualizacaoPlanejamento({
             atividadeSelecionadaId={atividadeSelecionadaId} onSelecionarAtividade={onSelecionarAtividade}
             nodosEap={nodosEap.data??[]} unidades={unidadesProducao.data??[]}
             distribuicoes={distribuicoesLob.data??[]} atividadeIds={atividadesLob}
-            editavel={editavelLob} salvandoLocal={definirLocalLob.isPending||definirLocaisLobEmLote.isPending}
-            erroLocal={definirLocalLob.error?.message??definirLocaisLobEmLote.error?.message??criarUnidadeLob.error?.message??null}
+            editavel={editavelLob} salvandoLocal={definirLocalLob.isPending}
+            erroLocal={definirLocalLob.error?.message??criarUnidadeLob.error?.message??null}
             onDefinirLocal={(nodeId,unitId)=>definirLocalLob.mutate({projectId:projetoId,nodeId,unitId})}
-            onDefinirTodosLocais={(unitId)=>{void definirTodosLocaisLob(unitId);}}
             onCriarUnidade={(code,name,unitType)=>criarUnidadeLob.mutate({projectId:projetoId,code,name,unitType})}
             onAbrirAtividades={() => window.dispatchEvent(new CustomEvent("abrir-aba",{detail:{aba:"atividades"}}))}/>
           <LobDistribuicaoPainel
