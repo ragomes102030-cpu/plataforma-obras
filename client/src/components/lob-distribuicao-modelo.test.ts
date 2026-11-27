@@ -1,5 +1,6 @@
 import {describe,it,expect} from "vitest";
 import {integrarDistribuicoesLob} from "./lob-distribuicao-modelo";
+import {aplicarLocaisDaEapNaLob} from "./linha-balanco-modelo";
 import type {EntradaDaLinha} from "@shared/cronograma-colunas";
 const parent:EntradaDaLinha={
  codigo:"1.4.3",atividade:"Lajes",frente:"Estrutura",pavimento:"Estrutura",
@@ -76,5 +77,28 @@ describe("Distribuição multilocal LOB — não duplica quantitativo, CPM ou EA
    ]);
    expect(r.entradas).toHaveLength(0);
    expect(r.pendentes).toEqual([parent]);
+ });
+});
+
+describe("LOB — identidade e saldo de distribuição",()=>{
+ it("não transfere parcela de um ID ausente para outra atividade com o mesmo código EAP",()=>{
+   const outra={...parent,activityId:11};
+   const r=integrarDistribuicoesLob([outra],ids,units,[part(1,1,25,"2026-11-01","2026-11-05")]);
+   expect(r.entradas).toEqual([]);
+   expect(r.pendentes).toEqual([outra]);
+ });
+ it("não confirma o saldo restante pelo local da EAP depois da distribuição parcial",()=>{
+   const origem={...parent,activityId:10,pavimento:"Térreo"};
+   const r=integrarDistribuicoesLob([origem],ids,units,[part(1,2,25,"2026-11-01","2026-11-05")]);
+   const locais=aplicarLocaisDaEapNaLob(r.pendentes,[{code:origem.codigo,location:"Térreo"}],units,r.atividadeIdsDistribuidos,r.codigosDistribuidos);
+   expect(r.entradas[0]).toMatchObject({pavimento:"1º Pavimento",quantidade:25});
+   expect(locais.linhas[0]).toMatchObject({activityId:10,pavimento:null,quantidade:75});
+   expect(locais.codigosConfirmados.size).toBe(0);
+ });
+ it("não usa um código legado ambíguo para identificar a parcela",()=>{
+   const outra={...parent,atividade:"Outro serviço"};
+   const r=integrarDistribuicoesLob([parent,outra],ids,units,[part(1,1,25,"2026-11-01","2026-11-05")]);
+   expect(r.entradas).toEqual([]);
+   expect(r.pendentes).toEqual([parent,outra]);
  });
 });
