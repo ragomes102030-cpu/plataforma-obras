@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTerminalEapNode, resolveActivityDuration } from "./activity-planning";
+import { isTerminalEapNode, normalizePlanningDecimal, resolveActivityDuration } from "./activity-planning";
 
 describe("politica de atividades", () => {
   it("aceita duração explícita positiva", () => {
@@ -46,5 +46,28 @@ describe("politica de atividades", () => {
     expect(isTerminalEapNode("pacote")).toBe(true);
     expect(isTerminalEapNode("entrega")).toBe(true);
     expect(isTerminalEapNode("grupo")).toBe(false);
+  });
+});
+
+describe("Precisão do planejamento persistido",()=>{
+  it("não adiciona um dia por erro de ponto flutuante",()=>{
+    expect(resolveActivityDuration({plannedQuantity:0.14,productivity:0.01})).toBe(14);
+  });
+  it("calcula com os mesmos valores que serão persistidos",()=>{
+    expect(resolveActivityDuration({plannedQuantity:1.0004,productivity:0.1004})).toBe(10);
+    expect(resolveActivityDuration({plannedQuantity:1.0006,productivity:0.1004})).toBe(11);
+  });
+  it("rejeita produtividade positiva que arredondaria para zero",()=>{
+    expect(()=>resolveActivityDuration({plannedQuantity:1,productivity:0.0001})).toThrow("precisão");
+    expect(()=>resolveActivityDuration({durationDays:3,productivity:0.0001})).toThrow("precisão");
+  });
+  it("rejeita números não finitos ou fora dos limites do banco",()=>{
+    expect(()=>normalizePlanningDecimal(Infinity)).toThrow();
+    expect(()=>normalizePlanningDecimal(100_000_000_000)).toThrow();
+    expect(()=>resolveActivityDuration({plannedQuantity:3_000_000,productivity:0.001})).toThrow("limite");
+  });
+  it("preserva duração explicitamente informada",()=>{
+    expect(resolveActivityDuration({durationDays:7,plannedQuantity:100,productivity:20})).toBe(7);
+    expect(normalizePlanningDecimal(0,true)).toBe(0);
   });
 });
