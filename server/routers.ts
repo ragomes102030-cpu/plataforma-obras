@@ -103,7 +103,7 @@ import type {
   ScheduleEvidenceActivity,
   ScheduleEvidenceDependency,
 } from "./construction/domain-types";
-import { isTerminalEapNode, resolveActivityDuration } from "./construction/activity-planning";
+import { isTerminalEapNode, normalizePlanningDecimal, resolveActivityDuration } from "./construction/activity-planning";
 import { sameEapContent } from "./construction/eap-content";
 import { buildInitialEapProposal } from "./construction/eap-proposal";
 import { semearEapDoCatalogo } from "./construction/eap-seeder";
@@ -6369,24 +6369,36 @@ export const appRouter = router({
           if (input.valor.trim() && (!Number.isFinite(Number(input.valor)) || Number(input.valor) < 0)) {
             throw badRequest("A quantidade deve ser numérica e não negativa.");
           }
-          const quantity = input.valor.trim() ? Number(input.valor) : null;
+          let quantity: number | null;
+          try {
+            quantity = input.valor.trim() ? normalizePlanningDecimal(Number(input.valor), true) : null;
+          } catch (error) {
+            throw badRequest(error instanceof Error ? error.message : "Quantidade inválida.");
+          }
           patch.plannedQuantity = quantity == null ? null : quantity.toFixed(3);
           const productivity = Number(activity.productivity ?? 0);
           if (quantity != null && quantity > 0 && productivity > 0) {
-            const duration = resolveActivityDuration({ plannedQuantity: quantity, productivity });
-            patch.durationDays = duration;
-            quantityChangedDuration = duration !== activity.durationDays;
-            alargarFaixaPara(duration);
+            try {
+              const duration = resolveActivityDuration({ plannedQuantity: quantity, productivity });
+              patch.durationDays = duration;
+              quantityChangedDuration = duration !== activity.durationDays;
+              alargarFaixaPara(duration);
+            } catch (error) {
+              throw badRequest(error instanceof Error ? error.message : "Duração calculada inválida.");
+            }
           }
         }
         if (input.campo === "produtividade") {
-          const productivity = Number(input.valor);
-          if (!Number.isFinite(productivity) || productivity <= 0) throw badRequest("A produtividade deve ser maior que zero.");
-          patch.productivity = productivity.toFixed(3);
-          const quantity = Number(activity.plannedQuantity ?? 0);
-          if (quantity > 0) {
-            patch.durationDays = Math.max(1, Math.ceil(quantity / productivity));
-            alargarFaixaPara(patch.durationDays as number);
+          try {
+            const productivity = normalizePlanningDecimal(Number(input.valor));
+            patch.productivity = productivity.toFixed(3);
+            const quantity = Number(activity.plannedQuantity ?? 0);
+            if (quantity > 0) {
+              patch.durationDays = resolveActivityDuration({ plannedQuantity: quantity, productivity });
+              alargarFaixaPara(patch.durationDays as number);
+            }
+          } catch (error) {
+            throw badRequest(error instanceof Error ? error.message : "Produtividade inválida.");
           }
         }
         if (input.campo === "unidade") patch.unit = input.valor.trim() || null;

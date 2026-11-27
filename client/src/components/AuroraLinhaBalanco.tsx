@@ -85,7 +85,7 @@ function selecionarPeriodoPelosServicos(series: SerieLob[]): { primeiro: string;
  */
 export function LinhaBalancoEscadinha({
   linhas,finsCalculados,hoje,inicioObra,codigosExemplo,nodosEap=[],unidades=[],distribuicoes=[],atividadeIds=[],
-  editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onDefinirTodosLocais,onCriarUnidade,
+  editavel=false,salvandoLocal=false,erroLocal=null,onDefinirLocal,onCriarUnidade,
   onAbrirAtividades,dependencias=[],dependenciasIds=[],estadoVinculos="carregando",atividadeSelecionadaId,onSelecionarAtividade
 }: Props) {
   // O cronograma pode conter serviços reais e atividades de QA em 2028.
@@ -105,7 +105,7 @@ export function LinhaBalancoEscadinha({
     [linhasDaVisualizacao,atividadeIds,unidades,distribuicoes,finsCalculados]
   );
   const locaisConfirmados = useMemo(
-    ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades),
+    ()=>aplicarLocaisDaEapNaLob(integrado.pendentes,nodosEap,unidades,integrado.atividadeIdsDistribuidos,integrado.codigosDistribuidos),
     [integrado,nodosEap,unidades]
   );
   const todosConfirmados = useMemo(
@@ -482,6 +482,7 @@ export function LinhaBalancoEscadinha({
         </div>
       ) : (
         <>
+          {qtdReais > 0 && !exibirQa && <p role="status" className="lob-flow-technical-note" data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size}</b> com ao menos um vínculo cadastrado · <b>{Math.max(0,qtdReais-new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size)}</b> sem vínculo cadastrado</p>}
           {(obraComecaAntesDaLob || qtdQa > 0 || atividadesGerais.length > 0) && (
             <div className="lob-stairs-context" role="status" data-testid="lob-calendar-context">
               <div>
@@ -490,7 +491,6 @@ export function LinhaBalancoEscadinha({
                 {periodoRepetitivo && <span>{pontosVisiveis.some(s => s.repetitiva) ? "Primeira atividade repetitiva" : "Primeira atividade localizada"}: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {qtdQa > 0 && <span className="lob-stairs-qa">QA: {qtdQa} atividade(s) de demonstração {possuiQaSeparada && !exibirQa ? "— ocultas da visão principal" : "nas sequências repetitivas"}{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                {possuiQaSeparada && !exibirQa && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size}</b> com ao menos um local · <b>{Math.max(0,qtdReais-new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size)}</b> sem vínculo físico</span>}
                 <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
               {possuiQaSeparada && <label className="lob-stairs-qa-toggle">
@@ -802,14 +802,7 @@ export function LinhaBalancoEscadinha({
                     Cadastrar local
                   </button>
                 </div>
-                {editavel && unidades.length > 0 && onDefinirTodosLocais && totalGerais > 0 && (
-                  <div className="lob-stairs-mapping-bulk">
-                    <div><strong>Fechamento rápido da demonstração</strong><span>Vincula as atividades pendentes ao primeiro local abaixo, sem alterar datas, durações ou quantidades.</span></div>
-                    <button type="button" disabled={salvandoLocal} onClick={()=>onDefinirTodosLocais(unidades[0]!.id)}>
-                      {salvandoLocal ? "Gravando vínculos…" : `Vincular ${totalGerais} pendentes a ${unidades[0]!.name}`}
-                    </button>
-                  </div>
-                )}
+                <p role="note">Os locais únicos já confirmados na EAP são aproveitados automaticamente. Não distribua todos os serviços no mesmo local: confirme somente a frente real ou informe parcelas por local.</p>
                 <table><thead><tr><th>Atividade / EAP</th><th>Início oficial</th><th>Local confirmado</th><th>Ação</th></tr></thead>
                   <tbody>{geraisVisiveis.flatMap(g=>g.pontos).map(p=>{
                     const node=nodosEap.find(n=>n.code===p.codigo);
@@ -819,7 +812,7 @@ export function LinhaBalancoEscadinha({
                       <td><select aria-label={"Selecionar local físico de "+p.codigo} value={valor}
                         onChange={e=>setLocalSelecionado(v=>({...v,[p.codigo]:e.target.value}))}>
                         <option value="">Selecionar local</option>
-                        {unidades.map(u=><option key={u.id} value={String(u.id)}>{u.name} ({u.code})</option>)}
+                        {unidades.filter(u=>!/did[aá]tic/i.test(u.name)).map(u=><option key={u.id} value={String(u.id)}>{u.name} ({u.code})</option>)}
                       </select></td>
                       <td><button type="button" disabled={!editavel||!node||!valor||salvandoLocal||!onDefinirLocal}
                         onClick={()=>{if(node&&valor)onDefinirLocal?.(node.id,Number(valor));}}>

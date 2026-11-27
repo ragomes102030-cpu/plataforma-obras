@@ -1,4 +1,4 @@
-import {useMemo,useState} from "react";
+import React, {useMemo,useState} from "react";
 import type {EntradaDaLinha} from "@shared/cronograma-colunas";
 import type {AtividadeIdLob,DistribuicaoLob,UnidadeLob} from "./lob-distribuicao-modelo";
 import "./lob-distribuicao-painel.css";
@@ -25,17 +25,17 @@ export function LobDistribuicaoPainel({
   const [inicio,setInicio]=useState("");
   const [fim,setFim]=useState("");
   const [aberto,setAberto]=useState(false);
-  const linhasPorCodigo=useMemo(()=>new Map(linhas.map(l=>[l.codigo,l])),[linhas]);
+  const linhasPorId=useMemo(()=>new Map(linhas.map(l=>[l.activityId,l])),[linhas]);
   const codes=useMemo(()=>new Map(atividades.map(a=>[a.id,a.wbsCode])),[atividades]);
   const nomes=useMemo(()=>new Map(unidades.map(u=>[u.id,u.name])),[unidades]);
-  const ativos=useMemo(()=>atividades.filter(a=>linhasPorCodigo.has(a.wbsCode)),[atividades,linhasPorCodigo]);
+  const ativos=useMemo(()=>atividades.filter(a=>linhasPorId.has(a.id)),[atividades,linhasPorId]);
   const selecionada=ativos.find(a=>String(a.id)===atividade);
-  const linha=selecionada?linhasPorCodigo.get(selecionada.wbsCode):undefined;
+  const linha=selecionada?linhasPorId.get(selecionada.id):undefined;
   const outras=distribuicoes.filter(d=>String(d.activityId)===atividade&&String(d.unitId)!==unidade);
   const alocado=outras.reduce((s,d)=>s+Number(d.plannedQuantity),0);
   const restante=(linha?.quantidade??0)-alocado;
   const quantidadeNum=Number(quantidade);
-  const valido=!!selecionada&&!!unidade&&quantidade.trim()!==""&&
+  const valido=!!selecionada&&unidades.some(u=>String(u.id)===unidade&&!/did[aá]tic/i.test(u.name))&&quantidade.trim()!==""&&
     Number.isFinite(quantidadeNum)&&quantidadeNum>0&&
     Math.abs(quantidadeNum*1000-Math.round(quantidadeNum*1000))<1e-6&&
     (linha?.quantidade??0)>0&&quantidadeNum<=restante+0.0001&&
@@ -44,13 +44,13 @@ export function LobDistribuicaoPainel({
     fim<=(finsCalculados[String(linha.activityId)]??finsCalculados[linha.codigo])!;
   const comDistribuicao=new Set(distribuicoes.map(d=>d.activityId)).size;
   const totais=useMemo(()=>ativos.map(a=>{
-    const l=linhasPorCodigo.get(a.wbsCode)!;
+    const l=linhasPorId.get(a.id)!;
     const alocs=distribuicoes.filter(d=>d.activityId===a.id);
     const somado=alocs.reduce((s,d)=>s+Number(d.plannedQuantity),0);
     return {id:a.id,code:a.wbsCode,name:l.atividade,total:l.quantidade,
       unidade:l.unidade,allocated:somado,remaining:l.quantidade===null?null:Math.max(0,l.quantidade-somado),
       parts:alocs.length};
-  }),[ativos,linhasPorCodigo,distribuicoes]);
+  }),[ativos,linhasPorId,distribuicoes]);
   const fechadas=totais.filter(t=>t.total!==null&&t.total>0&&t.remaining!==null&&t.remaining<=0.001).length;
   return <details className="lob-distribuicao" open={aberto} onToggle={e=>setAberto(e.currentTarget.open)} data-testid="lob-multilocal-panel">
     <summary><strong>Distribuição por pavimento / setor</strong>
@@ -63,14 +63,14 @@ export function LobDistribuicaoPainel({
         <label>Atividade da EAP<select aria-label="Atividade para distribuir" value={atividade} onChange={e=>{
           setAtividade(e.target.value);setUnidade("");setQuantidade("");setInicio("");setFim("");
         }}><option value="">Selecionar atividade</option>{ativos.map(a=>{
-          const l=linhasPorCodigo.get(a.wbsCode)!;
+          const l=linhasPorId.get(a.id)!;
           return <option value={a.id} key={a.id}>{a.wbsCode} · {l.atividade}</option>;
         })}</select></label>
         <label>Local físico<select aria-label="Local de distribuição" value={unidade} onChange={e=>{
           const novo=e.target.value;setUnidade(novo);
           const d=distribuicoes.find(x=>String(x.activityId)===atividade&&String(x.unitId)===novo);
           setQuantidade(d?.plannedQuantity??"");setInicio(d?.startDate??"");setFim(d?.finishDate??"");
-        }}><option value="">Selecionar local</option>{unidades.map(u=><option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
+        }}><option value="">Selecionar local</option>{unidades.filter(u=>!/did[aá]tic/i.test(u.name)).map(u=><option value={u.id} key={u.id}>{u.name}</option>)}</select></label>
         <label>Quantidade por local <small>{linha?.unidade??""}</small>
           <input aria-label="Quantidade planejada no local" type="number" min="0.001" step="0.001" value={quantidade} onChange={e=>setQuantidade(e.target.value)} placeholder="Não estimar"/></label>
         <label>Início no local<input aria-label="Início do trecho" type="date" value={inicio} onChange={e=>setInicio(e.target.value)}/></label>

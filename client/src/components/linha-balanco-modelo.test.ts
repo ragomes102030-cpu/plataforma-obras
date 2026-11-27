@@ -133,3 +133,26 @@ describe("LOB — unidade física confirmada na EAP",()=>{
     expect(m.linhas[0]?.pavimento).toBe("1º Pavimento");
   });
 });
+
+describe("LOB — prevenção de vínculos indevidos",()=>{
+  it("não escolhe arbitrariamente entre unidades com nomes ou códigos ambíguos",()=>{
+    const entradas=[linha("A","Estrutura","Pendente")];
+    const r=aplicarLocaisDaEapNaLob(entradas,[{code:"A",location:"P01"}],[
+      {code:"TA-P01",name:"P01"},{code:"TB-P01",name:"P01"}
+    ]);
+    expect(r.codigosConfirmados.size).toBe(0);
+    expect(r.linhas[0]?.pavimento).toBe("Pendente");
+  });
+  it("não transforma locais didáticos em locais físicos confirmados",()=>{
+    const r=aplicarLocaisDaEapNaLob([linha("A","Fundação","Pendente")],[{code:"A",location:"QA-01"}],[
+      {code:"QA-01",name:"Setor didático 01"}
+    ]);
+    expect(r.codigosConfirmados.size).toBe(0);
+  });
+  it("aceita código e nome coincidentes da mesma unidade sem falsa ambiguidade",()=>{
+    const r=aplicarLocaisDaEapNaLob([linha("A","Fundação","Pendente")],[{code:"A",location:"canteiro"}],[
+      {code:"CANTEIRO",name:"Canteiro"}
+    ]);
+    expect(r.codigosConfirmados.has("A")).toBe(true);
+  });
+});

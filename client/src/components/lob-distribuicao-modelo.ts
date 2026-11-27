@@ -17,7 +17,9 @@ export function integrarDistribuicoesLob(
   finsCalculados:Readonly<Record<string,string>> = {}
 ){
   const codPorId=new Map(ids.map(a=>[a.id,a.wbsCode]));
-  const porCodigo=new Map(linhas.map(l=>[l.codigo,l]));
+  // Fallback legado somente quando não existe ID operacional e o código é inequívoco.
+  const porCodigo=new Map<string,EntradaDaLinha[]>();
+  for(const l of linhas) porCodigo.set(l.codigo,[...(porCodigo.get(l.codigo)??[]),l]);
   const porAtividade=new Map(linhas.filter(l=>l.activityId!=null).map(l=>[l.activityId,l]));
   const nomePorUnidade=new Map(unidades.map(u=>[u.id,u.name]));
   const somaPorCodigo=new Map<string,number>();
@@ -32,7 +34,9 @@ export function integrarDistribuicoesLob(
   const codigosDistribuidos=new Set<string>();
   for(const d of distribuicoes) {
     const codigo=codPorId.get(d.activityId);
-    const fonte=porAtividade.get(d.activityId) ?? (codigo ? porCodigo.get(codigo) : undefined);
+    const candidatas=codigo?porCodigo.get(codigo):undefined;
+    const legado=candidatas?.length===1&&candidatas[0]?.activityId==null?candidatas[0]:undefined;
+    const fonte=porAtividade.get(d.activityId) ?? legado;
     const nomeLocal=nomePorUnidade.get(d.unitId);
     const quantidade=Number(d.plannedQuantity);
     if(!fonte||!nomeLocal||fonte.marco||!dataValida(d.startDate)||!dataValida(d.finishDate)||
@@ -72,6 +76,7 @@ export function integrarDistribuicoesLob(
     return [{
       ...l,
       atividade:l.atividade+" (saldo sem local)",
+      pavimento:null,
       quantidade:restante===null?null:restante/MIL,
       executado:0,
     }];
