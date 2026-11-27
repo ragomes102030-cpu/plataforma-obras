@@ -87,6 +87,10 @@ describe("dashboard não transforma dado ausente em desempenho zero", () => {
     expect(html).not.toContain("VALOR AGREGADO · CENÁRIO QA");
     expect(html).toContain("40 atividade(s) com histórico QA de local não confirmado");
     expect(html).not.toContain("estão classificadas fora da Linha de Balanço neste cenário");
+    expect(html).toContain("Referência não validada");
+    expect(html).not.toContain("Avanço realizado 0,0%");
+    expect(html).not.toContain("−40,0 p.p.");
+    expect(html).not.toContain("Meta física até hoje");
   });
 
   it("explica o caminho por serviços antes dos indicadores financeiros", () => {
