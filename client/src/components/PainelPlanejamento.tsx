@@ -409,12 +409,8 @@ export function PainelPlanejamento({ projetoId }: Props) {
                     onChange={event => setEdicoes(atual => ({ ...atual, [activity.id + "|pavimento"]: event.target.value }))}
                     onBlur={() => salvarEdicao(activity.id, "pavimento")}
                     aria-label={"Unidade física de " + activity.name}
-                    placeholder="sem unidade específica" title={activity.pavimentoIsProductionUnit ? "Unidade física cadastrada e vinculada por nome exato." : "Informe uma unidade física cadastrada. O escopo textual da EAP só é ligado quando coincide exatamente com uma unidade."} />
-                  {!activity.pavimento && activity.wbsLocation && <small className="pl-local-eap" title={activity.wbsLocationIsProductionUnit ? "Este escopo coincide com unidade cadastrada; salve-o no campo acima para usar na Linha de Balanço." : "Escopo textual da EAP; não equivale a uma unidade operacional cadastrada."}>
-                    Escopo EAP: {activity.wbsLocation}
-                  </small>}
-                  {!activity.pavimento && !activity.wbsLocation && <small className="pl-local-eap pendente">Local não declarado na EAP</small>}
-                  {activity.lobQaUnresolved && <small className="pl-local-eap" title={plano.data?.lobQaUnresolvedNote ?? "Local não confirmado; requer revisão."}>Local a revisar</small>}
+                    placeholder={identificarLocalOperacional({atividade:activity.name,pavimento:activity.pavimentoIsProductionUnit?activity.pavimento:activity.wbsLocationIsProductionUnit?activity.wbsLocation:null,localEap:activity.wbsLocation,localDeclarado:activity.pavimento,isMilestone:activity.isMilestone,lobApplicability:activity.lobApplicability,lobApplicabilityReason:activity.lobApplicabilityReason}).rotulo} title={identificarLocalOperacional({atividade:activity.name,pavimento:activity.pavimentoIsProductionUnit?activity.pavimento:activity.wbsLocationIsProductionUnit?activity.wbsLocation:null,localEap:activity.wbsLocation,localDeclarado:activity.pavimento,isMilestone:activity.isMilestone,lobApplicability:activity.lobApplicability,lobApplicabilityReason:activity.lobApplicabilityReason}).detalhe} />
+                  {activity.wbsLocation&&!activity.wbsLocationIsProductionUnit&&<small className="pl-local-eap" title={activity.wbsLocation}>Escopo EAP: {activity.wbsLocation}</small>}
                 </td>
                 <td className="type-col"><span className="pl-atividade-tag">Task</span></td>
                 <td className="dur-col">
