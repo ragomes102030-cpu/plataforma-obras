@@ -22,6 +22,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 vi.mock("./CurvaSControlTower", () => ({ CurvaSControlTower: () => null }));
+vi.mock("./CurvaFisicaDashboard", () => ({ CurvaFisicaDashboard: () => null }));
 
 const atividade = {
   id: 1,
