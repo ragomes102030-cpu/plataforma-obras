@@ -150,6 +150,8 @@ export function aplicarLocaisDaEapNaLob(
   linhas: readonly EntradaDaLinha[],
   nodos: readonly {code:string;location:string|null}[],
   unidades: readonly {code:string;name:string}[],
+  idsComParcelas: ReadonlySet<number> = new Set(),
+  codigosComParcelas: ReadonlySet<string> = new Set(),
 ): {linhas:EntradaDaLinha[]; codigosConfirmados:Set<string>} {
   const nomes = new Map<string, Set<number>>();
   for (const [index,u] of unidades.entries()) {
@@ -164,6 +166,8 @@ export function aplicarLocaisDaEapNaLob(
   const porCodigo = new Map(nodos.map(n=>[n.code,n.location]));
   const codigosConfirmados = new Set<string>();
   const saida = linhas.map(l=>{
+    // Saldo de um pacote multilocal não herda a localização integral da EAP.
+    if(l.activityId!=null ? idsComParcelas.has(l.activityId) : codigosComParcelas.has(l.codigo)) return {...l,pavimento:null};
     const informado=porCodigo.get(l.codigo);
     const candidatos=informado?nomes.get(informado.trim().toLocaleLowerCase("pt-BR")):undefined;
     const unidade=candidatos?.size===1?unidades[[...candidatos][0]!]:undefined;
