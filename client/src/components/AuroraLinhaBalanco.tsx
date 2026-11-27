@@ -482,7 +482,8 @@ export function LinhaBalancoEscadinha({
         </div>
       ) : (
         <>
-          {(obraComecaAntesDaLob || qtdQa > 0 || atividadesGerais.length > 0 || qtdReais > 0) && (
+          {qtdReais > 0 && !exibirQa && <p role="status" className="lob-flow-technical-note" data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size}</b> com ao menos um vínculo cadastrado · <b>{Math.max(0,qtdReais-new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size)}</b> sem vínculo cadastrado</p>}
+          {(obraComecaAntesDaLob || qtdQa > 0 || atividadesGerais.length > 0) && (
             <div className="lob-stairs-context" role="status" data-testid="lob-calendar-context">
               <div>
                 <strong>Referência das datas</strong>
@@ -490,7 +491,6 @@ export function LinhaBalancoEscadinha({
                 {periodoRepetitivo && <span>{pontosVisiveis.some(s => s.repetitiva) ? "Primeira atividade repetitiva" : "Primeira atividade localizada"}: <b>{formatoCompleto(periodoRepetitivo.primeiro)}</b></span>}
                 {atividadesGerais.length > 0 && <span data-testid="lob-general-count">{atividadesGerais.reduce((s,g)=>s+g.pontos.length,0)} atividades do cronograma fora das escadinhas</span>}
                 {qtdQa > 0 && <span className="lob-stairs-qa">QA: {qtdQa} atividade(s) de demonstração {possuiQaSeparada && !exibirQa ? "— ocultas da visão principal" : "nas sequências repetitivas"}{todosServicosSaoQA ? " — não representam execução real" : ""}</span>}
-                {qtdReais > 0 && !exibirQa && <span data-testid="lob-real-status"><b>{qtdReais}</b> atividades do plano real · <b>{new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size}</b> com ao menos um local · <b>{Math.max(0,qtdReais-new Set([...locaisConfirmados.codigosConfirmados,...integrado.codigosDistribuidos]).size)}</b> sem vínculo físico</span>}
                 <small>Serviços com localização física confirmada no Dicionário da EAP entram no gráfico, inclusive quando aparecem em um único local. Os demais ficam pendentes de vínculo; datas e atividades não são alteradas.</small>
               </div>
               {possuiQaSeparada && <label className="lob-stairs-qa-toggle">
