@@ -1,6 +1,6 @@
 import {FormEvent,useEffect,useRef,useState} from "react";
 import {ArrowUpRight,Ban,Clock3,History,Save,Undo2,X} from "lucide-react";
-import type {LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
+import {identificarLocalOperacional,type LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
 import {trpc} from "@/lib/trpc";
 import {revalidarAtualizacaoPrazo} from "@/lib/revalidar-atualizacao-prazo";
 
@@ -106,7 +106,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
     {titulo:"Baseline",linhas:[["Referência",referenciaBaseline],["Variação",variacaoBaseline]],aba:"baseline"},
     {titulo:"Realizado",linhas:[["Quantidade",valor(linha.executado,linha.unidade?` ${linha.unidade}`:"")],["Progresso",progresso]],aba:"producao"},
     {titulo:"Rede",linhas:[["Predecessoras",predecessoras],["Sucessoras",sucessoras],["Caminho crítico",linha.critica?"Sim":"Não"]],aba:"dependencias"},
-    {titulo:"Local",linhas:[["Local de execução",valor(linha.pavimento)]],aba:"eap"},
+    {titulo:"Local",linhas:[["Situação",identificarLocalOperacional(linha).rotulo],["Unidade física",valor(linha.pavimento)],["Escopo descrito",valor(linha.localEap??linha.localDeclarado)],["Orientação",identificarLocalOperacional(linha).detalhe]],aba:"eap"},
     {titulo:"Restrições",linhas:[["Abertas",restricoesAbertas??"Consulta indisponível"],["Estado",restricoesAbertas==null?"Não confirmado":restricoesAbertas>0?"Requer atenção":"Sem restrições abertas"]],aba:"producao"},
   ] as const;
   return <div className="cronograma-inspetor-raiz">
