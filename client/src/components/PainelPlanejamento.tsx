@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, CheckCircle2, Filter, ListPlus, Plus, RefreshCw, Search, Layers3 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { identificarLocalOperacional } from "@/lib/cronograma-operacional";
 import { isPhysicalWeightQaEvidence } from "@shared/physical-weight-qa";
 
 type Props = { projetoId: number };
@@ -14,6 +15,7 @@ type ProposalItem = {
   duration: number | null;
   plannedQuantity: number | null;
   unit?: string | null;
+  location?: string | null;
   rationale: string;
 };
 
@@ -541,7 +543,7 @@ export function PainelPlanejamento({ projetoId }: Props) {
                   )}
                 </td>
                 <td className="frente-col">{item.phase || "—"}</td>
-                <td className="pavimento-col">—</td>
+                <td className="pavimento-col"><span title={identificarLocalOperacional({atividade:item.name,pavimento:null,localEap:item.location}).detalhe}>{identificarLocalOperacional({atividade:item.name,pavimento:null,localEap:item.location}).rotulo}</span>{item.location&&<small className="pl-local-eap">{item.location}</small>}</td>
                 <td className="type-col"><span className="pl-atividade-tag proposta">Proposta</span></td>
                 <td className="dur-col">
                   <input

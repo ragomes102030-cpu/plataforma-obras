@@ -1,6 +1,6 @@
 import {FormEvent,useEffect,useRef,useState} from "react";
 import {ArrowUpRight,Ban,Clock3,History,Save,Undo2,X} from "lucide-react";
-import type {LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
+import {identificarLocalOperacional,sugerirNaturezaAtividade,type LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
 import {trpc} from "@/lib/trpc";
 import {revalidarAtualizacaoPrazo} from "@/lib/revalidar-atualizacao-prazo";
 
@@ -34,6 +34,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
   const [invalidatingUpdateId,setInvalidatingUpdateId]=useState<number|null>(null);
   const [invalidationReason,setInvalidationReason]=useState("");
   const [invalidationFeedback,setInvalidationFeedback]=useState<string|null>(null);
+  const naturezaLocal=sugerirNaturezaAtividade(linha);
   const [lobApplicability,setLobApplicability]=useState<ApplicabilidadeLob>(linha.lobApplicability??"pendente");
   const [lobReason,setLobReason]=useState(linha.lobApplicabilityReason??"");
   const [lobFeedback,setLobFeedback]=useState<string|null>(null);
@@ -106,7 +107,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
     {titulo:"Baseline",linhas:[["Referência",referenciaBaseline],["Variação",variacaoBaseline]],aba:"baseline"},
     {titulo:"Realizado",linhas:[["Quantidade",valor(linha.executado,linha.unidade?` ${linha.unidade}`:"")],["Progresso",progresso]],aba:"producao"},
     {titulo:"Rede",linhas:[["Predecessoras",predecessoras],["Sucessoras",sucessoras],["Caminho crítico",linha.critica?"Sim":"Não"]],aba:"dependencias"},
-    {titulo:"Local",linhas:[["Local de execução",valor(linha.pavimento)]],aba:"eap"},
+    {titulo:"Local",linhas:[["Natureza",naturezaLocal.rotulo],["Situação",identificarLocalOperacional(linha).rotulo],["Unidade física",valor(linha.pavimento)],["Escopo descrito",valor(linha.localEap??linha.localDeclarado)],["Orientação",identificarLocalOperacional(linha).detalhe]],aba:"eap"},
     {titulo:"Restrições",linhas:[["Abertas",restricoesAbertas??"Consulta indisponível"],["Estado",restricoesAbertas==null?"Não confirmado":restricoesAbertas>0?"Requer atenção":"Sem restrições abertas"]],aba:"producao"},
   ] as const;
   return <div className="cronograma-inspetor-raiz">
@@ -139,6 +140,7 @@ export function InspetorAtividade({projetoId,linha,predecessoras,sucessoras,rest
         {!linha.pavimento&&<section className="cronograma-lob-classificacao" aria-labelledby="inspetor-lob">
           <div><h3 id="inspetor-lob">Linha de Balanço (opcional)</h3><small>Sem unidade afeta somente o fluxo por local; o planejamento por prazo continua liberado.</small></div>
           {linha.lobApplicability==="fora_lob"&&<p role="status">Fora da LOB: {linha.lobApplicabilityReason??"justificativa registrada"}</p>}
+          {!linha.lobApplicability&&naturezaLocal.sugerirForaLob&&linha.estadoConsultaLocal!=="carregando"&&linha.estadoConsultaLocal!=="erro"&&<div role="note"><p>{naturezaLocal.justificativa}</p><button type="button" onClick={()=>{setLobApplicability("fora_lob");setLobReason(naturezaLocal.justificativa);}}>Preparar classificação sugerida</button><small>Revise a justificativa antes de salvar.</small></div>}
           <form onSubmit={salvarApplicabilidadeLob}>
             <label>Aplicabilidade<select value={lobApplicability} onChange={evento=>setLobApplicability(evento.target.value as ApplicabilidadeLob)}>
               <option value="pendente">Ainda não revisada</option>

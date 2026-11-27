@@ -8314,6 +8314,7 @@ export const appRouter = router({
           duration:null,
           plannedQuantity:node.plannedQuantity==null?null:Number(node.plannedQuantity),
           unit:node.unit,
+          location:node.location??null,
           rationale:"Proposta inicial derivada da folha EAP; o engenheiro deve confirmar se o pacote representa uma única atividade ou se precisa ser decomposto em múltiplas atividades."
         }));
         return {

@@ -1,10 +1,10 @@
 import {useCallback,useEffect,useMemo,useState} from "react";
-import {Activity,GitBranch,GanttChartSquare,MapPin,Search} from "lucide-react";
+import {Activity,GitBranch,GanttChartSquare,Search} from "lucide-react";
 import type {EntradaDaLinha} from "@shared/cronograma-colunas";
 import type {ActivityScheduleStatus} from "@shared/activity-schedule-update";
 import type {IsoDate} from "@shared/work-calendar";
 import {trpc} from "@/lib/trpc";
-import {estadoCronogramaDaQuery,estadoCronogramaNaQuery,selecionarLinhasOperacionais,type EstadoCronogramaOperacional,type LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
+import {estadoCronogramaDaQuery,estadoCronogramaNaQuery,identificarLocalOperacional,selecionarLinhasOperacionais,type EstadoCronogramaOperacional,type LinhaCronogramaOperacional} from "@/lib/cronograma-operacional";
 import {VisualizacaoPlanejamento} from "./VisualizacaoPlanejamento";
 import {AbaDependencias} from "./AbaDependencias";
 import {InspetorAtividade} from "./InspetorAtividade";
@@ -58,13 +58,15 @@ export function CronogramaOperacional({projetoId,linhas,inicioObra,hoje,titulo,c
     const previsaoVencida=relato?.status!=="concluida"&&relato?.forecastFinishDate!=null&&relato.forecastFinishDate<hoje;
     return {activityId:linha.activityId,codigo:linha.codigo,atividade:linha.atividade,inicio:linha.inicio,fim,duracao:linha.duracao,
       executado,quantidade,unidade:linha.unidade??null,pavimento:atividade?.pavimentoIsProductionUnit?atividade.pavimento??null:atividade?.wbsLocationIsProductionUnit?atividade.wbsLocation:null,
+      isMilestone:atividade?.isMilestone===true,localEap:atividade?.wbsLocation??null,localDeclarado:atividade?.pavimento??null,
+      estadoConsultaLocal:planejamento.isError?"erro":planejamento.isPending||!atividade?"carregando":"pronto",
       critica:Number(atividade?.critical??0)===1,atrasada:Boolean(previsaoVencida),
       estadoRelatado:relato?.status??null,dataPosicao:relato?.positionDate??null,previsaoRelatada:relato?.forecastFinishDate??null,
       bloqueada:relatosPrazo.isError?null:relato?.status==="bloqueada",
       restricoesAbertas:restricoes.isPending||restricoes.isError?null:restricoesPorAtividade.get(linha.activityId)??0,
       lobApplicability:atividade?.lobApplicability??null,lobApplicabilityReason:atividade?.lobApplicabilityReason??null,
       planejamentoRelativo:false};
-  }),[linhas,atividadePorId,relatoPorAtividade,finsCalculados,hoje,restricoesPorAtividade,restricoes.isPending,restricoes.isError,relatosPrazo.isError]);
+  }),[linhas,atividadePorId,relatoPorAtividade,finsCalculados,hoje,restricoesPorAtividade,restricoes.isPending,restricoes.isError,relatosPrazo.isError,planejamento.isError,planejamento.isPending]);
   const operacionaisComPlanoRelativo=useMemo<LinhaCronogramaOperacional[]>(()=>{
     if(inicioObra||linhas.length>0||planejamento.isPending||planejamento.isError)return operacionais;
     return (planejamento.data?.activities??[])
@@ -79,6 +81,7 @@ export function CronogramaOperacional({projetoId,linhas,inicioObra,hoje,titulo,c
           inicio:`D+${offset}`,fim:`D+${offset+duracao-1}`,duracao,
           executado:null,quantidade:activity.plannedQuantity==null?null:Number(activity.plannedQuantity),
           unidade:activity.unit??null,pavimento:activity.pavimentoIsProductionUnit?activity.pavimento??null:activity.wbsLocationIsProductionUnit?activity.wbsLocation:null,
+          isMilestone:activity.isMilestone===true,localEap:activity.wbsLocation??null,localDeclarado:activity.pavimento??null,estadoConsultaLocal:"pronto",
           critica:false,atrasada:Boolean(previsaoVencida),
           bloqueada:relatosPrazo.isError?null:relato?.status==="bloqueada",
           estadoRelatado:relato?.status??null,dataPosicao:relato?.positionDate??null,
@@ -105,7 +108,8 @@ export function CronogramaOperacional({projetoId,linhas,inicioObra,hoje,titulo,c
     atrasadas:operacionaisExibidas.filter(item=>item.atrasada).length,
     bloqueadas:operacionaisExibidas.filter(item=>item.bloqueada===true).length,
     criticas:operacionaisExibidas.filter(item=>item.critica).length,
-    semLocal:operacionaisExibidas.filter(item=>!item.pavimento&&item.lobApplicability!=="fora_lob").length,
+    semLocal:operacionaisExibidas.filter(item=>["escopo","a_definir"].includes(identificarLocalOperacional(item).estado)).length,
+    revisarGlobais:operacionaisExibidas.filter(item=>identificarLocalOperacional(item).estado==="revisar_global").length,
   }),[operacionaisExibidas]);
   const temPlanoRelativo=!inicioObra&&operacionaisExibidas.some(item=>item.planejamentoRelativo);
   const descricaoModo=estado.modo==="cronograma"
@@ -121,15 +125,18 @@ export function CronogramaOperacional({projetoId,linhas,inicioObra,hoje,titulo,c
     <div className="cronograma-modo-explicacao"><strong>{rotuloModo[estado.modo]}:</strong><span>{descricaoModo}</span></div>
     {temPlanoRelativo&&<div className="cronograma-orientacao" role="note"><strong>Planejamento em dias relativos</strong><p>Os marcos D+ mostram início e duração cadastrados, sem presumir uma data civil. Informe o início planejado em Escopo para calcular o CPM, comparar a baseline e liberar Gantt e Linha de Balanço. Você já pode registrar o andamento de cada atividade nesta tela.</p><button type="button" onClick={()=>abrirAba("escopo")}>Informar início planejado</button></div>}
     {planejamento.isError&&<div className="cronograma-orientacao" role="alert"><strong>Não foi possível carregar as atividades do plano.</strong><p>Tente novamente antes de interpretar a lista vazia como ausência de atividades.</p></div>}
-    <div className="cronograma-resumo" aria-label="Resumo do cronograma"><div><small>ATIVIDADES</small><b>{operacionaisExibidas.length}</b></div><div><small>PREVISÕES VENCIDAS</small><b className={resumoOperacional.atrasadas?"alerta":""}>{resumoOperacional.atrasadas}</b></div><div><small>BLOQUEADAS POR RELATO</small><b className={resumoOperacional.bloqueadas?"alerta":""}>{resumoOperacional.bloqueadas}</b></div><div><small>SEM UNIDADE LOB</small><b>{resumoOperacional.semLocal}</b></div><div><small>CRÍTICAS</small><b>{temPlanoRelativo?"—":resumoOperacional.criticas}</b></div></div>
+    <div className="cronograma-resumo" aria-label="Resumo do cronograma"><div><small>ATIVIDADES</small><b>{operacionaisExibidas.length}</b></div><div><small>PREVISÕES VENCIDAS</small><b className={resumoOperacional.atrasadas?"alerta":""}>{resumoOperacional.atrasadas}</b></div><div><small>BLOQUEADAS POR RELATO</small><b className={resumoOperacional.bloqueadas?"alerta":""}>{resumoOperacional.bloqueadas}</b></div><div><small title="Atividades com escopo físico a detalhar ou local a definir; não bloqueiam o cronograma por prazo.">LOCAL A DETALHAR</small><b>{planejamento.isPending||planejamento.isError?"—":resumoOperacional.semLocal}</b></div><div><small>CRÍTICAS</small><b>{temPlanoRelativo?"—":resumoOperacional.criticas}</b></div></div>
     <div className="cronograma-controles"><label className="cronograma-busca"><span>Pesquisar atividade</span><div><Search size={15}/><input value={estado.busca} onChange={e=>atualizar({busca:e.target.value})} placeholder="Código, serviço ou local"/></div></label><label><span>Filtrar</span><select value={estado.filtro} onChange={e=>atualizar({filtro:e.target.value as EstadoCronogramaOperacional["filtro"]})}>{filtros.map(([valor,rotulo])=><option key={valor} value={valor}>{rotulo}</option>)}</select></label><strong aria-live="polite">{visiveis.length} de {operacionaisExibidas.length} atividades</strong></div>
+    <p className="cronograma-modo-explicacao"><span>Local confirmado: unidade cadastrada. Distribuição a detalhar: serviço repetitivo com escopo em vários locais. Não se aplica: serviço sem vínculo físico necessário. “(sug.)” indica classificação sugerida, ainda a confirmar. Essas situações não impedem o planejamento por prazo.</span></p>
+    {resumoOperacional.revisarGlobais>0&&<p className="cronograma-modo-explicacao"><span>{resumoOperacional.revisarGlobais} atividade(s) com sugestão de não aplicação da LOB. Confirme no inspetor; não são contabilizadas como vínculos físicos pendentes.</span></p>}
     <div className="cronograma-grade" role="region" aria-label="Atividades do cronograma" tabIndex={0}>
       <div className="cronograma-grade-cab"><span>Atividade</span><span>Local</span><span>Início</span><span>Término</span><span>Situação</span></div>
       {restricoes.isError&&<div className="cronograma-orientacao" role="alert"><strong>Não foi possível confirmar as restrições.</strong><p>O sistema não considera as atividades liberadas enquanto esta consulta falhar. Tente novamente antes de assumir que a frente está desbloqueada.</p></div>}
       {visiveis.map(linha=><button key={linha.activityId} type="button" className={`cronograma-linha${estado.atividadeSelecionadaId===linha.activityId?" selecionada":""}`} style={visiveis.length>50?{contentVisibility:"auto",containIntrinsicSize:"42px"}:undefined} onClick={()=>atualizar({atividadeSelecionadaId:linha.activityId})} aria-pressed={estado.atividadeSelecionadaId===linha.activityId}>
-        <span><b>{linha.codigo}</b>{linha.atividade}{linha.critica&&<em>Crítica</em>}</span><span>{linha.pavimento??(linha.lobApplicability==="fora_lob"?<small title={linha.lobApplicabilityReason??"Serviço sem repetição por unidade física"}>Fora da LOB</small>:<><MapPin size={13}/> Vincular local</>)}</span><span>{linha.inicio}</span><span>{linha.fim}</span><span>{linha.estadoRelatado?`${({nao_iniciada:"Não iniciada",em_andamento:"Em andamento",concluida:"Concluída",bloqueada:"Bloqueada"} as Record<string,string>)[linha.estadoRelatado]??linha.estadoRelatado}${linha.dataPosicao?` · posição ${linha.dataPosicao}`:""}${linha.atrasada?" · previsão vencida":""}`:"Sem atualização de prazo"}{linha.restricoesAbertas==null?" · restrições indisponíveis":linha.restricoesAbertas>0?` · ${linha.restricoesAbertas} restrição(ões) aberta(s)`:""}</span>
+        <span><b>{linha.codigo}</b>{linha.atividade}{linha.critica&&<em>Crítica</em>}</span><span title={identificarLocalOperacional(linha).detalhe}>{identificarLocalOperacional(linha).rotulo}</span><span>{linha.inicio}</span><span>{linha.fim}</span><span>{linha.estadoRelatado?`${({nao_iniciada:"Não iniciada",em_andamento:"Em andamento",concluida:"Concluída",bloqueada:"Bloqueada"} as Record<string,string>)[linha.estadoRelatado]??linha.estadoRelatado}${linha.dataPosicao?` · posição ${linha.dataPosicao}`:""}${linha.atrasada?" · previsão vencida":""}`:"Sem atualização de prazo"}{linha.restricoesAbertas==null?" · restrições indisponíveis":linha.restricoesAbertas>0?` · ${linha.restricoesAbertas} restrição(ões) aberta(s)`:""}</span>
       </button>)}</div>
-    {estado.modo==="fluxo"&&selecionada&&!selecionada.pavimento&&selecionada.lobApplicability!=="fora_lob"&&<div className="cronograma-orientacao" role="status"><strong>Esta atividade ainda não pode entrar no fluxo por local.</strong><p>Vincule um local físico na EAP quando o serviço se repetir por unidade. Se não houver repetição, justifique a classificação fora da LOB no inspetor. Esta pendência não impede o planejamento por prazo.</p><button type="button" onClick={()=>atualizar({modo:"cronograma"})}>Classificar no inspetor</button></div>}
+    {estado.modo==="fluxo"&&selecionada&&["escopo","a_definir"].includes(identificarLocalOperacional(selecionada).estado)&&<div className="cronograma-orientacao" role="status"><strong>Esta atividade ainda não pode entrar no fluxo por local.</strong><p>O escopo pode abranger diversos locais ou um serviço global. Confira o local descrito na EAP, distribua serviços repetitivos conforme evidência e justifique serviços sem repetição no inspetor. Esta pendência não impede o planejamento por prazo.</p><button type="button" onClick={()=>atualizar({modo:"cronograma"})}>Classificar no inspetor</button></div>}
+    {estado.modo==="fluxo"&&selecionada&&identificarLocalOperacional(selecionada).estado==="revisar_global"&&<div className="cronograma-orientacao" role="status"><strong>Não aplicação da LOB sugerida.</strong><p>Confira a natureza e o escopo no inspetor e confirme a classificação. O prazo continua disponível.</p></div>}
     {estado.modo==="fluxo"&&selecionada&&!selecionada.pavimento&&selecionada.lobApplicability==="fora_lob"&&<div className="cronograma-orientacao" role="status"><strong>Atividade classificada fora da Linha de Balanço.</strong><p>{selecionada.lobApplicabilityReason??"Justificativa registrada no histórico da obra."} O planejamento e o acompanhamento por prazo continuam disponíveis.</p></div>}
     <div className="cronograma-visual">{estado.modo==="rede"?<AbaDependencias projetoId={projetoId}/>:temPlanoRelativo?<div className="cronograma-orientacao" role="status"><strong>{estado.modo==="fluxo"?"Linha de Balanço aguardando data civil":"Gantt civil aguardando data inicial"}</strong><p>As atividades e durações permanecem organizadas acima em dias relativos. Este gráfico não inventa datas.</p></div>:<VisualizacaoPlanejamento projetoId={projetoId} linhas={linhasVisiveis} inicioObra={inicioObra} hoje={hoje} view={estado.modo==="fluxo"?"lob":"gantt"} titulo={titulo} codigoObra={codigoObra} localObra={localObra} finsCalculados={finsCalculados} codigosExemplo={codigosExemplo} layoutProfissional={layoutProfissional} atividadeSelecionadaId={estado.atividadeSelecionadaId} situacoesTemporais={situacoesTemporais} onSelecionarAtividade={activityId=>atualizar({atividadeSelecionadaId:activityId})}/>}</div>
     {selecionada&&<InspetorAtividade
