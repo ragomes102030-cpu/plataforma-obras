@@ -5969,6 +5969,9 @@ export const appRouter = router({
         const qaPayload = qaRelease?.payload as Record<string, unknown> | undefined;
         const qaUnresolved = qaPayload?.lobUnresolvedActivityIds ?? qaPayload?.lobExcludedActivityIds;
         const lobQaUnresolvedIds = new Set(Array.isArray(qaUnresolved) ? qaUnresolved.map(Number).filter(Number.isInteger) : []);
+        const qaCurrentSegments = currentVersion && lobQaUnresolvedIds.size ? await db.select({ activityId: lobActivityLocations.activityId })
+          .from(lobActivityLocations).where(and(eq(lobActivityLocations.projectId, input.projectId), eq(lobActivityLocations.versionId, currentVersion.id))) : [];
+        const qaSegmentActivityIds = new Set(qaCurrentSegments.map(segment => segment.activityId));
         const applicabilityByActivity = await loadActivityLobApplicability(db, input.projectId, currentVersion?.id ?? null);
         const evidenceByActivity = new Map<number, Record<string, unknown>>();
         for (const row of evidenceRows) {
@@ -5990,7 +5993,7 @@ export const appRouter = router({
             wbsLocationIsProductionUnit: node != null && physicalUnitNames.has(wbsLocation ?? ""),
             pavimentoIsProductionUnit: physicalUnitNames.has(activity.pavimento?.trim() ?? ""),
             lobQaNonrepetitive: false,
-            lobQaUnresolved: lobQaUnresolvedIds.has(activity.id) && !physicalUnitNames.has(activity.pavimento?.trim() ?? "") && !physicalUnitNames.has(wbsLocation ?? "") && applicabilityByActivity.get(activity.id)?.applicability !== "fora_lob",
+            lobQaUnresolved: lobQaUnresolvedIds.has(activity.id) && !qaSegmentActivityIds.has(activity.id) && !physicalUnitNames.has(activity.pavimento?.trim() ?? "") && !physicalUnitNames.has(wbsLocation ?? "") && applicabilityByActivity.get(activity.id)?.applicability !== "fora_lob",
             lobApplicability: applicabilityByActivity.get(activity.id)?.applicability ?? null,
             lobApplicabilityReason: applicabilityByActivity.get(activity.id)?.reason ?? null,
             planningEvidence: evidenceByActivity.get(activity.id) ?? null,
