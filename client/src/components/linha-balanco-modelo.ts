@@ -151,18 +151,23 @@ export function aplicarLocaisDaEapNaLob(
   nodos: readonly {code:string;location:string|null}[],
   unidades: readonly {code:string;name:string}[],
 ): {linhas:EntradaDaLinha[]; codigosConfirmados:Set<string>} {
-  const nomes = new Map<string,string>();
-  for (const u of unidades) {
+  const nomes = new Map<string, Set<number>>();
+  for (const [index,u] of unidades.entries()) {
     for (const valor of [u.code,u.name]) {
       const k=valor.trim().toLocaleLowerCase("pt-BR");
-      if(k && !nomes.has(k)) nomes.set(k,u.name);
+      if (!k) continue;
+      const candidatos=nomes.get(k)??new Set<number>();
+      candidatos.add(index);
+      nomes.set(k,candidatos);
     }
   }
   const porCodigo = new Map(nodos.map(n=>[n.code,n.location]));
   const codigosConfirmados = new Set<string>();
   const saida = linhas.map(l=>{
     const informado=porCodigo.get(l.codigo);
-    const local=informado?nomes.get(informado.trim().toLocaleLowerCase("pt-BR")):undefined;
+    const candidatos=informado?nomes.get(informado.trim().toLocaleLowerCase("pt-BR")):undefined;
+    const unidade=candidatos?.size===1?unidades[[...candidatos][0]!]:undefined;
+    const local=unidade&&!/did[aá]tic/i.test(unidade.name)?unidade.name:undefined;
     if(!local) return {...l};
     codigosConfirmados.add(l.codigo);
     return {...l,pavimento:local};
