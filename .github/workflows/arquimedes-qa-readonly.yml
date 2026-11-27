@@ -1,0 +1,51 @@
+name: Arquimedes QA read-only
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: ID da obra
+        required: true
+        default: '26'
+      position_date:
+        description: Data de posição YYYY-MM-DD
+        required: true
+      activity_id:
+        description: ID da atividade para simulação
+        required: false
+        default: '1727'
+      scenario_percent:
+        description: Percentual hipotético
+        required: false
+        default: '50'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validar sintaxe
+        run: node --check scripts/arquimedes-qa-readonly.mjs
+      - name: Auditar sem gravação
+        env:
+          QA_READONLY_DATABASE_URL: ${{ secrets.QA_READONLY_DATABASE_URL }}
+          QA_PROJECT_ID: ${{ inputs.project_id }}
+          QA_POSITION_DATE: ${{ inputs.position_date }}
+          QA_ACTIVITY_ID: ${{ inputs.activity_id }}
+          QA_SCENARIO_PERCENT: ${{ inputs.scenario_percent }}
+        run: node scripts/arquimedes-qa-readonly.mjs
+      - name: Publicar relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arquimedes-qa-report
+          path: qa-results/audit.json
+          retention-days: 7
+          if-no-files-found: warn
